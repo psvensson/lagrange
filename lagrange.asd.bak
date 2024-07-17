@@ -12,4 +12,4 @@
                (:file "message-service/message-service")
                (:file "message-service/transport")
                (:file "message-service/websocket-transport")
-               (:file "cache/system-cache")))
+               (:file "message-service/cache/system-cache")))
