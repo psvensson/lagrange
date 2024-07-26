@@ -26,7 +26,8 @@
 (defmethod addMember (raft-group-manager system-node)
   ;; Send remote addRaftGroupMember message to node
   ;; If successful, the message returns the port of the new raft group member service
-  ;; I then update the raft group configuration in the local cache, which will update all other nodes eventually
+  ;; I then update the raft group configuration in the local cache, which will 
+  ;; update all other nodes eventually
   
 )    
     

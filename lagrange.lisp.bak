@@ -1,0 +1,22 @@
+(defpackage #:lagrange
+  (:use #:cl)
+  (:export start-app))
+
+(in-package :lagrange)
+
+(defun start-app ()
+  ;;
+  ;; Create eventbus, transport and message-service, system-cache 
+  ;; and wire them together
+  ;;
+  ;; Lasty initialize system, either from a provided existing node 
+  ;; or from scratch (we're first).
+  ;;
+  (let* ((bus (make-eventbus))
+         (cache (make-system-cache :bus bus))
+         ;; TODO: Do soething smart with the dependecies bwteeen transport ans msg svc
+         (transport)
+         )
+    
+  
+    (format t "Hello World~%")))

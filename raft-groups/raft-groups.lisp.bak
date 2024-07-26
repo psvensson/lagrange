@@ -14,7 +14,7 @@
     
 (defun make-raft-group (members)
   (make-instance 'raft-group :members members)
-  ;; TODO: start ay existing member raft groups using low-level rqlite
+  ;; TODO: start any existing member raft groups using low-level rqlite
   
   
   )

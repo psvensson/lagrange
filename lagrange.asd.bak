@@ -1,15 +1,15 @@
 (asdf:defsystem #:lagrange
   :description "New System"
   :author "some@one.com"
-  :license  "BSD"
+  :license "BSD"
   :version "0.0.0"
   :serial t
   :entry-point "lagrange:start-app"
   :depends-on ("fiveam" "clack" "websocket-driver" "alexandria" "eventbus")
-  :components ((:file "lagrange")
-               (:file "node")
-               (:file "raft-groups/raft-groups")
-               (:file "message-service/message-service")
-               (:file "message-service/transport")
-               (:file "message-service/websocket-transport")
-               (:file "message-service/cache/system-cache")))
+  :components ((:file "package")
+               (:module "message-service"
+                        :components ((:file "package")
+                                     (:file "transport")
+                                     (:file "message-service")
+                                     (:file "websocket-transport")))
+               (:file "system")))
