@@ -15,5 +15,5 @@
 (defun make-websocket-transport (&key message-service)
   (let ((transport (make-instance 'websocket-transport)))
     (when message-service
-      (messaging-system.message-service:register-transport message-service transport))
+      (messaging-system:register-transport message-service transport))
     transport))

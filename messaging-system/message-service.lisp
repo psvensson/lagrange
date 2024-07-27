@@ -6,7 +6,7 @@
               :initarg :transport)))
 
 (defmethod handle-received-message ((service message-service) message)
-  (format t "Handling received message: ~a~%" message)
+  (format t "Messaging system Handling received message: ~a~%" message)
   ;; Handle the incoming message
   )
 
