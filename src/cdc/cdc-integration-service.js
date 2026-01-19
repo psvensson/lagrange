@@ -157,19 +157,16 @@ class CDCIntegrationService extends EventEmitter {
 
     // Generate ID if not provided
     const rowData = {...data};
-    if (!rowData.id) {
-      // Use the primary key field based on table schema
-      const idField = this.getPrimaryKeyField(tableName);
-      if (!rowData[idField]) {
-        rowData[idField] = uuidv4();
-      }
-      // Also set 'id' for cache compatibility
-      rowData.id = rowData[idField];
+    const idField = this.getPrimaryKeyField(tableName);
+    if (!rowData[idField]) {
+      rowData[idField] = uuidv4();
     }
+    // Track the id for logging (don't add 'id' field to row data)
+    const trackingId = rowData[idField];
 
     this.logger.debug('Inserting system table row via CDC', {
       tableName,
-      id: rowData.id,
+      id: trackingId,
       nodeId: this.nodeId,
     });
 
@@ -181,7 +178,7 @@ class CDCIntegrationService extends EventEmitter {
 
       this.logger.debug('System table row inserted', {
         tableName,
-        id: rowData.id,
+        id: trackingId,
         success: result.success,
       });
 
@@ -203,7 +200,7 @@ class CDCIntegrationService extends EventEmitter {
 
       this.logger.error('Failed to insert system table row', {
         tableName,
-        id: rowData.id,
+        id: trackingId,
         error: error.message,
         nodeId: this.nodeId,
       });
@@ -243,8 +240,8 @@ class CDCIntegrationService extends EventEmitter {
       );
     }
 
-    // Add id to data for cache compatibility
-    const updateData = {...data, id};
+    // Keep data as-is, don't add 'id' field
+    const updateData = {...data};
 
     this.logger.debug('Updating system table row via CDC', {
       tableName,

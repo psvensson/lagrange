@@ -19,7 +19,7 @@ const PRIMARY_KEYS = {
   message_groups: 'group_id',
   indices: 'index_id',
   logs: 'log_id',
-  config: 'key',
+  config: 'config_key',
   contexts: 'context_id',
 };
 

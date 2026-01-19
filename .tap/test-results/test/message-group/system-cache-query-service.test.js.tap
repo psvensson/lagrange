@@ -1,114 +1,21 @@
 TAP version 14
-# Subtest: SystemCacheQueryService - constructor creates service
-    ok 1 - Should create service
-    ok 2 - Should have zero queries
-    1..2
-ok 1 - SystemCacheQueryService - constructor creates service # time=2.219ms
-
-# Subtest: SystemCacheQueryService - registerMessageGroup adds replica
-    ok 1 - Should have 1 registered replica
-    1..1
-ok 2 - SystemCacheQueryService - registerMessageGroup adds replica # time=0.339ms
-
-# Subtest: SystemCacheQueryService - unregisterMessageGroup removes replica
-    ok 1 - Should have 0 registered replicas
-    1..1
-ok 3 - SystemCacheQueryService - unregisterMessageGroup removes replica # time=0.264ms
-
-# Subtest: SystemCacheQueryService - querySystemCache routes to replica
-    ok 1 - Should return result
-    ok 2 - Should return correct record
-    ok 3 - Should have correct status
-    1..3
-ok 4 - SystemCacheQueryService - querySystemCache routes to replica # time=0.522ms
-
-# Subtest: SystemCacheQueryService - throws when no replica available
-    ok 1 - Should throw when no replica
-    1..1
-ok 5 - SystemCacheQueryService - throws when no replica available # time=1.247ms
-
-# Subtest: SystemCacheQueryService - get returns record by key
-    ok 1 - Should return result
-    ok 2 - Should return correct record
-    1..2
-ok 6 - SystemCacheQueryService - get returns record by key # time=0.332ms
-
-# Subtest: SystemCacheQueryService - get returns undefined for missing key
-    ok 1 - Should return undefined
-    1..1
-ok 7 - SystemCacheQueryService - get returns undefined for missing key # time=0.264ms
-
-# Subtest: SystemCacheQueryService - find returns first match
-    ok 1 - Should return result
-    ok 2 - Should match predicate
-    1..2
-ok 8 - SystemCacheQueryService - find returns first match # time=0.367ms
-
-# Subtest: SystemCacheQueryService - filter returns all matches
-    ok 1 - Should return 1 match
-    ok 2 - Should return correct record
-    1..2
-ok 9 - SystemCacheQueryService - filter returns all matches # time=0.484ms
-
-# Subtest: SystemCacheQueryService - getAll returns all records
-    ok 1 - Should return all records
-    1..1
-ok 10 - SystemCacheQueryService - getAll returns all records # time=0.315ms
-
-# Subtest: SystemCacheQueryService - has returns true for existing key
-    ok 1 - Should return true
-    1..1
-ok 11 - SystemCacheQueryService - has returns true for existing key # time=0.298ms
-
-# Subtest: SystemCacheQueryService - has returns false for missing key
-    ok 1 - Should return false
-    1..1
-ok 12 - SystemCacheQueryService - has returns false for missing key # time=0.284ms
-
-# Subtest: SystemCacheQueryService - count returns record count
-    ok 1 - Should return correct count
-    1..1
-ok 13 - SystemCacheQueryService - count returns record count # time=0.515ms
-
-# Subtest: SystemCacheQueryService - getNodes returns nodes
-    ok 1 - Should return all nodes
-    ok 2 - Should filter by nodeId
-    ok 3 - Should filter by status
-    1..3
-ok 14 - SystemCacheQueryService - getNodes returns nodes # time=0.909ms
-
-# Subtest: SystemCacheQueryService - getPartitions returns partitions
-    ok 1 - Should return all partitions
-    ok 2 - Should filter by partitionId
-    ok 3 - Should filter by tableId
-    1..3
-ok 15 - SystemCacheQueryService - getPartitions returns partitions # time=0.93ms
-
-# Subtest: SystemCacheQueryService - getTables returns tables
-    ok 1 - Should return all tables
-    ok 2 - Should filter by tableId
-    ok 3 - Should filter by tableName
-    1..3
-ok 16 - SystemCacheQueryService - getTables returns tables # time=0.875ms
-
-# Subtest: SystemCacheQueryService - getStats returns statistics
-    ok 1 - Should count queries
-    ok 2 - Should count hits
-    ok 3 - Should have no misses
-    ok 4 - Should have hit rate
-    1..4
-ok 17 - SystemCacheQueryService - getStats returns statistics # time=0.737ms
-
-# Subtest: SystemCacheQueryService - resetStats clears statistics
-    ok 1 - Should reset query count
-    ok 2 - Should reset hits
-    1..2
-ok 18 - SystemCacheQueryService - resetStats clears statistics # time=0.56ms
-
-# Subtest: SystemCacheQueryService - uses getLocalReplica function
-    ok 1 - Should use provided function
-    ok 2 - Should return correct record
-    1..2
-ok 19 - SystemCacheQueryService - uses getLocalReplica function # time=0.592ms
-
+ok 1 - SystemCacheQueryService - constructor creates service # SKIP filter: /SystemTableCache/
+ok 2 - SystemCacheQueryService - registerMessageGroup adds replica # SKIP filter: /SystemTableCache/
+ok 3 - SystemCacheQueryService - unregisterMessageGroup removes replica # SKIP filter: /SystemTableCache/
+ok 4 - SystemCacheQueryService - querySystemCache routes to replica # SKIP filter: /SystemTableCache/
+ok 5 - SystemCacheQueryService - throws when no replica available # SKIP filter: /SystemTableCache/
+ok 6 - SystemCacheQueryService - get returns record by key # SKIP filter: /SystemTableCache/
+ok 7 - SystemCacheQueryService - get returns undefined for missing key # SKIP filter: /SystemTableCache/
+ok 8 - SystemCacheQueryService - find returns first match # SKIP filter: /SystemTableCache/
+ok 9 - SystemCacheQueryService - filter returns all matches # SKIP filter: /SystemTableCache/
+ok 10 - SystemCacheQueryService - getAll returns all records # SKIP filter: /SystemTableCache/
+ok 11 - SystemCacheQueryService - has returns true for existing key # SKIP filter: /SystemTableCache/
+ok 12 - SystemCacheQueryService - has returns false for missing key # SKIP filter: /SystemTableCache/
+ok 13 - SystemCacheQueryService - count returns record count # SKIP filter: /SystemTableCache/
+ok 14 - SystemCacheQueryService - getNodes returns nodes # SKIP filter: /SystemTableCache/
+ok 15 - SystemCacheQueryService - getPartitions returns partitions # SKIP filter: /SystemTableCache/
+ok 16 - SystemCacheQueryService - getTables returns tables # SKIP filter: /SystemTableCache/
+ok 17 - SystemCacheQueryService - getStats returns statistics # SKIP filter: /SystemTableCache/
+ok 18 - SystemCacheQueryService - resetStats clears statistics # SKIP filter: /SystemTableCache/
+ok 19 - SystemCacheQueryService - uses getLocalReplica function # SKIP filter: /SystemTableCache/
 1..19

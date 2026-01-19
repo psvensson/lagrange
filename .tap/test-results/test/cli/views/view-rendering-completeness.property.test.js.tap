@@ -1,36 +1,3 @@
 TAP version 14
-# Subtest: Property 1: View Rendering Completeness
-    # Subtest: NodesView renders all required columns
-        ok 1 - NodesView renders all required columns
-        1..1
-    ok 1 - NodesView renders all required columns # time=6.143ms
-    
-    # Subtest: NodesView renders all entities from data
-        ok 1 - NodesView renders all entities from data
-        1..1
-    ok 2 - NodesView renders all entities from data # time=6.166ms
-    
-    # Subtest: NodesView row values match entity data
-        ok 1 - NodesView row values match entity data
-        1..1
-    ok 3 - NodesView row values match entity data # time=1.543ms
-    
-    # Subtest: NodesView formatRow produces correct column count
-        ok 1 - NodesView formatRow produces correct column count
-        1..1
-    ok 4 - NodesView formatRow produces correct column count # time=1.157ms
-    
-    # Subtest: NodesView handles null/undefined values gracefully
-        ok 1 - NodesView handles null/undefined values gracefully
-        1..1
-    ok 5 - NodesView handles null/undefined values gracefully # time=1.563ms
-    
-    # Subtest: render result contains correct metadata
-        ok 1 - render result contains correct metadata
-        1..1
-    ok 6 - render result contains correct metadata # time=1.878ms
-    
-    1..6
-ok 1 - Property 1: View Rendering Completeness # time=23.298ms
-
+ok 1 - Property 1: View Rendering Completeness # SKIP filter: /SystemTableCache/
 1..1

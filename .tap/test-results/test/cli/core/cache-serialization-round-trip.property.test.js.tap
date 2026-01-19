@@ -1,27 +1,7 @@
 TAP version 14
-# Subtest: Property 10: Cache Serialization Round-Trip
-    ok 1 - Serialization round-trip preserves all cache data
-    1..1
-ok 1 - Property 10: Cache Serialization Round-Trip # time=24.968ms
-
-# Subtest: Property 10: Cache Serialization - lastUpdate preserved
-    ok 1 - Serialization round-trip preserves lastUpdate timestamp
-    1..1
-ok 2 - Property 10: Cache Serialization - lastUpdate preserved # time=14.139ms
-
-# Subtest: Property 10: Cache Serialization - entity counts preserved
-    ok 1 - Serialization round-trip preserves entity counts
-    1..1
-ok 3 - Property 10: Cache Serialization - entity counts preserved # time=10.112ms
-
-# Subtest: Property 10: Cache Serialization - JSON is valid
-    ok 1 - Serialized cache is valid JSON with expected structure
-    1..1
-ok 4 - Property 10: Cache Serialization - JSON is valid # time=8.177ms
-
-# Subtest: Property 10: Cache Serialization - multiple round-trips
-    ok 1 - Multiple serialization round-trips preserve cache data
-    1..1
-ok 5 - Property 10: Cache Serialization - multiple round-trips # time=12.523ms
-
+ok 1 - Property 10: Cache Serialization Round-Trip # SKIP filter: /SystemTableCache/
+ok 2 - Property 10: Cache Serialization - lastUpdate preserved # SKIP filter: /SystemTableCache/
+ok 3 - Property 10: Cache Serialization - entity counts preserved # SKIP filter: /SystemTableCache/
+ok 4 - Property 10: Cache Serialization - JSON is valid # SKIP filter: /SystemTableCache/
+ok 5 - Property 10: Cache Serialization - multiple round-trips # SKIP filter: /SystemTableCache/
 1..5

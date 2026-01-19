@@ -1,136 +1,21 @@
 TAP version 14
-# Subtest: MessageGroupService - constructor requires groupId
-    ok 1 - Should throw without groupId
-    1..1
-ok 1 - MessageGroupService - constructor requires groupId # time=8.988ms
-
-# Subtest: MessageGroupService - constructor requires replicaId
-    ok 1 - Should throw without replicaId
-    1..1
-ok 2 - MessageGroupService - constructor requires replicaId # time=0.627ms
-
-# Subtest: MessageGroupService - constructor initializes correctly
-    ok 1 - Should set groupId
-    ok 2 - Should set replicaId
-    ok 3 - Should set nodeId
-    ok 4 - Should set replicaIds
-    ok 5 - Should not be initialized
-    1..5
-ok 3 - MessageGroupService - constructor initializes correctly # time=1.52ms
-
-# Subtest: MessageGroupService - initialize starts as follower
-    ok 1 - Should be initialized
-    ok 2 - Should start as follower
-    1..2
-ok 4 - MessageGroupService - initialize starts as follower # time=0.966ms
-
-# Subtest: MessageGroupService - sendMessage creates message envelope
-    ok 1 - Should return messageId
-    ok 2 - Should return status
-    1..2
-ok 5 - MessageGroupService - sendMessage creates message envelope # time=0.736ms
-
-# Subtest: MessageGroupService - receiveMessage processes message
-    ok 1 - Should return messageId
-    ok 2 - Should return received status
-    ok 3 - Should emit messageReceived event
-    ok 4 - Event should have messageId
-    1..4
-ok 6 - MessageGroupService - receiveMessage processes message # time=0.587ms
-
-# Subtest: MessageGroupService - receiveMessage detects duplicates
-    ok 1 - Should detect duplicate
-    ok 2 - Should indicate already acknowledged
-    1..2
-ok 7 - MessageGroupService - receiveMessage detects duplicates # time=0.53ms
-
-# Subtest: MessageGroupService - acknowledgeMessage marks message
-    ok 1 - Should return messageId
-    ok 2 - Should be acknowledged
-    ok 3 - Should have log index
-    ok 4 - Should emit messageAcknowledged event
-    1..4
-ok 8 - MessageGroupService - acknowledgeMessage marks message # time=0.585ms
-
-# Subtest: MessageGroupService - subscribeToCDC adds subscription
-    ok 1 - Should subscribe to nodes
-    ok 2 - Should subscribe to partitions
-    1..2
-ok 9 - MessageGroupService - subscribeToCDC adds subscription # time=0.469ms
-
-# Subtest: MessageGroupService - applyCDCEvent updates cache
-    ok 1 - Should emit cdcApplied event
-    ok 2 - Event should have tableName
-    ok 3 - Event should have operation
-    ok 4 - Should find record in cache
-    ok 5 - Should have correct address
-    1..5
-ok 10 - MessageGroupService - applyCDCEvent updates cache # time=0.872ms
-
-# Subtest: MessageGroupService - querySystemCache returns data
-    ok 1 - Should find by key
-    ok 2 - Should return correct record
-    ok 3 - Should filter correctly
-    ok 4 - Should return all records
-    1..4
-ok 11 - MessageGroupService - querySystemCache returns data # time=0.696ms
-
-# Subtest: MessageGroupService - getReadOnlyCache returns wrapper
-    ok 1 - Should return cache
-{"level":50,"time":"2026-01-19T08:23:02.912Z","nodeId":"test-node","pid":3589966,"subsystem":"cache","operation":"applySystemTableChange","attemptedMethod":"applySystemTableChange","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
-    ok 2 - Should block write operations
-    1..2
-ok 12 - MessageGroupService - getReadOnlyCache returns wrapper # time=0.945ms
-
-# Subtest: MessageGroupService - single replica becomes leader
-    ok 1 - Should become leader
-    ok 2 - Should be own leader
-    ok 3 - Should emit leaderElected event
-    1..3
-ok 13 - MessageGroupService - single replica becomes leader # time=401.148ms
-
-# Subtest: MessageGroupService - getStatus returns complete status
-    ok 1 - Should have groupId
-    ok 2 - Should have replicaId
-    ok 3 - Should have nodeId
-    ok 4 - Should have role
-    ok 5 - Should have term
-    ok 6 - Should have logLength
-    ok 7 - Should be initialized
-    1..7
-ok 14 - MessageGroupService - getStatus returns complete status # time=0.611ms
-
-# Subtest: MessageGroupService - shutdown cleans up
-    ok 1 - Should not be initialized
-    ok 2 - Should emit shutdown event
-    ok 3 - Event should have groupId
-    1..3
-ok 15 - MessageGroupService - shutdown cleans up # time=0.511ms
-
-# Subtest: InMemoryRaftStorage - appendEntry adds entries
-    ok 1 - First entry should have index 1
-    ok 2 - Second entry should have index 2
-    ok 3 - Should have 2 entries
-    1..3
-ok 16 - InMemoryRaftStorage - appendEntry adds entries # time=0.517ms
-
-# Subtest: InMemoryRaftStorage - getEntriesFrom returns entries
-    ok 1 - Should return all entries from start
-    ok 2 - Should return entries from index 2
-    ok 3 - First should be test2
-    1..3
-ok 17 - InMemoryRaftStorage - getEntriesFrom returns entries # time=0.475ms
-
-# Subtest: InMemoryRaftStorage - getLastEntry returns last
-    ok 1 - Should return null when empty
-    ok 2 - Should return last entry
-    1..2
-ok 18 - InMemoryRaftStorage - getLastEntry returns last # time=0.419ms
-
-# Subtest: InMemoryRaftStorage - truncateFrom removes entries
-    ok 1 - Should have 1 entry after truncate
-    ok 2 - Should keep first entry
-    1..2
-ok 19 - InMemoryRaftStorage - truncateFrom removes entries # time=0.608ms
-
+ok 1 - MessageGroupService - constructor requires groupId # SKIP filter: /SystemTableCache/
+ok 2 - MessageGroupService - constructor requires replicaId # SKIP filter: /SystemTableCache/
+ok 3 - MessageGroupService - constructor initializes correctly # SKIP filter: /SystemTableCache/
+ok 4 - MessageGroupService - initialize starts as follower # SKIP filter: /SystemTableCache/
+ok 5 - MessageGroupService - sendMessage creates message envelope # SKIP filter: /SystemTableCache/
+ok 6 - MessageGroupService - receiveMessage processes message # SKIP filter: /SystemTableCache/
+ok 7 - MessageGroupService - receiveMessage detects duplicates # SKIP filter: /SystemTableCache/
+ok 8 - MessageGroupService - acknowledgeMessage marks message # SKIP filter: /SystemTableCache/
+ok 9 - MessageGroupService - subscribeToCDC adds subscription # SKIP filter: /SystemTableCache/
+ok 10 - MessageGroupService - applyCDCEvent updates cache # SKIP filter: /SystemTableCache/
+ok 11 - MessageGroupService - querySystemCache returns data # SKIP filter: /SystemTableCache/
+ok 12 - MessageGroupService - getReadOnlyCache returns wrapper # SKIP filter: /SystemTableCache/
+ok 13 - MessageGroupService - single replica becomes leader # SKIP filter: /SystemTableCache/
+ok 14 - MessageGroupService - getStatus returns complete status # SKIP filter: /SystemTableCache/
+ok 15 - MessageGroupService - shutdown cleans up # SKIP filter: /SystemTableCache/
+ok 16 - InMemoryRaftStorage - appendEntry adds entries # SKIP filter: /SystemTableCache/
+ok 17 - InMemoryRaftStorage - getEntriesFrom returns entries # SKIP filter: /SystemTableCache/
+ok 18 - InMemoryRaftStorage - getLastEntry returns last # SKIP filter: /SystemTableCache/
+ok 19 - InMemoryRaftStorage - truncateFrom removes entries # SKIP filter: /SystemTableCache/
 1..19

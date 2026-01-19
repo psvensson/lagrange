@@ -1,22 +1,6 @@
 TAP version 14
-# Subtest: Property 26: Partition Count Accuracy - single table
-    ok 1 - Partition count equals number of partition records
-    1..1
-ok 1 - Property 26: Partition Count Accuracy - single table # time=12.92ms
-
-# Subtest: Property 26: Partition Count Accuracy - multiple tables
-    ok 1 - Partition count accurate for multiple tables
-    1..1
-ok 2 - Property 26: Partition Count Accuracy - multiple tables # time=12.524ms
-
-# Subtest: Property 26: Partition Count Accuracy - zero partitions
-    ok 1 - Partition count is 0 for tables with no partitions
-    1..1
-ok 3 - Property 26: Partition Count Accuracy - zero partitions # time=1.088ms
-
-# Subtest: Property 26: Partition Count Accuracy - only counts matching table_id
-    ok 1 - Partition count only counts partitions with matching table_id
-    1..1
-ok 4 - Property 26: Partition Count Accuracy - only counts matching table_id # time=0.866ms
-
+ok 1 - Property 26: Partition Count Accuracy - single table # SKIP filter: /SystemTableCache/
+ok 2 - Property 26: Partition Count Accuracy - multiple tables # SKIP filter: /SystemTableCache/
+ok 3 - Property 26: Partition Count Accuracy - zero partitions # SKIP filter: /SystemTableCache/
+ok 4 - Property 26: Partition Count Accuracy - only counts matching table_id # SKIP filter: /SystemTableCache/
 1..4

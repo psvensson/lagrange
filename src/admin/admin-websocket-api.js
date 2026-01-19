@@ -262,12 +262,13 @@ class AdminWebSocketAPI {
 
   /**
    * Build cache dump from system table cache.
-   * @return {Object} Cache dump with all six system tables.
+   * @return {Object} Cache dump with all system tables.
    * @private
    */
   buildCacheDump() {
     const tables = ['nodes', 'services', 'partitions', 'tables',
-      'message_groups', 'indices'];
+      'message_groups', 'indices', 'logs', 'config', 'contexts',
+      'live_queries'];
     const dump = {};
 
     for (const tableName of tables) {
@@ -294,7 +295,8 @@ class AdminWebSocketAPI {
    */
   async queryPartitionsForDump() {
     const systemTables = ['nodes', 'services', 'partitions', 'tables',
-      'message_groups', 'indices'];
+      'message_groups', 'indices', 'logs', 'config', 'contexts',
+      'live_queries'];
     const data = {};
 
     for (const tableName of systemTables) {

@@ -23,6 +23,8 @@ import {
 } from './system-table-schemas.js';
 import {CacheHydrationService} from '../cache/cache-hydration-service.js';
 import {SQLQueryEngine} from '../query/sql-query-engine.js';
+import {DynamicConfigService} from '../config/dynamic-config-service.js';
+import {CDCIntegrationService} from '../cdc/cdc-integration-service.js';
 
 /**
  * Bootstrap phases enumeration.
@@ -522,6 +524,9 @@ class BootstrapService extends EventEmitter {
     // Update partition sizes in the partitions table
     await this.updatePartitionSizes();
 
+    // Seed dynamic configuration into config system table
+    await this.seedDynamicConfiguration();
+
     this.logger.debug('Service registration complete', {
       nodeId: this.nodeId,
       servicesCreated: this.servicesCreated,
@@ -542,22 +547,6 @@ class BootstrapService extends EventEmitter {
       return;
     }
 
-    // First, clean up any stale nodes with the same address but different ID
-    // This handles the case where the node restarts with a new ID
-    try {
-      await nodesPartition.deleteData(SystemTableName.NODES, {
-        node_address: this.nodeAddress,
-      });
-      this.logger.debug('Cleaned up stale node entries', {
-        nodeAddress: this.nodeAddress,
-      });
-    } catch (error) {
-      // Ignore delete errors - there may be no stale entries
-      this.logger.debug('No stale node entries to clean up', {
-        nodeAddress: this.nodeAddress,
-      });
-    }
-
     const nodeData = {
       node_id: this.nodeId,
       node_address: this.nodeAddress,
@@ -573,7 +562,7 @@ class BootstrapService extends EventEmitter {
     };
 
     try {
-      await nodesPartition.insertData(SystemTableName.NODES, nodeData);
+      await nodesPartition.upsertData(SystemTableName.NODES, nodeData);
       this.logger.debug('Node registered', {nodeId: this.nodeId});
     } catch (error) {
       this.logger.error('Failed to register node', {
@@ -610,7 +599,7 @@ class BootstrapService extends EventEmitter {
     };
 
     try {
-      await mgPartition.insertData(SystemTableName.MESSAGE_GROUPS, groupData);
+      await mgPartition.upsertData(SystemTableName.MESSAGE_GROUPS, groupData);
       this.logger.debug('Message group registered', {
         groupId: INITIAL_MESSAGE_GROUP_ID,
       });
@@ -652,7 +641,7 @@ class BootstrapService extends EventEmitter {
       };
 
       try {
-        await servicesPartition.insertData(SystemTableName.SERVICES, serviceData);
+        await servicesPartition.upsertData(SystemTableName.SERVICES, serviceData);
       } catch (error) {
         this.logger.error('Failed to register message group service', {
           replicaId,
@@ -678,7 +667,7 @@ class BootstrapService extends EventEmitter {
       };
 
       try {
-        await servicesPartition.insertData(SystemTableName.SERVICES, serviceData);
+        await servicesPartition.upsertData(SystemTableName.SERVICES, serviceData);
       } catch (error) {
         this.logger.error('Failed to register partition service', {
           replicaId,
@@ -713,7 +702,7 @@ class BootstrapService extends EventEmitter {
       const tableName = schema.tableName;
       const partitionId = INITIAL_PARTITION_IDS[tableName];
 
-      // Register table
+      // Register table (use upsert to handle restarts with persistent storage)
       const tableData = {
         table_id: tableName,
         table_name: tableName,
@@ -726,7 +715,7 @@ class BootstrapService extends EventEmitter {
       };
 
       try {
-        await tablesPartition.insertData(SystemTableName.TABLES, tableData);
+        await tablesPartition.upsertData(SystemTableName.TABLES, tableData);
       } catch (error) {
         this.logger.error('Failed to register table', {
           tableName,
@@ -734,7 +723,7 @@ class BootstrapService extends EventEmitter {
         });
       }
 
-      // Register partition
+      // Register partition (use upsert to handle restarts with persistent storage)
       const partitionData = {
         partition_id: partitionId,
         table_id: tableName,
@@ -749,7 +738,7 @@ class BootstrapService extends EventEmitter {
       };
 
       try {
-        await partitionsPartition.insertData(SystemTableName.PARTITIONS, partitionData);
+        await partitionsPartition.upsertData(SystemTableName.PARTITIONS, partitionData);
       } catch (error) {
         this.logger.error('Failed to register partition', {
           partitionId,
@@ -818,6 +807,99 @@ class BootstrapService extends EventEmitter {
       updatedCount,
       totalPartitions: updatedPartitions.size,
     });
+  }
+
+  /**
+   * Seed dynamic configuration into the config system table.
+   * This must happen before cache hydration so config values are available.
+   * @return {Promise<void>}
+   * @private
+   */
+  async seedDynamicConfiguration() {
+    // Get the config partition to check if data already exists
+    const configPartition = this.getLeaderPartition(SystemTableName.CONFIG);
+    if (!configPartition) {
+      this.logger.warn('Config partition not available for seeding');
+      return;
+    }
+
+    // Check if config already exists in the partition (from previous run)
+    try {
+      const result = await configPartition.executeQuery(
+        'SELECT COUNT(*) as count FROM config',
+      );
+      if (result && result.rows && result.rows.length > 0 && result.rows[0].count > 0) {
+        this.logger.info('Config already seeded, skipping', {
+          existingCount: result.rows[0].count,
+        });
+        return;
+      }
+    } catch (error) {
+      this.logger.debug('Could not check existing config, proceeding with seeding', {
+        error: error.message,
+      });
+    }
+
+    // Build partition registry for CDC integration service
+    const partitionRegistry = new Map();
+    for (const [_replicaId, partition] of this.partitionServices) {
+      const partitionId = partition.partitionId;
+      if (!partitionRegistry.has(partitionId) || partition.isLeader) {
+        partitionRegistry.set(partitionId, partition);
+      }
+    }
+
+    // Create a function to get partition for a table from the registry
+    const getPartitionForTable = (tableName) => {
+      for (const partition of partitionRegistry.values()) {
+        if (partition.tableName === tableName && partition.isLeader) {
+          return partition;
+        }
+      }
+      // Return first matching partition if no leader found
+      for (const partition of partitionRegistry.values()) {
+        if (partition.tableName === tableName) {
+          return partition;
+        }
+      }
+      return null;
+    };
+
+    // Create CDC integration service for config seeding
+    const cdcIntegrationService = new CDCIntegrationService({
+      nodeId: this.nodeId,
+      getPartitionForTable,
+    });
+    cdcIntegrationService.initialize();
+
+    // Get system table cache for reading existing config
+    let systemTableCache = null;
+    for (const mgService of this.messageGroupServices.values()) {
+      systemTableCache = mgService.systemTableCache;
+      break;
+    }
+
+    // Create and initialize dynamic config service
+    const dynamicConfigService = new DynamicConfigService({
+      cdcIntegrationService,
+      systemTableCache,
+      nodeId: this.nodeId,
+    });
+    await dynamicConfigService.initialize();
+
+    try {
+      const result = await dynamicConfigService.seedConfiguration('system');
+      this.logger.info('Dynamic configuration seeded', {
+        seeded: result.seeded.length,
+        skipped: result.skipped.length,
+      });
+    } catch (error) {
+      this.logger.error('Failed to seed dynamic configuration', {
+        error: error.message,
+        stack: error.stack,
+      });
+      // Continue anyway - config seeding is not critical for startup
+    }
   }
 
   /**

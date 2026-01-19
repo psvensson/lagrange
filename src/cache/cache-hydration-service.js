@@ -17,6 +17,11 @@ const SYSTEM_TABLES_TO_HYDRATE = [
   'partitions',
   'message_groups',
   'indices',
+  'config',
+  'logs',
+  'live_queries',
+  'contexts',
+  'code',
 ];
 
 /**

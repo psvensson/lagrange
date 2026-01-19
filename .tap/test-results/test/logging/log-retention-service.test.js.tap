@@ -1,143 +1,17 @@
 TAP version 14
-# Subtest: setup
-    ok 1 - configuration initialized
-    1..1
-ok 1 - setup # time=36.933ms
-
-# Subtest: LogRetentionService singleton
-    ok 1 - should return the same instance
-LogRetentionService shutdown
-    1..1
-ok 2 - LogRetentionService singleton # time=0.766ms
-
-# Subtest: LogRetentionService initialization
-    ok 1 - should not be initialized before initialize()
-LogRetentionService initialized
-    ok 2 - should be initialized after initialize()
-    ok 3 - should have zero total deleted
-    ok 4 - should have zero cleanup count
-    ok 5 - should not be running
-LogRetentionService shutdown
-    1..5
-ok 3 - LogRetentionService initialization # time=0.833ms
-
-# Subtest: LogRetentionService default config
-    ok 1 - should have 7 day retention
-    ok 2 - should have 1 hour interval
-    ok 3 - should have batch size
-    ok 4 - should have max deletes per run
-    1..4
-ok 4 - LogRetentionService default config # time=0.307ms
-
-LogRetentionService initialized
-Retention period set to 86400000ms
-# Subtest: LogRetentionService setRetentionPeriod
-    ok 1 - should update retention period
-LogRetentionService shutdown
-    1..1
-ok 5 - LogRetentionService setRetentionPeriod # time=0.43ms
-
-LogRetentionService initialized
-# Subtest: LogRetentionService setRetentionPeriod rejects negative
-    ok 1 - should reject negative retention period
-LogRetentionService shutdown
-    1..1
-ok 6 - LogRetentionService setRetentionPeriod rejects negative # time=0.43ms
-
-LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-12T08:23:01.411Z)
-# Subtest: LogRetentionService runCleanup without engine returns error
-    ok 1 - should fail without engine
-    ok 2 - should have error message
-LogRetentionService shutdown
-    1..2
-ok 7 - LogRetentionService runCleanup without engine returns error # time=0.676ms
-
-LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-12T08:23:01.412Z)
-Log cleanup completed: 0 entries deleted in 0ms
-# Subtest: LogRetentionService runCleanup with mock engine - no logs to delete
-    ok 1 - should succeed
-    ok 2 - should delete 0 entries
-    ok 3 - should have cutoff time
-LogRetentionService shutdown
-    1..3
-ok 8 - LogRetentionService runCleanup with mock engine - no logs to delete # time=0.609ms
-
-LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-12T08:23:01.413Z)
-# Subtest: LogRetentionService runCleanup with mock engine - deletes logs
-    ok 1 - should include log-1
-    ok 2 - should include log-2
-    ok 3 - should include log-3
-Log cleanup completed: 3 entries deleted in 0ms
-    ok 4 - should call SELECT
-    ok 5 - should call DELETE
-    ok 6 - should succeed
-    ok 7 - should delete 3 entries
-    ok 8 - should update total deleted
-    ok 9 - should update cleanup count
-    ok 10 - should update last cleanup time
-LogRetentionService shutdown
-    1..10
-ok 9 - LogRetentionService runCleanup with mock engine - deletes logs # time=1.017ms
-
-LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-12T08:23:01.414Z)
-Log cleanup completed: 0 entries deleted in 50ms
-# Subtest: LogRetentionService runCleanup prevents concurrent runs
-    ok 1 - one should succeed
-    ok 2 - one should fail
-    ok 3 - should indicate already running
-LogRetentionService shutdown
-    1..3
-ok 10 - LogRetentionService runCleanup prevents concurrent runs # time=50.976ms
-
-LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-12T08:23:01.465Z)
-Log cleanup completed: 10 entries deleted in 0ms
-# Subtest: LogRetentionService runCleanup batches deletes
-    ok 1 - should succeed
-    ok 2 - should delete 10 entries
-    ok 3 - should call SELECT twice (batch + check for more)
-    ok 4 - should call DELETE once
-LogRetentionService shutdown
-    1..4
-ok 11 - LogRetentionService runCleanup batches deletes # time=0.659ms
-
-LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-18T08:23:01.466Z)
-Log cleanup completed: 0 entries deleted in 0ms
-# Subtest: LogRetentionService uses table policy retention period
-    ok 1 - should capture cutoff time
-    ok 2 - should use policy retention period
-LogRetentionService shutdown
-    1..2
-ok 12 - LogRetentionService uses table policy retention period # time=0.575ms
-
-LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-12T08:23:01.467Z)
-Log cleanup completed: 0 entries deleted in 0ms
-# Subtest: LogRetentionService emits cleanup event
-    ok 1 - should have deleted count
-    ok 2 - should have duration
-    ok 3 - should have cutoff time
-    ok 4 - should emit cleanup event
-LogRetentionService shutdown
-    1..4
-ok 13 - LogRetentionService emits cleanup event # time=0.593ms
-
-LogRetentionService initialized
-LogRetentionService shutdown
-# Subtest: LogRetentionService shutdown
-    ok 1 - should not be initialized after shutdown
-LogRetentionService shutdown
-    1..1
-ok 14 - LogRetentionService shutdown # time=0.347ms
-
-# Subtest: cleanup
-    ok 1 - cleanup complete
-    1..1
-ok 15 - cleanup # time=0.144ms
-
+ok 1 - setup # SKIP filter: /SystemTableCache/
+ok 2 - LogRetentionService singleton # SKIP filter: /SystemTableCache/
+ok 3 - LogRetentionService initialization # SKIP filter: /SystemTableCache/
+ok 4 - LogRetentionService default config # SKIP filter: /SystemTableCache/
+ok 5 - LogRetentionService setRetentionPeriod # SKIP filter: /SystemTableCache/
+ok 6 - LogRetentionService setRetentionPeriod rejects negative # SKIP filter: /SystemTableCache/
+ok 7 - LogRetentionService runCleanup without engine returns error # SKIP filter: /SystemTableCache/
+ok 8 - LogRetentionService runCleanup with mock engine - no logs to delete # SKIP filter: /SystemTableCache/
+ok 9 - LogRetentionService runCleanup with mock engine - deletes logs # SKIP filter: /SystemTableCache/
+ok 10 - LogRetentionService runCleanup prevents concurrent runs # SKIP filter: /SystemTableCache/
+ok 11 - LogRetentionService runCleanup batches deletes # SKIP filter: /SystemTableCache/
+ok 12 - LogRetentionService uses table policy retention period # SKIP filter: /SystemTableCache/
+ok 13 - LogRetentionService emits cleanup event # SKIP filter: /SystemTableCache/
+ok 14 - LogRetentionService shutdown # SKIP filter: /SystemTableCache/
+ok 15 - cleanup # SKIP filter: /SystemTableCache/
 1..15

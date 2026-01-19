@@ -1,17 +1,5 @@
 TAP version 14
-# Subtest: Property 4: Tables are implemented as SQLite-backed Raft partitions
-    ok 1 - All tables are implemented as SQLite-backed Raft partitions
-    1..1
-ok 1 - Property 4: Tables are implemented as SQLite-backed Raft partitions # time=5022.119ms
-
-# Subtest: Property 4: Partitions maintain Raft consensus state
-    ok 1 - Partitions maintain Raft consensus state
-    1..1
-ok 2 - Property 4: Partitions maintain Raft consensus state # time=5010.868ms
-
-# Subtest: Property 4: Partition data is persisted in SQLite
-    ok 1 - Partition data is persisted in SQLite
-    1..1
-ok 3 - Property 4: Partition data is persisted in SQLite # time=5014.59ms
-
+ok 1 - Property 4: Tables are implemented as SQLite-backed Raft partitions # SKIP filter: /SystemTableCache/
+ok 2 - Property 4: Partitions maintain Raft consensus state # SKIP filter: /SystemTableCache/
+ok 3 - Property 4: Partition data is persisted in SQLite # SKIP filter: /SystemTableCache/
 1..3

@@ -1,66 +1,10 @@
 TAP version 14
-# Subtest: Property 33: All system table partitions have odd replica counts
-    ok 1 - System table tables has odd replica count: 3
-    ok 2 - System table tables has at least 3 replicas: 3
-    ok 3 - System table nodes has odd replica count: 3
-    ok 4 - System table nodes has at least 3 replicas: 3
-    ok 5 - System table message_groups has odd replica count: 3
-    ok 6 - System table message_groups has at least 3 replicas: 3
-    ok 7 - System table partitions has odd replica count: 3
-    ok 8 - System table partitions has at least 3 replicas: 3
-    ok 9 - System table services has odd replica count: 3
-    ok 10 - System table services has at least 3 replicas: 3
-    ok 11 - System table indices has odd replica count: 3
-    ok 12 - System table indices has at least 3 replicas: 3
-    ok 13 - System table logs has odd replica count: 3
-    ok 14 - System table logs has at least 3 replicas: 3
-    ok 15 - System table config has odd replica count: 3
-    ok 16 - System table config has at least 3 replicas: 3
-    ok 17 - System table live_queries has odd replica count: 3
-    ok 18 - System table live_queries has at least 3 replicas: 3
-    ok 19 - System table contexts has odd replica count: 3
-    ok 20 - System table contexts has at least 3 replicas: 3
-    ok 21 - System table code has odd replica count: 3
-    ok 22 - System table code has at least 3 replicas: 3
-    1..22
-ok 1 - Property 33: All system table partitions have odd replica counts # time=3.766ms
-
-# Subtest: Property 33: Initial message group has odd replica count
-    ok 1 - Initial message group has odd replica count: 3
-    ok 2 - Initial message group has at least 3 replicas: 3
-    1..2
-ok 2 - Property 33: Initial message group has odd replica count # time=0.373ms
-
-# Subtest: Property 33: Default partition replica count is odd
-    ok 1 - Default partition replica count is odd: 3
-    ok 2 - Default partition replica count is at least 3: 3
-    1..2
-ok 3 - Property 33: Default partition replica count is odd # time=0.359ms
-
-# Subtest: Property 33: Default message group replica count is odd
-    ok 1 - Default message group replica count is odd: 3
-    ok 2 - Default message group replica count is at least 3: 3
-    1..2
-ok 4 - Property 33: Default message group replica count is odd # time=0.384ms
-
-# Subtest: Property 33: Valid replica counts are always odd
-    ok 1 - Valid replica counts are always odd
-    1..1
-ok 5 - Property 33: Valid replica counts are always odd # time=1.711ms
-
-# Subtest: Property 33: Replica count growth maintains odd invariant
-    ok 1 - Replica count growth maintains odd invariant
-    1..1
-ok 6 - Property 33: Replica count growth maintains odd invariant # time=0.701ms
-
-# Subtest: Property 33: Replica count shrink maintains odd invariant
-    ok 1 - Replica count shrink maintains odd invariant
-    1..1
-ok 7 - Property 33: Replica count shrink maintains odd invariant # time=0.629ms
-
-# Subtest: Property 33: Quorum calculation requires odd replica count
-    ok 1 - Quorum calculation requires odd replica count
-    1..1
-ok 8 - Property 33: Quorum calculation requires odd replica count # time=0.457ms
-
+ok 1 - Property 33: All system table partitions have odd replica counts # SKIP filter: /SystemTableCache/
+ok 2 - Property 33: Initial message group has odd replica count # SKIP filter: /SystemTableCache/
+ok 3 - Property 33: Default partition replica count is odd # SKIP filter: /SystemTableCache/
+ok 4 - Property 33: Default message group replica count is odd # SKIP filter: /SystemTableCache/
+ok 5 - Property 33: Valid replica counts are always odd # SKIP filter: /SystemTableCache/
+ok 6 - Property 33: Replica count growth maintains odd invariant # SKIP filter: /SystemTableCache/
+ok 7 - Property 33: Replica count shrink maintains odd invariant # SKIP filter: /SystemTableCache/
+ok 8 - Property 33: Quorum calculation requires odd replica count # SKIP filter: /SystemTableCache/
 1..8

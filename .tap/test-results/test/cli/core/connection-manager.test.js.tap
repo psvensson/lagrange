@@ -1,159 +1,30 @@
 TAP version 14
-# Subtest: ConnectionManager - initial state
-    ok 1 - should be equal
-    ok 2 - should be equal
-    ok 3 - should be equal
-    ok 4 - should be equal
-    1..4
-ok 1 - ConnectionManager - initial state # time=8.15ms
-
-# Subtest: ConnectionManager - default config values
-    ok 1 - should be equal
-    ok 2 - should be equal
-    ok 3 - should be equal
-    1..3
-ok 2 - ConnectionManager - default config values # time=0.467ms
-
-# Subtest: ConnectionManager - custom config values
-    ok 1 - should be equal
-    ok 2 - should be equal
-    ok 3 - should be equal
-    1..3
-ok 3 - ConnectionManager - custom config values # time=0.378ms
-
-# Subtest: ConnectionManager - buildWebSocketUrl adds protocol
-    ok 1 - should be equal
-    1..1
-ok 4 - ConnectionManager - buildWebSocketUrl adds protocol # time=0.33ms
-
-# Subtest: ConnectionManager - buildWebSocketUrl converts http to ws
-    ok 1 - should be equal
-    1..1
-ok 5 - ConnectionManager - buildWebSocketUrl converts http to ws # time=0.273ms
-
-# Subtest: ConnectionManager - buildWebSocketUrl converts https to wss
-    ok 1 - should be equal
-    1..1
-ok 6 - ConnectionManager - buildWebSocketUrl converts https to wss # time=0.239ms
-
-# Subtest: ConnectionManager - buildWebSocketUrl preserves ws protocol
-    ok 1 - should be equal
-    1..1
-ok 7 - ConnectionManager - buildWebSocketUrl preserves ws protocol # time=0.219ms
-
-# Subtest: ConnectionManager - buildWebSocketUrl preserves wss protocol
-    ok 1 - should be equal
-    1..1
-ok 8 - ConnectionManager - buildWebSocketUrl preserves wss protocol # time=0.213ms
-
-# Subtest: ConnectionManager - buildWebSocketUrl handles trailing slash
-    ok 1 - should be equal
-    1..1
-ok 9 - ConnectionManager - buildWebSocketUrl handles trailing slash # time=0.218ms
-
-# Subtest: ConnectionManager - buildWebSocketUrl preserves existing path
-    ok 1 - should be equal
-    1..1
-ok 10 - ConnectionManager - buildWebSocketUrl preserves existing path # time=0.233ms
-
-# Subtest: ConnectionManager - calculateBackoffDelay exponential
-    ok 1 - should be equal
-    ok 2 - should be equal
-    ok 3 - should be equal
-    ok 4 - should be equal
-    ok 5 - should be equal
-    1..5
-ok 11 - ConnectionManager - calculateBackoffDelay exponential # time=0.5ms
-
-# Subtest: ConnectionManager - calculateBackoffDelay caps at maxDelay
-    ok 1 - should be equal
-    ok 2 - should be equal
-    1..2
-ok 12 - ConnectionManager - calculateBackoffDelay caps at maxDelay # time=0.306ms
-
-# Subtest: ConnectionManager - disconnect sets status
-    ok 1 - should be equal
-    ok 2 - should be equal
-    1..2
-ok 13 - ConnectionManager - disconnect sets status # time=0.505ms
-
-# Subtest: ConnectionManager - disconnect cancels reconnect timer
-    ok 1 - should be equal
-    1..1
-ok 14 - ConnectionManager - disconnect cancels reconnect timer # time=0.379ms
-
-# Subtest: ConnectionManager - resetReconnectAttempts
-    ok 1 - should be equal
-    1..1
-ok 15 - ConnectionManager - resetReconnectAttempts # time=0.241ms
-
-# Subtest: ConnectionManager - cancelReconnect clears timer
-    ok 1 - should be equal
-    1..1
-ok 16 - ConnectionManager - cancelReconnect clears timer # time=0.245ms
-
-# Subtest: ConnectionManager - sendQuery returns false when not connected
-    ok 1 - should be equal
-    1..1
-ok 17 - ConnectionManager - sendQuery returns false when not connected # time=0.247ms
-
-# Subtest: ConnectionManager - subscribeLiveQuery returns false when not connected
-    ok 1 - should be equal
-    1..1
-ok 18 - ConnectionManager - subscribeLiveQuery returns false when not connected # time=0.228ms
-
-# Subtest: ConnectionManager - unsubscribeLiveQuery returns false when not connected
-    ok 1 - should be equal
-    1..1
-ok 19 - ConnectionManager - unsubscribeLiveQuery returns false when not connected # time=0.276ms
-
-# Subtest: ConnectionManager - requestCacheDump returns false when not connected
-    ok 1 - should be equal
-    1..1
-ok 20 - ConnectionManager - requestCacheDump returns false when not connected # time=0.336ms
-
-# Subtest: ConnectionManager - handleMessage parses cache_dump
-    ok 1 - should be equivalent
-    1..1
-ok 21 - ConnectionManager - handleMessage parses cache_dump # time=2.542ms
-
-# Subtest: ConnectionManager - handleMessage parses cdc_event
-    ok 1 - should be equivalent
-    1..1
-ok 22 - ConnectionManager - handleMessage parses cdc_event # time=0.53ms
-
-# Subtest: ConnectionManager - handleMessage parses query_result
-    ok 1 - should be equivalent
-    1..1
-ok 23 - ConnectionManager - handleMessage parses query_result # time=0.379ms
-
-# Subtest: ConnectionManager - handleMessage parses error
-    ok 1 - should be equal
-    ok 2 - should be equal
-    1..2
-ok 24 - ConnectionManager - handleMessage parses error # time=0.401ms
-
-# Subtest: ConnectionManager - handleMessage handles invalid JSON
-    ok 1 - should be equal
-    ok 2 - should be equal
-    1..2
-ok 25 - ConnectionManager - handleMessage handles invalid JSON # time=0.337ms
-
-# Subtest: ConnectionManager - handleMessage ignores unknown types
-    ok 1 - should be equal
-    1..1
-ok 26 - ConnectionManager - handleMessage ignores unknown types # time=0.26ms
-
-# Subtest: ConnectionManager - scheduleReconnect respects max attempts
-    ok 1 - should be equal
-    ok 2 - should be equal
-    1..2
-ok 27 - ConnectionManager - scheduleReconnect respects max attempts # time=0.392ms
-
-# Subtest: ConnectionManager - scheduleReconnect does nothing if intentional disconnect
-    ok 1 - should be equal
-    ok 2 - should be equal
-    1..2
-ok 28 - ConnectionManager - scheduleReconnect does nothing if intentional disconnect # time=3.885ms
-
+ok 1 - ConnectionManager - initial state # SKIP filter: /SystemTableCache/
+ok 2 - ConnectionManager - default config values # SKIP filter: /SystemTableCache/
+ok 3 - ConnectionManager - custom config values # SKIP filter: /SystemTableCache/
+ok 4 - ConnectionManager - buildWebSocketUrl adds protocol # SKIP filter: /SystemTableCache/
+ok 5 - ConnectionManager - buildWebSocketUrl converts http to ws # SKIP filter: /SystemTableCache/
+ok 6 - ConnectionManager - buildWebSocketUrl converts https to wss # SKIP filter: /SystemTableCache/
+ok 7 - ConnectionManager - buildWebSocketUrl preserves ws protocol # SKIP filter: /SystemTableCache/
+ok 8 - ConnectionManager - buildWebSocketUrl preserves wss protocol # SKIP filter: /SystemTableCache/
+ok 9 - ConnectionManager - buildWebSocketUrl handles trailing slash # SKIP filter: /SystemTableCache/
+ok 10 - ConnectionManager - buildWebSocketUrl preserves existing path # SKIP filter: /SystemTableCache/
+ok 11 - ConnectionManager - calculateBackoffDelay exponential # SKIP filter: /SystemTableCache/
+ok 12 - ConnectionManager - calculateBackoffDelay caps at maxDelay # SKIP filter: /SystemTableCache/
+ok 13 - ConnectionManager - disconnect sets status # SKIP filter: /SystemTableCache/
+ok 14 - ConnectionManager - disconnect cancels reconnect timer # SKIP filter: /SystemTableCache/
+ok 15 - ConnectionManager - resetReconnectAttempts # SKIP filter: /SystemTableCache/
+ok 16 - ConnectionManager - cancelReconnect clears timer # SKIP filter: /SystemTableCache/
+ok 17 - ConnectionManager - sendQuery returns false when not connected # SKIP filter: /SystemTableCache/
+ok 18 - ConnectionManager - subscribeLiveQuery returns false when not connected # SKIP filter: /SystemTableCache/
+ok 19 - ConnectionManager - unsubscribeLiveQuery returns false when not connected # SKIP filter: /SystemTableCache/
+ok 20 - ConnectionManager - requestCacheDump returns false when not connected # SKIP filter: /SystemTableCache/
+ok 21 - ConnectionManager - handleMessage parses cache_dump # SKIP filter: /SystemTableCache/
+ok 22 - ConnectionManager - handleMessage parses cdc_event # SKIP filter: /SystemTableCache/
+ok 23 - ConnectionManager - handleMessage parses query_result # SKIP filter: /SystemTableCache/
+ok 24 - ConnectionManager - handleMessage parses error # SKIP filter: /SystemTableCache/
+ok 25 - ConnectionManager - handleMessage handles invalid JSON # SKIP filter: /SystemTableCache/
+ok 26 - ConnectionManager - handleMessage ignores unknown types # SKIP filter: /SystemTableCache/
+ok 27 - ConnectionManager - scheduleReconnect respects max attempts # SKIP filter: /SystemTableCache/
+ok 28 - ConnectionManager - scheduleReconnect does nothing if intentional disconnect # SKIP filter: /SystemTableCache/
 1..28

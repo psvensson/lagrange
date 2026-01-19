@@ -1,114 +1,14 @@
 TAP version 14
-# Subtest: setup
-    ok 1 - configuration initialized
-    1..1
-ok 1 - setup # time=43.411ms
-
-# Subtest: LoggingService singleton
-    ok 1 - should return the same instance
-    1..1
-ok 2 - LoggingService singleton # time=0.387ms
-
-# Subtest: LoggingService initialization
-    ok 1 - should not be initialized before initialize()
-    ok 2 - should be initialized after initialize()
-    ok 3 - should set node ID
-    1..3
-ok 3 - LoggingService initialization # time=2.088ms
-
-# Subtest: LoggingService log levels
-    ok 1 - should have trace level
-    ok 2 - should have debug level
-    ok 3 - should have info level
-    ok 4 - should have warn level
-    ok 5 - should have error level
-    ok 6 - should have fatal level
-    1..6
-ok 4 - LoggingService log levels # time=0.643ms
-
-# Subtest: LoggingService buffering during bootstrap
-    ok 1 - logs table should not be ready initially
-{"level":30,"time":"2026-01-19T08:23:02.447Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Test message 1"}
-    ok 2 - should buffer log entries
-    1..2
-ok 5 - LoggingService buffering during bootstrap # time=2.368ms
-
-{"level":30,"time":"2026-01-19T08:23:02.449Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Buffered message 1"}
-# Subtest: LoggingService flush on logs table ready
-    ok 1 - should have 2 buffered entries
-    ok 2 - should return flushed count
-    ok 3 - logs table should be ready
-    ok 4 - buffer should be empty after flush
-    1..4
-ok 6 - LoggingService flush on logs table ready # time=1.129ms
-
-{"level":30,"time":"2026-01-19T08:23:02.450Z","nodeId":"test-node","pid":3589855,"serviceId":"partition-1","nodeId":"test-node","msg":"Child message"}
-# Subtest: LoggingService child logger
-    ok 1 - child logger should use parent buffer
-    ok 2 - should include child bindings
-    1..2
-ok 7 - LoggingService child logger # time=0.724ms
-
-{"level":30,"time":"2026-01-19T08:23:02.451Z","nodeId":"test-node","pid":3589855,"subsystem":"hlc","nodeId":"test-node","msg":"HLC message"}
-# Subtest: LoggingService forSubsystem creates subsystem logger
-    ok 1 - should buffer both messages
-    ok 2 - should have hlc subsystem
-    ok 3 - should include subsystem in metadata
-    ok 4 - should have raft subsystem
-    ok 5 - should include subsystem in metadata
-    1..5
-ok 8 - LoggingService forSubsystem creates subsystem logger # time=0.865ms
-
-{"level":30,"time":"2026-01-19T08:23:02.452Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Message 0"}
-# Subtest: LoggingService buffer size limit
-    ok 1 - should limit buffer size
-    1..1
-ok 9 - LoggingService buffer size limit # time=0.537ms
-
-{"level":30,"time":"2026-01-19T08:23:02.452Z","nodeId":"test-node","pid":3589855,"subsystem":"test-subsystem","serviceId":"svc-1","serviceType":"partition","traceId":"trace-123","nodeId":"test-node","msg":"Test message"}
-# Subtest: LoggingService log entry structure
-    ok 1 - should have log ID
-    ok 2 - should have timestamp
-    ok 3 - should have uppercase level
-    ok 4 - should have node ID
-    ok 5 - should have subsystem
-    ok 6 - should have service ID
-    ok 7 - should have service type
-    ok 8 - should have message
-    ok 9 - should have trace ID
-    ok 10 - should have created at
-    1..10
-ok 10 - LoggingService log entry structure # time=0.937ms
-
-{"level":10,"time":"2026-01-19T08:23:02.454Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Trace message"}
-{"level":20,"time":"2026-01-19T08:23:02.454Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Debug message"}
-{"level":30,"time":"2026-01-19T08:23:02.454Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Info message"}
-{"level":40,"time":"2026-01-19T08:23:02.454Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Warn message"}
-{"level":50,"time":"2026-01-19T08:23:02.454Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Error message"}
-{"level":60,"time":"2026-01-19T08:23:02.454Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Fatal message"}
-# Subtest: LoggingService all log methods
-    ok 1 - should log all levels
-    ok 2 - should have correct levels
-    1..2
-ok 11 - LoggingService all log methods # time=1.644ms
-
-# Subtest: cleanup
-    ok 1 - cleanup complete
-    1..1
-ok 12 - cleanup # time=0.279ms
-
-{"level":30,"time":"2026-01-19T08:23:02.447Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Test message 2"}
-{"level":30,"time":"2026-01-19T08:23:02.447Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Test message 3"}
-{"level":30,"time":"2026-01-19T08:23:02.449Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Buffered message 2"}
-{"level":30,"time":"2026-01-19T08:23:02.449Z","nodeId":"test-node","pid":3589855,"bufferedEntries":2,"nodeId":"test-node","msg":"Logs table ready, flushing buffer"}
-{"level":30,"time":"2026-01-19T08:23:02.451Z","nodeId":"test-node","pid":3589855,"subsystem":"raft","nodeId":"test-node","msg":"Raft message"}
-{"level":30,"time":"2026-01-19T08:23:02.452Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Message 1"}
-{"level":30,"time":"2026-01-19T08:23:02.452Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Message 2"}
-{"level":30,"time":"2026-01-19T08:23:02.452Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Message 3"}
-{"level":30,"time":"2026-01-19T08:23:02.452Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Message 4"}
-{"level":30,"time":"2026-01-19T08:23:02.452Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Message 5"}
-{"level":30,"time":"2026-01-19T08:23:02.452Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Message 6"}
-{"level":30,"time":"2026-01-19T08:23:02.452Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Message 7"}
-{"level":30,"time":"2026-01-19T08:23:02.452Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Message 8"}
-{"level":30,"time":"2026-01-19T08:23:02.452Z","nodeId":"test-node","pid":3589855,"nodeId":"test-node","msg":"Message 9"}
+ok 1 - setup # SKIP filter: /SystemTableCache/
+ok 2 - LoggingService singleton # SKIP filter: /SystemTableCache/
+ok 3 - LoggingService initialization # SKIP filter: /SystemTableCache/
+ok 4 - LoggingService log levels # SKIP filter: /SystemTableCache/
+ok 5 - LoggingService buffering during bootstrap # SKIP filter: /SystemTableCache/
+ok 6 - LoggingService flush on logs table ready # SKIP filter: /SystemTableCache/
+ok 7 - LoggingService child logger # SKIP filter: /SystemTableCache/
+ok 8 - LoggingService forSubsystem creates subsystem logger # SKIP filter: /SystemTableCache/
+ok 9 - LoggingService buffer size limit # SKIP filter: /SystemTableCache/
+ok 10 - LoggingService log entry structure # SKIP filter: /SystemTableCache/
+ok 11 - LoggingService all log methods # SKIP filter: /SystemTableCache/
+ok 12 - cleanup # SKIP filter: /SystemTableCache/
 1..12

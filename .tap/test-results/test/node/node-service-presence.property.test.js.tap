@@ -1,31 +1,3 @@
 TAP version 14
-# Subtest: Property 2: Node Service Presence
-    # Subtest: singleton ensures exactly one NodeService instance
-        ok 1 - singleton ensures exactly one NodeService instance
-        1..1
-    ok 1 - singleton ensures exactly one NodeService instance # time=5.575ms
-    
-    # Subtest: NodeService is present and active after initialization
-        ok 1 - NodeService is present and active after initialization
-        1..1
-    ok 2 - NodeService is present and active after initialization # time=6.076ms
-    
-    # Subtest: multiple initialization attempts are idempotent
-        ok 1 - multiple initialization attempts are idempotent
-        1..1
-    ok 3 - multiple initialization attempts are idempotent # time=4.684ms
-    
-    # Subtest: NodeService has complete interface
-        ok 1 - NodeService has complete interface
-        1..1
-    ok 4 - NodeService has complete interface # time=0.608ms
-    
-    # Subtest: NodeService status is always valid
-        ok 1 - NodeService status is always valid
-        1..1
-    ok 5 - NodeService status is always valid # time=1.845ms
-    
-    1..5
-ok 1 - Property 2: Node Service Presence # time=184.648ms
-
+ok 1 - Property 2: Node Service Presence # SKIP filter: /SystemTableCache/
 1..1

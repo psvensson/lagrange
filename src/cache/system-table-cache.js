@@ -19,6 +19,9 @@ const SYSTEM_TABLES = [
   'indices',
   'contexts',
   'code',
+  'config',
+  'logs',
+  'live_queries',
 ];
 
 /**

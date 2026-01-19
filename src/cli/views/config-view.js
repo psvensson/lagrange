@@ -70,9 +70,9 @@ export class ConfigView extends BaseView {
    */
   formatRow(config) {
     return [
-      config.key || 'N/A',
-      this.formatValue(config.value, config.type),
-      config.type || 'string',
+      config.config_key || 'N/A',
+      this.formatValue(config.config_value, config.value_type),
+      config.value_type || 'string',
       this.formatRequiresRestart(config),
       this.formatTimestamp(config.updated_at),
     ];
@@ -173,7 +173,7 @@ export class ConfigView extends BaseView {
       return false;
     }
 
-    const currentValue = config.value;
+    const currentValue = config.config_value;
     const defaultValue = config.default_value;
 
     // Handle null/undefined cases
@@ -199,7 +199,7 @@ export class ConfigView extends BaseView {
    * @return {string} Unique key
    */
   getItemKey(config) {
-    return config.key || '';
+    return config.config_key || '';
   }
 
   /**
@@ -233,12 +233,12 @@ export class ConfigView extends BaseView {
     if (this.keyPatternFilter) {
       try {
         const pattern = new RegExp(this.escapeRegex(this.keyPatternFilter), 'i');
-        result = result.filter((config) => pattern.test(config.key || ''));
+        result = result.filter((config) => pattern.test(config.config_key || ''));
       } catch (_err) {
         // If regex is invalid, fall back to simple includes
         const lowerPattern = this.keyPatternFilter.toLowerCase();
         result = result.filter((config) =>
-          (config.key || '').toLowerCase().includes(lowerPattern),
+          (config.config_key || '').toLowerCase().includes(lowerPattern),
         );
       }
     }
@@ -281,7 +281,7 @@ export class ConfigView extends BaseView {
     return {
       action: 'showDetail',
       view: 'config',
-      context: {configKey: selectedConfig.key},
+      context: {configKey: selectedConfig.config_key},
       detail: this.getSelectedDetails(),
     };
   }
@@ -313,11 +313,13 @@ export class ConfigView extends BaseView {
       {
         title: 'Configuration Entry',
         fields: [
-          {label: 'Key', value: config.key || 'N/A'},
-          {label: 'Value', value: this.formatFullValue(config.value, config.type)},
-          {label: 'Type', value: config.type || 'string'},
+          {label: 'Key', value: config.config_key || 'N/A'},
+          {label: 'Value', value: this.formatFullValue(
+            config.config_value, config.value_type,
+          )},
+          {label: 'Type', value: config.value_type || 'string'},
           {label: 'Default Value', value: this.formatFullValue(
-            config.default_value, config.type,
+            config.default_value, config.value_type,
           )},
           {label: 'Requires Restart', value: config.requires_restart ? 'Yes' : 'No'},
           {label: 'Last Modified', value: this.formatTimestamp(config.updated_at)},
@@ -356,7 +358,7 @@ export class ConfigView extends BaseView {
     }
 
     return {
-      title: `Config: ${config.key || 'Unknown'}`,
+      title: `Config: ${config.config_key || 'Unknown'}`,
       sections,
     };
   }
@@ -496,7 +498,7 @@ export class ConfigView extends BaseView {
    * @return {Object} Edit operation result
    */
   prepareEdit(configKey, newValue) {
-    const config = this.data.find((c) => c.key === configKey);
+    const config = this.data.find((c) => c.config_key === configKey);
     if (!config) {
       return {
         success: false,
@@ -504,7 +506,7 @@ export class ConfigView extends BaseView {
       };
     }
 
-    const validation = this.validateValue(newValue, config.type || 'string');
+    const validation = this.validateValue(newValue, config.value_type || 'string');
     if (!validation.valid) {
       return {
         success: false,
@@ -515,7 +517,7 @@ export class ConfigView extends BaseView {
     return {
       success: true,
       config,
-      oldValue: config.value,
+      oldValue: config.config_value,
       newValue: validation.parsedValue,
       requiresRestart: config.requires_restart || false,
       affectedNodes: this.getAffectedNodes(config),
@@ -557,10 +559,10 @@ export class ConfigView extends BaseView {
     const {config, oldValue, newValue, requiresRestart, affectedNodes} = editOperation;
 
     const message = [
-      `Change config "${config.key}"?`,
+      `Change config "${config.config_key}"?`,
       '',
-      `Current value: ${this.formatFullValue(oldValue, config.type)}`,
-      `New value: ${this.formatFullValue(newValue, config.type)}`,
+      `Current value: ${this.formatFullValue(oldValue, config.value_type)}`,
+      `New value: ${this.formatFullValue(newValue, config.value_type)}`,
       '',
       `Affected nodes: ${affectedNodes.join(', ')}`,
     ];
@@ -585,7 +587,7 @@ export class ConfigView extends BaseView {
    * @return {Object} Revert operation result
    */
   prepareRevert(configKey) {
-    const config = this.data.find((c) => c.key === configKey);
+    const config = this.data.find((c) => c.config_key === configKey);
     if (!config) {
       return {
         success: false,
@@ -610,7 +612,7 @@ export class ConfigView extends BaseView {
     return {
       success: true,
       config,
-      oldValue: config.value,
+      oldValue: config.config_value,
       newValue: config.default_value,
       requiresRestart: config.requires_restart || false,
       affectedNodes: this.getAffectedNodes(config),
@@ -632,10 +634,10 @@ export class ConfigView extends BaseView {
     const {config, oldValue, newValue, requiresRestart, affectedNodes} = revertOperation;
 
     const message = [
-      `Revert config "${config.key}" to default value?`,
+      `Revert config "${config.config_key}" to default value?`,
       '',
-      `Current value: ${this.formatFullValue(oldValue, config.type)}`,
-      `Default value: ${this.formatFullValue(newValue, config.type)}`,
+      `Current value: ${this.formatFullValue(oldValue, config.value_type)}`,
+      `Default value: ${this.formatFullValue(newValue, config.value_type)}`,
       '',
       `Affected nodes: ${affectedNodes.join(', ')}`,
     ];
@@ -659,7 +661,7 @@ export class ConfigView extends BaseView {
    * @return {Object} Editability result
    */
   canEdit(configKey) {
-    const config = this.data.find((c) => c.key === configKey);
+    const config = this.data.find((c) => c.config_key === configKey);
     if (!config) {
       return {editable: false, reason: 'Config key not found'};
     }
@@ -678,7 +680,7 @@ export class ConfigView extends BaseView {
    * @return {Object} Revertability result
    */
   canRevert(configKey) {
-    const config = this.data.find((c) => c.key === configKey);
+    const config = this.data.find((c) => c.config_key === configKey);
     if (!config) {
       return {revertable: false, reason: 'Config key not found'};
     }

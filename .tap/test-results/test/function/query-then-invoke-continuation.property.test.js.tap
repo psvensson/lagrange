@@ -1,37 +1,7 @@
 TAP version 14
-# Subtest: Property 38: executeQueryThenInvoke invokes function with results
-    ok 1 - executeQueryThenInvoke invokes function with query results
-    1..1
-ok 1 - Property 38: executeQueryThenInvoke invokes function with results # time=15.986ms
-
-# Subtest: Property 38: additional context passed to invoked function
-    ok 1 - additional context passed to invoked function
-    1..1
-ok 2 - Property 38: additional context passed to invoked function # time=5.742ms
-
-# Subtest: Property 38: query result structure preserved in context
-    ok 1 - query result structure preserved in context
-    1..1
-ok 3 - Property 38: query result structure preserved in context # time=2.15ms
-
-# Subtest: Property 38: unique invocation IDs for each call
-    ok 1 - unique invocation IDs for each call
-    1..1
-ok 4 - Property 38: unique invocation IDs for each call # time=3.214ms
-
-{"level":50,"time":"2026-01-19T08:22:59.853Z","nodeId":"test-node","pid":3589657,"subsystem":"function-query-executor","invocationId":"8ed91ddf-6c18-43e7-8a9e-22f0ddaa94f3","nextFunctionId":"failing-function","error":"PeJJE]<0&Ygp","nodeId":"test-node","msg":"Function invocation failed after query"}
-# Subtest: Property 38: function failure preserves query result
-    ok 1 - function failure preserves query result
-    1..1
-ok 5 - Property 38: function failure preserves query result # time=5.743ms
-
-{"level":50,"time":"2026-01-19T08:22:59.854Z","nodeId":"test-node","pid":3589657,"subsystem":"function-query-executor","invocationId":"45a348aa-6b75-4968-bf29-94d90688239c","nextFunctionId":"failing-function","error":"]","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-01-19T08:22:59.854Z","nodeId":"test-node","pid":3589657,"subsystem":"function-query-executor","invocationId":"00e4e4c7-8494-424b-a436-8b5a4cfcd266","nextFunctionId":"failing-function","error":"Uf|[#5zDS","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-01-19T08:22:59.855Z","nodeId":"test-node","pid":3589657,"subsystem":"function-query-executor","invocationId":"e4c4f3fa-205e-4da2-b378-5380f460b203","nextFunctionId":"failing-function","error":"0>!#7$$J","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-01-19T08:22:59.855Z","nodeId":"test-node","pid":3589657,"subsystem":"function-query-executor","invocationId":"3ab38b6e-7438-47bf-9864-7adea6c45eab","nextFunctionId":"failing-function","error":"0.4thKD}SIM","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-01-19T08:22:59.855Z","nodeId":"test-node","pid":3589657,"subsystem":"function-query-executor","invocationId":"fe33a2ab-7dc1-42b0-8061-f99629e9277c","nextFunctionId":"failing-function","error":"P#\"$Vca","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-01-19T08:22:59.855Z","nodeId":"test-node","pid":3589657,"subsystem":"function-query-executor","invocationId":"337d4382-4536-4ea7-8a46-e5ca98320e74","nextFunctionId":"failing-function","error":"I^","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-01-19T08:22:59.856Z","nodeId":"test-node","pid":3589657,"subsystem":"function-query-executor","invocationId":"63da7045-a7cd-42f2-a7c3-6f466a2bf57a","nextFunctionId":"failing-function","error":"!poStrin","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-01-19T08:22:59.857Z","nodeId":"test-node","pid":3589657,"subsystem":"function-query-executor","invocationId":"0e61614b-7371-4f69-9ddb-9cfb3dbc3dbc","nextFunctionId":"failing-function","error":"valueOf","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-01-19T08:22:59.858Z","nodeId":"test-node","pid":3589657,"subsystem":"function-query-executor","invocationId":"bb40d27a-7f81-49a3-8ea7-c7c8da730da7","nextFunctionId":"failing-function","error":"f","nodeId":"test-node","msg":"Function invocation failed after query"}
+ok 1 - Property 38: executeQueryThenInvoke invokes function with results # SKIP filter: /SystemTableCache/
+ok 2 - Property 38: additional context passed to invoked function # SKIP filter: /SystemTableCache/
+ok 3 - Property 38: query result structure preserved in context # SKIP filter: /SystemTableCache/
+ok 4 - Property 38: unique invocation IDs for each call # SKIP filter: /SystemTableCache/
+ok 5 - Property 38: function failure preserves query result # SKIP filter: /SystemTableCache/
 1..5

@@ -1,26 +1,3 @@
 TAP version 14
-# Subtest: Property 34: Autonomous Placement Decisions
-    # Subtest: leaders make independent decisions
-        ok 1 - Leaders make independent decisions
-        1..1
-    ok 1 - leaders make independent decisions # time=5.434ms
-    
-    # Subtest: decisions converge to consistent state
-        ok 1 - Decisions converge to consistent state
-        1..1
-    ok 2 - decisions converge to consistent state # time=1.726ms
-    
-    # Subtest: no coordination required between leaders
-        ok 1 - No coordination required between leaders
-        1..1
-    ok 3 - no coordination required between leaders # time=1.275ms
-    
-    # Subtest: decisions based on local system table cache
-        ok 1 - Decisions based on local system table cache
-        1..1
-    ok 4 - decisions based on local system table cache # time=1.679ms
-    
-    1..4
-ok 1 - Property 34: Autonomous Placement Decisions # time=57.213ms
-
+ok 1 - Property 34: Autonomous Placement Decisions # SKIP filter: /SystemTableCache/
 1..1

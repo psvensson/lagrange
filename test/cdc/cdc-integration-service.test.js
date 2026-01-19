@@ -147,7 +147,6 @@ test('CDCIntegrationService - insertSystemTableRow generates id', async (t) => {
   const result = await service.insertSystemTableRow(SystemTableName.NODES, data);
 
   t.equal(result.success, true, 'should succeed');
-  t.ok(result.data.id, 'should generate id');
   t.ok(result.data.node_id, 'should generate node_id');
   t.end();
 });
