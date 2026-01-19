@@ -1,0 +1,130 @@
+TAP version 14
+# Subtest: AdminWebSocketAPI - initialization
+    ok 1 - should not be initialized initially
+    ok 2 - should be initialized after init
+    ok 3 - should have no clients initially
+    ok 4 - should not be initialized after shutdown
+    1..4
+ok 1 - AdminWebSocketAPI - initialization # time=24.873ms
+
+# Subtest: AdminWebSocketAPI - cache dump on connection
+    ok 1 - should receive cache_dump
+    ok 2 - should have timestamp
+    ok 3 - should have data
+    ok 4 - should have nodes array
+    ok 5 - should have services array
+    ok 6 - should have partitions array
+    ok 7 - should have tables array
+    ok 8 - should have message_groups
+    ok 9 - should have indices array
+    ok 10 - should have 1 node
+    ok 11 - should have correct node
+    1..11
+ok 2 - AdminWebSocketAPI - cache dump on connection # time=11.68ms
+
+# Subtest: AdminWebSocketAPI - multiple concurrent connections
+    ok 1 - should have 3 connected clients
+    ok 2 - should have 2 clients after disconnect
+    1..2
+ok 3 - AdminWebSocketAPI - multiple concurrent connections # time=57.571ms
+
+# Subtest: AdminWebSocketAPI - query execution SELECT
+    ok 1 - should receive query_result
+    ok 2 - should have correct queryId
+    ok 3 - should have results array
+    ok 4 - should have count
+    ok 5 - should have partitions array
+    ok 6 - should have tableName
+    1..6
+ok 4 - AdminWebSocketAPI - query execution SELECT # time=15.499ms
+
+# Subtest: AdminWebSocketAPI - query execution INSERT
+    ok 1 - should receive query_result
+    ok 2 - should have correct queryId
+    ok 3 - should have operation
+    ok 4 - should have affectedRows
+    ok 5 - should have partitions
+    ok 6 - should have tableName
+    1..6
+ok 5 - AdminWebSocketAPI - query execution INSERT # time=4.05ms
+
+# Subtest: AdminWebSocketAPI - query execution UPDATE
+    ok 1 - should have UPDATE operation
+    ok 2 - should have affectedRows
+    1..2
+ok 6 - AdminWebSocketAPI - query execution UPDATE # time=3.049ms
+
+# Subtest: AdminWebSocketAPI - query execution DELETE
+    ok 1 - should have DELETE operation
+    ok 2 - should have affectedRows
+    1..2
+ok 7 - AdminWebSocketAPI - query execution DELETE # time=2.888ms
+
+# Subtest: AdminWebSocketAPI - error handling TABLE_NOT_FOUND
+    ok 1 - should receive query_result
+    ok 2 - should have correct queryId
+    ok 3 - should have error
+    ok 4 - should have error code
+    1..4
+ok 8 - AdminWebSocketAPI - error handling TABLE_NOT_FOUND # time=3.126ms
+
+# Subtest: AdminWebSocketAPI - error handling SYNTAX_ERROR
+    ok 1 - should have SYNTAX_ERROR
+    1..1
+ok 9 - AdminWebSocketAPI - error handling SYNTAX_ERROR # time=3.21ms
+
+# Subtest: AdminWebSocketAPI - malformed JSON handling
+    ok 1 - should have error code
+    ok 2 - should have error message
+    ok 3 - should have hint
+    1..3
+ok 10 - AdminWebSocketAPI - malformed JSON handling # time=3.127ms
+
+# Subtest: AdminWebSocketAPI - unknown message type ignored
+    ok 1 - should receive query result
+    ok 2 - should have correct queryId
+    1..2
+ok 11 - AdminWebSocketAPI - unknown message type ignored # time=3.39ms
+
+# Subtest: AdminWebSocketAPI - refresh message
+    ok 1 - should receive initial dump
+    ok 2 - should receive refresh dump
+    1..2
+ok 12 - AdminWebSocketAPI - refresh message # time=2.898ms
+
+# Subtest: AdminWebSocketAPI - CDC event broadcasting
+    ok 1 - client 1 should receive event
+    ok 2 - should have correct table
+    ok 3 - should have correct operation
+    ok 4 - should have correct record
+    ok 5 - client 2 should receive event
+    1..5
+ok 13 - AdminWebSocketAPI - CDC event broadcasting # time=3.542ms
+
+# Subtest: AdminWebSocketAPI - health endpoint
+    ok 1 - should be healthy
+    ok 2 - should have nodeId
+    ok 3 - should have 1 connected client
+    1..3
+ok 14 - AdminWebSocketAPI - health endpoint # time=21.141ms
+
+# Subtest: AdminWebSocketAPI - cleanup on disconnect
+    ok 1 - should have 1 client
+    ok 2 - should have 0 clients after disconnect
+    1..2
+ok 15 - AdminWebSocketAPI - cleanup on disconnect # time=54.594ms
+
+# Subtest: AdminWebSocketAPI - query without queryId
+    ok 1 - should have error
+    ok 2 - should have error code
+    1..2
+ok 16 - AdminWebSocketAPI - query without queryId # time=11.75ms
+
+# Subtest: AdminWebSocketAPI - query without sql
+    ok 1 - should have queryId
+    ok 2 - should have error
+    ok 3 - should have error code
+    1..3
+ok 17 - AdminWebSocketAPI - query without sql # time=5.655ms
+
+1..17

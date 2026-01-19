@@ -1,0 +1,349 @@
+/**
+ * Unit tests for CDCHandler.
+ * Requirements: 4.4, 4.7, 5.3, 5.4
+ */
+
+import {test, beforeEach, afterEach} from 'tap';
+import {CDCHandler, CDCEvent} from '../../src/message-group/cdc-handler.js';
+import {SystemTableCache, CDC_OPERATIONS} from '../../src/cache/system-table-cache.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {HLCClockService} from '../../src/hlc/hlc-clock-service.js';
+
+let cache;
+let hlcClock;
+
+beforeEach(() => {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  const config = ConfigurationManager.getInstance();
+  config.initialize({node: {id: 'test-node'}});
+  const logger = LoggingService.getInstance();
+  logger.initialize({level: 'error'});
+
+  cache = new SystemTableCache();
+  hlcClock = new HLCClockService('test-node');
+});
+
+afterEach(() => {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+});
+
+test('CDCHandler - constructor requires cache', async (t) => {
+  t.throws(
+    () => new CDCHandler(null),
+    /requires a SystemTableCache/,
+    'Should throw without cache',
+  );
+});
+
+test('CDCHandler - constructor initializes correctly', async (t) => {
+  const handler = new CDCHandler(cache);
+
+  t.ok(handler, 'Should create handler');
+  t.equal(handler.initialized, false, 'Should not be initialized');
+  t.equal(handler.getSubscriptions().length, 0, 'Should have no subscriptions');
+});
+
+test('CDCHandler - initialize starts handler', async (t) => {
+  const handler = new CDCHandler(cache);
+  handler.initialize();
+
+  t.equal(handler.initialized, true, 'Should be initialized');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - subscribe adds subscription', async (t) => {
+  const handler = new CDCHandler(cache);
+  handler.initialize();
+
+  let subscribedEvent = null;
+  handler.on('subscribed', (event) => {
+    subscribedEvent = event;
+  });
+
+  handler.subscribe('nodes');
+
+  t.ok(handler.isSubscribed('nodes'), 'Should be subscribed to nodes');
+  t.ok(subscribedEvent, 'Should emit subscribed event');
+  t.equal(subscribedEvent.tableName, 'nodes', 'Event should have tableName');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - unsubscribe removes subscription', async (t) => {
+  const handler = new CDCHandler(cache);
+  handler.initialize();
+
+  handler.subscribe('nodes');
+  t.ok(handler.isSubscribed('nodes'), 'Should be subscribed');
+
+  let unsubscribedEvent = null;
+  handler.on('unsubscribed', (event) => {
+    unsubscribedEvent = event;
+  });
+
+  handler.unsubscribe('nodes');
+
+  t.notOk(handler.isSubscribed('nodes'), 'Should not be subscribed');
+  t.ok(unsubscribedEvent, 'Should emit unsubscribed event');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - handleEvent buffers events', async (t) => {
+  const handler = new CDCHandler(cache, {bufferSize: 10});
+  handler.initialize();
+  handler.subscribe('nodes');
+
+  const timestamp = hlcClock.now().toString();
+  const result = handler.handleEvent({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.INSERT,
+    data: {id: 'node-1', status: 'active'},
+    timestamp,
+  });
+
+  t.ok(result, 'Should accept event');
+  t.equal(handler.getBufferSize('nodes'), 1, 'Should buffer event');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - handleEvent ignores unsubscribed tables', async (t) => {
+  const handler = new CDCHandler(cache);
+  handler.initialize();
+
+  const timestamp = hlcClock.now().toString();
+  const result = handler.handleEvent({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.INSERT,
+    data: {id: 'node-1'},
+    timestamp,
+  });
+
+  t.notOk(result, 'Should reject event for unsubscribed table');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - handleEvent deduplicates events', async (t) => {
+  const handler = new CDCHandler(cache, {bufferSize: 10});
+  handler.initialize();
+  handler.subscribe('nodes');
+
+  const timestamp = hlcClock.now().toString();
+  const event = {
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.INSERT,
+    data: {id: 'node-1'},
+    timestamp,
+  };
+
+  // First event
+  handler.handleEvent(event);
+  handler.flushBuffer('nodes');
+
+  // Duplicate event
+  const result = handler.handleEvent(event);
+
+  t.notOk(result, 'Should reject duplicate event');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - flushBuffer applies events to cache', async (t) => {
+  const handler = new CDCHandler(cache, {bufferSize: 10});
+  handler.initialize();
+  handler.subscribe('nodes');
+
+  let appliedEvent = null;
+  handler.on('eventApplied', (event) => {
+    appliedEvent = event;
+  });
+
+  const timestamp = hlcClock.now().toString();
+  handler.handleEvent({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.INSERT,
+    data: {id: 'node-1', status: 'active'},
+    timestamp,
+  });
+
+  handler.flushBuffer('nodes');
+
+  t.ok(appliedEvent, 'Should emit eventApplied');
+  t.equal(appliedEvent.tableName, 'nodes', 'Should have tableName');
+  t.equal(appliedEvent.key, 'node-1', 'Should have key');
+
+  // Verify cache was updated
+  const record = cache.get('nodes', 'node-1');
+  t.ok(record, 'Should find record in cache');
+  t.equal(record.status, 'active', 'Should have correct status');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - events applied in timestamp order', async (t) => {
+  const handler = new CDCHandler(cache, {bufferSize: 10});
+  handler.initialize();
+  handler.subscribe('nodes');
+
+  // Create events with different timestamps
+  const ts1 = hlcClock.now().toString();
+  const ts2 = hlcClock.now().toString();
+  const ts3 = hlcClock.now().toString();
+
+  // Add events out of order
+  handler.handleEvent({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.INSERT,
+    data: {id: 'node-1', version: 3},
+    timestamp: ts3,
+  });
+  handler.handleEvent({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.UPDATE,
+    data: {id: 'node-1', version: 1},
+    timestamp: ts1,
+  });
+  handler.handleEvent({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.UPDATE,
+    data: {id: 'node-1', version: 2},
+    timestamp: ts2,
+  });
+
+  handler.flushBuffer('nodes');
+
+  // Last applied should be ts3 (highest timestamp)
+  const lastTs = handler.getLastAppliedTimestamp('nodes');
+  t.equal(lastTs, ts3, 'Last applied should be highest timestamp');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - applyImmediate bypasses buffer', async (t) => {
+  const handler = new CDCHandler(cache, {bufferSize: 10});
+  handler.initialize();
+  handler.subscribe('nodes');
+
+  const timestamp = hlcClock.now().toString();
+  handler.applyImmediate({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.INSERT,
+    data: {id: 'node-1', status: 'active'},
+    timestamp,
+  });
+
+  // Should be applied immediately, not buffered
+  t.equal(handler.getBufferSize('nodes'), 0, 'Should not buffer');
+
+  const record = cache.get('nodes', 'node-1');
+  t.ok(record, 'Should find record in cache');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - auto-flush when buffer full', async (t) => {
+  const handler = new CDCHandler(cache, {bufferSize: 2});
+  handler.initialize();
+  handler.subscribe('nodes');
+
+  const ts1 = hlcClock.now().toString();
+  const ts2 = hlcClock.now().toString();
+
+  handler.handleEvent({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.INSERT,
+    data: {id: 'node-1'},
+    timestamp: ts1,
+  });
+
+  t.equal(handler.getBufferSize('nodes'), 1, 'Should have 1 buffered');
+
+  handler.handleEvent({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.INSERT,
+    data: {id: 'node-2'},
+    timestamp: ts2,
+  });
+
+  // Buffer should be flushed when full
+  t.equal(handler.getBufferSize('nodes'), 0, 'Should be flushed');
+
+  // Both records should be in cache
+  t.ok(cache.get('nodes', 'node-1'), 'Should have node-1');
+  t.ok(cache.get('nodes', 'node-2'), 'Should have node-2');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - getStatus returns complete status', async (t) => {
+  const handler = new CDCHandler(cache);
+  handler.initialize();
+  handler.subscribe('nodes');
+  handler.subscribe('partitions');
+
+  const status = handler.getStatus();
+
+  t.equal(status.initialized, true, 'Should be initialized');
+  t.equal(status.subscriptions.length, 2, 'Should have 2 subscriptions');
+  t.ok(status.subscriptions.includes('nodes'), 'Should include nodes');
+  t.ok(status.subscriptions.includes('partitions'), 'Should include partitions');
+  t.equal(typeof status.totalBuffered, 'number', 'Should have totalBuffered');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - shutdown flushes remaining events', async (t) => {
+  const handler = new CDCHandler(cache, {bufferSize: 10});
+  handler.initialize();
+  handler.subscribe('nodes');
+
+  const timestamp = hlcClock.now().toString();
+  handler.handleEvent({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.INSERT,
+    data: {id: 'node-1'},
+    timestamp,
+  });
+
+  t.equal(handler.getBufferSize('nodes'), 1, 'Should have buffered event');
+
+  handler.shutdown();
+
+  // Event should be applied during shutdown
+  const record = cache.get('nodes', 'node-1');
+  t.ok(record, 'Should have applied event during shutdown');
+});
+
+test('CDCEvent - constructor creates event', async (t) => {
+  const timestamp = hlcClock.now().toString();
+  const event = new CDCEvent(
+    'nodes',
+    CDC_OPERATIONS.INSERT,
+    {id: 'node-1', status: 'active'},
+    timestamp,
+    'partition-1',
+  );
+
+  t.equal(event.tableName, 'nodes', 'Should have tableName');
+  t.equal(event.operation, CDC_OPERATIONS.INSERT, 'Should have operation');
+  t.equal(event.getKey(), 'node-1', 'Should return key');
+  t.equal(event.sourcePartition, 'partition-1', 'Should have sourcePartition');
+});
+
+test('CDCEvent - compareTimestamp orders events', async (t) => {
+  const ts1 = hlcClock.now().toString();
+  const ts2 = hlcClock.now().toString();
+
+  const event1 = new CDCEvent('nodes', CDC_OPERATIONS.INSERT, {id: 'n1'}, ts1);
+  const event2 = new CDCEvent('nodes', CDC_OPERATIONS.INSERT, {id: 'n2'}, ts2);
+
+  t.ok(event1.compareTimestamp(event2) < 0, 'event1 should be before event2');
+  t.ok(event2.compareTimestamp(event1) > 0, 'event2 should be after event1');
+  t.equal(event1.compareTimestamp(event1), 0, 'Same event should be equal');
+});

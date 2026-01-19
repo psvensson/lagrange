@@ -1,0 +1,249 @@
+TAP version 14
+# Subtest: ErrorHandler - constructor initializes with defaults
+    ok 1 - should have notifications array
+    ok 2 - should start with no notifications
+    ok 3 - should have default max notifications
+    ok 4 - should have default duration
+    ok 5 - should not be too small initially
+    1..5
+ok 1 - ErrorHandler - constructor initializes with defaults # time=10.574ms
+
+# Subtest: ErrorHandler - constructor accepts custom options
+    ok 1 - should use provided event bus
+    ok 2 - should use provided log path
+    ok 3 - should use provided max notifications
+    ok 4 - should use provided duration
+    1..4
+ok 2 - ErrorHandler - constructor accepts custom options # time=1.148ms
+
+# Subtest: ErrorHandler - log writes to file
+    ok 1 - should log correct level
+    ok 2 - should log correct message
+    ok 3 - should log context
+    ok 4 - should have timestamp
+    ok 5 - should have ISO time
+    1..5
+ok 3 - ErrorHandler - log writes to file # time=2.436ms
+
+# Subtest: ErrorHandler - log methods work correctly
+    ok 1 - should have 5 log entries
+    ok 2 - first should be debug
+    ok 3 - second should be info
+    ok 4 - third should be warning
+    ok 5 - fourth should be error
+    ok 6 - fifth should be critical
+    1..6
+ok 4 - ErrorHandler - log methods work correctly # time=1.177ms
+
+# Subtest: ErrorHandler - log handles Error objects in context
+    ok 1 - should include stack trace
+    ok 2 - should include error message
+    1..2
+ok 5 - ErrorHandler - log handles Error objects in context # time=1.25ms
+
+# Subtest: ErrorHandler - notify creates notification
+    ok 1 - should return notification ID
+    ok 2 - should have correct ID format
+    ok 3 - should have one notification
+    ok 4 - should have correct type
+    ok 5 - should have correct message
+    ok 6 - should not be dismissed
+    1..6
+ok 6 - ErrorHandler - notify creates notification # time=1.239ms
+
+# Subtest: ErrorHandler - notification helper methods
+    ok 1 - should have three notifications
+    ok 2 - first should be info
+    ok 3 - second should be success
+    ok 4 - third should be warning
+    1..4
+ok 7 - ErrorHandler - notification helper methods # time=0.652ms
+
+# Subtest: ErrorHandler - notifyError also logs error
+    ok 1 - should have one notification
+    ok 2 - should be error type
+    ok 3 - should log as error
+    1..3
+ok 8 - ErrorHandler - notifyError also logs error # time=0.822ms
+
+# Subtest: ErrorHandler - dismissNotification removes notification
+    ok 1 - should have one active
+    ok 2 - should have no active
+    ok 3 - should be marked dismissed
+    1..3
+ok 9 - ErrorHandler - dismissNotification removes notification # time=0.546ms
+
+# Subtest: ErrorHandler - dismissAllNotifications clears all
+    ok 1 - should have three active
+    ok 2 - should have no active
+    1..2
+ok 10 - ErrorHandler - dismissAllNotifications clears all # time=0.411ms
+
+# Subtest: ErrorHandler - notifications auto-dismiss after duration
+    ok 1 - should have one active
+    ok 2 - should auto-dismiss
+    1..2
+ok 11 - ErrorHandler - notifications auto-dismiss after duration # time=101.197ms
+
+# Subtest: ErrorHandler - max notifications limit
+    ok 1 - should trim to max
+    ok 2 - should keep most recent
+    1..2
+ok 12 - ErrorHandler - max notifications limit # time=0.471ms
+
+# Subtest: ErrorHandler - handleTerminalResize updates size
+    ok 1 - should update width
+    ok 2 - should update height
+    ok 3 - should not be too small
+    1..3
+ok 13 - ErrorHandler - handleTerminalResize updates size # time=1.043ms
+
+# Subtest: ErrorHandler - handleTerminalResize detects too small
+    ok 1 - should detect too small
+    ok 2 - should log warning
+    1..2
+ok 14 - ErrorHandler - handleTerminalResize detects too small # time=0.96ms
+
+# Subtest: ErrorHandler - handleTerminalResize emits events
+    ok 1 - should emit resize event
+    ok 2 - resize event should have width
+    ok 3 - resize event should indicate too small
+    ok 4 - should emit tooSmall event
+    ok 5 - should have current size
+    ok 6 - should have minimum size
+    1..6
+ok 15 - ErrorHandler - handleTerminalResize emits events # time=1.409ms
+
+# Subtest: ErrorHandler - handleTerminalResize calls callbacks
+    ok 1 - should call resize callback
+    ok 2 - should call too small callback
+    1..2
+ok 16 - ErrorHandler - handleTerminalResize calls callbacks # time=0.599ms
+
+# Subtest: ErrorHandler - getMinTerminalSize returns constants
+    ok 1 - should return minimum size
+    1..1
+ok 17 - ErrorHandler - getMinTerminalSize returns constants # time=0.356ms
+
+# Subtest: ErrorHandler - formatWithMissingIndicator handles null/undefined
+    ok 1 - null should be N/A
+    ok 2 - undefined should be N/A
+    ok 3 - value should pass through
+    ok 4 - number should stringify
+    ok 5 - custom placeholder
+    1..5
+ok 18 - ErrorHandler - formatWithMissingIndicator handles null/undefined # time=0.571ms
+
+# Subtest: ErrorHandler - createPartialDataIndicator creates indicator
+    ok 1 - should have section name
+    ok 2 - should have message
+    ok 3 - should be marked as missing
+    1..3
+ok 19 - ErrorHandler - createPartialDataIndicator creates indicator # time=0.448ms
+
+# Subtest: ErrorHandler - checkPartialData detects missing fields
+    ok 1 - should detect partial data
+    ok 2 - should list missing fields
+    1..2
+ok 20 - ErrorHandler - checkPartialData detects missing fields # time=0.893ms
+
+# Subtest: ErrorHandler - checkPartialData returns false for complete data
+    ok 1 - should not be partial
+    ok 2 - should have no missing fields
+    1..2
+ok 21 - ErrorHandler - checkPartialData returns false for complete data # time=0.45ms
+
+# Subtest: ErrorHandler - handleApiError creates notification and logs
+    ok 1 - should create notification
+    ok 2 - should include operation
+    ok 3 - should include error
+    1..3
+ok 22 - ErrorHandler - handleApiError creates notification and logs # time=1.054ms
+
+# Subtest: ErrorHandler - logMetadataWarning logs with context
+    ok 1 - should be warning level
+    ok 2 - should include operation
+    ok 3 - should include message
+    ok 4 - should have operation in context
+    1..4
+ok 23 - ErrorHandler - logMetadataWarning logs with context # time=0.781ms
+
+# Subtest: ErrorHandler - safeExecute returns result on success
+    ok 1 - should return function result
+    1..1
+ok 24 - ErrorHandler - safeExecute returns result on success # time=0.323ms
+
+# Subtest: ErrorHandler - safeExecute returns default on error
+    ok 1 - should return default value
+    ok 2 - should log warning
+    1..2
+ok 25 - ErrorHandler - safeExecute returns default on error # time=0.866ms
+
+# Subtest: ErrorHandler - wrapWithErrorHandling wraps function
+    ok 1 - should return function result
+    1..1
+ok 26 - ErrorHandler - wrapWithErrorHandling wraps function # time=0.572ms
+
+# Subtest: ErrorHandler - wrapWithErrorHandling handles errors
+    ok 1 - should rethrow error
+    ok 2 - should create notification
+    1..2
+ok 27 - ErrorHandler - wrapWithErrorHandling handles errors # time=0.882ms
+
+# Subtest: ErrorHandler - notification emits events
+    ok 1 - should emit show event
+    ok 2 - show event should have ID
+    ok 3 - should emit dismiss event
+    ok 4 - dismiss event should have ID
+    1..4
+ok 28 - ErrorHandler - notification emits events # time=0.568ms
+
+# Subtest: ErrorHandler - notification calls callback
+    ok 1 - should call callback
+    ok 2 - callback should receive notification
+    1..2
+ok 29 - ErrorHandler - notification calls callback # time=0.372ms
+
+# Subtest: ErrorHandler - destroy cleans up resources
+    ok 1 - should have timer
+    ok 2 - should clear timers
+    ok 3 - should clear notifications
+    ok 4 - should clear event bus
+    1..4
+ok 30 - ErrorHandler - destroy cleans up resources # time=0.552ms
+
+# Subtest: ErrorHandler - log emits event
+    ok 1 - should emit log event
+    ok 2 - event should have level
+    ok 3 - event should have message
+    1..3
+ok 31 - ErrorHandler - log emits event # time=0.717ms
+
+# Subtest: ErrorHandler - handles missing log directory gracefully
+    1..0
+ok 32 - ErrorHandler - handles missing log directory gracefully # time=0.319ms
+
+# Subtest: MIN_TERMINAL_SIZE has correct values
+    ok 1 - minimum width should be 80
+    ok 2 - minimum height should be 24
+    1..2
+ok 33 - MIN_TERMINAL_SIZE has correct values # time=0.309ms
+
+# Subtest: ERROR_LEVEL has all levels
+    ok 1 - should have debug
+    ok 2 - should have info
+    ok 3 - should have warning
+    ok 4 - should have error
+    ok 5 - should have critical
+    1..5
+ok 34 - ERROR_LEVEL has all levels # time=0.494ms
+
+# Subtest: NOTIFICATION_TYPE has all types
+    ok 1 - should have info
+    ok 2 - should have success
+    ok 3 - should have warning
+    ok 4 - should have error
+    1..4
+ok 35 - NOTIFICATION_TYPE has all types # time=0.419ms
+
+1..35

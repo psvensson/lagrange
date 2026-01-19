@@ -1,0 +1,118 @@
+TAP version 14
+# Subtest: PartitionSplitMergeManager - constructor initializes with defaults
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    1..5
+ok 1 - PartitionSplitMergeManager - constructor initializes with defaults # time=7.762ms
+
+# Subtest: PartitionSplitMergeManager - evaluateSplitCriteria returns true when storage exceeds threshold
+    ok 1 - should be equal
+    1..1
+ok 2 - PartitionSplitMergeManager - evaluateSplitCriteria returns true when storage exceeds threshold # time=0.522ms
+
+# Subtest: PartitionSplitMergeManager - evaluateSplitCriteria returns true when traffic exceeds threshold
+    ok 1 - should be equal
+    1..1
+ok 3 - PartitionSplitMergeManager - evaluateSplitCriteria returns true when traffic exceeds threshold # time=0.367ms
+
+# Subtest: PartitionSplitMergeManager - evaluateSplitCriteria returns false when below thresholds
+    ok 1 - should be equal
+    1..1
+ok 4 - PartitionSplitMergeManager - evaluateSplitCriteria returns false when below thresholds # time=0.456ms
+
+# Subtest: PartitionSplitMergeManager - evaluateSplitCriteria uses custom policy thresholds
+    ok 1 - should be equal
+    1..1
+ok 5 - PartitionSplitMergeManager - evaluateSplitCriteria uses custom policy thresholds # time=0.343ms
+
+# Subtest: PartitionSplitMergeManager - evaluateMergeCriteria returns true when both below thresholds
+    ok 1 - should be equal
+    1..1
+ok 6 - PartitionSplitMergeManager - evaluateMergeCriteria returns true when both below thresholds # time=0.632ms
+
+# Subtest: PartitionSplitMergeManager - evaluateMergeCriteria returns false when storage exceeds threshold
+    ok 1 - should be equal
+    1..1
+ok 7 - PartitionSplitMergeManager - evaluateMergeCriteria returns false when storage exceeds threshold # time=0.554ms
+
+# Subtest: PartitionSplitMergeManager - evaluateMergeCriteria returns false when traffic exceeds threshold
+    ok 1 - should be equal
+    1..1
+ok 8 - PartitionSplitMergeManager - evaluateMergeCriteria returns false when traffic exceeds threshold # time=0.469ms
+
+# Subtest: PartitionSplitMergeManager - splitPartition creates two adjacent partitions
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - should be equal
+    1..11
+ok 9 - PartitionSplitMergeManager - splitPartition creates two adjacent partitions # time=2.799ms
+
+# Subtest: PartitionSplitMergeManager - mergePartitions combines adjacent partitions
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    1..9
+ok 10 - PartitionSplitMergeManager - mergePartitions combines adjacent partitions # time=1.15ms
+
+{"level":50,"time":"2026-01-19T08:23:06.135Z","nodeId":"test-node","pid":3590409,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (30) != partition-3 start (60)","nodeId":"test-node","msg":"Partition merge failed"}
+# Subtest: PartitionSplitMergeManager - mergePartitions rejects non-adjacent partitions
+    ok 1 - expected to reject
+    1..1
+ok 11 - PartitionSplitMergeManager - mergePartitions rejects non-adjacent partitions # time=14.985ms
+
+# Subtest: PartitionSplitMergeManager - setThresholds updates thresholds
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 12 - PartitionSplitMergeManager - setThresholds updates thresholds # time=0.702ms
+
+# Subtest: PartitionSplitMergeManager - validateRangeIntegrity catches violations
+    ok 1 - Valid split passed validation
+    ok 2 - expected to throw
+    ok 3 - expected to throw
+    1..3
+ok 13 - PartitionSplitMergeManager - validateRangeIntegrity catches violations # time=2.191ms
+
+# Subtest: PartitionSplitMergeManager - splitPartition fails with insufficient rows
+{"level":50,"time":"2026-01-19T08:23:06.213Z","nodeId":"test-node","pid":3590409,"subsystem":"partition-split-merge","partitionId":"partition-1","error":"Partition has insufficient rows for split","nodeId":"test-node","msg":"Partition split failed"}
+    ok 1 - expected to reject
+    1..1
+ok 14 - PartitionSplitMergeManager - splitPartition fails with insufficient rows # time=0.874ms
+
+# Subtest: PartitionSplitMergeManager - emits events during split
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    1..5
+ok 15 - PartitionSplitMergeManager - emits events during split # time=1.326ms
+
+# Subtest: PartitionSplitMergeManager - emits events during merge
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 16 - PartitionSplitMergeManager - emits events during merge # time=0.707ms
+
+1..16

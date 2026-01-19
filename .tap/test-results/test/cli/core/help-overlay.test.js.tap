@@ -1,0 +1,155 @@
+TAP version 14
+# Subtest: HelpOverlay
+    # Subtest: constructor initializes with shortcuts
+        ok 1 - has shortcuts
+        ok 2 - has help shortcut
+        ok 3 - has quit shortcut
+        1..3
+    ok 1 - constructor initializes with shortcuts # time=2.474ms
+    
+    # Subtest: getGlobalShortcuts() returns categorized shortcuts
+        ok 1 - has categories
+        ok 2 - has Navigation category
+        ok 3 - has Views category
+        ok 4 - has Actions category
+        ok 5 - has General category
+        1..5
+    ok 2 - getGlobalShortcuts() returns categorized shortcuts # time=0.665ms
+    
+    # Subtest: getViewHelp() returns help for all views
+        ok 1 - has help for nodes
+        ok 2 - nodes has title
+        ok 3 - nodes has description
+        ok 4 - nodes has shortcuts
+        ok 5 - has help for services
+        ok 6 - services has title
+        ok 7 - services has description
+        ok 8 - services has shortcuts
+        ok 9 - has help for tables
+        ok 10 - tables has title
+        ok 11 - tables has description
+        ok 12 - tables has shortcuts
+        ok 13 - has help for partitions
+        ok 14 - partitions has title
+        ok 15 - partitions has description
+        ok 16 - partitions has shortcuts
+        ok 17 - has help for message_groups
+        ok 18 - message_groups has title
+        ok 19 - message_groups has description
+        ok 20 - message_groups has shortcuts
+        ok 21 - has help for sql
+        ok 22 - sql has title
+        ok 23 - sql has description
+        ok 24 - sql has shortcuts
+        ok 25 - has help for logs
+        ok 26 - logs has title
+        ok 27 - logs has description
+        ok 28 - logs has shortcuts
+        ok 29 - has help for config
+        ok 30 - config has title
+        ok 31 - config has description
+        ok 32 - config has shortcuts
+        ok 33 - has help for contexts
+        ok 34 - contexts has title
+        ok 35 - contexts has description
+        ok 36 - contexts has shortcuts
+        1..36
+    ok 3 - getViewHelp() returns help for all views # time=2.925ms
+    
+    # Subtest: getHelpContent() returns combined content
+        ok 1 - has global shortcuts
+        ok 2 - has view help
+        ok 3 - has current view
+        1..3
+    ok 4 - getHelpContent() returns combined content # time=0.595ms
+    
+    # Subtest: getHelpContent() handles unknown view
+        ok 1 - has global shortcuts
+        ok 2 - view help is null
+        1..2
+    ok 5 - getHelpContent() handles unknown view # time=0.373ms
+    
+    # Subtest: formatHelpText() returns formatted string
+        ok 1 - has title
+        ok 2 - has view title
+        ok 3 - has navigation category
+        ok 4 - has dismiss hint
+        1..4
+    ok 6 - formatHelpText() returns formatted string # time=0.633ms
+    
+    # Subtest: getStatusBarHints() returns hints for view
+        ok 1 - has help hint
+        ok 2 - has quit hint
+        ok 3 - has drill down hint
+        1..3
+    ok 7 - getStatusBarHints() returns hints for view # time=0.538ms
+    
+    # Subtest: getStatusBarHints() returns SQL-specific hints
+        ok 1 - has execute hint
+        1..1
+    ok 8 - getStatusBarHints() returns SQL-specific hints # time=0.32ms
+    
+    # Subtest: getUsageText() returns CLI usage
+        ok 1 - has usage section
+        ok 2 - has options section
+        ok 3 - has help option
+        ok 4 - has examples
+        1..4
+    ok 9 - getUsageText() returns CLI usage # time=0.588ms
+    
+    # Subtest: show() sets visible and emits event
+        ok 1 - should be equal
+        ok 2 - emitted help:show
+        1..2
+    ok 10 - show() sets visible and emits event # time=0.815ms
+    
+    # Subtest: hide() clears visible and emits event
+        ok 1 - should be equal
+        ok 2 - emitted help:hide
+        1..2
+    ok 11 - hide() clears visible and emits event # time=0.471ms
+    
+    # Subtest: toggle() toggles visibility
+        ok 1 - should be equal
+        ok 2 - should be equal
+        ok 3 - should be equal
+        1..3
+    ok 12 - toggle() toggles visibility # time=0.532ms
+    
+    # Subtest: handleKey() dismisses when visible
+        ok 1 - key was handled
+        ok 2 - overlay hidden
+        1..2
+    ok 13 - handleKey() dismisses when visible # time=0.412ms
+    
+    # Subtest: handleKey() returns false when not visible
+        ok 1 - key was not handled
+        1..1
+    ok 14 - handleKey() returns false when not visible # time=0.305ms
+    
+    # Subtest: getShortcutsByCategory() returns category shortcuts
+        ok 1 - has navigation shortcuts
+        ok 2 - has arrow keys
+        1..2
+    ok 15 - getShortcutsByCategory() returns category shortcuts # time=0.466ms
+    
+    # Subtest: getShortcutsByCategory() returns empty for unknown
+        ok 1 - should be equivalent
+        1..1
+    ok 16 - getShortcutsByCategory() returns empty for unknown # time=1.114ms
+    
+    # Subtest: getViewShortcuts() returns view shortcuts
+        ok 1 - has SQL shortcuts
+        ok 2 - has execute shortcut
+        1..2
+    ok 17 - getViewShortcuts() returns view shortcuts # time=0.317ms
+    
+    # Subtest: getViewShortcuts() returns empty for unknown
+        ok 1 - should be equivalent
+        1..1
+    ok 18 - getViewShortcuts() returns empty for unknown # time=0.349ms
+    
+    1..18
+ok 1 - HelpOverlay # time=24.578ms
+
+1..1

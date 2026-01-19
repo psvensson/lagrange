@@ -1,0 +1,152 @@
+TAP version 14
+# Subtest: ContextsView - getColumns returns correct columns
+    ok 1 - should have 5 columns
+    ok 2 - first column should be context_id
+    ok 3 - second column should be context_type
+    ok 4 - third column should be name
+    ok 5 - fourth column should be created_at
+    ok 6 - fifth column should be updated_at
+    1..6
+ok 1 - ContextsView - getColumns returns correct columns # time=8.354ms
+
+# Subtest: ContextsView - formatRow formats context entry correctly
+    ok 1 - context_id should be formatted
+    ok 2 - context_type should be formatted
+    ok 3 - name should be formatted
+    ok 4 - created_at should be formatted
+    ok 5 - updated_at should be formatted
+    1..5
+ok 2 - ContextsView - formatRow formats context entry correctly # time=1.652ms
+
+# Subtest: ContextsView - formatRow handles missing values
+    ok 1 - missing context_id should be N/A
+    ok 2 - missing context_type should be N/A
+    ok 3 - missing name should be N/A
+    ok 4 - missing created_at should be N/A
+    ok 5 - missing updated_at should be N/A
+    1..5
+ok 3 - ContextsView - formatRow handles missing values # time=0.608ms
+
+# Subtest: ContextsView - truncateName truncates long names
+    ok 1 - short names should not be truncated
+    ok 2 - null should be N/A
+    ok 3 - undefined should be N/A
+    ok 4 - long names should be truncated with ellipsis
+    ok 5 - truncated name should be 40 chars
+    1..5
+ok 4 - ContextsView - truncateName truncates long names # time=0.656ms
+
+# Subtest: ContextsView - formatTimestamp formats timestamps correctly
+    ok 1 - null should be N/A
+    ok 2 - undefined should be N/A
+    ok 3 - invalid date should be N/A
+    ok 4 - should format ISO timestamp
+    ok 5 - should format numeric timestamp
+    1..5
+ok 5 - ContextsView - formatTimestamp formats timestamps correctly # time=0.682ms
+
+# Subtest: ContextsView - isRecentlyUpdated detects recent updates
+    ok 1 - should detect recent update
+    ok 2 - should not detect old update
+    ok 3 - should handle missing timestamp
+    ok 4 - should not detect future update
+    1..4
+ok 6 - ContextsView - isRecentlyUpdated detects recent updates # time=0.603ms
+
+# Subtest: ContextsView - getRowStatus highlights recently updated
+    ok 1 - recent should be warning
+    ok 2 - old should be normal
+    ok 3 - no timestamp should be normal
+    1..3
+ok 7 - ContextsView - getRowStatus highlights recently updated # time=0.451ms
+
+# Subtest: ContextsView - setTypeFilter filters by type
+    ok 1 - should filter to function contexts
+    ok 2 - all filtered should be function type
+    ok 3 - should filter to service contexts
+    ok 4 - should show all after clearing filter
+    1..4
+ok 8 - ContextsView - setTypeFilter filters by type # time=0.836ms
+
+# Subtest: ContextsView - setNamePatternFilter filters by name pattern
+    ok 1 - should filter to names containing "user"
+    ok 2 - all filtered should contain "user"
+    ok 3 - should show all after clearing filter
+    1..3
+ok 9 - ContextsView - setNamePatternFilter filters by name pattern # time=0.67ms
+
+# Subtest: ContextsView - combined filters work together
+    ok 1 - should filter by both type and name
+    ok 2 - should find userAuth function
+    ok 3 - should show all after clearing all filters
+    1..3
+ok 10 - ContextsView - combined filters work together # time=0.486ms
+
+# Subtest: ContextsView - getSelectedDetails returns full context details
+    ok 1 - should return details
+    ok 2 - should have correct title
+    ok 3 - should have multiple sections
+    ok 4 - should have context entry section
+    ok 5 - should have state data section
+    ok 6 - should include state data fields
+    1..6
+ok 11 - ContextsView - getSelectedDetails returns full context details # time=0.92ms
+
+# Subtest: ContextsView - getContextCountByType returns correct counts
+    ok 1 - should count function contexts
+    ok 2 - should count service contexts
+    ok 3 - should count user contexts
+    1..3
+ok 12 - ContextsView - getContextCountByType returns correct counts # time=0.576ms
+
+# Subtest: ContextsView - getStatusBarInfo returns correct info
+    ok 1 - should count all contexts
+    ok 2 - should have total count
+    ok 3 - should count recently updated
+    ok 4 - should have counts by type
+    ok 5 - should count function type
+    ok 6 - should count service type
+    1..6
+ok 13 - ContextsView - getStatusBarInfo returns correct info # time=0.779ms
+
+# Subtest: ContextsView - handleDrillDown returns navigation action
+    ok 1 - should return action
+    ok 2 - should be showDetail action
+    ok 3 - should be contexts view
+    ok 4 - should have context id in context
+    1..4
+ok 14 - ContextsView - handleDrillDown returns navigation action # time=0.556ms
+
+# Subtest: ContextsView - CONTEXT_TYPES export
+    ok 1 - CONTEXT_TYPES should be an array
+    ok 2 - should include function type
+    ok 3 - should include service type
+    ok 4 - should include user type
+    1..4
+ok 15 - ContextsView - CONTEXT_TYPES export # time=0.545ms
+
+# Subtest: ContextsView - RECENT_UPDATE_THRESHOLD_MS export
+    ok 1 - should be a number
+    ok 2 - should be 5 minutes in ms
+    1..2
+ok 16 - ContextsView - RECENT_UPDATE_THRESHOLD_MS export # time=0.315ms
+
+# Subtest: ContextsView - sorting by updated_at
+    ok 1 - most recent should be first
+    ok 2 - oldest should be last
+    ok 3 - oldest should be first in asc
+    1..3
+ok 17 - ContextsView - sorting by updated_at # time=0.511ms
+
+# Subtest: ContextsView - getItemKey returns context_id
+    ok 1 - should return context_id
+    ok 2 - should return empty string for missing id
+    1..2
+ok 18 - ContextsView - getItemKey returns context_id # time=0.425ms
+
+# Subtest: ContextsView - setRecentUpdateThreshold changes threshold
+    ok 1 - should update threshold
+    1..1
+ok 19 - ContextsView - setRecentUpdateThreshold changes threshold # time=0.291ms
+
+1..19

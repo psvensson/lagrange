@@ -1,0 +1,56 @@
+TAP version 14
+# Subtest: Property 17: Fault Recovery Behavior
+{"level":50,"time":"2026-01-19T08:23:03.976Z","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","pid":3590021,"subsystem":"failure-detector","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","lastHeartbeat":"2026-01-19T08:22:23.323Z","threshold":15000,"msg":"Node failure detected"}
+    # Subtest: node failures are detected via heartbeat timeout
+        ok 1 - node failures are detected via heartbeat timeout
+        1..1
+    ok 1 - node failures are detected via heartbeat timeout # time=10.229ms
+    
+{"level":50,"time":"2026-01-19T08:23:04.015Z","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","pid":3590021,"subsystem":"failure-detector","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","lastHeartbeat":"2026-01-19T08:22:44.015Z","threshold":15000,"msg":"Node failure detected"}
+    # Subtest: affected replicas are marked as failed when node fails
+        ok 1 - affected replicas are marked as failed when node fails
+        1..1
+    ok 2 - affected replicas are marked as failed when node fails # time=6.077ms
+    
+    # Subtest: replacement replicas are created on healthy nodes
+        ok 1 - replacement replicas are created on healthy nodes
+        1..1
+    ok 3 - replacement replicas are created on healthy nodes # time=3.513ms
+    
+    # Subtest: no recovery when replica count is sufficient
+        ok 1 - no recovery when replica count is sufficient
+        1..1
+    ok 4 - no recovery when replica count is sufficient # time=2.003ms
+    
+    # Subtest: healthy nodes are not marked as failed
+        ok 1 - healthy nodes are not marked as failed
+        1..1
+    ok 5 - healthy nodes are not marked as failed # time=2.266ms
+    
+    # Subtest: message group replicas are recovered
+        ok 1 - message group replicas are recovered
+        1..1
+    ok 6 - message group replicas are recovered # time=2.683ms
+    
+    1..6
+ok 1 - Property 17: Fault Recovery Behavior # time=221.51ms
+
+{"level":50,"time":"2026-01-19T08:23:03.977Z","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","pid":3590021,"subsystem":"failure-detector","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","lastHeartbeat":"2026-01-19T08:22:03.988Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:03.977Z","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","pid":3590021,"subsystem":"failure-detector","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","lastHeartbeat":"2026-01-19T08:22:34.830Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:03.978Z","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","pid":3590021,"subsystem":"failure-detector","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","lastHeartbeat":"2026-01-19T08:22:03.986Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:03.978Z","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","pid":3590021,"subsystem":"failure-detector","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","lastHeartbeat":"2026-01-19T08:22:03.985Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:03.978Z","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","pid":3590021,"subsystem":"failure-detector","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","lastHeartbeat":"2026-01-19T08:22:05.609Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:03.978Z","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","pid":3590021,"subsystem":"failure-detector","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","lastHeartbeat":"2026-01-19T08:22:04.897Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:03.979Z","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","pid":3590021,"subsystem":"failure-detector","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","lastHeartbeat":"2026-01-19T08:22:18.336Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:03.979Z","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","pid":3590021,"subsystem":"failure-detector","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","lastHeartbeat":"2026-01-19T08:22:12.199Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:03.979Z","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","pid":3590021,"subsystem":"failure-detector","nodeId":"5cc561c8-d4be-4732-abb8-3449cbcf2f44","lastHeartbeat":"2026-01-19T08:22:03.993Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:04.016Z","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","pid":3590021,"subsystem":"failure-detector","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","lastHeartbeat":"2026-01-19T08:22:44.016Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:04.018Z","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","pid":3590021,"subsystem":"failure-detector","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","lastHeartbeat":"2026-01-19T08:22:44.018Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:04.019Z","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","pid":3590021,"subsystem":"failure-detector","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","lastHeartbeat":"2026-01-19T08:22:44.019Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:04.019Z","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","pid":3590021,"subsystem":"failure-detector","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","lastHeartbeat":"2026-01-19T08:22:44.019Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:04.019Z","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","pid":3590021,"subsystem":"failure-detector","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","lastHeartbeat":"2026-01-19T08:22:44.019Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:04.019Z","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","pid":3590021,"subsystem":"failure-detector","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","lastHeartbeat":"2026-01-19T08:22:44.019Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:04.020Z","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","pid":3590021,"subsystem":"failure-detector","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","lastHeartbeat":"2026-01-19T08:22:44.020Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:04.020Z","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","pid":3590021,"subsystem":"failure-detector","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","lastHeartbeat":"2026-01-19T08:22:44.020Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-19T08:23:04.020Z","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","pid":3590021,"subsystem":"failure-detector","nodeId":"e7f289ba-24e3-4d1c-bb16-1055502d2667","lastHeartbeat":"2026-01-19T08:22:44.020Z","threshold":15000,"msg":"Node failure detected"}
+1..1

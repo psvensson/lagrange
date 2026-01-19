@@ -1,0 +1,109 @@
+TAP version 14
+# Subtest: setup
+    ok 1 - configuration initialized
+    1..1
+ok 1 - setup # time=79.662ms
+
+# Subtest: LogsTableService singleton
+    ok 1 - should return the same instance
+LogsTableService shutdown
+    1..1
+ok 2 - LogsTableService singleton # time=1.329ms
+
+# Subtest: LogsTableService initialization
+    ok 1 - should not be initialized before initialize()
+LogsTableService initialized
+    ok 2 - should be initialized after initialize()
+    ok 3 - should have no pending writes
+    ok 4 - should have zero write count
+    ok 5 - should have zero error count
+LogsTableService shutdown
+    1..5
+ok 3 - LogsTableService initialization # time=1.347ms
+
+# Subtest: LogsTableService default config
+    ok 1 - should have default batch size
+    ok 2 - should have default flush interval
+    ok 3 - should have default max retries
+    ok 4 - should have default retry delay
+    1..4
+ok 4 - LogsTableService default config # time=0.513ms
+
+LogsTableService initialized
+# Subtest: LogsTableService writeLogEntry queues entries
+    ok 1 - should queue the entry
+    1..1
+ok 5 - LogsTableService writeLogEntry queues entries # time=0.972ms
+
+LogsTableService initialized
+# Subtest: LogsTableService flush with mock CDC service
+    ok 1 - should flush 2 entries
+    ok 2 - should write 2 rows
+    ok 3 - should write to logs table
+    ok 4 - should have correct log_id
+    ok 5 - should include service_id
+    ok 6 - should include trace_id
+    ok 7 - should include metadata
+    ok 8 - should have no pending writes after flush
+    ok 9 - should update write count
+LogsTableService shutdown
+    1..9
+ok 6 - LogsTableService flush with mock CDC service # time=1.401ms
+
+LogsTableService initialized
+# Subtest: LogsTableService handles write errors
+    ok 1 - should retry the configured number of times
+    ok 2 - should increment error count
+LogsTableService shutdown
+    1..2
+ok 7 - LogsTableService handles write errors # time=16.92ms
+
+LogsTableService initialized
+# Subtest: LogsTableService batch flush on size threshold
+    ok 1 - should auto-flush when batch size reached
+    ok 2 - should have no pending writes
+LogsTableService shutdown
+    1..2
+ok 8 - LogsTableService batch flush on size threshold # time=0.948ms
+
+{"level":30,"time":"2026-01-19T08:23:02.243Z","nodeId":"test-node","pid":3589861,"nodeId":"test-node","msg":"Buffered message 1"}
+# Subtest: LogsTableService connectToLoggingService flushes buffer
+    ok 1 - should have buffered entries
+LogsTableService initialized
+Connected to LoggingService, flushed 2 buffered entries
+    ok 2 - should return flushed count
+    ok 3 - logs table should be marked ready
+    ok 4 - buffer should be empty
+    ok 5 - should have pending writes queued
+    ok 6 - should write buffered entries
+LogsTableService shutdown
+LogsTableService shutdown
+    1..6
+ok 9 - LogsTableService connectToLoggingService flushes buffer # time=8.474ms
+
+LogsTableService initialized
+# Subtest: LogsTableService shutdown flushes pending
+    ok 1 - should have pending write
+LogsTableService shutdown
+    ok 2 - should flush on shutdown
+    ok 3 - should not be initialized after shutdown
+LogsTableService shutdown
+    1..3
+ok 10 - LogsTableService shutdown flushes pending # time=1.028ms
+
+LogsTableService initialized
+# Subtest: LogsTableService handles null entry
+    ok 1 - should not queue null entry
+LogsTableService shutdown
+    1..1
+ok 11 - LogsTableService handles null entry # time=0.512ms
+
+# Subtest: cleanup
+    ok 1 - cleanup complete
+    1..1
+ok 12 - cleanup # time=0.28ms
+
+{"level":30,"time":"2026-01-19T08:23:02.247Z","nodeId":"test-node","pid":3589861,"nodeId":"test-node","msg":"Buffered message 2"}
+{"level":30,"time":"2026-01-19T08:23:02.248Z","nodeId":"test-node","pid":3589861,"bufferedEntries":2,"nodeId":"test-node","msg":"Logs table ready, flushing buffer"}
+LogsTableService shutdown
+1..12

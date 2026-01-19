@@ -1,0 +1,31 @@
+TAP version 14
+# Subtest: Property 8: Back Navigation Consistency
+    # Subtest: goBack after drillDown returns to previous state
+        ok 1 - goBack after drillDown returns to previous state
+        1..1
+    ok 1 - goBack after drillDown returns to previous state # time=7.7ms
+    
+    # Subtest: multiple drillDowns followed by same goBack count
+        ok 1 - multiple drillDowns followed by same goBack count
+        1..1
+    ok 2 - multiple drillDowns followed by same goBack count # time=3.1ms
+    
+    # Subtest: goBack at root returns false
+        ok 1 - goBack at root returns false
+        1..1
+    ok 3 - goBack at root returns false # time=1.331ms
+    
+    # Subtest: extra goBack calls after returning to root
+        ok 1 - extra goBack calls after returning to root
+        1..1
+    ok 4 - extra goBack calls after returning to root # time=2.413ms
+    
+    # Subtest: goBack preserves intermediate states
+        ok 1 - goBack preserves intermediate states
+        1..1
+    ok 5 - goBack preserves intermediate states # time=2.449ms
+    
+    1..5
+ok 1 - Property 8: Back Navigation Consistency # time=24.349ms
+
+1..1

@@ -1,0 +1,398 @@
+TAP version 14
+# Subtest: DynamicConfigService initialization
+    ok 1 - should not be initialized before init
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+    ok 2 - should be initialized after init
+    1..2
+ok 1 - DynamicConfigService initialization # time=23.433ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService get with default value
+    ok 1 - should return default value for missing key
+    1..1
+ok 2 - DynamicConfigService get with default value # time=1.182ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService get from cache
+    ok 1 - should return cached value
+    1..1
+ok 3 - DynamicConfigService get from cache # time=0.626ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration updated {
+  key: [32m'logging.level'[39m,
+  updatedBy: [32m'test-user'[39m,
+  requiresRestart: [33mfalse[39m
+}
+# Subtest: DynamicConfigService set value
+    ok 1 - should succeed
+    ok 2 - should return key
+    ok 3 - should return value
+    ok 4 - should insert row
+    ok 5 - should insert correct key
+    ok 6 - should record who made change
+    1..6
+ok 4 - DynamicConfigService set value # time=1.491ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration updated { key: [32m'logging.level'[39m, updatedBy: [32m'admin'[39m, requiresRestart: [33mfalse[39m }
+# Subtest: DynamicConfigService update existing value
+    ok 1 - should succeed
+    ok 2 - should update row
+    ok 3 - should record who made change
+    1..3
+ok 5 - DynamicConfigService update existing value # time=1.137ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService validation - invalid log level
+    ok 1 - should reject invalid log level
+    1..1
+ok 6 - DynamicConfigService validation - invalid log level # time=2.013ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService validation - wrong type
+    ok 1 - should reject wrong type
+    1..1
+ok 7 - DynamicConfigService validation - wrong type # time=0.954ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration watcher registered { key: [32m'logging.level'[39m }
+Configuration updated { key: [32m'logging.level'[39m, updatedBy: [32m'test'[39m, requiresRestart: [33mfalse[39m }
+# Subtest: DynamicConfigService watchers
+    ok 1 - watcher should be called
+    ok 2 - should receive new value
+Configuration updated { key: [32m'logging.level'[39m, updatedBy: [32m'test'[39m, requiresRestart: [33mfalse[39m }
+    ok 3 - watcher should not be called after unsubscribe
+    1..3
+ok 8 - DynamicConfigService watchers # time=1.359ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService requiresRestart
+    ok 1 - restApiPort should require restart
+    ok 2 - raft election timeout should require restart
+    ok 3 - logging.level should not require restart
+    ok 4 - split threshold should not require restart
+    1..4
+ok 9 - DynamicConfigService requiresRestart # time=1.012ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService getRestartRequiredKeys
+    ok 1 - should return array
+    ok 2 - should include restApiPort
+    ok 3 - should include raft timeout
+    ok 4 - should not include logging.level
+    1..4
+ok 10 - DynamicConfigService getRestartRequiredKeys # time=0.857ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService getHotReloadKeys
+    ok 1 - should return array
+    ok 2 - should include logging.level
+    ok 3 - should include split threshold
+    ok 4 - should not include restApiPort
+    1..4
+ok 11 - DynamicConfigService getHotReloadKeys # time=0.866ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration updated {
+  key: [32m'node.heartbeatIntervalMs'[39m,
+  updatedBy: [32m'test'[39m,
+  requiresRestart: [33mfalse[39m
+}
+# Subtest: DynamicConfigService value types
+    ok 1 - should use number type
+Configuration updated {
+  key: [32m'queryCoordinator.speculativeExecutionEnabled'[39m,
+  updatedBy: [32m'test'[39m,
+  requiresRestart: [33mfalse[39m
+}
+    ok 2 - should use boolean type
+Configuration updated { key: [32m'logging.level'[39m, updatedBy: [32m'test'[39m, requiresRestart: [33mfalse[39m }
+    ok 3 - should use string type
+    1..3
+ok 12 - DynamicConfigService value types # time=1.455ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService getMetadata
+    ok 1 - should return metadata
+    ok 2 - should have correct type
+    ok 3 - should have requiresRestart
+    ok 4 - should have description
+    ok 5 - should have default value
+    ok 6 - should return null for unknown key
+    1..6
+ok 13 - DynamicConfigService getMetadata # time=0.926ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration watcher registered { key: [32m'logging.level'[39m }
+# Subtest: DynamicConfigService handleCDCEvent
+    ok 1 - watcher should be called on CDC event
+    ok 2 - cache should be updated
+    1..2
+ok 14 - DynamicConfigService handleCDCEvent # time=0.719ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration updated { key: [32m'logging.level'[39m, updatedBy: [32m'test'[39m, requiresRestart: [33mfalse[39m }
+# Subtest: DynamicConfigService getStats
+    ok 1 - should track reads
+    ok 2 - should track writes
+    ok 3 - should have watcher count
+    ok 4 - should have cached keys count
+    1..4
+ok 15 - DynamicConfigService getStats # time=0.915ms
+
+# Subtest: CONFIG_DEFINITIONS coverage
+    ok 1 - should have definitions
+    ok 2 - node.heartbeatIntervalMs should have defaultValue
+    ok 3 - node.heartbeatIntervalMs should have type
+    ok 4 - node.heartbeatIntervalMs should have requiresRestart
+    ok 5 - node.heartbeatIntervalMs should have description
+    ok 6 - node.heartbeatTimeoutMs should have defaultValue
+    ok 7 - node.heartbeatTimeoutMs should have type
+    ok 8 - node.heartbeatTimeoutMs should have requiresRestart
+    ok 9 - node.heartbeatTimeoutMs should have description
+    ok 10 - node.statsCollectionIntervalMs should have defaultValue
+    ok 11 - node.statsCollectionIntervalMs should have type
+    ok 12 - node.statsCollectionIntervalMs should have requiresRestart
+    ok 13 - node.statsCollectionIntervalMs should have description
+    ok 14 - node.maxServicesPerNode should have defaultValue
+    ok 15 - node.maxServicesPerNode should have type
+    ok 16 - node.maxServicesPerNode should have requiresRestart
+    ok 17 - node.maxServicesPerNode should have description
+    ok 18 - node.restApiPort should have defaultValue
+    ok 19 - node.restApiPort should have type
+    ok 20 - node.restApiPort should have requiresRestart
+    ok 21 - node.restApiPort should have description
+    ok 22 - raft.electionTimeoutMinMs should have defaultValue
+    ok 23 - raft.electionTimeoutMinMs should have type
+    ok 24 - raft.electionTimeoutMinMs should have requiresRestart
+    ok 25 - raft.electionTimeoutMinMs should have description
+    ok 26 - raft.electionTimeoutMaxMs should have defaultValue
+    ok 27 - raft.electionTimeoutMaxMs should have type
+    ok 28 - raft.electionTimeoutMaxMs should have requiresRestart
+    ok 29 - raft.electionTimeoutMaxMs should have description
+    ok 30 - raft.heartbeatIntervalMs should have defaultValue
+    ok 31 - raft.heartbeatIntervalMs should have type
+    ok 32 - raft.heartbeatIntervalMs should have requiresRestart
+    ok 33 - raft.heartbeatIntervalMs should have description
+    ok 34 - messageGroup.replicaCount should have defaultValue
+    ok 35 - messageGroup.replicaCount should have type
+    ok 36 - messageGroup.replicaCount should have requiresRestart
+    ok 37 - messageGroup.replicaCount should have description
+    ok 38 - messageGroup.deliveryTimeoutMs should have defaultValue
+    ok 39 - messageGroup.deliveryTimeoutMs should have type
+    ok 40 - messageGroup.deliveryTimeoutMs should have requiresRestart
+    ok 41 - messageGroup.deliveryTimeoutMs should have description
+    ok 42 - messageGroup.retryMaxAttempts should have defaultValue
+    ok 43 - messageGroup.retryMaxAttempts should have type
+    ok 44 - messageGroup.retryMaxAttempts should have requiresRestart
+    ok 45 - messageGroup.retryMaxAttempts should have description
+    ok 46 - messageGroup.cacheTtlMs should have defaultValue
+    ok 47 - messageGroup.cacheTtlMs should have type
+    ok 48 - messageGroup.cacheTtlMs should have requiresRestart
+    ok 49 - messageGroup.cacheTtlMs should have description
+    ok 50 - partition.defaultReplicaCount should have defaultValue
+    ok 51 - partition.defaultReplicaCount should have type
+    ok 52 - partition.defaultReplicaCount should have requiresRestart
+    ok 53 - partition.defaultReplicaCount should have description
+    ok 54 - partition.splitThresholdBytes should have defaultValue
+    ok 55 - partition.splitThresholdBytes should have type
+    ok 56 - partition.splitThresholdBytes should have requiresRestart
+    ok 57 - partition.splitThresholdBytes should have description
+    ok 58 - partition.splitThresholdQpm should have defaultValue
+    ok 59 - partition.splitThresholdQpm should have type
+    ok 60 - partition.splitThresholdQpm should have requiresRestart
+    ok 61 - partition.splitThresholdQpm should have description
+    ok 62 - partition.mergeThresholdBytes should have defaultValue
+    ok 63 - partition.mergeThresholdBytes should have type
+    ok 64 - partition.mergeThresholdBytes should have requiresRestart
+    ok 65 - partition.mergeThresholdBytes should have description
+    ok 66 - partition.mergeThresholdQpm should have defaultValue
+    ok 67 - partition.mergeThresholdQpm should have type
+    ok 68 - partition.mergeThresholdQpm should have requiresRestart
+    ok 69 - partition.mergeThresholdQpm should have description
+    ok 70 - partition.evaluationIntervalMs should have defaultValue
+    ok 71 - partition.evaluationIntervalMs should have type
+    ok 72 - partition.evaluationIntervalMs should have requiresRestart
+    ok 73 - partition.evaluationIntervalMs should have description
+    ok 74 - logging.level should have defaultValue
+    ok 75 - logging.level should have type
+    ok 76 - logging.level should have requiresRestart
+    ok 77 - logging.level should have description
+    ok 78 - logging.retentionDays should have defaultValue
+    ok 79 - logging.retentionDays should have type
+    ok 80 - logging.retentionDays should have requiresRestart
+    ok 81 - logging.retentionDays should have description
+    ok 82 - rebalancer.periodicCheckIntervalMs should have defaultValue
+    ok 83 - rebalancer.periodicCheckIntervalMs should have type
+    ok 84 - rebalancer.periodicCheckIntervalMs should have requiresRestart
+    ok 85 - rebalancer.periodicCheckIntervalMs should have description
+    ok 86 - rebalancer.maxConcurrentMoves should have defaultValue
+    ok 87 - rebalancer.maxConcurrentMoves should have type
+    ok 88 - rebalancer.maxConcurrentMoves should have requiresRestart
+    ok 89 - rebalancer.maxConcurrentMoves should have description
+    ok 90 - queryCoordinator.maxParallelPartitions should have defaultValue
+    ok 91 - queryCoordinator.maxParallelPartitions should have type
+    ok 92 - queryCoordinator.maxParallelPartitions should have requiresRestart
+    ok 93 - queryCoordinator.maxParallelPartitions should have description
+    ok 94 - queryCoordinator.queryTimeoutMs should have defaultValue
+    ok 95 - queryCoordinator.queryTimeoutMs should have type
+    ok 96 - queryCoordinator.queryTimeoutMs should have requiresRestart
+    ok 97 - queryCoordinator.queryTimeoutMs should have description
+    ok 98 - queryCoordinator.speculativeExecutionEnabled should have defaultValue
+    ok 99 - queryCoordinator.speculativeExecutionEnabled should have type
+    ok 100 - queryCoordinator.speculativeExecutionEnabled should have requiresRestart
+    ok 101 - queryCoordinator.speculativeExecutionEnabled should have description
+    1..101
+ok 16 - CONFIG_DEFINITIONS coverage # time=5.328ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration seeding complete { seeded: [33m25[39m, skipped: [33m0[39m }
+# Subtest: DynamicConfigService seedConfiguration
+    ok 1 - should seed some keys
+    ok 2 - should return skipped array
+    ok 3 - should seed all defined keys
+    ok 4 - should have config_key
+    ok 5 - should have config_value
+    ok 6 - should have value_type
+    ok 7 - should have description
+    ok 8 - should have default_value
+    ok 9 - should record updatedBy
+    1..9
+ok 17 - DynamicConfigService seedConfiguration # time=1.872ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration seeding complete { seeded: [33m24[39m, skipped: [33m1[39m }
+# Subtest: DynamicConfigService seedConfiguration skips existing
+    ok 1 - should skip existing key
+    ok 2 - should not seed existing key
+    1..2
+ok 18 - DynamicConfigService seedConfiguration skips existing # time=1.077ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration seeding complete { seeded: [33m25[39m, skipped: [33m0[39m }
+# Subtest: DynamicConfigService seedConfiguration from env vars
+    ok 1 - should insert heartbeat interval
+    ok 2 - should use env var value
+    1..2
+ok 19 - DynamicConfigService seedConfiguration from env vars # time=1.143ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration watcher registered { key: [32m'partition.splitThresholdBytes'[39m }
+Configuration updated {
+  key: [32m'partition.splitThresholdBytes'[39m,
+  updatedBy: [32m'admin'[39m,
+  requiresRestart: [33mfalse[39m
+}
+# Subtest: DynamicConfigService hot reload notification
+    ok 1 - should not require restart
+    ok 2 - watcher should be called
+    ok 3 - should receive new value
+    1..3
+ok 20 - DynamicConfigService hot reload notification # time=1.025ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration watcher registered { key: [32m'node.restApiPort'[39m }
+Configuration updated { key: [32m'node.restApiPort'[39m, updatedBy: [32m'admin'[39m, requiresRestart: [33mtrue[39m }
+# Subtest: DynamicConfigService restart-required notification
+    ok 1 - should require restart
+    ok 2 - watcher should still be called
+    ok 3 - should receive new value
+    1..3
+ok 21 - DynamicConfigService restart-required notification # time=1.006ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration watcher registered { key: [32m'logging.level'[39m }
+Configuration watcher registered { key: [32m'logging.level'[39m }
+Configuration updated { key: [32m'logging.level'[39m, updatedBy: [32m'test'[39m, requiresRestart: [33mfalse[39m }
+# Subtest: DynamicConfigService multiple watchers
+    ok 1 - first watcher should be called
+    ok 2 - second watcher should be called
+    1..2
+ok 22 - DynamicConfigService multiple watchers # time=1.014ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration watcher registered { key: [32m'logging.level'[39m }
+Configuration updated { key: [32m'logging.level'[39m, updatedBy: [32m'test'[39m, requiresRestart: [33mfalse[39m }
+# Subtest: DynamicConfigService event emission
+    ok 1 - should have correct key
+    ok 2 - should have new value
+    ok 3 - change event should be emitted
+    1..3
+ok 23 - DynamicConfigService event emission # time=0.897ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService validation - negative number
+    ok 1 - should reject negative values
+    1..1
+ok 24 - DynamicConfigService validation - negative number # time=0.657ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService validation - boolean type
+    ok 1 - should reject non-boolean for boolean config
+    1..1
+ok 25 - DynamicConfigService validation - boolean type # time=0.768ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration updated {
+  key: [32m'logging.level'[39m,
+  updatedBy: [32m'admin-user'[39m,
+  requiresRestart: [33mfalse[39m
+}
+# Subtest: DynamicConfigService auditing - timestamp recorded
+    ok 1 - should have timestamp >= before
+    ok 2 - should have timestamp <= after
+    ok 3 - should have created_at
+    1..3
+ok 26 - DynamicConfigService auditing - timestamp recorded # time=0.995ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration updated {
+  key: [32m'logging.level'[39m,
+  updatedBy: [32m'operator@example.com'[39m,
+  requiresRestart: [33mfalse[39m
+}
+# Subtest: DynamicConfigService auditing - updatedBy recorded
+    ok 1 - should record who made the change
+    1..1
+ok 27 - DynamicConfigService auditing - updatedBy recorded # time=0.77ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+Configuration updated {
+  key: [32m'logging.level'[39m,
+  updatedBy: [32m'security-admin'[39m,
+  requiresRestart: [33mfalse[39m
+}
+# Subtest: DynamicConfigService auditing - update records change
+    ok 1 - should record updater
+    ok 2 - should record update time
+    1..2
+ok 28 - DynamicConfigService auditing - update records change # time=0.953ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService validateValue method
+    ok 1 - should accept valid log level
+    ok 2 - should reject number for string config
+    ok 3 - should have type error
+    ok 4 - should accept valid number
+    ok 5 - should reject string for number config
+    ok 6 - should accept valid boolean
+    ok 7 - should allow unknown keys
+    1..7
+ok 29 - DynamicConfigService validateValue method # time=0.827ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService getAll returns defaults
+    ok 1 - should have logging.level
+    ok 2 - should have default value
+    ok 3 - should have heartbeat interval
+    1..3
+ok 30 - DynamicConfigService getAll returns defaults # time=0.802ms
+
+Dynamic configuration service initialized { nodeId: [32m'test-node'[39m, definedKeys: [33m25[39m }
+# Subtest: DynamicConfigService clearCache
+    ok 1 - cache should be empty after clear
+    1..1
+ok 31 - DynamicConfigService clearCache # time=0.557ms
+
+1..31

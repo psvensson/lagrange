@@ -1,0 +1,17 @@
+TAP version 14
+# Subtest: Property 42: Single-column PRIMARY KEY becomes partition key
+    ok 1 - Single-column PRIMARY KEY is automatically used as partition key
+    1..1
+ok 1 - Property 42: Single-column PRIMARY KEY becomes partition key # time=10.273ms
+
+# Subtest: Property 42: Composite PRIMARY KEY becomes partition key
+    ok 1 - Composite PRIMARY KEY is automatically used as partition key
+    1..1
+ok 2 - Property 42: Composite PRIMARY KEY becomes partition key # time=3.392ms
+
+# Subtest: Property 42: derivePartitionKey derives from PRIMARY KEY
+    ok 1 - derivePartitionKey correctly derives partition key from PRIMARY KEY
+    1..1
+ok 3 - Property 42: derivePartitionKey derives from PRIMARY KEY # time=1.619ms
+
+1..3

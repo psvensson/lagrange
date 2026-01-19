@@ -1,0 +1,26 @@
+TAP version 14
+# Subtest: Property 37: State Snapshot Restoration
+    # Subtest: snapshot restores exact state
+        ok 1 - Snapshot restores exact state
+        1..1
+    ok 1 - snapshot restores exact state # time=5.481ms
+    
+    # Subtest: multiple snapshots restore independently
+        ok 1 - Multiple snapshots restore independently
+        1..1
+    ok 2 - multiple snapshots restore independently # time=1.603ms
+    
+    # Subtest: snapshot is isolated from subsequent changes
+        ok 1 - Snapshot is isolated from subsequent changes
+        1..1
+    ok 3 - snapshot is isolated from subsequent changes # time=1.727ms
+    
+    # Subtest: restored state is a deep copy
+        ok 1 - Restored state is a deep copy
+        1..1
+    ok 4 - restored state is a deep copy # time=1.37ms
+    
+    1..4
+ok 1 - Property 37: State Snapshot Restoration # time=13.42ms
+
+1..1

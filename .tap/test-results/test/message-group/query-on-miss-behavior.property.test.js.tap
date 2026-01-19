@@ -1,0 +1,372 @@
+TAP version 14
+# Subtest: Property 28: Cache miss triggers system partition query
+    ok 1 - Query should be called once on miss
+    ok 2 - Should return query result
+    ok 3 - Query options should be passed
+    ok 4 - queryOnMiss should be tracked
+    ok 5 - Miss should be tracked
+    ok 6 - Query should be called once on miss
+    ok 7 - Should return query result
+    ok 8 - Query options should be passed
+    ok 9 - queryOnMiss should be tracked
+    ok 10 - Miss should be tracked
+    ok 11 - Query should be called once on miss
+    ok 12 - Should return query result
+    ok 13 - Query options should be passed
+    ok 14 - queryOnMiss should be tracked
+    ok 15 - Miss should be tracked
+    ok 16 - Query should be called once on miss
+    ok 17 - Should return query result
+    ok 18 - Query options should be passed
+    ok 19 - queryOnMiss should be tracked
+    ok 20 - Miss should be tracked
+    ok 21 - Query should be called once on miss
+    ok 22 - Should return query result
+    ok 23 - Query options should be passed
+    ok 24 - queryOnMiss should be tracked
+    ok 25 - Miss should be tracked
+    ok 26 - Query should be called once on miss
+    ok 27 - Should return query result
+    ok 28 - Query options should be passed
+    ok 29 - queryOnMiss should be tracked
+    ok 30 - Miss should be tracked
+    ok 31 - Query should be called once on miss
+    ok 32 - Should return query result
+    ok 33 - Query options should be passed
+    ok 34 - queryOnMiss should be tracked
+    ok 35 - Miss should be tracked
+    ok 36 - Query should be called once on miss
+    ok 37 - Should return query result
+    ok 38 - Query options should be passed
+    ok 39 - queryOnMiss should be tracked
+    ok 40 - Miss should be tracked
+    ok 41 - Query should be called once on miss
+    ok 42 - Should return query result
+    ok 43 - Query options should be passed
+    ok 44 - queryOnMiss should be tracked
+    ok 45 - Miss should be tracked
+    ok 46 - Query should be called once on miss
+    ok 47 - Should return query result
+    ok 48 - Query options should be passed
+    ok 49 - queryOnMiss should be tracked
+    ok 50 - Miss should be tracked
+    1..50
+ok 1 - Property 28: Cache miss triggers system partition query # time=16.012ms
+
+# Subtest: Property 28: Query result is cached
+    ok 1 - First access should query
+    ok 2 - Second access should not query
+    ok 3 - Should return cached result
+    ok 4 - Second access should be a hit
+    ok 5 - First access should query
+    ok 6 - Second access should not query
+    ok 7 - Should return cached result
+    ok 8 - Second access should be a hit
+    ok 9 - First access should query
+    ok 10 - Second access should not query
+    ok 11 - Should return cached result
+    ok 12 - Second access should be a hit
+    ok 13 - First access should query
+    ok 14 - Second access should not query
+    ok 15 - Should return cached result
+    ok 16 - Second access should be a hit
+    ok 17 - First access should query
+    ok 18 - Second access should not query
+    ok 19 - Should return cached result
+    ok 20 - Second access should be a hit
+    ok 21 - First access should query
+    ok 22 - Second access should not query
+    ok 23 - Should return cached result
+    ok 24 - Second access should be a hit
+    ok 25 - First access should query
+    ok 26 - Second access should not query
+    ok 27 - Should return cached result
+    ok 28 - Second access should be a hit
+    ok 29 - First access should query
+    ok 30 - Second access should not query
+    ok 31 - Should return cached result
+    ok 32 - Second access should be a hit
+    ok 33 - First access should query
+    ok 34 - Second access should not query
+    ok 35 - Should return cached result
+    ok 36 - Second access should be a hit
+    ok 37 - First access should query
+    ok 38 - Second access should not query
+    ok 39 - Should return cached result
+    ok 40 - Second access should be a hit
+    1..40
+ok 2 - Property 28: Query result is cached # time=3.164ms
+
+# Subtest: Property 28: Expired entries trigger fresh query
+    ok 1 - First query should return version 1
+    ok 2 - Should have queried once
+    ok 3 - Second query should return version 2
+    ok 4 - Should have queried twice
+    ok 5 - First query should return version 1
+    ok 6 - Should have queried once
+    ok 7 - Second query should return version 2
+    ok 8 - Should have queried twice
+    ok 9 - First query should return version 1
+    ok 10 - Should have queried once
+    ok 11 - Second query should return version 2
+    ok 12 - Should have queried twice
+    ok 13 - First query should return version 1
+    ok 14 - Should have queried once
+    ok 15 - Second query should return version 2
+    ok 16 - Should have queried twice
+    ok 17 - First query should return version 1
+    ok 18 - Should have queried once
+    ok 19 - Second query should return version 2
+    ok 20 - Should have queried twice
+    ok 21 - First query should return version 1
+    ok 22 - Should have queried once
+    ok 23 - Second query should return version 2
+    ok 24 - Should have queried twice
+    ok 25 - First query should return version 1
+    ok 26 - Should have queried once
+    ok 27 - Second query should return version 2
+    ok 28 - Should have queried twice
+    ok 29 - First query should return version 1
+    ok 30 - Should have queried once
+    ok 31 - Second query should return version 2
+    ok 32 - Should have queried twice
+    ok 33 - First query should return version 1
+    ok 34 - Should have queried once
+    ok 35 - Second query should return version 2
+    ok 36 - Should have queried twice
+    ok 37 - First query should return version 1
+    ok 38 - Should have queried once
+    ok 39 - Second query should return version 2
+    ok 40 - Should have queried twice
+    1..40
+ok 3 - Property 28: Expired entries trigger fresh query # time=708.949ms
+
+# Subtest: Property 28: Consecutive failures trigger refresh
+    ok 1 - Entry should exist below threshold
+    ok 2 - No refresh query below threshold
+    ok 3 - Refresh query should be triggered
+    ok 4 - Refresh should be tracked
+    ok 5 - Entry should exist below threshold
+    ok 6 - No refresh query below threshold
+    ok 7 - Refresh query should be triggered
+    ok 8 - Refresh should be tracked
+    ok 9 - Entry should exist below threshold
+    ok 10 - No refresh query below threshold
+    ok 11 - Refresh query should be triggered
+    ok 12 - Refresh should be tracked
+    ok 13 - Entry should exist below threshold
+    ok 14 - No refresh query below threshold
+    ok 15 - Refresh query should be triggered
+    ok 16 - Refresh should be tracked
+    ok 17 - Entry should exist below threshold
+    ok 18 - No refresh query below threshold
+    ok 19 - Refresh query should be triggered
+    ok 20 - Refresh should be tracked
+    ok 21 - Entry should exist below threshold
+    ok 22 - No refresh query below threshold
+    ok 23 - Refresh query should be triggered
+    ok 24 - Refresh should be tracked
+    ok 25 - Entry should exist below threshold
+    ok 26 - No refresh query below threshold
+    ok 27 - Refresh query should be triggered
+    ok 28 - Refresh should be tracked
+    ok 29 - Entry should exist below threshold
+    ok 30 - No refresh query below threshold
+    ok 31 - Refresh query should be triggered
+    ok 32 - Refresh should be tracked
+    ok 33 - Entry should exist below threshold
+    ok 34 - No refresh query below threshold
+    ok 35 - Refresh query should be triggered
+    ok 36 - Refresh should be tracked
+    ok 37 - Entry should exist below threshold
+    ok 38 - No refresh query below threshold
+    ok 39 - Refresh query should be triggered
+    ok 40 - Refresh should be tracked
+    1..40
+ok 4 - Property 28: Consecutive failures trigger refresh # time=4.553ms
+
+# Subtest: Property 28: Null results are not cached
+    ok 1 - Should return null
+    ok 2 - Should have queried
+    ok 3 - Should return null again
+    ok 4 - Should query again for null result
+    ok 5 - Null result should not be cached
+    ok 6 - Should return null
+    ok 7 - Should have queried
+    ok 8 - Should return null again
+    ok 9 - Should query again for null result
+    ok 10 - Null result should not be cached
+    ok 11 - Should return null
+    ok 12 - Should have queried
+    ok 13 - Should return null again
+    ok 14 - Should query again for null result
+    ok 15 - Null result should not be cached
+    ok 16 - Should return null
+    ok 17 - Should have queried
+    ok 18 - Should return null again
+    ok 19 - Should query again for null result
+    ok 20 - Null result should not be cached
+    ok 21 - Should return null
+    ok 22 - Should have queried
+    ok 23 - Should return null again
+    ok 24 - Should query again for null result
+    ok 25 - Null result should not be cached
+    ok 26 - Should return null
+    ok 27 - Should have queried
+    ok 28 - Should return null again
+    ok 29 - Should query again for null result
+    ok 30 - Null result should not be cached
+    ok 31 - Should return null
+    ok 32 - Should have queried
+    ok 33 - Should return null again
+    ok 34 - Should query again for null result
+    ok 35 - Null result should not be cached
+    ok 36 - Should return null
+    ok 37 - Should have queried
+    ok 38 - Should return null again
+    ok 39 - Should query again for null result
+    ok 40 - Null result should not be cached
+    ok 41 - Should return null
+    ok 42 - Should have queried
+    ok 43 - Should return null again
+    ok 44 - Should query again for null result
+    ok 45 - Null result should not be cached
+    ok 46 - Should return null
+    ok 47 - Should have queried
+    ok 48 - Should return null again
+    ok 49 - Should query again for null result
+    ok 50 - Null result should not be cached
+    1..50
+ok 5 - Property 28: Null results are not cached # time=3.495ms
+
+{"level":50,"time":"2026-01-19T08:23:03.751Z","nodeId":"test-node","pid":3589972,"subsystem":"metadata-cache","key":"X,tN<4Joj","error":"{>.F[0","nodeId":"test-node","msg":"Failed to query system partition"}
+# Subtest: Property 28: Query errors propagate
+    ok 1 - Error should be thrown
+    ok 2 - Error message should be preserved
+    ok 3 - Error should be thrown
+    ok 4 - Error message should be preserved
+    ok 5 - Error should be thrown
+    ok 6 - Error message should be preserved
+    ok 7 - Error should be thrown
+    ok 8 - Error message should be preserved
+    ok 9 - Error should be thrown
+    ok 10 - Error message should be preserved
+    ok 11 - Error should be thrown
+    ok 12 - Error message should be preserved
+    ok 13 - Error should be thrown
+    ok 14 - Error message should be preserved
+    ok 15 - Error should be thrown
+    ok 16 - Error message should be preserved
+    ok 17 - Error should be thrown
+    ok 18 - Error message should be preserved
+    ok 19 - Error should be thrown
+    ok 20 - Error message should be preserved
+    1..20
+ok 6 - Property 28: Query errors propagate # time=4.067ms
+
+# Subtest: Property 28: Partition getters use query-on-miss
+    ok 1 - Should query for partition
+    ok 2 - Should query partitions table
+    ok 3 - Should return partition data
+    ok 4 - Should query for partition
+    ok 5 - Should query partitions table
+    ok 6 - Should return partition data
+    ok 7 - Should query for partition
+    ok 8 - Should query partitions table
+    ok 9 - Should return partition data
+    ok 10 - Should query for partition
+    ok 11 - Should query partitions table
+    ok 12 - Should return partition data
+    ok 13 - Should query for partition
+    ok 14 - Should query partitions table
+    ok 15 - Should return partition data
+    ok 16 - Should query for partition
+    ok 17 - Should query partitions table
+    ok 18 - Should return partition data
+    ok 19 - Should query for partition
+    ok 20 - Should query partitions table
+    ok 21 - Should return partition data
+    ok 22 - Should query for partition
+    ok 23 - Should query partitions table
+    ok 24 - Should return partition data
+    ok 25 - Should query for partition
+    ok 26 - Should query partitions table
+    ok 27 - Should return partition data
+    ok 28 - Should query for partition
+    ok 29 - Should query partitions table
+    ok 30 - Should return partition data
+    1..30
+ok 7 - Property 28: Partition getters use query-on-miss # time=2.97ms
+
+# Subtest: Property 28: No query function returns null on miss
+    ok 1 - Should return null without query function
+    ok 2 - Should return null without query function
+    ok 3 - Should return null without query function
+    ok 4 - Should return null without query function
+    ok 5 - Should return null without query function
+    ok 6 - Should return null without query function
+    ok 7 - Should return null without query function
+    ok 8 - Should return null without query function
+    ok 9 - Should return null without query function
+    ok 10 - Should return null without query function
+    1..10
+ok 8 - Property 28: No query function returns null on miss # time=1.879ms
+
+# Subtest: Property 28: Dynamic query function setting
+    ok 1 - Should return null initially
+    ok 2 - Should return query result
+    ok 3 - Should return null initially
+    ok 4 - Should return query result
+    ok 5 - Should return null initially
+    ok 6 - Should return query result
+    ok 7 - Should return null initially
+    ok 8 - Should return query result
+    ok 9 - Should return null initially
+    ok 10 - Should return query result
+    ok 11 - Should return null initially
+    ok 12 - Should return query result
+    ok 13 - Should return null initially
+    ok 14 - Should return query result
+    ok 15 - Should return null initially
+    ok 16 - Should return query result
+    ok 17 - Should return null initially
+    ok 18 - Should return query result
+    ok 19 - Should return null initially
+    ok 20 - Should return query result
+    1..20
+ok 9 - Property 28: Dynamic query function setting # time=2.384ms
+
+# Subtest: Property 28: Failure counter resets on success
+    ok 1 - No refresh after counter reset
+    ok 2 - Entry should still exist
+    ok 3 - No refresh after counter reset
+    ok 4 - Entry should still exist
+    ok 5 - No refresh after counter reset
+    ok 6 - Entry should still exist
+    ok 7 - No refresh after counter reset
+    ok 8 - Entry should still exist
+    ok 9 - No refresh after counter reset
+    ok 10 - Entry should still exist
+    ok 11 - No refresh after counter reset
+    ok 12 - Entry should still exist
+    ok 13 - No refresh after counter reset
+    ok 14 - Entry should still exist
+    ok 15 - No refresh after counter reset
+    ok 16 - Entry should still exist
+    ok 17 - No refresh after counter reset
+    ok 18 - Entry should still exist
+    ok 19 - No refresh after counter reset
+    ok 20 - Entry should still exist
+    1..20
+ok 10 - Property 28: Failure counter resets on success # time=1.761ms
+
+{"level":50,"time":"2026-01-19T08:23:03.752Z","nodeId":"test-node","pid":3589972,"subsystem":"metadata-cache","key":"vS/","error":"0~\\xL)k'8YW~Q","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-19T08:23:03.752Z","nodeId":"test-node","pid":3589972,"subsystem":"metadata-cache","key":"8kc|@JT9=-m5|+","error":"!}p$_loo","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-19T08:23:03.753Z","nodeId":"test-node","pid":3589972,"subsystem":"metadata-cache","key":"v&%|R|'0&z#\"'2","error":" +hUT`","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-19T08:23:03.753Z","nodeId":"test-node","pid":3589972,"subsystem":"metadata-cache","key":"nf7xqnG%Bhz|","error":"fNxi@;0l","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-19T08:23:03.753Z","nodeId":"test-node","pid":3589972,"subsystem":"metadata-cache","key":"apply","error":"j }zyp","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-19T08:23:03.753Z","nodeId":"test-node","pid":3589972,"subsystem":"metadata-cache","key":"WvWJ)","error":" =#!\"~xD z","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-19T08:23:03.754Z","nodeId":"test-node","pid":3589972,"subsystem":"metadata-cache","key":"7DUbJ/mq`1[","error":"3{~  y","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-19T08:23:03.754Z","nodeId":"test-node","pid":3589972,"subsystem":"metadata-cache","key":"!t \"~w3vs$&~x4","error":"%1\"~~","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-19T08:23:03.754Z","nodeId":"test-node","pid":3589972,"subsystem":"metadata-cache","key":"6ktL","error":"\\tpI<`","nodeId":"test-node","msg":"Failed to query system partition"}
+1..10

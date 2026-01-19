@@ -1,0 +1,22 @@
+TAP version 14
+# Subtest: Property 28: Metadata Enrichment Idempotence - f(x) = f(f(x))
+    ok 1 - Enriching twice produces same result as enriching once
+    1..1
+ok 1 - Property 28: Metadata Enrichment Idempotence - f(x) = f(f(x)) # time=9.852ms
+
+# Subtest: Property 28: Metadata Enrichment Idempotence - multiple applications
+    ok 1 - Multiple enrichment applications produce same result
+    1..1
+ok 2 - Property 28: Metadata Enrichment Idempotence - multiple applications # time=2.968ms
+
+# Subtest: Property 28: Metadata Enrichment Idempotence - preserves original fields
+    ok 1 - Enrichment preserves original table fields
+    1..1
+ok 3 - Property 28: Metadata Enrichment Idempotence - preserves original fields # time=2.167ms
+
+# Subtest: Property 28: Metadata Enrichment Idempotence - computed fields stable
+    ok 1 - Computed fields are stable across multiple enrichments
+    1..1
+ok 4 - Property 28: Metadata Enrichment Idempotence - computed fields stable # time=2.118ms
+
+1..4

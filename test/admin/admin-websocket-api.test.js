@@ -1,0 +1,645 @@
+/**
+ * Tests for Admin WebSocket API.
+ * Requirements: 32.1-32.39
+ */
+
+import {test} from 'tap';
+import WebSocket from 'ws';
+import {AdminWebSocketAPI, MessageType, ErrorCode} from
+  '../../src/admin/admin-websocket-api.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
+
+// Initialize services for tests
+ConfigurationManager.getInstance().initialize();
+LoggingService.getInstance().initialize({level: 'error'});
+
+/**
+ * Create a mock SQL query engine.
+ * @return {Object} Mock query engine.
+ */
+function createMockQueryEngine() {
+  return {
+    executeQuery: async (sql, _params, _options) => {
+      const sqlLower = sql.toLowerCase().trim();
+
+      // Check for error conditions first (before checking statement type)
+      if (sqlLower.includes('invalid_table')) {
+        return {
+          success: false,
+          error: 'Table not found: invalid_table',
+          errorCode: 'TABLE_NOT_FOUND',
+        };
+      } else if (sqlLower.includes('syntax_error')) {
+        throw new Error('Parse error: syntax error near syntax_error');
+      } else if (sqlLower.startsWith('select')) {
+        return {
+          success: true,
+          results: [{id: '1', name: 'test'}],
+          count: 1,
+          partitions: ['partition-1'],
+          tableName: 'test_table',
+        };
+      } else if (sqlLower.startsWith('insert')) {
+        return {
+          success: true,
+          operation: 'INSERT',
+          affectedRows: 1,
+          partitions: ['partition-1'],
+          tableName: 'test_table',
+        };
+      } else if (sqlLower.startsWith('update')) {
+        return {
+          success: true,
+          operation: 'UPDATE',
+          affectedRows: 2,
+          partitions: ['partition-1'],
+          tableName: 'test_table',
+        };
+      } else if (sqlLower.startsWith('delete')) {
+        return {
+          success: true,
+          operation: 'DELETE',
+          affectedRows: 1,
+          partitions: ['partition-1'],
+          tableName: 'test_table',
+        };
+      }
+
+      return {success: true, results: [], count: 0};
+    },
+  };
+}
+
+/**
+ * Create a populated system table cache.
+ * @return {SystemTableCache} Populated cache.
+ */
+function createPopulatedCache() {
+  const cache = new SystemTableCache();
+
+  cache.applySystemTableChange('nodes', 'INSERT', {
+    id: 'node-1',
+    address: 'localhost:8080',
+    status: 'active',
+  });
+
+  cache.applySystemTableChange('services', 'INSERT', {
+    id: 'service-1',
+    nodeId: 'node-1',
+    type: 'partition',
+  });
+
+  cache.applySystemTableChange('partitions', 'INSERT', {
+    id: 'partition-1',
+    tableId: 'table-1',
+    keyStart: null,
+    keyEnd: null,
+  });
+
+  cache.applySystemTableChange('tables', 'INSERT', {
+    id: 'table-1',
+    name: 'test_table',
+  });
+
+  cache.applySystemTableChange('message_groups', 'INSERT', {
+    id: 'mg-1',
+    replicaCount: 3,
+  });
+
+  cache.applySystemTableChange('indices', 'INSERT', {
+    id: 'index-1',
+    tableId: 'table-1',
+    column: 'name',
+  });
+
+  return cache;
+}
+
+/**
+ * Connect to WebSocket and wait for first message.
+ * @param {string} url - WebSocket URL.
+ * @param {number} timeout - Timeout in ms.
+ * @return {Promise<{ws: WebSocket, message: Object}>}
+ */
+function connectAndReceive(url, timeout = 2000) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+
+    const timer = setTimeout(() => {
+      ws.close();
+      reject(new Error('Timeout waiting for connection/message'));
+    }, timeout);
+
+    ws.on('message', (data) => {
+      clearTimeout(timer);
+      try {
+        const message = JSON.parse(data.toString());
+        resolve({ws, message});
+      } catch (e) {
+        ws.close();
+        reject(e);
+      }
+    });
+
+    ws.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Wait for next message from WebSocket.
+ * @param {WebSocket} ws - WebSocket instance.
+ * @param {number} timeout - Timeout in ms.
+ * @return {Promise<Object>} Parsed message.
+ */
+function waitForMessage(ws, timeout = 2000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('Timeout waiting for message'));
+    }, timeout);
+
+    ws.once('message', (data) => {
+      clearTimeout(timer);
+      try {
+        resolve(JSON.parse(data.toString()));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
+}
+
+test('AdminWebSocketAPI - initialization', async (t) => {
+  const api = new AdminWebSocketAPI({nodeId: 'test-node'});
+
+  t.equal(api.isInitialized(), false, 'should not be initialized initially');
+
+  await api.initialize(0);
+
+  t.equal(api.isInitialized(), true, 'should be initialized after init');
+  t.equal(api.getClientCount(), 0, 'should have no clients initially');
+
+  await api.shutdown();
+  t.equal(api.isInitialized(), false, 'should not be initialized after shutdown');
+});
+
+test('AdminWebSocketAPI - cache dump on connection', async (t) => {
+  const cache = createPopulatedCache();
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: cache,
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws, message} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  t.equal(message.type, MessageType.CACHE_DUMP, 'should receive cache_dump');
+  t.ok(message.timestamp, 'should have timestamp');
+  t.ok(message.data, 'should have data');
+  t.ok(Array.isArray(message.data.nodes), 'should have nodes array');
+  t.ok(Array.isArray(message.data.services), 'should have services array');
+  t.ok(Array.isArray(message.data.partitions), 'should have partitions array');
+  t.ok(Array.isArray(message.data.tables), 'should have tables array');
+  t.ok(Array.isArray(message.data.message_groups), 'should have message_groups');
+  t.ok(Array.isArray(message.data.indices), 'should have indices array');
+  t.equal(message.data.nodes.length, 1, 'should have 1 node');
+  t.equal(message.data.nodes[0].id, 'node-1', 'should have correct node');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - multiple concurrent connections', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+  const url = `ws://localhost:${port}/api/admin/stream`;
+
+  const [conn1, conn2, conn3] = await Promise.all([
+    connectAndReceive(url),
+    connectAndReceive(url),
+    connectAndReceive(url),
+  ]);
+
+  t.equal(api.getClientCount(), 3, 'should have 3 connected clients');
+
+  conn1.ws.close();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  t.equal(api.getClientCount(), 2, 'should have 2 clients after disconnect');
+
+  conn2.ws.close();
+  conn3.ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - query execution SELECT', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  ws.send(JSON.stringify({
+    type: MessageType.QUERY,
+    queryId: 'q1',
+    sql: 'SELECT * FROM test_table',
+  }));
+
+  const result = await waitForMessage(ws);
+
+  t.equal(result.type, MessageType.QUERY_RESULT, 'should receive query_result');
+  t.equal(result.queryId, 'q1', 'should have correct queryId');
+  t.ok(Array.isArray(result.results), 'should have results array');
+  t.equal(result.count, 1, 'should have count');
+  t.ok(Array.isArray(result.partitions), 'should have partitions array');
+  t.equal(result.tableName, 'test_table', 'should have tableName');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - query execution INSERT', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  ws.send(JSON.stringify({
+    type: MessageType.QUERY,
+    queryId: 'q2',
+    sql: 'INSERT INTO test_table (id, name) VALUES (1, "test")',
+  }));
+
+  const result = await waitForMessage(ws);
+
+  t.equal(result.type, MessageType.QUERY_RESULT, 'should receive query_result');
+  t.equal(result.queryId, 'q2', 'should have correct queryId');
+  t.equal(result.operation, 'INSERT', 'should have operation');
+  t.equal(result.affectedRows, 1, 'should have affectedRows');
+  t.ok(Array.isArray(result.partitions), 'should have partitions');
+  t.equal(result.tableName, 'test_table', 'should have tableName');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - query execution UPDATE', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  ws.send(JSON.stringify({
+    type: MessageType.QUERY,
+    queryId: 'q3',
+    sql: 'UPDATE test_table SET name = "updated"',
+  }));
+
+  const result = await waitForMessage(ws);
+
+  t.equal(result.operation, 'UPDATE', 'should have UPDATE operation');
+  t.equal(result.affectedRows, 2, 'should have affectedRows');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - query execution DELETE', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  ws.send(JSON.stringify({
+    type: MessageType.QUERY,
+    queryId: 'q4',
+    sql: 'DELETE FROM test_table WHERE id = 1',
+  }));
+
+  const result = await waitForMessage(ws);
+
+  t.equal(result.operation, 'DELETE', 'should have DELETE operation');
+  t.equal(result.affectedRows, 1, 'should have affectedRows');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - error handling TABLE_NOT_FOUND', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  ws.send(JSON.stringify({
+    type: MessageType.QUERY,
+    queryId: 'q5',
+    sql: 'SELECT * FROM invalid_table',
+  }));
+
+  const result = await waitForMessage(ws);
+
+  t.equal(result.type, MessageType.QUERY_RESULT, 'should receive query_result');
+  t.equal(result.queryId, 'q5', 'should have correct queryId');
+  t.ok(result.error, 'should have error');
+  t.equal(result.errorCode, ErrorCode.TABLE_NOT_FOUND, 'should have error code');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - error handling SYNTAX_ERROR', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  ws.send(JSON.stringify({
+    type: MessageType.QUERY,
+    queryId: 'q6',
+    sql: 'syntax_error',
+  }));
+
+  const result = await waitForMessage(ws);
+
+  t.equal(result.errorCode, ErrorCode.SYNTAX_ERROR, 'should have SYNTAX_ERROR');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - malformed JSON handling', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  ws.send('not valid json');
+
+  const result = await waitForMessage(ws);
+
+  t.equal(result.errorCode, ErrorCode.MALFORMED_JSON, 'should have error code');
+  t.ok(result.error, 'should have error message');
+  t.ok(result.hint, 'should have hint');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - unknown message type ignored', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  // Send unknown message type (should be ignored)
+  ws.send(JSON.stringify({type: 'unknown_type', data: 'test'}));
+
+  // Send a valid query
+  ws.send(JSON.stringify({
+    type: MessageType.QUERY,
+    queryId: 'q7',
+    sql: 'SELECT 1',
+  }));
+
+  const result = await waitForMessage(ws);
+
+  t.equal(result.type, MessageType.QUERY_RESULT, 'should receive query result');
+  t.equal(result.queryId, 'q7', 'should have correct queryId');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - refresh message', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws, message: firstDump} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  t.equal(firstDump.type, MessageType.CACHE_DUMP, 'should receive initial dump');
+
+  ws.send(JSON.stringify({type: MessageType.REFRESH}));
+
+  const secondDump = await waitForMessage(ws);
+  t.equal(secondDump.type, MessageType.CACHE_DUMP, 'should receive refresh dump');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - CDC event broadcasting', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+  const url = `ws://localhost:${port}/api/admin/stream`;
+
+  const [conn1, conn2] = await Promise.all([
+    connectAndReceive(url),
+    connectAndReceive(url),
+  ]);
+
+  // Broadcast CDC event
+  api.broadcastCDCEvent('nodes', 'INSERT', {
+    id: 'node-2',
+    address: 'localhost:8081',
+    status: 'active',
+  });
+
+  const [event1, event2] = await Promise.all([
+    waitForMessage(conn1.ws),
+    waitForMessage(conn2.ws),
+  ]);
+
+  t.equal(event1.type, MessageType.CDC_EVENT, 'client 1 should receive event');
+  t.equal(event1.table, 'nodes', 'should have correct table');
+  t.equal(event1.operation, 'insert', 'should have correct operation');
+  t.equal(event1.record.id, 'node-2', 'should have correct record');
+
+  t.equal(event2.type, MessageType.CDC_EVENT, 'client 2 should receive event');
+
+  conn1.ws.close();
+  conn2.ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - health endpoint', async (t) => {
+  const api = new AdminWebSocketAPI({nodeId: 'test-node'});
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  const response = await fetch(`http://localhost:${port}/health`);
+  const health = await response.json();
+
+  t.equal(health.status, 'healthy', 'should be healthy');
+  t.equal(health.nodeId, 'test-node', 'should have nodeId');
+  t.equal(health.connectedClients, 1, 'should have 1 connected client');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - cleanup on disconnect', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  t.equal(api.getClientCount(), 1, 'should have 1 client');
+
+  ws.close();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  t.equal(api.getClientCount(), 0, 'should have 0 clients after disconnect');
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - query without queryId', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  ws.send(JSON.stringify({type: MessageType.QUERY, sql: 'SELECT 1'}));
+
+  const result = await waitForMessage(ws);
+
+  t.ok(result.error, 'should have error');
+  t.equal(result.errorCode, ErrorCode.MALFORMED_JSON, 'should have error code');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - query without sql', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+  });
+
+  await api.initialize(0);
+  const port = api.getFastify().server.address().port;
+
+  const {ws} = await connectAndReceive(
+    `ws://localhost:${port}/api/admin/stream`,
+  );
+
+  ws.send(JSON.stringify({type: MessageType.QUERY, queryId: 'q8'}));
+
+  const result = await waitForMessage(ws);
+
+  t.equal(result.queryId, 'q8', 'should have queryId');
+  t.ok(result.error, 'should have error');
+  t.equal(result.errorCode, ErrorCode.SYNTAX_ERROR, 'should have error code');
+
+  ws.close();
+  await api.shutdown();
+});

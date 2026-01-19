@@ -1,0 +1,49 @@
+TAP version 14
+# Subtest: Property 32: System tables use same PartitionService as user tables
+    ok 1 - System table tables partition initialized
+    ok 2 - System table tables query succeeded
+    ok 3 - System table tables exists in SQLite
+    ok 4 - System table nodes partition initialized
+    ok 5 - System table nodes query succeeded
+    ok 6 - System table nodes exists in SQLite
+    ok 7 - System table message_groups partition initialized
+    ok 8 - System table message_groups query succeeded
+    ok 9 - System table message_groups exists in SQLite
+    ok 10 - System table partitions partition initialized
+    ok 11 - System table partitions query succeeded
+    ok 12 - System table partitions exists in SQLite
+    ok 13 - System table services partition initialized
+    ok 14 - System table services query succeeded
+    ok 15 - System table services exists in SQLite
+    ok 16 - System table indices partition initialized
+    ok 17 - System table indices query succeeded
+    ok 18 - System table indices exists in SQLite
+    ok 19 - System table logs partition initialized
+    ok 20 - System table logs query succeeded
+    ok 21 - System table logs exists in SQLite
+    ok 22 - System table config partition initialized
+    ok 23 - System table config query succeeded
+    ok 24 - System table config exists in SQLite
+    ok 25 - System table live_queries partition initialized
+    ok 26 - System table live_queries query succeeded
+    ok 27 - System table live_queries exists in SQLite
+    ok 28 - System table contexts partition initialized
+    ok 29 - System table contexts query succeeded
+    ok 30 - System table contexts exists in SQLite
+    ok 31 - System table code partition initialized
+    ok 32 - System table code query succeeded
+    ok 33 - System table code exists in SQLite
+    1..33
+ok 1 - Property 32: System tables use same PartitionService as user tables # time=3335.305ms
+
+# Subtest: Property 32: User tables use same PartitionService as system tables
+    ok 1 - User tables use same PartitionService infrastructure as system tables
+    1..1
+ok 2 - Property 32: User tables use same PartitionService as system tables # time=3035.766ms
+
+# Subtest: Property 32: No infrastructure distinction between system and user tables
+    ok 1 - No infrastructure distinction between system and user tables
+    1..1
+ok 3 - Property 32: No infrastructure distinction between system and user tables # time=3039.946ms
+
+1..3

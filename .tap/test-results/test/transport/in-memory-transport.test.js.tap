@@ -1,0 +1,123 @@
+TAP version 14
+# Subtest: InMemoryTransport
+    # Subtest: constructor creates transport with default options
+        ok 1 - should have transport ID
+        ok 2 - should have local address
+        ok 3 - should not be initialized
+        ok 4 - should have no services
+        1..4
+    ok 1 - constructor creates transport with default options # time=5.939ms
+    
+    # Subtest: constructor accepts custom local address
+        ok 1 - should use custom address
+        1..1
+    ok 2 - constructor accepts custom local address # time=0.244ms
+    
+    # Subtest: initialize sets initialized flag
+        ok 1 - should be initialized
+        1..1
+    ok 3 - initialize sets initialized flag # time=0.362ms
+    
+    # Subtest: initialize is idempotent
+        ok 1 - should remain initialized
+        1..1
+    ok 4 - initialize is idempotent # time=0.212ms
+    
+    # Subtest: register adds service handler
+        ok 1 - should have one service
+        ok 2 - should be registered
+        1..2
+    ok 5 - register adds service handler # time=0.282ms
+    
+    # Subtest: register throws for non-function handler
+        ok 1 - should throw for invalid handler
+        1..1
+    ok 6 - register throws for non-function handler # time=0.78ms
+    
+    # Subtest: unregister removes service handler
+        ok 1 - should have no services
+        ok 2 - should not be registered
+        1..2
+    ok 7 - unregister removes service handler # time=0.324ms
+    
+    # Subtest: deliver sends message to registered service
+        ok 1 - should be acknowledged
+        ok 2 - should receive message
+        ok 3 - should have correct data
+        1..3
+    ok 8 - deliver sends message to registered service # time=0.5ms
+    
+    # Subtest: deliver returns error for unregistered service
+        ok 1 - should not be acknowledged
+        ok 2 - should have error
+        1..2
+    ok 9 - deliver returns error for unregistered service # time=0.276ms
+    
+    # Subtest: deliver auto-initializes transport
+        ok 1 - should not be initialized
+        ok 2 - should be initialized after deliver
+        1..2
+    ok 10 - deliver auto-initializes transport # time=0.298ms
+    
+    # Subtest: sendAppendEntries sends Raft message
+        ok 1 - should send append entries type
+        1..1
+    ok 11 - sendAppendEntries sends Raft message # time=0.325ms
+    
+    # Subtest: sendRequestVote sends Raft vote request
+        ok 1 - should send request vote type
+        1..1
+    ok 12 - sendRequestVote sends Raft vote request # time=0.296ms
+    
+    # Subtest: broadcast sends to all services except self
+        ok 1 - should not send to self
+        ok 2 - should send to other-1
+        ok 3 - should send to other-2
+        1..3
+    ok 13 - broadcast sends to all services except self # time=0.439ms
+    
+    # Subtest: getRegisteredAddresses returns all addresses
+        ok 1 - should have two addresses
+        ok 2 - should include service-1
+        ok 3 - should include service-2
+        1..3
+    ok 14 - getRegisteredAddresses returns all addresses # time=0.312ms
+    
+    # Subtest: getStats returns transport statistics
+        ok 1 - should have transport ID
+        ok 2 - should have local address
+        ok 3 - should have one service
+        ok 4 - should have one message
+        1..4
+    ok 15 - getStats returns transport statistics # time=0.402ms
+    
+    # Subtest: shutdown clears all state
+        ok 1 - should not be initialized
+        ok 2 - should have no services
+        1..2
+    ok 16 - shutdown clears all state # time=0.288ms
+    
+    # Subtest: emits initialized event
+        ok 1 - should emit event
+        ok 2 - should have transport ID
+        1..2
+    ok 17 - emits initialized event # time=0.26ms
+    
+    # Subtest: emits shutdown event
+        ok 1 - should emit event
+        ok 2 - should have transport ID
+        1..2
+    ok 18 - emits shutdown event # time=0.237ms
+    
+{"level":50,"time":"2026-01-19T08:23:22.339Z","nodeId":"test-node","pid":3592334,"subsystem":"in-memory-transport","messageId":"c05ab100-233b-4e78-8375-e1849af041cc","error":"Handler error","nodeId":"test-node","msg":"Handler threw error"}
+    # Subtest: handles handler errors gracefully
+        ok 1 - should not be acknowledged
+        ok 2 - should have error message
+        1..2
+    ok 19 - handles handler errors gracefully # time=0.865ms
+    
+    1..19
+ok 1 - InMemoryTransport # time=16.707ms
+
+{"level":50,"time":"2026-01-19T08:23:22.340Z","nodeId":"test-node","pid":3592334,"subsystem":"in-memory-transport","messageId":"c05ab100-233b-4e78-8375-e1849af041cc","targetAddress":"error-service","error":"Handler error","nodeId":"test-node","msg":"Message delivery failed"}
+1..1

@@ -1,0 +1,41 @@
+TAP version 14
+# Subtest: Property 3: Drill-Down Filtering
+    # Subtest: node filter shows only services for that node
+        ok 1 - node filter shows only services for that node
+        1..1
+    ok 1 - node filter shows only services for that node # time=12.216ms
+    
+    # Subtest: type filter shows only services of that type
+        ok 1 - type filter shows only services of that type
+        1..1
+    ok 2 - type filter shows only services of that type # time=3.238ms
+    
+    # Subtest: combined filters are conjunctive (AND)
+        ok 1 - combined filters are conjunctive (AND)
+        1..1
+    ok 3 - combined filters are conjunctive (AND) # time=3.418ms
+    
+    # Subtest: clearing filters restores all data
+        ok 1 - clearing filters restores all data
+        1..1
+    ok 4 - clearing filters restores all data # time=1.824ms
+    
+    # Subtest: filtered count is subset of total
+        ok 1 - filtered count is subset of total
+        1..1
+    ok 5 - filtered count is subset of total # time=1.539ms
+    
+    # Subtest: drill-down returns correct parent reference
+        ok 1 - drill-down returns correct parent reference
+        1..1
+    ok 6 - drill-down returns correct parent reference # time=1.39ms
+    
+    # Subtest: message group drill-down returns correct reference
+        ok 1 - message group drill-down returns correct reference
+        1..1
+    ok 7 - message group drill-down returns correct reference # time=5.318ms
+    
+    1..7
+ok 1 - Property 3: Drill-Down Filtering # time=36.125ms
+
+1..1

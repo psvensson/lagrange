@@ -1,0 +1,276 @@
+TAP version 14
+# Subtest: Property 50: Cross-Partition JOIN Support
+Executing distributed SELECT {
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1768810987697-0-query-executor'[39m,
+  hasJoins: [33mtrue[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing cross-partition JOIN { mainTable: [32m'users'[39m, mainPartitionCount: [33m1[39m, joinCount: [33m1[39m }
+Executing distributed SELECT {
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1768810987698-1-query-executor'[39m,
+  hasJoins: [33mtrue[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing cross-partition JOIN { mainTable: [32m'users'[39m, mainPartitionCount: [33m1[39m, joinCount: [33m1[39m }
+Executing distributed SELECT {
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1768810987699-1-query-executor'[39m,
+  hasJoins: [33mtrue[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing cross-partition JOIN { mainTable: [32m'users'[39m, mainPartitionCount: [33m1[39m, joinCount: [33m1[39m }
+Executing distributed SELECT {
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1768810987699-1-query-executor'[39m,
+  hasJoins: [33mtrue[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing cross-partition JOIN { mainTable: [32m'users'[39m, mainPartitionCount: [33m1[39m, joinCount: [33m1[39m }
+Executing distributed SELECT {
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1768810987699-1-query-executor'[39m,
+  hasJoins: [33mtrue[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing cross-partition JOIN { mainTable: [32m'users'[39m, mainPartitionCount: [33m1[39m, joinCount: [33m1[39m }
+Executing distributed SELECT {
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1768810987700-1-query-executor'[39m,
+  hasJoins: [33mtrue[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing cross-partition JOIN { mainTable: [32m'users'[39m, mainPartitionCount: [33m1[39m, joinCount: [33m1[39m }
+Executing distributed SELECT {
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1768810987700-1-query-executor'[39m,
+  hasJoins: [33mtrue[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing cross-partition JOIN { mainTable: [32m'users'[39m, mainPartitionCount: [33m1[39m, joinCount: [33m1[39m }
+Executing distributed SELECT {
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1768810987700-1-query-executor'[39m,
+  hasJoins: [33mtrue[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing cross-partition JOIN { mainTable: [32m'users'[39m, mainPartitionCount: [33m1[39m, joinCount: [33m1[39m }
+Executing distributed SELECT {
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1768810987700-1-query-executor'[39m,
+  hasJoins: [33mtrue[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing cross-partition JOIN { mainTable: [32m'users'[39m, mainPartitionCount: [33m1[39m, joinCount: [33m1[39m }
+Executing distributed SELECT {
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1768810987701-1-query-executor'[39m,
+  hasJoins: [33mtrue[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing cross-partition JOIN { mainTable: [32m'users'[39m, mainPartitionCount: [33m1[39m, joinCount: [33m1[39m }
+    # Subtest: INNER JOIN produces correct results across partitions
+        ok 1 - INNER JOIN produces correct results across partitions
+        1..1
+    ok 1 - INNER JOIN produces correct results across partitions # time=8.473ms
+    
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987704-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987707-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987707-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987707-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987708-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987708-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987708-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987708-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987708-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987708-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+    # Subtest: JOIN with multiple partitions per table
+        ok 1 - JOIN with multiple partitions per table works correctly
+        1..1
+    ok 2 - JOIN with multiple partitions per table # time=5.423ms
+    
+Executing distributed SELECT {
+  partitionCount: [33m3[39m,
+  timestamp: [32m'1768810987710-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m4[39m,
+  timestamp: [32m'1768810987710-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m3[39m,
+  timestamp: [32m'1768810987710-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m3[39m,
+  timestamp: [32m'1768810987710-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m3[39m,
+  timestamp: [32m'1768810987711-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987711-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m4[39m,
+  timestamp: [32m'1768810987711-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m3[39m,
+  timestamp: [32m'1768810987711-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m3[39m,
+  timestamp: [32m'1768810987711-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m3[39m,
+  timestamp: [32m'1768810987712-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+    # Subtest: results are aggregated into single result set
+        ok 1 - Results are aggregated into single result set
+        1..1
+    ok 3 - results are aggregated into single result set # time=2.6ms
+    
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987713-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987713-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987713-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987714-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987714-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987714-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987714-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987714-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987714-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+Executing distributed SELECT {
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1768810987715-1-query-executor'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
+}
+    # Subtest: SQL semantics preserved for ORDER BY after JOIN
+        ok 1 - SQL semantics preserved for ORDER BY after JOIN
+        1..1
+    ok 4 - SQL semantics preserved for ORDER BY after JOIN # time=2.598ms
+    
+    1..4
+ok 1 - Property 50: Cross-Partition JOIN Support # time=22.216ms
+
+1..1

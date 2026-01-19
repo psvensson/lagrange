@@ -1,0 +1,21 @@
+TAP version 14
+# Subtest: Property 12: Unified Rebalancer Behavior
+    # Subtest: same algorithm for partitions and message groups
+        ok 1 - Same algorithm used for partitions and message groups
+        1..1
+    ok 1 - same algorithm for partitions and message groups # time=7.779ms
+    
+    # Subtest: behavior determined by policy
+        ok 1 - Behavior determined by policy
+        1..1
+    ok 2 - behavior determined by policy # time=1.632ms
+    
+    # Subtest: independent leader decisions converge
+        ok 1 - Independent leader decisions converge
+        1..1
+    ok 3 - independent leader decisions converge # time=3.198ms
+    
+    1..3
+ok 1 - Property 12: Unified Rebalancer Behavior # time=69.29ms
+
+1..1

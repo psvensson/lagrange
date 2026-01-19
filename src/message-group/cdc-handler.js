@@ -1,0 +1,443 @@
+/**
+ * CDC Handler - Manages CDC subscriptions and cache updates for message groups.
+ * Ensures cache consistency across replicas via CDC event processing.
+ * Requirements: 4.4, 4.7, 5.3, 5.4
+ */
+
+import {EventEmitter} from 'events';
+import {LoggingService} from '../logging/logging-service.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
+import {CDC_OPERATIONS} from '../cache/system-table-cache.js';
+import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
+
+/**
+ * CDC event structure.
+ */
+class CDCEvent {
+  /**
+   * Create a new CDC event.
+   * @param {string} tableName - System table name.
+   * @param {string} operation - CDC operation (INSERT, UPDATE, DELETE).
+   * @param {Object} data - Record data.
+   * @param {string} timestamp - HLC timestamp string.
+   * @param {string} sourcePartition - Source partition ID.
+   */
+  constructor(tableName, operation, data, timestamp, sourcePartition = null) {
+    this.tableName = tableName;
+    this.operation = operation;
+    this.data = data;
+    this.timestamp = timestamp;
+    this.sourcePartition = sourcePartition;
+    this.receivedAt = Date.now();
+  }
+
+  /**
+   * Get the record key from the event data.
+   * @return {string} Record key (id field).
+   */
+  getKey() {
+    return this.data?.id;
+  }
+
+  /**
+   * Compare timestamps for ordering.
+   * @param {CDCEvent} other - Other event to compare.
+   * @return {number} Comparison result (-1, 0, 1).
+   */
+  compareTimestamp(other) {
+    const thisTs = HLCTimestamp.fromString(this.timestamp);
+    const otherTs = HLCTimestamp.fromString(other.timestamp);
+    return thisTs.compare(otherTs);
+  }
+}
+
+/**
+ * CDCHandler manages CDC subscriptions and applies events to the cache.
+ * It ensures events are applied in HLC timestamp order for consistency.
+ */
+class CDCHandler extends EventEmitter {
+  /**
+   * Create a new CDCHandler.
+   * @param {SystemTableCache} cache - The writable system table cache.
+   * @param {Object} options - Configuration options.
+   */
+  constructor(cache, options = {}) {
+    super();
+
+    if (!cache) {
+      throw new Error('CDCHandler requires a SystemTableCache');
+    }
+
+    this.cache = cache;
+    this.subscriptions = new Set();
+    this.eventBuffer = new Map(); // tableName -> array of pending events
+    this.lastAppliedTimestamp = new Map(); // tableName -> last applied HLC timestamp
+    this.processedEventIds = new Set(); // For deduplication
+
+    // Configuration
+    const config = ConfigurationManager.getInstance();
+    this.bufferSize = options.bufferSize ||
+      config.get('messageGroup.cdcBufferSize') || 100;
+    this.flushIntervalMs = options.flushIntervalMs ||
+      config.get('messageGroup.cdcFlushIntervalMs') || 1000;
+    this.maxProcessedEventIds = options.maxProcessedEventIds || 10000;
+
+    // Logging
+    const loggingService = LoggingService.getInstance();
+    this.logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem('cdc-handler') : console;
+
+    // Flush interval
+    this.flushInterval = null;
+    this.initialized = false;
+  }
+
+  /**
+   * Initialize the CDC handler.
+   */
+  initialize() {
+    if (this.initialized) {
+      return;
+    }
+
+    // Start periodic flush
+    this.flushInterval = setInterval(() => {
+      this.flushAllBuffers();
+    }, this.flushIntervalMs);
+
+    this.initialized = true;
+
+    this.logger.debug('CDC handler initialized', {
+      bufferSize: this.bufferSize,
+      flushIntervalMs: this.flushIntervalMs,
+    });
+  }
+
+  /**
+   * Subscribe to CDC events for a system table.
+   * @param {string} tableName - System table name.
+   */
+  subscribe(tableName) {
+    if (this.subscriptions.has(tableName)) {
+      return;
+    }
+
+    this.subscriptions.add(tableName);
+    this.eventBuffer.set(tableName, []);
+    this.lastAppliedTimestamp.set(tableName, null);
+
+    this.logger.debug('Subscribed to CDC', {tableName});
+    this.emit('subscribed', {tableName});
+  }
+
+  /**
+   * Unsubscribe from CDC events for a system table.
+   * @param {string} tableName - System table name.
+   */
+  unsubscribe(tableName) {
+    if (!this.subscriptions.has(tableName)) {
+      return;
+    }
+
+    // Flush pending events before unsubscribing
+    this.flushBuffer(tableName);
+
+    this.subscriptions.delete(tableName);
+    this.eventBuffer.delete(tableName);
+    this.lastAppliedTimestamp.delete(tableName);
+
+    this.logger.debug('Unsubscribed from CDC', {tableName});
+    this.emit('unsubscribed', {tableName});
+  }
+
+  /**
+   * Check if subscribed to a table.
+   * @param {string} tableName - System table name.
+   * @return {boolean} True if subscribed.
+   */
+  isSubscribed(tableName) {
+    return this.subscriptions.has(tableName);
+  }
+
+  /**
+   * Get all subscriptions.
+   * @return {Array<string>} Array of subscribed table names.
+   */
+  getSubscriptions() {
+    return Array.from(this.subscriptions);
+  }
+
+  /**
+   * Handle an incoming CDC event.
+   * Events are buffered and applied in timestamp order.
+   * @param {CDCEvent|Object} event - CDC event or event-like object.
+   * @return {boolean} True if event was accepted.
+   */
+  handleEvent(event) {
+    // Convert to CDCEvent if needed
+    const cdcEvent = event instanceof CDCEvent ?
+      event :
+      new CDCEvent(
+        event.tableName,
+        event.operation,
+        event.data,
+        event.timestamp,
+        event.sourcePartition,
+      );
+
+    const {tableName} = cdcEvent;
+
+    // Check subscription
+    if (!this.subscriptions.has(tableName)) {
+      this.logger.debug('Ignoring event for unsubscribed table', {tableName});
+      return false;
+    }
+
+    // Generate event ID for deduplication
+    const eventId = this.generateEventId(cdcEvent);
+    if (this.processedEventIds.has(eventId)) {
+      this.logger.debug('Duplicate CDC event ignored', {
+        tableName,
+        eventId,
+        key: cdcEvent.getKey(),
+      });
+      return false;
+    }
+
+    // Add to buffer
+    const buffer = this.eventBuffer.get(tableName);
+    buffer.push(cdcEvent);
+
+    this.logger.debug('CDC event buffered', {
+      tableName,
+      operation: cdcEvent.operation,
+      key: cdcEvent.getKey(),
+      bufferSize: buffer.length,
+    });
+
+    // Flush if buffer is full
+    if (buffer.length >= this.bufferSize) {
+      this.flushBuffer(tableName);
+    }
+
+    return true;
+  }
+
+  /**
+   * Apply a CDC event immediately (bypass buffering).
+   * Used for critical events that need immediate application.
+   * @param {CDCEvent|Object} event - CDC event.
+   */
+  applyImmediate(event) {
+    const cdcEvent = event instanceof CDCEvent ?
+      event :
+      new CDCEvent(
+        event.tableName,
+        event.operation,
+        event.data,
+        event.timestamp,
+        event.sourcePartition,
+      );
+
+    this.applyEvent(cdcEvent);
+  }
+
+  /**
+   * Flush the event buffer for a specific table.
+   * Events are sorted by timestamp and applied in order.
+   * @param {string} tableName - System table name.
+   */
+  flushBuffer(tableName) {
+    const buffer = this.eventBuffer.get(tableName);
+    if (!buffer || buffer.length === 0) {
+      return;
+    }
+
+    // Sort by HLC timestamp
+    buffer.sort((a, b) => a.compareTimestamp(b));
+
+    // Apply events in order
+    for (const event of buffer) {
+      this.applyEvent(event);
+    }
+
+    // Clear buffer
+    this.eventBuffer.set(tableName, []);
+
+    this.logger.debug('Flushed CDC buffer', {
+      tableName,
+      eventCount: buffer.length,
+    });
+  }
+
+  /**
+   * Flush all event buffers.
+   */
+  flushAllBuffers() {
+    for (const tableName of this.subscriptions) {
+      this.flushBuffer(tableName);
+    }
+  }
+
+  /**
+   * Apply a single CDC event to the cache.
+   * @param {CDCEvent} event - CDC event to apply.
+   * @private
+   */
+  applyEvent(event) {
+    const {tableName, operation, data, timestamp} = event;
+    const key = event.getKey();
+
+    // Check timestamp ordering
+    const lastTimestamp = this.lastAppliedTimestamp.get(tableName);
+    if (lastTimestamp) {
+      const lastTs = HLCTimestamp.fromString(lastTimestamp);
+      const eventTs = HLCTimestamp.fromString(timestamp);
+      if (eventTs.compare(lastTs) < 0) {
+        this.logger.warn('Out-of-order CDC event detected', {
+          tableName,
+          key,
+          eventTimestamp: timestamp,
+          lastTimestamp,
+        });
+        // Still apply - the cache handles conflicts
+      }
+    }
+
+    try {
+      // Apply to cache
+      this.cache.applySystemTableChange(tableName, operation, data);
+
+      // Update tracking
+      this.lastAppliedTimestamp.set(tableName, timestamp);
+      this.markEventProcessed(event);
+
+      this.logger.debug('Applied CDC event', {
+        tableName,
+        operation,
+        key,
+        timestamp,
+      });
+
+      this.emit('eventApplied', {
+        tableName,
+        operation,
+        key,
+        timestamp,
+      });
+    } catch (error) {
+      this.logger.error('Failed to apply CDC event', {
+        tableName,
+        operation,
+        key,
+        error: error.message,
+      });
+
+      this.emit('eventError', {
+        tableName,
+        operation,
+        key,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Generate a unique event ID for deduplication.
+   * @param {CDCEvent} event - CDC event.
+   * @return {string} Event ID.
+   * @private
+   */
+  generateEventId(event) {
+    return `${event.tableName}:${event.getKey()}:${event.timestamp}`;
+  }
+
+  /**
+   * Mark an event as processed for deduplication.
+   * @param {CDCEvent} event - CDC event.
+   * @private
+   */
+  markEventProcessed(event) {
+    const eventId = this.generateEventId(event);
+    this.processedEventIds.add(eventId);
+
+    // Limit size of processed set
+    if (this.processedEventIds.size > this.maxProcessedEventIds) {
+      // Remove oldest entries (convert to array, slice, convert back)
+      const entries = Array.from(this.processedEventIds);
+      const toRemove = entries.slice(0, entries.length - this.maxProcessedEventIds);
+      for (const id of toRemove) {
+        this.processedEventIds.delete(id);
+      }
+    }
+  }
+
+  /**
+   * Get the last applied timestamp for a table.
+   * @param {string} tableName - System table name.
+   * @return {string|null} Last applied HLC timestamp.
+   */
+  getLastAppliedTimestamp(tableName) {
+    return this.lastAppliedTimestamp.get(tableName) || null;
+  }
+
+  /**
+   * Get buffer size for a table.
+   * @param {string} tableName - System table name.
+   * @return {number} Number of buffered events.
+   */
+  getBufferSize(tableName) {
+    const buffer = this.eventBuffer.get(tableName);
+    return buffer ? buffer.length : 0;
+  }
+
+  /**
+   * Get total buffered event count.
+   * @return {number} Total buffered events across all tables.
+   */
+  getTotalBufferedEvents() {
+    let total = 0;
+    for (const buffer of this.eventBuffer.values()) {
+      total += buffer.length;
+    }
+    return total;
+  }
+
+  /**
+   * Get handler status.
+   * @return {Object} Handler status.
+   */
+  getStatus() {
+    const bufferSizes = {};
+    for (const [tableName, buffer] of this.eventBuffer) {
+      bufferSizes[tableName] = buffer.length;
+    }
+
+    return {
+      initialized: this.initialized,
+      subscriptions: Array.from(this.subscriptions),
+      bufferSizes,
+      totalBuffered: this.getTotalBufferedEvents(),
+      processedEventCount: this.processedEventIds.size,
+    };
+  }
+
+  /**
+   * Shutdown the CDC handler.
+   */
+  shutdown() {
+    if (this.flushInterval) {
+      clearInterval(this.flushInterval);
+      this.flushInterval = null;
+    }
+
+    // Flush remaining events
+    this.flushAllBuffers();
+
+    this.initialized = false;
+    this.logger.debug('CDC handler shutdown');
+    this.emit('shutdown');
+  }
+}
+
+export {CDCHandler, CDCEvent, CDC_OPERATIONS};

@@ -1,0 +1,114 @@
+TAP version 14
+# Subtest: CDCIntegrationService - constructor
+    ok 1 - should set nodeId
+    ok 2 - should not be initialized
+    1..2
+ok 1 - CDCIntegrationService - constructor # time=3.597ms
+
+# Subtest: CDCIntegrationService - initialize
+    ok 1 - should be initialized
+    1..1
+ok 2 - CDCIntegrationService - initialize # time=1.137ms
+
+# Subtest: CDCIntegrationService - insertSystemTableRow
+    ok 1 - should succeed
+    ok 2 - should be INSERT operation
+    ok 3 - should have correct table name
+    ok 4 - should insert one row
+    ok 5 - should insert to correct table
+    1..5
+ok 3 - CDCIntegrationService - insertSystemTableRow # time=1.2ms
+
+# Subtest: CDCIntegrationService - insertSystemTableRow generates id
+    ok 1 - should succeed
+    ok 2 - should generate id
+    ok 3 - should generate node_id
+    1..3
+ok 4 - CDCIntegrationService - insertSystemTableRow generates id # time=0.606ms
+
+# Subtest: CDCIntegrationService - updateSystemTableRow
+    ok 1 - should succeed
+    ok 2 - should be UPDATE operation
+    ok 3 - should have correct table name
+    ok 4 - should update one row
+    ok 5 - should have correct whereClause
+    1..5
+ok 5 - CDCIntegrationService - updateSystemTableRow # time=1.316ms
+
+# Subtest: CDCIntegrationService - deleteSystemTableRow
+    ok 1 - should succeed
+    ok 2 - should be DELETE operation
+    ok 3 - should have correct table name
+    ok 4 - should delete one row
+    ok 5 - should have correct whereClause
+    1..5
+ok 6 - CDCIntegrationService - deleteSystemTableRow # time=0.908ms
+
+# Subtest: CDCIntegrationService - validates table name
+    ok 1 - should have error message
+    1..1
+ok 7 - CDCIntegrationService - validates table name # time=0.414ms
+
+# Subtest: CDCIntegrationService - validates data object
+    ok 1 - should have error message
+    1..1
+ok 8 - CDCIntegrationService - validates data object # time=0.907ms
+
+# Subtest: CDCIntegrationService - requires primary key for update
+    ok 1 - should have error message
+    1..1
+ok 9 - CDCIntegrationService - requires primary key for update # time=0.546ms
+
+# Subtest: CDCIntegrationService - requires primary key for delete
+    ok 1 - should have error message
+    1..1
+ok 10 - CDCIntegrationService - requires primary key for delete # time=0.386ms
+
+{"level":50,"time":"2026-01-19T08:22:47.632Z","nodeId":"6441cc0d-c656-42ab-b5e0-b4fc0ff94bc0","pid":3588316,"subsystem":"cdc-integration","tableName":"nodes","id":"1","error":"No partition available for system table: nodes","nodeId":"6441cc0d-c656-42ab-b5e0-b4fc0ff94bc0","msg":"Failed to insert system table row"}
+# Subtest: CDCIntegrationService - throws when partition not available
+    ok 1 - should have error message
+    1..1
+ok 11 - CDCIntegrationService - throws when partition not available # time=1.512ms
+
+{"level":50,"time":"2026-01-19T08:22:47.654Z","nodeId":"f05473a8-6ca0-423f-a3c8-e79b052119d7","pid":3588316,"subsystem":"cdc-integration","tableName":"nodes","id":"1","error":"CDCIntegrationService not properly initialized: getPartitionForTable function not provided","nodeId":"f05473a8-6ca0-423f-a3c8-e79b052119d7","msg":"Failed to insert system table row"}
+# Subtest: CDCIntegrationService - throws when not initialized
+    ok 1 - should have error message
+    1..1
+ok 12 - CDCIntegrationService - throws when not initialized # time=0.905ms
+
+# Subtest: CDCIntegrationService - tracks statistics
+    ok 1 - should track inserts
+    ok 2 - should track updates
+    ok 3 - should track deletes
+    ok 4 - should track total
+    1..4
+ok 13 - CDCIntegrationService - tracks statistics # time=1.186ms
+
+# Subtest: CDCIntegrationService - emits events
+    ok 1 - should emit 3 events
+    ok 2 - should emit insert event
+    ok 3 - should emit update event
+    ok 4 - should emit delete event
+    1..4
+ok 14 - CDCIntegrationService - emits events # time=1.043ms
+
+# Subtest: CDCIntegrationService - VALID_SYSTEM_TABLES contains all system tables
+    ok 1 - should include nodes
+    ok 2 - should include services
+    ok 3 - should include partitions
+    ok 4 - should include tables
+    ok 5 - should include message_groups
+    ok 6 - should include indices
+    ok 7 - should include logs
+    ok 8 - should include config
+    1..8
+ok 15 - CDCIntegrationService - VALID_SYSTEM_TABLES contains all system tables # time=1.01ms
+
+# Subtest: CDCIntegrationService - resetStats
+    ok 1 - should have 1 insert
+    ok 2 - should reset inserts
+    ok 3 - should reset total
+    1..3
+ok 16 - CDCIntegrationService - resetStats # time=0.703ms
+
+1..16

@@ -1,0 +1,193 @@
+TAP version 14
+# Subtest: ConfigView - getColumns returns correct columns
+    ok 1 - should have 5 columns
+    ok 2 - first column should be key
+    ok 3 - second column should be value
+    ok 4 - third column should be type
+    ok 5 - fourth column should be requires_restart
+    ok 6 - fifth column should be updated_at
+    1..6
+ok 1 - ConfigView - getColumns returns correct columns # time=5.535ms
+
+# Subtest: ConfigView - formatRow formats config entry correctly
+    ok 1 - key should be formatted
+    ok 2 - value should be formatted as string
+    ok 3 - type should be formatted
+    ok 4 - requires_restart should be Yes
+    ok 5 - timestamp should be formatted
+    1..5
+ok 2 - ConfigView - formatRow formats config entry correctly # time=1.37ms
+
+# Subtest: ConfigView - formatValue handles different types
+    ok 1 - null should be "null"
+    ok 2 - undefined should be "null"
+    ok 3 - string should be returned
+    ok 4 - number should be stringified
+    ok 5 - boolean true should be "true"
+    ok 6 - boolean false should be "false"
+    ok 7 - json should be stringified
+    ok 8 - long values should be truncated
+    ok 9 - truncated value should be 40 chars
+    1..9
+ok 3 - ConfigView - formatValue handles different types # time=0.715ms
+
+# Subtest: ConfigView - formatRequiresRestart shows warning indicator
+    ok 1 - should show No when not required
+    ok 2 - should show Yes when required
+    ok 3 - should show warning when pending restart
+    1..3
+ok 4 - ConfigView - formatRequiresRestart shows warning indicator # time=0.327ms
+
+# Subtest: ConfigView - getRowStatus highlights non-default values
+    ok 1 - should be normal when matching
+    ok 2 - should warn when different
+    ok 3 - should warn when pending restart
+    1..3
+ok 5 - ConfigView - getRowStatus highlights non-default values # time=0.396ms
+
+# Subtest: ConfigView - isDifferentFromDefault compares values correctly
+    ok 1 - should be false when no default_value
+    ok 2 - should be false for same numbers
+    ok 3 - should be false for same strings
+    ok 4 - should be true for different numbers
+    ok 5 - should be true for different strings
+    ok 6 - should be false for same objects
+    ok 7 - should be true for different objects
+    ok 8 - should be false for both null
+    ok 9 - should be true when value is null but default is not
+    ok 10 - should be true when default is null but value is not
+    1..10
+ok 6 - ConfigView - isDifferentFromDefault compares values correctly # time=0.68ms
+
+# Subtest: ConfigView - setKeyPatternFilter filters by key pattern
+    ok 1 - should filter to entries containing "max"
+    ok 2 - all filtered entries should contain "max"
+    ok 3 - should show all entries after clearing filter
+    1..3
+ok 7 - ConfigView - setKeyPatternFilter filters by key pattern # time=6.238ms
+
+# Subtest: ConfigView - getSelectedDetails returns full config details
+    ok 1 - should return details
+    ok 2 - should have correct title
+    ok 3 - should have multiple sections
+    ok 4 - should have config entry section
+    ok 5 - should include default value
+    1..5
+ok 8 - ConfigView - getSelectedDetails returns full config details # time=0.522ms
+
+# Subtest: ConfigView - getStatusBarInfo returns correct counts
+    ok 1 - should count all configs
+    ok 2 - should count non-default configs
+    ok 3 - should count restart required configs
+    1..3
+ok 9 - ConfigView - getStatusBarInfo returns correct counts # time=0.326ms
+
+# Subtest: ConfigView - handleDrillDown returns navigation action
+    ok 1 - should return action
+    ok 2 - should be showDetail action
+    ok 3 - should be config view
+    ok 4 - should have config key in context
+    1..4
+ok 10 - ConfigView - handleDrillDown returns navigation action # time=0.418ms
+
+# Subtest: ConfigView - CONFIG_TYPES export
+    ok 1 - CONFIG_TYPES should be an array
+    ok 2 - should include string type
+    ok 3 - should include number type
+    ok 4 - should include boolean type
+    ok 5 - should include json type
+    1..5
+ok 11 - ConfigView - CONFIG_TYPES export # time=0.325ms
+
+# Subtest: ConfigView - validateValue validates string type
+    ok 1 - should accept string
+    ok 2 - should return trimmed string
+    ok 3 - should trim whitespace
+    1..3
+ok 12 - ConfigView - validateValue validates string type # time=0.364ms
+
+# Subtest: ConfigView - validateValue validates number type
+    ok 1 - should accept integer
+    ok 2 - should parse integer
+    ok 3 - should accept float
+    ok 4 - should parse float
+    ok 5 - should accept negative
+    ok 6 - should parse negative
+    ok 7 - should reject non-number
+    ok 8 - should have error message
+    ok 9 - should reject empty string
+    1..9
+ok 13 - ConfigView - validateValue validates number type # time=0.936ms
+
+# Subtest: ConfigView - validateValue validates boolean type
+    ok 1 - should parse "true"
+    ok 2 - should parse "false"
+    ok 3 - should parse "yes"
+    ok 4 - should parse "no"
+    ok 5 - should parse "1"
+    ok 6 - should parse "0"
+    ok 7 - should be case insensitive
+    ok 8 - should reject invalid boolean
+    1..8
+ok 14 - ConfigView - validateValue validates boolean type # time=0.723ms
+
+# Subtest: ConfigView - validateValue validates json type
+    ok 1 - should accept valid JSON object
+    ok 2 - should parse JSON object
+    ok 3 - should accept valid JSON array
+    ok 4 - should parse JSON array
+    ok 5 - should reject invalid JSON
+    ok 6 - should have error message
+    ok 7 - should reject empty string
+    1..7
+ok 15 - ConfigView - validateValue validates json type # time=2.214ms
+
+# Subtest: ConfigView - prepareEdit validates and prepares edit operation
+    ok 1 - should succeed for valid edit
+    ok 2 - should have old value
+    ok 3 - should have parsed new value
+    ok 4 - should indicate restart required
+    ok 5 - should fail for invalid value
+    ok 6 - should have error message
+    ok 7 - should fail for non-existent key
+    1..7
+ok 16 - ConfigView - prepareEdit validates and prepares edit operation # time=0.822ms
+
+# Subtest: ConfigView - prepareRevert prepares revert operation
+    ok 1 - should succeed for valid revert
+    ok 2 - should have old value
+    ok 3 - should have default value
+    ok 4 - should be marked as revert
+    ok 5 - should fail when already at default
+    ok 6 - should fail when no default defined
+    ok 7 - should fail for non-existent key
+    1..7
+ok 17 - ConfigView - prepareRevert prepares revert operation # time=0.536ms
+
+# Subtest: ConfigView - getEditConfirmation generates confirmation message
+    ok 1 - should return confirmation
+    ok 2 - should have title
+    ok 3 - should include key
+    ok 4 - should include old value
+    ok 5 - should include new value
+    ok 6 - should indicate restart required
+    1..6
+ok 18 - ConfigView - getEditConfirmation generates confirmation message # time=0.506ms
+
+# Subtest: ConfigView - canEdit checks editability
+    ok 1 - should be editable
+    ok 2 - should not be editable
+    ok 3 - should have reason
+    ok 4 - should not be editable if not found
+    1..4
+ok 19 - ConfigView - canEdit checks editability # time=0.428ms
+
+# Subtest: ConfigView - canRevert checks revertability
+    ok 1 - should be revertable
+    ok 2 - should not be revertable if unchanged
+    ok 3 - should not be revertable without default
+    ok 4 - should not be revertable if readonly
+    1..4
+ok 20 - ConfigView - canRevert checks revertability # time=0.549ms
+
+1..20

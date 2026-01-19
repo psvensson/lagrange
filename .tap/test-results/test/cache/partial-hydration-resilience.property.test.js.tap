@@ -1,0 +1,111 @@
+TAP version 14
+{"level":50,"time":"2026-01-19T08:29:52.392Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+# Subtest: Property 2: Successful tables are hydrated despite failures
+    ok 1 - Successful tables are hydrated despite failures
+    1..1
+ok 1 - Property 2: Successful tables are hydrated despite failures # time=13.549ms
+
+{"level":50,"time":"2026-01-19T08:29:52.421Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+# Subtest: Property 2: Failed tables are reported in errors
+    ok 1 - Failed tables are reported in errors
+    1..1
+ok 2 - Property 2: Failed tables are reported in errors # time=6.771ms
+
+{"level":50,"time":"2026-01-19T08:29:52.444Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+# Subtest: Property 2: Failed tables have empty cache
+    ok 1 - Failed tables have empty cache
+    1..1
+ok 3 - Property 2: Failed tables have empty cache # time=4.859ms
+
+{"level":50,"time":"2026-01-19T08:29:52.462Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure","nodeId":"test-node","msg":"Failed to hydrate system table"}
+# Subtest: Property 2: Hydration continues after failure
+    ok 1 - Hydration continues after failure
+    1..1
+ok 4 - Property 2: Hydration continues after failure # time=4.193ms
+
+{"level":50,"time":"2026-01-19T08:29:52.392Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.392Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.393Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.393Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.393Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"partitions","error":"Simulated failure for partitions","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.393Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.394Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.394Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.394Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.394Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.395Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.395Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.395Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.395Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.395Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.396Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.396Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.396Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.397Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.397Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.397Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.397Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"partitions","error":"Simulated failure for partitions","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.397Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.397Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.398Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.398Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.398Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.421Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.421Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.422Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.423Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"partitions","error":"Simulated failure for partitions","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.423Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.424Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"partitions","error":"Simulated failure for partitions","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.424Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.424Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.425Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.425Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.425Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"partitions","error":"Simulated failure for partitions","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.425Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.425Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.426Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.426Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.426Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.426Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.426Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.426Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.426Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.426Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.427Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.427Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.427Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.427Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"partitions","error":"Simulated failure for partitions","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.427Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.444Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.444Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.444Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"partitions","error":"Simulated failure for partitions","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.444Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.445Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.445Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.446Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.446Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.446Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"partitions","error":"Simulated failure for partitions","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.446Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.446Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.446Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.447Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.447Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"message_groups","error":"Simulated failure for message_groups","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.447Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.447Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.447Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"partitions","error":"Simulated failure for partitions","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.447Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.447Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.448Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure for nodes","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.448Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"services","error":"Simulated failure for services","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.448Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"tables","error":"Simulated failure for tables","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.448Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"indices","error":"Simulated failure for indices","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.463Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.463Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.463Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.464Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.464Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.464Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.465Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.465Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure","nodeId":"test-node","msg":"Failed to hydrate system table"}
+{"level":50,"time":"2026-01-19T08:29:52.465Z","nodeId":"test-node","pid":3593691,"subsystem":"cache-hydration","tableName":"nodes","error":"Simulated failure","nodeId":"test-node","msg":"Failed to hydrate system table"}
+1..4

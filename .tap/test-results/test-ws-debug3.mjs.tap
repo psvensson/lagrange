@@ -1,0 +1,82 @@
+TAP version 14
+Port: [33m37185[39m
+Connected
+# Subtest: simple test
+    not ok 1 - Timeout waiting for message
+      ---
+      stack: |
+        Timeout._onTimeout (test-ws-debug3.mjs:36:14)
+      at:
+        fileName: test-ws-debug3.mjs
+        lineNumber: 36
+        columnNumber: 14
+        typeName: Timeout
+        methodName: _onTimeout
+        functionName: Timeout._onTimeout
+      tapCaught: returnedPromiseRejection
+      source: |2
+          return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+              reject(new Error('Timeout waiting for message'));
+        -------------^
+            }, timeout);
+      ...
+    
+    1..1
+not ok 1 - simple test # time=2040.955ms
+  ---
+  at:
+    fileName: test-ws-debug3.mjs
+    lineNumber: 50
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('simple test', async (t) => {
+    ^
+      const cache = createPopulatedCache();
+      const api = new AdminWebSocketAPI({
+  ...
+
+not ok 2 - timeout!
+  ---
+  signal: SIGALRM
+  handles:
+    - type: Server
+      events:
+        - request
+        - connection
+        - listening
+        - clientError
+        - upgrade
+      connectionKey: 4:0.0.0.0:0
+    - type: Socket
+      events:
+        - close
+        - error
+        - prefinish
+        - finish
+        - drain
+        - data
+        - end
+        - readable
+        - connect
+    - type: Socket
+      events:
+        - close
+        - error
+        - prefinish
+        - finish
+        - drain
+        - data
+        - end
+        - readable
+        - timeout
+        - resume
+        - pause
+  expired: TAP
+  test: TAP
+  ...
+
+1..2

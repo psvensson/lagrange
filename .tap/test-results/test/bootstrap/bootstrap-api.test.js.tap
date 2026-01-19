@@ -1,0 +1,69 @@
+TAP version 14
+# Subtest: BootstrapAPI - initialization
+    ok 1 - should not be initialized before init
+    ok 2 - should be initialized after init
+    ok 3 - should have fastify instance
+    ok 4 - should not be initialized after shutdown
+    1..4
+ok 1 - BootstrapAPI - initialization # time=58.052ms
+
+# Subtest: BootstrapAPI - health endpoint
+    ok 1 - should return 200
+    ok 2 - should return healthy status
+    ok 3 - should return seed node ID
+    1..3
+ok 2 - BootstrapAPI - health endpoint # time=28.25ms
+
+# Subtest: BootstrapAPI - bootstrap validation
+    ok 1 - should return 400 for missing nodeId
+    ok 2 - error should mention nodeId
+    ok 3 - should return 400 for invalid nodeId
+    ok 4 - error should mention UUID
+    ok 5 - should return 400 for missing nodeAddress
+    ok 6 - error should mention nodeAddress
+    1..6
+ok 3 - BootstrapAPI - bootstrap validation # time=20.456ms
+
+# Subtest: BootstrapAPI - bootstrap conflict detection
+    ok 1 - first bootstrap should succeed
+    ok 2 - duplicate nodeId should return 409
+    ok 3 - error should mention already registered
+    ok 4 - seed node ID should fail validation
+    1..4
+ok 4 - BootstrapAPI - bootstrap conflict detection # time=15.597ms
+
+# Subtest: BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED
+    ok 1 - bootstrap should succeed
+    ok 2 - should return success
+    ok 3 - should return seed node ID
+    ok 4 - should have message group assignment
+    ok 5 - should use CREATE_SELF_HOSTED strategy when no movable replicas
+    ok 6 - should have 3 replicas
+    ok 7 - should have cluster config
+    ok 8 - should have timestamp
+    1..8
+ok 5 - BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED # time=12.202ms
+
+# Subtest: BootstrapAPI - bootstrap with MOVE_REPLICA strategy
+    ok 1 - bootstrap should succeed
+    ok 2 - should return success
+    ok 3 - should have message group assignment
+    ok 4 - should use MOVE_REPLICA strategy when movable replicas exist
+    ok 5 - should target existing group
+    ok 6 - should identify source node
+    ok 7 - should identify replica to move
+    ok 8 - should have replica addresses
+    1..8
+ok 6 - BootstrapAPI - bootstrap with MOVE_REPLICA strategy # time=14.541ms
+
+# Subtest: BootstrapAPI - cluster state endpoint
+    ok 1 - should return 200
+    ok 2 - should return seed node ID
+    ok 3 - should have 2 nodes (seed + new)
+    ok 4 - should have nodes array
+    ok 5 - should have seed node
+    ok 6 - should have new node
+    1..6
+ok 7 - BootstrapAPI - cluster state endpoint # time=12.319ms
+
+1..7

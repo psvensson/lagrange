@@ -1,0 +1,722 @@
+TAP version 14
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997076-0.700642337279622'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997076-0.700642337279622'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('a', 'User1'), ('x', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997076-0.700642337279622'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997082-0.3537601674390174'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997082-0.3537601674390174'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('b', 'User1'), ('zy', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997082-0.3537601674390174'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997083-0.9176828875797411'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997083-0.9176828875797411'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('c', 'User1'), ('x', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997083-0.9176828875797411'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997083-0.3444399723378908'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997083-0.3444399723378908'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('cc', 'User1'), ('x', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997083-0.3444399723378908'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997083-0.9700043548693755'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997083-0.9700043548693755'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('aa', 'User1'), ('x', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997083-0.9700043548693755'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997084-0.38081690716061267'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997084-0.38081690716061267'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('ab', 'User1'), ('z', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997084-0.38081690716061267'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997084-0.3110078380877481'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997084-0.3110078380877481'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('ac', 'User1'), ('zy', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997084-0.3110078380877481'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997084-0.03933514885064682'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997084-0.03933514885064682'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('cb', 'User1'), ('xx', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997084-0.03933514885064682'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997084-0.5848510042833546'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997084-0.5848510042833546'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('b', 'User1'), ('y', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997084-0.5848510042833546'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997085-0.8835113633041862'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997085-0.8835113633041862'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('b', 'User1'), ('y', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997085-0.8835113633041862'[39m
+}
+# Subtest: Property 47: Cross-partition INSERT is rejected
+    ok 1 - Cross-partition INSERT rejection property holds
+    1..1
+ok 1 - Property 47: Cross-partition INSERT is rejected # time=13.958ms
+
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997088-0.24553301153354812'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997088-0.24553301153354812'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('a', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997088-0.24553301153354812'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997088-0.24553301153354812'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997088-0.24553301153354812'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997090-0.290591660433015'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997090-0.290591660433015'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('a', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997090-0.290591660433015'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997090-0.290591660433015'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997090-0.290591660433015'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997090-0.8810249069748877'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997090-0.8810249069748877'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('a', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997090-0.8810249069748877'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997090-0.8810249069748877'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997090-0.8810249069748877'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997091-0.8094733230957383'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997091-0.8094733230957383'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('ba', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997091-0.8094733230957383'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997091-0.8094733230957383'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997091-0.8094733230957383'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997092-0.608054603031845'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997092-0.608054603031845'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('c', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997092-0.608054603031845'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997092-0.608054603031845'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997092-0.608054603031845'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997092-0.021917738509041884'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997092-0.021917738509041884'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('a', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997092-0.021917738509041884'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997092-0.021917738509041884'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997092-0.021917738509041884'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997093-0.6524527339251636'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997093-0.6524527339251636'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('c', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997093-0.6524527339251636'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997093-0.6524527339251636'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997093-0.6524527339251636'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997094-0.3685111984626437'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997094-0.3685111984626437'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('c', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997094-0.3685111984626437'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997094-0.3685111984626437'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997094-0.3685111984626437'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997094-0.4751002196895526'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997094-0.4751002196895526'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('b', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997094-0.4751002196895526'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997094-0.4751002196895526'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997094-0.4751002196895526'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997095-0.559629757287228'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997095-0.559629757287228'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('ac', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997095-0.559629757287228'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997095-0.559629757287228'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997095-0.559629757287228'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+# Subtest: Property 47: Cross-partition UPDATE is rejected
+    ok 1 - Cross-partition UPDATE rejection property holds
+    1..1
+ok 2 - Property 47: Cross-partition UPDATE is rejected # time=7.982ms
+
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997096-0.62876920484523'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997096-0.62876920484523'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('ac', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997096-0.62876920484523'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997096-0.62876920484523'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m'DELETE FROM users WHERE age > 18'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997096-0.62876920484523'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997097-0.9689554081048963'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997097-0.9689554081048963'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('a', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997097-0.9689554081048963'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997097-0.9689554081048963'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m'DELETE FROM users WHERE age > 18'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997097-0.9689554081048963'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997098-0.5781268835894564'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997098-0.5781268835894564'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('c', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997098-0.5781268835894564'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997098-0.5781268835894564'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m'DELETE FROM users WHERE age > 18'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997098-0.5781268835894564'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997098-0.3432747404686287'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997098-0.3432747404686287'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('ba', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997098-0.3432747404686287'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997098-0.3432747404686287'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m'DELETE FROM users WHERE age > 18'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997098-0.3432747404686287'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997099-0.4824481869020294'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997099-0.4824481869020294'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('c', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997099-0.4824481869020294'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997099-0.4824481869020294'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m'DELETE FROM users WHERE age > 18'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997099-0.4824481869020294'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997099-0.29049401275669506'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997099-0.29049401275669506'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('b', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997099-0.29049401275669506'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997099-0.29049401275669506'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m'DELETE FROM users WHERE age > 18'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997099-0.29049401275669506'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997100-0.8153631544697824'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997100-0.8153631544697824'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('ac', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997100-0.8153631544697824'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997100-0.8153631544697824'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m'DELETE FROM users WHERE age > 18'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997100-0.8153631544697824'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997101-0.004363013423823281'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997101-0.004363013423823281'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('b', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997101-0.004363013423823281'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997101-0.004363013423823281'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m'DELETE FROM users WHERE age > 18'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997101-0.004363013423823281'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997101-0.008176067702091672'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997101-0.008176067702091672'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('ba', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997101-0.008176067702091672'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997101-0.008176067702091672'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m'DELETE FROM users WHERE age > 18'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997101-0.008176067702091672'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997102-0.42826681521701304'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997102-0.42826681521701304'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('aa', 'User1')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997102-0.42826681521701304'[39m
+}
+Routing INSERT to partitions {
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'session-1768810997102-0.42826681521701304'[39m
+}
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Executing SQL query {
+  sql: [32m'DELETE FROM users WHERE age > 18'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997102-0.42826681521701304'[39m
+}
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+# Subtest: Property 47: Cross-partition DELETE is rejected
+    ok 1 - Cross-partition DELETE rejection property holds
+    1..1
+ok 3 - Property 47: Cross-partition DELETE is rejected # time=6.782ms
+
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997103-0.4490199383042668'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997103-0.4490199383042668'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('a', 'User1'), ('xz', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997103-0.4490199383042668'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997103-0.8190960302905148'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997103-0.8190960302905148'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('a', 'User1'), ('x', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997103-0.8190960302905148'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997104-0.1941061704167153'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997104-0.1941061704167153'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('cb', 'User1'), ('xx', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997104-0.1941061704167153'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997104-0.6759952665574978'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997104-0.6759952665574978'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('a', 'User1'), ('y', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997104-0.6759952665574978'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997104-0.8225376970066045'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997104-0.8225376970066045'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('c', 'User1'), ('yx', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997104-0.8225376970066045'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997104-0.6093639006733738'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997104-0.6093639006733738'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('c', 'User1'), ('zz', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997104-0.6093639006733738'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997105-0.8793435881127363'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997105-0.8793435881127363'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('ca', 'User1'), ('yz', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997105-0.8793435881127363'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997105-0.4003069533961672'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997105-0.4003069533961672'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('c', 'User1'), ('x', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997105-0.4003069533961672'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997105-0.4534268320815693'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997105-0.4534268320815693'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('c', 'User1'), ('x', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997105-0.4534268320815693'[39m
+}
+Executing SQL query {
+  sql: [32m'BEGIN TRANSACTION'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997106-0.7446853727069087'[39m
+}
+BEGIN TRANSACTION { sessionId: [32m'session-1768810997106-0.7446853727069087'[39m }
+Executing SQL query {
+  sql: [32m"INSERT INTO users (id, name) VALUES ('c', 'User1'), ('z', 'User2')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'session-1768810997106-0.7446853727069087'[39m
+}
+# Subtest: Property 47: Error message indicates cross-partition not supported
+    ok 1 - Error message property holds
+    1..1
+ok 4 - Property 47: Error message indicates cross-partition not supported # time=3.422ms
+
+1..4

@@ -1,0 +1,36 @@
+TAP version 14
+# Subtest: Property 20: Location Transparent Communication
+    # Subtest: message delivery is location-independent
+        ok 1 - message delivery is location-independent
+        1..1
+    ok 1 - message delivery is location-independent # time=7.178ms
+    
+    # Subtest: messages route through message groups when provider configured
+        ok 1 - messages route through message groups when provider configured
+        1..1
+    ok 2 - messages route through message groups when provider configured # time=1.85ms
+    
+    # Subtest: local delivery bypasses message group
+        ok 1 - local delivery bypasses message group
+        1..1
+    ok 3 - local delivery bypasses message group # time=4.892ms
+    
+    # Subtest: handler response determines acknowledgment
+        ok 1 - handler response determines acknowledgment
+        1..1
+    ok 4 - handler response determines acknowledgment # time=2.097ms
+    
+    # Subtest: transport abstraction hides protocol details
+        ok 1 - transport abstraction hides protocol details
+        1..1
+    ok 5 - transport abstraction hides protocol details # time=1.911ms
+    
+    # Subtest: transport types have compatible APIs
+        ok 1 - transport types have compatible APIs
+        1..1
+    ok 6 - transport types have compatible APIs # time=1.83ms
+    
+    1..6
+ok 1 - Property 20: Location Transparent Communication # time=22.674ms
+
+1..1
