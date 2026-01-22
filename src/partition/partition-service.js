@@ -17,6 +17,7 @@ import {UnifiedRebalancer, EntityType} from '../rebalancer/unified-rebalancer.js
 import {PendingRequestTracker} from './pending-request-tracker.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas.js';
 
 /**
  * Partition state enumeration.
@@ -356,6 +357,11 @@ class PartitionService extends EventEmitter {
     this.electionStarted = false;
     // ReplicaStateMachine for tracking replica lifecycle states
     this.replicaStateMachine = options.replicaStateMachine || null;
+
+    // Map of replicaId -> unified address (e.g., 'nodeId/partition/replicaId')
+    // Used when joining an existing partition on a different node
+    // Requirements: 1.1, 3.1, 3.2, 3.3
+    this.peerAddresses = options.peerAddresses || [];
   }
 
   /**
@@ -385,6 +391,22 @@ class PartitionService extends EventEmitter {
         partitionId: this.partitionId,
       });
       return peerId;
+    }
+
+    // Check peerAddresses array (provided during cross-node joining)
+    // Format: ['nodeId/partition/replicaId', ...]
+    // Requirements: 1.1, 3.1, 3.2, 3.3
+    if (this.peerAddresses && this.peerAddresses.length > 0) {
+      const matchingAddress = this.peerAddresses.find((addr) =>
+        addr.endsWith(`/partition/${peerId}`) || addr.endsWith(`/${peerId}`));
+      if (matchingAddress) {
+        this.logger.debug('Built peer address from peerAddresses array', {
+          peerId,
+          address: matchingAddress,
+          partitionId: this.partitionId,
+        });
+        return matchingAddress;
+      }
     }
 
     // Try to look up nodeId from system table cache
@@ -533,12 +555,13 @@ class PartitionService extends EventEmitter {
 
     // Create SQLiteLogAdapter for liferaft
     // Requirements: 12.1, 12.2, 12.3, 12.4
-    const logAdapter = new SQLiteLogAdapter(this.db);
+    this.logAdapter = new SQLiteLogAdapter(this.db);
 
     // Create liferaft instance
     // Use unified address so that packet.address contains the full address
     // This allows other nodes to respond to vote requests correctly
     // Requirements: 8.1, 10.1, 10.5
+    const logAdapter = this.logAdapter;
     this.raft = new RaftNode(this.unifiedAddress, {
       'heartbeat': heartbeatMs,
       'election min': electionMinMs,
@@ -1882,6 +1905,19 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Set the CDC integration service for system table writes.
+   * Called after cache hydration is complete.
+   * Required for rebalancer to delete service rows after REMOVE_REPLICA.
+   * @param {Object} cdcIntegrationService - CDC integration service.
+   */
+  setCdcIntegrationService(cdcIntegrationService) {
+    this.cdcIntegrationService = cdcIntegrationService;
+    if (this.rebalancer) {
+      this.rebalancer.cdcIntegrationService = cdcIntegrationService;
+    }
+  }
+
+  /**
    * Trigger an immediate rebalance check.
    * Called when a significant cluster event occurs (e.g., node join).
    * @param {string} reason - Reason for the trigger.
@@ -1984,6 +2020,33 @@ class PartitionService extends EventEmitter {
       replicaIds = [this.replicaId, replicaId];
     }
 
+    // Build unified peer addresses for Raft communication
+    // Format: ${nodeId}/partition/${replicaId}
+    // Requirements: 1.1, 3.1, 3.2, 3.3
+    let peerAddresses = [];
+    if (this.systemTableCache) {
+      try {
+        const partitionServices = this.systemTableCache.filter(
+          'services',
+          (svc) => svc.partition_id === this.partitionId &&
+                   svc.service_type === 'partition',
+        );
+        peerAddresses = partitionServices
+          .filter((svc) => svc.node_id) // Only include services with node_id
+          .map((svc) => `${svc.node_id}/partition/${svc.service_id}`);
+        this.logger.debug('Built peer addresses for CREATE_REPLICA', {
+          partitionId: this.partitionId,
+          peerAddresses,
+          count: peerAddresses.length,
+        });
+      } catch (err) {
+        this.logger.warn('Failed to build peer addresses from cache', {
+          partitionId: this.partitionId,
+          error: err.message,
+        });
+      }
+    }
+
     // Build CREATE_REPLICA message per design spec
     const message = {
       type: 'CREATE_REPLICA',
@@ -1993,6 +2056,7 @@ class PartitionService extends EventEmitter {
       table_id: this.tableId,
       replica_id: replicaId,
       replica_ids: replicaIds, // Include all peer replica IDs for Raft group
+      peer_addresses: peerAddresses, // Include unified peer addresses for routing
       leader_address: this.nodeId,
       leader_replica_id: this.replicaId,
       key_range: this.keyRange,
@@ -2136,6 +2200,33 @@ class PartitionService extends EventEmitter {
       requestId,
     });
 
+    // Delete the service row BEFORE sending REMOVE_REPLICA
+    // This must happen first because:
+    // 1. The services-p1 partition service may be shut down after REMOVE_REPLICA
+    // 2. If we're removing a replica from services-p1, we can't write to it after shutdown
+    // 3. The cache update needs to happen while we still have a working partition
+    if (this.cdcIntegrationService) {
+      try {
+        await this.cdcIntegrationService.deleteSystemTableRow(
+          SystemTableName.SERVICES,
+          {service_id: replicaId},
+        );
+        this.logger.info('Deleted service row before REMOVE_REPLICA', {
+          partitionId: this.partitionId,
+          replicaId,
+          targetNodeId,
+        });
+      } catch (deleteError) {
+        // Log but continue - the replica removal should still proceed
+        // The row will be orphaned but the replica will still be removed
+        this.logger.warn('Failed to delete service row before REMOVE_REPLICA', {
+          partitionId: this.partitionId,
+          replicaId,
+          error: deleteError.message,
+        });
+      }
+    }
+
     // Build REMOVE_REPLICA message per design spec
     const message = {
       type: 'REMOVE_REPLICA',
@@ -2169,9 +2260,9 @@ class PartitionService extends EventEmitter {
             status: result.status,
           });
 
-          // If replica was not found, mark the pending move as completed
+          // Mark the pending move as completed
           // This prevents the rebalancer from repeatedly trying to remove it
-          if (result.status === 'not_found' && this.rebalancer) {
+          if (this.rebalancer) {
             this.rebalancer.completePendingMove(requestId, 'completed');
           }
 
@@ -2378,6 +2469,12 @@ class PartitionService extends EventEmitter {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
     });
+
+    // Close log adapter first to prevent database access after close
+    // This must happen before raft.end() to avoid race conditions
+    if (this.logAdapter) {
+      this.logAdapter.close();
+    }
 
     // Stop liferaft instance
     if (this.raft) {

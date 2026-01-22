@@ -2,16 +2,16 @@ TAP version 14
 # Subtest: Property 5: Default replica count is 3
     ok 1 - Default replica count is 3
     1..1
-ok 1 - Property 5: Default replica count is 3 # time=17.43ms
+ok 1 - Property 5: Default replica count is 3 # time=18.009ms
 
 # Subtest: Property 5: Partition reports correct replica count
     ok 1 - Partition reports correct replica count
     1..1
-ok 2 - Property 5: Partition reports correct replica count # time=11.281ms
+ok 2 - Property 5: Partition reports correct replica count # time=10.253ms
 
 # Subtest: Property 5: Replica count is odd for Raft quorum
     ok 1 - Replica count is odd for Raft quorum
     1..1
-ok 3 - Property 5: Replica count is odd for Raft quorum # time=9.446ms
+ok 3 - Property 5: Replica count is odd for Raft quorum # time=8.634ms
 
 1..3

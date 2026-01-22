@@ -1286,9 +1286,34 @@ class BootstrapService extends EventEmitter {
 
     const result = await hydrationService.hydrateCache();
 
-    // Set system table cache on all partition services for rebalancer
+    // Create a function to get partition for a table from the registry
+    const getPartitionForTable = (tableName) => {
+      for (const partition of partitionRegistry.values()) {
+        if (partition.tableName === tableName && partition.isLeader) {
+          return partition;
+        }
+      }
+      // Return first matching partition if no leader found
+      for (const partition of partitionRegistry.values()) {
+        if (partition.tableName === tableName) {
+          return partition;
+        }
+      }
+      return null;
+    };
+
+    // Create CDC integration service for partition rebalancer operations
+    // This enables partitions to delete service rows after REMOVE_REPLICA
+    const cdcIntegrationService = new CDCIntegrationService({
+      nodeId: this.nodeId,
+      getPartitionForTable,
+    });
+    cdcIntegrationService.initialize();
+
+    // Set system table cache and CDC integration service on all partition services
     for (const partition of this.partitionServices.values()) {
       partition.setSystemTableCache(systemTableCache);
+      partition.setCdcIntegrationService(cdcIntegrationService);
     }
 
     this.logger.info('Cache hydration complete', {

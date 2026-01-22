@@ -352,6 +352,7 @@ class ReplicaLifecycleManager extends EventEmitter {
       key_range,
       leader_address,
       replica_ids,
+      peer_addresses,
     } = message;
 
     // Convert message format for handler
@@ -365,6 +366,7 @@ class ReplicaLifecycleManager extends EventEmitter {
       keyRange: key_range,
       leaderAddress: leader_address,
       replicaIds: replica_ids,
+      peerAddresses: peer_addresses || [],
     };
 
     const response = await this.replicaHandler.handleCreateReplica(handlerRequest);
@@ -495,6 +497,7 @@ class ReplicaLifecycleManager extends EventEmitter {
       schema,
       table_id,
       replica_ids,
+      peer_addresses,
     } = message;
 
     try {
@@ -523,6 +526,7 @@ class ReplicaLifecycleManager extends EventEmitter {
           keyRange: message.key_range,
           replicaId: replica_id,
           replicaIds: replica_ids,
+          peerAddresses: peer_addresses || [], // Pass unified peer addresses for routing
           nodeId: this.nodeId,
           dbPath,
           leaderAddress: message.leader_address,

@@ -147,6 +147,7 @@ class ReplicaHandler extends EventEmitter {
       keyRange,
       leaderAddress,
       replicaIds,
+      peerAddresses,
     } = request;
 
     this.logger.info('Handling CREATE_REPLICA request', {
@@ -232,6 +233,7 @@ class ReplicaHandler extends EventEmitter {
       keyRange,
       leaderAddress,
       replicaIds,
+      peerAddresses: peerAddresses || [],
     }).catch((error) => {
       this.logger.error('Async replica creation failed', {
         operationId,
@@ -266,6 +268,7 @@ class ReplicaHandler extends EventEmitter {
       keyRange,
       leaderAddress,
       replicaIds,
+      peerAddresses,
     } = request;
 
     try {
@@ -282,6 +285,7 @@ class ReplicaHandler extends EventEmitter {
           keyRange,
           replicaId,
           replicaIds,
+          peerAddresses: peerAddresses || [], // Pass unified peer addresses for routing
           nodeId: this.nodeId,
           dbPath,
           leaderAddress,

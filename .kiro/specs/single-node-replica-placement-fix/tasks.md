@@ -93,6 +93,25 @@ This implementation plan addresses the Raft leadership stability issue by ensuri
   - All addresses now use unified format for WebSocket routing
   - **All tests pass**
 
+- [x] 15. Fix CREATE_REPLICA timeout due to lifecycle handler initialization timing
+  - **Problem**: When a joining node registers itself in the `nodes` table, the seed node triggers rebalancing which sends CREATE_REPLICA messages. But the joining node's `ReplicaLifecycleManager` wasn't initialized yet, causing message timeouts.
+  - **Solution**: Initialize `ReplicaLifecycleManager` BEFORE `phaseQuerySystemState()` (which registers the node)
+  - Updated `join()` in `src/bootstrap/node-joining-service.js` to initialize lifecycle manager earlier
+  - This ensures the lifecycle handler is registered before the node announces itself to the cluster
+  - **All tests pass**
+
+- [x] 16. Fix service row deletion timing during replica removal
+  - **Problem**: When removing a replica, the code tried to delete the service row AFTER sending REMOVE_REPLICA. But if removing a replica from `services-p1`, the partition service is shut down before we can write to it.
+  - **Solution**: Delete the service row BEFORE sending REMOVE_REPLICA, while the partition service is still running
+  - Updated `handleRebalancerRemoveReplica()` in `src/partition/partition-service.js`
+  - **All tests pass**
+
+- [x] 17. Fix service row deletion timing (second pass)
+  - **Problem**: The previous fix (task 16) was in a different code path. The actual `handleRebalancerRemoveReplica` method still had the deletion AFTER the REMOVE_REPLICA ACK.
+  - **Solution**: Moved the `cdcIntegrationService.deleteSystemTableRow()` call to happen BEFORE sending REMOVE_REPLICA
+  - This ensures the services table is updated while `services-p1` partition is still running
+  - **All tests pass**
+
 ## Notes
 
 - All tasks are required for comprehensive implementation

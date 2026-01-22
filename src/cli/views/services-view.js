@@ -88,11 +88,9 @@ export class ServicesView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'service_id', label: 'Service ID', width: 25},
+      {key: 'unified_address', label: 'Unified Address', width: 45},
       {key: 'service_type', label: 'Type', width: 15},
-      {key: 'node_id', label: 'Node ID', width: 20},
       {key: 'status', label: 'Status', width: 12},
-      {key: 'address', label: 'Address', width: 25},
     ];
   }
 
@@ -104,12 +102,27 @@ export class ServicesView extends BaseView {
    */
   formatRow(service) {
     return [
-      service.service_id || 'N/A',
+      this.formatUnifiedAddress(service),
       this.formatServiceType(service.service_type),
-      service.node_id || 'N/A',
       this.formatStatus(service),
-      service.address || 'N/A',
     ];
+  }
+
+  /**
+   * Format unified address for display
+   * Format: ${node_id}/${service_type}/${service_id}
+   * @param {Object} service - Service record
+   * @return {string} Unified address
+   */
+  formatUnifiedAddress(service) {
+    const nodeId = service.node_id || 'unknown';
+    const serviceType = service.service_type || 'unknown';
+    const serviceId = service.service_id || 'unknown';
+
+    // Map service_type to entity type for address format
+    const entityType = serviceType === 'message_group' ? 'message-group' : serviceType;
+
+    return `${nodeId}/${entityType}/${serviceId}`;
   }
 
   /**
@@ -353,15 +366,17 @@ export class ServicesView extends BaseView {
       return null;
     }
 
+    const unifiedAddress = this.formatUnifiedAddress(service);
+
     const sections = [
       {
         title: 'Basic Information',
         fields: [
+          {label: 'Unified Address', value: unifiedAddress},
           {label: 'Service ID', value: service.service_id},
           {label: 'Type', value: this.formatServiceType(service.service_type)},
           {label: 'Node ID', value: service.node_id},
           {label: 'Status', value: this.formatStatus(service)},
-          {label: 'Address', value: service.address},
         ],
       },
     ];
@@ -437,7 +452,7 @@ export class ServicesView extends BaseView {
     }
 
     return {
-      title: `Service: ${service.service_id}`,
+      title: `Service: ${unifiedAddress}`,
       sections,
     };
   }

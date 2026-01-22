@@ -147,10 +147,16 @@ class NodeJoiningService extends EventEmitter {
         () => this.phaseWaitForLeadership(),
       );
 
-      // Initialize ReplicaLifecycleManager after message group is ready
+      // Initialize ReplicaLifecycleManager BEFORE registering node in cluster
+      // This is critical because:
+      // 1. Node registration triggers CDC event on seed node
+      // 2. CDC event triggers rebalancing which sends CREATE_REPLICA messages
+      // 3. CREATE_REPLICA messages need the lifecycle handler to be registered
+      // If we initialize after registration, CREATE_REPLICA messages will timeout
       this.initializeReplicaLifecycleManager();
 
       // Phase 5: Query system partitions for cluster state
+      // This includes registering the node in the cluster's nodes table
       await this.executePhase(
         JoiningPhase.QUERYING_STATE,
         () => this.phaseQuerySystemState(),

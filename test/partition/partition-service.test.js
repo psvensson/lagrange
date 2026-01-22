@@ -709,3 +709,101 @@ test('PartitionService - emits leaderElected event for single replica', async (t
 
   await partition.shutdown();
 });
+
+test('PartitionService - handleRebalancerRemoveReplica deletes service row after ACK', async (t) => {
+  // Track CDC delete calls
+  let deleteCalledWith = null;
+  const mockCdcIntegrationService = {
+    deleteSystemTableRow: async (tableName, whereClause) => {
+      deleteCalledWith = {tableName, whereClause};
+      return {success: true};
+    },
+  };
+
+  // Mock messageRouter that returns initiated ACK
+  const mockMessageRouter = {
+    register: () => {},
+    unregister: () => {},
+    deliver: async () => ({
+      acknowledged: true,
+      status: 'initiated',
+      request_id: 'test-request-123',
+    }),
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition-21',
+    tableId: 'services',
+    tableName: 'services',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'seed-node',
+    dbPath: ':memory:',
+    transport: mockMessageRouter,
+    messageRouter: mockMessageRouter,
+    cdcIntegrationService: mockCdcIntegrationService,
+  });
+
+  await partition.initialize();
+
+  // Trigger the rebalancer remove replica handler
+  await partition.handleRebalancerRemoveReplica({
+    replicaId: 'replica-to-remove',
+    nodeId: 'joining-node',
+    requestId: 'test-request-123',
+    entityId: 'test-partition-21',
+  });
+
+  // Verify the service row was deleted
+  t.ok(deleteCalledWith, 'deleteSystemTableRow should be called');
+  t.equal(deleteCalledWith.tableName, 'services', 'Should delete from services table');
+  t.same(
+    deleteCalledWith.whereClause,
+    {service_id: 'replica-to-remove'},
+    'Should delete by service_id',
+  );
+
+  await partition.shutdown();
+});
+
+test('PartitionService - setCdcIntegrationService sets service on partition and rebalancer',
+  async (t) => {
+    const mockCdcIntegrationService = {
+      deleteSystemTableRow: async () => ({success: true}),
+      insertSystemTableRow: async () => ({success: true}),
+    };
+
+    const partition = new PartitionService({
+      partitionId: 'test-partition-22',
+      tableId: 'services',
+      tableName: 'services',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      nodeId: 'test-node',
+      dbPath: ':memory:',
+    });
+
+    await partition.initialize();
+
+    // Initially no cdcIntegrationService
+    t.equal(partition.cdcIntegrationService, null, 'Initially null');
+
+    // Set the CDC integration service
+    partition.setCdcIntegrationService(mockCdcIntegrationService);
+
+    // Verify it was set on the partition
+    t.equal(
+      partition.cdcIntegrationService,
+      mockCdcIntegrationService,
+      'Should be set on partition',
+    );
+
+    // Verify it was set on the rebalancer
+    t.equal(
+      partition.rebalancer.cdcIntegrationService,
+      mockCdcIntegrationService,
+      'Should be set on rebalancer',
+    );
+
+    await partition.shutdown();
+  });

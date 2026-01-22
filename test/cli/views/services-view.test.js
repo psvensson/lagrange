@@ -38,12 +38,10 @@ test('ServicesView', async (t) => {
     const view = new ServicesView();
     const columns = view.getColumns();
 
-    t.equal(columns.length, 5);
-    t.equal(columns[0].key, 'service_id');
+    t.equal(columns.length, 3);
+    t.equal(columns[0].key, 'unified_address');
     t.equal(columns[1].key, 'service_type');
-    t.equal(columns[2].key, 'node_id');
-    t.equal(columns[3].key, 'status');
-    t.equal(columns[4].key, 'address');
+    t.equal(columns[2].key, 'status');
   });
 
   t.test('formatRow formats service data correctly', async (t) => {
@@ -52,11 +50,9 @@ test('ServicesView', async (t) => {
 
     const row = view.formatRow(service);
 
-    t.equal(row[0], 'svc-1');
+    t.equal(row[0], 'node-1/partition/svc-1');
     t.equal(row[1], 'Partition');
-    t.equal(row[2], 'node-1');
-    t.equal(row[3], 'active');
-    t.equal(row[4], '192.168.1.1:8080');
+    t.equal(row[2], 'active');
   });
 
   t.test('formatRow handles missing values', async (t) => {
@@ -71,11 +67,37 @@ test('ServicesView', async (t) => {
 
     const row = view.formatRow(service);
 
-    t.equal(row[0], 'N/A');
+    t.equal(row[0], 'unknown/unknown/unknown');
     t.equal(row[1], 'N/A');
-    t.equal(row[2], 'N/A');
-    t.equal(row[3], 'unknown');
-    t.equal(row[4], 'N/A');
+    t.equal(row[2], 'unknown');
+  });
+
+  t.test('formatUnifiedAddress formats address correctly', async (t) => {
+    const view = new ServicesView();
+
+    // Partition service
+    const partitionService = createService({
+      node_id: 'node-1',
+      service_type: 'partition',
+      service_id: 'svc-1',
+    });
+    t.equal(view.formatUnifiedAddress(partitionService), 'node-1/partition/svc-1');
+
+    // Message group service (note: message_group -> message-group)
+    const msgGroupService = createService({
+      node_id: 'node-2',
+      service_type: 'message_group',
+      service_id: 'mg-1',
+    });
+    t.equal(view.formatUnifiedAddress(msgGroupService), 'node-2/message-group/mg-1');
+
+    // Node service
+    const nodeService = createService({
+      node_id: 'node-3',
+      service_type: 'node',
+      service_id: 'node-svc-1',
+    });
+    t.equal(view.formatUnifiedAddress(nodeService), 'node-3/node/node-svc-1');
   });
 
   t.test('formatServiceType formats types correctly', async (t) => {
@@ -262,7 +284,7 @@ test('ServicesView', async (t) => {
 
     const details = view.getSelectedDetails();
 
-    t.equal(details.title, 'Service: svc-1');
+    t.equal(details.title, 'Service: node-1/partition/svc-1');
     t.ok(details.sections.length >= 1);
     t.equal(details.sections[0].title, 'Basic Information');
   });

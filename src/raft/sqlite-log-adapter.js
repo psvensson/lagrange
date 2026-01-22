@@ -21,7 +21,25 @@ class SQLiteLogAdapter {
     }
     this.db = db;
     this.node = node;
+    this.closed = false;
     this.initializeTables();
+  }
+
+  /**
+   * Check if the database is open and available.
+   * @return {boolean} True if database is open.
+   * @private
+   */
+  isOpen() {
+    return !this.closed && this.db && this.db.open;
+  }
+
+  /**
+   * Mark the adapter as closed.
+   * Called when the partition service shuts down.
+   */
+  close() {
+    this.closed = true;
   }
 
   /**
@@ -110,6 +128,9 @@ class SQLiteLogAdapter {
    * @return {Object} {index, term}
    */
   getLastInfo() {
+    if (!this.isOpen()) {
+      return {index: 0, term: this.node ? this.node.term : 0};
+    }
     const row = this.db.prepare(
       'SELECT log_index, term FROM _raft_log ORDER BY log_index DESC LIMIT 1',
     ).get();
@@ -127,6 +148,9 @@ class SQLiteLogAdapter {
    * @return {Object|null} Log entry or null if not found
    */
   get(index) {
+    if (!this.isOpen()) {
+      return null;
+    }
     const row = this.db.prepare(
       'SELECT log_index, term, command FROM _raft_log WHERE log_index = ?',
     ).get(index);
@@ -145,6 +169,9 @@ class SQLiteLogAdapter {
    * @param {Object} entry - Log entry with index, term, command
    */
   put(entry) {
+    if (!this.isOpen()) {
+      return;
+    }
     this.db.prepare(
       'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)',
     ).run(entry.index, entry.term, JSON.stringify(entry.command), Date.now());
@@ -156,6 +183,9 @@ class SQLiteLogAdapter {
    * @param {number} index - Index to remove from (inclusive)
    */
   removeFrom(index) {
+    if (!this.isOpen()) {
+      return;
+    }
     this.db.prepare('DELETE FROM _raft_log WHERE log_index >= ?').run(index);
   }
 
@@ -167,6 +197,9 @@ class SQLiteLogAdapter {
    * @return {Array} Array of log entries
    */
   getRange(startIndex, endIndex) {
+    if (!this.isOpen()) {
+      return [];
+    }
     const rows = this.db.prepare(
       'SELECT log_index, term, command FROM _raft_log ' +
       'WHERE log_index >= ? AND log_index <= ? ORDER BY log_index',
@@ -187,6 +220,9 @@ class SQLiteLogAdapter {
    * @return {boolean} True if entry exists
    */
   has(index) {
+    if (!this.isOpen()) {
+      return false;
+    }
     const row = this.db.prepare(
       'SELECT 1 FROM _raft_log WHERE log_index = ?',
     ).get(index);
@@ -219,10 +255,12 @@ class SQLiteLogAdapter {
       command,
     };
 
-    // Store in SQLite
-    this.db.prepare(
-      'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)',
-    ).run(index, term, JSON.stringify(entry), Date.now());
+    // Store in SQLite (only if database is open)
+    if (this.isOpen()) {
+      this.db.prepare(
+        'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)',
+      ).run(index, term, JSON.stringify(entry), Date.now());
+    }
 
     return entry;
   }
@@ -236,6 +274,9 @@ class SQLiteLogAdapter {
    * @return {Object} Updated entry
    */
   commandAck(index, address) {
+    if (!this.isOpen()) {
+      return {responses: []};
+    }
     const row = this.db.prepare(
       'SELECT command FROM _raft_log WHERE log_index = ?',
     ).get(index);
@@ -272,6 +313,9 @@ class SQLiteLogAdapter {
    * @return {Array} Uncommitted entries
    */
   getUncommittedEntriesUpToIndex(index, _term) {
+    if (!this.isOpen()) {
+      return [];
+    }
     const rows = this.db.prepare(
       'SELECT log_index, term, command FROM _raft_log WHERE log_index <= ? ORDER BY log_index',
     ).all(index);
@@ -296,6 +340,9 @@ class SQLiteLogAdapter {
    * @return {Object} Committed entry
    */
   commit(index) {
+    if (!this.isOpen()) {
+      return null;
+    }
     const row = this.db.prepare(
       'SELECT log_index, term, command FROM _raft_log WHERE log_index = ?',
     ).get(index);
@@ -324,6 +371,12 @@ class SQLiteLogAdapter {
    * @return {Object} Last entry or default
    */
   getLastEntry() {
+    if (!this.isOpen()) {
+      return {
+        index: 0,
+        term: this.node ? this.node.term : 0,
+      };
+    }
     const row = this.db.prepare(
       'SELECT log_index, term, command FROM _raft_log ORDER BY log_index DESC LIMIT 1',
     ).get();
@@ -376,8 +429,13 @@ class SQLiteLogAdapter {
       return defaultInfo;
     }
 
+    if (!this.isOpen()) {
+      return defaultInfo;
+    }
+
     const row = this.db.prepare(
-      'SELECT log_index, term, command FROM _raft_log WHERE log_index < ? ORDER BY log_index DESC LIMIT 1',
+      'SELECT log_index, term, command FROM _raft_log ' +
+      'WHERE log_index < ? ORDER BY log_index DESC LIMIT 1',
     ).get(entry.index);
 
     if (!row) {
@@ -400,6 +458,9 @@ class SQLiteLogAdapter {
    * @return {Array} Entries after index
    */
   getEntriesAfter(index) {
+    if (!this.isOpen()) {
+      return [];
+    }
     const rows = this.db.prepare(
       'SELECT log_index, term, command FROM _raft_log WHERE log_index > ? ORDER BY log_index',
     ).all(index);
@@ -421,6 +482,9 @@ class SQLiteLogAdapter {
    * @param {number} index - Index to remove after
    */
   removeEntriesAfter(index) {
+    if (!this.isOpen()) {
+      return;
+    }
     this.db.prepare('DELETE FROM _raft_log WHERE log_index > ?').run(index);
   }
 
@@ -429,6 +493,9 @@ class SQLiteLogAdapter {
    * @return {number} Committed index
    */
   getCommittedIndex() {
+    if (!this.isOpen()) {
+      return 0;
+    }
     const row = this.db.prepare(
       'SELECT value FROM _raft_state WHERE key = ?',
     ).get('committedIndex');
@@ -440,6 +507,9 @@ class SQLiteLogAdapter {
    * @param {number} index - Committed index
    */
   setCommittedIndex(index) {
+    if (!this.isOpen()) {
+      return;
+    }
     this.db.prepare(
       'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
     ).run('committedIndex', String(index));
@@ -456,6 +526,10 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Completion callback
    */
   append(entries, callback) {
+    if (!this.isOpen()) {
+      callback(null);
+      return;
+    }
     try {
       // Use INSERT OR REPLACE to handle duplicate indices gracefully
       // This can happen during Raft log replication when entries are re-sent
@@ -488,6 +562,10 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Callback with entries
    */
   getEntriesFrom(startIndex, callback) {
+    if (!this.isOpen()) {
+      callback(null, []);
+      return;
+    }
     try {
       const entries = this.db.prepare(
         'SELECT log_index, term, command FROM _raft_log WHERE log_index >= ? ORDER BY log_index',
@@ -504,10 +582,14 @@ class SQLiteLogAdapter {
   }
 
   /**
-   * Get the last log entry.
+   * Get the last log entry (callback version).
    * @param {Function} callback - Callback with entry
    */
-  getLastEntry(callback) {
+  getLastEntryCallback(callback) {
+    if (!this.isOpen()) {
+      callback(null, null);
+      return;
+    }
     try {
       const row = this.db.prepare(
         'SELECT log_index, term, command FROM _raft_log ORDER BY log_index DESC LIMIT 1',
@@ -534,6 +616,10 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Completion callback
    */
   truncateFrom(fromIndex, callback) {
+    if (!this.isOpen()) {
+      callback(null);
+      return;
+    }
     try {
       this.db.prepare('DELETE FROM _raft_log WHERE log_index >= ?').run(fromIndex);
       callback(null);
@@ -547,6 +633,10 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Callback with length
    */
   getLength(callback) {
+    if (!this.isOpen()) {
+      callback(null, 0);
+      return;
+    }
     try {
       const row = this.db.prepare('SELECT COUNT(*) as count FROM _raft_log').get();
       callback(null, row.count);
@@ -562,6 +652,10 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Callback with value
    */
   getState(key, callback) {
+    if (!this.isOpen()) {
+      callback(null, null);
+      return;
+    }
     try {
       const row = this.db.prepare('SELECT value FROM _raft_state WHERE key = ?').get(key);
       callback(null, row ? row.value : null);
@@ -578,6 +672,10 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Completion callback
    */
   setState(key, value, callback) {
+    if (!this.isOpen()) {
+      callback(null);
+      return;
+    }
     try {
       this.db.prepare('INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)')
         .run(key, value);

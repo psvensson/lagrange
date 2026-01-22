@@ -7,7 +7,7 @@ TAP version 14
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 1 - KeyRange - full range contains all keys # time=9.085ms
+ok 1 - KeyRange - full range contains all keys # time=5.789ms
 
 # Subtest: KeyRange - bounded range contains correct keys
     ok 1 - should be equal
@@ -17,7 +17,7 @@ ok 1 - KeyRange - full range contains all keys # time=9.085ms
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 2 - KeyRange - bounded range contains correct keys # time=5.93ms
+ok 2 - KeyRange - bounded range contains correct keys # time=6.395ms
 
 # Subtest: KeyRange - unbounded start
     ok 1 - should be equal
@@ -25,7 +25,7 @@ ok 2 - KeyRange - bounded range contains correct keys # time=5.93ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 3 - KeyRange - unbounded start # time=0.595ms
+ok 3 - KeyRange - unbounded start # time=0.544ms
 
 # Subtest: KeyRange - unbounded end
     ok 1 - should be equal
@@ -33,7 +33,7 @@ ok 3 - KeyRange - unbounded start # time=0.595ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 4 - KeyRange - unbounded end # time=0.526ms
+ok 4 - KeyRange - unbounded end # time=0.424ms
 
 # Subtest: KeyRange - numeric keys
     ok 1 - should be equal
@@ -42,21 +42,21 @@ ok 4 - KeyRange - unbounded end # time=0.526ms
     ok 4 - should be equal
     ok 5 - should be equal
     1..5
-ok 5 - KeyRange - numeric keys # time=0.544ms
+ok 5 - KeyRange - numeric keys # time=0.683ms
 
 # Subtest: KeyRange - isAdjacentTo
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 6 - KeyRange - isAdjacentTo # time=0.539ms
+ok 6 - KeyRange - isAdjacentTo # time=1.132ms
 
 # Subtest: KeyRange - overlaps
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 7 - KeyRange - overlaps # time=0.55ms
+ok 7 - KeyRange - overlaps # time=1.049ms
 
 # Subtest: KeyRange - clone and toObject
     ok 1 - should be equal
@@ -65,14 +65,14 @@ ok 7 - KeyRange - overlaps # time=0.55ms
     ok 4 - should be equal
     ok 5 - should be equal
     1..5
-ok 8 - KeyRange - clone and toObject # time=2.533ms
+ok 8 - KeyRange - clone and toObject # time=2.299ms
 
 # Subtest: KeyRangeManager - add and get partition
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 9 - KeyRangeManager - add and get partition # time=1.205ms
+ok 9 - KeyRangeManager - add and get partition # time=1.204ms
 
 # Subtest: KeyRangeManager - find partition for key
     ok 1 - should be equal
@@ -80,24 +80,24 @@ ok 9 - KeyRangeManager - add and get partition # time=1.205ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 10 - KeyRangeManager - find partition for key # time=0.658ms
+ok 10 - KeyRangeManager - find partition for key # time=0.676ms
 
 # Subtest: KeyRangeManager - detect overlapping ranges
     ok 1 - expected to throw
     1..1
-ok 11 - KeyRangeManager - detect overlapping ranges # time=0.745ms
+ok 11 - KeyRangeManager - detect overlapping ranges # time=1.284ms
 
 # Subtest: KeyRangeManager - validate contiguous ranges
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 12 - KeyRangeManager - validate contiguous ranges # time=0.801ms
+ok 12 - KeyRangeManager - validate contiguous ranges # time=0.886ms
 
 # Subtest: KeyRangeManager - detect gap in ranges
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 13 - KeyRangeManager - detect gap in ranges # time=0.48ms
+ok 13 - KeyRangeManager - detect gap in ranges # time=0.555ms
 
 # Subtest: KeyRangeManager - split partition
     ok 1 - should be equal
@@ -109,7 +109,7 @@ ok 13 - KeyRangeManager - detect gap in ranges # time=0.48ms
     ok 7 - should be equal
     ok 8 - should be equal
     1..8
-ok 14 - KeyRangeManager - split partition # time=1.036ms
+ok 14 - KeyRangeManager - split partition # time=0.988ms
 
 # Subtest: KeyRangeManager - merge partitions
     ok 1 - should be equal
@@ -119,45 +119,45 @@ ok 14 - KeyRangeManager - split partition # time=1.036ms
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 15 - KeyRangeManager - merge partitions # time=1.046ms
+ok 15 - KeyRangeManager - merge partitions # time=1.392ms
 
 # Subtest: KeyRangeManager - cannot merge non-adjacent partitions
     ok 1 - expected to throw
     1..1
-ok 16 - KeyRangeManager - cannot merge non-adjacent partitions # time=0.576ms
+ok 16 - KeyRangeManager - cannot merge non-adjacent partitions # time=0.706ms
 
 # Subtest: KeyRangeManager - find partitions in range
     ok 1 - should be equivalent
     ok 2 - should be equivalent
     ok 3 - should be equivalent
     1..3
-ok 17 - KeyRangeManager - find partitions in range # time=1.189ms
+ok 17 - KeyRangeManager - find partitions in range # time=1.526ms
 
 # Subtest: KeyRangeManager - find adjacent partition
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 18 - KeyRangeManager - find adjacent partition # time=0.733ms
+ok 18 - KeyRangeManager - find adjacent partition # time=0.853ms
 
 # Subtest: KeyRangeManager - getSortedPartitions
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 19 - KeyRangeManager - getSortedPartitions # time=0.708ms
+ok 19 - KeyRangeManager - getSortedPartitions # time=0.763ms
 
 # Subtest: KeyRangeManager - getPartitionCount
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 20 - KeyRangeManager - getPartitionCount # time=0.441ms
+ok 20 - KeyRangeManager - getPartitionCount # time=0.759ms
 
 # Subtest: KeyRangeManager - remove partition
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 21 - KeyRangeManager - remove partition # time=0.901ms
+ok 21 - KeyRangeManager - remove partition # time=0.986ms
 
 1..21

@@ -3,29 +3,29 @@ TAP version 14
     # Subtest: full flow: seed node, second node joins, replica placed via message group
         ok 1 - message group should elect leader
         ok 2 - partition should become leader
-{"level":50,"time":"2026-01-22T17:52:28.915Z","nodeId":"test-node","pid":313824,"subsystem":"partition","partitionId":"test-partition-1","tableName":"test_table","replicaId":"1bc522a5-f4dd-4bde-aa89-34bfbf9bd2cb","targetNodeId":"second-node-002","error":"Delivery failed: No connection to node second-node-002","errorStack":"Error: Delivery failed: No connection to node second-node-002\n    at PartitionService.deliverWithAck (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2330:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async PartitionService.handleRebalancerAddReplica (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2017:24)","elapsedMs":0,"nodeId":"test-node","msg":"CREATE_REPLICA failed via messageRouter"}
+{"level":50,"time":"2026-01-22T19:14:20.095Z","nodeId":"test-node","pid":332586,"subsystem":"partition","partitionId":"test-partition-1","tableName":"test_table","replicaId":"697cb436-d207-4266-a6af-139fb16b1b81","targetNodeId":"second-node-002","error":"Delivery failed: No connection to node second-node-002","errorStack":"Error: Delivery failed: No connection to node second-node-002\n    at PartitionService.deliverWithAck (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2421:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async PartitionService.handleRebalancerAddReplica (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2084:24)","elapsedMs":0,"nodeId":"test-node","msg":"CREATE_REPLICA failed via messageRouter"}
         ok 3 - rebalancing should trigger events
         ok 4 - should have rebalancer events
         ok 5 - should have add replica events
         ok 6 - add event should target second node
-{"level":50,"time":"2026-01-22T17:52:28.915Z","nodeId":"test-node","pid":313824,"subsystem":"partition","partitionId":"test-partition-1","tableName":"test_table","replicaId":"b12656bd-b98b-44d7-ac7d-409d813e9e69","targetNodeId":"second-node-002","error":"Delivery failed: No connection to node second-node-002","errorStack":"Error: Delivery failed: No connection to node second-node-002\n    at PartitionService.deliverWithAck (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2330:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async PartitionService.handleRebalancerAddReplica (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2017:24)","elapsedMs":1,"nodeId":"test-node","msg":"CREATE_REPLICA failed via messageRouter"}
-{"level":50,"time":"2026-01-22T17:52:28.917Z","nodeId":"test-node","pid":313824,"subsystem":"partition","partitionId":"test-partition-1","replicaId":"test-partition-1-r1","targetNodeId":"seed-node-001","error":"Router shutdown","nodeId":"test-node","msg":"REMOVE_REPLICA failed via messageRouter"}
-{"level":50,"time":"2026-01-22T17:52:28.917Z","nodeId":"test-node","pid":313824,"subsystem":"partition","partitionId":"test-partition-1","replicaId":"test-partition-1-r2","targetNodeId":"seed-node-001","error":"Router shutdown","nodeId":"test-node","msg":"REMOVE_REPLICA failed via messageRouter"}
-{"level":50,"time":"2026-01-22T17:52:28.918Z","nodeId":"test-node","pid":313824,"subsystem":"message-router","nodeId":"test-node","connectionId":"4ceecd2c-2161-4824-9d88-e164193ef6cc","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:28.919Z","nodeId":"test-node","pid":313824,"subsystem":"message-router","nodeId":"test-node","connectionId":"50daefcc-54ef-4902-89a9-b704c799d04e","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T19:14:20.096Z","nodeId":"test-node","pid":332586,"subsystem":"partition","partitionId":"test-partition-1","tableName":"test_table","replicaId":"0628c0ab-5ba3-42a4-8235-ba76081b4b7b","targetNodeId":"second-node-002","error":"Delivery failed: No connection to node second-node-002","errorStack":"Error: Delivery failed: No connection to node second-node-002\n    at PartitionService.deliverWithAck (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2421:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async PartitionService.handleRebalancerAddReplica (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2084:24)","elapsedMs":1,"nodeId":"test-node","msg":"CREATE_REPLICA failed via messageRouter"}
+{"level":50,"time":"2026-01-22T19:14:20.097Z","nodeId":"test-node","pid":332586,"subsystem":"partition","partitionId":"test-partition-1","replicaId":"test-partition-1-r1","targetNodeId":"seed-node-001","error":"Router shutdown","nodeId":"test-node","msg":"REMOVE_REPLICA failed via messageRouter"}
+{"level":50,"time":"2026-01-22T19:14:20.097Z","nodeId":"test-node","pid":332586,"subsystem":"partition","partitionId":"test-partition-1","replicaId":"test-partition-1-r2","targetNodeId":"seed-node-001","error":"Router shutdown","nodeId":"test-node","msg":"REMOVE_REPLICA failed via messageRouter"}
+{"level":50,"time":"2026-01-22T19:14:20.098Z","nodeId":"test-node","pid":332586,"subsystem":"message-router","nodeId":"test-node","connectionId":"00061a2f-4a68-47e4-9486-40c447251438","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T19:14:20.098Z","nodeId":"test-node","pid":332586,"subsystem":"message-router","nodeId":"test-node","connectionId":"309728df-682e-47c4-afa6-14be2c54c26c","msg":"Self-connection lost - fatal error"}
         1..6
-    ok 1 - full flow: seed node, second node joins, replica placed via message group # time=40.994ms
+    ok 1 - full flow: seed node, second node joins, replica placed via message group # time=24.375ms
     
-{"level":50,"time":"2026-01-22T17:52:28.919Z","nodeId":"test-node","pid":313824,"subsystem":"message-router","nodeId":"test-node","connectionId":"59e47c6d-9804-452e-a4cc-a51b8b16e893","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T19:14:20.098Z","nodeId":"test-node","pid":332586,"subsystem":"message-router","nodeId":"test-node","connectionId":"8ac93803-57b8-4fb5-a47c-ae581778c859","msg":"Self-connection lost - fatal error"}
     # Subtest: message group routes CREATE_REPLICA via real WebSocket
         ok 1 - should have message ID
         ok 2 - should be acknowledged
         ok 3 - should receive message
         ok 4 - should receive CREATE_REPLICA message
         ok 5 - should have correct request ID
-{"level":50,"time":"2026-01-22T17:52:28.955Z","nodeId":"test-node","pid":313824,"subsystem":"message-router","nodeId":"test-node","connectionId":"69d838a5-77c1-4c7b-aa3e-06373960e9bc","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T19:14:20.117Z","nodeId":"test-node","pid":332586,"subsystem":"message-router","nodeId":"test-node","connectionId":"bad34e93-226f-4c4f-94a2-e064a2cfbf2c","msg":"Self-connection lost - fatal error"}
         1..5
-    ok 2 - message group routes CREATE_REPLICA via real WebSocket # time=4.71ms
+    ok 2 - message group routes CREATE_REPLICA via real WebSocket # time=2.438ms
     
     # Subtest: rebalancer only spreads when multiple nodes available
         ok 1 - rebalance should succeed
@@ -34,16 +34,16 @@ TAP version 14
         ok 4 - rebalance should succeed
         ok 5 - should have moves with two nodes
         1..5
-    ok 3 - rebalancer only spreads when multiple nodes available # time=1.549ms
+    ok 3 - rebalancer only spreads when multiple nodes available # time=0.831ms
     
     # Subtest: replica lifecycle manager handles CREATE_REPLICA idempotently
         ok 1 - first call should return initiated
         ok 2 - second call should return already_exists
         ok 3 - should only create replica once
         1..3
-    ok 4 - replica lifecycle manager handles CREATE_REPLICA idempotently # time=50.948ms
+    ok 4 - replica lifecycle manager handles CREATE_REPLICA idempotently # time=52.776ms
     
     1..4
-ok 1 - Cross-node replica placement integration tests # time=223.026ms
+ok 1 - Cross-node replica placement integration tests # time=149.612ms
 
 1..1

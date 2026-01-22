@@ -1,31 +1,184 @@
 TAP version 14
-ok 1 - PartitionService - constructor requires partitionId # SKIP filter: /generates CDC events on delete/
-ok 2 - PartitionService - constructor requires tableId # SKIP filter: /generates CDC events on delete/
-ok 3 - PartitionService - constructor requires replicaId # SKIP filter: /generates CDC events on delete/
-ok 4 - PartitionService - initializes with in-memory database # SKIP filter: /generates CDC events on delete/
-ok 5 - PartitionService - creates table from schema # SKIP filter: /generates CDC events on delete/
-ok 6 - PartitionService - executeQuery for SELECT # SKIP filter: /generates CDC events on delete/
-ok 7 - PartitionService - updateData modifies records # SKIP filter: /generates CDC events on delete/
-ok 8 - PartitionService - deleteData removes records # SKIP filter: /generates CDC events on delete/
-ok 9 - PartitionService - generates CDC events on insert # SKIP filter: /generates CDC events on delete/
-ok 10 - PartitionService - generates CDC events on update # SKIP filter: /generates CDC events on delete/
+# Subtest: PartitionService - constructor requires partitionId
+    ok 1 - expected to throw
+    1..1
+ok 1 - PartitionService - constructor requires partitionId # time=6.899ms
+
+# Subtest: PartitionService - constructor requires tableId
+    ok 1 - expected to throw
+    1..1
+ok 2 - PartitionService - constructor requires tableId # time=0.357ms
+
+# Subtest: PartitionService - constructor requires replicaId
+    ok 1 - expected to throw
+    1..1
+ok 3 - PartitionService - constructor requires replicaId # time=0.308ms
+
+# Subtest: PartitionService - initializes with in-memory database
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    1..6
+ok 4 - PartitionService - initializes with in-memory database # time=4.031ms
+
+# Subtest: PartitionService - creates table from schema
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 5 - PartitionService - creates table from schema # time=1.355ms
+
+# Subtest: PartitionService - executeQuery for SELECT
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 6 - PartitionService - executeQuery for SELECT # time=1.071ms
+
+# Subtest: PartitionService - updateData modifies records
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 7 - PartitionService - updateData modifies records # time=1.006ms
+
+# Subtest: PartitionService - deleteData removes records
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 8 - PartitionService - deleteData removes records # time=1.124ms
+
+# Subtest: PartitionService - generates CDC events on insert
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 9 - PartitionService - generates CDC events on insert # time=0.891ms
+
+# Subtest: PartitionService - generates CDC events on update
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 10 - PartitionService - generates CDC events on update # time=0.878ms
+
 # Subtest: PartitionService - generates CDC events on delete
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - DELETE CDC event should contain primary key
     1..3
-ok 11 - PartitionService - generates CDC events on delete # time=6.273ms
+ok 11 - PartitionService - generates CDC events on delete # time=0.847ms
 
-ok 12 - PartitionService - calculates partition size # SKIP filter: /generates CDC events on delete/
-ok 13 - PartitionService - key range management # SKIP filter: /generates CDC events on delete/
-ok 14 - PartitionService - full key range (null, null) # SKIP filter: /generates CDC events on delete/
-ok 15 - PartitionService - getStatus returns complete status # SKIP filter: /generates CDC events on delete/
-ok 16 - PartitionService - single replica becomes leader # SKIP filter: /generates CDC events on delete/
-ok 17 - PartitionService - unsubscribe from CDC # SKIP filter: /generates CDC events on delete/
-ok 18 - PartitionService - handleTransportMessage routes Raft packets to liferaft # SKIP filter: /generates CDC events on delete/
-ok 19 - PartitionService - handleTransportMessage handles application messages # SKIP filter: /generates CDC events on delete/
-ok 20 - PartitionService - handleTransportMessage rejects unknown message types # SKIP filter: /generates CDC events on delete/
-ok 21 - PartitionService - liferaft instance is created with correct configuration # SKIP filter: /generates CDC events on delete/
-ok 22 - PartitionService - buildPeerAddress returns correct format # SKIP filter: /generates CDC events on delete/
-ok 23 - PartitionService - emits leaderElected event for single replica # SKIP filter: /generates CDC events on delete/
-1..23
+# Subtest: PartitionService - calculates partition size
+    ok 1 - Initial size should be non-negative
+    ok 2 - Size should increase after inserts
+    1..2
+ok 12 - PartitionService - calculates partition size # time=1.272ms
+
+# Subtest: PartitionService - key range management
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    1..7
+ok 13 - PartitionService - key range management # time=0.908ms
+
+# Subtest: PartitionService - full key range (null, null)
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 14 - PartitionService - full key range (null, null) # time=0.757ms
+
+# Subtest: PartitionService - getStatus returns complete status
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    1..8
+ok 15 - PartitionService - getStatus returns complete status # time=1.402ms
+
+# Subtest: PartitionService - single replica becomes leader
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 16 - PartitionService - single replica becomes leader # time=0.84ms
+
+# Subtest: PartitionService - unsubscribe from CDC
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 17 - PartitionService - unsubscribe from CDC # time=0.955ms
+
+# Subtest: PartitionService - handleTransportMessage routes Raft packets to liferaft
+    ok 1 - Raft packet should be acknowledged
+    ok 2 - Should emit data event to liferaft
+    ok 3 - Raft packet should be emitted to liferaft
+    ok 4 - Packet type should be preserved
+    ok 5 - Packet term should be preserved
+    1..5
+ok 18 - PartitionService - handleTransportMessage routes Raft packets to liferaft # time=0.961ms
+
+# Subtest: PartitionService - handleTransportMessage handles application messages
+    ok 1 - FORWARD_WRITE should succeed
+    ok 2 - One row should be inserted
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 19 - PartitionService - handleTransportMessage handles application messages # time=0.951ms
+
+# Subtest: PartitionService - handleTransportMessage rejects unknown message types
+    ok 1 - Unknown message should not be acknowledged
+    ok 2 - Error message should be present
+    ok 3 - Error should mention unknown type
+    1..3
+ok 20 - PartitionService - handleTransportMessage rejects unknown message types # time=0.744ms
+
+# Subtest: PartitionService - liferaft instance is created with correct configuration
+    ok 1 - Liferaft instance should exist
+    ok 2 - should be equal
+    1..2
+ok 21 - PartitionService - liferaft instance is created with correct configuration # time=0.686ms
+
+# Subtest: PartitionService - buildPeerAddress returns correct format
+    ok 1 - Should build correct address
+    ok 2 - Should return formatted address as-is
+    1..2
+ok 22 - PartitionService - buildPeerAddress returns correct format # time=0.728ms
+
+# Subtest: PartitionService - emits leaderElected event for single replica
+    ok 1 - leaderElected event should be emitted
+    ok 2 - Leader should be this replica
+    ok 3 - Partition ID should match
+    1..3
+ok 23 - PartitionService - emits leaderElected event for single replica # time=0.814ms
+
+# Subtest: PartitionService - handleRebalancerRemoveReplica deletes service row after ACK
+    ok 1 - deleteSystemTableRow should be called
+    ok 2 - Should delete from services table
+    ok 3 - Should delete by service_id
+    1..3
+ok 24 - PartitionService - handleRebalancerRemoveReplica deletes service row after ACK # time=1.782ms
+
+# Subtest: PartitionService - setCdcIntegrationService sets service on partition and rebalancer
+    ok 1 - Initially null
+    ok 2 - Should be set on partition
+    ok 3 - Should be set on rebalancer
+    1..3
+ok 25 - PartitionService - setCdcIntegrationService sets service on partition and rebalancer # time=0.72ms
+
+1..25
