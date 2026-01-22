@@ -35,6 +35,9 @@ class HLCTimestamp {
    * @return {HLCTimestamp} Parsed timestamp.
    */
   static fromString(str) {
+    if (typeof str !== 'string') {
+      throw new Error(`HLC timestamp must be a string, got ${typeof str}`);
+    }
     const parts = str.split('-');
     if (parts.length < 3) {
       throw new Error(`Invalid HLC timestamp string: ${str}`);

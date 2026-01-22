@@ -1,7 +1,27 @@
 TAP version 14
-ok 1 - Property 36: setContext propagates via CDC to all caches # SKIP filter: /SystemTableCache/
-ok 2 - Property 36: Multiple context updates maintain CDC consistency # SKIP filter: /SystemTableCache/
-ok 3 - Property 36: Context updates propagate via CDC # SKIP filter: /SystemTableCache/
-ok 4 - Property 36: Context deletion propagates via CDC # SKIP filter: /SystemTableCache/
-ok 5 - Property 36: Context data retrievable from any cache # SKIP filter: /SystemTableCache/
+# Subtest: Property 36: setContext propagates via CDC to all caches
+    ok 1 - setContext propagates via CDC to all caches
+    1..1
+ok 1 - Property 36: setContext propagates via CDC to all caches # time=9.173ms
+
+# Subtest: Property 36: Multiple context updates maintain CDC consistency
+    ok 1 - Multiple context updates maintain CDC consistency
+    1..1
+ok 2 - Property 36: Multiple context updates maintain CDC consistency # time=14.56ms
+
+# Subtest: Property 36: Context updates propagate via CDC
+    ok 1 - Context updates propagate via CDC
+    1..1
+ok 3 - Property 36: Context updates propagate via CDC # time=3.451ms
+
+# Subtest: Property 36: Context deletion propagates via CDC
+    ok 1 - Context deletion propagates via CDC
+    1..1
+ok 4 - Property 36: Context deletion propagates via CDC # time=2.996ms
+
+# Subtest: Property 36: Context data retrievable from any cache
+    ok 1 - Context data retrievable from any cache
+    1..1
+ok 5 - Property 36: Context data retrievable from any cache # time=2.885ms
+
 1..5

@@ -1,3 +1,276 @@
 TAP version 14
-ok 1 - Property 50: Cross-Partition JOIN Support # SKIP filter: /SystemTableCache/
+# Subtest: Property 50: Cross-Partition JOIN Support
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1769104359790-1-query-executor',
+  hasJoins: true,
+  hasAggregates: false
+}
+Executing cross-partition JOIN { mainTable: 'users', mainPartitionCount: 1, joinCount: 1 }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1769104359792-1-query-executor',
+  hasJoins: true,
+  hasAggregates: false
+}
+Executing cross-partition JOIN { mainTable: 'users', mainPartitionCount: 1, joinCount: 1 }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1769104359793-1-query-executor',
+  hasJoins: true,
+  hasAggregates: false
+}
+Executing cross-partition JOIN { mainTable: 'users', mainPartitionCount: 1, joinCount: 1 }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1769104359793-1-query-executor',
+  hasJoins: true,
+  hasAggregates: false
+}
+Executing cross-partition JOIN { mainTable: 'users', mainPartitionCount: 1, joinCount: 1 }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1769104359794-1-query-executor',
+  hasJoins: true,
+  hasAggregates: false
+}
+Executing cross-partition JOIN { mainTable: 'users', mainPartitionCount: 1, joinCount: 1 }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1769104359794-1-query-executor',
+  hasJoins: true,
+  hasAggregates: false
+}
+Executing cross-partition JOIN { mainTable: 'users', mainPartitionCount: 1, joinCount: 1 }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1769104359795-1-query-executor',
+  hasJoins: true,
+  hasAggregates: false
+}
+Executing cross-partition JOIN { mainTable: 'users', mainPartitionCount: 1, joinCount: 1 }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1769104359795-1-query-executor',
+  hasJoins: true,
+  hasAggregates: false
+}
+Executing cross-partition JOIN { mainTable: 'users', mainPartitionCount: 1, joinCount: 1 }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1769104359795-1-query-executor',
+  hasJoins: true,
+  hasAggregates: false
+}
+Executing cross-partition JOIN { mainTable: 'users', mainPartitionCount: 1, joinCount: 1 }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1769104359796-1-query-executor',
+  hasJoins: true,
+  hasAggregates: false
+}
+Executing cross-partition JOIN { mainTable: 'users', mainPartitionCount: 1, joinCount: 1 }
+    # Subtest: INNER JOIN produces correct results across partitions
+        ok 1 - INNER JOIN produces correct results across partitions
+        1..1
+    ok 1 - INNER JOIN produces correct results across partitions # time=11.654ms
+    
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359800-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359801-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359801-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359801-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359801-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359801-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359802-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359802-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359802-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359802-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+    # Subtest: JOIN with multiple partitions per table
+        ok 1 - JOIN with multiple partitions per table works correctly
+        1..1
+    ok 2 - JOIN with multiple partitions per table # time=3.172ms
+    
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359803-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359804-0-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359804-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359804-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359804-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359804-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359805-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359805-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359805-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359805-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+    # Subtest: results are aggregated into single result set
+        ok 1 - Results are aggregated into single result set
+        1..1
+    ok 3 - results are aggregated into single result set # time=2.754ms
+    
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359807-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359807-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359808-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359808-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359808-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359809-0-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359809-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359809-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359810-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359810-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+    # Subtest: SQL semantics preserved for ORDER BY after JOIN
+        ok 1 - SQL semantics preserved for ORDER BY after JOIN
+        1..1
+    ok 4 - SQL semantics preserved for ORDER BY after JOIN # time=3.899ms
+    
+    1..4
+ok 1 - Property 50: Cross-Partition JOIN Support # time=25.158ms
+
 1..1

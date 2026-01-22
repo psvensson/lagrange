@@ -1,19 +1,31 @@
 TAP version 14
-ok 1 - PartitionService - constructor requires partitionId # SKIP filter: /SystemTableCache/
-ok 2 - PartitionService - constructor requires tableId # SKIP filter: /SystemTableCache/
-ok 3 - PartitionService - constructor requires replicaId # SKIP filter: /SystemTableCache/
-ok 4 - PartitionService - initializes with in-memory database # SKIP filter: /SystemTableCache/
-ok 5 - PartitionService - creates table from schema # SKIP filter: /SystemTableCache/
-ok 6 - PartitionService - executeQuery for SELECT # SKIP filter: /SystemTableCache/
-ok 7 - PartitionService - updateData modifies records # SKIP filter: /SystemTableCache/
-ok 8 - PartitionService - deleteData removes records # SKIP filter: /SystemTableCache/
-ok 9 - PartitionService - generates CDC events on insert # SKIP filter: /SystemTableCache/
-ok 10 - PartitionService - generates CDC events on update # SKIP filter: /SystemTableCache/
-ok 11 - PartitionService - generates CDC events on delete # SKIP filter: /SystemTableCache/
-ok 12 - PartitionService - calculates partition size # SKIP filter: /SystemTableCache/
-ok 13 - PartitionService - key range management # SKIP filter: /SystemTableCache/
-ok 14 - PartitionService - full key range (null, null) # SKIP filter: /SystemTableCache/
-ok 15 - PartitionService - getStatus returns complete status # SKIP filter: /SystemTableCache/
-ok 16 - PartitionService - single replica becomes leader # SKIP filter: /SystemTableCache/
-ok 17 - PartitionService - unsubscribe from CDC # SKIP filter: /SystemTableCache/
-1..17
+ok 1 - PartitionService - constructor requires partitionId # SKIP filter: /generates CDC events on delete/
+ok 2 - PartitionService - constructor requires tableId # SKIP filter: /generates CDC events on delete/
+ok 3 - PartitionService - constructor requires replicaId # SKIP filter: /generates CDC events on delete/
+ok 4 - PartitionService - initializes with in-memory database # SKIP filter: /generates CDC events on delete/
+ok 5 - PartitionService - creates table from schema # SKIP filter: /generates CDC events on delete/
+ok 6 - PartitionService - executeQuery for SELECT # SKIP filter: /generates CDC events on delete/
+ok 7 - PartitionService - updateData modifies records # SKIP filter: /generates CDC events on delete/
+ok 8 - PartitionService - deleteData removes records # SKIP filter: /generates CDC events on delete/
+ok 9 - PartitionService - generates CDC events on insert # SKIP filter: /generates CDC events on delete/
+ok 10 - PartitionService - generates CDC events on update # SKIP filter: /generates CDC events on delete/
+# Subtest: PartitionService - generates CDC events on delete
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - DELETE CDC event should contain primary key
+    1..3
+ok 11 - PartitionService - generates CDC events on delete # time=6.273ms
+
+ok 12 - PartitionService - calculates partition size # SKIP filter: /generates CDC events on delete/
+ok 13 - PartitionService - key range management # SKIP filter: /generates CDC events on delete/
+ok 14 - PartitionService - full key range (null, null) # SKIP filter: /generates CDC events on delete/
+ok 15 - PartitionService - getStatus returns complete status # SKIP filter: /generates CDC events on delete/
+ok 16 - PartitionService - single replica becomes leader # SKIP filter: /generates CDC events on delete/
+ok 17 - PartitionService - unsubscribe from CDC # SKIP filter: /generates CDC events on delete/
+ok 18 - PartitionService - handleTransportMessage routes Raft packets to liferaft # SKIP filter: /generates CDC events on delete/
+ok 19 - PartitionService - handleTransportMessage handles application messages # SKIP filter: /generates CDC events on delete/
+ok 20 - PartitionService - handleTransportMessage rejects unknown message types # SKIP filter: /generates CDC events on delete/
+ok 21 - PartitionService - liferaft instance is created with correct configuration # SKIP filter: /generates CDC events on delete/
+ok 22 - PartitionService - buildPeerAddress returns correct format # SKIP filter: /generates CDC events on delete/
+ok 23 - PartitionService - emits leaderElected event for single replica # SKIP filter: /generates CDC events on delete/
+1..23

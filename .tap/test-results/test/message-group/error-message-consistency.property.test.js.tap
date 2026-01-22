@@ -1,0 +1,134 @@
+TAP version 14
+{"level":50,"time":"2026-01-22T18:03:30.667Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"c2f2f83e-feba-4cf4-9e42-e998ea002823","targetService":"+&y=5!0F-S D>$7","groupId":"a40e4eca-4217-1900-a153-7c8400000018","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+# Subtest: Property 3: Error Message Consistency - delivery error message
+    ok 1 - Delivery error should have exact message from requirement 4.1
+    ok 2 - Error message should contain "WebSocket transport"
+{"level":50,"time":"2026-01-22T18:03:30.667Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"c2f2f83e-feba-4cf4-9e42-e998ea002823","targetService":"+&y=5!0F-S D>$7","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.670Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"11375d09-839a-44a9-9786-31a6c660a366","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.672Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"3bf5a8b1-74e9-49ed-91de-b16ab425d291","targetService":"1#$$;zyW7$z%Z~:'\"Z!","groupId":"00000013-0006-1000-9d53-195d00000000","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 3 - Delivery error should have exact message from requirement 4.1
+    ok 4 - Error message should contain "WebSocket transport"
+{"level":50,"time":"2026-01-22T18:03:30.672Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"3bf5a8b1-74e9-49ed-91de-b16ab425d291","targetService":"1#$$;zyW7$z%Z~:'\"Z!","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.673Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"4111f27f-b966-47f4-a4d5-8cbc79d8ec16","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.674Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"26e10aca-b381-4fde-9837-eb346a786004","targetService":"g.?K/9^('","groupId":"0000001f-0015-1000-8000-00060000001c","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 5 - Delivery error should have exact message from requirement 4.1
+    ok 6 - Error message should contain "WebSocket transport"
+{"level":50,"time":"2026-01-22T18:03:30.674Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"26e10aca-b381-4fde-9837-eb346a786004","targetService":"g.?K/9^('","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.674Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"562d82b1-186d-4fd1-ad9b-498e3be8b651","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.679Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"2264d7dd-9bd0-44ca-88bf-90b7472de6e1","targetService":"KWm[`1$sn@[5;","groupId":"9cb9ebfb-9f62-4157-870a-998efffffff6","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 7 - Delivery error should have exact message from requirement 4.1
+    ok 8 - Error message should contain "WebSocket transport"
+{"level":50,"time":"2026-01-22T18:03:30.679Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"2264d7dd-9bd0-44ca-88bf-90b7472de6e1","targetService":"KWm[`1$sn@[5;","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.680Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"b2bd715c-1d08-4cf7-bb8d-1a615e6607e9","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.681Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"e1296c66-4237-4117-a90d-342e14bbfb9b","targetService":"\\H F$$[p;,!\"a~","groupId":"00000003-691a-1025-8000-000d00000001","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 9 - Delivery error should have exact message from requirement 4.1
+    ok 10 - Error message should contain "WebSocket transport"
+{"level":50,"time":"2026-01-22T18:03:30.681Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"e1296c66-4237-4117-a90d-342e14bbfb9b","targetService":"\\H F$$[p;,!\"a~","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.681Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"a40e677b-7894-46cc-af55-ac321277b7eb","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.683Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"91d1eb41-21f0-44df-98ac-e8617276ddbb","targetService":"!&J7\\bX|aEjxi1","groupId":"957e2b4f-0000-1000-9c34-fee00000000a","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 11 - Delivery error should have exact message from requirement 4.1
+    ok 12 - Error message should contain "WebSocket transport"
+{"level":50,"time":"2026-01-22T18:03:30.683Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"91d1eb41-21f0-44df-98ac-e8617276ddbb","targetService":"!&J7\\bX|aEjxi1","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.683Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"f62c9edf-53cd-401a-bedf-59086110df14","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.684Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"438cc39f-3930-47cd-9208-70a345133628","targetService":"&uJ@{^PyD","groupId":"671f5f12-001e-1000-bfff-ffede0311520","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 13 - Delivery error should have exact message from requirement 4.1
+    ok 14 - Error message should contain "WebSocket transport"
+{"level":50,"time":"2026-01-22T18:03:30.684Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"438cc39f-3930-47cd-9208-70a345133628","targetService":"&uJ@{^PyD","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.684Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"0dedf91f-652a-4e70-afdf-ef98d40345b4","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.685Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"45cfd593-0046-426e-8d88-52cd81b4bab1","targetService":"O-24[|>g`%Hy/Xj.<(1","groupId":"00000003-f20e-4455-a405-1479d6bb230e","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 15 - Delivery error should have exact message from requirement 4.1
+    ok 16 - Error message should contain "WebSocket transport"
+{"level":50,"time":"2026-01-22T18:03:30.685Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"45cfd593-0046-426e-8d88-52cd81b4bab1","targetService":"O-24[|>g`%Hy/Xj.<(1","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.686Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"e1f95cfc-3e08-47bb-b58e-cd102c03f9ea","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.687Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"4d5af4b5-3756-421b-800e-937fa4e4a552","targetService":"{{y rY{/z{Nx|Ud","groupId":"00000016-0004-1000-975b-b561b4f0250f","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 17 - Delivery error should have exact message from requirement 4.1
+    ok 18 - Error message should contain "WebSocket transport"
+{"level":50,"time":"2026-01-22T18:03:30.687Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"4d5af4b5-3756-421b-800e-937fa4e4a552","targetService":"{{y rY{/z{Nx|Ud","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.688Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"31363b20-dbe8-4f2e-90f5-13dece78846f","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.689Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"b3aa1f13-da8f-49f8-8704-d30d7796b592","targetService":"va{cz^B%","groupId":"d7aa7a9e-eb68-1c44-a097-5ceb616b582a","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 19 - Delivery error should have exact message from requirement 4.1
+    ok 20 - Error message should contain "WebSocket transport"
+    1..20
+ok 1 - Property 3: Error Message Consistency - delivery error message # time=42.266ms
+
+# Subtest: Property 3: Error Message Consistency - constructor transport validation
+    ok 1 - Constructor error should mention transport
+    ok 2 - Constructor error should mention WebSocket
+    ok 3 - Constructor error should mention transport
+    ok 4 - Constructor error should mention WebSocket
+    ok 5 - Constructor error should mention transport
+    ok 6 - Constructor error should mention WebSocket
+    ok 7 - Constructor error should mention transport
+    ok 8 - Constructor error should mention WebSocket
+    ok 9 - Constructor error should mention transport
+    ok 10 - Constructor error should mention WebSocket
+    ok 11 - Constructor error should mention transport
+    ok 12 - Constructor error should mention WebSocket
+    ok 13 - Constructor error should mention transport
+    ok 14 - Constructor error should mention WebSocket
+    ok 15 - Constructor error should mention transport
+    ok 16 - Constructor error should mention WebSocket
+    ok 17 - Constructor error should mention transport
+    ok 18 - Constructor error should mention WebSocket
+    ok 19 - Constructor error should mention transport
+    ok 20 - Constructor error should mention WebSocket
+    1..20
+ok 2 - Property 3: Error Message Consistency - constructor transport validation # time=2.016ms
+
+{"level":50,"time":"2026-01-22T18:03:30.689Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"b3aa1f13-da8f-49f8-8704-d30d7796b592","targetService":"va{cz^B%","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.689Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"186218a1-ccfb-4c95-a521-fc41cc148d11","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.728Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"14984389-4276-4207-a59d-5c5f7616d4db","targetService":"target-service","groupId":"00000002-dd1c-57e7-bfff-ffff0000000c","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+# Subtest: Property 3: Error Message Consistency - all errors contain WebSocket transport
+    ok 1 - delivery error should contain "WebSocket transport", got: WebSocket transport required but not available
+    ok 2 - delivery error should indicate requirement, got: WebSocket transport required but not available
+{"level":50,"time":"2026-01-22T18:03:30.728Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"14984389-4276-4207-a59d-5c5f7616d4db","targetService":"target-service","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.729Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"adc5186b-b9c4-4a5f-883e-b09114fac0f6","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.730Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"e795c5f0-41ed-458f-9462-ab9a9c66fca0","targetService":"target-service","groupId":"3c3d9680-0001-1000-bfff-fffa10e24097","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 3 - delivery error should contain "WebSocket transport", got: WebSocket transport required but not available
+    ok 4 - delivery error should indicate requirement, got: WebSocket transport required but not available
+{"level":50,"time":"2026-01-22T18:03:30.730Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"e795c5f0-41ed-458f-9462-ab9a9c66fca0","targetService":"target-service","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.730Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"d82c5719-e4b5-4591-b19e-ccd55a492527","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.731Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"338727b4-738f-4662-a17d-a05181a66ee6","targetService":"target-service","groupId":"0000000d-0000-1000-9683-7e7fc8643f9e","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 5 - delivery error should contain "WebSocket transport", got: WebSocket transport required but not available
+    ok 6 - delivery error should indicate requirement, got: WebSocket transport required but not available
+{"level":50,"time":"2026-01-22T18:03:30.731Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"338727b4-738f-4662-a17d-a05181a66ee6","targetService":"target-service","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.731Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"7233c0f0-b54c-4d3f-b311-4003b18b8965","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.732Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"4c072644-5e09-4bc4-b6fd-872ff6e001f4","targetService":"target-service","groupId":"0ccd3776-0004-1000-a75f-da1f776ecc10","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 7 - delivery error should contain "WebSocket transport", got: WebSocket transport required but not available
+    ok 8 - delivery error should indicate requirement, got: WebSocket transport required but not available
+{"level":50,"time":"2026-01-22T18:03:30.732Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"4c072644-5e09-4bc4-b6fd-872ff6e001f4","targetService":"target-service","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.733Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"edce15b8-413c-4777-a489-e69effaffb81","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.733Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"edc126d6-b364-41b4-b130-52c3ffafab67","targetService":"target-service","groupId":"a5d8f655-d07b-5e0d-bfff-fff10f4edeac","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 9 - delivery error should contain "WebSocket transport", got: WebSocket transport required but not available
+    ok 10 - delivery error should indicate requirement, got: WebSocket transport required but not available
+{"level":50,"time":"2026-01-22T18:03:30.733Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"edc126d6-b364-41b4-b130-52c3ffafab67","targetService":"target-service","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.734Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"9e7cac7a-3241-4893-9b97-b9f7667b5c5a","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.735Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"d6c082c4-b4a9-4652-83ca-976c69fc9d8c","targetService":"target-service","groupId":"fffffffb-7a48-35f0-bb2c-8692023a74eb","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 11 - delivery error should contain "WebSocket transport", got: WebSocket transport required but not available
+    ok 12 - delivery error should indicate requirement, got: WebSocket transport required but not available
+{"level":50,"time":"2026-01-22T18:03:30.735Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"d6c082c4-b4a9-4652-83ca-976c69fc9d8c","targetService":"target-service","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.735Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"1fa73c3c-d4cf-414f-bd3c-78992b4200c3","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.736Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"7569dd73-742b-470a-b7ad-20d71e25d6ce","targetService":"target-service","groupId":"56544156-0009-1000-8931-bbef0000001b","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 13 - delivery error should contain "WebSocket transport", got: WebSocket transport required but not available
+    ok 14 - delivery error should indicate requirement, got: WebSocket transport required but not available
+{"level":50,"time":"2026-01-22T18:03:30.736Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"7569dd73-742b-470a-b7ad-20d71e25d6ce","targetService":"target-service","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.736Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"45a9ce14-a8c9-4066-b50b-078c5be19f94","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.737Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"c324438d-b8b9-4525-97f6-6492a45d402e","targetService":"target-service","groupId":"cea012b0-000e-1000-b74c-0fdcaa8c49cd","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 15 - delivery error should contain "WebSocket transport", got: WebSocket transport required but not available
+    ok 16 - delivery error should indicate requirement, got: WebSocket transport required but not available
+{"level":50,"time":"2026-01-22T18:03:30.737Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"c324438d-b8b9-4525-97f6-6492a45d402e","targetService":"target-service","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.737Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"b45dea90-5263-402f-a0b5-ca1b805f9dcd","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.738Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"8df3eec3-fc68-433c-a59d-e4fb0149b92e","targetService":"target-service","groupId":"2a436ed8-fd6c-30a0-8000-001816ba7cf7","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 17 - delivery error should contain "WebSocket transport", got: WebSocket transport required but not available
+    ok 18 - delivery error should indicate requirement, got: WebSocket transport required but not available
+{"level":50,"time":"2026-01-22T18:03:30.738Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"8df3eec3-fc68-433c-a59d-e4fb0149b92e","targetService":"target-service","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.739Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"c976f6e8-bc2b-43d2-b026-62531b303a32","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T18:03:30.739Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"ab7049d6-0981-4b16-b508-3b17e2851cd8","targetService":"target-service","groupId":"b1568a3f-8ff4-1614-b880-34c82b465b69","nodeId":"test-node","msg":"WebSocket transport not available for message delivery"}
+    ok 19 - delivery error should contain "WebSocket transport", got: WebSocket transport required but not available
+    ok 20 - delivery error should indicate requirement, got: WebSocket transport required but not available
+    1..20
+ok 3 - Property 3: Error Message Consistency - all errors contain WebSocket transport # time=13.471ms
+
+{"level":50,"time":"2026-01-22T18:03:30.740Z","nodeId":"test-node","pid":320034,"subsystem":"message-group","messageId":"ab7049d6-0981-4b16-b508-3b17e2851cd8","targetService":"target-service","error":"WebSocket transport required but not available","nodeId":"test-node","msg":"Failed to send message"}
+{"level":50,"time":"2026-01-22T18:03:30.740Z","nodeId":"test-node","pid":320034,"subsystem":"message-router","nodeId":"test-node","connectionId":"3bc0bd3a-e62f-4c71-a282-f5bc3164dfbd","msg":"Self-connection lost - fatal error"}
+1..3

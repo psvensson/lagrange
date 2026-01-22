@@ -155,7 +155,7 @@ test('Failure scenario integration tests', async (t) => {
         {
           service_id: 'svc-1',
           node_id: 'node-2',
-          service_type: 'partition_replica',
+          service_type: 'partition',
           partition_id: 'partition-1',
           status: 'active',
         },
@@ -191,7 +191,7 @@ test('Failure scenario integration tests', async (t) => {
 
     // Verify replicas were found and marked
     const partitionReplicas = mockCache.filter('services', (s) =>
-      s.node_id === 'node-2' && s.service_type === 'partition_replica');
+      s.node_id === 'node-2' && s.service_type === 'partition');
     t.equal(partitionReplicas.length, 1, 'should have partition replica in cache');
 
     // Check CDC updates for replica status changes (services table updates)
@@ -217,7 +217,7 @@ test('Failure scenario integration tests', async (t) => {
       id: 'replica-1',
       service_id: 'replica-1',
       node_id: 'node-1',
-      service_type: 'partition_replica',
+      service_type: 'partition',
       partition_id: 'partition-1',
       status: 'active',
     });
@@ -225,7 +225,7 @@ test('Failure scenario integration tests', async (t) => {
       id: 'replica-2',
       service_id: 'replica-2',
       node_id: 'node-2',
-      service_type: 'partition_replica',
+      service_type: 'partition',
       partition_id: 'partition-1',
       status: 'active',
     });
@@ -233,7 +233,7 @@ test('Failure scenario integration tests', async (t) => {
       id: 'replica-3',
       service_id: 'replica-3',
       node_id: 'node-3',
-      service_type: 'partition_replica',
+      service_type: 'partition',
       partition_id: 'partition-1',
       status: 'failed', // This replica failed
     });
@@ -518,14 +518,14 @@ test('Failure scenario integration tests', async (t) => {
         {
           service_id: 'svc-1',
           node_id: 'node-2',
-          service_type: 'partition_replica',
+          service_type: 'partition',
           partition_id: 'partition-1',
           status: 'active',
         },
         {
           service_id: 'svc-2',
           node_id: 'node-3',
-          service_type: 'partition_replica',
+          service_type: 'partition',
           partition_id: 'partition-1',
           status: 'active',
         },
@@ -695,35 +695,35 @@ test('Failure scenario integration tests', async (t) => {
         {
           service_id: 'svc-1',
           node_id: 'test-node',
-          service_type: 'partition_replica',
+          service_type: 'partition',
           partition_id: 'partition-1',
           status: 'active',
         },
         {
           service_id: 'svc-2',
           node_id: 'node-2',
-          service_type: 'partition_replica',
+          service_type: 'partition',
           partition_id: 'partition-1',
           status: 'active',
         },
         {
           service_id: 'svc-3',
           node_id: 'node-3',
-          service_type: 'partition_replica',
+          service_type: 'partition',
           partition_id: 'partition-1',
           status: 'active',
         },
         {
           service_id: 'svc-4',
           node_id: 'node-4',
-          service_type: 'partition_replica',
+          service_type: 'partition',
           partition_id: 'partition-1',
           status: 'active',
         },
         {
           service_id: 'svc-5',
           node_id: 'node-5',
-          service_type: 'partition_replica',
+          service_type: 'partition',
           partition_id: 'partition-1',
           status: 'active',
         },

@@ -1,0 +1,126 @@
+TAP version 14
+# Subtest: Property 3: RPC Correlation Correctness
+    # Subtest: responses are matched to correct callers
+        ok 1 - Request 0 should get correct response
+        ok 2 - Request 0 should get correct response
+        ok 3 - Request 1 should get correct response
+        ok 4 - Request 2 should get correct response
+        ok 5 - Request 3 should get correct response
+        ok 6 - Request 0 should get correct response
+        ok 7 - Request 1 should get correct response
+        ok 8 - Request 0 should get correct response
+        ok 9 - Request 1 should get correct response
+        ok 10 - Request 2 should get correct response
+        ok 11 - Request 0 should get correct response
+        ok 12 - Request 0 should get correct response
+        ok 13 - Request 1 should get correct response
+        ok 14 - Request 2 should get correct response
+        ok 15 - Request 3 should get correct response
+        ok 16 - Request 0 should get correct response
+        ok 17 - Request 1 should get correct response
+        ok 18 - Request 0 should get correct response
+        ok 19 - Request 1 should get correct response
+        ok 20 - Request 2 should get correct response
+        ok 21 - Request 3 should get correct response
+        ok 22 - Request 4 should get correct response
+        ok 23 - Request 0 should get correct response
+        ok 24 - Request 1 should get correct response
+        ok 25 - Request 2 should get correct response
+        ok 26 - Request 0 should get correct response
+        ok 27 - Request 1 should get correct response
+        ok 28 - Request 2 should get correct response
+        ok 29 - Request 3 should get correct response
+        1..29
+    ok 1 - responses are matched to correct callers # time=213.396ms
+    
+    # Subtest: handleResponse returns false for unknown correlation ID
+        ok 1 - Unknown correlation IDs are not matched
+        1..1
+    ok 2 - handleResponse returns false for unknown correlation ID # time=3.149ms
+    
+    # Subtest: each request gets unique correlation ID
+        ok 1 - Should have 2 unique correlation IDs
+        ok 2 - Should have 5 unique correlation IDs
+        ok 3 - Should have 9 unique correlation IDs
+        ok 4 - Should have 7 unique correlation IDs
+        ok 5 - Should have 9 unique correlation IDs
+        ok 6 - Should have 8 unique correlation IDs
+        ok 7 - Should have 7 unique correlation IDs
+        ok 8 - Should have 5 unique correlation IDs
+        ok 9 - Should have 10 unique correlation IDs
+        ok 10 - Should have 3 unique correlation IDs
+        1..10
+    ok 3 - each request gets unique correlation ID # time=205.472ms
+    
+    # Subtest: response only resolves matching request
+        ok 1 - Second request should still be pending
+        ok 2 - First response correct
+        ok 3 - Second response correct
+        ok 4 - Second request should still be pending
+        ok 5 - First response correct
+        ok 6 - Second response correct
+        ok 7 - Second request should still be pending
+        ok 8 - First response correct
+        ok 9 - Second response correct
+        ok 10 - Second request should still be pending
+        ok 11 - First response correct
+        ok 12 - Second response correct
+        ok 13 - Second request should still be pending
+        ok 14 - First response correct
+        ok 15 - Second response correct
+        ok 16 - Second request should still be pending
+        ok 17 - First response correct
+        ok 18 - Second response correct
+        ok 19 - Second request should still be pending
+        ok 20 - First response correct
+        ok 21 - Second response correct
+        ok 22 - Second request should still be pending
+        ok 23 - First response correct
+        ok 24 - Second response correct
+        ok 25 - Second request should still be pending
+        ok 26 - First response correct
+        ok 27 - Second response correct
+        ok 28 - Second request should still be pending
+        ok 29 - First response correct
+        ok 30 - Second response correct
+        1..30
+    ok 4 - response only resolves matching request # time=207.928ms
+    
+    # Subtest: duplicate responses are ignored
+        ok 1 - First response should match
+        ok 2 - Second response should not match
+        ok 3 - Result should be first response
+        ok 4 - First response should match
+        ok 5 - Second response should not match
+        ok 6 - Result should be first response
+        ok 7 - First response should match
+        ok 8 - Second response should not match
+        ok 9 - Result should be first response
+        ok 10 - First response should match
+        ok 11 - Second response should not match
+        ok 12 - Result should be first response
+        ok 13 - First response should match
+        ok 14 - Second response should not match
+        ok 15 - Result should be first response
+        ok 16 - First response should match
+        ok 17 - Second response should not match
+        ok 18 - Result should be first response
+        ok 19 - First response should match
+        ok 20 - Second response should not match
+        ok 21 - Result should be first response
+        ok 22 - First response should match
+        ok 23 - Second response should not match
+        ok 24 - Result should be first response
+        ok 25 - First response should match
+        ok 26 - Second response should not match
+        ok 27 - Result should be first response
+        ok 28 - First response should match
+        ok 29 - Second response should not match
+        ok 30 - Result should be first response
+        1..30
+    ok 5 - duplicate responses are ignored # time=205.988ms
+    
+    1..5
+ok 1 - Property 3: RPC Correlation Correctness # time=840.463ms
+
+1..1

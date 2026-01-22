@@ -1,0 +1,45 @@
+TAP version 14
+# Subtest: Property 6: Stabilization Timer Reset
+    # Subtest: recordStateChange resets lastStateChangeTime
+        ok 1 - recordStateChange updates lastStateChangeTime
+        1..1
+    ok 1 - recordStateChange resets lastStateChangeTime # time=301.287ms
+    
+    # Subtest: multiple state changes extend stabilization period
+        ok 1 - Multiple state changes extend stabilization period
+        1..1
+    ok 2 - multiple state changes extend stabilization period # time=139.912ms
+    
+    # Subtest: stabilization timer is cleared on shutdown
+        ok 1 - Stabilization timer should exist after state change
+        ok 2 - Stabilization timer should be null after shutdown
+        ok 3 - lastStateChangeTime should be null after shutdown
+        1..3
+    ok 3 - stabilization timer is cleared on shutdown # time=12.412ms
+    
+    # Subtest: new state change cancels previous stabilization timer
+        ok 1 - New state change creates new stabilization timer
+        1..1
+    ok 4 - new state change cancels previous stabilization timer # time=119.891ms
+    
+    # Subtest: time until stabilized resets on each state change
+        ok 1 - Time until stabilized should be close to full period after first change
+        ok 2 - Time until stabilized should reset after second change
+        1..2
+    ok 5 - time until stabilized resets on each state change # time=22.178ms
+    
+    # Subtest: stabilization timer only created when leader
+        ok 1 - Stabilization timer should not be created when not leader
+        ok 2 - lastStateChangeTime should still be set
+        1..2
+    ok 6 - stabilization timer only created when leader # time=17.498ms
+    
+    # Subtest: stabilization timer created when leader
+        ok 1 - Stabilization timer should be created when leader
+        1..1
+    ok 7 - stabilization timer created when leader # time=17.317ms
+    
+    1..7
+ok 1 - Property 6: Stabilization Timer Reset # time=637.154ms
+
+1..1

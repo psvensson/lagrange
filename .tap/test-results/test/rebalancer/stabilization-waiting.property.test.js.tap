@@ -1,0 +1,42 @@
+TAP version 14
+# Subtest: Property 4: Stabilization Waiting Before Moves
+    # Subtest: isStabilized returns false on fresh rebalancer (bootstrap protection)
+        ok 1 - Should not be stabilized on fresh rebalancer (bootstrap protection)
+        1..1
+    ok 1 - isStabilized returns false on fresh rebalancer (bootstrap protection) # time=53.663ms
+    
+    # Subtest: isStabilized returns false immediately after state change
+        ok 1 - isStabilized returns false immediately after state change
+        1..1
+    ok 2 - isStabilized returns false immediately after state change # time=243.198ms
+    
+    # Subtest: getTimeUntilStabilized returns positive value after state change
+        ok 1 - getTimeUntilStabilized returns positive value after state change
+        1..1
+    ok 3 - getTimeUntilStabilized returns positive value after state change # time=168.054ms
+    
+    # Subtest: getTimeUntilStabilized returns positive value on fresh rebalancer
+        ok 1 - Should return positive value on fresh rebalancer (bootstrap protection)
+        ok 2 - Time remaining should not exceed stabilization period
+        1..2
+    ok 4 - getTimeUntilStabilized returns positive value on fresh rebalancer # time=15.368ms
+    
+    # Subtest: checkRebalance skips moves during stabilization period
+        ok 1 - checkRebalance skips moves during stabilization period
+        1..1
+    ok 5 - checkRebalance skips moves during stabilization period # time=163.985ms
+    
+    # Subtest: stabilization period prevents immediate moves on node join
+        ok 1 - Should not be stabilized immediately after node join
+        1..1
+    ok 6 - stabilization period prevents immediate moves on node join # time=19.096ms
+    
+    # Subtest: stabilization period prevents immediate moves on suboptimal state
+        ok 1 - Should not be stabilized immediately after suboptimal state detected
+        1..1
+    ok 7 - stabilization period prevents immediate moves on suboptimal state # time=17.675ms
+    
+    1..7
+ok 1 - Property 4: Stabilization Waiting Before Moves # time=687.617ms
+
+1..1

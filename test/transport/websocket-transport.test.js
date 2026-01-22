@@ -244,4 +244,60 @@ test('WebSocketTransport', async (t) => {
     await clientTransport.shutdown();
     await serverTransport.shutdown();
   });
+
+  t.test('async handler returns resolved value in ACK', async (t) => {
+    // This test ensures async handlers are properly awaited before sending ACK
+    // Previously, async handlers would return Promise objects instead of resolved values
+    const serverTransport = new WebSocketTransport({
+      localNodeId: 'server-async',
+      localAddress: 'ws://localhost:9878',
+    });
+
+    // Register an ASYNC handler that returns a promise
+    serverTransport.register('async-service', async (msg) => {
+      // Simulate async work (like handleCreateReplica does)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return {
+        acknowledged: true,
+        request_id: msg.payload.request_id,
+        status: 'initiated',
+        replica_id: 'test-replica',
+      };
+    });
+
+    await serverTransport.startServer(9878);
+    await serverTransport.initialize();
+
+    const clientTransport = new WebSocketTransport({
+      localNodeId: 'client-async',
+      localAddress: 'ws://localhost:9879',
+    });
+
+    await clientTransport.initialize({
+      peerNodes: [{
+        nodeId: 'server-async',
+        address: 'ws://localhost:9878',
+      }],
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const result = await clientTransport.deliver('async-service', {
+      type: 'CREATE_REPLICA',
+      request_id: 'test-request-123',
+    }, {targetNodeId: 'server-async'});
+
+    // ACK structure is flat - handler result fields are spread directly into result
+    t.ok(result.acknowledged, 'should be acknowledged');
+    t.equal(result.request_id, 'test-request-123', 'should have request_id');
+    t.equal(result.status, 'initiated', 'should have status');
+    t.equal(result.replica_id, 'test-replica', 'should have replica_id');
+
+    // Verify result is not a Promise object
+    t.notOk(result instanceof Promise, 'result should not be a Promise');
+    t.notOk(result.then, 'result should not have .then method');
+
+    await clientTransport.shutdown();
+    await serverTransport.shutdown();
+  });
 });

@@ -22,6 +22,7 @@ const VALID_VIEWS = [
   'config',
   'contexts',
   'replicas',
+  'operations',
 ];
 
 /**
@@ -117,6 +118,10 @@ export class NavigationController {
       return context.partitionId ?
         `Replicas (${context.partitionId})` :
         'Replicas';
+    case 'operations':
+      return context.operationId ?
+        `Operation: ${context.operationId.substring(0, 8)}...` :
+        'Operations';
     case 'sql':
       return 'SQL Query';
     case 'logs':
@@ -147,6 +152,7 @@ export class NavigationController {
       'config': 'Config',
       'contexts': 'Contexts',
       'replicas': 'Replicas',
+      'operations': 'Operations',
     };
     return names[view] || view;
   }
@@ -280,6 +286,8 @@ export class NavigationController {
       return this.cache.getConfig();
     case 'contexts':
       return this.cache.getContexts(this.currentContext || {});
+    case 'operations':
+      return this.cache.getOperations(this.currentContext || {});
     default:
       return [];
     }

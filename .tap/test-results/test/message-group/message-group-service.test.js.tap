@@ -1,21 +1,161 @@
 TAP version 14
-ok 1 - MessageGroupService - constructor requires groupId # SKIP filter: /SystemTableCache/
-ok 2 - MessageGroupService - constructor requires replicaId # SKIP filter: /SystemTableCache/
-ok 3 - MessageGroupService - constructor initializes correctly # SKIP filter: /SystemTableCache/
-ok 4 - MessageGroupService - initialize starts as follower # SKIP filter: /SystemTableCache/
-ok 5 - MessageGroupService - sendMessage creates message envelope # SKIP filter: /SystemTableCache/
-ok 6 - MessageGroupService - receiveMessage processes message # SKIP filter: /SystemTableCache/
-ok 7 - MessageGroupService - receiveMessage detects duplicates # SKIP filter: /SystemTableCache/
-ok 8 - MessageGroupService - acknowledgeMessage marks message # SKIP filter: /SystemTableCache/
-ok 9 - MessageGroupService - subscribeToCDC adds subscription # SKIP filter: /SystemTableCache/
-ok 10 - MessageGroupService - applyCDCEvent updates cache # SKIP filter: /SystemTableCache/
-ok 11 - MessageGroupService - querySystemCache returns data # SKIP filter: /SystemTableCache/
-ok 12 - MessageGroupService - getReadOnlyCache returns wrapper # SKIP filter: /SystemTableCache/
-ok 13 - MessageGroupService - single replica becomes leader # SKIP filter: /SystemTableCache/
-ok 14 - MessageGroupService - getStatus returns complete status # SKIP filter: /SystemTableCache/
-ok 15 - MessageGroupService - shutdown cleans up # SKIP filter: /SystemTableCache/
-ok 16 - InMemoryRaftStorage - appendEntry adds entries # SKIP filter: /SystemTableCache/
-ok 17 - InMemoryRaftStorage - getEntriesFrom returns entries # SKIP filter: /SystemTableCache/
-ok 18 - InMemoryRaftStorage - getLastEntry returns last # SKIP filter: /SystemTableCache/
-ok 19 - InMemoryRaftStorage - truncateFrom removes entries # SKIP filter: /SystemTableCache/
-1..19
+# Subtest: MessageGroupService - constructor requires groupId
+    ok 1 - Should throw without groupId
+{"level":50,"time":"2026-01-22T18:03:30.554Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"b17404bf-e997-4927-94be-b9e45445ac7e","msg":"Self-connection lost - fatal error"}
+    1..1
+ok 1 - MessageGroupService - constructor requires groupId # time=25.04ms
+
+# Subtest: MessageGroupService - constructor requires replicaId
+    ok 1 - Should throw without replicaId
+{"level":50,"time":"2026-01-22T18:03:30.585Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"9de337a9-28c3-4890-a0eb-c391ed7b3835","msg":"Self-connection lost - fatal error"}
+    1..1
+ok 2 - MessageGroupService - constructor requires replicaId # time=2.19ms
+
+# Subtest: MessageGroupService - constructor requires transport
+    ok 1 - Should throw without transport
+    1..1
+ok 3 - MessageGroupService - constructor requires transport # time=0.595ms
+
+# Subtest: MessageGroupService - constructor requires WebSocket-based transport
+    ok 1 - Should throw with non-WebSocket transport
+    1..1
+ok 4 - MessageGroupService - constructor requires WebSocket-based transport # time=0.519ms
+
+# Subtest: MessageGroupService - constructor initializes correctly
+    ok 1 - Should set groupId
+    ok 2 - Should set replicaId
+    ok 3 - Should set nodeId
+    ok 4 - Should set replicaIds
+    ok 5 - Should not be initialized
+{"level":50,"time":"2026-01-22T18:03:30.651Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"784f7a61-3163-498b-82ec-43e3503c96c8","msg":"Self-connection lost - fatal error"}
+    1..5
+ok 5 - MessageGroupService - constructor initializes correctly # time=3.112ms
+
+# Subtest: MessageGroupService - initialize becomes leader for single replica
+    ok 1 - Should be initialized
+    ok 2 - Should become leader for single replica
+{"level":50,"time":"2026-01-22T18:03:30.675Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"ee9eac1e-f12e-4898-b10e-f09ee59d7078","msg":"Self-connection lost - fatal error"}
+    1..2
+ok 6 - MessageGroupService - initialize becomes leader for single replica # time=5.144ms
+
+# Subtest: MessageGroupService - sendMessage creates message envelope
+    ok 1 - Should return messageId
+    ok 2 - Should return status
+{"level":50,"time":"2026-01-22T18:03:31.012Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"9bbb8f39-af2b-4593-a793-1010c2570cf3","msg":"Self-connection lost - fatal error"}
+    1..2
+ok 7 - MessageGroupService - sendMessage creates message envelope # time=317.215ms
+
+# Subtest: MessageGroupService - receiveMessage processes message
+    ok 1 - Should return messageId
+    ok 2 - Should return received status
+    ok 3 - Should emit messageReceived event
+    ok 4 - Event should have messageId
+{"level":50,"time":"2026-01-22T18:03:31.028Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"66c07771-4e71-4409-8cc0-8c0fdb62475d","msg":"Self-connection lost - fatal error"}
+    1..4
+ok 8 - MessageGroupService - receiveMessage processes message # time=2.952ms
+
+# Subtest: MessageGroupService - receiveMessage detects duplicates
+    ok 1 - Should detect duplicate
+    ok 2 - Should indicate already acknowledged
+{"level":50,"time":"2026-01-22T18:03:31.039Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"9282c1ba-9971-4aef-b619-cc2aa4cba90e","msg":"Self-connection lost - fatal error"}
+    1..2
+ok 9 - MessageGroupService - receiveMessage detects duplicates # time=1.637ms
+
+# Subtest: MessageGroupService - acknowledgeMessage marks message
+    ok 1 - Should return messageId
+    ok 2 - Should be acknowledged
+    ok 3 - Should have log index
+    ok 4 - Should emit messageAcknowledged event
+{"level":50,"time":"2026-01-22T18:03:31.050Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"340b9f56-fc20-4112-b197-e36023a92a5b","msg":"Self-connection lost - fatal error"}
+    1..4
+ok 10 - MessageGroupService - acknowledgeMessage marks message # time=2.224ms
+
+# Subtest: MessageGroupService - subscribeToCDC adds subscription
+    ok 1 - Should subscribe to nodes
+    ok 2 - Should subscribe to partitions
+{"level":50,"time":"2026-01-22T18:03:31.061Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"1a2a1634-9e4f-4977-ab0f-35563cd76091","msg":"Self-connection lost - fatal error"}
+    1..2
+ok 11 - MessageGroupService - subscribeToCDC adds subscription # time=1.639ms
+
+# Subtest: MessageGroupService - applyCDCEvent updates cache
+    ok 1 - Should emit cdcApplied event
+    ok 2 - Event should have tableName
+    ok 3 - Event should have operation
+    ok 4 - Should find record in cache
+    ok 5 - Should have correct address
+{"level":50,"time":"2026-01-22T18:03:31.073Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"099244fc-a30f-4571-84a2-bb49c0f5176e","msg":"Self-connection lost - fatal error"}
+    1..5
+ok 12 - MessageGroupService - applyCDCEvent updates cache # time=2.547ms
+
+# Subtest: MessageGroupService - querySystemCache returns data
+    ok 1 - Should find by key
+    ok 2 - Should return correct record
+    ok 3 - Should filter correctly
+    ok 4 - Should return all records
+{"level":50,"time":"2026-01-22T18:03:31.083Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"4bfc7758-56a0-4153-a32d-cde913d2e5dc","msg":"Self-connection lost - fatal error"}
+    1..4
+ok 13 - MessageGroupService - querySystemCache returns data # time=1.771ms
+
+# Subtest: MessageGroupService - getReadOnlyCache returns wrapper
+    ok 1 - Should return cache
+{"level":50,"time":"2026-01-22T18:03:31.094Z","nodeId":"test-node","pid":320058,"subsystem":"cache","operation":"applySystemTableChange","attemptedMethod":"applySystemTableChange","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
+    ok 2 - Should block write operations
+    1..2
+ok 14 - MessageGroupService - getReadOnlyCache returns wrapper # time=1.959ms
+
+{"level":50,"time":"2026-01-22T18:03:31.094Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"db3fbfea-62dc-4661-8a80-ecf7a326dc39","msg":"Self-connection lost - fatal error"}
+# Subtest: MessageGroupService - single replica becomes leader
+    ok 1 - Should become leader
+    ok 2 - Should be own leader
+    ok 3 - Should emit leaderElected event
+{"level":50,"time":"2026-01-22T18:03:31.105Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"ea791699-41cb-484b-8846-1240ff1bff06","msg":"Self-connection lost - fatal error"}
+    1..3
+ok 15 - MessageGroupService - single replica becomes leader # time=1.685ms
+
+# Subtest: MessageGroupService - getStatus returns complete status
+    ok 1 - Should have groupId
+    ok 2 - Should have replicaId
+    ok 3 - Should have nodeId
+    ok 4 - Should have role
+    ok 5 - Should have term
+    ok 6 - Should have logLength
+    ok 7 - Should be initialized
+{"level":50,"time":"2026-01-22T18:03:31.115Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"061f9680-4b96-454a-9a39-beb7480fc9f1","msg":"Self-connection lost - fatal error"}
+    1..7
+ok 16 - MessageGroupService - getStatus returns complete status # time=2.143ms
+
+# Subtest: MessageGroupService - shutdown cleans up
+    ok 1 - Should not be initialized
+    ok 2 - Should emit shutdown event
+    ok 3 - Event should have groupId
+{"level":50,"time":"2026-01-22T18:03:31.125Z","nodeId":"test-node","pid":320058,"subsystem":"message-router","nodeId":"test-node","connectionId":"f2f6e576-7d34-4c3d-9908-bb8448ad13a9","msg":"Self-connection lost - fatal error"}
+    1..3
+ok 17 - MessageGroupService - shutdown cleans up # time=1.491ms
+
+# Subtest: InMemoryRaftStorage - appendEntry adds entries
+    ok 1 - First entry should have index 1
+    ok 2 - Second entry should have index 2
+    ok 3 - Should have 2 entries
+    1..3
+ok 18 - InMemoryRaftStorage - appendEntry adds entries # time=0.405ms
+
+# Subtest: InMemoryRaftStorage - getEntriesFrom returns entries
+    ok 1 - Should return all entries from start
+    ok 2 - Should return entries from index 2
+    ok 3 - First should be test2
+    1..3
+ok 19 - InMemoryRaftStorage - getEntriesFrom returns entries # time=0.367ms
+
+# Subtest: InMemoryRaftStorage - getLastEntry returns last
+    ok 1 - Should return null when empty
+    ok 2 - Should return last entry
+    1..2
+ok 20 - InMemoryRaftStorage - getLastEntry returns last # time=0.35ms
+
+# Subtest: InMemoryRaftStorage - truncateFrom removes entries
+    ok 1 - Should have 1 entry after truncate
+    ok 2 - Should keep first entry
+    1..2
+ok 21 - InMemoryRaftStorage - truncateFrom removes entries # time=0.349ms
+
+1..21

@@ -14,3 +14,9 @@ export {
   CONTEXT_TYPES,
   RECENT_UPDATE_THRESHOLD_MS,
 } from './contexts-view.js';
+export {
+  OperationsView,
+  OPERATION_STATUS,
+  ADD_WORKFLOW_STEPS,
+  REMOVE_WORKFLOW_STEPS,
+} from './operations-view.js';

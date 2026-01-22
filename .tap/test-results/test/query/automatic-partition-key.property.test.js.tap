@@ -1,5 +1,17 @@
 TAP version 14
-ok 1 - Property 42: Single-column PRIMARY KEY becomes partition key # SKIP filter: /SystemTableCache/
-ok 2 - Property 42: Composite PRIMARY KEY becomes partition key # SKIP filter: /SystemTableCache/
-ok 3 - Property 42: derivePartitionKey derives from PRIMARY KEY # SKIP filter: /SystemTableCache/
+# Subtest: Property 42: Single-column PRIMARY KEY becomes partition key
+    ok 1 - Single-column PRIMARY KEY is automatically used as partition key
+    1..1
+ok 1 - Property 42: Single-column PRIMARY KEY becomes partition key # time=9.118ms
+
+# Subtest: Property 42: Composite PRIMARY KEY becomes partition key
+    ok 1 - Composite PRIMARY KEY is automatically used as partition key
+    1..1
+ok 2 - Property 42: Composite PRIMARY KEY becomes partition key # time=4.365ms
+
+# Subtest: Property 42: derivePartitionKey derives from PRIMARY KEY
+    ok 1 - derivePartitionKey correctly derives partition key from PRIMARY KEY
+    1..1
+ok 3 - Property 42: derivePartitionKey derives from PRIMARY KEY # time=3.31ms
+
 1..3

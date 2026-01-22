@@ -11,6 +11,10 @@ import fc from 'fast-check';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+
+// Port counter for unique ports per test
+let testPortCounter = 30000;
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -25,6 +29,24 @@ afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
+
+/**
+ * Create a real WebSocket transport for testing.
+ * @return {Promise<{router: MessageRouter, nodeId: string, cleanup: Function}>}
+ */
+async function createTestTransport() {
+  const port = testPortCounter++;
+  const nodeId = `test-node-${port}`;
+  const router = new MessageRouter({nodeId, wsPort: port});
+  await router.initialize({startServer: true});
+  return {
+    router,
+    nodeId,
+    cleanup: async () => {
+      await router.shutdown();
+    },
+  };
+}
 
 /**
  * Simulates a cluster with nodes and message group replicas.
@@ -413,36 +435,41 @@ test('Property 8: Message Group Replica Distribution - service instantiation', a
       fc.record({
         groupId: fc.string({minLength: 3, maxLength: 20}).filter((s) => /^[a-z0-9-]+$/.test(s)),
         replicaIndex: fc.integer({min: 0, max: 2}),
-        nodeId: fc.uuid(),
       }),
       async (config) => {
-        const replicaId = `${config.groupId}-r${config.replicaIndex}`;
-        const replicaIds = [
-          `${config.groupId}-r0`,
-          `${config.groupId}-r1`,
-          `${config.groupId}-r2`,
-        ];
+        const {router, nodeId, cleanup} = await createTestTransport();
+        try {
+          const replicaId = `${config.groupId}-r${config.replicaIndex}`;
+          const replicaIds = [
+            `${config.groupId}-r0`,
+            `${config.groupId}-r1`,
+            `${config.groupId}-r2`,
+          ];
 
-        // Create message group service
-        const service = new MessageGroupService({
-          groupId: config.groupId,
-          replicaId,
-          nodeId: config.nodeId,
-          replicaIds,
-        });
+          // Create message group service
+          const service = new MessageGroupService({
+            groupId: config.groupId,
+            replicaId,
+            nodeId,
+            replicaIds,
+            transport: router,
+          });
 
-        // Property: Service should be creatable with valid config
-        t.ok(service, 'Service should be created');
-        t.equal(service.groupId, config.groupId, 'Should have correct groupId');
-        t.equal(service.replicaId, replicaId, 'Should have correct replicaId');
-        t.equal(service.nodeId, config.nodeId, 'Should have correct nodeId');
-        t.equal(service.replicaIds.length, 3, 'Should have 3 replica IDs');
+          // Property: Service should be creatable with valid config
+          t.ok(service, 'Service should be created');
+          t.equal(service.groupId, config.groupId, 'Should have correct groupId');
+          t.equal(service.replicaId, replicaId, 'Should have correct replicaId');
+          t.equal(service.nodeId, nodeId, 'Should have correct nodeId');
+          t.equal(service.replicaIds.length, 3, 'Should have 3 replica IDs');
 
-        // Initialize and verify
-        await service.initialize();
-        t.ok(service.initialized, 'Service should be initialized');
+          // Initialize and verify
+          await service.initialize();
+          t.ok(service.initialized, 'Service should be initialized');
 
-        await service.shutdown();
+          await service.shutdown();
+        } finally {
+          await cleanup();
+        }
 
         return true;
       },

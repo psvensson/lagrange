@@ -1,0 +1,229 @@
+/**
+ * Tests for Bootstrap Sequence.
+ * Verifies the ordering: server → self-connect → services
+ * Requirements: 8.1, 8.2, 8.3, 8.4
+ */
+
+import {test} from 'tap';
+import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
+import {NodeService} from '../../src/node/node-service.js';
+
+// Initialize configuration and logging for tests
+function initializeTestEnvironment() {
+  ConfigurationManager.resetInstance();
+  const config = ConfigurationManager.getInstance();
+  if (!config.isInitialized()) {
+    config.initialize({
+      node: {id: 'test-bootstrap-node'},
+      logging: {level: 'error'},
+    });
+  }
+
+  const logging = LoggingService.getInstance();
+  if (!logging.isInitialized()) {
+    logging.initialize({level: 'error'});
+  }
+
+  // Reset NodeService for clean test state
+  NodeService.resetInstance();
+}
+
+// Get a random available port
+function getRandomPort() {
+  return 10000 + Math.floor(Math.random() * 50000);
+}
+
+test('Bootstrap sequence - server starts before services', async (t) => {
+  initializeTestEnvironment();
+
+  const wsPort = getRandomPort();
+  const nodeId = `test-node-${Date.now()}`;
+
+  const bootstrap = new BootstrapService({
+    nodeId,
+    nodeAddress: `ws://localhost:${wsPort}`,
+    wsPort,
+    config: {
+      leadershipWaitTimeoutMs: 5000,
+      leadershipWaitInitialDelayMs: 10,
+      partitionDbPath: ':memory:',
+    },
+  });
+
+  // Track phase order
+  const phaseOrder = [];
+  bootstrap.on('phaseStart', ({phase}) => {
+    phaseOrder.push(phase);
+  });
+
+  try {
+    const result = await bootstrap.bootstrap();
+
+    t.equal(result.success, true, 'bootstrap should succeed');
+    t.ok(result.messageRouter, 'should have messageRouter');
+
+    // Verify phase order
+    t.equal(phaseOrder[0], 'infrastructure', 'infrastructure should be first phase');
+    t.ok(phaseOrder.indexOf('infrastructure') < phaseOrder.indexOf('message_groups'),
+      'infrastructure should come before message_groups');
+    t.ok(phaseOrder.indexOf('infrastructure') < phaseOrder.indexOf('partitions'),
+      'infrastructure should come before partitions');
+
+    // Verify server is running
+    t.ok(result.messageRouter.server, 'WebSocket server should be running');
+
+    // Verify self-connection is established
+    t.ok(result.messageRouter.hasSelfConnection(),
+      'self-connection should be established');
+  } finally {
+    await bootstrap.shutdown();
+  }
+});
+
+test('Bootstrap sequence - self-connection established before services', async (t) => {
+  initializeTestEnvironment();
+
+  const wsPort = getRandomPort();
+  const nodeId = `test-node-${Date.now()}`;
+
+  const bootstrap = new BootstrapService({
+    nodeId,
+    nodeAddress: `ws://localhost:${wsPort}`,
+    wsPort,
+    config: {
+      leadershipWaitTimeoutMs: 5000,
+      leadershipWaitInitialDelayMs: 10,
+      partitionDbPath: ':memory:',
+    },
+  });
+
+  let selfConnectionBeforeServices = false;
+
+  // Check self-connection status when message_groups phase starts
+  bootstrap.on('phaseStart', ({phase}) => {
+    if (phase === 'message_groups') {
+      // At this point, infrastructure phase is complete
+      // Self-connection should already be established
+      selfConnectionBeforeServices = bootstrap.messageRouter &&
+        bootstrap.messageRouter.hasSelfConnection();
+    }
+  });
+
+  try {
+    const result = await bootstrap.bootstrap();
+
+    t.equal(result.success, true, 'bootstrap should succeed');
+    t.ok(selfConnectionBeforeServices,
+      'self-connection should be established before services are created');
+  } finally {
+    await bootstrap.shutdown();
+  }
+});
+
+test('Bootstrap sequence - services created after self-connection', async (t) => {
+  initializeTestEnvironment();
+
+  const wsPort = getRandomPort();
+  const nodeId = `test-node-${Date.now()}`;
+
+  const bootstrap = new BootstrapService({
+    nodeId,
+    nodeAddress: `ws://localhost:${wsPort}`,
+    wsPort,
+    config: {
+      leadershipWaitTimeoutMs: 5000,
+      leadershipWaitInitialDelayMs: 10,
+      partitionDbPath: ':memory:',
+    },
+  });
+
+  try {
+    const result = await bootstrap.bootstrap();
+
+    t.equal(result.success, true, 'bootstrap should succeed');
+
+    // Verify services were created
+    t.ok(result.messageGroupServices.size > 0, 'message group services should be created');
+    t.ok(result.partitionServices.size > 0, 'partition services should be created');
+
+    // Verify self-connection is still active
+    t.ok(result.messageRouter.hasSelfConnection(),
+      'self-connection should still be active after services created');
+  } finally {
+    await bootstrap.shutdown();
+  }
+});
+
+test('Bootstrap sequence - without wsPort (no server/self-connection)', async (t) => {
+  initializeTestEnvironment();
+
+  const nodeId = `test-node-${Date.now()}`;
+
+  const bootstrap = new BootstrapService({
+    nodeId,
+    nodeAddress: 'ws://localhost:8080',
+    // No wsPort - server won't start, leadership can't be established
+    config: {
+      leadershipWaitTimeoutMs: 1000, // Short timeout since it will fail
+      leadershipWaitInitialDelayMs: 10,
+      partitionDbPath: ':memory:',
+    },
+  });
+
+  try {
+    const result = await bootstrap.bootstrap();
+
+    // Without wsPort, bootstrap should fail because message groups can't
+    // establish leadership without WebSocket communication
+    t.equal(result.success, false, 'bootstrap should fail without wsPort');
+    t.ok(result.error, 'should have error message');
+    t.ok(
+      result.error.includes('leadership') || result.error.includes('failed'),
+      'error should mention leadership failure',
+    );
+  } finally {
+    await bootstrap.shutdown();
+  }
+});
+
+test('Bootstrap sequence - startWebSocketServer after bootstrap', async (t) => {
+  initializeTestEnvironment();
+
+  const wsPort = getRandomPort();
+  const nodeId = `test-node-${Date.now()}`;
+
+  // Bootstrap without wsPort first
+  const bootstrap = new BootstrapService({
+    nodeId,
+    nodeAddress: `ws://localhost:${wsPort}`,
+    wsPort, // Set wsPort so startWebSocketServer can use it
+    config: {
+      leadershipWaitTimeoutMs: 5000,
+      leadershipWaitInitialDelayMs: 10,
+      partitionDbPath: ':memory:',
+    },
+  });
+
+  try {
+    const result = await bootstrap.bootstrap();
+
+    t.equal(result.success, true, 'bootstrap should succeed');
+
+    // Server should already be running since wsPort was provided
+    t.ok(result.messageRouter.server, 'WebSocket server should be running');
+    t.ok(result.messageRouter.hasSelfConnection(),
+      'self-connection should be established');
+
+    // Calling startWebSocketServer again should be a no-op
+    await bootstrap.startWebSocketServer();
+
+    // Server should still be running
+    t.ok(result.messageRouter.server, 'WebSocket server should still be running');
+    t.ok(result.messageRouter.hasSelfConnection(),
+      'self-connection should still be established');
+  } finally {
+    await bootstrap.shutdown();
+  }
+});

@@ -1,0 +1,70 @@
+TAP version 14
+# Subtest: Property 10: Timeout-Triggered Failures
+    # Subtest: replicas exceeding timeout transition to failed
+        ok 1 - replicas exceeding timeout transition to failed
+        1..1
+    ok 1 - replicas exceeding timeout transition to failed # time=4.924ms
+    
+    # Subtest: timeout error message includes timeout value
+        ok 1 - timeout error message includes timeout value
+        1..1
+    ok 2 - timeout error message includes timeout value # time=2.356ms
+    
+    # Subtest: timeout reason includes state name
+        ok 1 - timeout reason includes state name
+        1..1
+    ok 3 - timeout reason includes state name # time=2.295ms
+    
+    # Subtest: replicas not exceeding timeout remain unchanged
+        ok 1 - replicas not exceeding timeout remain unchanged
+        1..1
+    ok 4 - replicas not exceeding timeout remain unchanged # time=2.058ms
+    
+    # Subtest: timeout event emitted on timeout
+        ok 1 - timeout event emitted on timeout
+        1..1
+    ok 5 - timeout event emitted on timeout # time=2.069ms
+    
+    # Subtest: non-transitional states do not timeout
+        ok 1 - non-transitional states do not timeout
+        1..1
+    ok 6 - non-transitional states do not timeout # time=2.078ms
+    
+    # Subtest: default timeouts match requirements
+        ok 1 - pending timeout is 30s
+        ok 2 - creating timeout is 60s
+        ok 3 - syncing timeout is 300s
+        ok 4 - removing timeout is 60s
+        1..4
+    ok 7 - default timeouts match requirements # time=0.891ms
+    
+    # Subtest: timeout checker can be started and stopped
+        ok 1 - timeout checker initially null
+        ok 2 - timeout checker started
+        ok 3 - starting again is idempotent
+        ok 4 - timeout checker stopped
+        ok 5 - stopping again is safe
+        1..5
+    ok 8 - timeout checker can be started and stopped # time=1.39ms
+    
+    # Subtest: clear stops timeout checker
+        ok 1 - timeout checker started
+        ok 2 - clear stopped timeout checker
+        1..2
+    ok 9 - clear stops timeout checker # time=0.758ms
+    
+    # Subtest: getTimeout returns correct values
+        ok 1 - pending timeout correct
+        ok 2 - creating timeout correct
+        ok 3 - syncing timeout correct
+        ok 4 - removing timeout correct
+        ok 5 - active has no timeout
+        ok 6 - failed has no timeout
+        ok 7 - removed has no timeout
+        1..7
+    ok 10 - getTimeout returns correct values # time=1.32ms
+    
+    1..10
+ok 1 - Property 10: Timeout-Triggered Failures # time=268.827ms
+
+1..1

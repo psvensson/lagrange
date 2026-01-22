@@ -403,7 +403,7 @@ class WebSocketTransport extends EventEmitter {
    * @param {Object} message - Service message.
    * @private
    */
-  handleServiceMessage(ws, message) {
+  async handleServiceMessage(ws, message) {
     const {targetAddress, messageId, payload} = message;
 
     // Find handler for target address
@@ -411,20 +411,28 @@ class WebSocketTransport extends EventEmitter {
 
     if (handler) {
       try {
-        const result = handler({
+        // Await the handler result in case it's async
+        const result = await handler({
           messageId,
           payload,
           sourceAddress: message.sourceAddress,
           sourceNodeId: message.sourceNodeId,
         });
 
-        // Send acknowledgment
-        this.sendRaw(ws, {
+        // Send acknowledgment with flat structure - spread handler result directly
+        const ack = {
           type: WSMessageType.ACK,
           messageId,
           acknowledged: true,
-          result,
-        });
+        };
+        if (result && typeof result === 'object') {
+          const {acknowledged: _ack, type: handlerType, ...rest} = result;
+          Object.assign(ack, rest);
+          if (handlerType) {
+            ack.responseType = handlerType;
+          }
+        }
+        this.sendRaw(ws, ack);
       } catch (error) {
         this.sendRaw(ws, {
           type: WSMessageType.ACK,
@@ -458,7 +466,7 @@ class WebSocketTransport extends EventEmitter {
    * @private
    */
   handleAcknowledgment(message) {
-    const {messageId, acknowledged, result, error} = message;
+    const {messageId, acknowledged, error, type: _type, ...rest} = message;
 
     const pending = this.pendingMessages.get(messageId);
     if (pending) {
@@ -466,7 +474,8 @@ class WebSocketTransport extends EventEmitter {
       this.pendingMessages.delete(messageId);
 
       if (acknowledged) {
-        pending.resolve({messageId, acknowledged: true, result});
+        // Flat structure - spread all fields from ACK
+        pending.resolve({messageId, acknowledged: true, ...rest});
       } else {
         pending.reject(new Error(error || 'Message not acknowledged'));
       }

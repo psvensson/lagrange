@@ -1,0 +1,35 @@
+TAP version 14
+# Subtest: Bidirectional WebSocket communication
+    # Subtest: seed node can send to joining node via incoming connection
+        ok 1 - joining node should be connected to seed node
+        # Seed node connection to joining-node-bidir: connected
+        # Joining node connection to seed-node-bidir: connected
+        # Seed node connected nodes: ["seed-node-bidir","seed-node-bidir","joining-node-bidir"]
+        ok 2 - seed node should have connection to joining node
+        ok 3 - message should be acknowledged
+        ok 4 - should have correct request_id
+        ok 5 - should have status initiated
+        ok 6 - joining node should receive one message
+        ok 7 - should receive CREATE_REPLICA
+{"level":50,"time":"2026-01-22T17:52:28.932Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","connectionId":"43728cbe-7b04-42f6-82c0-f8421a351f80","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T17:52:28.933Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","connectionId":"f848e42f-93cd-4760-976a-c3d63a37ee69","msg":"Self-connection lost - fatal error"}
+        1..7
+    ok 1 - seed node can send to joining node via incoming connection # time=97.912ms
+    
+    # Subtest: MessageRouter routes to joining node via WebSocket
+        ok 1 - seed should have connection to joining node
+        ok 2 - message should be acknowledged
+        ok 3 - should have correct request_id
+        ok 4 - should have status initiated
+        ok 5 - joining node should receive one message
+{"level":50,"time":"2026-01-22T17:52:29.045Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","connectionId":"a354f150-89d2-4959-9bc1-b8f4319aa2ca","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-22T17:52:29.045Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","connectionId":"3e9d8e6f-7679-40a9-9d10-ee29d19a2b60","msg":"Self-connection lost - fatal error"}
+        1..5
+    ok 2 - MessageRouter routes to joining node via WebSocket # time=81.09ms
+    
+    1..2
+ok 1 - Bidirectional WebSocket communication # time=251.68ms
+
+{"level":50,"time":"2026-01-22T17:52:29.934Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","error":"connect ECONNREFUSED 127.0.0.1:19900","msg":"WebSocket error"}
+{"level":50,"time":"2026-01-22T17:52:30.047Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","error":"connect ECONNREFUSED 127.0.0.1:19902","msg":"WebSocket error"}
+1..1

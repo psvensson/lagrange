@@ -1,3 +1,396 @@
 TAP version 14
-ok 1 - Property 53: Aggregate Function Correctness # SKIP filter: /SystemTableCache/
+# Subtest: Property 53: Aggregate Function Correctness
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359553-0-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359555-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359556-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359557-0-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359557-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359557-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359558-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359558-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359559-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359559-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+    # Subtest: COUNT(*) is correct across partitions
+        ok 1 - COUNT(*) is correct across partitions
+        1..1
+    ok 1 - COUNT(*) is correct across partitions # time=13.732ms
+    
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359564-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359565-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359565-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359565-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359566-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359566-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359567-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359568-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359568-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359568-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+    # Subtest: SUM is correct across partitions
+        ok 1 - SUM is correct across partitions
+        1..1
+    ok 2 - SUM is correct across partitions # time=5.697ms
+    
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359570-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359571-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359571-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359572-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359572-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359573-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359573-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359574-0-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359574-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359574-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+    # Subtest: AVG is correct across partitions
+        ok 1 - AVG is correct across partitions
+        1..1
+    ok 3 - AVG is correct across partitions # time=5.489ms
+    
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359577-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359578-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359579-0-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359579-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359579-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359580-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359580-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359580-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359581-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359581-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+    # Subtest: MIN is correct across partitions
+        ok 1 - MIN is correct across partitions
+        1..1
+    ok 4 - MIN is correct across partitions # time=5.364ms
+    
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359583-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359584-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359584-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359584-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769104359585-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359585-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359586-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359586-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359586-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359587-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+    # Subtest: MAX is correct across partitions
+        ok 1 - MAX is correct across partitions
+        1..1
+    ok 5 - MAX is correct across partitions # time=4.772ms
+    
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359589-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359590-0-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359590-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359591-0-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359591-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359592-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359592-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769104359593-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359593-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1769104359594-1-query-executor',
+  hasJoins: false,
+  hasAggregates: true
+}
+    # Subtest: multiple aggregates in single query
+        ok 1 - Multiple aggregates in single query work correctly
+        1..1
+    ok 6 - multiple aggregates in single query # time=6.348ms
+    
+    1..6
+ok 1 - Property 53: Aggregate Function Correctness # time=49.182ms
+
 1..1

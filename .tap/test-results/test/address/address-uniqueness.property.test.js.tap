@@ -1,3 +1,36 @@
 TAP version 14
-ok 1 - Property 1: Address Uniqueness # SKIP filter: /SystemTableCache/
+# Subtest: Property 1: Address Uniqueness
+    # Subtest: generated node addresses are always unique
+        ok 1 - all generated node addresses are unique
+        1..1
+    ok 1 - generated node addresses are always unique # time=7.185ms
+    
+    # Subtest: generated service addresses are always unique
+        ok 1 - all generated service addresses are unique
+        1..1
+    ok 2 - generated service addresses are always unique # time=1.095ms
+    
+    # Subtest: no collisions between node and service addresses
+        ok 1 - no collisions between node and service addresses
+        1..1
+    ok 3 - no collisions between node and service addresses # time=1.803ms
+    
+    # Subtest: conflict detection identifies registered addresses
+        ok 1 - conflict detection correctly identifies all registered addresses
+        1..1
+    ok 4 - conflict detection identifies registered addresses # time=0.769ms
+    
+    # Subtest: cross-type registration prevents duplicates
+        ok 1 - cross-type registration correctly prevents duplicates
+        1..1
+    ok 5 - cross-type registration prevents duplicates # time=1.797ms
+    
+    # Subtest: address counts remain consistent after operations
+        ok 1 - address counts remain consistent after operations
+        1..1
+    ok 6 - address counts remain consistent after operations # time=2.526ms
+    
+    1..6
+ok 1 - Property 1: Address Uniqueness # time=19.129ms
+
 1..1

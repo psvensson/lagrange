@@ -102,6 +102,7 @@ export class AdminCLI {
     this.cdcPaused = false;
     this.showingDetail = false;
     this.readOnlyMode = false;
+    this.initialCacheLoaded = false;
   }
 
   /**
@@ -384,6 +385,65 @@ export class AdminCLI {
       label: ' Results ',
     });
 
+    // Config edit dialog (hidden by default)
+    this.configEditDialog = blessed.box({
+      parent: this.screen,
+      top: 'center',
+      left: 'center',
+      width: 60,
+      height: 12,
+      hidden: true,
+      tags: true,
+      border: {type: 'line'},
+      style: {border: {fg: 'green'}, bg: 'black'},
+      label: ' Edit Configuration ',
+    });
+
+    this.configEditLabel = blessed.text({
+      parent: this.configEditDialog,
+      top: 1,
+      left: 2,
+      tags: true,
+      content: '',
+    });
+
+    this.configEditInput = blessed.textbox({
+      parent: this.configEditDialog,
+      top: 4,
+      left: 2,
+      width: '100%-6',
+      height: 3,
+      inputOnFocus: true,
+      keys: true,
+      mouse: true,
+      border: {type: 'line'},
+      style: {
+        border: {fg: 'cyan'},
+        focus: {border: {fg: 'green'}},
+      },
+    });
+
+    this.configEditHint = blessed.text({
+      parent: this.configEditDialog,
+      top: 8,
+      left: 2,
+      tags: true,
+      content: '{cyan-fg}Enter{/cyan-fg}:Save  {cyan-fg}Esc{/cyan-fg}:Cancel',
+    });
+
+    // Config edit state
+    this.configEditKey = null;
+    this.configEditType = null;
+
+    // Wire up config edit events
+    this.configEditInput.key(['escape'], () => {
+      this.hideConfigEditDialog();
+    });
+
+    this.configEditInput.key(['enter'], () => {
+      this.submitConfigEdit();
+    });
+
     // Wire up SQL input events
     this.sqlInput.on('submit', () => this.executeSqlQuery());
     this.sqlInput.key(['C-x'], () => this.executeSqlQuery());
@@ -508,9 +568,16 @@ export class AdminCLI {
         'green',
       );
 
-      // Switch to nodes view and refresh
-      this.switchView('nodes');
-      debugLog('switchView(nodes) called');
+      // Only switch to nodes view on initial connection, not on refresh
+      if (!this.initialCacheLoaded) {
+        this.initialCacheLoaded = true;
+        this.switchView('nodes');
+        debugLog('switchView(nodes) called - initial load');
+      } else {
+        // Just refresh the current view
+        this.refreshCurrentView();
+        debugLog('refreshCurrentView() called - cache refresh');
+      }
     };
 
     this.connectionManager.onCDCEvent = (event) => {
@@ -904,6 +971,189 @@ export class AdminCLI {
   }
 
   /**
+   * Handle config edit request
+   */
+  handleConfigEdit() {
+    if (this.currentView !== 'config') {
+      return;
+    }
+
+    if (this.readOnlyMode) {
+      this.showError('Read-only mode - editing disabled');
+      return;
+    }
+
+    const view = this.viewManager.getCurrentView();
+    if (!view) return;
+
+    const result = view.handleEditRequest?.();
+    if (!result) return;
+
+    if (result.action === 'showError') {
+      this.showError(result.message);
+      return;
+    }
+
+    if (result.action === 'editConfig') {
+      this.showConfigEditDialog(result.config);
+    }
+  }
+
+  /**
+   * Handle config revert request
+   */
+  handleConfigRevert() {
+    if (this.currentView !== 'config') {
+      return;
+    }
+
+    if (this.readOnlyMode) {
+      this.showError('Read-only mode - editing disabled');
+      return;
+    }
+
+    const view = this.viewManager.getCurrentView();
+    if (!view) return;
+
+    const result = view.handleRevertRequest?.();
+    if (!result) return;
+
+    if (result.action === 'showError') {
+      this.showError(result.message);
+      return;
+    }
+
+    if (result.action === 'revertConfig') {
+      // Execute revert via SQL UPDATE
+      const config = result.config;
+      const defaultValue = config.default_value;
+      this.executeConfigUpdate(config.config_key, defaultValue, config.value_type);
+    }
+  }
+
+  /**
+   * Show config edit dialog
+   * @param {Object} config - Config entry to edit
+   */
+  showConfigEditDialog(config) {
+    this.configEditKey = config.config_key;
+    this.configEditType = config.value_type || 'string';
+
+    const typeHint = this.configEditType === 'boolean' ? ' (true/false)' :
+      this.configEditType === 'number' ? ' (number)' :
+        this.configEditType === 'json' ? ' (JSON)' : '';
+
+    this.configEditLabel.setContent(
+      `{cyan-fg}Key:{/cyan-fg} ${config.config_key}\n` +
+      `{cyan-fg}Type:{/cyan-fg} ${this.configEditType}${typeHint}`,
+    );
+
+    // Set current value in input
+    const currentValue = config.config_value !== null &&
+      config.config_value !== undefined ?
+      String(config.config_value) : '';
+    this.configEditInput.setValue(currentValue);
+
+    this.configEditDialog.show();
+    this.configEditInput.focus();
+    this.screen.render();
+  }
+
+  /**
+   * Hide config edit dialog
+   */
+  hideConfigEditDialog() {
+    this.configEditDialog.hide();
+    this.configEditKey = null;
+    this.configEditType = null;
+    this.screen.render();
+  }
+
+  /**
+   * Submit config edit
+   */
+  submitConfigEdit() {
+    const newValue = this.configEditInput.getValue().trim();
+    const key = this.configEditKey;
+    const type = this.configEditType;
+
+    this.hideConfigEditDialog();
+
+    if (!key) return;
+
+    // Validate the value using the view's validation
+    const view = this.viewManager.getCurrentView();
+    if (view && view.validateValue) {
+      const validation = view.validateValue(newValue, type);
+      if (!validation.valid) {
+        this.showError(`Invalid value: ${validation.error}`);
+        return;
+      }
+    }
+
+    this.executeConfigUpdate(key, newValue, type);
+  }
+
+  /**
+   * Execute config update via SQL
+   * @param {string} key - Config key
+   * @param {string} value - New value
+   * @param {string} type - Value type
+   */
+  executeConfigUpdate(key, value, type) {
+    // Format value for SQL based on type
+    let sqlValue;
+    if (type === 'string' || type === 'json') {
+      // Escape single quotes
+      const escaped = String(value).replace(/'/g, '\'\'');
+      sqlValue = `'${escaped}'`;
+    } else {
+      sqlValue = `'${value}'`;
+    }
+
+    const sql = `UPDATE config SET config_value = ${sqlValue}, ` +
+      `updated_at = ${Date.now()} WHERE config_key = '${key}'`;
+
+    this.updateStatus(`Updating ${key}...`, 'yellow');
+
+    const queryId = `config_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const resultHandler = (result) => {
+      if (result.queryId !== queryId) return;
+      this.eventBus.off('query:result', resultHandler);
+
+      if (result.error) {
+        this.showError(`Failed to update: ${result.error}`);
+      } else {
+        this.updateStatus(`Updated ${key}`, 'green');
+        // Request cache refresh to see the change
+        this.connectionManager.requestCacheDump?.();
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      this.eventBus.off('query:result', resultHandler);
+      this.showError('Update timeout');
+    }, 10000);
+
+    const wrappedHandler = (result) => {
+      clearTimeout(timeoutId);
+      resultHandler(result);
+    };
+
+    this.eventBus.on('query:result', wrappedHandler);
+
+    if (this.connectionManager) {
+      const sent = this.connectionManager.sendQuery(queryId, sql);
+      if (!sent) {
+        clearTimeout(timeoutId);
+        this.eventBus.off('query:result', wrappedHandler);
+        this.showError('Not connected to server');
+      }
+    }
+  }
+
+  /**
    * Update the header bar
    */
   updateHeader() {
@@ -939,6 +1189,15 @@ export class AdminCLI {
         '{cyan-fg}↑↓{/cyan-fg}:Navigate  ' +
         '{cyan-fg}Esc{/cyan-fg}:Clear  ' +
         '{cyan-fg}1-9{/cyan-fg}:Views  ' +
+        '{cyan-fg}?{/cyan-fg}:Help';
+    }
+
+    // Add config-specific hints when in config view
+    if (this.currentView === 'config') {
+      hints = '{cyan-fg}e{/cyan-fg}:Edit  ' +
+        '{cyan-fg}R{/cyan-fg}:Revert  ' +
+        '{cyan-fg}d{/cyan-fg}:Details  ' +
+        '{cyan-fg}/{/cyan-fg}:Filter  ' +
         '{cyan-fg}?{/cyan-fg}:Help';
     }
 
@@ -1024,6 +1283,12 @@ export class AdminCLI {
       break;
     case 'help:show':
       this.showHelpOverlay();
+      break;
+    case 'config:edit':
+      this.handleConfigEdit();
+      break;
+    case 'config:revert':
+      this.handleConfigRevert();
       break;
     case 'app:quit':
     case 'app:force-quit':
@@ -1176,7 +1441,160 @@ export class AdminCLI {
     case 'connect':
       if (args[0]) this.reconnect(args[0]);
       break;
+    case 'history':
+      if (args[0]) this.showReplicaHistory(args[0]);
+      break;
     }
+  }
+
+  /**
+   * Show state transition history for a replica
+   * Requirements: 8.4
+   * @param {string} replicaId - Replica ID to show history for
+   */
+  async showReplicaHistory(replicaId) {
+    if (!replicaId) {
+      this.showError('Replica ID required');
+      return;
+    }
+
+    this.updateStatus(`Loading history for ${replicaId}...`, 'yellow');
+
+    // Query logs table for state transition events for this replica
+    // The logs contain 'Replica state transition' messages with replicaId in metadata
+    const sql = `SELECT timestamp, level, message, metadata FROM logs ` +
+      `WHERE message LIKE '%Replica state transition%' ` +
+      `AND metadata LIKE '%${replicaId.replace(/'/g, '\'\'')}%' ` +
+      `ORDER BY timestamp ASC LIMIT 100`;
+
+    const queryId = `history_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const resultHandler = (result) => {
+      if (result.queryId !== queryId) return;
+      this.eventBus.off('query:result', resultHandler);
+
+      if (result.error) {
+        this.showError(`Failed to load history: ${result.error}`);
+        return;
+      }
+
+      const rows = result.results || [];
+      this.displayReplicaHistory(replicaId, rows);
+    };
+
+    const timeoutId = setTimeout(() => {
+      this.eventBus.off('query:result', resultHandler);
+      this.showError('History query timeout');
+    }, 10000);
+
+    const wrappedHandler = (result) => {
+      clearTimeout(timeoutId);
+      resultHandler(result);
+    };
+
+    this.eventBus.on('query:result', wrappedHandler);
+
+    if (this.connectionManager) {
+      const sent = this.connectionManager.sendQuery(queryId, sql);
+      if (!sent) {
+        clearTimeout(timeoutId);
+        this.eventBus.off('query:result', wrappedHandler);
+        this.showError('Not connected to server');
+      }
+    } else {
+      clearTimeout(timeoutId);
+      this.eventBus.off('query:result', wrappedHandler);
+      this.showError('Not connected to server');
+    }
+  }
+
+  /**
+   * Display replica state transition history in a dialog
+   * Requirements: 8.4
+   * @param {string} replicaId - Replica ID
+   * @param {Array} rows - Log rows from query
+   */
+  displayReplicaHistory(replicaId, rows) {
+    if (!rows || rows.length === 0) {
+      this.updateStatus(`No history found for replica ${replicaId}`, 'yellow');
+      return;
+    }
+
+    // Parse and format the history entries
+    const historyEntries = rows.map((row) => {
+      let metadata = {};
+      try {
+        if (row.metadata) {
+          metadata = typeof row.metadata === 'string' ?
+            JSON.parse(row.metadata) : row.metadata;
+        }
+      } catch (_e) {
+        // Ignore parse errors
+      }
+
+      const timestamp = row.timestamp ?
+        new Date(row.timestamp).toISOString().replace('T', ' ').substring(0, 19) :
+        'N/A';
+
+      return {
+        timestamp,
+        previousState: metadata.previousState || 'N/A',
+        newState: metadata.newState || 'N/A',
+        reason: metadata.reason || 'N/A',
+        nodeId: metadata.nodeId || 'N/A',
+      };
+    });
+
+    // Build the history display content
+    let content = `{bold}{cyan-fg}State Transition History{/cyan-fg}{/bold}\n`;
+    content += `{cyan-fg}Replica:{/cyan-fg} ${replicaId}\n`;
+    content += `{cyan-fg}Entries:{/cyan-fg} ${historyEntries.length}\n\n`;
+    content += '{cyan-fg}─────────────────────────────────────────────────{/cyan-fg}\n\n';
+
+    for (const entry of historyEntries) {
+      // Color code the state transitions
+      const stateColor = this.getStateColor(entry.newState);
+      content += `{white-fg}${entry.timestamp}{/white-fg}\n`;
+      content += `  {gray-fg}${entry.previousState || '(none)'}{/gray-fg} → `;
+      content += `{${stateColor}-fg}${entry.newState}{/${stateColor}-fg}\n`;
+      if (entry.reason && entry.reason !== 'N/A') {
+        content += `  {gray-fg}Reason:{/gray-fg} ${entry.reason}\n`;
+      }
+      if (entry.nodeId && entry.nodeId !== 'N/A') {
+        content += `  {gray-fg}Node:{/gray-fg} ${entry.nodeId}\n`;
+      }
+      content += '\n';
+    }
+
+    content += '{cyan-fg}─────────────────────────────────────────────────{/cyan-fg}\n';
+    content += '{gray-fg}Press Escape or any key to close{/gray-fg}';
+
+    // Show in the help box (reusing it as a modal)
+    this.helpBox.setContent(content);
+    this.helpBox.setLabel(' Replica History ');
+    this.helpBox.show();
+    this.helpBox.focus();
+    this.screen.render();
+
+    this.updateStatus(`Showing ${historyEntries.length} history entries`, 'green');
+  }
+
+  /**
+   * Get color for a replica state
+   * @param {string} state - Replica state
+   * @return {string} Color name
+   */
+  getStateColor(state) {
+    const stateColors = {
+      'pending': 'blue',
+      'creating': 'blue',
+      'syncing': 'yellow',
+      'active': 'green',
+      'removing': 'yellow',
+      'removed': 'gray',
+      'failed': 'red',
+    };
+    return stateColors[state] || 'white';
   }
 
   /**

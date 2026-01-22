@@ -1,0 +1,97 @@
+TAP version 14
+# Subtest: ReplicaLifecycleManager
+    # Subtest: initialization
+        ok 1 - not initialized before init
+        ok 2 - initialized after init
+        ok 3 - node ID set correctly
+        ok 4 - not initialized after shutdown
+        1..4
+    ok 1 - initialization # time=2.175ms
+    
+    # Subtest: initializes with message group service
+        ok 1 - manager should be initialized
+        ok 2 - node ID should be set
+        1..2
+    ok 2 - initializes with message group service # time=0.548ms
+    
+    # Subtest: status transition validation
+        ok 1 - starting -> syncing is valid
+        ok 2 - syncing -> active is valid
+        ok 3 - active -> stopping is valid
+        ok 4 - stopping -> stopped is valid
+        ok 5 - starting -> failed is valid
+        ok 6 - active -> failed is valid
+        ok 7 - starting -> active is invalid (must go through syncing)
+        ok 8 - active -> starting is invalid
+        ok 9 - stopped -> active is invalid (terminal state)
+        1..9
+    ok 3 - status transition validation # time=0.875ms
+    
+    # Subtest: handleCreateReplica - returns already_exists for duplicate
+        ok 1 - correct ACK type
+        ok 2 - status is already_exists
+        ok 3 - replica_id in ACK
+        ok 4 - request_id in ACK
+        1..4
+    ok 4 - handleCreateReplica - returns already_exists for duplicate # time=1.165ms
+    
+    # Subtest: handleCreateReplica - returns initiated for new replica
+        ok 1 - correct ACK type
+        ok 2 - status is initiated
+        ok 3 - replica_id in ACK
+        ok 4 - node_id in ACK
+        ok 5 - pending operation tracked
+        ok 6 - correct operation type
+        ok 7 - partition_id tracked
+        1..7
+    ok 5 - handleCreateReplica - returns initiated for new replica # time=52.703ms
+    
+    # Subtest: handleRemoveReplica - returns not_found for missing replica
+        ok 1 - correct ACK type
+        ok 2 - status is not_found
+        ok 3 - replica_id in ACK
+        1..3
+    ok 6 - handleRemoveReplica - returns not_found for missing replica # time=0.917ms
+    
+    # Subtest: handleRemoveReplica - returns initiated for existing replica
+        ok 1 - correct ACK type
+        ok 2 - status is initiated
+        ok 3 - replica_id in ACK
+        ok 4 - pending operation tracked
+        ok 5 - correct operation type
+        ok 6 - reason tracked
+        1..6
+    ok 7 - handleRemoveReplica - returns initiated for existing replica # time=51.564ms
+    
+    # Subtest: node recovery - cleans up orphaned replicas
+        ok 1 - two replicas marked as failed
+        ok 2 - one replica marked as stopped
+        ok 3 - one replica deleted
+        1..3
+    ok 8 - node recovery - cleans up orphaned replicas # time=1.028ms
+    
+    # Subtest: getStats returns correct statistics
+        ok 1 - correct node ID
+        ok 2 - initialized flag correct
+        ok 3 - correct local replica count
+        ok 4 - correct pending operation count
+        1..4
+    ok 9 - getStats returns correct statistics # time=0.531ms
+    
+    # Subtest: cleanupExpiredOperations removes old completed operations
+        ok 1 - old completed operation removed
+        ok 2 - recent completed operation kept
+        ok 3 - pending operation kept (not completed)
+        1..3
+    ok 10 - cleanupExpiredOperations removes old completed operations # time=0.773ms
+    
+    # Subtest: emits events during lifecycle operations
+        ok 1 - status change events emitted
+        ok 2 - replicaCreated event emitted
+        1..2
+    ok 11 - emits events during lifecycle operations # time=100.338ms
+    
+    1..11
+ok 1 - ReplicaLifecycleManager # time=423.223ms
+
+1..1

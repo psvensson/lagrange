@@ -21,6 +21,7 @@ const PRIMARY_KEYS = {
   logs: 'log_id',
   config: 'config_key',
   contexts: 'context_id',
+  replica_operations: 'operation_id',
 };
 
 /**
@@ -41,6 +42,7 @@ export class RemoteCache {
       logs: new Map(),
       config: new Map(),
       contexts: new Map(),
+      replica_operations: new Map(),
     };
     this.lastUpdate = null;
     this.cdcLag = 0;
@@ -345,6 +347,47 @@ export class RemoteCache {
    */
   getContext(contextId) {
     return this.tables.contexts.get(contextId);
+  }
+
+  /**
+   * Get replica operations with optional filtering
+   * Requirements: 4.4, 9.3
+   * @param {Object} filter - Optional filter with status, type, partitionId, inFlightOnly
+   * @return {Array} Array of operation records
+   */
+  getOperations(filter = {}) {
+    let operations = Array.from(this.tables.replica_operations.values());
+
+    if (filter.status) {
+      operations = operations.filter((op) => op.status === filter.status);
+    }
+    if (filter.type) {
+      operations = operations.filter((op) => op.type === filter.type);
+    }
+    if (filter.partitionId) {
+      operations = operations.filter((op) => op.partition_id === filter.partitionId);
+    }
+    if (filter.targetNodeId) {
+      operations = operations.filter((op) => op.target_node_id === filter.targetNodeId);
+    }
+    if (filter.inFlightOnly) {
+      const terminalStatuses = ['active', 'removed', 'failed'];
+      operations = operations.filter((op) => !terminalStatuses.includes(op.status));
+    }
+
+    // Sort by updated_at descending (most recent first)
+    operations.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
+
+    return operations;
+  }
+
+  /**
+   * Get a specific operation by ID
+   * @param {string} operationId - The operation ID
+   * @return {Object|undefined} The operation record or undefined
+   */
+  getOperation(operationId) {
+    return this.tables.replica_operations.get(operationId);
   }
 
   /**

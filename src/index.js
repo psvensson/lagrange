@@ -157,11 +157,16 @@ async function main() {
       ? seedNodeAddress
       : `http://${seedNodeAddress}`;
 
+    // Determine WebSocket port for this joining node
+    const restApiPort = config.get('node.restApiPort') || 8080;
+    const wsPort = config.get('node.wsPort') || (restApiPort + 1000);
+
     const nodeJoiningService = new NodeJoiningService({
       nodeId: config.get('node.id'),
       nodeAddress: config.get('node.address') ||
         `localhost:${config.get('node.restApiPort')}`,
       seedNodeAddress: seedUrl,
+      wsPort: wsPort,
     });
 
     const joinResult = await nodeJoiningService.join();
@@ -244,10 +249,16 @@ async function main() {
     // Start as seed node - bootstrap the system
     mainLogger.info('Starting as seed node');
 
+    // Determine WebSocket port for cross-node communication
+    // Use REST API port + 1000 as default (e.g., 8080 -> 9080)
+    const restApiPort = config.get('node.restApiPort') || 8080;
+    const wsPort = config.get('node.wsPort') || (restApiPort + 1000);
+
     const bootstrapService = new BootstrapService({
       nodeId: config.get('node.id'),
-      nodeAddress: config.get('node.address') || `localhost:${config.get('node.restApiPort')}`,
+      nodeAddress: config.get('node.address') || `localhost:${restApiPort}`,
       dataDirectoryManager,
+      wsPort: wsPort,
     });
 
     const bootstrapResult = await bootstrapService.bootstrap();
@@ -269,11 +280,24 @@ async function main() {
     const bootstrapAPI = new BootstrapAPI({
       seedNodeId: config.get('node.id'),
       seedNodeAddress: config.get('node.address'),
+      wsPort: wsPort,
       messageGroupServices: bootstrapResult.messageGroupServices,
       partitionServices: bootstrapResult.partitionServices,
+      replicaLifecycleManager: bootstrapResult.replicaLifecycleManager,
     });
 
     await bootstrapAPI.initialize();
+
+    // Start WebSocket server for cross-node communication
+    // This allows joining nodes to connect and receive lifecycle messages
+    try {
+      await bootstrapService.startWebSocketServer();
+      mainLogger.info('WebSocket server started for cross-node communication');
+    } catch (wsError) {
+      mainLogger.warn('Failed to start WebSocket server', {
+        error: wsError.message,
+      });
+    }
 
     // Get system table cache from first message group service
     let systemTableCache = null;

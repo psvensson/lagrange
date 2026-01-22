@@ -8,11 +8,11 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
-import {DataDirectoryManager} from '../storage/data-directory-manager.js';
+import {DataDirectoryManager as _DataDirectoryManager} from '../storage/data-directory-manager.js';
 import {NodeService} from '../node/node-service.js';
 import {MessageGroupService} from '../message-group/message-group-service.js';
 import {PartitionService} from '../partition/partition-service.js';
-import {InMemoryTransport} from '../transport/in-memory-transport.js';
+import {MessageRouter} from '../transport/message-router.js';
 import {
   SystemTableName,
   SYSTEM_TABLE_SCHEMAS,
@@ -25,6 +25,8 @@ import {CacheHydrationService} from '../cache/cache-hydration-service.js';
 import {SQLQueryEngine} from '../query/sql-query-engine.js';
 import {DynamicConfigService} from '../config/dynamic-config-service.js';
 import {CDCIntegrationService} from '../cdc/cdc-integration-service.js';
+import {ReplicaLifecycleManager} from '../node/replica-lifecycle-manager.js';
+import {ReplicaStateMachine, ReplicaState} from '../node/replica-state-machine.js';
 
 /**
  * Bootstrap phases enumeration.
@@ -49,6 +51,7 @@ const DEFAULT_BOOTSTRAP_CONFIG = {
   leadershipWaitMaxDelayMs: 5000,
   leadershipWaitBackoffMultiplier: 2,
   partitionDbPath: ':memory:',
+  wsPort: null, // WebSocket port for cross-node communication (null = no server)
 };
 
 /**
@@ -66,13 +69,24 @@ class BootstrapService extends EventEmitter {
 
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
-    this.config = options.config || DEFAULT_BOOTSTRAP_CONFIG;
+    this.wsPort = options.wsPort || null;
+    this.config = {...DEFAULT_BOOTSTRAP_CONFIG, ...options.config};
     this.dataDirectoryManager = options.dataDirectoryManager || null;
 
     // Services created during bootstrap
     this.messageGroupServices = new Map();
     this.partitionServices = new Map();
     this.transport = null;
+    // MessageRouter for unified local/remote message routing
+    this.messageRouter = null;
+    // Track message group replicas for deferred election start
+    this.messageGroupReplicas = [];
+
+    // Replica lifecycle manager for handling CREATE_REPLICA/REMOVE_REPLICA
+    this.replicaLifecycleManager = null;
+
+    // Replica state machine for tracking replica lifecycle states
+    this.replicaStateMachine = null;
 
     // Bootstrap state
     this.phase = BootstrapPhase.NOT_STARTED;
@@ -135,6 +149,9 @@ class BootstrapService extends EventEmitter {
         () => this.phaseCacheHydration(),
       );
 
+      // Initialize ReplicaLifecycleManager after all services are ready
+      this.initializeReplicaLifecycleManager();
+
       // Bootstrap complete
       this.phase = BootstrapPhase.COMPLETE;
       const duration = Date.now() - this.startTime;
@@ -164,7 +181,10 @@ class BootstrapService extends EventEmitter {
         messageGroupsCreated: this.messageGroupsCreated,
         messageGroupServices: this.messageGroupServices,
         partitionServices: this.partitionServices,
+        replicaLifecycleManager: this.replicaLifecycleManager,
+        replicaStateMachine: this.replicaStateMachine,
         transport: this.transport,
+        messageRouter: this.messageRouter,
       };
     } catch (error) {
       return this.handleBootstrapFailure(error);
@@ -235,6 +255,8 @@ class BootstrapService extends EventEmitter {
   /**
    * Phase 1: Infrastructure setup.
    * Initialize node service and transport.
+   * Requirements: 2.1, 2.2, 2.3 - Use WebSocket-based transport for message groups.
+   * Requirements: 8.1, 8.2, 8.3, 8.4 - Bootstrap sequence: server → self-connect → services.
    * @return {Promise<void>}
    * @private
    */
@@ -262,18 +284,81 @@ class BootstrapService extends EventEmitter {
     this.nodeId = nodeService.getNodeId();
     this.nodeAddress = nodeService.getNodeAddress();
 
-    // Create in-memory transport for local message passing
-    this.transport = new InMemoryTransport();
+    // Determine WebSocket port from config or options
+    const wsPort = this.wsPort || this.config.wsPort;
+
+    // Create MessageRouter for unified local/remote message routing
+    // Requirements: 2.3 - Initialize MessageRouter before creating message groups
+    this.messageRouter = new MessageRouter({
+      nodeId: this.nodeId,
+      nodeAddress: this.nodeAddress,
+      wsPort: wsPort,
+    });
+
+    // Set up resolver to extract nodeId from address pattern "${nodeId}/..."
+    // This enables routing messages to remote nodes based on address patterns
+    // like "joining-node-id/lifecycle" -> routes to node "joining-node-id"
+    this.messageRouter.setServiceNodeResolver((address) => {
+      const match = address.match(/^([^/]+)\//);
+      return match ? match[1] : null;
+    });
+
+    // Requirements: 8.1, 8.2, 8.4 - Start server first, then establish self-connection
+    // If wsPort is specified, start server and establish self-connection
+    // This ensures all messages (local and remote) go through WebSocket
+    if (wsPort) {
+      try {
+        // Requirements: 8.1 - Start WebSocket server first
+        await this.messageRouter.initialize({startServer: true});
+
+        this.logger.info('WebSocket server started and self-connection established', {
+          nodeId: this.nodeId,
+          wsPort: wsPort,
+          hasSelfConnection: this.messageRouter.hasSelfConnection(),
+        });
+      } catch (error) {
+        // Requirements: 8.4 - Fail bootstrap if self-connection fails
+        this.logger.error('MessageRouter initialization failed', {
+          nodeId: this.nodeId,
+          wsPort: wsPort,
+          error: error.message,
+          stack: error.stack,
+        });
+        throw new Error(`MessageRouter initialization failed: ${error.message}`);
+      }
+    } else {
+      // No wsPort - initialize without server (for testing or single-node scenarios)
+      try {
+        await this.messageRouter.initialize({startServer: false});
+      } catch (error) {
+        this.logger.error('MessageRouter initialization failed', {
+          nodeId: this.nodeId,
+          error: error.message,
+          stack: error.stack,
+        });
+        throw new Error(`MessageRouter initialization failed: ${error.message}`);
+      }
+    }
+
+    // Use MessageRouter directly for all services
+    // MessageRouter handles both local and remote message delivery
+    // No MessageGroupTransport needed - all messages go through MessageRouter
+    this.transport = this.messageRouter;
 
     this.logger.debug('Infrastructure setup complete', {
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
+      wsPort: wsPort,
+      hasMessageRouter: !!this.messageRouter,
+      hasSelfConnection: wsPort ? this.messageRouter.hasSelfConnection() : false,
     });
   }
 
   /**
    * Phase 2: Message group creation.
    * Create initial message group with 3 replicas on seed node.
+   * Elections are DEFERRED until after partitions are created to prevent election storms.
+   * Requirements: 2.1, 2.2 - Use WebSocket-based transport for message groups.
    * @return {Promise<void>}
    * @private
    */
@@ -281,47 +366,69 @@ class BootstrapService extends EventEmitter {
     const groupId = INITIAL_MESSAGE_GROUP_ID;
     const replicaIds = INITIAL_MESSAGE_GROUP_REPLICA_IDS;
 
+    // Stagger delay between replica creations to allow handlers to be registered
+    const replicaStaggerDelayMs = 50;
+
     this.logger.debug('Creating initial message group', {
       groupId,
       replicaCount: replicaIds.length,
       nodeId: this.nodeId,
     });
 
-    // Create all 3 replicas on seed node
-    for (const replicaId of replicaIds) {
+    // Track replicas created for this group - elections start AFTER partitions are created
+    this.messageGroupReplicas = [];
+
+    // Create all 3 replicas on seed node with staggered delays
+    // Use deferElection to prevent election storms - elections start after ALL services ready
+    for (let i = 0; i < replicaIds.length; i++) {
+      const replicaId = replicaIds[i];
+
+      // Stagger replica creation to allow handlers to be registered
+      // First replica starts immediately, subsequent replicas wait
+      if (i > 0) {
+        await new Promise((resolve) => setTimeout(resolve, replicaStaggerDelayMs));
+      }
+
       const messageGroup = new MessageGroupService({
         groupId,
         replicaId,
         nodeId: this.nodeId,
         replicaIds,
-        transport: this.transport,
-        isSelfHostedGroup: true, // All replicas on same node - enables fast leader election
+        // Use MessageRouter directly for all communication
+        transport: this.messageRouter,
+        // Defer election until ALL services (message groups + partitions) are created
+        deferElection: true,
       });
 
-      // Register with transport before initializing
-      this.transport.register(replicaId, (envelope) => {
+      // Register with MessageRouter using unified address format
+      // Requirements: 1.1, 5.1 - Unified address format ${nodeId}/${entityType}/${entityId}
+      const unifiedAddress = `${this.nodeId}/message-group/${replicaId}`;
+      this.messageRouter.register(unifiedAddress, (envelope) => {
         return messageGroup.receiveMessage(envelope);
       });
 
       await messageGroup.initialize();
 
       this.messageGroupServices.set(replicaId, messageGroup);
+      this.messageGroupReplicas.push(messageGroup);
       this.servicesCreated++;
 
       this.logger.debug('Message group replica created', {
         groupId,
         replicaId,
+        replicaIndex: i,
         nodeId: this.nodeId,
       });
     }
 
     this.messageGroupsCreated++;
 
-    // Wait for leadership establishment
-    await this.waitForMessageGroupLeadership(groupId, replicaIds);
-
-    this.logger.debug('Message group leadership established', {
+    // NOTE: Elections are NOT started here - they will be started in phasePartitions()
+    // after ALL partitions are created. This prevents election storms where message
+    // group elections interfere with partition creation.
+    this.logger.debug('Message group replicas created, elections deferred', {
       groupId,
+      replicaCount: this.messageGroupReplicas.length,
       nodeId: this.nodeId,
     });
   }
@@ -347,7 +454,24 @@ class BootstrapService extends EventEmitter {
       nodeId: this.nodeId,
     });
 
+    // Check immediately first (no delay) - leadership may already be established
+    for (const replicaId of replicaIds) {
+      const service = this.messageGroupServices.get(replicaId);
+      if (service && service.isLeaderReplica()) {
+        this.logger.debug('Message group leader found immediately', {
+          groupId,
+          leaderId: replicaId,
+          elapsedMs: 0,
+        });
+        return;
+      }
+    }
+
     while (Date.now() - startTime < timeoutMs) {
+      // Wait with exponential backoff
+      await this.sleep(delay);
+      delay = Math.min(delay * backoffMultiplier, maxDelay);
+
       // Check if any replica is leader
       for (const replicaId of replicaIds) {
         const service = this.messageGroupServices.get(replicaId);
@@ -360,10 +484,6 @@ class BootstrapService extends EventEmitter {
           return;
         }
       }
-
-      // Wait with exponential backoff
-      await this.sleep(delay);
-      delay = Math.min(delay * backoffMultiplier, maxDelay);
     }
 
     // Timeout - fail bootstrap
@@ -376,12 +496,126 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
+   * Wait for all system table partitions to establish leadership.
+   * This ensures writes can succeed during the registration phase.
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForPartitionLeadership() {
+    const startTime = Date.now();
+    // Wait up to 5 seconds for partition leadership
+    // Raft election takes 150-300ms per partition, and elections happen in parallel
+    // so this should be enough for all 12 system table partitions
+    const timeoutMs = Math.min(this.config.leadershipWaitTimeoutMs || 30000, 5000);
+    let delay = this.config.leadershipWaitInitialDelayMs || 10;
+    const maxDelay = 100; // Check frequently
+    const backoffMultiplier = 1.5;
+
+    // Get unique partition IDs (multiple replicas per partition)
+    const partitionIds = new Set();
+    for (const partition of this.partitionServices.values()) {
+      partitionIds.add(partition.partitionId);
+    }
+
+    this.logger.debug('Waiting for partition leadership', {
+      partitionCount: partitionIds.size,
+      timeoutMs,
+      nodeId: this.nodeId,
+    });
+
+    // Check immediately first (no delay) - leadership may already be established
+    const leadersFound = this.checkPartitionLeaders(partitionIds);
+    if (leadersFound.size === partitionIds.size) {
+      this.logger.debug('All partition leaders found immediately', {
+        partitionCount: partitionIds.size,
+        elapsedMs: 0,
+      });
+      return;
+    }
+
+    while (Date.now() - startTime < timeoutMs) {
+      // Wait with exponential backoff
+      await this.sleep(delay);
+      delay = Math.min(delay * backoffMultiplier, maxDelay);
+
+      // Check if all partitions have leaders
+      const leaders = this.checkPartitionLeaders(partitionIds);
+      if (leaders.size === partitionIds.size) {
+        this.logger.debug('All partition leaders found', {
+          partitionCount: partitionIds.size,
+          elapsedMs: Date.now() - startTime,
+        });
+        return;
+      }
+    }
+
+    // Timeout - log debug but don't fail (registration operations handle errors)
+    const leaders = this.checkPartitionLeaders(partitionIds);
+    const missing = [...partitionIds].filter((id) => !leaders.has(id));
+    this.logger.debug('Some partitions still electing leaders, continuing', {
+      totalPartitions: partitionIds.size,
+      leadersFound: leaders.size,
+      missingLeaders: missing,
+      elapsedMs: Date.now() - startTime,
+      nodeId: this.nodeId,
+    });
+  }
+
+  /**
+   * Check which partitions have leaders.
+   * @param {Set<string>} partitionIds - Partition IDs to check.
+   * @return {Set<string>} Partition IDs that have leaders.
+   * @private
+   */
+  checkPartitionLeaders(partitionIds) {
+    const leadersFound = new Set();
+    for (const partition of this.partitionServices.values()) {
+      if (partition.isLeader && partitionIds.has(partition.partitionId)) {
+        leadersFound.add(partition.partitionId);
+      }
+    }
+    return leadersFound;
+  }
+
+  /**
+   * Get the leader message group service for sending lifecycle messages.
+   * Returns the first message group service that is a leader, or any available service.
+   * @return {Object|null} Message group service or null.
+   * @private
+   */
+  getLeaderMessageGroupService() {
+    // First try to find a leader
+    for (const service of this.messageGroupServices.values()) {
+      if (service && service.isLeaderReplica && service.isLeaderReplica()) {
+        return service;
+      }
+    }
+    // Fall back to any available service
+    for (const service of this.messageGroupServices.values()) {
+      if (service) {
+        return service;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Phase 3: Partition creation for system tables.
    * Create partitions for all system tables.
+   * Elections are deferred until ALL partitions are created to prevent election storms.
    * @return {Promise<void>}
    * @private
    */
   async phasePartitions() {
+    // Stagger delay between replica creations to prevent election storms
+    // When all replicas start simultaneously, they all timeout and start elections
+    // at similar times, causing repeated failed elections
+    const replicaStaggerDelayMs = 50;
+
+    // Track ALL replicas across ALL partitions to start elections after all are ready
+    // This prevents election storms where elections from different partitions interfere
+    const allPartitionReplicas = [];
+
     // Create partitions for each system table
     for (const schema of SYSTEM_TABLE_SCHEMAS) {
       const tableName = schema.tableName;
@@ -395,8 +629,17 @@ class BootstrapService extends EventEmitter {
         nodeId: this.nodeId,
       });
 
-      // Create all 3 replicas on seed node
-      for (const replicaId of replicaIds) {
+      // Create all 3 replicas on seed node with staggered delays
+      // Use deferElection to prevent election storms - elections start after ALL ready
+      for (let i = 0; i < replicaIds.length; i++) {
+        const replicaId = replicaIds[i];
+
+        // Stagger replica creation to allow handlers to be registered
+        // First replica starts immediately, subsequent replicas wait
+        if (i > 0) {
+          await new Promise((resolve) => setTimeout(resolve, replicaStaggerDelayMs));
+        }
+
         // Generate database path using DataDirectoryManager
         let dbPath = ':memory:';
         if (this.dataDirectoryManager && this.dataDirectoryManager.isInitialized()) {
@@ -416,11 +659,19 @@ class BootstrapService extends EventEmitter {
           nodeId: this.nodeId,
           transport: this.transport,
           dbPath,
-          isSelfHostedGroup: true, // All replicas on same node - enables fast leader election
+          // Pass message group service for CREATE_REPLICA/REMOVE_REPLICA messages
+          messageGroupService: this.getLeaderMessageGroupService(),
+          // Pass MessageRouter for cross-node lifecycle messages
+          messageRouter: this.messageRouter,
+          // Defer election until ALL partitions are created to prevent election storms
+          deferElection: true,
         });
 
-        // Register with transport before initializing
-        this.transport.register(replicaId, (envelope) => {
+        // Register with MessageRouter for unified local/remote message delivery
+        // All local messages go through MessageRouter - no InMemoryTransport
+        // Requirements: 1.1, 5.1 - Unified address format ${nodeId}/${entityType}/${entityId}
+        const unifiedPartitionAddress = `${this.nodeId}/partition/${replicaId}`;
+        this.messageRouter.register(unifiedPartitionAddress, (envelope) => {
           return partition.handleTransportMessage ?
             partition.handleTransportMessage(envelope) :
             {acknowledged: true};
@@ -429,12 +680,14 @@ class BootstrapService extends EventEmitter {
         await partition.initialize();
 
         this.partitionServices.set(replicaId, partition);
+        allPartitionReplicas.push(partition);
         this.servicesCreated++;
 
         this.logger.debug('Partition replica created', {
           tableName,
           partitionId,
           replicaId,
+          replicaIndex: i,
           nodeId: this.nodeId,
         });
       }
@@ -442,7 +695,48 @@ class BootstrapService extends EventEmitter {
       this.partitionsCreated++;
 
       // Subscribe message groups to CDC from this partition
+      // Do this before starting elections so CDC handlers are ready
       await this.subscribeToCDC(tableName, partitionId, replicaIds);
+    }
+
+    // ALL partitions are now created and registered
+    // Now start elections on ALL Raft groups (message groups + partitions)
+    // Starting them together prevents election storms where one group's elections
+    // interfere with another group's elections during creation
+
+    // First, start message group elections (they were created in phase 2)
+    if (this.messageGroupReplicas && this.messageGroupReplicas.length > 0) {
+      this.logger.info('Starting elections for message group replicas', {
+        totalReplicas: this.messageGroupReplicas.length,
+        nodeId: this.nodeId,
+      });
+
+      for (const messageGroup of this.messageGroupReplicas) {
+        messageGroup.startElection();
+      }
+
+      // Wait for message group leadership before starting partition elections
+      // This ensures message groups are stable before partitions start electing
+      await this.waitForMessageGroupLeadership(
+        INITIAL_MESSAGE_GROUP_ID,
+        INITIAL_MESSAGE_GROUP_REPLICA_IDS,
+      );
+
+      this.logger.debug('Message group leadership established', {
+        groupId: INITIAL_MESSAGE_GROUP_ID,
+        nodeId: this.nodeId,
+      });
+    }
+
+    // Now start partition elections
+    this.logger.info('Starting elections for all partition replicas', {
+      totalReplicas: allPartitionReplicas.length,
+      partitionsCreated: this.partitionsCreated,
+      nodeId: this.nodeId,
+    });
+
+    for (const partition of allPartitionReplicas) {
+      partition.startElection();
     }
 
     this.logger.debug('All system table partitions created', {
@@ -460,39 +754,75 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   async subscribeToCDC(tableName, partitionId, replicaIds) {
-    // Get the leader partition replica
-    let leaderPartition = null;
+    this.logger.info('Setting up CDC subscription', {
+      tableName,
+      partitionId,
+      replicaIds,
+    });
+
+    // Subscribe to ALL replicas since any could become leader
+    // and the query executor routes to the current leader
     for (const replicaId of replicaIds) {
       const partition = this.partitionServices.get(replicaId);
-      if (partition && partition.isLeader) {
-        leaderPartition = partition;
-        break;
+      if (!partition) {
+        this.logger.warn('Partition not found for CDC subscription', {
+          tableName,
+          replicaId,
+        });
+        continue;
       }
-    }
 
-    // If no leader yet, use first replica
-    if (!leaderPartition) {
-      leaderPartition = this.partitionServices.get(replicaIds[0]);
-    }
+      // Subscribe all message group replicas to CDC from this partition replica
+      for (const messageGroup of this.messageGroupServices.values()) {
+        await messageGroup.subscribeToCDC(tableName);
 
-    if (!leaderPartition) {
-      return;
-    }
+        // Register CDC handler on this partition replica
+        partition.subscribeToCDC(async (cdcEvent) => {
+          if (cdcEvent.tableName === tableName) {
+            this.logger.debug('CDC event received by bootstrap handler', {
+              tableName: cdcEvent.tableName,
+              operation: cdcEvent.operation,
+              sourceReplica: replicaId,
+            });
+            await messageGroup.applyCDCEvent(
+              cdcEvent.tableName,
+              cdcEvent.operation,
+              cdcEvent.data,
+            );
 
-    // Subscribe all message group replicas to CDC
-    for (const messageGroup of this.messageGroupServices.values()) {
-      await messageGroup.subscribeToCDC(tableName);
+            // Trigger rebalancing on all partitions when a new node joins
+            if (tableName === 'nodes' && cdcEvent.operation === 'INSERT') {
+              this.triggerRebalancingOnAllPartitions('node_join');
+            }
+          }
+        });
+      }
 
-      // Register CDC handler
-      leaderPartition.subscribeToCDC(async (cdcEvent) => {
-        if (cdcEvent.tableName === tableName) {
-          await messageGroup.applyCDCEvent(
-            cdcEvent.tableName,
-            cdcEvent.operation,
-            cdcEvent.data,
-          );
-        }
+      this.logger.info('CDC subscription registered on replica', {
+        tableName,
+        partitionId,
+        replicaId,
+        isLeader: partition.isLeader,
       });
+    }
+  }
+
+  /**
+   * Trigger rebalancing check on all partition leaders.
+   * Called when a significant cluster event occurs.
+   * @param {string} reason - Reason for triggering rebalancing.
+   * @private
+   */
+  triggerRebalancingOnAllPartitions(reason) {
+    this.logger.info('Triggering rebalancing on all partitions', {
+      reason,
+      partitionCount: this.partitionServices.size,
+    });
+
+    for (const partition of this.partitionServices.values()) {
+      if (partition.isLeader) {
+        partition.triggerRebalanceCheck(reason);
+      }
     }
   }
 
@@ -504,6 +834,10 @@ class BootstrapService extends EventEmitter {
    */
   async phaseRegistration() {
     const timestamp = Date.now();
+
+    // Wait for partition leadership before attempting writes
+    // This prevents "No leader available for write operation" errors
+    await this.waitForPartitionLeadership();
 
     // Get node stats for registration
     const nodeService = NodeService.getInstance();
@@ -635,7 +969,8 @@ class BootstrapService extends EventEmitter {
         replica_id: replicaId,
         raft_role: service.getRole(),
         status: 'active',
-        address: `${this.nodeAddress}/services/${replicaId}`,
+        // Use unified address format: ${nodeId}/${entityType}/${entityId}
+        address: `${this.nodeId}/message-group/${replicaId}`,
         created_at: now,
         updated_at: now,
       };
@@ -661,7 +996,8 @@ class BootstrapService extends EventEmitter {
         replica_id: replicaId,
         raft_role: service.role,
         status: 'active',
-        address: `${this.nodeAddress}/services/${replicaId}`,
+        // Use unified address format: ${nodeId}/${entityType}/${entityId}
+        address: `${this.nodeId}/partition/${replicaId}`,
         created_at: now,
         updated_at: now,
       };
@@ -950,10 +1286,317 @@ class BootstrapService extends EventEmitter {
 
     const result = await hydrationService.hydrateCache();
 
+    // Set system table cache on all partition services for rebalancer
+    for (const partition of this.partitionServices.values()) {
+      partition.setSystemTableCache(systemTableCache);
+    }
+
     this.logger.info('Cache hydration complete', {
       success: result.success,
       tablesHydrated: Object.keys(result.tables).length,
       errors: result.errors.length,
+    });
+  }
+
+  /**
+   * Initialize the ReplicaLifecycleManager to handle CREATE_REPLICA/REMOVE_REPLICA.
+   * @private
+   */
+  initializeReplicaLifecycleManager() {
+    // Get the leader message group service for routing
+    const messageGroupService = this.getLeaderMessageGroupService();
+
+    // Get data directory for partition storage
+    let dataDir = './data';
+    if (this.dataDirectoryManager && this.dataDirectoryManager.isInitialized()) {
+      dataDir = this.dataDirectoryManager.getDataDir();
+    }
+
+    // Build partition registry for CDC integration service
+    const partitionRegistry = new Map();
+    for (const [_replicaId, partition] of this.partitionServices) {
+      const partitionId = partition.partitionId;
+      if (!partitionRegistry.has(partitionId) || partition.isLeader) {
+        partitionRegistry.set(partitionId, partition);
+      }
+    }
+
+    // Create a function to get partition for a table from the registry
+    const getPartitionForTable = (tableName) => {
+      for (const partition of partitionRegistry.values()) {
+        if (partition.tableName === tableName && partition.isLeader) {
+          return partition;
+        }
+      }
+      // Return first matching partition if no leader found
+      for (const partition of partitionRegistry.values()) {
+        if (partition.tableName === tableName) {
+          return partition;
+        }
+      }
+      return null;
+    };
+
+    // Create CDC integration service for state machine persistence
+    const cdcIntegrationService = new CDCIntegrationService({
+      nodeId: this.nodeId,
+      getPartitionForTable,
+    });
+    cdcIntegrationService.initialize();
+
+    // Create ReplicaStateMachine for tracking replica lifecycle states
+    // Requirements: 1.4 - Single source of truth for replica status
+    this.replicaStateMachine = new ReplicaStateMachine({
+      nodeId: this.nodeId,
+      cdcIntegrationService: cdcIntegrationService,
+    });
+
+    // Start the timeout checker for stuck operations
+    this.replicaStateMachine.startTimeoutChecker();
+
+    // Create partition service factory that includes messageGroupService and transport
+    const createPartitionService = async (options) => {
+      // Generate database path
+      let dbPath = ':memory:';
+      if (this.dataDirectoryManager && this.dataDirectoryManager.isInitialized()) {
+        dbPath = this.dataDirectoryManager.getPartitionDbPath(
+          options.partitionId,
+          options.replicaId,
+        );
+      }
+
+      const partition = new PartitionService({
+        ...options,
+        dbPath,
+        transport: this.transport,
+        messageGroupService: messageGroupService,
+        messageRouter: this.messageRouter,
+        replicaStateMachine: this.replicaStateMachine,
+      });
+
+      // Note: PartitionService now registers itself with unified address format
+      // in its initialize() method. No need to register here.
+
+      await partition.initialize();
+
+      // Track the partition service
+      this.partitionServices.set(options.replicaId, partition);
+      this.servicesCreated++;
+
+      return partition;
+    };
+
+    // Create ReplicaLifecycleManager with state machine
+    this.replicaLifecycleManager = new ReplicaLifecycleManager({
+      nodeId: this.nodeId,
+      messageGroupService: messageGroupService,
+      createPartitionService: createPartitionService,
+      dataDir: dataDir,
+      replicaStateMachine: this.replicaStateMachine,
+    });
+
+    this.replicaLifecycleManager.initialize();
+
+    // Register lifecycle handler with MessageRouter
+    this.registerLifecycleHandler(this.messageRouter, this.replicaLifecycleManager);
+
+    // Register all bootstrap-created partitions with ReplicaLifecycleManager
+    // This ensures seed node partitions can be found during rebalancer remove operations
+    this.registerPartitionsWithLifecycleManager(
+      this.replicaLifecycleManager,
+      this.partitionServices,
+    );
+
+    // Register existing replicas with the state machine
+    // Requirements: 1.4 - State machine is single source of truth
+    this.registerReplicasWithStateMachine(
+      this.replicaStateMachine,
+      this.partitionServices,
+    );
+
+    this.logger.info('ReplicaLifecycleManager initialized', {
+      nodeId: this.nodeId,
+      hasMessageGroupService: !!messageGroupService,
+      hasStateMachine: !!this.replicaStateMachine,
+      registeredPartitions: this.partitionServices.size,
+    });
+  }
+
+  /**
+   * Register bootstrap-created partitions with ReplicaLifecycleManager.
+   * This ensures seed node partitions are tracked and can be found during
+   * rebalancer remove operations.
+   * Requirements: 1.1, 1.2
+   * @param {ReplicaLifecycleManager} lifecycleManager - Manager instance.
+   * @param {Map<string, PartitionService>} partitions - Created partitions.
+   */
+  registerPartitionsWithLifecycleManager(lifecycleManager, partitions) {
+    if (!lifecycleManager) {
+      this.logger.warn('No lifecycle manager provided for partition registration');
+      return;
+    }
+
+    let registeredCount = 0;
+    for (const [replicaId, partition] of partitions) {
+      try {
+        lifecycleManager.registerExistingReplica({
+          replicaId: replicaId,
+          partitionId: partition.partitionId,
+          tableName: partition.tableName,
+          status: 'active',
+          service: partition,
+        });
+        registeredCount++;
+      } catch (error) {
+        this.logger.error('Failed to register partition with lifecycle manager', {
+          replicaId,
+          partitionId: partition.partitionId,
+          error: error.message,
+        });
+      }
+    }
+
+    this.logger.debug('Registered partitions with lifecycle manager', {
+      registeredCount,
+      totalPartitions: partitions.size,
+      nodeId: this.nodeId,
+    });
+  }
+
+  /**
+   * Register bootstrap-created replicas with the ReplicaStateMachine.
+   * This ensures the state machine tracks all existing replicas as 'active'.
+   * Requirements: 1.4 - State machine is single source of truth
+   *
+   * Note: During bootstrap, we temporarily disable CDC persistence because:
+   * 1. Partition leadership may not be established yet (Raft election in progress)
+   * 2. Services are already registered in registerServices() phase
+   * 3. This avoids "No leader available for write operation" errors
+   *
+   * @param {ReplicaStateMachine} stateMachine - State machine instance.
+   * @param {Map<string, PartitionService>} partitions - Created partitions.
+   */
+  registerReplicasWithStateMachine(stateMachine, partitions) {
+    if (!stateMachine) {
+      this.logger.warn('No state machine provided for replica registration');
+      return;
+    }
+
+    // Temporarily disable CDC persistence during bootstrap registration
+    // to avoid "No leader available" errors before Raft election completes.
+    // The services are already registered in the registerServices() phase.
+    const originalCdcService = stateMachine.cdcIntegrationService;
+    stateMachine.cdcIntegrationService = null;
+
+    let registeredCount = 0;
+    for (const [replicaId, partition] of partitions) {
+      try {
+        // Transition from null (new) to pending, then through to active
+        // For bootstrap replicas, we directly set them as active
+        // First transition: null -> pending
+        stateMachine.transition(replicaId, ReplicaState.PENDING, {
+          partitionId: partition.partitionId,
+          nodeId: this.nodeId,
+          reason: 'bootstrap_registration',
+          serviceId: replicaId,
+        });
+
+        // Second transition: pending -> creating
+        stateMachine.transition(replicaId, ReplicaState.CREATING, {
+          partitionId: partition.partitionId,
+          nodeId: this.nodeId,
+          reason: 'bootstrap_registration',
+          serviceId: replicaId,
+        });
+
+        // Third transition: creating -> syncing
+        stateMachine.transition(replicaId, ReplicaState.SYNCING, {
+          partitionId: partition.partitionId,
+          nodeId: this.nodeId,
+          reason: 'bootstrap_registration',
+          serviceId: replicaId,
+        });
+
+        // Fourth transition: syncing -> active
+        stateMachine.transition(replicaId, ReplicaState.ACTIVE, {
+          partitionId: partition.partitionId,
+          nodeId: this.nodeId,
+          reason: 'bootstrap_registration',
+          serviceId: replicaId,
+        });
+
+        registeredCount++;
+      } catch (error) {
+        this.logger.error('Failed to register replica with state machine', {
+          replicaId,
+          partitionId: partition.partitionId,
+          error: error.message,
+        });
+      }
+    }
+
+    // Restore CDC persistence for future state transitions
+    stateMachine.cdcIntegrationService = originalCdcService;
+
+    this.logger.debug('Registered replicas with state machine', {
+      registeredCount,
+      totalPartitions: partitions.size,
+      nodeId: this.nodeId,
+      stateCounts: stateMachine.getStateCounts(),
+    });
+  }
+
+  /**
+   * Register lifecycle handler with MessageRouter.
+   * The handler delegates CREATE_REPLICA and REMOVE_REPLICA messages to
+   * ReplicaLifecycleManager and emits ACK events.
+   * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+   * @param {MessageRouter} messageRouter - Router instance.
+   * @param {ReplicaLifecycleManager} lifecycleManager - Manager instance.
+   */
+  registerLifecycleHandler(messageRouter, lifecycleManager) {
+    if (!messageRouter) {
+      this.logger.warn('No message router provided for lifecycle handler registration');
+      return;
+    }
+
+    if (!lifecycleManager) {
+      this.logger.warn('No lifecycle manager provided for handler registration');
+      return;
+    }
+
+    // Get message group service for ACK event emission
+    const messageGroupService = this.getLeaderMessageGroupService();
+
+    // Lifecycle handler address follows unified format: ${nodeId}/lifecycle/manager
+    // Requirements: 1.1, 5.1 - Unified address format ${nodeId}/${entityType}/${entityId}
+    const lifecycleAddress = `${this.nodeId}/lifecycle/manager`;
+
+    const lifecycleHandler = async (envelope) => {
+      const message = envelope.payload || envelope;
+      if (message.type === 'CREATE_REPLICA') {
+        const ack = await lifecycleManager.handleCreateReplica(message);
+        if (messageGroupService) {
+          messageGroupService.emit('CREATE_REPLICA_ACK', ack);
+        }
+        // Return flat structure - spread ACK fields directly
+        return {acknowledged: true, ...ack};
+      } else if (message.type === 'REMOVE_REPLICA') {
+        const ack = await lifecycleManager.handleRemoveReplica(message);
+        if (messageGroupService) {
+          messageGroupService.emit('REMOVE_REPLICA_ACK', ack);
+        }
+        // Return flat structure - spread ACK fields directly
+        return {acknowledged: true, ...ack};
+      }
+      return {acknowledged: false, error: 'Unknown message type'};
+    };
+
+    messageRouter.register(lifecycleAddress, lifecycleHandler);
+
+    this.logger.debug('Registered lifecycle handler', {
+      address: lifecycleAddress,
+      nodeId: this.nodeId,
     });
   }
 
@@ -1035,6 +1678,19 @@ class BootstrapService extends EventEmitter {
       partitionServices: this.partitionServices.size,
     });
 
+    // Shutdown replica state machine
+    if (this.replicaStateMachine) {
+      this.replicaStateMachine.stopTimeoutChecker();
+      this.replicaStateMachine.clear();
+      this.replicaStateMachine = null;
+    }
+
+    // Shutdown replica lifecycle manager
+    if (this.replicaLifecycleManager) {
+      this.replicaLifecycleManager.shutdown();
+      this.replicaLifecycleManager = null;
+    }
+
     // Shutdown partition services
     for (const [replicaId, partition] of this.partitionServices) {
       try {
@@ -1067,12 +1723,67 @@ class BootstrapService extends EventEmitter {
     }
     this.messageGroupServices.clear();
 
-    // Clear transport
-    if (this.transport) {
-      this.transport.clear();
+    // Shutdown message router
+    if (this.messageRouter && this.messageRouter.shutdown) {
+      await this.messageRouter.shutdown();
+      this.messageRouter = null;
     }
 
+    // Shutdown transport (alias for messageRouter)
+    if (this.transport && this.transport.shutdown && this.transport !== this.messageRouter) {
+      await this.transport.shutdown();
+    }
+    this.transport = null;
+
     this.logger.info('Cleanup complete', {nodeId: this.nodeId});
+  }
+
+  /**
+   * Start WebSocket server for cross-node communication.
+   * Call this after bootstrap is complete to enable remote node connections.
+   * Note: If wsPort was provided during bootstrap, the server is already started.
+   * @return {Promise<void>}
+   */
+  async startWebSocketServer() {
+    if (!this.messageRouter) {
+      throw new Error('MessageRouter not initialized - bootstrap must complete first');
+    }
+
+    const wsPort = this.wsPort || this.config.wsPort;
+    if (!wsPort) {
+      this.logger.warn('No WebSocket port configured, skipping server start');
+      return;
+    }
+
+    // Check if server is already running (started during bootstrap)
+    if (this.messageRouter.server) {
+      this.logger.debug('WebSocket server already running', {
+        nodeId: this.nodeId,
+        wsPort: wsPort,
+      });
+      return;
+    }
+
+    // Update the port if not already set
+    if (!this.messageRouter.wsPort) {
+      this.messageRouter.wsPort = wsPort;
+    }
+
+    // Start server and establish self-connection
+    await this.messageRouter.initialize({startServer: true});
+
+    this.logger.info('WebSocket server started for cross-node communication', {
+      nodeId: this.nodeId,
+      wsPort: wsPort,
+    });
+  }
+
+  /**
+   * Get the MessageRouter for cross-node communication.
+   * @return {MessageRouter|null} The message router or null if not initialized.
+   */
+  getMessageRouter() {
+    return this.messageRouter;
   }
 
   /**
@@ -1108,6 +1819,22 @@ class BootstrapService extends EventEmitter {
    */
   sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Shutdown the bootstrap service and all managed services.
+   * @return {Promise<void>}
+   */
+  async shutdown() {
+    this.logger.info('Shutting down bootstrap service', {
+      nodeId: this.nodeId,
+      messageGroupServices: this.messageGroupServices.size,
+      partitionServices: this.partitionServices.size,
+    });
+
+    await this.cleanup();
+
+    this.emit('shutdown', {nodeId: this.nodeId});
   }
 
   /**

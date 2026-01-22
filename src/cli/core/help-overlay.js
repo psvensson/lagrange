@@ -64,6 +64,7 @@ export class HelpOverlay {
           {key: '7', description: 'Logs view'},
           {key: '8', description: 'Config view'},
           {key: '9', description: 'Contexts view'},
+          {key: '0', description: 'Operations view'},
         ],
       },
       {
@@ -169,6 +170,15 @@ export class HelpOverlay {
           {key: 't', description: 'Filter by context type'},
         ],
       },
+      operations: {
+        title: 'Operations View',
+        description: 'View replica operations with workflow steps and history.',
+        shortcuts: [
+          {key: 'Enter', description: 'View operation details'},
+          {key: 'i', description: 'Filter in-flight operations only'},
+          {key: 'f', description: 'Filter failed operations only'},
+        ],
+      },
     };
   }
 
@@ -248,13 +258,13 @@ export class HelpOverlay {
     // Add view-specific hints
     switch (currentView) {
     case 'sql':
-      hints.unshift('Ctrl+Enter:Execute');
+      hints.unshift('Ctrl+X:Execute');
       break;
     case 'logs':
       hints.unshift('l:Level', 'n:Node');
       break;
     case 'config':
-      hints.unshift('Enter:Edit');
+      hints.unshift('e:Edit', 'R:Revert', 'Enter:Details');
       break;
     default:
       hints.unshift('Enter:Drill Down');

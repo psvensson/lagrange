@@ -123,9 +123,10 @@ This implementation plan breaks down the distributed database system into increm
 
 - [x] 8. Message Transport Layer
   - [x] 8.1 Implement InMemoryTransport for single-node bootstrap
-    - Create transport for local message passing
-    - Support Raft consensus messages between local replicas
-    - _Requirements: 4.1_
+    - Create transport for local message passing during initial bootstrap ONLY
+    - Support Raft consensus messages between local replicas during bootstrap
+    - NOTE: InMemoryTransport is NOT used after bootstrap completes
+    - _Requirements: 4.1, 4.21_
 
   - [x] 8.2 Implement WebSocketTransport for inter-node communication
     - Create WebSocket-based transport using ws library
@@ -980,6 +981,160 @@ This implementation plan breaks down the distributed database system into increm
 
 - [x] 50. Checkpoint - Verify persistent storage
   - All 7,337 tests pass including storage module tests and property tests (Properties 76 & 77)
+
+- [x] 51. Replica Lifecycle Management
+  - [x] 51.1 Implement ReplicaLifecycleManager class
+    - Create ReplicaLifecycleManager with message handlers for CREATE_REPLICA and REMOVE_REPLICA
+    - Register handlers with message group service
+    - Track pending operations with request_id mapping
+    - _Requirements: 10.1, 10.2, 10.10, 10.11_
+
+  - [x] 51.2 Implement CREATE_REPLICA handler
+    - Check for duplicate replica (idempotency)
+    - Send immediate ACK with 'initiated' or 'already_exists' status
+    - Insert service row with status 'starting'
+    - Create PartitionService instance with correct dbPath
+    - Update status to 'syncing' after message group registration
+    - Sync Raft log from leader
+    - Update status to 'active' on sync completion
+    - Handle errors by setting status to 'failed'
+    - _Requirements: 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9_
+
+  - [x] 51.3 Implement REMOVE_REPLICA handler
+    - Send immediate ACK with 'initiated' status
+    - Update status to 'stopping'
+    - Complete in-flight operations via graceful shutdown
+    - Update status to 'stopped'
+    - Delete service row from services table
+    - Clean up local resources (SQLite files)
+    - Unregister service from node service
+    - Handle errors by setting status to 'failed'
+    - _Requirements: 10.12, 10.13, 10.14, 10.15, 10.16_
+
+  - [x] 51.4 Implement replica status state machine
+    - Define valid status transitions in constants
+    - Validate transitions before applying status updates
+    - Log invalid transition attempts
+    - _Requirements: 10.17, 10.18, 10.19_
+
+  - [x] 51.5 Implement message acknowledgment with timeout
+    - Create sendWithAck() method in rebalancer
+    - Register one-time ACK handler with request_id matching
+    - Implement configurable timeout (default 30 seconds)
+    - Clean up handler on timeout or response
+    - _Requirements: 10.20, 10.21, 10.22_
+
+  - [x] 51.6 Update UnifiedRebalancer for lifecycle integration
+    - Replace event emission with CREATE_REPLICA/REMOVE_REPLICA messages
+    - Track pending moves in pendingMoves Map
+    - Filter out pending replicas in calculateMoves()
+    - Skip move generation when transitioning replicas exist
+    - Implement cleanupExpiredMoves() for stale operations
+    - _Requirements: 10.23, 10.24, 10.25_
+
+  - [x] 51.7 Implement CDC event handling for move completion
+    - Subscribe to services table CDC events
+    - Detect ADD completion when status becomes 'active'
+    - Detect REMOVE completion when row is deleted
+    - Detect failure when status becomes 'failed'
+    - Remove completed/failed moves from pendingMoves
+    - _Requirements: 10.23, 10.24_
+
+  - [x] 51.8 Implement node recovery orphan cleanup
+    - Query services table for transitional states on node recovery
+    - Mark 'starting'/'syncing' replicas as 'failed'
+    - Complete removal for 'stopping' replicas
+    - Clean up local resources for orphaned replicas
+    - _Requirements: 10.26, 10.27, 10.28_
+
+  - [x] 51.9 Implement lifecycle observability
+    - Log all lifecycle operations at INFO level
+    - Include partition_id, replica_id, node_id, status in log context
+    - Log state transitions with before/after status
+    - Log errors with full context and stack traces
+    - _Requirements: 10.29_
+
+  - [x] 51.10 Write property test for replica lifecycle message delivery
+    - **Property 77: Replica Lifecycle Message Delivery**
+    - **Validates: Requirements 10.1, 10.2, 10.10, 10.11, 10.20**
+
+  - [x] 51.11 Write property test for replica creation idempotency
+    - **Property 78: Replica Creation Idempotency**
+    - **Validates: Requirements 10.3**
+
+  - [x] 51.12 Write property test for replica status state machine validity
+    - **Property 79: Replica Status State Machine Validity**
+    - **Validates: Requirements 10.17, 10.18, 10.19**
+
+  - [x] 51.13 Write property test for pending move tracking
+    - **Property 80: Pending Move Tracking**
+    - **Validates: Requirements 10.23, 10.24**
+
+  - [x] 51.14 Write property test for duplicate move prevention
+    - **Property 81: Duplicate Move Prevention**
+    - **Validates: Requirements 10.25**
+
+  - [x] 51.15 Write property test for replica removal graceful shutdown
+    - **Property 82: Replica Removal Graceful Shutdown**
+    - **Validates: Requirements 10.12, 10.13, 10.14, 10.15, 10.16**
+
+  - [x] 51.16 Write property test for node recovery orphan cleanup
+    - **Property 83: Node Recovery Orphan Cleanup**
+    - **Validates: Requirements 10.26, 10.27, 10.28**
+
+- [x] 52. Checkpoint - Verify replica lifecycle management
+  - Ensure all tests pass, ask the user if questions arise.
+
+
+- [x] 53. Cross-Node WebSocket Communication
+  - [x] 53.1 Implement MessageRouter for unified local/remote routing
+    - Created MessageRouter class that handles both local and WebSocket routing
+    - Supports local handler registration (like InMemoryTransport)
+    - Supports WebSocket server for incoming connections
+    - Supports WebSocket client connections to remote nodes
+    - Routes messages locally or via WebSocket based on target
+    - _Requirements: 11.1, 11.8, 4.16, 4.21, 4.22_
+
+  - [x] 53.2 Integrate MessageRouter into bootstrap-service
+    - Added MessageRouter import and initialization
+    - Added wsPort configuration option
+    - Added startWebSocketServer() method for post-bootstrap server start
+    - Added getMessageRouter() accessor
+    - Updated cleanup to shutdown MessageRouter
+    - _Requirements: 11.8, 4.16, 4.21, 4.22_
+
+  - [x] 53.3 Integrate MessageRouter into node-joining-service
+    - Added MessageRouter import and initialization
+    - Added seedNodeWsAddress and wsPort options
+    - Added CONNECTING_WEBSOCKET phase
+    - Added phaseConnectWebSocket() to connect to seed node
+    - Updated cleanup to shutdown MessageRouter
+    - _Requirements: 11.8, 4.16, 4.22_
+
+  - [x] 53.4 Update MessageGroupTransport to use MessageRouter
+    - Added messageRouter option to constructor
+    - Added setMessageRouter() method
+    - Updated deliver() to try WebSocket routing for cross-node targets
+    - Added deliverViaMessageRouter() method for WebSocket delivery
+    - Falls back to message group routing if WebSocket fails
+    - Updated getStats() to include hasMessageRouter
+    - _Requirements: 11.2, 11.3, 4.21, 4.22_
+
+  - [x] 53.5 Write unit tests for MessageRouter
+    - Test local message delivery
+    - Test handler registration/unregistration
+    - Test stats and state management
+    - _Requirements: 10.1, 10.10_
+
+  - [x] 53.6 Write integration test for cross-node replica placement
+    - Test that CREATE_REPLICA messages reach new nodes
+    - Test that REMOVE_REPLICA messages reach target nodes
+    - Verify rebalancer moves are executed across nodes
+    - _Requirements: 10.1, 10.10, 11.3_
+
+- [x] 54. Checkpoint - Verify cross-node communication
+  - All tests pass for MessageRouter, MessageGroupTransport, and integration tests
+
 
 ## Notes
 

@@ -1,5 +1,6 @@
 import {test} from 'tap';
-import {ServicesView, SERVICE_TYPES} from
+import {ServicesView, SERVICE_TYPES, REPLICA_STATES, REPLICA_STATE_COLORS,
+  TRANSITIONAL_STATES} from
   '../../../src/cli/views/services-view.js';
 import {ROW_STATUS} from '../../../src/cli/core/base-view.js';
 
@@ -313,4 +314,172 @@ test('ServicesView', async (t) => {
     t.equal(SERVICE_TYPES.MESSAGE_GROUP, 'message_group');
     t.equal(SERVICE_TYPES.NODE, 'node');
   });
+
+  t.test('REPLICA_STATES constants are correct', async (t) => {
+    t.equal(REPLICA_STATES.PENDING, 'pending');
+    t.equal(REPLICA_STATES.CREATING, 'creating');
+    t.equal(REPLICA_STATES.SYNCING, 'syncing');
+    t.equal(REPLICA_STATES.ACTIVE, 'active');
+    t.equal(REPLICA_STATES.REMOVING, 'removing');
+    t.equal(REPLICA_STATES.REMOVED, 'removed');
+    t.equal(REPLICA_STATES.FAILED, 'failed');
+  });
+
+  t.test('REPLICA_STATE_COLORS has correct color mappings', async (t) => {
+    t.equal(REPLICA_STATE_COLORS[REPLICA_STATES.ACTIVE], 'green');
+    t.equal(REPLICA_STATE_COLORS[REPLICA_STATES.SYNCING], 'yellow');
+    t.equal(REPLICA_STATE_COLORS[REPLICA_STATES.CREATING], 'blue');
+    t.equal(REPLICA_STATE_COLORS[REPLICA_STATES.PENDING], 'blue');
+    t.equal(REPLICA_STATE_COLORS[REPLICA_STATES.REMOVING], 'yellow');
+    t.equal(REPLICA_STATE_COLORS[REPLICA_STATES.REMOVED], 'gray');
+    t.equal(REPLICA_STATE_COLORS[REPLICA_STATES.FAILED], 'red');
+  });
+
+  t.test('TRANSITIONAL_STATES contains correct states', async (t) => {
+    t.ok(TRANSITIONAL_STATES.includes('pending'));
+    t.ok(TRANSITIONAL_STATES.includes('creating'));
+    t.ok(TRANSITIONAL_STATES.includes('syncing'));
+    t.ok(TRANSITIONAL_STATES.includes('removing'));
+    t.notOk(TRANSITIONAL_STATES.includes('active'));
+    t.notOk(TRANSITIONAL_STATES.includes('failed'));
+  });
+
+  t.test('getStatusColor returns correct colors for replica states', async (t) => {
+    const view = new ServicesView();
+
+    t.equal(view.getStatusColor('active'), 'green');
+    t.equal(view.getStatusColor('syncing'), 'yellow');
+    t.equal(view.getStatusColor('creating'), 'blue');
+    t.equal(view.getStatusColor('pending'), 'blue');
+    t.equal(view.getStatusColor('removing'), 'yellow');
+    t.equal(view.getStatusColor('failed'), 'red');
+    t.equal(view.getStatusColor('unknown'), 'white');
+  });
+
+  t.test('getRowStatus returns WARNING for transitional states', async (t) => {
+    const view = new ServicesView();
+
+    t.equal(view.getRowStatus(createService({status: 'pending'})),
+      ROW_STATUS.WARNING);
+    t.equal(view.getRowStatus(createService({status: 'creating'})),
+      ROW_STATUS.WARNING);
+    t.equal(view.getRowStatus(createService({status: 'syncing'})),
+      ROW_STATUS.WARNING);
+    t.equal(view.getRowStatus(createService({status: 'removing'})),
+      ROW_STATUS.WARNING);
+  });
+
+  t.test('formatTimeInState formats durations correctly', async (t) => {
+    const view = new ServicesView();
+    const now = Date.now();
+
+    // Test seconds
+    t.equal(view.formatTimeInState(now - 5000), '5s');
+    t.equal(view.formatTimeInState(now - 30000), '30s');
+
+    // Test minutes
+    t.equal(view.formatTimeInState(now - 65000), '1m 5s');
+    t.equal(view.formatTimeInState(now - 120000), '2m 0s');
+
+    // Test hours
+    t.equal(view.formatTimeInState(now - 3665000), '1h 1m');
+
+    // Test edge cases
+    t.equal(view.formatTimeInState(null), 'N/A');
+    t.equal(view.formatTimeInState(undefined), 'N/A');
+    t.equal(view.formatTimeInState(now + 1000), '0s'); // Future timestamp
+  });
+
+  t.test('formatStatus includes time-in-state for transitional states',
+    async (t) => {
+      const view = new ServicesView();
+      const now = Date.now();
+
+      const syncingService = createService({
+        status: 'syncing',
+        state_entered_at: now - 30000,
+      });
+      const result = view.formatStatus(syncingService);
+      t.ok(result.includes('syncing'));
+      t.ok(result.includes('[30s]'));
+    });
+
+  t.test('formatStatus does not include time-in-state for non-transitional',
+    async (t) => {
+      const view = new ServicesView();
+      const now = Date.now();
+
+      const activeService = createService({
+        status: 'active',
+        state_entered_at: now - 30000,
+      });
+      const result = view.formatStatus(activeService);
+      t.equal(result, 'active');
+      t.notOk(result.includes('['));
+    });
+
+  t.test('getSelectedDetails includes state information section', async (t) => {
+    const view = new ServicesView();
+    const now = Date.now();
+
+    view.setData([createService({
+      status: 'syncing',
+      state_entered_at: now - 30000,
+      previous_state: 'creating',
+      trigger_reason: 'ACK received',
+    })]);
+
+    const details = view.getSelectedDetails();
+
+    t.ok(details.sections.length >= 2);
+    const stateSection = details.sections.find((s) =>
+      s.title === 'State Information');
+    t.ok(stateSection);
+    t.ok(stateSection.fields.some((f) => f.label === 'Time in State'));
+    t.ok(stateSection.fields.some((f) => f.label === 'Previous State'));
+    t.ok(stateSection.fields.some((f) => f.label === 'Trigger Reason'));
+  });
+
+  t.test('getSelectedDetails shows failure reason for failed replicas',
+    async (t) => {
+      const view = new ServicesView();
+
+      view.setData([createService({
+        status: 'failed',
+        error_message: 'Operation timed out after 60000ms',
+        previous_state: 'creating',
+      })]);
+
+      const details = view.getSelectedDetails();
+
+      const stateSection = details.sections.find((s) =>
+        s.title === 'State Information');
+      t.ok(stateSection);
+      const failureField = stateSection.fields.find((f) =>
+        f.label === 'Failure Reason');
+      t.ok(failureField);
+      t.equal(failureField.value, 'Operation timed out after 60000ms');
+    });
+
+  t.test('getSelectedDetails does not show failure reason for non-failed',
+    async (t) => {
+      const view = new ServicesView();
+
+      view.setData([createService({
+        status: 'active',
+        error_message: 'Some old error',
+      })]);
+
+      const details = view.getSelectedDetails();
+
+      const stateSection = details.sections.find((s) =>
+        s.title === 'State Information');
+      if (stateSection) {
+        const failureField = stateSection.fields.find((f) =>
+          f.label === 'Failure Reason');
+        t.notOk(failureField);
+      } else {
+        t.pass('No state section for active service without state tracking');
+      }
+    });
 });

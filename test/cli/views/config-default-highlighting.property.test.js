@@ -34,55 +34,58 @@ const configValueArb = (type) => {
 
 /**
  * Generate a valid config record
+ * Uses config_key and config_value to match ConfigView expectations
  */
 const configArb = fc.record({
-  key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
-  type: fc.constantFrom(...CONFIG_TYPES),
+  config_key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
+  value_type: fc.constantFrom(...CONFIG_TYPES),
   requires_restart: fc.boolean(),
   pending_restart: fc.boolean(),
   updated_at: fc.integer({min: 1000000000000, max: 2000000000000}),
 }).chain((base) => {
   return fc.record({
     ...Object.fromEntries(Object.entries(base).map(([k, v]) => [k, fc.constant(v)])),
-    value: configValueArb(base.type),
-    default_value: configValueArb(base.type),
+    config_value: configValueArb(base.value_type),
+    default_value: configValueArb(base.value_type),
   });
 });
 
 /**
  * Generate a config record where value equals default_value
+ * Uses config_key and config_value to match ConfigView expectations
  */
 const configWithMatchingDefaultArb = fc.record({
-  key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
-  type: fc.constantFrom(...CONFIG_TYPES),
+  config_key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
+  value_type: fc.constantFrom(...CONFIG_TYPES),
   requires_restart: fc.constant(false),
   pending_restart: fc.constant(false),
   updated_at: fc.integer({min: 1000000000000, max: 2000000000000}),
 }).chain((base) => {
-  return configValueArb(base.type).map((value) => ({
+  return configValueArb(base.value_type).map((value) => ({
     ...base,
-    value,
+    config_value: value,
     default_value: value, // Same as value
   }));
 });
 
 /**
  * Generate a config record where value differs from default_value
+ * Uses config_key and config_value to match ConfigView expectations
  */
 const configWithDifferentDefaultArb = fc.record({
-  key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
-  type: fc.constantFrom('string', 'number'), // Use types where we can guarantee difference
+  config_key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
+  value_type: fc.constantFrom('string', 'number'), // Use types where we can guarantee difference
   requires_restart: fc.constant(false),
   pending_restart: fc.constant(false),
   updated_at: fc.integer({min: 1000000000000, max: 2000000000000}),
 }).chain((base) => {
-  if (base.type === 'number') {
+  if (base.value_type === 'number') {
     return fc.tuple(
       fc.integer({min: 0, max: 100}),
       fc.integer({min: 101, max: 200}),
     ).map(([value, defaultValue]) => ({
       ...base,
-      value,
+      config_value: value,
       default_value: defaultValue,
     }));
   } else {
@@ -91,7 +94,7 @@ const configWithDifferentDefaultArb = fc.record({
       fc.string({minLength: 11, maxLength: 20}),
     ).map(([value, defaultValue]) => ({
       ...base,
-      value,
+      config_value: value,
       default_value: defaultValue,
     }));
   }
@@ -158,9 +161,9 @@ test('Property 45: Config Default Highlighting', async (t) => {
     fc.assert(
       fc.property(
         fc.record({
-          key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
-          value: fc.integer(),
-          type: fc.constant('number'),
+          config_key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
+          config_value: fc.integer(),
+          value_type: fc.constant('number'),
           requires_restart: fc.constant(false),
           pending_restart: fc.constant(false),
         }),
@@ -202,8 +205,8 @@ test('Property 45: Config Default Highlighting', async (t) => {
           const uniqueConfigs = [];
           const seenKeys = new Set();
           for (const config of configs) {
-            if (!seenKeys.has(config.key)) {
-              seenKeys.add(config.key);
+            if (!seenKeys.has(config.config_key)) {
+              seenKeys.add(config.config_key);
               uniqueConfigs.push(config);
             }
           }
@@ -236,10 +239,10 @@ test('Property 45: Config Default Highlighting', async (t) => {
     fc.assert(
       fc.property(
         fc.record({
-          key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
-          value: fc.constant(null),
+          config_key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
+          config_value: fc.constant(null),
           default_value: fc.integer({min: 1, max: 100}),
-          type: fc.constant('number'),
+          value_type: fc.constant('number'),
           requires_restart: fc.constant(false),
           pending_restart: fc.constant(false),
         }),
@@ -257,10 +260,10 @@ test('Property 45: Config Default Highlighting', async (t) => {
     fc.assert(
       fc.property(
         fc.record({
-          key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
-          value: fc.integer({min: 1, max: 100}),
+          config_key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
+          config_value: fc.integer({min: 1, max: 100}),
           default_value: fc.constant(null),
-          type: fc.constant('number'),
+          value_type: fc.constant('number'),
           requires_restart: fc.constant(false),
           pending_restart: fc.constant(false),
         }),
@@ -278,10 +281,10 @@ test('Property 45: Config Default Highlighting', async (t) => {
     fc.assert(
       fc.property(
         fc.record({
-          key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
-          value: fc.constant(null),
+          config_key: fc.string({minLength: 1, maxLength: 30}).filter((s) => s.trim().length > 0),
+          config_value: fc.constant(null),
           default_value: fc.constant(null),
-          type: fc.constant('string'),
+          value_type: fc.constant('string'),
           requires_restart: fc.constant(false),
           pending_restart: fc.constant(false),
         }),

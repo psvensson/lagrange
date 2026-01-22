@@ -1,3 +1,51 @@
 TAP version 14
-ok 1 - Property 17: Fault Recovery Behavior # SKIP filter: /SystemTableCache/
+# Subtest: Property 7: Recovery State Handling
+    # Subtest: creating replicas transition to failed on recovery
+        ok 1 - creating replicas transition to failed on recovery
+        1..1
+    ok 1 - creating replicas transition to failed on recovery # time=4.953ms
+    
+    # Subtest: syncing replicas transition to failed on recovery
+        ok 1 - syncing replicas transition to failed on recovery
+        1..1
+    ok 2 - syncing replicas transition to failed on recovery # time=1.613ms
+    
+    # Subtest: removing replicas transition to removed on recovery
+        ok 1 - removing replicas transition to removed on recovery
+        1..1
+    ok 3 - removing replicas transition to removed on recovery # time=1.71ms
+    
+    # Subtest: mixed transitional replicas are all handled
+        ok 1 - mixed transitional replicas are all handled
+        1..1
+    ok 4 - mixed transitional replicas are all handled # time=1.876ms
+    
+    # Subtest: active replicas are not affected by recovery
+        ok 1 - active replicas are not affected by recovery
+        1..1
+    ok 5 - active replicas are not affected by recovery # time=1.278ms
+    
+    # Subtest: replicas on other nodes are not affected
+        ok 1 - replicas on other nodes are not affected
+        1..1
+    ok 6 - replicas on other nodes are not affected # time=1.428ms
+    
+    # Subtest: recoveryComplete event is emitted with correct counts
+        ok 1 - recoveryComplete event is emitted with correct counts
+        1..1
+    ok 7 - recoveryComplete event is emitted with correct counts # time=1.807ms
+    
+    # Subtest: recovery handles empty cache gracefully
+        ok 1 - recovery handles empty cache gracefully
+        1..1
+    ok 8 - recovery handles empty cache gracefully # time=1.488ms
+    
+    # Subtest: recovery handles missing cache gracefully
+        ok 1 - recovery handles missing cache gracefully
+        1..1
+    ok 9 - recovery handles missing cache gracefully # time=0.838ms
+    
+    1..9
+ok 1 - Property 7: Recovery State Handling # time=173.452ms
+
 1..1

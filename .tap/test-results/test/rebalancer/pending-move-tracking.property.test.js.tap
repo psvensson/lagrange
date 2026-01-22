@@ -1,0 +1,41 @@
+TAP version 14
+# Subtest: Property 80: Pending Move Tracking
+    # Subtest: addReplica tracks move in pendingMoves
+        ok 1 - addReplica tracks move in pendingMoves
+        1..1
+    ok 1 - addReplica tracks move in pendingMoves # time=9.64ms
+    
+    # Subtest: removeReplica tracks move in pendingMoves
+        ok 1 - removeReplica tracks move in pendingMoves
+        1..1
+    ok 2 - removeReplica tracks move in pendingMoves # time=3.132ms
+    
+    # Subtest: CDC active status completes ADD move
+        ok 1 - CDC active status completes ADD move
+        1..1
+    ok 3 - CDC active status completes ADD move # time=3.093ms
+    
+    # Subtest: CDC DELETE completes REMOVE move
+        ok 1 - CDC DELETE completes REMOVE move
+        1..1
+    ok 4 - CDC DELETE completes REMOVE move # time=2.659ms
+    
+    # Subtest: CDC failed status marks move as failed
+        ok 1 - CDC failed status marks move as failed
+        1..1
+    ok 5 - CDC failed status marks move as failed # time=6.283ms
+    
+    # Subtest: cleanupExpiredMoves removes old moves
+        ok 1 - cleanupExpiredMoves removes old moves
+        1..1
+    ok 6 - cleanupExpiredMoves removes old moves # time=2.151ms
+    
+    # Subtest: hasPendingMove identifies pending moves
+        ok 1 - hasPendingMove identifies pending moves
+        1..1
+    ok 7 - hasPendingMove identifies pending moves # time=2.341ms
+    
+    1..7
+ok 1 - Property 80: Pending Move Tracking # time=258.929ms
+
+1..1

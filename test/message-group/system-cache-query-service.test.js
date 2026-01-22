@@ -8,8 +8,13 @@ import {SystemCacheQueryService} from '../../src/message-group/system-cache-quer
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+
+// Port counter for unique ports per test
+let testPortCounter = 26000;
 
 let messageGroup;
+let router;
 
 beforeEach(async () => {
   ConfigurationManager.resetInstance();
@@ -19,12 +24,19 @@ beforeEach(async () => {
   const logger = LoggingService.getInstance();
   logger.initialize({level: 'error'});
 
+  // Create real WebSocket transport
+  const port = testPortCounter++;
+  const nodeId = `test-node-${port}`;
+  router = new MessageRouter({nodeId, wsPort: port});
+  await router.initialize({startServer: true});
+
   // Create and initialize a message group for testing
   messageGroup = new MessageGroupService({
     groupId: 'mg-1',
     replicaId: 'mg-1-r1',
-    nodeId: 'test-node',
+    nodeId,
     replicaIds: ['mg-1-r1'],
+    transport: router,
   });
   await messageGroup.initialize();
 
@@ -61,6 +73,9 @@ beforeEach(async () => {
 afterEach(async () => {
   if (messageGroup) {
     await messageGroup.shutdown();
+  }
+  if (router) {
+    await router.shutdown();
   }
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();

@@ -35,8 +35,8 @@ const ReplicaStatus = {
  * Service types.
  */
 const ServiceType = {
-  PARTITION_REPLICA: 'partition_replica',
-  MESSAGE_GROUP_REPLICA: 'message_group_replica',
+  PARTITION_REPLICA: 'partition',
+  MESSAGE_GROUP_REPLICA: 'message_group',
 };
 
 /**

@@ -11,8 +11,13 @@ import fc from 'fast-check';
 import {MessageGroupService, MessageStatus} from '../../src/message-group/message-group-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+
+// Port counter for unique ports per test
+let testPortCounter = 28000;
 
 let messageGroup;
+let router;
 
 beforeEach(async () => {
   ConfigurationManager.resetInstance();
@@ -22,11 +27,18 @@ beforeEach(async () => {
   const logger = LoggingService.getInstance();
   logger.initialize({level: 'error'});
 
+  // Create real WebSocket transport
+  const port = testPortCounter++;
+  const nodeId = `test-node-${port}`;
+  router = new MessageRouter({nodeId, wsPort: port});
+  await router.initialize({startServer: true});
+
   messageGroup = new MessageGroupService({
     groupId: 'mg-1',
     replicaId: 'mg-1-r1',
-    nodeId: 'test-node',
+    nodeId,
     replicaIds: ['mg-1-r1'],
+    transport: router,
   });
   await messageGroup.initialize();
 });
@@ -34,6 +46,9 @@ beforeEach(async () => {
 afterEach(async () => {
   if (messageGroup) {
     await messageGroup.shutdown();
+  }
+  if (router) {
+    await router.shutdown();
   }
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
@@ -176,10 +191,10 @@ test('Property 9: Message Delivery Reliability - acknowledgment tracking', async
 
 /**
  * Feature: message-group, Property 9: Message Delivery Reliability
- * Message delivery should emit events for tracking.
+ * Message delivery should use transport for delivery.
  * Validates: Requirements 4.2
  */
-test('Property 9: Message Delivery Reliability - event emission', async (t) => {
+test('Property 9: Message Delivery Reliability - transport delivery', async (t) => {
   await fc.assert(
     fc.asyncProperty(
       fc.record({
@@ -188,22 +203,15 @@ test('Property 9: Message Delivery Reliability - event emission', async (t) => {
       }),
       fc.string({minLength: 5, maxLength: 30}),
       async (payload, target) => {
-        let messageEmitted = false;
+        const initialCount = router.messageCount;
 
-        // Listen for message event (local delivery)
-        const handler = () => {
-          messageEmitted = true;
-        };
-        messageGroup.on('message', handler);
+        await messageGroup.sendMessage(target, payload);
 
-        try {
-          await messageGroup.sendMessage(target, payload);
-
-          // Property: Without transport, local delivery should emit event
-          t.ok(messageEmitted, 'Message event should be emitted for local delivery');
-        } finally {
-          messageGroup.off('message', handler);
-        }
+        // Property: With transport, delivery should go through transport
+        t.ok(
+          router.messageCount > initialCount,
+          'Message should be delivered via transport',
+        );
 
         return true;
       },

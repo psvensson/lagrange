@@ -164,13 +164,15 @@ class MessageGroupAssignment {
   }
 
   /**
-   * Build replica addresses for a node.
-   * @param {string} nodeAddress - Node address.
+   * Build unified replica addresses for Raft communication.
+   * All addresses use the unified format: ${nodeId}/${entityType}/${entityId}
+   * @param {string} nodeId - Node ID hosting the replicas.
    * @param {Array<string>} replicaIds - Replica IDs.
-   * @return {Array<string>} Replica addresses.
+   * @param {string} entityType - Entity type (e.g., 'message-group', 'partition').
+   * @return {Array<string>} Unified replica addresses.
    */
-  buildReplicaAddresses(nodeAddress, replicaIds) {
-    return replicaIds.map((id) => `${nodeAddress}/services/${id}`);
+  buildReplicaAddresses(nodeId, replicaIds, entityType = 'message-group') {
+    return replicaIds.map((id) => `${nodeId}/${entityType}/${id}`);
   }
 
   /**

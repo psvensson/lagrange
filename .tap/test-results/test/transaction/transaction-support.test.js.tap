@@ -1,13 +1,192 @@
 TAP version 14
-ok 1 - Transaction - BEGIN TRANSACTION starts a transaction # SKIP filter: /SystemTableCache/
-ok 2 - Transaction - COMMIT without active transaction returns error # SKIP filter: /SystemTableCache/
-ok 3 - Transaction - ROLLBACK without active transaction returns error # SKIP filter: /SystemTableCache/
-ok 4 - Transaction - double BEGIN returns error # SKIP filter: /SystemTableCache/
-ok 5 - Transaction - cross-partition INSERT is rejected # SKIP filter: /SystemTableCache/
-ok 6 - Transaction - cross-partition UPDATE is rejected # SKIP filter: /SystemTableCache/
-ok 7 - Transaction - single-partition operations succeed # SKIP filter: /SystemTableCache/
-ok 8 - Transaction - ROLLBACK reverts changes # SKIP filter: /SystemTableCache/
-ok 9 - Transaction - different sessions have independent transactions # SKIP filter: /SystemTableCache/
-ok 10 - Transaction - concurrent transactions on same partition use SQLite locking # SKIP filter: /SystemTableCache/
-ok 11 - Transaction - getTransactionPartition returns bound partition # SKIP filter: /SystemTableCache/
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'test-session-1'
+}
+BEGIN TRANSACTION { sessionId: 'test-session-1' }
+# Subtest: Transaction - BEGIN TRANSACTION starts a transaction
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 1 - Transaction - BEGIN TRANSACTION starts a transaction # time=5.411ms
+
+Executing SQL query { sql: 'COMMIT', paramCount: 0, sessionId: 'test-session-2' }
+# Subtest: Transaction - COMMIT without active transaction returns error
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 2 - Transaction - COMMIT without active transaction returns error # time=0.862ms
+
+Executing SQL query { sql: 'ROLLBACK', paramCount: 0, sessionId: 'test-session-3' }
+# Subtest: Transaction - ROLLBACK without active transaction returns error
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 3 - Transaction - ROLLBACK without active transaction returns error # time=0.691ms
+
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'test-session-4'
+}
+BEGIN TRANSACTION { sessionId: 'test-session-4' }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'test-session-4'
+}
+# Subtest: Transaction - double BEGIN returns error
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 4 - Transaction - double BEGIN returns error # time=0.867ms
+
+Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'cross-tx-1' }
+BEGIN TRANSACTION { sessionId: 'cross-tx-1' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice'), ('zack', 'Zack')",
+  paramCount: 0,
+  sessionId: 'cross-tx-1'
+}
+# Subtest: Transaction - cross-partition INSERT is rejected
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 5 - Transaction - cross-partition INSERT is rejected # time=9.264ms
+
+Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'cross-tx-2' }
+BEGIN TRANSACTION { sessionId: 'cross-tx-2' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice')",
+  paramCount: 0,
+  sessionId: 'cross-tx-2'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'cross-tx-2'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'cross-tx-2'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+# Subtest: Transaction - cross-partition UPDATE is rejected
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 6 - Transaction - cross-partition UPDATE is rejected # time=3.315ms
+
+Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'single-tx-1' }
+BEGIN TRANSACTION { sessionId: 'single-tx-1' }
+# Subtest: Transaction - single-partition operations succeed
+    ok 1 - should be equal
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice')",
+  paramCount: 0,
+  sessionId: 'single-tx-1'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'single-tx-1'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+    ok 2 - should be equal
+Executing SQL query { sql: 'COMMIT', paramCount: 0, sessionId: 'single-tx-1' }
+COMMIT { sessionId: 'single-tx-1', partitionId: 'p1' }
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 7 - Transaction - single-partition operations succeed # time=1.744ms
+
+Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'rollback-tx-1' }
+BEGIN TRANSACTION { sessionId: 'rollback-tx-1' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice')",
+  paramCount: 0,
+  sessionId: 'rollback-tx-1'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'rollback-tx-1'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Executing SQL query { sql: 'ROLLBACK', paramCount: 0, sessionId: 'rollback-tx-1' }
+ROLLBACK { sessionId: 'rollback-tx-1', partitionId: 'p1' }
+# Subtest: Transaction - ROLLBACK reverts changes
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 8 - Transaction - ROLLBACK reverts changes # time=1.911ms
+
+Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'session-a' }
+BEGIN TRANSACTION { sessionId: 'session-a' }
+# Subtest: Transaction - different sessions have independent transactions
+    ok 1 - should be equal
+    ok 2 - should be equal
+Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'session-b' }
+BEGIN TRANSACTION { sessionId: 'session-b' }
+    ok 3 - should be equal
+    ok 4 - should be equal
+Executing SQL query { sql: 'COMMIT', paramCount: 0, sessionId: 'session-a' }
+COMMIT { sessionId: 'session-a', partitionId: null }
+    ok 5 - should be equal
+    ok 6 - should be equal
+    1..6
+ok 9 - Transaction - different sessions have independent transactions # time=2.291ms
+
+Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'concurrent-1' }
+BEGIN TRANSACTION { sessionId: 'concurrent-1' }
+# Subtest: Transaction - concurrent transactions on same partition use SQLite locking
+    ok 1 - should be equal
+Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'concurrent-2' }
+BEGIN TRANSACTION { sessionId: 'concurrent-2' }
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+Executing SQL query { sql: 'COMMIT', paramCount: 0, sessionId: 'concurrent-1' }
+COMMIT { sessionId: 'concurrent-1', partitionId: null }
+    ok 5 - should be equal
+    ok 6 - should be equal
+Executing SQL query { sql: 'COMMIT', paramCount: 0, sessionId: 'concurrent-2' }
+COMMIT { sessionId: 'concurrent-2', partitionId: null }
+    ok 7 - should be equal
+    1..7
+ok 10 - Transaction - concurrent transactions on same partition use SQLite locking # time=1.811ms
+
+# Subtest: Transaction - getTransactionPartition returns bound partition
+    ok 1 - should be equal
+Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'bound-tx' }
+BEGIN TRANSACTION { sessionId: 'bound-tx' }
+    ok 2 - should be equal
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice')",
+  paramCount: 0,
+  sessionId: 'bound-tx'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'bound-tx'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+    ok 3 - should be equal
+Executing SQL query { sql: 'COMMIT', paramCount: 0, sessionId: 'bound-tx' }
+COMMIT { sessionId: 'bound-tx', partitionId: 'p1' }
+    ok 4 - should be equal
+    1..4
+ok 11 - Transaction - getTransactionPartition returns bound partition # time=1.978ms
+
 1..11

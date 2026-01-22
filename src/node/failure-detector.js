@@ -561,7 +561,7 @@ class FailureDetector extends EventEmitter {
     try {
       return this.systemTableCache.filter('services', (service) => {
         return service.node_id === nodeId &&
-          service.service_type === 'partition_replica';
+          service.service_type === 'partition';
       }) || [];
     } catch (_error) {
       return [];

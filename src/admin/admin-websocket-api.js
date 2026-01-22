@@ -82,11 +82,23 @@ class AdminWebSocketAPI {
   subscribeToCacheNotifications() {
     if (this.systemTableCache &&
         typeof this.systemTableCache.onCacheChange === 'function') {
+      this.logger.info('Subscribing to cache change notifications');
       this.systemTableCache.onCacheChange(
         (tableName, operation, record) => {
+          this.logger.info('Cache change notification received', {
+            tableName,
+            operation,
+            recordKeys: Object.keys(record || {}),
+          });
           this.broadcastCDCEvent(tableName, operation, record);
         },
       );
+    } else {
+      this.logger.warn('System table cache does not support onCacheChange', {
+        hasCache: !!this.systemTableCache,
+        hasMethod: this.systemTableCache ?
+          typeof this.systemTableCache.onCacheChange : 'N/A',
+      });
     }
   }
 
@@ -551,6 +563,13 @@ class AdminWebSocketAPI {
    * @param {Object} record - Record data.
    */
   broadcastCDCEvent(tableName, operation, record) {
+    this.logger.info('Broadcasting CDC event to clients', {
+      tableName,
+      operation,
+      clientCount: this.clients.size,
+      recordKeys: Object.keys(record || {}),
+    });
+
     const message = {
       type: MessageType.CDC_EVENT,
       timestamp: Date.now(),
@@ -563,7 +582,7 @@ class AdminWebSocketAPI {
       this.sendToClient(clientInfo, message);
     }
 
-    this.logger.debug('CDC event broadcast', {
+    this.logger.debug('CDC event broadcast complete', {
       tableName,
       operation,
       clientCount: this.clients.size,

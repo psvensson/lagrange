@@ -1,0 +1,826 @@
+TAP version 14
+# Subtest: Property 5: ADD Workflow Step Progression
+Creating operation {
+  operationId: 'c4a2f34b-a8f3-44e6-825d-2764ca8ee082',
+  type: 'ADD',
+  partitionId: 'fffffffd-b919-5fd7-aec3-ad6c22d71db2',
+  targetNodeId: 'fffffffc-6a74-425d-8000-001daed1ff1c'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '1fc1d66d-eee7-4fa8-973c-246d87bd0c54',
+  type: 'ADD',
+  partitionId: '00000010-6df5-2a4c-bfff-fff7eb71459f',
+  targetNodeId: '00000001-0017-1000-bfff-ffef93b11f70'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'd4362e52-b617-4f93-96db-64484e39104e',
+  type: 'ADD',
+  partitionId: 'e38b7432-c20e-174f-9b3e-cf390c8306a6',
+  targetNodeId: '00000015-0962-4069-8f61-5940a5590ada'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '7c048b80-f507-44f2-b90a-3fc72cadb609',
+  type: 'ADD',
+  partitionId: '00000011-946c-5d56-8000-001572e3ffe9',
+  targetNodeId: '00000008-cfde-4b98-89d0-f151fffffffb'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'cf117f93-83ae-457d-9842-f7648f34f9f9',
+  type: 'ADD',
+  partitionId: '0499ac2c-2856-17eb-8000-0007fd2dc57c',
+  targetNodeId: '00000004-fff5-5fff-a54d-77e469e3b0ec'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'c7ba65c2-b0b8-4433-8921-71fa96bc5b16',
+  type: 'ADD',
+  partitionId: '818c99b2-07b0-20f8-9d4e-deebfffffffc',
+  targetNodeId: '00000015-6ce5-2588-8000-00058c4be8f2'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'f9800182-8fac-49cd-80a8-3fa93c6db44d',
+  type: 'ADD',
+  partitionId: 'cc412e5b-fff7-5fff-bfff-ffe50000000b',
+  targetNodeId: '00000005-000b-1000-be02-87a00000000b'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'cac42991-9dea-4089-ac12-5bb1eb128763',
+  type: 'ADD',
+  partitionId: 'fffffff7-0001-1000-bfff-ffec0000000a',
+  targetNodeId: '00000018-6c66-4a07-bfff-fff00000000e'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '03a5c1a3-1fa0-49d2-adf2-9b8a7c588759',
+  type: 'ADD',
+  partitionId: '75d476d8-789f-1e01-bfff-ffef1fceb6bd',
+  targetNodeId: '00000017-0001-1000-8000-000dffffffe4'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'c1a411c2-d426-4a3e-b7d3-8351856f90b9',
+  type: 'ADD',
+  partitionId: '862676a5-fffa-5fff-8000-001db324a126',
+  targetNodeId: 'ff654052-ca0d-4a00-9434-00a50000000b'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+    # Subtest: ADD operation starts at PENDING step
+        ok 1 - ADD operations start at PENDING step
+        1..1
+    ok 1 - ADD operation starts at PENDING step # time=69.59ms
+    
+Creating operation {
+  operationId: '835e9aa0-1721-4aad-8177-48d8c2f31fcf',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+    # Subtest: updateStep progresses through ADD workflow in order
+        ok 1 - Initial step is PENDING
+        ok 2 - Initial history has 1 entry
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '835e9aa0-1721-4aad-8177-48d8c2f31fcf',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'test-partition'
+}
+        ok 3 - Step is SENDING
+        ok 4 - History has 2 entries after SENDING
+        ok 5 - History entry 1 is SENDING
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '835e9aa0-1721-4aad-8177-48d8c2f31fcf',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'test-partition'
+}
+        ok 6 - Step is CREATING
+        ok 7 - History has 3 entries after CREATING
+        ok 8 - History entry 2 is CREATING
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '835e9aa0-1721-4aad-8177-48d8c2f31fcf',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: 'test-partition'
+}
+        ok 9 - Step is SYNCING
+        ok 10 - History has 4 entries after SYNCING
+        ok 11 - History entry 3 is SYNCING
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '835e9aa0-1721-4aad-8177-48d8c2f31fcf',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: 'test-partition'
+}
+        ok 12 - Step is ACTIVE
+        ok 13 - History has 5 entries after ACTIVE
+        ok 14 - History entry 4 is ACTIVE
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..14
+    ok 2 - updateStep progresses through ADD workflow in order # time=3.546ms
+    
+Creating operation {
+  operationId: '55098846-014e-40ce-9954-74936ea492ed',
+  type: 'ADD',
+  partitionId: 'e41c7e70-a4b6-5a62-8000-00176d286fca',
+  targetNodeId: '00000007-4f87-145c-824a-82940000000c'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '55098846-014e-40ce-9954-74936ea492ed',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'e41c7e70-a4b6-5a62-8000-00176d286fca'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '55098846-014e-40ce-9954-74936ea492ed',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'e41c7e70-a4b6-5a62-8000-00176d286fca'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '55098846-014e-40ce-9954-74936ea492ed',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: 'e41c7e70-a4b6-5a62-8000-00176d286fca'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '55098846-014e-40ce-9954-74936ea492ed',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: 'e41c7e70-a4b6-5a62-8000-00176d286fca'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: 'd2e80e0e-6db5-4ed3-b71c-3f75b6b73023',
+  type: 'ADD',
+  partitionId: 'ffffffef-fffe-5fff-bd8f-9ee157c4b478',
+  targetNodeId: 'ea9f9370-ffe3-5fff-bfff-ffec0000001d'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'd2e80e0e-6db5-4ed3-b71c-3f75b6b73023',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'ffffffef-fffe-5fff-bd8f-9ee157c4b478'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'd2e80e0e-6db5-4ed3-b71c-3f75b6b73023',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'ffffffef-fffe-5fff-bd8f-9ee157c4b478'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'd2e80e0e-6db5-4ed3-b71c-3f75b6b73023',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: 'ffffffef-fffe-5fff-bd8f-9ee157c4b478'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'd2e80e0e-6db5-4ed3-b71c-3f75b6b73023',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: 'ffffffef-fffe-5fff-bd8f-9ee157c4b478'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '5ccbf5eb-1496-426c-9d78-faff9c354dc5',
+  type: 'ADD',
+  partitionId: '8521a4d7-4b14-1110-8000-0010fffffff9',
+  targetNodeId: 'bde12a32-e68f-5dd9-94e8-2a5eba558d3f'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '5ccbf5eb-1496-426c-9d78-faff9c354dc5',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '8521a4d7-4b14-1110-8000-0010fffffff9'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '5ccbf5eb-1496-426c-9d78-faff9c354dc5',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: '8521a4d7-4b14-1110-8000-0010fffffff9'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '5ccbf5eb-1496-426c-9d78-faff9c354dc5',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: '8521a4d7-4b14-1110-8000-0010fffffff9'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '5ccbf5eb-1496-426c-9d78-faff9c354dc5',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: '8521a4d7-4b14-1110-8000-0010fffffff9'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '3a45a0de-14c2-491c-9485-f7da822eebc0',
+  type: 'ADD',
+  partitionId: '1c8fb70a-3d9b-5e72-8000-001d4f7ae5bd',
+  targetNodeId: '3a7900d6-4420-5eed-8c0d-33cfe5135925'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '3a45a0de-14c2-491c-9485-f7da822eebc0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '1c8fb70a-3d9b-5e72-8000-001d4f7ae5bd'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '3a45a0de-14c2-491c-9485-f7da822eebc0',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: '1c8fb70a-3d9b-5e72-8000-001d4f7ae5bd'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '3a45a0de-14c2-491c-9485-f7da822eebc0',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: '1c8fb70a-3d9b-5e72-8000-001d4f7ae5bd'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '3a45a0de-14c2-491c-9485-f7da822eebc0',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: '1c8fb70a-3d9b-5e72-8000-001d4f7ae5bd'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '520f5d61-3184-45be-87f4-58a1c9dfcb50',
+  type: 'ADD',
+  partitionId: 'e0b11639-0006-1000-8000-000300000006',
+  targetNodeId: '4e6a55a8-0019-1000-9d55-0429cf4cf27f'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '520f5d61-3184-45be-87f4-58a1c9dfcb50',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'e0b11639-0006-1000-8000-000300000006'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '520f5d61-3184-45be-87f4-58a1c9dfcb50',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'e0b11639-0006-1000-8000-000300000006'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '520f5d61-3184-45be-87f4-58a1c9dfcb50',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: 'e0b11639-0006-1000-8000-000300000006'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '520f5d61-3184-45be-87f4-58a1c9dfcb50',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: 'e0b11639-0006-1000-8000-000300000006'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '5b2a4a6b-ddbb-48ea-a029-4802361cf2c8',
+  type: 'ADD',
+  partitionId: '8ac97747-441b-29f3-9256-51baffffffe9',
+  targetNodeId: '276087da-31cc-52a4-8000-0002cae790ae'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '5b2a4a6b-ddbb-48ea-a029-4802361cf2c8',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '8ac97747-441b-29f3-9256-51baffffffe9'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '5b2a4a6b-ddbb-48ea-a029-4802361cf2c8',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: '8ac97747-441b-29f3-9256-51baffffffe9'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '5b2a4a6b-ddbb-48ea-a029-4802361cf2c8',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: '8ac97747-441b-29f3-9256-51baffffffe9'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '5b2a4a6b-ddbb-48ea-a029-4802361cf2c8',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: '8ac97747-441b-29f3-9256-51baffffffe9'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '63c17650-fb65-4130-b870-3f8c3160bfcd',
+  type: 'ADD',
+  partitionId: 'ffffffe5-031a-1c97-bfff-ffe3db214fed',
+  targetNodeId: '00000011-7204-20b7-8000-001d0fb268b1'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '63c17650-fb65-4130-b870-3f8c3160bfcd',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'ffffffe5-031a-1c97-bfff-ffe3db214fed'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '63c17650-fb65-4130-b870-3f8c3160bfcd',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'ffffffe5-031a-1c97-bfff-ffe3db214fed'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '63c17650-fb65-4130-b870-3f8c3160bfcd',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: 'ffffffe5-031a-1c97-bfff-ffe3db214fed'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '63c17650-fb65-4130-b870-3f8c3160bfcd',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: 'ffffffe5-031a-1c97-bfff-ffe3db214fed'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: 'cc468bab-f74d-4314-8716-2b62ea168969',
+  type: 'ADD',
+  partitionId: 'c5e06afe-752f-53cc-909f-59cca128e9f6',
+  targetNodeId: 'fffffff9-21fc-1ef3-bfff-ffe66ee7fd9c'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'cc468bab-f74d-4314-8716-2b62ea168969',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'c5e06afe-752f-53cc-909f-59cca128e9f6'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'cc468bab-f74d-4314-8716-2b62ea168969',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'c5e06afe-752f-53cc-909f-59cca128e9f6'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'cc468bab-f74d-4314-8716-2b62ea168969',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: 'c5e06afe-752f-53cc-909f-59cca128e9f6'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'cc468bab-f74d-4314-8716-2b62ea168969',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: 'c5e06afe-752f-53cc-909f-59cca128e9f6'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '1dcabed8-f4ff-4f16-8c55-6856a314ec1b',
+  type: 'ADD',
+  partitionId: '0000000b-f510-25eb-aa1b-43cf9bd1d64a',
+  targetNodeId: '72b70f44-0001-1000-b65c-59b8a92f940a'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '1dcabed8-f4ff-4f16-8c55-6856a314ec1b',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '0000000b-f510-25eb-aa1b-43cf9bd1d64a'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '1dcabed8-f4ff-4f16-8c55-6856a314ec1b',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: '0000000b-f510-25eb-aa1b-43cf9bd1d64a'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '1dcabed8-f4ff-4f16-8c55-6856a314ec1b',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: '0000000b-f510-25eb-aa1b-43cf9bd1d64a'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '1dcabed8-f4ff-4f16-8c55-6856a314ec1b',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: '0000000b-f510-25eb-aa1b-43cf9bd1d64a'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: 'd3e72bb4-4b73-415b-9b55-13a845f29364',
+  type: 'ADD',
+  partitionId: 'ffffffe1-9a36-34f1-9b61-4f8300000012',
+  targetNodeId: '0000001e-9b2e-20e8-89e7-137afb012aa0'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'd3e72bb4-4b73-415b-9b55-13a845f29364',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'ffffffe1-9a36-34f1-9b61-4f8300000012'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'd3e72bb4-4b73-415b-9b55-13a845f29364',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'ffffffe1-9a36-34f1-9b61-4f8300000012'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'd3e72bb4-4b73-415b-9b55-13a845f29364',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: 'ffffffe1-9a36-34f1-9b61-4f8300000012'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'd3e72bb4-4b73-415b-9b55-13a845f29364',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: 'ffffffe1-9a36-34f1-9b61-4f8300000012'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+    # Subtest: each step transition has timestamp
+        ok 1 - Each step transition has timestamp in order
+        1..1
+    ok 3 - each step transition has timestamp # time=10.382ms
+    
+    # Subtest: ADD workflow steps match expected sequence
+        ok 1 - ADD_WORKFLOW_STEPS matches expected sequence
+        1..1
+    ok 4 - ADD workflow steps match expected sequence # time=1.012ms
+    
+Creating operation {
+  operationId: '14f2edd3-dae3-4860-9fd0-672b7e0ab30e',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+    # Subtest: step transitions update status correctly
+        ok 1 - Initial status is pending
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '14f2edd3-dae3-4860-9fd0-672b7e0ab30e',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'test-partition'
+}
+        ok 2 - SENDING maps to correct status
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '14f2edd3-dae3-4860-9fd0-672b7e0ab30e',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'test-partition'
+}
+        ok 3 - CREATING maps to creating status
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '14f2edd3-dae3-4860-9fd0-672b7e0ab30e',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: 'test-partition'
+}
+        ok 4 - SYNCING maps to syncing status
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '14f2edd3-dae3-4860-9fd0-672b7e0ab30e',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  status: 'active',
+  partitionId: 'test-partition'
+}
+        ok 5 - ACTIVE maps to active status
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..5
+    ok 5 - step transitions update status correctly # time=1.311ms
+    
+Creating operation {
+  operationId: '925aeb63-84a4-4085-bf32-e4b3104f6fb7',
+  type: 'ADD',
+  partitionId: '0e0c923c-7a13-188f-8000-001b6279adba',
+  targetNodeId: 'fffffff1-9d4f-522b-b1e7-c784a2fa824d'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation completed {
+  operationId: '925aeb63-84a4-4085-bf32-e4b3104f6fb7',
+  type: 'ADD',
+  partitionId: '0e0c923c-7a13-188f-8000-001b6279adba',
+  targetNodeId: 'fffffff1-9d4f-522b-b1e7-c784a2fa824d'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '7f94e6d5-2136-4747-a83b-499a1cce2b41',
+  type: 'ADD',
+  partitionId: '42251ac0-9133-33ca-9e65-d0b9c5d232da',
+  targetNodeId: '8f01ef9b-0012-1000-8000-001591dc98a0'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation completed {
+  operationId: '7f94e6d5-2136-4747-a83b-499a1cce2b41',
+  type: 'ADD',
+  partitionId: '42251ac0-9133-33ca-9e65-d0b9c5d232da',
+  targetNodeId: '8f01ef9b-0012-1000-8000-001591dc98a0'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '0b0697d1-7b98-4b75-b7da-362e6850bab3',
+  type: 'ADD',
+  partitionId: 'fffffff6-2bb9-1887-8000-00120000000f',
+  targetNodeId: '00000007-ffe2-5fff-8d24-530b5eb26f75'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation completed {
+  operationId: '0b0697d1-7b98-4b75-b7da-362e6850bab3',
+  type: 'ADD',
+  partitionId: 'fffffff6-2bb9-1887-8000-00120000000f',
+  targetNodeId: '00000007-ffe2-5fff-8d24-530b5eb26f75'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: 'd0837d58-4c80-46cb-bad9-4e369c33994e',
+  type: 'ADD',
+  partitionId: 'ffffffe4-ffe2-5fff-8000-001500000010',
+  targetNodeId: 'ffffffe5-ffef-5fff-ad62-da9567e5b625'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation completed {
+  operationId: 'd0837d58-4c80-46cb-bad9-4e369c33994e',
+  type: 'ADD',
+  partitionId: 'ffffffe4-ffe2-5fff-8000-001500000010',
+  targetNodeId: 'ffffffe5-ffef-5fff-ad62-da9567e5b625'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: 'f49d3993-162c-4c19-8c46-2a0acd14a981',
+  type: 'ADD',
+  partitionId: '4a23feef-000f-1000-bfff-ffee0000001c',
+  targetNodeId: '00000017-1d9f-3002-8000-001affffffe3'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation completed {
+  operationId: 'f49d3993-162c-4c19-8c46-2a0acd14a981',
+  type: 'ADD',
+  partitionId: '4a23feef-000f-1000-bfff-ffee0000001c',
+  targetNodeId: '00000017-1d9f-3002-8000-001affffffe3'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '5f9e4617-34f1-4360-b338-97686abbd95a',
+  type: 'ADD',
+  partitionId: '0000001f-2d6b-2ce3-bfff-ffeec218ad04',
+  targetNodeId: 'b1ee1592-4f06-55e9-8634-c79f0000000a'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation completed {
+  operationId: '5f9e4617-34f1-4360-b338-97686abbd95a',
+  type: 'ADD',
+  partitionId: '0000001f-2d6b-2ce3-bfff-ffeec218ad04',
+  targetNodeId: 'b1ee1592-4f06-55e9-8634-c79f0000000a'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '4b53e76b-3395-4b34-bacc-3a431205dd97',
+  type: 'ADD',
+  partitionId: '0000000f-c1b6-43ef-b6de-14129154f537',
+  targetNodeId: 'ffffffea-29c4-4518-8000-0011aa35f9ef'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation completed {
+  operationId: '4b53e76b-3395-4b34-bacc-3a431205dd97',
+  type: 'ADD',
+  partitionId: '0000000f-c1b6-43ef-b6de-14129154f537',
+  targetNodeId: 'ffffffea-29c4-4518-8000-0011aa35f9ef'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: 'fba15596-b5fc-440f-9e42-00af4be002d9',
+  type: 'ADD',
+  partitionId: '1b4b7318-ffeb-5fff-9eac-0880f5d25806',
+  targetNodeId: '2a58b753-073d-5737-8000-000d00000009'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation completed {
+  operationId: 'fba15596-b5fc-440f-9e42-00af4be002d9',
+  type: 'ADD',
+  partitionId: '1b4b7318-ffeb-5fff-9eac-0880f5d25806',
+  targetNodeId: '2a58b753-073d-5737-8000-000d00000009'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '8802b1c7-e1c6-4182-86a7-da4faa18f259',
+  type: 'ADD',
+  partitionId: '00000008-f74a-3808-bfff-fffa85a94704',
+  targetNodeId: '00000010-001d-1000-8cdc-571a45bee65c'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation completed {
+  operationId: '8802b1c7-e1c6-4182-86a7-da4faa18f259',
+  type: 'ADD',
+  partitionId: '00000008-f74a-3808-bfff-fffa85a94704',
+  targetNodeId: '00000010-001d-1000-8cdc-571a45bee65c'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '0e22d820-19e1-4634-888d-7a8d19df3049',
+  type: 'ADD',
+  partitionId: '1db152b1-4bbb-512d-8000-0011ffffffe2',
+  targetNodeId: 'f712754c-ffe9-5fff-a64f-0b4200000004'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation completed {
+  operationId: '0e22d820-19e1-4634-888d-7a8d19df3049',
+  type: 'ADD',
+  partitionId: '1db152b1-4bbb-512d-8000-0011ffffffe2',
+  targetNodeId: 'f712754c-ffe9-5fff-a64f-0b4200000004'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+    # Subtest: completeOperation sets final ACTIVE step for ADD
+        ok 1 - completeOperation sets final ACTIVE step for ADD
+        1..1
+    ok 6 - completeOperation sets final ACTIVE step for ADD # time=5.41ms
+    
+Creating operation {
+  operationId: '2a9af420-f854-4819-ae9b-317be32a9644',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '2a9af420-f854-4819-ae9b-317be32a9644',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'test-partition'
+}
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '2a9af420-f854-4819-ae9b-317be32a9644',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'test-partition'
+}
+    # Subtest: stepChanged event is emitted on step transitions
+        ok 1 - Two step changes emitted
+        ok 2 - First change from PENDING
+        ok 3 - First change to SENDING
+        ok 4 - Second change from SENDING
+        ok 5 - Second change to CREATING
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+        1..5
+    ok 7 - stepChanged event is emitted on step transitions # time=1.315ms
+    
+Creating operation {
+  operationId: '980148d9-3ae1-4d77-9a2f-2aa8f660fab7',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '980148d9-3ae1-4d77-9a2f-2aa8f660fab7',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'test-partition'
+}
+    # Subtest: updatedAt is updated on each step transition
+        ok 1 - updatedAt is updated after SENDING
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '980148d9-3ae1-4d77-9a2f-2aa8f660fab7',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'test-partition'
+}
+        ok 2 - updatedAt is updated after CREATING
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+        1..2
+    ok 8 - updatedAt is updated on each step transition # time=9.24ms
+    
+    1..8
+ok 1 - Property 5: ADD Workflow Step Progression # time=111.478ms
+
+1..1

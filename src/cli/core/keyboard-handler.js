@@ -29,6 +29,7 @@ export const VIEW_KEYS = {
   '7': 'logs',
   '8': 'config',
   '9': 'contexts',
+  '0': 'operations',
 };
 
 /**
@@ -188,6 +189,16 @@ export class KeyboardHandler {
     // Sort
     if (ch === 's') {
       return this.emitAction('view:sort');
+    }
+
+    // Edit (for config view)
+    if (ch === 'e') {
+      return this.emitAction('config:edit');
+    }
+
+    // Revert to default (for config view)
+    if (ch === 'R') {
+      return this.emitAction('config:revert');
     }
 
     // Ctrl+C for force quit

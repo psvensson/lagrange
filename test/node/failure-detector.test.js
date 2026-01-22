@@ -235,7 +235,7 @@ test('FailureDetector - marks replicas as failed on node failure', async (t) => 
       {
         service_id: 'service-1',
         node_id: 'node-1',
-        service_type: 'partition_replica',
+        service_type: 'partition',
         partition_id: 'partition-1',
         status: ReplicaStatus.ACTIVE,
       },
@@ -249,7 +249,7 @@ test('FailureDetector - marks replicas as failed on node failure', async (t) => 
       {
         service_id: 'service-3',
         node_id: 'node-2', // Different node, should not be affected
-        service_type: 'partition_replica',
+        service_type: 'partition',
         partition_id: 'partition-2',
         status: ReplicaStatus.ACTIVE,
       },

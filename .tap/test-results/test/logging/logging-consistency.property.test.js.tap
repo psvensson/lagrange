@@ -1,5 +1,123 @@
 TAP version 14
-ok 1 - setup # SKIP filter: /SystemTableCache/
-ok 2 - Property 19: Structured Logging Consistency # SKIP filter: /SystemTableCache/
-ok 3 - cleanup # SKIP filter: /SystemTableCache/
+# Subtest: setup
+    ok 1 - configuration initialized
+    1..1
+ok 1 - setup # time=38.509ms
+
+# Subtest: Property 19: Structured Logging Consistency
+{"level":50,"time":"2026-01-22T17:52:30.012Z","nodeId":"test-node","pid":313948,"serviceId":"00000017-c559-2641-b187-04020f699241","serviceType":"partition","traceId":"0000000a-c815-27e5-bfff-fff00000001f","nodeId":"test-node","msg":"w._QEEphpE"}
+{"level":20,"time":"2026-01-22T17:52:30.013Z","nodeId":"test-node","pid":313948,"serviceType":"node","traceId":"966c91a5-1689-1abf-8000-001c0000000f","nodeId":"test-node","msg":"ap"}
+{"level":30,"time":"2026-01-22T17:52:30.013Z","nodeId":"test-node","pid":313948,"serviceId":"d997d4eb-0005-1000-8000-00019f0e2880","nodeId":"test-node","msg":"ElE]"}
+{"level":30,"time":"2026-01-22T17:52:30.014Z","nodeId":"test-node","pid":313948,"serviceType":"node","traceId":"20762722-dd30-2533-a668-adacffffffe1","nodeId":"test-node","msg":"b~"}
+{"level":30,"time":"2026-01-22T17:52:30.014Z","nodeId":"test-node","pid":313948,"serviceId":"eec06d31-0007-1000-bdf4-447d7b3bebc9","serviceType":"node","traceId":"712b5abb-0007-1000-8000-001700000016","nodeId":"test-node","msg":"R'G\"s0Wz"}
+{"level":10,"time":"2026-01-22T17:52:30.014Z","nodeId":"test-node","pid":313948,"serviceId":"51e579a5-000c-1000-a5f9-d55e396702bf","traceId":"00000010-f3c6-4d96-8000-001ace4ded66","nodeId":"test-node","msg":"Zto"}
+{"level":10,"time":"2026-01-22T17:52:30.014Z","nodeId":"test-node","pid":313948,"serviceId":"fffffffa-20da-2572-85eb-7d2c0000000e","serviceType":"partition","traceId":"84f33356-000a-1000-8000-000bfffffffb","nodeId":"test-node","msg":"'-8"}
+{"level":40,"time":"2026-01-22T17:52:30.015Z","nodeId":"test-node","pid":313948,"serviceType":"message_group","traceId":"04dcb5e7-fffe-5fff-988c-549200000012","nodeId":"test-node","msg":"6$q}%~z"}
+{"level":20,"time":"2026-01-22T17:52:30.015Z","nodeId":"test-node","pid":313948,"serviceId":"a462e2c3-fffc-5fff-8000-000f0000000b","serviceType":"node","traceId":"00000013-b8b8-35e0-bfff-ffe30000001c","nodeId":"test-node","msg":"=vtO"}
+{"level":40,"time":"2026-01-22T17:52:30.015Z","nodeId":"test-node","pid":313948,"serviceId":"14ab484e-c228-5df8-93b4-f8276a33a822","serviceType":"node","traceId":"03b90903-b850-46a9-87c8-a78473052d18","nodeId":"test-node","msg":"uT"}
+    # Subtest: log entries include required metadata
+        ok 1 - all log entries include required metadata
+        1..1
+    ok 1 - log entries include required metadata # time=9.562ms
+    
+{"level":20,"time":"2026-01-22T17:52:30.018Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"%cons>H|!l"}
+{"level":40,"time":"2026-01-22T17:52:30.018Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"'"}
+{"level":20,"time":"2026-01-22T17:52:30.018Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"y`a"}
+{"level":20,"time":"2026-01-22T17:52:30.018Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"7P\"X]"}
+{"level":40,"time":"2026-01-22T17:52:30.018Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"toString"}
+{"level":10,"time":"2026-01-22T17:52:30.018Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"gcon"}
+{"level":30,"time":"2026-01-22T17:52:30.018Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"08[zSc\"|(<"}
+{"level":10,"time":"2026-01-22T17:52:30.018Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"[dH"}
+{"level":10,"time":"2026-01-22T17:52:30.018Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":" 3"}
+{"level":50,"time":"2026-01-22T17:52:30.019Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"pV#6~wTbzz{\""}
+    # Subtest: log structure is consistent across all levels
+        ok 1 - log structure is consistent across all levels
+        1..1
+    ok 2 - log structure is consistent across all levels # time=1.717ms
+    
+{"level":30,"time":"2026-01-22T17:52:30.020Z","nodeId":"test-node","pid":313948,"serviceId":"0389f204-7b92-36b6-8dda-3000ffffffec","serviceType":"node","nodeId":"test-node","msg":"~&9\"<'call"}
+{"level":30,"time":"2026-01-22T17:52:30.020Z","nodeId":"test-node","pid":313948,"serviceId":"0000001c-6095-39c0-8000-0013936ceab3","serviceType":"node","nodeId":"test-node","msg":"e}oS"}
+{"level":30,"time":"2026-01-22T17:52:30.020Z","nodeId":"test-node","pid":313948,"serviceId":"00000002-1d00-1c4c-bfff-fff1fffffff4","serviceType":"node","nodeId":"test-node","msg":"OStE1"}
+{"level":30,"time":"2026-01-22T17:52:30.020Z","nodeId":"test-node","pid":313948,"serviceId":"00000003-a6f3-3784-9c9e-fe8a73ac9952","serviceType":"node","nodeId":"test-node","msg":"b6[/aWsD"}
+{"level":30,"time":"2026-01-22T17:52:30.020Z","nodeId":"test-node","pid":313948,"serviceId":"d31e92f9-a743-2c1c-8000-0017ffffffe3","serviceType":"partition","nodeId":"test-node","msg":"gN@V"}
+{"level":30,"time":"2026-01-22T17:52:30.020Z","nodeId":"test-node","pid":313948,"serviceId":"0000000c-4c19-49e1-87f7-e38bd184b29e","serviceType":"message_group","nodeId":"test-node","msg":"|f}-~D{H]t"}
+{"level":30,"time":"2026-01-22T17:52:30.020Z","nodeId":"test-node","pid":313948,"serviceId":"ffffffe1-0002-1000-8000-000b61e6df60","serviceType":"partition","nodeId":"test-node","msg":"!BmQ+3:bN|"}
+{"level":30,"time":"2026-01-22T17:52:30.021Z","nodeId":"test-node","pid":313948,"serviceId":"f6f1d069-fffa-5fff-8000-00118510fe74","serviceType":"partition","nodeId":"test-node","msg":"r\\aYP>|{@"}
+{"level":30,"time":"2026-01-22T17:52:30.021Z","nodeId":"test-node","pid":313948,"serviceId":"00000008-fff9-5fff-bfff-fff6ffffffe5","serviceType":"node","nodeId":"test-node","msg":"K3Ca^JI]OnF"}
+{"level":30,"time":"2026-01-22T17:52:30.021Z","nodeId":"test-node","pid":313948,"serviceId":"a84bd429-ffee-5fff-9786-bf9817c55d80","serviceType":"partition","nodeId":"test-node","msg":"h]p"}
+    # Subtest: child logger preserves metadata
+        ok 1 - child logger preserves metadata in all entries
+        1..1
+    ok 3 - child logger preserves metadata # time=1.934ms
+    
+{"level":30,"time":"2026-01-22T17:52:30.022Z","nodeId":"test-node","pid":313948,"serviceId":"00000005-fb77-4ad2-853c-556100000004","traceId":"00000004-ffe6-5fff-bfff-fffe00000019","nodeId":"test-node","msg":"e `m!cy"}
+{"level":30,"time":"2026-01-22T17:52:30.022Z","nodeId":"test-node","pid":313948,"serviceId":"1305f371-6cab-45d7-a028-9c8000000011","traceId":"31b9ab73-fff7-5fff-ae92-67ab0000000a","nodeId":"test-node","msg":"BI%,"}
+{"level":30,"time":"2026-01-22T17:52:30.022Z","nodeId":"test-node","pid":313948,"serviceId":"64f03b35-ffef-5fff-bfff-ffff00000010","traceId":"ffffffe9-9e7d-44ff-8000-000bffffffe3","nodeId":"test-node","msg":"key"}
+{"level":30,"time":"2026-01-22T17:52:30.022Z","nodeId":"test-node","pid":313948,"serviceId":"00000000-000f-1000-9e7c-0f1b00000017","traceId":"00000011-89ec-43ae-bfff-fff700000018","nodeId":"test-node","msg":"hW"}
+{"level":30,"time":"2026-01-22T17:52:30.022Z","nodeId":"test-node","pid":313948,"serviceId":"03999ae2-7431-46b8-bfff-fffb65658e1b","traceId":"828a6714-000a-1000-bfff-ffe50000000c","nodeId":"test-node","msg":"eng4caller"}
+{"level":30,"time":"2026-01-22T17:52:30.022Z","nodeId":"test-node","pid":313948,"serviceId":"00000018-a733-59ee-8990-9220fffffff1","traceId":"0000001c-b73b-5d8d-8000-00133c29d647","nodeId":"test-node","msg":"+{n!"}
+{"level":30,"time":"2026-01-22T17:52:30.023Z","nodeId":"test-node","pid":313948,"serviceId":"c3fa001f-001d-1000-8000-000f00000019","traceId":"d1b52b94-001a-1000-b8f8-6e430000001f","nodeId":"test-node","msg":"9usra+dhnIS"}
+{"level":30,"time":"2026-01-22T17:52:30.023Z","nodeId":"test-node","pid":313948,"serviceId":"00000018-ffec-5fff-833f-051afffffffa","traceId":"fffffff6-e0a0-50eb-bfff-fffe00000004","nodeId":"test-node","msg":"keycal"}
+{"level":30,"time":"2026-01-22T17:52:30.023Z","nodeId":"test-node","pid":313948,"serviceId":"0000000e-022f-5240-bb28-57cb601a5fe7","traceId":"53bc2ecf-1d67-2bc3-8000-00014b8d39f3","nodeId":"test-node","msg":")g"}
+{"level":30,"time":"2026-01-22T17:52:30.023Z","nodeId":"test-node","pid":313948,"serviceId":"ffffffff-19c9-5204-b546-b61400000011","traceId":"ffffffe1-2afb-166b-bc4c-fd7629249638","nodeId":"test-node","msg":"eh4hpm"}
+    # Subtest: nested child loggers merge bindings
+        ok 1 - nested child loggers merge all bindings
+        1..1
+    ok 4 - nested child loggers merge bindings # time=2.294ms
+    
+{"level":30,"time":"2026-01-22T17:52:30.024Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"-6c?"}
+{"level":30,"time":"2026-01-22T17:52:30.024Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"Lj?Qo"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"P"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"[?p%8Y Z05A"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"M!"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"V|[.:uNY/.Pc"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"QE}HTa"}
+{"level":30,"time":"2026-01-22T17:52:30.026Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"UPR"}
+{"level":30,"time":"2026-01-22T17:52:30.026Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"NhvF"}
+{"level":30,"time":"2026-01-22T17:52:30.026Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"i"}
+    # Subtest: timestamps are monotonically increasing
+        ok 1 - timestamps are monotonically increasing
+        1..1
+    ok 5 - timestamps are monotonically increasing # time=2.356ms
+    
+    1..5
+ok 2 - Property 19: Structured Logging Consistency # time=19.929ms
+
+# Subtest: cleanup
+    ok 1 - cleanup complete
+    1..1
+ok 3 - cleanup # time=0.274ms
+
+{"level":30,"time":"2026-01-22T17:52:30.024Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"*{4&\\7ok3HC"}
+{"level":30,"time":"2026-01-22T17:52:30.024Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"XgT;6"}
+{"level":30,"time":"2026-01-22T17:52:30.024Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"t8aU6UmT5/"}
+{"level":30,"time":"2026-01-22T17:52:30.024Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"wm4"}
+{"level":30,"time":"2026-01-22T17:52:30.024Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"J|44bD"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"WVvXGaq"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"mJY;hr"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"a/y{|7R1?"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"C1I5]p]6E~"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"'M"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"!K[z"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"c8>$:cb"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"-@u-V7m&ub"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"Oz"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"\\SXaMAv"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"Pwt@O3V"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"gH`&"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"uInf&"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"5f"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"3o'>"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"B!gv\"2-ElH"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"I\\+vw8)cUlp"}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":" xK[YUCy]g["}
+{"level":30,"time":"2026-01-22T17:52:30.025Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"e\"h.;"}
+{"level":30,"time":"2026-01-22T17:52:30.026Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"j[zE(,0-PYr"}
+{"level":30,"time":"2026-01-22T17:52:30.026Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"h"}
+{"level":30,"time":"2026-01-22T17:52:30.026Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"P!;("}
+{"level":30,"time":"2026-01-22T17:52:30.026Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"n"}
+{"level":30,"time":"2026-01-22T17:52:30.026Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"E"}
+{"level":30,"time":"2026-01-22T17:52:30.026Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"=A"}
+{"level":30,"time":"2026-01-22T17:52:30.026Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"6gV#)"}
+{"level":30,"time":"2026-01-22T17:52:30.026Z","nodeId":"test-node","pid":313948,"nodeId":"test-node","msg":"tqj;~q&6=ae"}
 1..3

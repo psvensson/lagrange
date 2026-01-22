@@ -1,0 +1,160 @@
+TAP version 14
+# Subtest: Property 4: RPC Timeout Behavior
+    # Subtest: requests timeout after configured duration
+        ok 1 - Should timeout with correct message for 84ms
+        ok 2 - Should wait at least 84ms (waited 85ms)
+        ok 3 - Should timeout with correct message for 96ms
+        ok 4 - Should wait at least 96ms (waited 96ms)
+        ok 5 - Should timeout with correct message for 38ms
+        ok 6 - Should wait at least 38ms (waited 38ms)
+        ok 7 - Should timeout with correct message for 46ms
+        ok 8 - Should wait at least 46ms (waited 46ms)
+        ok 9 - Should timeout with correct message for 26ms
+        ok 10 - Should wait at least 26ms (waited 26ms)
+        ok 11 - Should timeout with correct message for 37ms
+        ok 12 - Should wait at least 37ms (waited 37ms)
+        ok 13 - Should timeout with correct message for 26ms
+        ok 14 - Should wait at least 26ms (waited 27ms)
+        ok 15 - Should timeout with correct message for 22ms
+        ok 16 - Should wait at least 22ms (waited 22ms)
+        ok 17 - Should timeout with correct message for 22ms
+        ok 18 - Should wait at least 22ms (waited 22ms)
+        ok 19 - Should timeout with correct message for 41ms
+        ok 20 - Should wait at least 41ms (waited 41ms)
+        1..20
+    ok 1 - requests timeout after configured duration # time=447.85ms
+    
+    # Subtest: pending request is cleaned up after timeout
+        ok 1 - Should have no pending requests after timeout
+        ok 2 - Correlation ID should not be pending after timeout
+        ok 3 - Should have no pending requests after timeout
+        ok 4 - Correlation ID should not be pending after timeout
+        ok 5 - Should have no pending requests after timeout
+        ok 6 - Correlation ID should not be pending after timeout
+        ok 7 - Should have no pending requests after timeout
+        ok 8 - Correlation ID should not be pending after timeout
+        ok 9 - Should have no pending requests after timeout
+        ok 10 - Correlation ID should not be pending after timeout
+        ok 11 - Should have no pending requests after timeout
+        ok 12 - Correlation ID should not be pending after timeout
+        ok 13 - Should have no pending requests after timeout
+        ok 14 - Correlation ID should not be pending after timeout
+        ok 15 - Should have no pending requests after timeout
+        ok 16 - Correlation ID should not be pending after timeout
+        ok 17 - Should have no pending requests after timeout
+        ok 18 - Correlation ID should not be pending after timeout
+        ok 19 - Should have no pending requests after timeout
+        ok 20 - Correlation ID should not be pending after timeout
+        1..20
+    ok 2 - pending request is cleaned up after timeout # time=308.308ms
+    
+    # Subtest: timeout counter is incremented
+        ok 1 - Should have 1 timeouts recorded
+        ok 2 - Should have 1 timeouts recorded
+        ok 3 - Should have 2 timeouts recorded
+        ok 4 - Should have 5 timeouts recorded
+        ok 5 - Should have 3 timeouts recorded
+        ok 6 - Should have 4 timeouts recorded
+        ok 7 - Should have 5 timeouts recorded
+        ok 8 - Should have 4 timeouts recorded
+        ok 9 - Should have 1 timeouts recorded
+        ok 10 - Should have 5 timeouts recorded
+        1..10
+    ok 3 - timeout counter is incremented # time=626.485ms
+    
+    # Subtest: custom timeout overrides default
+        ok 1 - Should use custom timeout 21ms
+        ok 2 - Should timeout before default (21ms < 105ms)
+        ok 3 - Should use custom timeout 22ms
+        ok 4 - Should timeout before default (22ms < 110ms)
+        ok 5 - Should use custom timeout 44ms
+        ok 6 - Should timeout before default (44ms < 154ms)
+        ok 7 - Should use custom timeout 24ms
+        ok 8 - Should timeout before default (24ms < 103ms)
+        ok 9 - Should use custom timeout 24ms
+        ok 10 - Should timeout before default (24ms < 101ms)
+        ok 11 - Should use custom timeout 48ms
+        ok 12 - Should timeout before default (48ms < 194ms)
+        ok 13 - Should use custom timeout 42ms
+        ok 14 - Should timeout before default (43ms < 198ms)
+        ok 15 - Should use custom timeout 20ms
+        ok 16 - Should timeout before default (19ms < 198ms)
+        ok 17 - Should use custom timeout 21ms
+        ok 18 - Should timeout before default (22ms < 101ms)
+        ok 19 - Should use custom timeout 20ms
+        ok 20 - Should timeout before default (20ms < 140ms)
+        1..20
+    ok 4 - custom timeout overrides default # time=289.561ms
+    
+    # Subtest: timeout event is emitted
+        ok 1 - Should emit timeout event
+        ok 2 - Event should have correlation ID
+        ok 3 - Event should have correct target
+        ok 4 - Event should have correct timeout
+        ok 5 - Should emit timeout event
+        ok 6 - Event should have correlation ID
+        ok 7 - Event should have correct target
+        ok 8 - Event should have correct timeout
+        ok 9 - Should emit timeout event
+        ok 10 - Event should have correlation ID
+        ok 11 - Event should have correct target
+        ok 12 - Event should have correct timeout
+        ok 13 - Should emit timeout event
+        ok 14 - Event should have correlation ID
+        ok 15 - Event should have correct target
+        ok 16 - Event should have correct timeout
+        ok 17 - Should emit timeout event
+        ok 18 - Event should have correlation ID
+        ok 19 - Event should have correct target
+        ok 20 - Event should have correct timeout
+        ok 21 - Should emit timeout event
+        ok 22 - Event should have correlation ID
+        ok 23 - Event should have correct target
+        ok 24 - Event should have correct timeout
+        ok 25 - Should emit timeout event
+        ok 26 - Event should have correlation ID
+        ok 27 - Event should have correct target
+        ok 28 - Event should have correct timeout
+        ok 29 - Should emit timeout event
+        ok 30 - Event should have correlation ID
+        ok 31 - Event should have correct target
+        ok 32 - Event should have correct timeout
+        ok 33 - Should emit timeout event
+        ok 34 - Event should have correlation ID
+        ok 35 - Event should have correct target
+        ok 36 - Event should have correct timeout
+        ok 37 - Should emit timeout event
+        ok 38 - Event should have correlation ID
+        ok 39 - Event should have correct target
+        ok 40 - Event should have correct timeout
+        1..40
+    ok 5 - timeout event is emitted # time=387.551ms
+    
+    # Subtest: late response after timeout is ignored
+        ok 1 - Late response should not be matched
+        ok 2 - Response counter should not increment for late response
+        ok 3 - Late response should not be matched
+        ok 4 - Response counter should not increment for late response
+        ok 5 - Late response should not be matched
+        ok 6 - Response counter should not increment for late response
+        ok 7 - Late response should not be matched
+        ok 8 - Response counter should not increment for late response
+        ok 9 - Late response should not be matched
+        ok 10 - Response counter should not increment for late response
+        ok 11 - Late response should not be matched
+        ok 12 - Response counter should not increment for late response
+        ok 13 - Late response should not be matched
+        ok 14 - Response counter should not increment for late response
+        ok 15 - Late response should not be matched
+        ok 16 - Response counter should not increment for late response
+        ok 17 - Late response should not be matched
+        ok 18 - Response counter should not increment for late response
+        ok 19 - Late response should not be matched
+        ok 20 - Response counter should not increment for late response
+        1..20
+    ok 6 - late response after timeout is ignored # time=202.281ms
+    
+    1..6
+ok 1 - Property 4: RPC Timeout Behavior # time=2266.235ms
+
+1..1

@@ -1,3 +1,36 @@
 TAP version 14
-ok 1 - Property 11: Command Parsing Correctness # SKIP filter: /SystemTableCache/
+# Subtest: Property 11: Command Parsing Correctness
+    # Subtest: valid commands parse to correct name and args
+        ok 1 - Valid commands parse correctly
+        1..1
+    ok 1 - valid commands parse to correct name and args # time=10.601ms
+    
+    # Subtest: invalid commands return error
+        ok 1 - Invalid commands return error
+        1..1
+    ok 2 - invalid commands return error # time=6.64ms
+    
+    # Subtest: missing required params return error
+        ok 1 - Missing required params return error
+        1..1
+    ok 3 - missing required params return error # time=0.784ms
+    
+    # Subtest: aliases resolve to canonical command names
+        ok 1 - Aliases resolve to canonical names
+        1..1
+    ok 4 - aliases resolve to canonical command names # time=0.531ms
+    
+    # Subtest: empty input returns error
+        ok 1 - Empty/whitespace input returns error
+        1..1
+    ok 5 - empty input returns error # time=0.742ms
+    
+    # Subtest: quoted arguments preserve spaces
+        ok 1 - Quoted arguments preserve spaces
+        1..1
+    ok 6 - quoted arguments preserve spaces # time=1.096ms
+    
+    1..6
+ok 1 - Property 11: Command Parsing Correctness # time=25.474ms
+
 1..1

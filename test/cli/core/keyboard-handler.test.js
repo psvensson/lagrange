@@ -377,7 +377,7 @@ test('KeyboardHandler', async (t) => {
 
     t.equal(handler.isViewSwitchKey({ch: '1'}), true);
     t.equal(handler.isViewSwitchKey({ch: '9'}), true);
-    t.equal(handler.isViewSwitchKey({ch: '0'}), false);
+    t.equal(handler.isViewSwitchKey({ch: '0'}), true); // operations view
     t.equal(handler.isViewSwitchKey({ch: 'a'}), false);
   });
 

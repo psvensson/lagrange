@@ -1,0 +1,21 @@
+TAP version 14
+# Subtest: Property 4: No Duplicate REMOVE Moves for Removing Replicas
+    # Subtest: no REMOVE moves for replicas in removing state
+        ok 1 - no REMOVE moves for replicas in removing state
+        1..1
+    ok 1 - no REMOVE moves for replicas in removing state # time=10.755ms
+    
+    # Subtest: state machine identifies removing replicas
+        ok 1 - state machine identifies removing replicas
+        1..1
+    ok 2 - state machine identifies removing replicas # time=7.518ms
+    
+    # Subtest: REMOVE moves allowed for active replicas
+        ok 1 - REMOVE moves allowed for active replicas
+        1..1
+    ok 3 - REMOVE moves allowed for active replicas # time=4.318ms
+    
+    1..3
+ok 1 - Property 4: No Duplicate REMOVE Moves for Removing Replicas # time=149.904ms
+
+1..1

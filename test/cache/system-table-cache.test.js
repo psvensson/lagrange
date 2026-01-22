@@ -442,3 +442,28 @@ test('SystemTableCache - notifies on DELETE', async (t) => {
   t.equal(events[0].operation, 'DELETE', 'Should have DELETE operation');
   t.equal(events[0].record.id, 'node-1', 'Should have deleted record');
 });
+
+
+test('SystemTableCache - DELETE with service_id primary key', async (t) => {
+  const cache = new SystemTableCache();
+
+  // Insert a service record using service_id as primary key
+  cache.applySystemTableChange('services', CDC_OPERATIONS.INSERT, {
+    service_id: 'tables-p1-r1',
+    node_id: 'node-1',
+    partition_id: 'tables-p1',
+    service_type: 'partition',
+    status: 'active',
+  });
+
+  t.equal(cache.has('services', 'tables-p1-r1'), true, 'Should exist after insert');
+  t.equal(cache.count('services'), 1, 'Should have 1 service');
+
+  // Delete using service_id (simulating CDC event from partition DELETE)
+  cache.applySystemTableChange('services', CDC_OPERATIONS.DELETE, {
+    service_id: 'tables-p1-r1',
+  });
+
+  t.equal(cache.has('services', 'tables-p1-r1'), false, 'Should not exist after delete');
+  t.equal(cache.count('services'), 0, 'Should have 0 services');
+});

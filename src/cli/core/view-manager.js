@@ -219,6 +219,7 @@ export class ViewManager {
       'logs': 'logs',
       'config': 'config',
       'contexts': 'contexts',
+      'replica_operations': 'operations',
     };
 
     const viewName = tableViewMap[table];
@@ -315,6 +316,7 @@ export class ViewManager {
       'logs': 'logs',
       'config': 'config',
       'contexts': 'contexts',
+      'replica_operations': 'operations',
     };
 
     const viewName = tableViewMap[change.table];

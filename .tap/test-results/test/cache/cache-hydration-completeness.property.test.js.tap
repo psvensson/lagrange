@@ -1,6 +1,22 @@
 TAP version 14
-ok 1 - Property 1: Cache contains all rows after hydration # SKIP filter: /SystemTableCache/
-ok 2 - Property 1: All system tables are queried # SKIP filter: /SystemTableCache/
-ok 3 - Property 1: Hydration result contains correct row counts # SKIP filter: /SystemTableCache/
-ok 4 - Property 1: Cache data matches source data # SKIP filter: /SystemTableCache/
+# Subtest: Property 1: Cache contains all rows after hydration
+    ok 1 - Cache contains all rows after hydration
+    1..1
+ok 1 - Property 1: Cache contains all rows after hydration # time=24.426ms
+
+# Subtest: Property 1: All system tables are queried
+    ok 1 - All system tables are queried
+    1..1
+ok 2 - Property 1: All system tables are queried # time=16.965ms
+
+# Subtest: Property 1: Hydration result contains correct row counts
+    ok 1 - Hydration result contains correct row counts
+    1..1
+ok 3 - Property 1: Hydration result contains correct row counts # time=6.516ms
+
+# Subtest: Property 1: Cache data matches source data
+    ok 1 - Cache data matches source data
+    1..1
+ok 4 - Property 1: Cache data matches source data # time=7.834ms
+
 1..4

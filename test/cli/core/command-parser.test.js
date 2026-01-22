@@ -20,6 +20,7 @@ test('CommandParser', async (t) => {
     t.ok(commands.includes('sql'), 'has sql command');
     t.ok(commands.includes('help'), 'has help command');
     t.ok(commands.includes('quit'), 'has quit command');
+    t.ok(commands.includes('history'), 'has history command');
   });
 
   await t.test('parse() handles valid commands', async (t) => {
@@ -224,5 +225,27 @@ test('CommandParser', async (t) => {
     parser.clearHistory();
 
     t.equal(parser.getHistory().length, 0);
+  });
+
+  await t.test('history command parses with replica_id argument', async (t) => {
+    const parser = new CommandParser();
+
+    const result = parser.parse('history replica-123');
+    t.same(result, {command: 'history', args: ['replica-123']});
+  });
+
+  await t.test('history command requires replica_id argument', async (t) => {
+    const parser = new CommandParser();
+
+    const result = parser.parse('history');
+    t.ok(result.error, 'has error');
+    t.match(result.error, /Missing required parameter/);
+  });
+
+  await t.test('history command alias hist works', async (t) => {
+    const parser = new CommandParser();
+
+    const result = parser.parse('hist replica-456');
+    t.same(result, {command: 'history', args: ['replica-456']});
   });
 });

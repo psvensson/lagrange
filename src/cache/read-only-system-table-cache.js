@@ -92,6 +92,24 @@ class ReadOnlySystemTableCache {
   }
 
   /**
+   * Subscribe to cache change notifications.
+   * Listeners receive (tableName, operation, record) on each change.
+   * @param {Function} listener - Called with (tableName, operation, record)
+   */
+  onCacheChange(listener) {
+    return this._cache.onCacheChange(listener);
+  }
+
+  /**
+   * Unsubscribe from cache change notifications.
+   * @param {Function} listener - The listener to remove
+   * @return {boolean} True if the listener was removed
+   */
+  offCacheChange(listener) {
+    return this._cache.offCacheChange(listener);
+  }
+
+  /**
    * Log a violation when write methods are attempted.
    * This method is called internally when detecting write attempts.
    * @param {string} operation - The attempted operation name.

@@ -1,7 +1,27 @@
 TAP version 14
-ok 1 - Property 5: CDC Cache Consistency - INSERT adds records # SKIP filter: /SystemTableCache/
-ok 2 - Property 5: CDC Cache Consistency - UPDATE modifies records # SKIP filter: /SystemTableCache/
-ok 3 - Property 5: CDC Cache Consistency - DELETE removes records # SKIP filter: /SystemTableCache/
-ok 4 - Property 5: CDC Cache Consistency - sequence of events # SKIP filter: /SystemTableCache/
-ok 5 - Property 5: CDC Cache Consistency - lastUpdate is updated # SKIP filter: /SystemTableCache/
+# Subtest: Property 5: CDC Cache Consistency - INSERT adds records
+    ok 1 - INSERT operations correctly add records to cache
+    1..1
+ok 1 - Property 5: CDC Cache Consistency - INSERT adds records # time=8.722ms
+
+# Subtest: Property 5: CDC Cache Consistency - UPDATE modifies records
+    ok 1 - UPDATE operations correctly modify records in cache
+    1..1
+ok 2 - Property 5: CDC Cache Consistency - UPDATE modifies records # time=2.01ms
+
+# Subtest: Property 5: CDC Cache Consistency - DELETE removes records
+    ok 1 - DELETE operations correctly remove records from cache
+    1..1
+ok 3 - Property 5: CDC Cache Consistency - DELETE removes records # time=1.116ms
+
+# Subtest: Property 5: CDC Cache Consistency - sequence of events
+    ok 1 - Sequence of CDC events produces consistent cache state
+    1..1
+ok 4 - Property 5: CDC Cache Consistency - sequence of events # time=8.49ms
+
+# Subtest: Property 5: CDC Cache Consistency - lastUpdate is updated
+    ok 1 - lastUpdate is updated after applying CDC events
+    1..1
+ok 5 - Property 5: CDC Cache Consistency - lastUpdate is updated # time=1.463ms
+
 1..5

@@ -80,6 +80,7 @@ class LoggingService {
         options: {
           colorize: true,
           translateTime: 'SYS:standard',
+          singleLine: true,
         },
       }));
     } else {

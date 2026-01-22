@@ -54,10 +54,10 @@ export class ConfigView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'key', label: 'Key', width: 35},
-      {key: 'value', label: 'Value', width: 30},
-      {key: 'type', label: 'Type', width: 10},
-      {key: 'requires_restart', label: 'Requires Restart', width: 16},
+      {key: 'key', label: 'Key', width: 45},
+      {key: 'value', label: 'Value', width: 20},
+      {key: 'type', label: 'Type', width: 8},
+      {key: 'requires_restart', label: 'Restart', width: 8},
       {key: 'updated_at', label: 'Last Modified', width: 20},
     ];
   }
@@ -295,7 +295,80 @@ export class ConfigView extends BaseView {
     if (key.name === 'enter' || key.name === 'return') {
       return this.handleDrillDown();
     }
+
+    // 'e' key to edit selected config
+    if (key.ch === 'e') {
+      return this.handleEditRequest();
+    }
+
+    // 'r' key to revert to default (when in config view context)
+    if (key.ch === 'R') {
+      return this.handleRevertRequest();
+    }
+
     return super.handleKey(key);
+  }
+
+  /**
+   * Handle edit request for selected config
+   * @return {Object|null} Edit action or null
+   */
+  handleEditRequest() {
+    const selectedConfig = this.getSelectedItem();
+    if (!selectedConfig) {
+      return null;
+    }
+
+    const editability = this.canEdit(selectedConfig.config_key);
+    if (!editability.editable) {
+      return {
+        action: 'showError',
+        message: editability.reason,
+      };
+    }
+
+    return {
+      action: 'editConfig',
+      config: selectedConfig,
+      currentValue: this.formatFullValue(
+        selectedConfig.config_value, selectedConfig.value_type,
+      ),
+    };
+  }
+
+  /**
+   * Handle revert request for selected config
+   * @return {Object|null} Revert action or null
+   */
+  handleRevertRequest() {
+    const selectedConfig = this.getSelectedItem();
+    if (!selectedConfig) {
+      return null;
+    }
+
+    const revertability = this.canRevert(selectedConfig.config_key);
+    if (!revertability.revertable) {
+      return {
+        action: 'showError',
+        message: revertability.reason,
+      };
+    }
+
+    const revertOp = this.prepareRevert(selectedConfig.config_key);
+    return {
+      action: 'revertConfig',
+      config: selectedConfig,
+      revertOperation: revertOp,
+      confirmation: this.getRevertConfirmation(revertOp),
+    };
+  }
+
+  /**
+   * Get help text for the config view
+   * @return {string} Help text for status bar
+   */
+  getHelpText() {
+    return 'e:Edit  R:Revert  Enter:Details  d:Detail Panel  /:Filter';
   }
 
   /**

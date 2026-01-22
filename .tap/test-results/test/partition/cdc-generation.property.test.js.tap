@@ -1,6 +1,22 @@
 TAP version 14
-ok 1 - Property 6: CDC event generated for INSERT operations # SKIP filter: /SystemTableCache/
-ok 2 - Property 6: CDC event generated for UPDATE operations # SKIP filter: /SystemTableCache/
-ok 3 - Property 6: CDC event generated for DELETE operations # SKIP filter: /SystemTableCache/
-ok 4 - Property 6: CDC events delivered to multiple subscribers # SKIP filter: /SystemTableCache/
+# Subtest: Property 6: CDC event generated for INSERT operations
+    ok 1 - CDC event generated for INSERT operations
+    1..1
+ok 1 - Property 6: CDC event generated for INSERT operations # time=12.913ms
+
+# Subtest: Property 6: CDC event generated for UPDATE operations
+    ok 1 - CDC event generated for UPDATE operations
+    1..1
+ok 2 - Property 6: CDC event generated for UPDATE operations # time=5.684ms
+
+# Subtest: Property 6: CDC event generated for DELETE operations
+    ok 1 - CDC event generated for DELETE operations
+    1..1
+ok 3 - Property 6: CDC event generated for DELETE operations # time=5.167ms
+
+# Subtest: Property 6: CDC events delivered to multiple subscribers
+    ok 1 - CDC events delivered to multiple subscribers
+    1..1
+ok 4 - Property 6: CDC events delivered to multiple subscribers # time=5.268ms
+
 1..4

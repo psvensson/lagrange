@@ -25,3 +25,7 @@ export {
   DEFAULT_MERGE_TRAFFIC_THRESHOLD,
   DEFAULT_EVALUATION_INTERVAL_MS,
 } from './partition-split-merge-manager.js';
+
+export {
+  PendingRequestTracker,
+} from './pending-request-tracker.js';

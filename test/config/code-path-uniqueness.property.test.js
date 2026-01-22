@@ -184,8 +184,11 @@ test('Property 14: Code Path Uniqueness', async (t) => {
   t.test('each class has exactly one implementation', async (t) => {
     // Classes that are intentionally duplicated for different contexts
     // CLI has its own LiveQueryManager that wraps the core one
+    // RaftNode is defined in both message-group-service.js and partition-service.js
+    // as inner classes extending LifeRaft for their specific use cases
     const allowedDuplicates = new Set([
       'LiveQueryManager', // CLI wrapper vs core implementation
+      'RaftNode', // Inner class in message-group-service.js and partition-service.js
     ]);
 
     fc.assert(
@@ -220,6 +223,7 @@ test('Property 14: Code Path Uniqueness', async (t) => {
     // Also verify no unexpected duplicates exist
     const allowedDuplicatesList = new Set([
       'LiveQueryManager', // CLI wrapper vs core implementation
+      'RaftNode', // Inner class in message-group-service.js and partition-service.js
     ]);
 
     const duplicates = [];
@@ -338,10 +342,11 @@ test('Property 14: Code Path Uniqueness', async (t) => {
       .filter((f) => f.endsWith('.js') && f !== 'index.js');
 
     // Each transport should have a distinct purpose
+    // Note: in-memory-transport.js removed as part of unified remote transport
     const expectedTransports = [
-      'in-memory-transport.js', // For testing and bootstrap
       'websocket-transport.js', // For inter-node communication
-      'message-group-transport.js', // For partition Raft via message groups
+      'message-router.js', // For routing messages between transports
+      'rpc-client.js', // For request-response pattern over message groups
     ];
 
     fc.assert(

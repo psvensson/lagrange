@@ -1,5 +1,17 @@
 TAP version 14
-ok 1 - Property 44: Initial partition has full key range [NULL, NULL) # SKIP filter: /SystemTableCache/
-ok 2 - Property 44: Initial partition is linked to correct table # SKIP filter: /SystemTableCache/
-ok 3 - Property 44: Exactly one partition created for new table # SKIP filter: /SystemTableCache/
+# Subtest: Property 44: Initial partition has full key range [NULL, NULL)
+    ok 1 - Initial partition covers full key range [NULL, NULL)
+    1..1
+ok 1 - Property 44: Initial partition has full key range [NULL, NULL) # time=6.25ms
+
+# Subtest: Property 44: Initial partition is linked to correct table
+    ok 1 - Initial partition is correctly linked to its table
+    1..1
+ok 2 - Property 44: Initial partition is linked to correct table # time=3.838ms
+
+# Subtest: Property 44: Exactly one partition created for new table
+    ok 1 - Exactly one partition is created for each new table
+    1..1
+ok 3 - Property 44: Exactly one partition created for new table # time=2.704ms
+
 1..3

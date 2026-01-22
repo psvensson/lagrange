@@ -1,17 +1,20 @@
 /**
  * Message Group Service - Reliable inter-service communication.
- * Implements 3-replica Raft groups with in-memory storage for message routing.
- * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+ * Implements 3-replica Raft groups using liferaft library for consensus.
+ * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.4, 6.5
  */
 
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
+import LifeRaft from '@markwylde/liferaft';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {SystemTableCache} from '../cache/system-table-cache.js';
 import {createReadOnlyCache} from '../cache/read-only-system-table-cache.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
+import {InMemoryLogAdapter} from '../raft/in-memory-log-adapter.js';
+import {isRaftPacket, RAFT_PACKET_TYPES} from '../raft/raft-packet-utils.js';
 
 /**
  * Message status enumeration.
@@ -32,8 +35,11 @@ const RaftRole = {
   LEADER: 'leader',
 };
 
+// Note: isRaftPacket and RAFT_PACKET_TYPES are imported from shared module
+// src/raft/raft-packet-utils.js - Requirements: 9.1, 9.2, 9.3, 9.4
+
 /**
- * In-memory Raft log entry.
+ * In-memory Raft log entry (kept for backward compatibility).
  */
 class RaftLogEntry {
   /**
@@ -50,8 +56,9 @@ class RaftLogEntry {
   }
 }
 
+
 /**
- * In-memory Raft storage for message groups.
+ * In-memory Raft storage for message groups (kept for backward compatibility).
  */
 class InMemoryRaftStorage {
   /**
@@ -131,7 +138,7 @@ class InMemoryRaftStorage {
 
 /**
  * MessageGroupService provides reliable inter-service communication.
- * Implements a 3-replica Raft group with in-memory storage.
+ * Implements a 3-replica Raft group using liferaft library.
  */
 class MessageGroupService extends EventEmitter {
   /**
@@ -141,7 +148,7 @@ class MessageGroupService extends EventEmitter {
    * @param {string} options.replicaId - This replica's ID.
    * @param {string} options.nodeId - Node ID hosting this replica.
    * @param {Array<string>} options.replicaIds - All replica IDs in the group.
-   * @param {Object} options.transport - Transport for Raft communication.
+   * @param {Object} options.transport - WebSocket-based transport for communication.
    */
   constructor(options = {}) {
     super();
@@ -153,13 +160,34 @@ class MessageGroupService extends EventEmitter {
       throw new Error('MessageGroupService requires replicaId');
     }
 
+    // Transport is now required - WebSocket transport is mandatory
+    if (!options.transport) {
+      throw new Error(
+        'MessageGroupService requires transport - WebSocket transport is mandatory',
+      );
+    }
+
+    // Validate transport is WebSocket-based (MessageRouter)
+    if (!this.isWebSocketBasedTransport(options.transport)) {
+      throw new Error(
+        'MessageGroupService requires WebSocket-based transport (MessageRouter)',
+      );
+    }
+
     this.groupId = options.groupId;
     this.replicaId = options.replicaId;
     this.nodeId = options.nodeId || 'unknown';
     this.replicaIds = options.replicaIds || [this.replicaId];
-    this.transport = options.transport || null;
-    // Self-hosted group: all replicas on same node (bootstrap scenario)
-    this.isSelfHostedGroup = options.isSelfHostedGroup || false;
+    this.transport = options.transport;
+
+    // Peer addresses for cross-node communication
+    // Map of replicaId -> unified address (e.g., 'nodeId/message-group/replicaId')
+    // Used when joining an existing message group on a different node
+    this.peerAddresses = options.peerAddresses || [];
+
+    // Unified address format: ${nodeId}/message-group/${replicaId}
+    // Requirements: 1.1, 5.1
+    this.unifiedAddress = `${this.nodeId}/message-group/${this.replicaId}`;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -170,12 +198,17 @@ class MessageGroupService extends EventEmitter {
     this.retryMaxDelayMs = config.get('messageGroup.retryMaxDelayMs') || 10000;
     this.retryJitterFactor = config.get('messageGroup.retryJitterFactor') || 0.1;
 
-    // Raft state
+    // Raft state - using liferaft library
+    // Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
+    this.raft = null; // Initialized in initialize()
+    this.logAdapter = new InMemoryLogAdapter();
+    // Note: transportAdapter removed - RaftNode.write() now calls messageRouter directly
+    // Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4
+
+    // Legacy storage for backward compatibility with tests
     this.storage = new InMemoryRaftStorage();
     this.role = RaftRole.FOLLOWER;
     this.leaderId = null;
-    this.electionTimeout = null;
-    this.heartbeatInterval = null;
 
     // Message tracking
     this.pendingMessages = new Map();
@@ -200,10 +233,91 @@ class MessageGroupService extends EventEmitter {
     // State
     this.initialized = false;
     this.isLeader = false;
+
+    // Defer election start until all replicas are ready
+    // When true, the Raft election timer won't start until startElection() is called
+    // This prevents election storms when multiple replicas are created on the same node
+    this.deferElection = options.deferElection || false;
+    this.electionStarted = false;
+  }
+
+
+  /**
+   * Check if transport is WebSocket-based (MessageRouter).
+   * Valid transports: MessageRouter
+   * Invalid: InMemoryTransport, null, undefined
+   *
+   * Detection is done via duck typing:
+   * - MessageRouter has: deliver(), initialize(), shutdown(), setServiceNodeResolver()
+   *
+   * @param {Object} transport - Transport to validate.
+   * @return {boolean} True if transport is WebSocket-based.
+   */
+  isWebSocketBasedTransport(transport) {
+    if (!transport) return false;
+
+    // Check for required methods
+    const hasDeliver = typeof transport.deliver === 'function';
+    const hasInitialize = typeof transport.initialize === 'function';
+
+    // Check for MessageRouter marker
+    const isMessageRouter = typeof transport.setServiceNodeResolver === 'function';
+
+    return hasDeliver && hasInitialize && isMessageRouter;
   }
 
   /**
+   * Get the unified address for this service.
+   * Format: ${nodeId}/message-group/${replicaId}
+   * Requirements: 1.1, 5.1
+   * @return {string} Unified address.
+   */
+  getUnifiedAddress() {
+    return this.unifiedAddress;
+  }
+
+  /**
+   * Build a unified address for a peer replica.
+   * Looks up the address from peerAddresses array, system table cache, or falls back.
+   * Requirements: 1.1, 9.1
+   * @param {string} peerId - Peer replica ID.
+   * @return {string} Unified address for the peer.
+   */
+  buildPeerAddress(peerId) {
+    // If peerId is already in unified format, return as-is
+    if (peerId.includes('/')) {
+      return peerId;
+    }
+
+    // Check peerAddresses array (provided during cross-node joining)
+    // Format: ['nodeId/message-group/replicaId', ...]
+    if (this.peerAddresses && this.peerAddresses.length > 0) {
+      const matchingAddress = this.peerAddresses.find((addr) =>
+        addr.endsWith(`/message-group/${peerId}`) || addr.endsWith(`/${peerId}`));
+      if (matchingAddress) {
+        return matchingAddress;
+      }
+    }
+
+    // Try to look up nodeId from system table cache
+    if (this.systemTableCache) {
+      const service = this.systemTableCache.get('services', peerId);
+      if (service && service.node_id) {
+        return `${service.node_id}/message-group/${peerId}`;
+      }
+    }
+
+    // During bootstrap, all replicas are on the same node, so use this.nodeId
+    // This enables Raft elections to work before the system table cache is populated
+    // Requirements: 1.1, 9.1
+    return `${this.nodeId}/message-group/${peerId}`;
+  }
+
+
+  /**
    * Initialize the message group service.
+   * Creates liferaft instance and wires up events.
+   * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 7.3, 7.4
    * @return {Promise<void>}
    */
   async initialize() {
@@ -218,18 +332,248 @@ class MessageGroupService extends EventEmitter {
       replicaCount: this.replicaIds.length,
     });
 
-    // Start as follower
-    this.role = RaftRole.FOLLOWER;
-    this.startElectionTimer();
+    // Get Raft configuration from ConfigurationManager
+    // Requirements: 7.1, 7.2, 7.3, 7.4
+    const config = ConfigurationManager.getInstance();
+    const heartbeatMs = config.get('raft.heartbeatIntervalMs') || 50;
+    const electionMinMs = config.get('raft.electionTimeoutMinMs') || 150;
+    const electionMaxMs = config.get('raft.electionTimeoutMaxMs') || 1000;
+
+    // Create extended LifeRaft class with our transport using ES6 class inheritance
+    // Requirements: 2.1, 2.2, 3.1, 3.2, 3.3, 3.4
+    const self = this;
+    const deferElection = this.deferElection;
+
+    /**
+     * Custom Raft node class that extends LifeRaft with our transport.
+     * Simplified to call messageRouter.deliver() directly without type conversion.
+     * Supports deferred election start to prevent election storms during bootstrap.
+     * Requirements: 3.1, 3.2, 3.3, 3.4
+     */
+    class RaftNode extends LifeRaft {
+      /**
+       * Override initialize to support deferred election start.
+       * When deferElection is true, we don't start the heartbeat timer.
+       * Call startElection() later to begin the election process.
+       * @param {Object} _options - Initialization options (unused).
+       * @param {Function} callback - Completion callback.
+       */
+      initialize(_options, callback) {
+        if (deferElection) {
+          // Don't start heartbeat timer - election will be started manually
+          self.logger.debug('Deferring election start', {
+            replicaId: self.replicaId,
+            groupId: self.groupId,
+          });
+          // Just signal initialization complete without starting timer
+          if (callback) callback();
+        } else {
+          // Normal initialization - heartbeat timer will start automatically
+          if (callback) callback();
+        }
+      }
+
+      /**
+       * Write method for sending Raft messages to peers.
+       * Called by liferaft when it needs to communicate with other nodes.
+       * Sends packets directly to MessageRouter without type conversion.
+       * Note: When liferaft calls node.write(), 'this' is the cloned node
+       * representing the peer, so 'this.address' is the destination address.
+       * Requirements: 3.1, 3.2, 3.3, 3.4
+       * @param {Object} packet - Raft protocol packet (packet.address is sender)
+       * @param {Function} callback - Completion callback
+       */
+      write(packet, callback) {
+        // Build peer address for routing
+        // this.address is the destination, packet.address is the sender
+        const peerAddress = self.buildPeerAddress(this.address);
+
+        // Send packet unchanged - no type conversion
+        // Only add destination address for routing, preserve all packet fields
+        // Requirements: 3.1, 3.2, 3.3
+        self.transport.deliver(peerAddress, packet)
+          .then((result) => callback(null, result))
+          .catch((err) => callback(err));
+      }
+    }
+
+
+    // Create liferaft instance
+    // Use unified address so that packet.address contains the full address
+    // This allows other nodes to respond to vote requests correctly
+    // Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
+    this.raft = new RaftNode(this.unifiedAddress, {
+      'heartbeat': heartbeatMs,
+      'election min': electionMinMs,
+      'election max': electionMaxMs,
+      'Log': InMemoryLogAdapter,
+    });
+
+    // If deferElection is true, clear all timers that liferaft started automatically
+    // This prevents elections from starting until startElection() is called
+    // Liferaft's _initialize() sets up a 'state change' handler that starts timers
+    if (this.deferElection && this.raft.timers) {
+      this.raft.timers.clear('heartbeat, election');
+      this.logger.debug('Cleared liferaft timers for deferred election', {
+        replicaId: this.replicaId,
+        groupId: this.groupId,
+      });
+    }
+
+    // Wire up liferaft events
+    // Requirements: 5.1, 5.2, 5.3, 5.4
+    this.raft.on('leader', () => {
+      this.role = RaftRole.LEADER;
+      this.isLeader = true;
+      this.leaderId = this.replicaId;
+      this.storage.currentTerm = this.raft.term;
+
+      this.logger.info('Became leader', {
+        term: this.raft.term,
+        replicaId: this.replicaId,
+        groupId: this.groupId,
+      });
+
+      this.emit('leaderElected', {
+        leaderId: this.replicaId,
+        term: this.raft.term,
+        groupId: this.groupId,
+      });
+    });
+
+    this.raft.on('follower', () => {
+      this.role = RaftRole.FOLLOWER;
+      this.isLeader = false;
+      this.storage.currentTerm = this.raft.term;
+    });
+
+    this.raft.on('candidate', () => {
+      this.role = RaftRole.CANDIDATE;
+      this.isLeader = false;
+      this.storage.currentTerm = this.raft.term;
+    });
+
+
+    // Handle committed entries
+    // Requirements: 6.1, 6.2, 6.4, 6.5
+    this.raft.on('commit', (command) => {
+      this.applyCommittedEntry(command);
+    });
+
+    this.raft.on('leader change', (to) => {
+      this.leaderId = to;
+      this.logger.debug('Leader changed', {
+        newLeader: to,
+        groupId: this.groupId,
+      });
+    });
+
+    this.raft.on('term change', (term) => {
+      this.storage.currentTerm = term;
+    });
+
+    // Join peer nodes
+    for (const peerId of this.replicaIds) {
+      if (peerId !== this.replicaId) {
+        const peerAddress = this.buildPeerAddress(peerId);
+        this.raft.join(peerAddress);
+      }
+    }
+
+    // For single-replica groups, become leader immediately
+    // This avoids the election timer delay during bootstrap
+    if (this.replicaIds.length === 1) {
+      // Manually promote to leader for single-node case
+      this.role = RaftRole.LEADER;
+      this.isLeader = true;
+      this.leaderId = this.replicaId;
+
+      this.logger.info('Single replica - becoming leader immediately', {
+        replicaId: this.replicaId,
+        groupId: this.groupId,
+      });
+
+      this.emit('leaderElected', {
+        leaderId: this.replicaId,
+        term: this.raft.term || 0,
+        groupId: this.groupId,
+      });
+    }
 
     this.initialized = true;
 
     this.logger.info('Message group service initialized', {
       groupId: this.groupId,
       replicaId: this.replicaId,
+      role: this.role,
     });
 
     this.emit('initialized', {groupId: this.groupId, replicaId: this.replicaId});
+  }
+
+  /**
+   * Start the Raft election timer.
+   * Call this after all replicas in the group have been created and registered.
+   * This prevents election storms when multiple replicas are created on the same node.
+   * If deferElection was false, this is a no-op (election already started).
+   */
+  startElection() {
+    if (this.electionStarted) {
+      return;
+    }
+
+    // For single-replica groups, we're already leader
+    if (this.replicaIds.length === 1) {
+      this.electionStarted = true;
+      return;
+    }
+
+    this.electionStarted = true;
+
+    if (this.raft) {
+      this.logger.info('Starting Raft election timer', {
+        replicaId: this.replicaId,
+        groupId: this.groupId,
+        peerCount: this.replicaIds.length - 1,
+      });
+
+      // Start the heartbeat timer which will trigger election on timeout
+      // Use a random timeout to stagger elections across replicas
+      this.raft.heartbeat(this.raft.timeout());
+    }
+  }
+
+
+  /**
+   * Apply a committed entry to the state machine.
+   * This is called by liferaft when an entry is committed.
+   * Requirements: 6.1, 6.2, 6.4, 6.5
+   * @param {Object} command - The committed command
+   */
+  applyCommittedEntry(command) {
+    if (!command || !command.type) {
+      return;
+    }
+
+    switch (command.type) {
+    case 'MESSAGE':
+      // Handle message persistence - already tracked in pendingMessages
+      break;
+    case 'CDC':
+      // Apply CDC event to cache
+      // Requirements: 6.2
+      this.systemTableCache.applySystemTableChange(
+        command.tableName,
+        command.operation,
+        command.data,
+      );
+      this.emit('cdcApplied', command);
+      break;
+    case 'ACK':
+      // Handle acknowledgment
+      this.acknowledgedMessages.add(command.messageId);
+      break;
+    }
   }
 
   /**
@@ -259,6 +603,7 @@ class MessageGroupService extends EventEmitter {
       createdAt: Date.now(),
     };
 
+
     this.logger.debug('Sending message', {
       messageId,
       targetService,
@@ -273,30 +618,31 @@ class MessageGroupService extends EventEmitter {
     const persistPromise = this.persistToRaftLog(messageEnvelope);
 
     try {
-      // Wait for either delivery success or persistence
-      const result = await Promise.race([
-        deliveryPromise.then((r) => ({type: 'delivery', result: r})),
-        persistPromise.then((r) => ({type: 'persist', result: r})),
+      // Wait for delivery to complete - we need the result for ACK extraction
+      // Persistence happens in parallel but we prioritize delivery result
+      const [deliveryResult, _persistResult] = await Promise.all([
+        deliveryPromise,
+        persistPromise,
       ]);
 
-      if (result.type === 'delivery' && result.result.success) {
+      if (deliveryResult.success) {
         // Direct delivery succeeded
         messageEnvelope.status = MessageStatus.DELIVERED;
         this.logger.debug('Message delivered directly', {
           messageId,
           targetService,
         });
+        // Spread the transport result directly - ACK structure is flat
+        const {success: _s, attempt: _a, ...transportResult} = deliveryResult;
         return {
           messageId,
           status: MessageStatus.DELIVERED,
           deliveryType: 'direct',
+          ...transportResult,
         };
       }
 
-      // Wait for persistence to complete if delivery failed
-      await persistPromise;
-
-      this.logger.debug('Message persisted to Raft log', {
+      this.logger.debug('Message persisted to Raft log (delivery failed)', {
         messageId,
         targetService,
       });
@@ -318,14 +664,28 @@ class MessageGroupService extends EventEmitter {
     }
   }
 
+
   /**
    * Attempt direct delivery to target service.
+   * Throws error if transport is unavailable (defense in depth).
    * @param {Object} messageEnvelope - Message envelope.
    * @return {Promise<Object>} Delivery result.
    * @private
    */
   async attemptDirectDelivery(messageEnvelope) {
     const {id: messageId, targetService, payload} = messageEnvelope;
+
+    // Transport is guaranteed to exist (validated in constructor)
+    // but we still check at runtime for defense in depth
+    if (!this.transport) {
+      this.logger.error('WebSocket transport not available for message delivery', {
+        messageId,
+        targetService,
+        groupId: this.groupId,
+      });
+      throw new Error('WebSocket transport required but not available');
+    }
+
     let lastError = null;
 
     for (let attempt = 0; attempt < this.retryMaxAttempts; attempt++) {
@@ -344,26 +704,16 @@ class MessageGroupService extends EventEmitter {
         }
 
         // Attempt delivery via transport
-        if (this.transport) {
-          const result = await this.transport.deliver(targetService, {
-            messageId,
-            payload,
-            sourceGroup: this.groupId,
-            sourceReplica: this.replicaId,
-          });
+        const result = await this.transport.deliver(targetService, {
+          messageId,
+          payload,
+          sourceGroup: this.groupId,
+          sourceReplica: this.replicaId,
+        });
 
-          if (result && result.acknowledged) {
-            return {success: true, attempt: attempt + 1};
-          }
-        } else {
-          // No transport - emit for local handling
-          this.emit('message', {
-            messageId,
-            targetService,
-            payload,
-            sourceGroup: this.groupId,
-          });
-          return {success: true, attempt: attempt + 1, local: true};
+        if (result && result.acknowledged) {
+          // Spread transport result directly - ACK structure is flat
+          return {success: true, attempt: attempt + 1, ...result};
         }
       } catch (error) {
         lastError = error;
@@ -379,21 +729,39 @@ class MessageGroupService extends EventEmitter {
     return {success: false, error: lastError?.message || 'Max retries exceeded'};
   }
 
+
   /**
    * Persist message to Raft log.
+   * Uses liferaft's command method for log replication.
+   * Note: Does not wait for commit - fire and forget for performance.
    * @param {Object} messageEnvelope - Message envelope.
    * @return {Promise<Object>} Persistence result.
    * @private
    */
   async persistToRaftLog(messageEnvelope) {
+    // Also persist to legacy storage for backward compatibility
     const entry = this.storage.appendEntry({
       type: 'MESSAGE',
       message: messageEnvelope,
     });
 
-    // If we're the leader, replicate to followers
-    if (this.role === RaftRole.LEADER) {
-      await this.replicateEntry(entry);
+    // Only use liferaft's command if it considers itself the leader
+    // For single-replica groups, liferaft may not be in LEADER state
+    const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
+    if (isLiferaftLeader) {
+      // Fire and forget - don't wait for commit
+      // The command will be replicated via heartbeats
+      this.raft.command({
+        type: 'MESSAGE',
+        message: messageEnvelope,
+      }, (err) => {
+        if (err) {
+          this.logger.debug('Raft command failed', {
+            messageId: messageEnvelope.id,
+            error: err.message,
+          });
+        }
+      });
     }
 
     return {
@@ -406,6 +774,9 @@ class MessageGroupService extends EventEmitter {
 
   /**
    * Receive a message from another service or replica.
+   * Detects Raft packets and routes them directly to liferaft.
+   * Handles non-Raft messages as application messages.
+   * Requirements: 2.2, 2.3, 5.2, 5.3
    * @param {Object} message - Incoming message.
    * @return {Promise<Object>} Processing result.
    */
@@ -414,20 +785,66 @@ class MessageGroupService extends EventEmitter {
       throw new Error('MessageGroupService not initialized');
     }
 
-    // Handle Raft vote requests
-    if (message.payload && message.payload.type === 'RAFT_REQUEST_VOTE') {
-      return this.handleVoteRequest(message.payload);
-    }
+    // Extract payload - handle both envelope and direct packet formats
+    const payload = message.payload || message;
 
-    // Handle Raft heartbeats/append entries
-    if (message.payload && message.payload.type === 'RAFT_APPEND_ENTRIES') {
-      this.handleHeartbeat(message.payload);
+    // Detect and handle Raft packets directly using isRaftPacket()
+    // No type conversion needed - packets flow through unchanged
+    // Requirements: 2.2, 2.3
+    if (isRaftPacket(payload)) {
+      if (this.raft) {
+        this.logger.debug('Received Raft packet', {
+          type: payload.type,
+          term: payload.term,
+          address: payload.address,
+          replicaId: this.replicaId,
+          groupId: this.groupId,
+        });
+
+        // Create write function for sending responses back to the sender
+        // The sender's address is in payload.address
+        // Requirements: 2.2
+        const senderAddress = payload.address;
+        const write = (responsePacket) => {
+          if (responsePacket) {
+            this.logger.debug('Sending Raft response', {
+              type: responsePacket.type,
+              destination: senderAddress,
+              term: responsePacket.term,
+            });
+            // Send response to the sender
+            this.transport.deliver(senderAddress, responsePacket)
+              .catch((err) => {
+                this.logger.error('Failed to send Raft response', {
+                  error: err.message,
+                  destination: senderAddress,
+                });
+              });
+          }
+        };
+
+        // Emit to liferaft with write function for responses
+        // Requirements: 2.2
+        this.raft.emit('data', payload, write);
+      }
       return {acknowledged: true};
     }
 
+    // Handle application messages (non-Raft)
+    // Requirements: 2.3, 5.3
+    return this.handleApplicationMessage(message);
+  }
+
+  /**
+   * Handle application messages (non-Raft messages).
+   * Requirements: 2.3, 5.3
+   * @param {Object} message - Application message
+   * @return {Promise<Object>} Processing result
+   */
+  async handleApplicationMessage(message) {
     const {messageId, payload, sourceGroup, sourceReplica} = message;
 
-    this.logger.debug('Received message', {
+    this.logger.debug('Received application message', {
       messageId,
       sourceGroup,
       sourceReplica,
@@ -444,10 +861,18 @@ class MessageGroupService extends EventEmitter {
       };
     }
 
-    // Update HLC from remote timestamp if present
-    if (message.timestamp) {
-      const remoteTimestamp = HLCTimestamp.fromString(message.timestamp);
-      this.hlcClock.update(remoteTimestamp);
+    // Update HLC from remote timestamp if present and is a valid HLC string
+    // The timestamp must be a string in HLC format (physical-logical-nodeId)
+    if (message.timestamp && typeof message.timestamp === 'string') {
+      try {
+        const remoteTimestamp = HLCTimestamp.fromString(message.timestamp);
+        this.hlcClock.update(remoteTimestamp);
+      } catch (err) {
+        this.logger.debug('Invalid HLC timestamp in message, ignoring', {
+          timestamp: message.timestamp,
+          error: err.message,
+        });
+      }
     }
 
     // Process the message
@@ -471,66 +896,6 @@ class MessageGroupService extends EventEmitter {
       });
       throw error;
     }
-  }
-
-  /**
-   * Handle a Raft vote request from a candidate.
-   * @param {Object} voteRequest - Vote request data.
-   * @return {Object} Vote response.
-   * @private
-   */
-  handleVoteRequest(voteRequest) {
-    const {term, candidateId, lastLogIndex, lastLogTerm} = voteRequest;
-
-    // If candidate's term is less than ours, reject
-    if (term < this.storage.currentTerm) {
-      return {
-        term: this.storage.currentTerm,
-        voteGranted: false,
-      };
-    }
-
-    // If candidate's term is greater, update our term and become follower
-    if (term > this.storage.currentTerm) {
-      this.storage.currentTerm = term;
-      this.storage.votedFor = null;
-      this.role = RaftRole.FOLLOWER;
-      this.isLeader = false;
-      this.stopHeartbeat();
-    }
-
-    // Check if we can vote for this candidate
-    const canVote = (this.storage.votedFor === null ||
-                     this.storage.votedFor === candidateId);
-
-    // Check if candidate's log is at least as up-to-date as ours
-    const ourLastEntry = this.storage.getLastEntry();
-    const ourLastTerm = ourLastEntry?.term || 0;
-    const ourLastIndex = this.storage.getLogLength();
-
-    const logIsUpToDate = (lastLogTerm > ourLastTerm) ||
-      (lastLogTerm === ourLastTerm && lastLogIndex >= ourLastIndex);
-
-    if (canVote && logIsUpToDate) {
-      this.storage.votedFor = candidateId;
-      this.startElectionTimer(); // Reset election timer
-
-      this.logger.debug('Granted vote', {
-        candidateId,
-        term,
-        replicaId: this.replicaId,
-      });
-
-      return {
-        term: this.storage.currentTerm,
-        voteGranted: true,
-      };
-    }
-
-    return {
-      term: this.storage.currentTerm,
-      voteGranted: false,
-    };
   }
 
   /**
@@ -580,6 +945,7 @@ class MessageGroupService extends EventEmitter {
       logIndex: entry.index,
     };
   }
+
 
   /**
    * Subscribe to CDC events from a system table.
@@ -634,13 +1000,29 @@ class MessageGroupService extends EventEmitter {
       timestamp: this.hlcClock.now().toString(),
     });
 
-    // Replicate if leader
-    if (this.role === RaftRole.LEADER) {
-      await this.replicateEntry(entry);
+    // Replicate if leader using liferaft
+    // Only use liferaft's command if it considers itself the leader
+    const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
+    if (isLiferaftLeader) {
+      // Fire and forget - don't wait for commit
+      this.raft.command({
+        type: 'CDC',
+        tableName,
+        operation,
+        data,
+      }, (err) => {
+        if (err) {
+          this.logger.debug('Raft CDC command failed', {
+            tableName,
+            error: err.message,
+          });
+        }
+      });
     }
 
-    this.emit('cdcApplied', {tableName, operation, data});
+    this.emit('cdcApplied', {tableName, operation, data, logIndex: entry.index});
   }
+
 
   /**
    * Query the system table cache.
@@ -686,239 +1068,8 @@ class MessageGroupService extends EventEmitter {
   }
 
   /**
-   * Replicate a log entry to followers.
-   * @param {RaftLogEntry} entry - Entry to replicate.
-   * @return {Promise<void>}
-   * @private
-   */
-  async replicateEntry(entry) {
-    if (this.role !== RaftRole.LEADER) {
-      return;
-    }
-
-    // In a real implementation, this would send AppendEntries RPCs
-    // For now, emit an event for testing
-    this.emit('replicateEntry', {
-      entry,
-      term: this.storage.currentTerm,
-      leaderId: this.replicaId,
-    });
-  }
-
-  /**
-   * Start the election timer.
-   * @private
-   */
-  startElectionTimer() {
-    this.stopElectionTimer();
-
-    const config = ConfigurationManager.getInstance();
-    const minTimeout = config.get('raft.electionTimeoutMinMs') || 150;
-    const maxTimeout = config.get('raft.electionTimeoutMaxMs') || 300;
-    const timeout = minTimeout + Math.random() * (maxTimeout - minTimeout);
-
-    this.electionTimeout = setTimeout(() => {
-      this.startElection();
-    }, timeout);
-  }
-
-  /**
-   * Stop the election timer.
-   * @private
-   */
-  stopElectionTimer() {
-    if (this.electionTimeout) {
-      clearTimeout(this.electionTimeout);
-      this.electionTimeout = null;
-    }
-  }
-
-  /**
-   * Start a leader election.
-   * @private
-   */
-  async startElection() {
-    if (this.role === RaftRole.LEADER) {
-      return;
-    }
-
-    this.role = RaftRole.CANDIDATE;
-    this.storage.currentTerm++;
-    this.storage.votedFor = this.replicaId;
-
-    this.logger.debug('Starting election', {
-      term: this.storage.currentTerm,
-      replicaId: this.replicaId,
-      groupId: this.groupId,
-    });
-
-    // For single-node or testing, become leader immediately
-    // This includes the self-hosted bootstrap case where all replicas
-    // are on the same node (same nodeId)
-    if (this.replicaIds.length === 1 ||
-        this.replicaIds.every((id) => id === this.replicaId) ||
-        this.isSelfHostedGroup) {
-      this.becomeLeader();
-      return;
-    }
-
-    // Request votes from other replicas via transport
-    if (this.transport) {
-      await this.requestVotesFromPeers();
-    } else {
-      // No transport - emit event for testing/local handling
-      this.emit('requestVote', {
-        term: this.storage.currentTerm,
-        candidateId: this.replicaId,
-        lastLogIndex: this.storage.getLogLength(),
-        lastLogTerm: this.storage.getLastEntry()?.term || 0,
-      });
-    }
-
-    // Restart election timer in case we don't win
-    this.startElectionTimer();
-  }
-
-  /**
-   * Request votes from peer replicas via transport.
-   * @return {Promise<void>}
-   * @private
-   */
-  async requestVotesFromPeers() {
-    const voteRequest = {
-      type: 'RAFT_REQUEST_VOTE',
-      term: this.storage.currentTerm,
-      candidateId: this.replicaId,
-      lastLogIndex: this.storage.getLogLength(),
-      lastLogTerm: this.storage.getLastEntry()?.term || 0,
-    };
-
-    let votesReceived = 1; // Vote for self
-    let peersReached = 0;
-    const majority = Math.floor(this.replicaIds.length / 2) + 1;
-
-    // Request votes from all other replicas
-    for (const peerId of this.replicaIds) {
-      if (peerId === this.replicaId) continue;
-
-      try {
-        const result = await this.transport.deliver(peerId, voteRequest);
-        if (result && result.acknowledged) {
-          peersReached++;
-          if (result.result && result.result.voteGranted) {
-            votesReceived++;
-          }
-        }
-      } catch (error) {
-        this.logger.debug('Vote request failed', {
-          peerId,
-          error: error.message,
-        });
-      }
-    }
-
-    // Check if we won the election
-    if (votesReceived >= majority && this.role === RaftRole.CANDIDATE) {
-      this.becomeLeader();
-    } else if (peersReached === 0 && this.role === RaftRole.CANDIDATE) {
-      // No peers reachable - become leader (bootstrap/single-node scenario)
-      this.logger.debug('No peers reachable, becoming leader', {
-        replicaId: this.replicaId,
-        term: this.storage.currentTerm,
-      });
-      this.becomeLeader();
-    }
-  }
-
-  /**
-   * Become the leader.
-   * @private
-   */
-  becomeLeader() {
-    this.role = RaftRole.LEADER;
-    this.leaderId = this.replicaId;
-    this.isLeader = true;
-
-    this.stopElectionTimer();
-    this.startHeartbeat();
-
-    this.logger.info('Became leader', {
-      term: this.storage.currentTerm,
-      replicaId: this.replicaId,
-      groupId: this.groupId,
-    });
-
-    this.emit('leaderElected', {
-      leaderId: this.replicaId,
-      term: this.storage.currentTerm,
-      groupId: this.groupId,
-    });
-  }
-
-  /**
-   * Start sending heartbeats as leader.
-   * @private
-   */
-  startHeartbeat() {
-    this.stopHeartbeat();
-
-    const config = ConfigurationManager.getInstance();
-    const interval = config.get('raft.heartbeatIntervalMs') || 50;
-
-    this.heartbeatInterval = setInterval(() => {
-      this.sendHeartbeat();
-    }, interval);
-  }
-
-  /**
-   * Stop sending heartbeats.
-   * @private
-   */
-  stopHeartbeat() {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-  }
-
-  /**
-   * Send heartbeat to followers.
-   * @private
-   */
-  sendHeartbeat() {
-    if (this.role !== RaftRole.LEADER) {
-      return;
-    }
-
-    this.emit('heartbeat', {
-      term: this.storage.currentTerm,
-      leaderId: this.replicaId,
-      groupId: this.groupId,
-    });
-  }
-
-  /**
-   * Handle receiving a heartbeat from leader.
-   * @param {Object} heartbeat - Heartbeat data.
-   */
-  handleHeartbeat(heartbeat) {
-    if (heartbeat.term >= this.storage.currentTerm) {
-      this.storage.currentTerm = heartbeat.term;
-      this.leaderId = heartbeat.leaderId;
-
-      if (this.role !== RaftRole.FOLLOWER) {
-        this.role = RaftRole.FOLLOWER;
-        this.isLeader = false;
-        this.stopHeartbeat();
-      }
-
-      // Reset election timer
-      this.startElectionTimer();
-    }
-  }
-
-  /**
    * Check if this replica is the leader.
+   * Requirements: 5.5
    * @return {boolean} True if leader.
    */
   isLeaderReplica() {
@@ -927,6 +1078,7 @@ class MessageGroupService extends EventEmitter {
 
   /**
    * Get the current leader ID.
+   * Requirements: 5.4
    * @return {string|null} Leader replica ID.
    */
   getLeaderId() {
@@ -935,6 +1087,7 @@ class MessageGroupService extends EventEmitter {
 
   /**
    * Get the current Raft role.
+   * Requirements: 5.5
    * @return {string} Current role.
    */
   getRole() {
@@ -946,7 +1099,7 @@ class MessageGroupService extends EventEmitter {
    * @return {number} Current term.
    */
   getCurrentTerm() {
-    return this.storage.currentTerm;
+    return this.raft ? this.raft.term : this.storage.currentTerm;
   }
 
   /**
@@ -956,6 +1109,7 @@ class MessageGroupService extends EventEmitter {
   getPendingMessageCount() {
     return this.pendingMessages.size;
   }
+
 
   /**
    * Get service status.
@@ -969,7 +1123,7 @@ class MessageGroupService extends EventEmitter {
       role: this.role,
       isLeader: this.isLeader,
       leaderId: this.leaderId,
-      term: this.storage.currentTerm,
+      term: this.raft ? this.raft.term : this.storage.currentTerm,
       logLength: this.storage.getLogLength(),
       pendingMessages: this.pendingMessages.size,
       acknowledgedMessages: this.acknowledgedMessages.size,
@@ -998,8 +1152,11 @@ class MessageGroupService extends EventEmitter {
       replicaId: this.replicaId,
     });
 
-    this.stopElectionTimer();
-    this.stopHeartbeat();
+    // End liferaft instance
+    if (this.raft) {
+      this.raft.end();
+      this.raft = null;
+    }
 
     this.initialized = false;
     this.pendingMessages.clear();
@@ -1015,4 +1172,6 @@ export {
   RaftRole,
   RaftLogEntry,
   InMemoryRaftStorage,
+  isRaftPacket,
+  RAFT_PACKET_TYPES,
 };

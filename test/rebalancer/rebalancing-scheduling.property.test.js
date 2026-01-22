@@ -128,7 +128,8 @@ test('Property 23: Rebalancing Scheduling', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.integer({min: 1000, max: 60000}),
-        fc.float({min: 0, max: 0.5}),
+        // Use integer percentage (0-50) divided by 100 to avoid NaN from fc.float
+        fc.integer({min: 0, max: 50}).map((n) => n / 100),
         async (baseInterval, jitterFactor) => {
           // Calculate expected jitter range
           const maxJitter = baseInterval * jitterFactor;

@@ -1,27 +1,593 @@
 TAP version 14
-ok 1 - QueryGroup - creates with parsed query # SKIP filter: /SystemTableCache/
-ok 2 - QueryGroup - adds and removes clients # SKIP filter: /SystemTableCache/
-ok 3 - QueryGroup - renews client subscription # SKIP filter: /SystemTableCache/
-ok 4 - QueryGroup - detects expired subscriptions # SKIP filter: /SystemTableCache/
-ok 5 - QueryGroup - finds partitions for key value # SKIP filter: /SystemTableCache/
-ok 6 - QueryGroup - finds all partitions when no key filter # SKIP filter: /SystemTableCache/
-ok 7 - QueryGroup - evaluates CDC INSERT event # SKIP filter: /SystemTableCache/
-ok 8 - QueryGroup - ignores non-matching INSERT # SKIP filter: /SystemTableCache/
-ok 9 - QueryGroup - evaluates UPDATE entering predicate # SKIP filter: /SystemTableCache/
-ok 10 - QueryGroup - evaluates UPDATE exiting predicate # SKIP filter: /SystemTableCache/
-ok 11 - QueryGroup - evaluates UPDATE staying in predicate # SKIP filter: /SystemTableCache/
-ok 12 - QueryGroup - evaluates DELETE event # SKIP filter: /SystemTableCache/
-ok 13 - QueryGroup - fans out CDC events to clients # SKIP filter: /SystemTableCache/
-ok 14 - LiveQueryManager - registers live query # SKIP filter: /SystemTableCache/
-ok 15 - LiveQueryManager - groups identical queries # SKIP filter: /SystemTableCache/
-ok 16 - LiveQueryManager - enforces query limit per client # SKIP filter: /SystemTableCache/
-ok 17 - LiveQueryManager - renews subscription # SKIP filter: /SystemTableCache/
-ok 18 - LiveQueryManager - unregisters subscription # SKIP filter: /SystemTableCache/
-ok 19 - LiveQueryManager - handles client disconnection # SKIP filter: /SystemTableCache/
-ok 20 - LiveQueryManager - cleans up expired subscriptions # SKIP filter: /SystemTableCache/
-ok 21 - LiveQueryManager - gets statistics # SKIP filter: /SystemTableCache/
-ok 22 - LiveQueryManager - handles partition topology change # SKIP filter: /SystemTableCache/
-ok 23 - QueryGroup - updates subscriptions on partition change # SKIP filter: /SystemTableCache/
-ok 24 - LiveQueryManager - resumes from cursor # SKIP filter: /SystemTableCache/
-ok 25 - LiveQueryManager - rejects old cursor # SKIP filter: /SystemTableCache/
+# Subtest: QueryGroup - creates with parsed query
+    ok 1 - should have queryId
+    ok 2 - should extract table
+    ok 3 - should have predicate
+    1..3
+ok 1 - QueryGroup - creates with parsed query # time=62.266ms
+
+Client joined query group {
+  queryId: 'dea888ef-1cb4-498e-8cd2-4f867d293d34',
+  clientId: 'c1',
+  clientCount: 1
+}
+# Subtest: QueryGroup - adds and removes clients
+    ok 1 - should have 1 client
+Client joined query group {
+  queryId: 'dea888ef-1cb4-498e-8cd2-4f867d293d34',
+  clientId: 'c2',
+  clientCount: 2
+}
+    ok 2 - should have 2 clients
+Client left query group {
+  queryId: 'dea888ef-1cb4-498e-8cd2-4f867d293d34',
+  clientId: 'c1',
+  clientCount: 1
+}
+    ok 3 - should not remove group
+    ok 4 - should have 1 client
+Client left query group {
+  queryId: 'dea888ef-1cb4-498e-8cd2-4f867d293d34',
+  clientId: 'c2',
+  clientCount: 0
+}
+    ok 5 - should remove group
+    ok 6 - should have 0 clients
+    1..6
+ok 2 - QueryGroup - adds and removes clients # time=2.992ms
+
+Client joined query group {
+  queryId: '72b18e40-4d84-450f-9e32-6af219600e65',
+  clientId: 'c1',
+  clientCount: 1
+}
+# Subtest: QueryGroup - renews client subscription
+    ok 1 - should return result
+    ok 2 - should have queryId
+    ok 3 - should have future expiry
+    1..3
+ok 3 - QueryGroup - renews client subscription # time=1.006ms
+
+Client joined query group {
+  queryId: '377cc1bf-3f36-4937-819d-03f8722ef8fb',
+  clientId: 'c1',
+  clientCount: 1
+}
+# Subtest: QueryGroup - detects expired subscriptions
+    ok 1 - should detect expired client
+    1..1
+ok 4 - QueryGroup - detects expired subscriptions # time=1.813ms
+
+# Subtest: QueryGroup - finds partitions for key value
+    ok 1 - should find 1 partition
+    ok 2 - should find partition p2
+    1..2
+ok 5 - QueryGroup - finds partitions for key value # time=1.016ms
+
+# Subtest: QueryGroup - finds all partitions when no key filter
+    ok 1 - should find all partitions
+    1..1
+ok 6 - QueryGroup - finds all partitions when no key filter # time=0.73ms
+
+# Subtest: QueryGroup - evaluates CDC INSERT event
+    ok 1 - should produce result
+    ok 2 - should be insert
+    ok 3 - should have row
+    1..3
+ok 7 - QueryGroup - evaluates CDC INSERT event # time=1.434ms
+
+# Subtest: QueryGroup - ignores non-matching INSERT
+    ok 1 - should not produce result
+    1..1
+ok 8 - QueryGroup - ignores non-matching INSERT # time=0.323ms
+
+# Subtest: QueryGroup - evaluates UPDATE entering predicate
+    ok 1 - should produce result
+    ok 2 - should be insert (entering predicate)
+    1..2
+ok 9 - QueryGroup - evaluates UPDATE entering predicate # time=0.502ms
+
+# Subtest: QueryGroup - evaluates UPDATE exiting predicate
+    ok 1 - should produce result
+    ok 2 - should be delete (exiting predicate)
+    1..2
+ok 10 - QueryGroup - evaluates UPDATE exiting predicate # time=0.416ms
+
+# Subtest: QueryGroup - evaluates UPDATE staying in predicate
+    ok 1 - should produce result
+    ok 2 - should be update
+    ok 3 - should have old row
+    ok 4 - should have new row
+    1..4
+ok 11 - QueryGroup - evaluates UPDATE staying in predicate # time=0.583ms
+
+# Subtest: QueryGroup - evaluates DELETE event
+    ok 1 - should produce result
+    ok 2 - should be delete
+    1..2
+ok 12 - QueryGroup - evaluates DELETE event # time=0.444ms
+
+Client joined query group {
+  queryId: '03a016f7-97a6-4d5a-8366-3e647035f4f7',
+  clientId: 'c1',
+  clientCount: 1
+}
+Client joined query group {
+  queryId: '03a016f7-97a6-4d5a-8366-3e647035f4f7',
+  clientId: 'c2',
+  clientCount: 2
+}
+# Subtest: QueryGroup - fans out CDC events to clients
+    ok 1 - client1 should receive message
+    ok 2 - client2 should receive message
+    ok 3 - should be insert
+    1..3
+ok 13 - QueryGroup - fans out CDC events to clients # time=1.118ms
+
+Live query manager initialized { nodeId: 'test-node', maxQueriesPerClient: 100 }
+Client joined query group {
+  queryId: 'aeabcdd3-9c0f-478d-b215-6b7a8ce32f01',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: 'aeabcdd3-9c0f-478d-b215-6b7a8ce32f01', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:',
+  queryId: 'aeabcdd3-9c0f-478d-b215-6b7a8ce32f01',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: 'aeabcdd3-9c0f-478d-b215-6b7a8ce32f01',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+# Subtest: LiveQueryManager - registers live query
+    ok 1 - should have queryId
+    ok 2 - should have future expiry
+    ok 3 - should have 1 group
+Query group cleaned up { queryId: 'aeabcdd3-9c0f-478d-b215-6b7a8ce32f01', table: 'orders' }
+Live query manager shutdown { nodeId: 'test-node' }
+    1..3
+ok 14 - LiveQueryManager - registers live query # time=4.688ms
+
+Live query manager initialized { nodeId: 'test-node', maxQueriesPerClient: 100 }
+Client joined query group {
+  queryId: '010ed405-add9-4619-bc35-6a51f761d683',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: '010ed405-add9-4619-bc35-6a51f761d683', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:{"left":{"column":"status","type":"column_ref"},"operator":"=","right":{"type":"literal","value":"active"},"type":"binary"}',
+  queryId: '010ed405-add9-4619-bc35-6a51f761d683',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: '010ed405-add9-4619-bc35-6a51f761d683',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+Client joined query group {
+  queryId: '010ed405-add9-4619-bc35-6a51f761d683',
+  clientId: 'c2',
+  clientCount: 2
+}
+Client joined existing query group {
+  groupKey: 'orders:{"left":{"column":"status","type":"column_ref"},"operator":"=","right":{"type":"literal","value":"active"},"type":"binary"}',
+  queryId: '010ed405-add9-4619-bc35-6a51f761d683',
+  clientId: 'c2',
+  clientCount: 2
+}
+Live query subscription created {
+  queryId: '010ed405-add9-4619-bc35-6a51f761d683',
+  clientId: 'c2',
+  table: 'orders',
+  isNewGroup: false
+}
+# Subtest: LiveQueryManager - groups identical queries
+    ok 1 - should share same queryId
+    ok 2 - should have 1 group
+    ok 3 - group should have 2 clients
+Query group cleaned up { queryId: '010ed405-add9-4619-bc35-6a51f761d683', table: 'orders' }
+Live query manager shutdown { nodeId: 'test-node' }
+    1..3
+ok 15 - LiveQueryManager - groups identical queries # time=2.365ms
+
+Live query manager initialized { nodeId: 'test-node', maxQueriesPerClient: 2 }
+Client joined query group {
+  queryId: 'fc26df14-99e1-4c93-9556-b5d2bfe34cf6',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: 'fc26df14-99e1-4c93-9556-b5d2bfe34cf6', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:',
+  queryId: 'fc26df14-99e1-4c93-9556-b5d2bfe34cf6',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: 'fc26df14-99e1-4c93-9556-b5d2bfe34cf6',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+Client joined query group {
+  queryId: '0c7e1cb0-5a1b-42ae-a60c-6c3440f9e175',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: '0c7e1cb0-5a1b-42ae-a60c-6c3440f9e175', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:{"left":{"column":"id","type":"column_ref"},"operator":"=","right":{"type":"literal","value":1},"type":"binary"}',
+  queryId: '0c7e1cb0-5a1b-42ae-a60c-6c3440f9e175',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: '0c7e1cb0-5a1b-42ae-a60c-6c3440f9e175',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+# Subtest: LiveQueryManager - enforces query limit per client
+    ok 1 - should throw limit error
+Query group cleaned up { queryId: 'fc26df14-99e1-4c93-9556-b5d2bfe34cf6', table: 'orders' }
+Query group cleaned up { queryId: '0c7e1cb0-5a1b-42ae-a60c-6c3440f9e175', table: 'orders' }
+Live query manager shutdown { nodeId: 'test-node' }
+    1..1
+ok 16 - LiveQueryManager - enforces query limit per client # time=2.493ms
+
+Live query manager initialized { nodeId: 'test-node', maxQueriesPerClient: 100 }
+Client joined query group {
+  queryId: '9c90524b-1e1c-4eb8-96b2-d96f3bc3da0b',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: '9c90524b-1e1c-4eb8-96b2-d96f3bc3da0b', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:',
+  queryId: '9c90524b-1e1c-4eb8-96b2-d96f3bc3da0b',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: '9c90524b-1e1c-4eb8-96b2-d96f3bc3da0b',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+Live query renewed {
+  queryId: '9c90524b-1e1c-4eb8-96b2-d96f3bc3da0b',
+  clientId: 'c1',
+  cursor: 'cursor-123'
+}
+# Subtest: LiveQueryManager - renews subscription
+    ok 1 - should return renewal result
+    ok 2 - should have future expiry
+Query group cleaned up { queryId: '9c90524b-1e1c-4eb8-96b2-d96f3bc3da0b', table: 'orders' }
+Live query manager shutdown { nodeId: 'test-node' }
+    1..2
+ok 17 - LiveQueryManager - renews subscription # time=1.738ms
+
+Live query manager initialized { nodeId: 'test-node', maxQueriesPerClient: 100 }
+Client joined query group {
+  queryId: 'deff1ecd-9e6c-4969-bae8-ec745acf224c',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: 'deff1ecd-9e6c-4969-bae8-ec745acf224c', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:',
+  queryId: 'deff1ecd-9e6c-4969-bae8-ec745acf224c',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: 'deff1ecd-9e6c-4969-bae8-ec745acf224c',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+Client left query group {
+  queryId: 'deff1ecd-9e6c-4969-bae8-ec745acf224c',
+  clientId: 'c1',
+  clientCount: 0
+}
+Query group cleaned up { queryId: 'deff1ecd-9e6c-4969-bae8-ec745acf224c', table: 'orders' }
+Query group removed {
+  queryId: 'deff1ecd-9e6c-4969-bae8-ec745acf224c',
+  groupKey: 'orders:'
+}
+Live query unregistered {
+  queryId: 'deff1ecd-9e6c-4969-bae8-ec745acf224c',
+  clientId: 'c1',
+  groupRemoved: true
+}
+# Subtest: LiveQueryManager - unregisters subscription
+    ok 1 - should remove empty group
+Live query manager shutdown { nodeId: 'test-node' }
+    1..1
+ok 18 - LiveQueryManager - unregisters subscription # time=1.955ms
+
+Live query manager initialized { nodeId: 'test-node', maxQueriesPerClient: 100 }
+Client joined query group {
+  queryId: '121223b7-b742-4400-8a97-5e94a3300ee5',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: '121223b7-b742-4400-8a97-5e94a3300ee5', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:',
+  queryId: '121223b7-b742-4400-8a97-5e94a3300ee5',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: '121223b7-b742-4400-8a97-5e94a3300ee5',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+Client joined query group {
+  queryId: '91f99026-2c15-453f-8fb4-52ab4d883d70',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: '91f99026-2c15-453f-8fb4-52ab4d883d70', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:{"left":{"column":"id","type":"column_ref"},"operator":"=","right":{"type":"literal","value":1},"type":"binary"}',
+  queryId: '91f99026-2c15-453f-8fb4-52ab4d883d70',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: '91f99026-2c15-453f-8fb4-52ab4d883d70',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+# Subtest: LiveQueryManager - handles client disconnection
+    ok 1 - should have 2 groups
+Client left query group {
+  queryId: '121223b7-b742-4400-8a97-5e94a3300ee5',
+  clientId: 'c1',
+  clientCount: 0
+}
+Query group cleaned up { queryId: '121223b7-b742-4400-8a97-5e94a3300ee5', table: 'orders' }
+Query group removed {
+  queryId: '121223b7-b742-4400-8a97-5e94a3300ee5',
+  groupKey: 'orders:'
+}
+Client left query group {
+  queryId: '91f99026-2c15-453f-8fb4-52ab4d883d70',
+  clientId: 'c1',
+  clientCount: 0
+}
+Query group cleaned up { queryId: '91f99026-2c15-453f-8fb4-52ab4d883d70', table: 'orders' }
+Query group removed {
+  queryId: '91f99026-2c15-453f-8fb4-52ab4d883d70',
+  groupKey: 'orders:{"left":{"column":"id","type":"column_ref"},"operator":"=","right":{"type":"literal","value":1},"type":"binary"}'
+}
+Client disconnected - cleaned up subscriptions { clientId: 'c1' }
+    ok 2 - should remove all groups
+    ok 3 - should clear subscriptions
+Live query manager shutdown { nodeId: 'test-node' }
+    1..3
+ok 19 - LiveQueryManager - handles client disconnection # time=2.988ms
+
+Live query manager initialized { nodeId: 'test-node', maxQueriesPerClient: 100 }
+Client joined query group {
+  queryId: 'ce58c3f5-5bcc-461c-9f50-5d434f4bd1b4',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: 'ce58c3f5-5bcc-461c-9f50-5d434f4bd1b4', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:',
+  queryId: 'ce58c3f5-5bcc-461c-9f50-5d434f4bd1b4',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: 'ce58c3f5-5bcc-461c-9f50-5d434f4bd1b4',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+Client left query group {
+  queryId: 'ce58c3f5-5bcc-461c-9f50-5d434f4bd1b4',
+  clientId: 'c1',
+  clientCount: 0
+}
+Live query subscription expired { queryId: 'ce58c3f5-5bcc-461c-9f50-5d434f4bd1b4', clientId: 'c1' }
+Query group cleaned up { queryId: 'ce58c3f5-5bcc-461c-9f50-5d434f4bd1b4', table: 'orders' }
+Query group removed {
+  queryId: 'ce58c3f5-5bcc-461c-9f50-5d434f4bd1b4',
+  groupKey: 'orders:'
+}
+# Subtest: LiveQueryManager - cleans up expired subscriptions
+    ok 1 - should remove expired group
+Live query manager shutdown { nodeId: 'test-node' }
+    1..1
+ok 20 - LiveQueryManager - cleans up expired subscriptions # time=2.141ms
+
+Live query manager initialized { nodeId: 'test-node', maxQueriesPerClient: 100 }
+Client joined query group {
+  queryId: '20d4808c-5afd-4cee-87a5-1b8af5f4f846',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: '20d4808c-5afd-4cee-87a5-1b8af5f4f846', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:',
+  queryId: '20d4808c-5afd-4cee-87a5-1b8af5f4f846',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: '20d4808c-5afd-4cee-87a5-1b8af5f4f846',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+Client joined query group {
+  queryId: '20d4808c-5afd-4cee-87a5-1b8af5f4f846',
+  clientId: 'c2',
+  clientCount: 2
+}
+Client joined existing query group {
+  groupKey: 'orders:',
+  queryId: '20d4808c-5afd-4cee-87a5-1b8af5f4f846',
+  clientId: 'c2',
+  clientCount: 2
+}
+Live query subscription created {
+  queryId: '20d4808c-5afd-4cee-87a5-1b8af5f4f846',
+  clientId: 'c2',
+  table: 'orders',
+  isNewGroup: false
+}
+# Subtest: LiveQueryManager - gets statistics
+    ok 1 - should have 1 group
+    ok 2 - should have 2 subscriptions
+    ok 3 - should have 2 unique clients
+Query group cleaned up { queryId: '20d4808c-5afd-4cee-87a5-1b8af5f4f846', table: 'orders' }
+Live query manager shutdown { nodeId: 'test-node' }
+    1..3
+ok 21 - LiveQueryManager - gets statistics # time=2.004ms
+
+Live query manager initialized { nodeId: 'test-node', maxQueriesPerClient: 100 }
+Client joined query group {
+  queryId: 'a78043fd-6be7-4693-a3fb-620dc06c1090',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: 'a78043fd-6be7-4693-a3fb-620dc06c1090', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:',
+  queryId: 'a78043fd-6be7-4693-a3fb-620dc06c1090',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: 'a78043fd-6be7-4693-a3fb-620dc06c1090',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+# Subtest: LiveQueryManager - handles partition topology change
+    ok 1 - should have 1 subscription
+    ok 2 - should subscribe to p1
+Updating subscriptions for partition change {
+  queryId: 'a78043fd-6be7-4693-a3fb-620dc06c1090',
+  table: 'orders',
+  operation: 'INSERT'
+}
+Unsubscribed from partition { queryId: 'a78043fd-6be7-4693-a3fb-620dc06c1090', partitionId: 'p1' }
+Subscribed to partition { queryId: 'a78043fd-6be7-4693-a3fb-620dc06c1090', partitionId: 'p1a' }
+Subscribed to partition { queryId: 'a78043fd-6be7-4693-a3fb-620dc06c1090', partitionId: 'p1b' }
+    ok 3 - should have 2 subscriptions after split
+    ok 4 - should subscribe to p1a
+    ok 5 - should subscribe to p1b
+Query group cleaned up { queryId: 'a78043fd-6be7-4693-a3fb-620dc06c1090', table: 'orders' }
+Live query manager shutdown { nodeId: 'test-node' }
+    1..5
+ok 22 - LiveQueryManager - handles partition topology change # time=2.841ms
+
+Subscribed to partition { queryId: '13bf70eb-3a81-43c2-9a3c-05740827327f', partitionId: 'p1' }
+# Subtest: QueryGroup - updates subscriptions on partition change
+    ok 1 - should have 1 partition
+    ok 2 - should have p1
+Unsubscribed from partition { queryId: '13bf70eb-3a81-43c2-9a3c-05740827327f', partitionId: 'p1' }
+Subscribed to partition { queryId: '13bf70eb-3a81-43c2-9a3c-05740827327f', partitionId: 'p3' }
+    ok 3 - should have 1 partition after merge
+    ok 4 - should have p3
+    ok 5 - should not have p1
+    1..5
+ok 23 - QueryGroup - updates subscriptions on partition change # time=1.673ms
+
+Live query manager initialized { nodeId: 'test-node', maxQueriesPerClient: 100 }
+Client joined query group {
+  queryId: '8c3aad5f-8275-46d8-9ccf-49a6c8189307',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: '8c3aad5f-8275-46d8-9ccf-49a6c8189307', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:',
+  queryId: '8c3aad5f-8275-46d8-9ccf-49a6c8189307',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: '8c3aad5f-8275-46d8-9ccf-49a6c8189307',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+Client left query group {
+  queryId: '8c3aad5f-8275-46d8-9ccf-49a6c8189307',
+  clientId: 'c1',
+  clientCount: 0
+}
+Query group cleaned up { queryId: '8c3aad5f-8275-46d8-9ccf-49a6c8189307', table: 'orders' }
+Query group removed {
+  queryId: '8c3aad5f-8275-46d8-9ccf-49a6c8189307',
+  groupKey: 'orders:'
+}
+Client disconnected - cleaned up subscriptions { clientId: 'c1' }
+Client joined query group {
+  queryId: 'be53d613-6360-4db9-854f-daff9c6fc950',
+  clientId: 'c2',
+  clientCount: 1
+}
+Subscribed to partition { queryId: 'be53d613-6360-4db9-854f-daff9c6fc950', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:',
+  queryId: 'be53d613-6360-4db9-854f-daff9c6fc950',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: 'be53d613-6360-4db9-854f-daff9c6fc950',
+  clientId: 'c2',
+  table: 'orders',
+  isNewGroup: true
+}
+Client joined query group {
+  queryId: 'be53d613-6360-4db9-854f-daff9c6fc950',
+  clientId: 'c3',
+  clientCount: 2
+}
+Live query resumed {
+  queryId: 'be53d613-6360-4db9-854f-daff9c6fc950',
+  clientId: 'c3',
+  cursor: '1769104349312:0:node1'
+}
+# Subtest: LiveQueryManager - resumes from cursor
+    ok 1 - should return resume result
+    ok 2 - should indicate resumed
+    ok 3 - should include cursor
+Query group cleaned up { queryId: 'be53d613-6360-4db9-854f-daff9c6fc950', table: 'orders' }
+Live query manager shutdown { nodeId: 'test-node' }
+    1..3
+ok 24 - LiveQueryManager - resumes from cursor # time=3.014ms
+
+Live query manager initialized { nodeId: 'test-node', maxQueriesPerClient: 100 }
+Client joined query group {
+  queryId: '497ecc4f-0d7f-45c1-81ed-b5e8605e934f',
+  clientId: 'c1',
+  clientCount: 1
+}
+Subscribed to partition { queryId: '497ecc4f-0d7f-45c1-81ed-b5e8605e934f', partitionId: 'p1' }
+Created new query group {
+  groupKey: 'orders:',
+  queryId: '497ecc4f-0d7f-45c1-81ed-b5e8605e934f',
+  partitionCount: 1
+}
+Live query subscription created {
+  queryId: '497ecc4f-0d7f-45c1-81ed-b5e8605e934f',
+  clientId: 'c1',
+  table: 'orders',
+  isNewGroup: true
+}
+# Subtest: LiveQueryManager - rejects old cursor
+    ok 1 - should reject old cursor
+Query group cleaned up { queryId: '497ecc4f-0d7f-45c1-81ed-b5e8605e934f', table: 'orders' }
+Live query manager shutdown { nodeId: 'test-node' }
+    1..1
+ok 25 - LiveQueryManager - rejects old cursor # time=1.574ms
+
 1..25

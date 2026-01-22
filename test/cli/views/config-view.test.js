@@ -26,9 +26,9 @@ test('ConfigView - getColumns returns correct columns', async (t) => {
 test('ConfigView - formatRow formats config entry correctly', async (t) => {
   const view = new ConfigView();
   const config = {
-    key: 'max_connections',
-    value: 100,
-    type: 'number',
+    config_key: 'max_connections',
+    config_value: 100,
+    value_type: 'number',
     requires_restart: true,
     updated_at: '2025-01-15T10:30:00Z',
   };
@@ -88,8 +88,8 @@ test('ConfigView - getRowStatus highlights non-default values', async (t) => {
 
   // Normal status when value equals default
   const normalConfig = {
-    key: 'test',
-    value: 100,
+    config_key: 'test',
+    config_value: 100,
     default_value: 100,
     requires_restart: false,
   };
@@ -97,8 +97,8 @@ test('ConfigView - getRowStatus highlights non-default values', async (t) => {
 
   // Warning status when value differs from default
   const changedConfig = {
-    key: 'test',
-    value: 200,
+    config_key: 'test',
+    config_value: 200,
     default_value: 100,
     requires_restart: false,
   };
@@ -106,8 +106,8 @@ test('ConfigView - getRowStatus highlights non-default values', async (t) => {
 
   // Warning status when pending restart
   const restartConfig = {
-    key: 'test',
-    value: 100,
+    config_key: 'test',
+    config_value: 100,
     default_value: 100,
     requires_restart: true,
     pending_restart: true,
@@ -120,60 +120,60 @@ test('ConfigView - isDifferentFromDefault compares values correctly', async (t) 
 
   // No default_value property
   t.equal(
-    view.isDifferentFromDefault({key: 'test', value: 100}),
+    view.isDifferentFromDefault({config_key: 'test', config_value: 100}),
     false,
     'should be false when no default_value',
   );
 
   // Same primitive values
   t.equal(
-    view.isDifferentFromDefault({value: 100, default_value: 100}),
+    view.isDifferentFromDefault({config_value: 100, default_value: 100}),
     false,
     'should be false for same numbers',
   );
   t.equal(
-    view.isDifferentFromDefault({value: 'test', default_value: 'test'}),
+    view.isDifferentFromDefault({config_value: 'test', default_value: 'test'}),
     false,
     'should be false for same strings',
   );
 
   // Different primitive values
   t.equal(
-    view.isDifferentFromDefault({value: 100, default_value: 200}),
+    view.isDifferentFromDefault({config_value: 100, default_value: 200}),
     true,
     'should be true for different numbers',
   );
   t.equal(
-    view.isDifferentFromDefault({value: 'test', default_value: 'other'}),
+    view.isDifferentFromDefault({config_value: 'test', default_value: 'other'}),
     true,
     'should be true for different strings',
   );
 
   // Object comparison
   t.equal(
-    view.isDifferentFromDefault({value: {a: 1}, default_value: {a: 1}}),
+    view.isDifferentFromDefault({config_value: {a: 1}, default_value: {a: 1}}),
     false,
     'should be false for same objects',
   );
   t.equal(
-    view.isDifferentFromDefault({value: {a: 1}, default_value: {a: 2}}),
+    view.isDifferentFromDefault({config_value: {a: 1}, default_value: {a: 2}}),
     true,
     'should be true for different objects',
   );
 
   // Null handling
   t.equal(
-    view.isDifferentFromDefault({value: null, default_value: null}),
+    view.isDifferentFromDefault({config_value: null, default_value: null}),
     false,
     'should be false for both null',
   );
   t.equal(
-    view.isDifferentFromDefault({value: null, default_value: 100}),
+    view.isDifferentFromDefault({config_value: null, default_value: 100}),
     true,
     'should be true when value is null but default is not',
   );
   t.equal(
-    view.isDifferentFromDefault({value: 100, default_value: null}),
+    view.isDifferentFromDefault({config_value: 100, default_value: null}),
     true,
     'should be true when default is null but value is not',
   );
@@ -182,17 +182,17 @@ test('ConfigView - isDifferentFromDefault compares values correctly', async (t) 
 test('ConfigView - setKeyPatternFilter filters by key pattern', async (t) => {
   const view = new ConfigView();
   view.setData([
-    {key: 'max_connections', value: 100},
-    {key: 'min_connections', value: 10},
-    {key: 'timeout_seconds', value: 30},
-    {key: 'max_retries', value: 3},
+    {config_key: 'max_connections', config_value: 100},
+    {config_key: 'min_connections', config_value: 10},
+    {config_key: 'timeout_seconds', config_value: 30},
+    {config_key: 'max_retries', config_value: 3},
   ]);
 
   // Filter by pattern
   view.setKeyPatternFilter('max');
   t.equal(view.filteredData.length, 2, 'should filter to entries containing "max"');
   t.ok(
-    view.filteredData.every((c) => c.key.includes('max')),
+    view.filteredData.every((c) => c.config_key.includes('max')),
     'all filtered entries should contain "max"',
   );
 
@@ -205,10 +205,10 @@ test('ConfigView - getSelectedDetails returns full config details', async (t) =>
   const view = new ConfigView();
   view.setData([
     {
-      key: 'max_connections',
-      value: 200,
+      config_key: 'max_connections',
+      config_value: 200,
       default_value: 100,
-      type: 'number',
+      value_type: 'number',
       requires_restart: true,
       pending_restart: true,
       description: 'Maximum number of connections',
@@ -234,9 +234,15 @@ test('ConfigView - getSelectedDetails returns full config details', async (t) =>
 test('ConfigView - getStatusBarInfo returns correct counts', async (t) => {
   const view = new ConfigView();
   view.setData([
-    {key: 'config1', value: 100, default_value: 100},
-    {key: 'config2', value: 200, default_value: 100}, // Different from default
-    {key: 'config3', value: 300, default_value: 300, requires_restart: true, pending_restart: true},
+    {config_key: 'config1', config_value: 100, default_value: 100},
+    {config_key: 'config2', config_value: 200, default_value: 100}, // Different from default
+    {
+      config_key: 'config3',
+      config_value: 300,
+      default_value: 300,
+      requires_restart: true,
+      pending_restart: true,
+    },
   ]);
 
   const statusBar = view.getStatusBarInfo();
@@ -249,7 +255,7 @@ test('ConfigView - getStatusBarInfo returns correct counts', async (t) => {
 test('ConfigView - handleDrillDown returns navigation action', async (t) => {
   const view = new ConfigView();
   view.setData([
-    {key: 'test_config', value: 100},
+    {config_key: 'test_config', config_value: 100},
   ]);
 
   const action = view.handleDrillDown();
@@ -339,8 +345,13 @@ test('ConfigView - validateValue validates json type', async (t) => {
 test('ConfigView - prepareEdit validates and prepares edit operation', async (t) => {
   const view = new ConfigView();
   view.setData([
-    {key: 'max_connections', value: 100, type: 'number', requires_restart: true},
-    {key: 'debug_mode', value: false, type: 'boolean', requires_restart: false},
+    {
+      config_key: 'max_connections',
+      config_value: 100,
+      value_type: 'number',
+      requires_restart: true,
+    },
+    {config_key: 'debug_mode', config_value: false, value_type: 'boolean', requires_restart: false},
   ]);
 
   // Valid edit
@@ -363,9 +374,9 @@ test('ConfigView - prepareEdit validates and prepares edit operation', async (t)
 test('ConfigView - prepareRevert prepares revert operation', async (t) => {
   const view = new ConfigView();
   view.setData([
-    {key: 'max_connections', value: 200, default_value: 100, type: 'number'},
-    {key: 'timeout', value: 30, default_value: 30, type: 'number'},
-    {key: 'no_default', value: 'test', type: 'string'},
+    {config_key: 'max_connections', config_value: 200, default_value: 100, value_type: 'number'},
+    {config_key: 'timeout', config_value: 30, default_value: 30, value_type: 'number'},
+    {config_key: 'no_default', config_value: 'test', value_type: 'string'},
   ]);
 
   // Valid revert
@@ -391,7 +402,12 @@ test('ConfigView - prepareRevert prepares revert operation', async (t) => {
 test('ConfigView - getEditConfirmation generates confirmation message', async (t) => {
   const view = new ConfigView();
   view.setData([
-    {key: 'max_connections', value: 100, type: 'number', requires_restart: true},
+    {
+      config_key: 'max_connections',
+      config_value: 100,
+      value_type: 'number',
+      requires_restart: true,
+    },
   ]);
 
   const editOp = view.prepareEdit('max_connections', '200');
@@ -408,8 +424,8 @@ test('ConfigView - getEditConfirmation generates confirmation message', async (t
 test('ConfigView - canEdit checks editability', async (t) => {
   const view = new ConfigView();
   view.setData([
-    {key: 'editable', value: 100, type: 'number'},
-    {key: 'readonly', value: 200, type: 'number', read_only: true},
+    {config_key: 'editable', config_value: 100, value_type: 'number'},
+    {config_key: 'readonly', config_value: 200, value_type: 'number', read_only: true},
   ]);
 
   const editableResult = view.canEdit('editable');
@@ -426,10 +442,16 @@ test('ConfigView - canEdit checks editability', async (t) => {
 test('ConfigView - canRevert checks revertability', async (t) => {
   const view = new ConfigView();
   view.setData([
-    {key: 'changed', value: 200, default_value: 100, type: 'number'},
-    {key: 'unchanged', value: 100, default_value: 100, type: 'number'},
-    {key: 'no_default', value: 'test', type: 'string'},
-    {key: 'readonly', value: 200, default_value: 100, type: 'number', read_only: true},
+    {config_key: 'changed', config_value: 200, default_value: 100, value_type: 'number'},
+    {config_key: 'unchanged', config_value: 100, default_value: 100, value_type: 'number'},
+    {config_key: 'no_default', config_value: 'test', value_type: 'string'},
+    {
+      config_key: 'readonly',
+      config_value: 200,
+      default_value: 100,
+      value_type: 'number',
+      read_only: true,
+    },
   ]);
 
   const changedResult = view.canRevert('changed');

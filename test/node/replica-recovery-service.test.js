@@ -460,9 +460,9 @@ test('ReplicaRecoveryService - ReplicaStatus values', async (t) => {
 });
 
 test('ReplicaRecoveryService - ServiceType values', async (t) => {
-  t.equal(ServiceType.PARTITION_REPLICA, 'partition_replica',
-    'should have partition_replica');
-  t.equal(ServiceType.MESSAGE_GROUP_REPLICA, 'message_group_replica',
-    'should have message_group_replica');
+  t.equal(ServiceType.PARTITION_REPLICA, 'partition',
+    'should have partition');
+  t.equal(ServiceType.MESSAGE_GROUP_REPLICA, 'message_group',
+    'should have message_group');
   t.end();
 });

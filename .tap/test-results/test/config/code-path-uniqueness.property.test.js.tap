@@ -1,3 +1,31 @@
 TAP version 14
-ok 1 - Property 14: Code Path Uniqueness # SKIP filter: /SystemTableCache/
+# Subtest: Property 14: Code Path Uniqueness
+    # Subtest: each class has exactly one implementation
+        ok 1 - No unexpected duplicate class implementations should exist. Found: []
+        1..1
+    ok 1 - each class has exactly one implementation # time=5.575ms
+    
+    # Subtest: no feature flags for core functionality
+        ok 1 - No files should have core feature flags. Found: []
+        1..1
+    ok 2 - no feature flags for core functionality # time=13.081ms
+    
+    # Subtest: no conditional compilation patterns
+        ok 1 - No files should have conditional compilation. Found: []
+        1..1
+    ok 3 - no conditional compilation patterns # time=14.068ms
+    
+    # Subtest: consistent service implementation patterns
+        ok 1 - all service classes have consistent implementation patterns
+        1..1
+    ok 4 - consistent service implementation patterns # time=1.663ms
+    
+    # Subtest: transport implementations serve distinct purposes
+        ok 1 - transport implementations match expected distinct purposes
+        1..1
+    ok 5 - transport implementations serve distinct purposes # time=1.911ms
+    
+    1..5
+ok 1 - Property 14: Code Path Uniqueness # time=40.499ms
+
 1..1

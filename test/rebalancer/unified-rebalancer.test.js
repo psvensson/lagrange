@@ -378,10 +378,18 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
   });
 
   await t.test('detects suboptimal state when replicas not spread', async (t) => {
+    // Create mock cache with 3 nodes - one unused node available for spreading
+    const mockCache = createMockCache([
+      {node_id: 'node-1', status: NodeStatus.ACTIVE},
+      {node_id: 'node-2', status: NodeStatus.ACTIVE},
+      {node_id: 'node-3', status: NodeStatus.ACTIVE}, // Unused node
+    ]);
+
     const rebalancer = new UnifiedRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
+      systemTableCache: mockCache,
     });
 
     const replicas = [
@@ -396,6 +404,35 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
     };
 
     t.equal(rebalancer.isSuboptimalState(replicas, policy), true);
+  });
+
+  await t.test('not suboptimal when no unused nodes for spreading', async (t) => {
+    // Create mock cache with only 2 nodes - no unused nodes available
+    const mockCache = createMockCache([
+      {node_id: 'node-1', status: NodeStatus.ACTIVE},
+      {node_id: 'node-2', status: NodeStatus.ACTIVE},
+    ]);
+
+    const rebalancer = new UnifiedRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+      systemTableCache: mockCache,
+    });
+
+    const replicas = [
+      {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+      {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+      {replica_id: 'r3', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+    ];
+
+    const policy = {
+      replicaCount: 3,
+      placementConstraints: {spreadAcrossNodes: true},
+    };
+
+    // Not suboptimal because there are no unused nodes to spread to
+    t.equal(rebalancer.isSuboptimalState(replicas, policy), false);
   });
 });
 
@@ -428,21 +465,21 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
         service_id: 's1',
         partition_id: 'partition-1',
         node_id: 'node-1',
-        service_type: 'partition_replica',
+        service_type: 'partition',
         status: ReplicaStatus.ACTIVE,
       },
       {
         service_id: 's2',
         partition_id: 'partition-1',
         node_id: 'node-2',
-        service_type: 'partition_replica',
+        service_type: 'partition',
         status: ReplicaStatus.ACTIVE,
       },
       {
         service_id: 's3',
         partition_id: 'partition-1',
         node_id: 'node-3',
-        service_type: 'partition_replica',
+        service_type: 'partition',
         status: ReplicaStatus.ACTIVE,
       },
     ]);
@@ -475,7 +512,7 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
         service_id: 's1',
         partition_id: 'partition-1',
         node_id: 'node-1',
-        service_type: 'partition_replica',
+        service_type: 'partition',
         status: ReplicaStatus.ACTIVE,
       },
     ]);
@@ -659,7 +696,7 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
         service_id: 's1',
         partition_id: 'partition-1',
         node_id: 'node-1',
-        service_type: 'partition_replica',
+        service_type: 'partition',
         status: ReplicaStatus.ACTIVE,
       },
     ]);
@@ -695,21 +732,21 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
         service_id: 's1',
         partition_id: 'partition-1',
         node_id: 'node-1',
-        service_type: 'partition_replica',
+        service_type: 'partition',
         status: ReplicaStatus.ACTIVE,
       },
       {
         service_id: 's2',
         partition_id: 'partition-1',
         node_id: 'node-1', // Same node as s1
-        service_type: 'partition_replica',
+        service_type: 'partition',
         status: ReplicaStatus.ACTIVE,
       },
       {
         service_id: 's3',
         partition_id: 'partition-1',
         node_id: 'node-2',
-        service_type: 'partition_replica',
+        service_type: 'partition',
         status: ReplicaStatus.ACTIVE,
       },
     ]);
@@ -817,7 +854,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         service_id: 's1',
         partition_id: 'partition-1',
         node_id: 'node-1',
-        service_type: 'partition_replica',
+        service_type: 'partition',
         status: ReplicaStatus.ACTIVE,
       },
     ]);
@@ -1013,14 +1050,14 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         service_id: 's1',
         partition_id: 'partition-1',
         node_id: 'node-1',
-        service_type: 'partition_replica',
+        service_type: 'partition',
         status: ReplicaStatus.ACTIVE,
       },
       {
         service_id: 's2',
         partition_id: 'partition-1',
         node_id: 'node-2',
-        service_type: 'partition_replica',
+        service_type: 'partition',
         status: ReplicaStatus.FAILED, // Failed replica
       },
     ]);

@@ -29,9 +29,10 @@ const logArb = fc.record({
 
 /**
  * Arbitrary for generating a config record
+ * Uses config_key as the primary key field to match RemoteCache PRIMARY_KEYS
  */
 const configArb = fc.record({
-  key: fc.string({minLength: 1, maxLength: 20})
+  config_key: fc.string({minLength: 1, maxLength: 20})
     .filter((s) => /^[a-z0-9._-]+$/i.test(s)),
   value: fc.string({minLength: 0, maxLength: 50}),
   type: fc.constantFrom('string', 'number', 'boolean'),
@@ -115,6 +116,13 @@ function makeUnique(records, keyField) {
   });
 }
 
+/**
+ * Helper to make config records unique by config_key
+ */
+function makeConfigUnique(records) {
+  return makeUnique(records, 'config_key');
+}
+
 test('Property 53: Cache Query Methods - getLogs returns all logs', async (t) => {
   /**
    * Feature: admin-cli, Property 53: Cache Query Methods Completeness
@@ -148,7 +156,7 @@ test('Property 53: Cache Query Methods - getConfig returns all config', async (t
       fc.array(configArb, {minLength: 0, maxLength: 10}),
       (configs) => {
         const cache = new RemoteCache();
-        const uniqueConfigs = makeUnique(configs, 'key');
+        const uniqueConfigs = makeConfigUnique(configs);
 
         cache.loadFromDump({config: uniqueConfigs});
 
@@ -312,7 +320,7 @@ test('Property 53: Cache Query Methods - data integrity preserved', async (t) =>
       (logs, configs, contexts) => {
         const cache = new RemoteCache();
         const uniqueLogs = makeUnique(logs, 'log_id');
-        const uniqueConfigs = makeUnique(configs, 'key');
+        const uniqueConfigs = makeConfigUnique(configs);
         const uniqueContexts = makeUnique(contexts, 'context_id');
 
         cache.loadFromDump({
@@ -333,7 +341,7 @@ test('Property 53: Cache Query Methods - data integrity preserved', async (t) =>
         }
 
         for (const config of uniqueConfigs) {
-          const found = resultConfigs.find((c) => c.key === config.key);
+          const found = resultConfigs.find((c) => c.config_key === config.config_key);
           if (!found || found.value !== config.value) return false;
         }
 

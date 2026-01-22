@@ -1,0 +1,132 @@
+TAP version 14
+# Subtest: ReplicaHandler
+    # Subtest: initialization
+        ok 1 - not initialized before init
+        ok 2 - initialized after init
+        ok 3 - node ID set correctly
+        ok 4 - not initialized after shutdown
+        1..4
+    ok 1 - initialization # time=2.478ms
+    
+    # Subtest: handleMessage routes to correct handler
+        ok 1 - correlationId preserved
+        ok 2 - create initiated
+        ok 3 - correlationId preserved
+        ok 4 - not found
+        ok 5 - error for unknown
+        1..5
+    ok 2 - handleMessage routes to correct handler # time=1.809ms
+    
+    # Subtest: handleCreateReplica - returns initiated for new replica
+        ok 1 - status is initiated
+        ok 2 - replicaId in response
+        ok 3 - nodeId in response
+        ok 4 - operationId in response
+        ok 5 - local replica tracked
+        ok 6 - status is creating
+        1..6
+    ok 3 - handleCreateReplica - returns initiated for new replica # time=51.039ms
+    
+    # Subtest: handleCreateReplica - returns already_exists for active replica
+        ok 1 - already_exists
+        ok 2 - replicaId in response
+        1..2
+    ok 4 - handleCreateReplica - returns already_exists for active replica # time=0.537ms
+    
+    # Subtest: handleCreateReplica - returns in_progress for creating replica
+        ok 1 - in_progress
+        ok 2 - replicaId in response
+        1..2
+    ok 5 - handleCreateReplica - returns in_progress for creating replica # time=0.726ms
+    
+    # Subtest: handleCreateReplica - idempotent for same operationId
+        ok 1 - in_progress
+        ok 2 - operationId in response
+        1..2
+    ok 6 - handleCreateReplica - idempotent for same operationId # time=0.595ms
+    
+    # Subtest: handleRemoveReplica - returns not_found for missing replica
+        ok 1 - not_found
+        ok 2 - replicaId in response
+        1..2
+    ok 7 - handleRemoveReplica - returns not_found for missing replica # time=0.725ms
+    
+    # Subtest: handleRemoveReplica - returns initiated for existing replica
+        ok 1 - initiated
+        ok 2 - replicaId in response
+        ok 3 - operationId in response
+        ok 4 - status is removing
+        1..4
+    ok 8 - handleRemoveReplica - returns initiated for existing replica # time=51.36ms
+    
+    # Subtest: handleRemoveReplica - returns in_progress for removing replica
+        ok 1 - in_progress
+        ok 2 - replicaId in response
+        1..2
+    ok 9 - handleRemoveReplica - returns in_progress for removing replica # time=0.731ms
+    
+    # Subtest: handleRemoveReplica - returns completed for removed replica
+        ok 1 - completed
+        ok 2 - replicaId in response
+        1..2
+    ok 10 - handleRemoveReplica - returns completed for removed replica # time=0.781ms
+    
+    # Subtest: registerExistingReplica - registers and is idempotent
+        ok 1 - replica registered
+        ok 2 - status correct
+        ok 3 - status unchanged
+        1..3
+    ok 11 - registerExistingReplica - registers and is idempotent # time=0.933ms
+    
+    # Subtest: getStats returns correct statistics
+        ok 1 - correct node ID
+        ok 2 - initialized flag correct
+        ok 3 - correct local replica count
+        ok 4 - correct in-progress count
+        1..4
+    ok 12 - getStats returns correct statistics # time=0.982ms
+    
+    # Subtest: emits events during lifecycle operations
+        ok 1 - replicaCreated event emitted
+        ok 2 - correct replicaId
+        1..2
+    ok 13 - emits events during lifecycle operations # time=101.662ms
+    
+    # Subtest: async creation updates status via CDC
+        ok 1 - syncing status update via CDC
+        ok 2 - active status update via CDC
+        1..2
+    ok 14 - async creation updates status via CDC # time=101.508ms
+    
+    # Subtest: async removal updates status via CDC
+        ok 1 - removing status update via CDC
+        ok 2 - removed status update via CDC
+        ok 3 - service row deleted via CDC
+        1..3
+    ok 15 - async removal updates status via CDC # time=101.566ms
+    
+    # Subtest: registerWithRouter registers handler at correct address
+        ok 1 - handler registered at correct address
+        ok 2 - response acknowledged
+        ok 3 - create initiated
+        ok 4 - correlationId preserved
+        1..4
+    ok 16 - registerWithRouter registers handler at correct address # time=1.137ms
+    
+    # Subtest: unregisterFromRouter removes handler
+        ok 1 - handler registered
+        ok 2 - handler unregistered
+        1..2
+    ok 17 - unregisterFromRouter removes handler # time=0.583ms
+    
+    # Subtest: registerWithRouter with RPC client notifies on response
+        ok 1 - RPC client notified
+        ok 2 - correct correlationId
+        ok 3 - correct status
+        1..3
+    ok 18 - registerWithRouter with RPC client notifies on response # time=0.693ms
+    
+    1..18
+ok 1 - ReplicaHandler # time=777.172ms
+
+1..1

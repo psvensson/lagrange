@@ -1,0 +1,11 @@
+TAP version 14
+# Subtest: ACK delivery via real WebSocket
+    ok 1 - received ACK
+    ok 2 - correct request_id
+    ok 3 - status initiated
+    ok 4 - replica created
+{"level":50,"time":"2026-01-22T17:52:28.587Z","nodeId":"test-node","pid":313791,"subsystem":"message-router","nodeId":"test-node","connectionId":"44e9e3b8-49ad-49da-a29f-31de4e6d264d","msg":"Self-connection lost - fatal error"}
+    1..4
+ok 1 - ACK delivery via real WebSocket # time=84.897ms
+
+1..1

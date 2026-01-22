@@ -29,6 +29,7 @@ const SystemTableName = {
   LIVE_QUERIES: 'live_queries',
   CONTEXTS: 'contexts',
   CODE: 'code',
+  REPLICA_OPERATIONS: 'replica_operations',
 };
 
 /**
@@ -143,6 +144,7 @@ const NODES_SCHEMA = {
  * Services system table schema.
  * Stores metadata about all services in the system.
  * Includes raft_role column for Raft-based services (Req 14.6, 14.7).
+ * Includes state machine tracking columns (Req 4.1).
  */
 const SERVICES_SCHEMA = {
   tableName: SystemTableName.SERVICES,
@@ -155,6 +157,10 @@ const SERVICES_SCHEMA = {
     {name: 'replica_id', type: ColumnType.TEXT},
     {name: 'raft_role', type: ColumnType.TEXT}, // leader, follower, candidate (Req 14.6)
     {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
+    {name: 'state_entered_at', type: ColumnType.INTEGER}, // Timestamp when current state was entered (Req 4.1)
+    {name: 'previous_state', type: ColumnType.TEXT}, // Previous state for debugging (Req 4.1)
+    {name: 'trigger_reason', type: ColumnType.TEXT}, // What triggered the current state (Req 4.1)
+    {name: 'error_message', type: ColumnType.TEXT}, // Error message if in failed state (Req 4.1)
     {name: 'address', type: ColumnType.TEXT},
     {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
     {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
@@ -165,6 +171,7 @@ const SERVICES_SCHEMA = {
     {name: 'idx_services_group', columns: ['group_id']},
     {name: 'idx_services_type', columns: ['service_type']},
     {name: 'idx_services_raft_role', columns: ['raft_role']},
+    {name: 'idx_services_status', columns: ['status']},
   ],
 };
 
@@ -289,6 +296,35 @@ const CODE_SCHEMA = {
 };
 
 /**
+ * Replica operations system table schema.
+ * Stores persistent log of all replica operations for debugging and recovery.
+ * Requirements: 9.1, 9.2
+ */
+const REPLICA_OPERATIONS_SCHEMA = {
+  tableName: SystemTableName.REPLICA_OPERATIONS,
+  columns: [
+    {name: 'operation_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'type', type: ColumnType.TEXT, notNull: true}, // 'ADD' or 'REMOVE'
+    {name: 'partition_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'replica_id', type: ColumnType.TEXT},
+    {name: 'source_node_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'target_node_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'status', type: ColumnType.TEXT, notNull: true}, // ReplicaStatus value
+    {name: 'workflow_step', type: ColumnType.TEXT, notNull: true},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'completed_at', type: ColumnType.INTEGER},
+    {name: 'error_message', type: ColumnType.TEXT},
+    {name: 'steps_history', type: ColumnType.TEXT, notNull: true}, // JSON array
+  ],
+  indices: [
+    {name: 'idx_replica_ops_status', columns: ['status']},
+    {name: 'idx_replica_ops_partition', columns: ['partition_id']},
+    {name: 'idx_replica_ops_created', columns: ['created_at']},
+  ],
+};
+
+/**
  * All system table schemas in creation order.
  * Order matters for foreign key dependencies.
  */
@@ -304,6 +340,7 @@ const SYSTEM_TABLE_SCHEMAS = [
   LIVE_QUERIES_SCHEMA,
   CONTEXTS_SCHEMA,
   CODE_SCHEMA,
+  REPLICA_OPERATIONS_SCHEMA,
 ];
 
 /**
@@ -322,6 +359,7 @@ const INITIAL_PARTITION_IDS = {
   [SystemTableName.LIVE_QUERIES]: 'live_queries-p1',
   [SystemTableName.CONTEXTS]: 'contexts-p1',
   [SystemTableName.CODE]: 'code-p1',
+  [SystemTableName.REPLICA_OPERATIONS]: 'replica_operations-p1',
 };
 
 /**
@@ -344,6 +382,9 @@ const INITIAL_REPLICA_IDS = {
   ],
   [SystemTableName.CONTEXTS]: ['contexts-p1-r1', 'contexts-p1-r2', 'contexts-p1-r3'],
   [SystemTableName.CODE]: ['code-p1-r1', 'code-p1-r2', 'code-p1-r3'],
+  [SystemTableName.REPLICA_OPERATIONS]: [
+    'replica_operations-p1-r1', 'replica_operations-p1-r2', 'replica_operations-p1-r3',
+  ],
 };
 
 /**
@@ -439,6 +480,7 @@ export {
   LIVE_QUERIES_SCHEMA,
   CONTEXTS_SCHEMA,
   CODE_SCHEMA,
+  REPLICA_OPERATIONS_SCHEMA,
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_PARTITION_IDS,
   INITIAL_REPLICA_IDS,

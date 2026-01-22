@@ -8,6 +8,7 @@ import Fastify from 'fastify';
 import {validate as uuidValidate} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {ReplicaLifecycleManager} from '../node/replica-lifecycle-manager.js';
 
 /**
  * Bootstrap response strategies.
@@ -27,15 +28,19 @@ class BootstrapAPI {
    * @param {Object} options.systemTableCache - System table cache for lookups.
    * @param {string} options.seedNodeId - Seed node ID.
    * @param {string} options.seedNodeAddress - Seed node address.
+   * @param {number} options.wsPort - WebSocket port for cross-node communication.
    * @param {Map} options.messageGroupServices - Message group services map.
    * @param {Map} options.partitionServices - Partition services map.
+   * @param {ReplicaLifecycleManager} options.replicaLifecycleManager - Lifecycle manager.
    */
   constructor(options = {}) {
     this.systemTableCache = options.systemTableCache || null;
     this.seedNodeId = options.seedNodeId || null;
     this.seedNodeAddress = options.seedNodeAddress || null;
+    this.wsPort = options.wsPort || null;
     this.messageGroupServices = options.messageGroupServices || new Map();
     this.partitionServices = options.partitionServices || new Map();
+    this.replicaLifecycleManager = options.replicaLifecycleManager || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -98,6 +103,11 @@ class BootstrapAPI {
     // Bootstrap endpoint for new node registration
     this.fastify.post('/bootstrap', async (request, reply) => {
       return this.handleBootstrapRequest(request, reply);
+    });
+
+    // Register node endpoint - inserts node into nodes system table
+    this.fastify.post('/register-node', async (request, reply) => {
+      return this.handleRegisterNodeRequest(request, reply);
     });
 
     // Get cluster state endpoint
@@ -163,10 +173,21 @@ class BootstrapAPI {
         status: 'bootstrapping',
       });
 
+      // Build seed node WebSocket address for cross-node communication
+      let seedNodeWsAddress = null;
+      if (this.wsPort) {
+        // Extract host from seedNodeAddress (e.g., 'localhost:8080' -> 'localhost')
+        const host = this.seedNodeAddress ?
+          this.seedNodeAddress.replace(/^https?:\/\//, '').split(':')[0] :
+          'localhost';
+        seedNodeWsAddress = `ws://${host}:${this.wsPort}`;
+      }
+
       const response = {
         success: true,
         seedNodeId: this.seedNodeId,
         seedNodeAddress: this.seedNodeAddress,
+        seedNodeWsAddress,
         messageGroupAssignment: assignment,
         partitionLeaders,
         clusterConfig,
@@ -190,6 +211,84 @@ class BootstrapAPI {
       reply.code(500);
       return {error: 'Internal server error during bootstrap'};
     }
+  }
+
+  /**
+   * Handle register node request - inserts node into nodes system table.
+   * @param {Object} request - Fastify request.
+   * @param {Object} reply - Fastify reply.
+   * @return {Promise<Object>} Registration response.
+   */
+  async handleRegisterNodeRequest(request, reply) {
+    const nodeData = request.body || {};
+
+    this.logger.info('Received register-node request', {
+      nodeId: nodeData.node_id,
+      nodeAddress: nodeData.node_address,
+    });
+
+    // Validate required fields
+    if (!nodeData.node_id) {
+      reply.code(400);
+      return {success: false, error: 'node_id is required'};
+    }
+
+    if (!nodeData.node_address) {
+      reply.code(400);
+      return {success: false, error: 'node_address is required'};
+    }
+
+    try {
+      // Find the leader partition for the nodes table
+      const nodesPartition = this.getLeaderPartitionForTable('nodes');
+
+      if (!nodesPartition) {
+        this.logger.error('Nodes partition not available for registration');
+        reply.code(503);
+        return {success: false, error: 'Nodes partition not available'};
+      }
+
+      // Upsert the node data into the nodes table
+      await nodesPartition.upsertData('nodes', nodeData);
+
+      this.logger.info('Node registered in nodes table', {
+        nodeId: nodeData.node_id,
+        nodeAddress: nodeData.node_address,
+      });
+
+      // Update local tracking
+      this.registeredNodes.set(nodeData.node_id, {
+        nodeId: nodeData.node_id,
+        nodeAddress: nodeData.node_address,
+        registeredAt: Date.now(),
+        status: 'active',
+      });
+
+      return {success: true, nodeId: nodeData.node_id};
+    } catch (error) {
+      this.logger.error('Failed to register node', {
+        nodeId: nodeData.node_id,
+        error: error.message,
+        stack: error.stack,
+      });
+      reply.code(500);
+      return {success: false, error: 'Failed to register node'};
+    }
+  }
+
+  /**
+   * Get the leader partition for a specific table.
+   * @param {string} tableName - Table name.
+   * @return {Object|null} Leader partition or null.
+   * @private
+   */
+  getLeaderPartitionForTable(tableName) {
+    for (const [_replicaId, partition] of this.partitionServices) {
+      if (partition.tableName === tableName && partition.isLeader) {
+        return partition;
+      }
+    }
+    return null;
   }
 
   /**
@@ -259,10 +358,34 @@ class BootstrapAPI {
     // Get existing message groups from cache or services
     const messageGroups = this.getMessageGroups();
 
+    this.logger.info('[JOIN-DEBUG] Determining message group assignment', {
+      newNodeId,
+      messageGroupCount: messageGroups.length,
+      messageGroups: messageGroups.map((g) => ({
+        groupId: g.group_id,
+        replicaCount: g.replicas?.length || 0,
+        replicas: g.replicas?.map((r) => ({
+          replicaId: r.replica_id,
+          nodeId: r.node_id,
+          address: r.address,
+        })),
+      })),
+    });
+
     // Strategy 1: Find a message group with 2+ replicas on the same node
     const movableReplica = this.findMessageGroupWithMovableReplica(messageGroups);
 
     if (movableReplica) {
+      this.logger.info('[JOIN-DEBUG] Found movable replica - using MOVE_REPLICA strategy', {
+        newNodeId,
+        groupId: movableReplica.groupId,
+        sourceNodeId: movableReplica.sourceNodeId,
+        replicaToMove: movableReplica.replicaId,
+        peerIds: movableReplica.peerIds,
+        peerAddresses: movableReplica.peerAddresses,
+        replicaAddresses: movableReplica.replicaAddresses,
+      });
+
       return {
         strategy: BootstrapStrategy.MOVE_REPLICA,
         groupId: movableReplica.groupId,
@@ -270,6 +393,7 @@ class BootstrapAPI {
         replicaToMove: movableReplica.replicaId,
         replicaAddresses: movableReplica.replicaAddresses,
         existingPeerIds: movableReplica.peerIds,
+        peerAddresses: movableReplica.peerAddresses,
       };
     }
 
@@ -315,10 +439,11 @@ class BootstrapAPI {
         });
       }
 
+      // Use unified address format: ${nodeId}/${entityType}/${entityId}
       groupMap.get(groupId).replicas.push({
         replica_id: replicaId,
         node_id: service.nodeId,
-        address: `${this.seedNodeAddress}/services/${replicaId}`,
+        address: `${service.nodeId}/message-group/${replicaId}`,
       });
     }
 
@@ -352,12 +477,23 @@ class BootstrapAPI {
           // Found a movable replica
           const replicaToMove = replicas.find((r) => r.node_id === nodeId);
 
+          // Build unified peer addresses for Raft communication
+          // Format: ${nodeId}/message-group/${replicaId}
+          const peerAddresses = replicas.map((r) =>
+            `${r.node_id}/message-group/${r.replica_id}`);
+
           return {
             groupId: group.group_id,
             sourceNodeId: nodeId,
             replicaId: replicaToMove.replica_id,
             replicaAddresses: replicas.map((r) => r.address),
             peerIds: replicas.map((r) => r.replica_id),
+            // Include unified peer addresses for Raft communication
+            peerAddresses: peerAddresses,
+            // Include replica to node mapping for address resolution
+            replicaNodeMap: Object.fromEntries(
+              replicas.map((r) => [r.replica_id, r.node_id]),
+            ),
           };
         }
       }
@@ -381,7 +517,8 @@ class BootstrapAPI {
             partitionId: partition.partitionId,
             replicaId,
             nodeId: partition.nodeId,
-            address: `${this.seedNodeAddress}/services/${replicaId}`,
+            // Use unified address format: ${nodeId}/${entityType}/${entityId}
+            address: `${partition.nodeId}/partition/${replicaId}`,
           };
         }
       }
@@ -473,6 +610,14 @@ class BootstrapAPI {
   }
 
   /**
+   * Get the ReplicaLifecycleManager instance.
+   * @return {ReplicaLifecycleManager|null} Lifecycle manager or null.
+   */
+  getReplicaLifecycleManager() {
+    return this.replicaLifecycleManager;
+  }
+
+  /**
    * Check if the API is initialized.
    * @return {boolean} True if initialized.
    */
@@ -498,4 +643,4 @@ class BootstrapAPI {
   }
 }
 
-export {BootstrapAPI, BootstrapStrategy};
+export {BootstrapAPI, BootstrapStrategy, ReplicaLifecycleManager};

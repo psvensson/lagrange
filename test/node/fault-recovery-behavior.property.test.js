@@ -1,109 +1,54 @@
 /**
- * Property Test: Fault Recovery Behavior
- * **Property 17: Fault Recovery Behavior**
- * **Validates: Requirements 14.1, 14.2**
+ * Property Test: Recovery State Handling
+ * **Property 7: Recovery State Handling**
+ * **Validates: Requirements 4.3, 4.4**
  *
- * *For any* node failure scenario, the system should detect the failure,
- * mark affected replicas as unavailable, and create replacement replicas
- * to maintain minimum counts.
- *
- * This property test verifies that:
- * 1. Node failures are detected via heartbeat timeout
- * 2. Affected replicas are marked as failed when a node fails
- * 3. Replacement replicas are created on healthy nodes
- * 4. Minimum replica counts are maintained after recovery
+ * *For any* replica found in a transitional state (`creating`, `syncing`,
+ * `removing`) after node recovery, the state machine SHALL transition it
+ * appropriately:
+ * - `creating`/`syncing` → `failed`
+ * - `removing` → `removed`
  */
 
 import {test} from 'tap';
 import fc from 'fast-check';
 import {
-  FailureDetector,
-  NodeStatus as FDNodeStatus,
-  ReplicaStatus as FDReplicaStatus,
-} from '../../src/node/failure-detector.js';
-import {
-  ReplicaRecoveryService,
-  NodeStatus as RRNodeStatus,
-  ReplicaStatus as RRReplicaStatus,
-  ServiceType,
-} from '../../src/node/replica-recovery-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
+  ReplicaStateMachine,
+  ReplicaState,
+} from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
 /**
- * Create a mock CDC integration service for testing.
- * @return {Object} Mock CDC integration service.
+ * Create a mock system table cache.
+ * @param {string} nodeId - Node ID to filter services.
+ * @param {Array} services - Services to include in cache.
+ * @return {Object} Mock cache.
  */
-function createMockCDCService() {
-  const operations = [];
-
+function createMockCache(nodeId, services = []) {
   return {
-    operations,
-    async insertSystemTableRow(tableName, data) {
-      operations.push({type: 'insert', tableName, data});
-      return {success: true, operation: 'INSERT', tableName, data};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      operations.push({type: 'update', tableName, whereClause, data});
-      return {success: true, operation: 'UPDATE', tableName, whereClause, data};
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      operations.push({type: 'delete', tableName, whereClause});
-      return {success: true, operation: 'DELETE', tableName, whereClause};
-    },
-    reset() {
-      operations.length = 0;
-    },
-  };
-}
-
-/**
- * Create a mock system table cache for testing.
- * @param {Object} data - Initial cache data.
- * @return {Object} Mock system table cache.
- */
-function createMockCache(data = {}) {
-  const cache = {
-    nodes: data.nodes || [],
-    services: data.services || [],
-    partitions: data.partitions || [],
-    message_groups: data.message_groups || [],
-  };
-
-  return {
-    getAll(tableName) {
-      return cache[tableName] || [];
-    },
     filter(tableName, predicate) {
-      const items = cache[tableName] || [];
-      return items.filter(predicate);
+      if (tableName === 'services') {
+        return services.filter(predicate);
+      }
+      return [];
     },
     get(tableName, id) {
-      const items = cache[tableName] || [];
-      return items.find((item) =>
-        item.id === id ||
-        item.node_id === id ||
-        item.partition_id === id ||
-        item.group_id === id,
-      );
+      if (tableName === 'services') {
+        return services.find((s) => s.service_id === id);
+      }
+      return null;
     },
-    setNodes(nodes) {
-      cache.nodes = nodes;
-    },
-    setServices(services) {
-      cache.services = services;
-    },
-    setPartitions(partitions) {
-      cache.partitions = partitions;
-    },
-    setMessageGroups(groups) {
-      cache.message_groups = groups;
+    getAll(tableName) {
+      if (tableName === 'services') {
+        return services;
+      }
+      return [];
     },
   };
 }
 
-test('Property 17: Fault Recovery Behavior', async (t) => {
+test('Property 7: Recovery State Handling', async (t) => {
   t.beforeEach(async () => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
@@ -121,374 +66,450 @@ test('Property 17: Fault Recovery Behavior', async (t) => {
   });
 
   /**
-   * Property: For any node with stale heartbeat, the failure detector
-   * should mark it as suspected or failed based on threshold.
+   * Property: For any 'creating' replica on recovery, it is transitioned to
+   * 'failed'.
    */
-  t.test('node failures are detected via heartbeat timeout', async (t) => {
+  t.test('creating replicas transition to failed on recovery', async (t) => {
     await fc.assert(
       fc.asyncProperty(
-        fc.integer({min: 16000, max: 60000}), // Time since heartbeat (> 15s threshold)
-        fc.uuid(),
-        async (timeSinceHeartbeat, nodeId) => {
-          const mockCDC = createMockCDCService();
-          const now = Date.now();
+        fc.uuid(), // service_id
+        fc.uuid(), // partition_id
+        async (serviceId, partitionId) => {
+          const nodeId = 'test-node';
 
-          const mockCache = createMockCache({
-            nodes: [
-              {
-                node_id: nodeId,
-                status: FDNodeStatus.SUSPECTED, // Already suspected
-                last_heartbeat: now - timeSinceHeartbeat,
-              },
-            ],
-            services: [],
-          });
-
-          const detector = new FailureDetector({
-            nodeId: 'test-node',
-            systemTableCache: mockCache,
-            cdcIntegrationService: mockCDC,
-          });
-          detector.initialize();
-
-          await detector.checkNodeHealth();
-
-          // Should have marked node as failed
-          const failedOps = mockCDC.operations.filter((op) =>
-            op.type === 'update' &&
-            op.tableName === SystemTableName.NODES &&
-            op.data.status === FDNodeStatus.FAILED,
-          );
-
-          detector.shutdown();
-          return failedOps.length > 0;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('node failures are detected via heartbeat timeout');
-  });
-
-  /**
-   * Property: For any failed node with replicas, all replicas on that
-   * node should be marked as failed.
-   */
-  t.test('affected replicas are marked as failed when node fails', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.uuid(),
-        fc.integer({min: 1, max: 5}), // Number of replicas on failed node
-        async (failedNodeId, replicaCount) => {
-          const mockCDC = createMockCDCService();
-          const now = Date.now();
-
-          // Create replicas on the failed node
-          const services = [];
-          for (let i = 0; i < replicaCount; i++) {
-            services.push({
-              service_id: `service-${i}`,
-              node_id: failedNodeId,
-              service_type: ServiceType.PARTITION_REPLICA,
-              partition_id: `partition-${i}`,
-              status: FDReplicaStatus.ACTIVE,
-            });
-          }
-
-          const mockCache = createMockCache({
-            nodes: [
-              {
-                node_id: failedNodeId,
-                status: FDNodeStatus.SUSPECTED,
-                last_heartbeat: now - 20000, // Stale heartbeat
-              },
-            ],
-            services,
-          });
-
-          const detector = new FailureDetector({
-            nodeId: 'test-node',
-            systemTableCache: mockCache,
-            cdcIntegrationService: mockCDC,
-          });
-          detector.initialize();
-
-          await detector.checkNodeHealth();
-
-          // Count replica failure updates
-          const replicaFailedOps = mockCDC.operations.filter((op) =>
-            op.type === 'update' &&
-            op.tableName === SystemTableName.SERVICES &&
-            op.data.status === FDReplicaStatus.FAILED,
-          );
-
-          detector.shutdown();
-
-          // All replicas should be marked as failed
-          return replicaFailedOps.length === replicaCount;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('affected replicas are marked as failed when node fails');
-  });
-
-  /**
-   * Property: For any partition with fewer healthy replicas than minimum,
-   * replacement replicas should be created on healthy nodes.
-   */
-  t.test('replacement replicas are created on healthy nodes', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.integer({min: 1, max: 2}), // Current healthy replica count (< 3)
-        fc.integer({min: 2, max: 4}), // Number of healthy nodes
-        async (healthyReplicaCount, healthyNodeCount) => {
-          const mockCDC = createMockCDCService();
-
-          // Create healthy nodes
-          const nodes = [];
-          for (let i = 0; i < healthyNodeCount; i++) {
-            nodes.push({
-              node_id: `node-${i}`,
-              status: RRNodeStatus.ACTIVE,
-            });
-          }
-
-          // Create partition with insufficient replicas
-          const partitions = [
-            {partition_id: 'partition-1', table_id: 'table-1', replica_count: 3},
-          ];
-
-          // Create healthy replicas (fewer than minimum)
-          const services = [];
-          for (let i = 0; i < healthyReplicaCount; i++) {
-            services.push({
-              service_id: `service-${i}`,
-              node_id: `node-${i}`,
-              partition_id: 'partition-1',
-              service_type: ServiceType.PARTITION_REPLICA,
-              status: RRReplicaStatus.ACTIVE,
-            });
-          }
-
-          const mockCache = createMockCache({
-            nodes,
-            services,
-            partitions,
-          });
-
-          const recoveryService = new ReplicaRecoveryService({
-            nodeId: 'test-node',
-            systemTableCache: mockCache,
-            cdcIntegrationService: mockCDC,
-          });
-          recoveryService.initialize();
-
-          await recoveryService.checkReplicaCounts();
-
-          // Count replica creation operations
-          const createOps = mockCDC.operations.filter((op) =>
-            op.type === 'insert' &&
-            op.tableName === SystemTableName.SERVICES &&
-            op.data.service_type === ServiceType.PARTITION_REPLICA,
-          );
-
-          recoveryService.shutdown();
-
-          // Should create enough replicas to reach minimum (3)
-          const expectedCreations = 3 - healthyReplicaCount;
-          return createOps.length === expectedCreations;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('replacement replicas are created on healthy nodes');
-  });
-
-  /**
-   * Property: For any partition with sufficient healthy replicas,
-   * no new replicas should be created.
-   */
-  t.test('no recovery when replica count is sufficient', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.integer({min: 3, max: 7}), // Healthy replica count (>= 3)
-        async (healthyReplicaCount) => {
-          const mockCDC = createMockCDCService();
-
-          // Create healthy nodes
-          const nodes = [];
-          for (let i = 0; i < healthyReplicaCount; i++) {
-            nodes.push({
-              node_id: `node-${i}`,
-              status: RRNodeStatus.ACTIVE,
-            });
-          }
-
-          // Create partition with sufficient replicas
-          const partitions = [
+          const services = [
             {
-              partition_id: 'partition-1',
-              table_id: 'table-1',
-              replica_count: healthyReplicaCount,
+              service_id: serviceId,
+              node_id: nodeId,
+              service_type: 'partition',
+              partition_id: partitionId,
+              status: 'creating',
             },
           ];
 
-          // Create healthy replicas
-          const services = [];
-          for (let i = 0; i < healthyReplicaCount; i++) {
-            services.push({
-              service_id: `service-${i}`,
-              node_id: `node-${i}`,
-              partition_id: 'partition-1',
-              service_type: ServiceType.PARTITION_REPLICA,
-              status: RRReplicaStatus.ACTIVE,
-            });
-          }
+          const mockCache = createMockCache(nodeId, services);
 
-          const mockCache = createMockCache({
-            nodes,
-            services,
-            partitions,
+          const stateMachine = new ReplicaStateMachine({
+            nodeId,
           });
 
-          const recoveryService = new ReplicaRecoveryService({
-            nodeId: 'test-node',
+          const result = await stateMachine.handleNodeRecovery({
             systemTableCache: mockCache,
-            cdcIntegrationService: mockCDC,
+            nodeId,
           });
-          recoveryService.initialize();
 
-          await recoveryService.checkReplicaCounts();
+          // Check that replica was transitioned to failed
+          const replicaState = stateMachine.getState(serviceId);
 
-          recoveryService.shutdown();
+          stateMachine.clear();
 
-          // Should not create any new replicas
-          return mockCDC.operations.length === 0;
+          return result.creatingToFailed === 1 &&
+            replicaState !== null &&
+            replicaState.state === ReplicaState.FAILED;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('no recovery when replica count is sufficient');
+    t.pass('creating replicas transition to failed on recovery');
   });
 
   /**
-   * Property: For any healthy node, the failure detector should not
-   * mark it as failed or suspected.
+   * Property: For any 'syncing' replica on recovery, it is transitioned to
+   * 'failed'.
    */
-  t.test('healthy nodes are not marked as failed', async (t) => {
+  t.test('syncing replicas transition to failed on recovery', async (t) => {
     await fc.assert(
       fc.asyncProperty(
-        fc.uuid(),
-        fc.integer({min: 1000, max: 5000}), // Recent heartbeat (< 10s)
-        async (nodeId, timeSinceHeartbeat) => {
-          const mockCDC = createMockCDCService();
-          const now = Date.now();
+        fc.uuid(), // service_id
+        fc.uuid(), // partition_id
+        async (serviceId, partitionId) => {
+          const nodeId = 'test-node';
 
-          const mockCache = createMockCache({
-            nodes: [
-              {
-                node_id: nodeId,
-                status: FDNodeStatus.ACTIVE,
-                last_heartbeat: now - timeSinceHeartbeat,
-              },
-            ],
-          });
-
-          const detector = new FailureDetector({
-            nodeId: 'test-node',
-            systemTableCache: mockCache,
-            cdcIntegrationService: mockCDC,
-          });
-          detector.initialize();
-
-          await detector.checkNodeHealth();
-
-          detector.shutdown();
-
-          // Should not have any status updates for healthy node
-          return mockCDC.operations.length === 0;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('healthy nodes are not marked as failed');
-  });
-
-  /**
-   * Property: For any message group with fewer healthy replicas than minimum,
-   * replacement replicas should be created.
-   */
-  t.test('message group replicas are recovered', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.integer({min: 1, max: 2}), // Current healthy replica count (< 3)
-        async (healthyReplicaCount) => {
-          const mockCDC = createMockCDCService();
-
-          // Create healthy nodes
-          const nodes = [];
-          for (let i = 0; i < 3; i++) {
-            nodes.push({
-              node_id: `node-${i}`,
-              status: RRNodeStatus.ACTIVE,
-            });
-          }
-
-          // Create message group with insufficient replicas
-          const messageGroups = [
-            {group_id: 'group-1', replica_count: 3},
+          const services = [
+            {
+              service_id: serviceId,
+              node_id: nodeId,
+              service_type: 'partition',
+              partition_id: partitionId,
+              status: 'syncing',
+            },
           ];
 
-          // Create healthy replicas (fewer than minimum)
-          const services = [];
-          for (let i = 0; i < healthyReplicaCount; i++) {
-            services.push({
-              service_id: `service-${i}`,
-              node_id: `node-${i}`,
-              group_id: 'group-1',
-              service_type: ServiceType.MESSAGE_GROUP_REPLICA,
-              status: RRReplicaStatus.ACTIVE,
-            });
-          }
+          const mockCache = createMockCache(nodeId, services);
 
-          const mockCache = createMockCache({
-            nodes,
-            services,
-            partitions: [],
-            message_groups: messageGroups,
+          const stateMachine = new ReplicaStateMachine({
+            nodeId,
           });
 
-          const recoveryService = new ReplicaRecoveryService({
-            nodeId: 'test-node',
+          const result = await stateMachine.handleNodeRecovery({
             systemTableCache: mockCache,
-            cdcIntegrationService: mockCDC,
+            nodeId,
           });
-          recoveryService.initialize();
 
-          await recoveryService.checkReplicaCounts();
+          // Check that replica was transitioned to failed
+          const replicaState = stateMachine.getState(serviceId);
 
-          // Count message group replica creation operations
-          const createOps = mockCDC.operations.filter((op) =>
-            op.type === 'insert' &&
-            op.tableName === SystemTableName.SERVICES &&
-            op.data.service_type === ServiceType.MESSAGE_GROUP_REPLICA,
-          );
+          stateMachine.clear();
 
-          recoveryService.shutdown();
-
-          // Should create enough replicas to reach minimum (3)
-          const expectedCreations = 3 - healthyReplicaCount;
-          return createOps.length === expectedCreations;
+          return result.syncingToFailed === 1 &&
+            replicaState !== null &&
+            replicaState.state === ReplicaState.FAILED;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('message group replicas are recovered');
+    t.pass('syncing replicas transition to failed on recovery');
+  });
+
+  /**
+   * Property: For any 'removing' replica on recovery, it is transitioned to
+   * 'removed'.
+   */
+  t.test('removing replicas transition to removed on recovery', async (t) => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uuid(), // service_id
+        fc.uuid(), // partition_id
+        async (serviceId, partitionId) => {
+          const nodeId = 'test-node';
+
+          const services = [
+            {
+              service_id: serviceId,
+              node_id: nodeId,
+              service_type: 'partition',
+              partition_id: partitionId,
+              status: 'removing',
+            },
+          ];
+
+          const mockCache = createMockCache(nodeId, services);
+
+          const stateMachine = new ReplicaStateMachine({
+            nodeId,
+          });
+
+          const result = await stateMachine.handleNodeRecovery({
+            systemTableCache: mockCache,
+            nodeId,
+          });
+
+          // Check that replica was transitioned to removed
+          const replicaState = stateMachine.getState(serviceId);
+
+          stateMachine.clear();
+
+          return result.removingToRemoved === 1 &&
+            replicaState !== null &&
+            replicaState.state === ReplicaState.REMOVED;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('removing replicas transition to removed on recovery');
+  });
+
+  /**
+   * Property: For any mix of transitional replicas, all are handled correctly.
+   */
+  t.test('mixed transitional replicas are all handled', async (t) => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({min: 0, max: 3}), // creating count
+        fc.integer({min: 0, max: 3}), // syncing count
+        fc.integer({min: 0, max: 3}), // removing count
+        async (creatingCount, syncingCount, removingCount) => {
+          const nodeId = 'test-node';
+
+          const services = [];
+
+          // Add creating replicas
+          for (let i = 0; i < creatingCount; i++) {
+            services.push({
+              service_id: `creating-${i}`,
+              node_id: nodeId,
+              service_type: 'partition',
+              partition_id: `partition-creating-${i}`,
+              status: 'creating',
+            });
+          }
+
+          // Add syncing replicas
+          for (let i = 0; i < syncingCount; i++) {
+            services.push({
+              service_id: `syncing-${i}`,
+              node_id: nodeId,
+              service_type: 'partition',
+              partition_id: `partition-syncing-${i}`,
+              status: 'syncing',
+            });
+          }
+
+          // Add removing replicas
+          for (let i = 0; i < removingCount; i++) {
+            services.push({
+              service_id: `removing-${i}`,
+              node_id: nodeId,
+              service_type: 'partition',
+              partition_id: `partition-removing-${i}`,
+              status: 'removing',
+            });
+          }
+
+          const mockCache = createMockCache(nodeId, services);
+
+          const stateMachine = new ReplicaStateMachine({
+            nodeId,
+          });
+
+          const result = await stateMachine.handleNodeRecovery({
+            systemTableCache: mockCache,
+            nodeId,
+          });
+
+          stateMachine.clear();
+
+          return result.creatingToFailed === creatingCount &&
+            result.syncingToFailed === syncingCount &&
+            result.removingToRemoved === removingCount &&
+            result.total === creatingCount + syncingCount + removingCount;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('mixed transitional replicas are all handled');
+  });
+
+  /**
+   * Property: Active replicas are not affected by recovery.
+   */
+  t.test('active replicas are not affected by recovery', async (t) => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uuid(), // service_id
+        fc.uuid(), // partition_id
+        async (serviceId, partitionId) => {
+          const nodeId = 'test-node';
+
+          // Active replica should not be processed
+          const services = [
+            {
+              service_id: serviceId,
+              node_id: nodeId,
+              service_type: 'partition',
+              partition_id: partitionId,
+              status: 'active',
+            },
+          ];
+
+          const mockCache = createMockCache(nodeId, services);
+
+          const stateMachine = new ReplicaStateMachine({
+            nodeId,
+          });
+
+          const result = await stateMachine.handleNodeRecovery({
+            systemTableCache: mockCache,
+            nodeId,
+          });
+
+          stateMachine.clear();
+
+          // No replicas should be processed
+          return result.total === 0;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('active replicas are not affected by recovery');
+  });
+
+  /**
+   * Property: Replicas on other nodes are not affected by recovery.
+   */
+  t.test('replicas on other nodes are not affected', async (t) => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uuid(), // service_id
+        fc.uuid(), // partition_id
+        async (serviceId, partitionId) => {
+          const nodeId = 'test-node';
+          const otherNodeId = 'other-node';
+
+          // Replica on different node in transitional state
+          const services = [
+            {
+              service_id: serviceId,
+              node_id: otherNodeId, // Different node
+              service_type: 'partition',
+              partition_id: partitionId,
+              status: 'creating',
+            },
+          ];
+
+          const mockCache = createMockCache(nodeId, services);
+
+          const stateMachine = new ReplicaStateMachine({
+            nodeId,
+          });
+
+          const result = await stateMachine.handleNodeRecovery({
+            systemTableCache: mockCache,
+            nodeId,
+          });
+
+          stateMachine.clear();
+
+          // No replicas should be processed (different node)
+          return result.total === 0;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('replicas on other nodes are not affected');
+  });
+
+  /**
+   * Property: Recovery emits recoveryComplete event with correct counts.
+   */
+  t.test('recoveryComplete event is emitted with correct counts', async (t) => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({min: 0, max: 3}), // creating count
+        fc.integer({min: 0, max: 3}), // syncing count
+        fc.integer({min: 0, max: 3}), // removing count
+        async (creatingCount, syncingCount, removingCount) => {
+          const nodeId = 'test-node';
+
+          const services = [];
+
+          for (let i = 0; i < creatingCount; i++) {
+            services.push({
+              service_id: `creating-${i}`,
+              node_id: nodeId,
+              service_type: 'partition',
+              partition_id: `partition-creating-${i}`,
+              status: 'creating',
+            });
+          }
+
+          for (let i = 0; i < syncingCount; i++) {
+            services.push({
+              service_id: `syncing-${i}`,
+              node_id: nodeId,
+              service_type: 'partition',
+              partition_id: `partition-syncing-${i}`,
+              status: 'syncing',
+            });
+          }
+
+          for (let i = 0; i < removingCount; i++) {
+            services.push({
+              service_id: `removing-${i}`,
+              node_id: nodeId,
+              service_type: 'partition',
+              partition_id: `partition-removing-${i}`,
+              status: 'removing',
+            });
+          }
+
+          const mockCache = createMockCache(nodeId, services);
+
+          const stateMachine = new ReplicaStateMachine({
+            nodeId,
+          });
+
+          let emittedEvent = null;
+          stateMachine.on('recoveryComplete', (event) => {
+            emittedEvent = event;
+          });
+
+          await stateMachine.handleNodeRecovery({
+            systemTableCache: mockCache,
+            nodeId,
+          });
+
+          stateMachine.clear();
+
+          return emittedEvent !== null &&
+            emittedEvent.nodeId === nodeId &&
+            emittedEvent.creatingToFailed === creatingCount &&
+            emittedEvent.syncingToFailed === syncingCount &&
+            emittedEvent.removingToRemoved === removingCount &&
+            emittedEvent.total === creatingCount + syncingCount + removingCount;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('recoveryComplete event is emitted with correct counts');
+  });
+
+  /**
+   * Property: Recovery handles empty cache gracefully.
+   */
+  t.test('recovery handles empty cache gracefully', async (t) => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uuid(), // nodeId
+        async (nodeId) => {
+          const services = [];
+          const mockCache = createMockCache(nodeId, services);
+
+          const stateMachine = new ReplicaStateMachine({
+            nodeId,
+          });
+
+          const result = await stateMachine.handleNodeRecovery({
+            systemTableCache: mockCache,
+            nodeId,
+          });
+
+          stateMachine.clear();
+
+          return result.total === 0 &&
+            result.creatingToFailed === 0 &&
+            result.syncingToFailed === 0 &&
+            result.removingToRemoved === 0;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('recovery handles empty cache gracefully');
+  });
+
+  /**
+   * Property: Recovery handles missing cache gracefully.
+   */
+  t.test('recovery handles missing cache gracefully', async (t) => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uuid(), // nodeId
+        async (nodeId) => {
+          const stateMachine = new ReplicaStateMachine({
+            nodeId,
+          });
+
+          // Call without systemTableCache
+          const result = await stateMachine.handleNodeRecovery({
+            nodeId,
+          });
+
+          stateMachine.clear();
+
+          return result.total === 0;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('recovery handles missing cache gracefully');
   });
 });

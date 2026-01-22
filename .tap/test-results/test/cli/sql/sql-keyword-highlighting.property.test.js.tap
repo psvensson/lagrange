@@ -1,3 +1,41 @@
 TAP version 14
-ok 1 - Property 22: SQL Keyword Highlighting # SKIP filter: /SystemTableCache/
+# Subtest: Property 22: SQL Keyword Highlighting
+    # Subtest: all SQL keywords are highlighted
+        ok 1 - all SQL keywords are highlighted
+        1..1
+    ok 1 - all SQL keywords are highlighted # time=9.788ms
+    
+    # Subtest: keyword highlighting is case-insensitive
+        ok 1 - keyword highlighting is case-insensitive
+        1..1
+    ok 2 - keyword highlighting is case-insensitive # time=1.406ms
+    
+    # Subtest: stripping highlighting returns original text
+        ok 1 - stripping highlighting returns original text
+        1..1
+    ok 3 - stripping highlighting returns original text # time=4.283ms
+    
+    # Subtest: keywords inside strings are not highlighted
+        ok 1 - keywords inside strings are not highlighted
+        1..1
+    ok 4 - keywords inside strings are not highlighted # time=1.149ms
+    
+    # Subtest: keywords inside comments are not highlighted as keywords
+        ok 1 - keywords inside comments are not highlighted as keywords
+        1..1
+    ok 5 - keywords inside comments are not highlighted as keywords # time=0.92ms
+    
+    # Subtest: highlighting preserves non-keyword text
+        ok 1 - highlighting preserves non-keyword text
+        1..1
+    ok 6 - highlighting preserves non-keyword text # time=1.953ms
+    
+    # Subtest: multiple keywords in same query are all highlighted
+        ok 1 - multiple keywords in same query are all highlighted
+        1..1
+    ok 7 - multiple keywords in same query are all highlighted # time=1.02ms
+    
+    1..7
+ok 1 - Property 22: SQL Keyword Highlighting # time=25.188ms
+
 1..1

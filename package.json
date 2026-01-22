@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@fastify/websocket": "^11.2.0",
+    "@markwylde/liferaft": "^1.4.0",
     "ajv": "^8.17.1",
     "better-sqlite3": "^11.7.0",
     "blessed": "^0.1.81",

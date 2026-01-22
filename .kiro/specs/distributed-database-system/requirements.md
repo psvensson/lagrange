@@ -25,6 +25,10 @@ The system uses Raft consensus for both data partitions and message routing, wit
 - **Message_Group**: A three-replica Raft group handling inter-service communication with in-memory storage
 - **Node_Service**: The administrative service present on every node
 - **Replica**: An instance of a partition or message group service
+- **Replica_Status**: The lifecycle state of a replica (starting, syncing, active, stopping, stopped, failed)
+- **Replica_Lifecycle_Manager**: The component on each node responsible for handling replica creation and removal requests
+- **CREATE_REPLICA_Message**: A message sent from a partition leader to a target node instructing it to create a new replica
+- **REMOVE_REPLICA_Message**: A message sent from a partition leader to a target node instructing it to remove an existing replica
 - **CDC**: Change Data Capture - notifications of data changes
 - **Seed_Node**: The first node in the system that creates initial system tables
 - **System_Tables**: Core tables (tables, partitions, indices, message-groups, nodes, services)
@@ -114,6 +118,8 @@ The system uses Raft consensus for both data partitions and message routing, wit
 18. THE System SHALL route incoming messages from remote message group replicas to local services
 19. WHEN message groups initialize, THE System SHALL allow them to start with empty caches and populate caches via CDC events from system table partitions
 20. THE System SHALL NOT require message groups to have populated caches before system table partitions can be created
+21. THE System SHALL use InMemoryTransport ONLY during initial service instantiation within a single node before message groups are operational
+22. AFTER the initial bootstrap phase completes, THE System SHALL route ALL communication through the message router (MessageGroupTransport for local routing, WebSocket for cross-node routing)
 
 ### Requirement 5: System Table Cache Integrity
 
@@ -216,7 +222,43 @@ The system uses Raft consensus for both data partitions and message routing, wit
 18. WHEN a node fails, THE System SHALL create replacement replicas on healthy nodes to restore the policy's target replica count
 19. THE System SHALL place new replicas on healthy nodes with available capacity according to placement policy constraints
 
-### Requirement 10: Protocol Support
+### Requirement 10: Replica Lifecycle Management
+
+**User Story:** As a partition leader, I want to create and remove replicas on remote nodes, so that the rebalancer's placement decisions are actually executed.
+
+#### Acceptance Criteria
+
+1. WHEN the Rebalancer generates an ADD move, THE Partition_Leader SHALL send a CREATE_REPLICA message to the target node via message groups
+2. THE CREATE_REPLICA message SHALL contain: partition_id, table_name, replica_id, leader_address, key_range, and schema
+3. WHEN a node receives a CREATE_REPLICA message, THE Replica_Lifecycle_Manager SHALL create a new PartitionService instance with status 'starting'
+4. WHEN the PartitionService is created, THE Replica_Lifecycle_Manager SHALL register it with the local message group for Raft communication
+5. WHEN the PartitionService is registered, THE System SHALL initiate Raft log synchronization from the leader
+6. DURING Raft log synchronization, THE replica SHALL have status 'syncing'
+7. WHEN Raft log synchronization completes, THE replica SHALL update its status to 'active' via CDC
+8. IF replica creation fails at any step, THE Replica_Lifecycle_Manager SHALL update the service status to 'failed' via CDC
+9. THE System SHALL NOT create duplicate replicas if a CREATE_REPLICA message is received for an already-existing replica
+10. WHEN the Rebalancer generates a REMOVE move, THE Partition_Leader SHALL send a REMOVE_REPLICA message to the target node via message groups
+11. THE REMOVE_REPLICA message SHALL contain: partition_id, replica_id, and reason
+12. WHEN a node receives a REMOVE_REPLICA message, THE Replica_Lifecycle_Manager SHALL gracefully stop the PartitionService
+13. BEFORE stopping, THE PartitionService SHALL complete any in-flight operations and flush pending writes
+14. WHEN the PartitionService is stopped, THE Replica_Lifecycle_Manager SHALL update the service status to 'stopped' via CDC
+15. WHEN the service status is 'stopped', THE Replica_Lifecycle_Manager SHALL delete the service row from the services table via CDC
+16. THE Replica_Lifecycle_Manager SHALL clean up local resources (SQLite files) after the service is stopped
+17. THE System SHALL define replica statuses: 'starting', 'syncing', 'active', 'stopping', 'stopped', 'failed'
+18. THE valid status transitions SHALL be: starting→syncing→active, active→stopping→stopped, and any→failed
+19. THE System SHALL reject invalid status transitions and log an error
+20. WHEN sending a CREATE_REPLICA or REMOVE_REPLICA message, THE Leader SHALL wait for acknowledgment within timeout (default 30 seconds)
+21. IF acknowledgment is not received within timeout, THE Leader SHALL retry the message up to 3 times with exponential backoff
+22. WHEN a move fails after max retries, THE System SHALL log an error and mark the pending move as failed
+23. WHEN calculating new moves, THE Rebalancer SHALL exclude replicas with status 'starting', 'syncing', or 'stopping' (pending operations)
+24. THE Rebalancer SHALL NOT generate ADD moves for partitions that already have a pending ADD operation
+25. THE Rebalancer SHALL NOT generate REMOVE moves for replicas that already have a pending REMOVE operation
+26. IF the target node fails during replica creation, THE System SHALL mark the pending move as failed after timeout
+27. IF the leader node fails during replica creation, THE new leader SHALL detect orphaned 'starting' replicas and clean them up
+28. WHEN a failed node recovers, THE Replica_Lifecycle_Manager SHALL check for incomplete operations and resume or clean up
+29. THE System SHALL log all lifecycle messages (CREATE_REPLICA, REMOVE_REPLICA) and status transitions at INFO level
+
+### Requirement 11: Protocol Support
 
 **User Story:** As a system tester, I want multiple protocol options, so that I can test the system in different environments.
 
@@ -227,8 +269,12 @@ The system uses Raft consensus for both data partitions and message routing, wit
 3. WHEN services on different nodes communicate, THE System SHALL route messages through WebSocket connections between message group replicas
 4. THE System SHALL abstract protocol details from service logic by using message groups as the unified transport layer
 5. WHEN running tests, THE System SHALL use the same message group infrastructure as production
+6. THE System SHALL use InMemoryTransport ONLY during initial service instantiation on a single node before message groups are operational
+7. AFTER message groups are operational, THE System SHALL route ALL communication (including same-node) through the message router (MessageGroupTransport + WebSocket)
+8. THE System SHALL establish WebSocket connections between nodes during node joining and maintain them for all subsequent inter-node communication
+9. THE System SHALL NOT use InMemoryTransport for any communication after the initial bootstrap phase completes
 
-### Requirement 11: Configuration Management
+### Requirement 12: Configuration Management
 
 **User Story:** As a developer, I want centralized configuration, so that the system avoids magic numbers and maintains consistency.
 
@@ -240,7 +286,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 4. THE System SHALL provide clear configuration categories for different system aspects
 5. THE System SHALL validate configuration values at startup
 
-### Requirement 12: Code Quality and Maintainability
+### Requirement 13: Code Quality and Maintainability
 
 **User Story:** As a developer, I want clean and maintainable code, so that the system remains simple and reliable over time.
 
@@ -252,7 +298,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 4. THE System SHALL avoid conditional compilation or feature flags for core functionality
 5. THE System SHALL follow Google JavaScript lint rules consistently
 
-### Requirement 13: Index Management
+### Requirement 14: Index Management
 
 **User Story:** As a database user, I want efficient data retrieval through indices, so that queries perform well on large datasets.
 
@@ -264,7 +310,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 4. WHEN queries are executed, THE System SHALL use appropriate indices for optimization
 5. THE System SHALL distribute index data across the same partitions as the base table data
 
-### Requirement 14: Table Policy Management
+### Requirement 15: Table Policy Management
 
 **User Story:** As a database administrator, I want configurable table policies, so that I can control partition behavior based on system requirements.
 
@@ -279,7 +325,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 7. WHEN Raft state changes for a service, THE System SHALL update the service's raft_role value
 8. THE System SHALL propagate raft_role updates via CDC to all message group caches
 
-### Requirement 15: Fault Tolerance and Recovery
+### Requirement 16: Fault Tolerance and Recovery
 
 **User Story:** As a system operator, I want the system to handle failures gracefully, so that data remains available despite node or network issues.
 
@@ -291,7 +337,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 4. WHEN failed nodes recover, THE System SHALL reintegrate them and rebalance replicas
 5. THE System SHALL maintain data availability as long as a majority of replicas remain accessible
 
-### Requirement 16: SQL Write Operations
+### Requirement 17: SQL Write Operations
 
 **User Story:** As a database client, I want to modify data through SQL commands, so that I can maintain application state in the distributed database.
 
@@ -304,7 +350,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 5. WHEN a write operation affects only a single partition, THE System SHALL support transaction semantics as defined in Requirement 21
 6. WHEN a write operation would affect multiple partitions outside a transaction, THE System SHALL execute writes independently to each partition
 
-### Requirement 17: Centralized Logging
+### Requirement 18: Centralized Logging
 
 **User Story:** As a system operator, I want comprehensive logging across all system components, so that I can monitor, debug, and audit system behavior.
 
@@ -316,7 +362,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 4. THE System SHALL include structured logging with consistent metadata (node_id, service_id, timestamp, trace_id)
 5. THE System SHALL log all critical operations including node joins, replica movements, partition splits, and authentication events
 
-### Requirement 18: Message Retry and Failure Handling
+### Requirement 19: Message Retry and Failure Handling
 
 **User Story:** As a distributed system component, I want failed message deliveries to be retried intelligently, so that the system remains resilient to transient failures and routing changes.
 
@@ -330,7 +376,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 6. THE System SHALL maintain local metadata cache with TTL (default 30 seconds) to reduce query overhead
 7. WHEN cached metadata expires or is missing, THE System SHALL query system partitions directly and update the cache
 
-### Requirement 19: Single Executable Packaging
+### Requirement 20: Single Executable Packaging
 
 **User Story:** As a system administrator, I want both the distributed database system and the admin CLI tool to be available as free-standing single executables, so that I can deploy and run them without managing dependencies.
 
@@ -344,7 +390,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 6. WHEN the single executable starts, THE System SHALL behave identically to the non-packaged version
 7. THE build process SHALL produce executables that can be distributed and run on standard Linux distributions
 
-### Requirement 20: Autonomous Replica Management
+### Requirement 21: Autonomous Replica Management
 
 **User Story:** As a system architect, I want replica placement and management to be fully autonomous, so that the system optimally manages resources without operator intervention and maintains architectural consistency across all table types.
 
@@ -356,7 +402,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 4. WHEN policies change, THE System SHALL automatically adjust replica placement to comply with new policies without operator intervention
 5. THE System SHALL ensure replica counts remain odd numbers (3, 5, 7, etc.) at all times for Raft quorum requirements
 
-### Requirement 21: Transparent Partition Key Management
+### Requirement 22: Transparent Partition Key Management
 
 **User Story:** As a database user, I want to use standard SQL without thinking about partitions, so that the system handles data distribution automatically.
 
@@ -373,7 +419,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 9. THE System SHALL validate partition range integrity after every split or merge operation
 10. THE System SHALL expose partitioning details only in system tables for operators, never in user-facing query results
 
-### Requirement 22: Single-Partition Transaction Semantics
+### Requirement 23: Single-Partition Transaction Semantics
 
 **User Story:** As a database user, I want ACID transactions within a partition, so that my data remains consistent.
 
@@ -387,7 +433,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 6. THE System SHALL ensure transaction durability through Raft replication before acknowledging commits
 7. WHEN concurrent transactions access the same partition, THE System SHALL use SQLite's locking mechanisms to prevent conflicts
 
-### Requirement 23: Distributed Read-Only Queries
+### Requirement 24: Distributed Read-Only Queries
 
 **User Story:** As a database user, I want to query and join data across partitions, so that I can analyze distributed datasets.
 
@@ -401,7 +447,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 6. WHEN aggregating results, THE System SHALL preserve SQL semantics for ORDER BY, GROUP BY, and LIMIT clauses
 7. THE System SHALL support cross-partition queries for COUNT, SUM, AVG, MIN, and MAX aggregate functions
 
-### Requirement 24: Consistency Guarantees
+### Requirement 25: Consistency Guarantees
 
 **User Story:** As a database user, I want strong consistency guarantees equivalent to CockroachDB, so that my application logic is simple and correct without worrying about distributed system anomalies.
 
@@ -418,7 +464,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 9. WHEN conflicts are detected between concurrent transactions, THE System SHALL abort one transaction and automatically retry it
 10. THE System SHALL provide these consistency guarantees even in the presence of network partitions, node failures, and clock skew
 
-### Requirement 25: Authentication and Authorization
+### Requirement 26: Authentication and Authorization
 
 **User Story:** As a system administrator, I want secure authentication and authorization using Keycloak, so that only authorized services and users can access the system.
 
@@ -435,7 +481,7 @@ The system uses Raft consensus for both data partitions and message routing, wit
 9. THE System SHALL support configurable Keycloak realm and client settings via environment variables or configuration files
 10. THE System SHALL log all authentication and authorization events for security auditing
 
-### Requirement 26: Performance and Scalability Limits
+### Requirement 27: Performance and Scalability Limits
 
 **User Story:** As a system architect, I want clear performance targets and scalability limits, so that I can design applications that meet user expectations and understand when to scale the system.
 

@@ -27,3 +27,23 @@ export {
   NodeStatus as ReintegrationNodeStatus,
   ReintegrationStatus,
 } from './node-reintegration-service.js';
+
+export {
+  ReplicaLifecycleManager,
+  ReplicaStatus as LifecycleReplicaStatus,
+  VALID_STATUS_TRANSITIONS,
+  MessageType as LifecycleMessageType,
+  AckStatus,
+} from './replica-lifecycle-manager.js';
+
+export {
+  ReplicaStateMachine,
+  ReplicaState,
+  VALID_TRANSITIONS,
+} from './replica-state-machine.js';
+
+export {
+  ReplicaHandler,
+  MessageType as ReplicaHandlerMessageType,
+  ResponseStatus as ReplicaHandlerResponseStatus,
+} from './replica-handler.js';

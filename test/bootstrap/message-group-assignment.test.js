@@ -177,14 +177,14 @@ test('MessageGroupAssignment - buildReplicaAddresses', async (t) => {
   const assignment = new MessageGroupAssignment();
 
   const addresses = assignment.buildReplicaAddresses(
-    'ws://localhost:8080',
+    'node-1',
     ['mg-1-r0', 'mg-1-r1', 'mg-1-r2'],
   );
 
   t.equal(addresses.length, 3);
-  t.equal(addresses[0], 'ws://localhost:8080/services/mg-1-r0');
-  t.equal(addresses[1], 'ws://localhost:8080/services/mg-1-r1');
-  t.equal(addresses[2], 'ws://localhost:8080/services/mg-1-r2');
+  t.equal(addresses[0], 'node-1/message-group/mg-1-r0');
+  t.equal(addresses[1], 'node-1/message-group/mg-1-r1');
+  t.equal(addresses[2], 'node-1/message-group/mg-1-r2');
 });
 
 test('MessageGroupAssignment - validateAssignment', async (t) => {

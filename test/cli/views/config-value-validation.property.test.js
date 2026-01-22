@@ -206,7 +206,7 @@ test('Property 44: Config View Value Validation', async (t) => {
         (type, num) => {
           const view = new ConfigView();
           view.setData([
-            {key: 'test_config', value: 0, type, requires_restart: false},
+            {config_key: 'test_config', config_value: 0, value_type: type, requires_restart: false},
           ]);
 
           // For number type, integer string should be valid

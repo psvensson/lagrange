@@ -42,11 +42,11 @@ afterEach(async () => {
 test('Property 24: Exponential backoff delays increase exponentially', async (t) => {
   await fc.assert(
     fc.asyncProperty(
-      // Generate retry configuration
+      // Generate retry configuration - use noNaN to avoid NaN values
       fc.record({
         initialDelayMs: fc.integer({min: 10, max: 100}),
         maxDelayMs: fc.integer({min: 500, max: 2000}),
-        backoffMultiplier: fc.double({min: 1.5, max: 3.0}),
+        backoffMultiplier: fc.double({min: 1.5, max: 3.0, noNaN: true}),
       }),
       async (config) => {
         retryHandler = new MessageRetryHandler({

@@ -9,13 +9,13 @@ import {NodeService, NodeStatus} from '../../src/node/node-service.js';
 import {NodeJoiningService, JoiningPhase} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
-import {InMemoryTransport} from '../../src/transport/in-memory-transport.js';
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
 
 /**
  * Initialize test environment with fast Raft elections.
@@ -80,13 +80,15 @@ test('Multi-node cluster integration tests', async (t) => {
     const port = seedApi.getFastify().server.address().port;
 
     // Create joining service for new node (must use valid UUID)
+    // wsPort is required for WebSocket server to enable Raft message routing
     const joiningService = new NodeJoiningService({
       nodeId: '550e8400-e29b-41d4-a716-446655440002',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: `http://localhost:${port}`,
+      wsPort: 9090,
       config: {
         httpTimeoutMs: 5000,
-        leadershipWaitTimeoutMs: 5000,
+        leadershipWaitTimeoutMs: 2000,
         leadershipWaitInitialDelayMs: 50,
         leadershipWaitMaxDelayMs: 500,
       },
@@ -173,83 +175,115 @@ test('Multi-node cluster integration tests', async (t) => {
   });
 
   t.test('message routing - local message delivery', async (t) => {
-    const transport = new InMemoryTransport();
+    const port = 23000;
+    const nodeId = 'node-1';
+    const router = new MessageRouter({nodeId, wsPort: port});
+    const messageGroups = [];
 
-    // Create message group service
-    const messageGroup = new MessageGroupService({
-      groupId: 'mg-1',
-      replicaId: 'mg-1-r1',
-      nodeId: 'node-1',
-      replicaIds: ['mg-1-r1'],
-      transport,
-      isSelfHostedGroup: true,
-    });
+    try {
+      await router.initialize({startServer: true});
 
-    // Register with transport
-    transport.register('mg-1-r1', (envelope) => {
-      return messageGroup.receiveMessage(envelope);
-    });
+      // Create 3-replica message group (all on same node for this test)
+      const replicaIds = ['mg-1-r1', 'mg-1-r2', 'mg-1-r3'];
 
-    await messageGroup.initialize();
+      for (const replicaId of replicaIds) {
+        const messageGroup = new MessageGroupService({
+          groupId: 'mg-1',
+          replicaId,
+          nodeId,
+          replicaIds,
+          transport: router,
+        });
 
-    // Wait for leader election
-    await new Promise((resolve) => setTimeout(resolve, 200));
+        // Register with router using unified address format
+        const address = `${nodeId}/message-group/${replicaId}`;
+        router.register(address, (envelope) => {
+          return messageGroup.receiveMessage(envelope);
+        });
 
-    t.equal(messageGroup.isLeaderReplica(), true, 'should be leader');
+        await messageGroup.initialize();
+        messageGroups.push(messageGroup);
+      }
 
-    // Send a message
-    const result = await messageGroup.sendMessage('target-service', {
-      action: 'test',
-      data: 'hello',
-    });
+      // Poll for leader election (should complete within 300ms with fast Raft config)
+      let leader = null;
+      for (let i = 0; i < 10 && !leader; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        leader = messageGroups.find((mg) => mg.isLeaderReplica());
+      }
+      t.ok(leader, 'should have elected a leader');
 
-    t.ok(result.messageId, 'should have message ID');
-    t.ok(['delivered', 'pending'].includes(result.status.toLowerCase()) ||
-         result.deliveryType, 'should have delivery status');
+      // Send a message from the leader to a registered target
+      // Register a target service handler to receive the message
+      const targetAddress = `${nodeId}/service/target-service`;
+      let receivedMessage = null;
+      router.register(targetAddress, (envelope) => {
+        receivedMessage = envelope;
+        return {acknowledged: true, status: 'received'};
+      });
 
-    // Cleanup
-    await messageGroup.shutdown();
+      const result = await leader.sendMessage(targetAddress, {
+        action: 'test',
+        data: 'hello',
+      });
+
+      t.ok(result.messageId, 'should have message ID');
+      t.ok(['delivered', 'pending'].includes(result.status.toLowerCase()) ||
+           result.deliveryType, 'should have delivery status');
+
+      // Cleanup
+      for (const mg of messageGroups) {
+        await mg.shutdown();
+      }
+    } finally {
+      await router.shutdown();
+    }
   });
 
   t.test('message routing - cross-replica communication', async (t) => {
-    const transport = new InMemoryTransport();
+    const port = 23001;
+    const nodeId = 'node-1';
+    const router = new MessageRouter({nodeId, wsPort: port});
+    const replicas = [];
 
-    // Create two message group replicas
-    const replica1 = new MessageGroupService({
-      groupId: 'mg-cross',
-      replicaId: 'mg-cross-r1',
-      nodeId: 'node-1',
-      replicaIds: ['mg-cross-r1', 'mg-cross-r2'],
-      transport,
-      isSelfHostedGroup: true,
-    });
+    try {
+      await router.initialize({startServer: true});
 
-    const replica2 = new MessageGroupService({
-      groupId: 'mg-cross',
-      replicaId: 'mg-cross-r2',
-      nodeId: 'node-1',
-      replicaIds: ['mg-cross-r1', 'mg-cross-r2'],
-      transport,
-      isSelfHostedGroup: true,
-    });
+      // Create 3-replica message group for proper Raft consensus
+      const replicaIds = ['mg-cross-r1', 'mg-cross-r2', 'mg-cross-r3'];
 
-    // Register both with transport
-    transport.register('mg-cross-r1', (envelope) => replica1.receiveMessage(envelope));
-    transport.register('mg-cross-r2', (envelope) => replica2.receiveMessage(envelope));
+      for (const replicaId of replicaIds) {
+        const replica = new MessageGroupService({
+          groupId: 'mg-cross',
+          replicaId,
+          nodeId,
+          replicaIds,
+          transport: router,
+        });
 
-    await replica1.initialize();
-    await replica2.initialize();
+        // Register with router using unified address format
+        const address = `${nodeId}/message-group/${replicaId}`;
+        router.register(address, (envelope) => replica.receiveMessage(envelope));
 
-    // Wait for leader election
-    await new Promise((resolve) => setTimeout(resolve, 300));
+        await replica.initialize();
+        replicas.push(replica);
+      }
 
-    // One should be leader
-    const hasLeader = replica1.isLeaderReplica() || replica2.isLeaderReplica();
-    t.equal(hasLeader, true, 'one replica should be leader');
+      // Poll for leader election (should complete within 300ms with fast Raft config)
+      let leader = null;
+      for (let i = 0; i < 10 && !leader; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        leader = replicas.find((r) => r.isLeaderReplica());
+      }
+      t.ok(leader, '3-replica group should elect a leader');
 
-    // Cleanup
-    await replica1.shutdown();
-    await replica2.shutdown();
+      // Cleanup
+      for (const replica of replicas) {
+        await replica.shutdown();
+      }
+    } finally {
+      await router.shutdown();
+    }
   });
 
   t.test('rebalancer - maintains odd replica count', async (t) => {

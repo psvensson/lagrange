@@ -1,7 +1,27 @@
 TAP version 14
-ok 1 - Property 76: Persistent Storage Path Generation # SKIP filter: /SystemTableCache/
-ok 2 - Property 76: Path contains partitions directory # SKIP filter: /SystemTableCache/
-ok 3 - Property 76: Path ends with .db extension # SKIP filter: /SystemTableCache/
-ok 4 - Property 76: Path contains partition ID # SKIP filter: /SystemTableCache/
-ok 5 - Property 76: Path contains replica ID # SKIP filter: /SystemTableCache/
+# Subtest: Property 76: Persistent Storage Path Generation
+    ok 1 - Property 76: All generated paths follow the expected pattern
+    1..1
+ok 1 - Property 76: Persistent Storage Path Generation # time=5.397ms
+
+# Subtest: Property 76: Path contains partitions directory
+    ok 1 - All paths contain partitions directory
+    1..1
+ok 2 - Property 76: Path contains partitions directory # time=0.876ms
+
+# Subtest: Property 76: Path ends with .db extension
+    ok 1 - All paths end with .db extension
+    1..1
+ok 3 - Property 76: Path ends with .db extension # time=0.922ms
+
+# Subtest: Property 76: Path contains partition ID
+    ok 1 - All paths contain partition ID
+    1..1
+ok 4 - Property 76: Path contains partition ID # time=0.579ms
+
+# Subtest: Property 76: Path contains replica ID
+    ok 1 - All paths contain replica ID
+    1..1
+ok 5 - Property 76: Path contains replica ID # time=0.705ms
+
 1..5

@@ -1,0 +1,27 @@
+TAP version 14
+# Subtest: Property 2: Valid Raft packets are correctly detected
+    ok 1 - Valid Raft packets correctly detected
+    1..1
+ok 1 - Property 2: Valid Raft packets are correctly detected # time=10.255ms
+
+# Subtest: Property 2: Non-Raft payloads are correctly rejected
+    ok 1 - Non-Raft payloads correctly rejected
+    1..1
+ok 2 - Property 2: Non-Raft payloads are correctly rejected # time=5.877ms
+
+# Subtest: Property 2: Payloads without type field are rejected
+    ok 1 - Payloads without type field correctly rejected
+    1..1
+ok 3 - Property 2: Payloads without type field are rejected # time=4.407ms
+
+# Subtest: Property 2: Null/undefined/primitive payloads are rejected
+    ok 1 - Null/undefined/primitive payloads correctly rejected
+    1..1
+ok 4 - Property 2: Null/undefined/primitive payloads are rejected # time=0.551ms
+
+# Subtest: Property 2: Payloads with non-string type are rejected
+    ok 1 - Payloads with non-string type correctly rejected
+    1..1
+ok 5 - Property 2: Payloads with non-string type are rejected # time=1.285ms
+
+1..5

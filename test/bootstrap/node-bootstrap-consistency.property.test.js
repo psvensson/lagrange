@@ -21,6 +21,19 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 
+// Fast config for tests - reduces Raft election and leadership wait times
+const FAST_TEST_CONFIG = {
+  httpTimeoutMs: 2000,
+  leadershipWaitTimeoutMs: 5000,
+  leadershipWaitInitialDelayMs: 10,
+  leadershipWaitMaxDelayMs: 100,
+};
+
+// Get a random port for WebSocket server
+function getRandomWsPort() {
+  return 20000 + Math.floor(Math.random() * 10000);
+}
+
 // Initialize test environment
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -35,9 +48,9 @@ function initializeTestEnvironment() {
   // Override raft config after initialization for faster tests
   config.config.raft = {
     ...config.config.raft,
-    electionTimeoutMinMs: 50,
-    electionTimeoutMaxMs: 100,
-    heartbeatIntervalMs: 25,
+    electionTimeoutMinMs: 25,
+    electionTimeoutMaxMs: 50,
+    heartbeatIntervalMs: 10,
   };
 
   const logging = LoggingService.getInstance();
@@ -48,18 +61,16 @@ function initializeTestEnvironment() {
   NodeService.resetInstance();
 }
 
-// Custom arbitrary for valid node addresses
-const nodeAddressArb = fc.tuple(
-  fc.constantFrom('ws://', 'wss://'),
-  fc.constantFrom('localhost', '127.0.0.1', '192.168.1.1', '10.0.0.1'),
-  fc.integer({min: 1024, max: 65535}),
-).map(([protocol, host, port]) => `${protocol}${host}:${port}`);
+// Custom arbitrary for valid node addresses with random ports
+const nodeAddressArb = fc.integer({min: 30000, max: 40000})
+  .map((port) => `ws://localhost:${port}`);
 
 test('Property 11: Node Bootstrap Consistency', async (t) => {
   await t.test('new node with UUID receives bootstrap response from seed', async (t) => {
     initializeTestEnvironment();
 
     let seedApi = null;
+    let service = null;
 
     try {
       await fc.assert(
@@ -84,17 +95,16 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
             await seedApi.initialize(0);
             const port = seedApi.getFastify().server.address().port;
 
+            // Get wsPort from nodeAddress
+            const wsPort = parseInt(nodeAddress.split(':')[2], 10);
+
             // Requirement 7.2: Contact seed node's REST API with self-generated node ID
-            const service = new NodeJoiningService({
+            service = new NodeJoiningService({
               nodeId,
               nodeAddress,
               seedNodeAddress: `http://localhost:${port}`,
-              config: {
-                httpTimeoutMs: 5000,
-                leadershipWaitTimeoutMs: 5000,
-                leadershipWaitInitialDelayMs: 50,
-                leadershipWaitMaxDelayMs: 500,
-              },
+              wsPort, // Enable WebSocket server for self-connection
+              config: FAST_TEST_CONFIG,
             });
 
             const result = await service.join();
@@ -115,6 +125,7 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
 
             // Cleanup
             await service.cleanup();
+            service = null;
             await seedApi.shutdown();
             seedApi = null;
 
@@ -126,6 +137,9 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
 
       t.pass('All nodes with valid UUIDs successfully bootstrap');
     } finally {
+      if (service) {
+        await service.cleanup();
+      }
       if (seedApi) {
         await seedApi.shutdown();
       }
@@ -136,6 +150,7 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
     initializeTestEnvironment();
 
     let seedApi = null;
+    let service = null;
 
     try {
       await fc.assert(
@@ -143,7 +158,8 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
           fc.constant(null), // No random input needed
           async () => {
             const nodeId = uuidv4();
-            const nodeAddress = 'ws://localhost:9090';
+            const wsPort = getRandomWsPort();
+            const nodeAddress = `ws://localhost:${wsPort}`;
 
             seedApi = new BootstrapAPI({
               seedNodeId: 'seed-node-1',
@@ -154,16 +170,12 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
             await seedApi.initialize(0);
             const port = seedApi.getFastify().server.address().port;
 
-            const service = new NodeJoiningService({
+            service = new NodeJoiningService({
               nodeId,
               nodeAddress,
               seedNodeAddress: `http://localhost:${port}`,
-              config: {
-                httpTimeoutMs: 5000,
-                leadershipWaitTimeoutMs: 5000,
-                leadershipWaitInitialDelayMs: 50,
-                leadershipWaitMaxDelayMs: 500,
-              },
+              wsPort, // Enable WebSocket server for self-connection
+              config: FAST_TEST_CONFIG,
             });
 
             const result = await service.join();
@@ -174,6 +186,7 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
 
             // Cleanup
             await service.cleanup();
+            service = null;
             await seedApi.shutdown();
             seedApi = null;
 
@@ -185,6 +198,9 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
 
       t.pass('Bootstrap response contains partition leaders');
     } finally {
+      if (service) {
+        await service.cleanup();
+      }
       if (seedApi) {
         await seedApi.shutdown();
       }
@@ -195,6 +211,7 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
     initializeTestEnvironment();
 
     let seedApi = null;
+    let service = null;
 
     try {
       await fc.assert(
@@ -202,7 +219,8 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
           fc.constant(null),
           async () => {
             const nodeId = uuidv4();
-            const nodeAddress = 'ws://localhost:9091';
+            const wsPort = getRandomWsPort();
+            const nodeAddress = `ws://localhost:${wsPort}`;
 
             seedApi = new BootstrapAPI({
               seedNodeId: 'seed-node-1',
@@ -213,16 +231,12 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
             await seedApi.initialize(0);
             const port = seedApi.getFastify().server.address().port;
 
-            const service = new NodeJoiningService({
+            service = new NodeJoiningService({
               nodeId,
               nodeAddress,
               seedNodeAddress: `http://localhost:${port}`,
-              config: {
-                httpTimeoutMs: 5000,
-                leadershipWaitTimeoutMs: 5000,
-                leadershipWaitInitialDelayMs: 50,
-                leadershipWaitMaxDelayMs: 500,
-              },
+              wsPort, // Enable WebSocket server for self-connection
+              config: FAST_TEST_CONFIG,
             });
 
             const result = await service.join();
@@ -236,6 +250,7 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
 
             // Cleanup
             await service.cleanup();
+            service = null;
             await seedApi.shutdown();
             seedApi = null;
 
@@ -247,6 +262,9 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
 
       t.pass('New node establishes message group leadership');
     } finally {
+      if (service) {
+        await service.cleanup();
+      }
       if (seedApi) {
         await seedApi.shutdown();
       }
@@ -257,6 +275,8 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
     initializeTestEnvironment();
 
     let seedApi = null;
+    let service1 = null;
+    let service2 = null;
 
     try {
       await fc.assert(
@@ -275,32 +295,26 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
             const port = seedApi.getFastify().server.address().port;
 
             // First node joins successfully
-            const service1 = new NodeJoiningService({
+            const wsPort1 = getRandomWsPort();
+            service1 = new NodeJoiningService({
               nodeId,
-              nodeAddress: 'ws://localhost:9092',
+              nodeAddress: `ws://localhost:${wsPort1}`,
               seedNodeAddress: `http://localhost:${port}`,
-              config: {
-                httpTimeoutMs: 5000,
-                leadershipWaitTimeoutMs: 5000,
-                leadershipWaitInitialDelayMs: 50,
-                leadershipWaitMaxDelayMs: 500,
-              },
+              wsPort: wsPort1, // Enable WebSocket server for self-connection
+              config: FAST_TEST_CONFIG,
             });
 
             const result1 = await service1.join();
             const firstJoinSuccess = result1.success;
 
             // Second node with same ID should fail
-            const service2 = new NodeJoiningService({
+            const wsPort2 = getRandomWsPort();
+            service2 = new NodeJoiningService({
               nodeId, // Same node ID
-              nodeAddress: 'ws://localhost:9093',
+              nodeAddress: `ws://localhost:${wsPort2}`,
               seedNodeAddress: `http://localhost:${port}`,
-              config: {
-                httpTimeoutMs: 5000,
-                leadershipWaitTimeoutMs: 5000,
-                leadershipWaitInitialDelayMs: 50,
-                leadershipWaitMaxDelayMs: 500,
-              },
+              wsPort: wsPort2, // Enable WebSocket server for self-connection
+              config: FAST_TEST_CONFIG,
             });
 
             const result2 = await service2.join();
@@ -308,7 +322,9 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
 
             // Cleanup
             await service1.cleanup();
+            service1 = null;
             await service2.cleanup();
+            service2 = null;
             await seedApi.shutdown();
             seedApi = null;
 
@@ -320,6 +336,12 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
 
       t.pass('Duplicate node IDs are rejected');
     } finally {
+      if (service1) {
+        await service1.cleanup();
+      }
+      if (service2) {
+        await service2.cleanup();
+      }
       if (seedApi) {
         await seedApi.shutdown();
       }

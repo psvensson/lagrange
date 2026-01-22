@@ -129,6 +129,7 @@ const CONFIG_SCHEMA = {
         nodeCpuThreshold: {type: 'number', minimum: 0, maximum: 1},
         nodeMemoryThreshold: {type: 'number', minimum: 0, maximum: 1},
         nodeDiskThreshold: {type: 'number', minimum: 0, maximum: 1},
+        stabilizationPeriodMs: {type: 'number', minimum: 1000, maximum: 10000},
       },
       additionalProperties: false,
     },
@@ -184,7 +185,7 @@ const DEFAULT_CONFIG = {
   },
   raft: {
     electionTimeoutMinMs: 150,
-    electionTimeoutMaxMs: 300,
+    electionTimeoutMaxMs: 1000,
     heartbeatIntervalMs: 50,
     snapshotThreshold: 10000,
     maxLogEntriesPerAppend: 100,
@@ -244,14 +245,15 @@ const DEFAULT_CONFIG = {
     syncOnStartup: true,
   },
   rebalancer: {
-    periodicCheckIntervalMs: 60000, // 1 minute
-    periodicCheckJitterMs: 10000, // ±10 seconds
-    criticalCheckDelayMs: 5000, // 5 seconds delay for critical events
+    periodicCheckIntervalMs: 10000, // 10 seconds - fast checks for small clusters
+    periodicCheckJitterMs: 2000, // ±2 seconds
+    criticalCheckDelayMs: 1000, // 1 second delay for critical events
     maxConcurrentMoves: 5, // Max concurrent replica moves
     moveTimeoutMs: 300000, // 5 minutes timeout per move
     nodeCpuThreshold: 0.8, // 80% CPU threshold
     nodeMemoryThreshold: 0.8, // 80% memory threshold
     nodeDiskThreshold: 0.9, // 90% disk threshold
+    stabilizationPeriodMs: 5000, // 5 seconds stabilization period (Req 2.1)
   },
   queryCoordinator: {
     maxParallelPartitions: 1000, // Max partitions per query (Req 26.2)

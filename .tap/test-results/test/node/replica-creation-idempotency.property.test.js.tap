@@ -1,0 +1,26 @@
+TAP version 14
+# Subtest: Property 78: Replica Creation Idempotency
+    # Subtest: duplicate CREATE_REPLICA returns in_progress
+        ok 1 - duplicate CREATE_REPLICA returns in_progress
+        1..1
+    ok 1 - duplicate CREATE_REPLICA returns in_progress # time=8.445ms
+    
+    # Subtest: only one service row inserted for duplicates
+        ok 1 - only one service row inserted for duplicates
+        1..1
+    ok 2 - only one service row inserted for duplicates # time=2.128ms
+    
+    # Subtest: pre-existing replica returns already_exists with no CDC ops
+        ok 1 - pre-existing replica returns already_exists with no CDC ops
+        1..1
+    ok 3 - pre-existing replica returns already_exists with no CDC ops # time=1.387ms
+    
+    # Subtest: replica in any status returns idempotent response
+        ok 1 - replica in any status returns idempotent response
+        1..1
+    ok 4 - replica in any status returns idempotent response # time=1.297ms
+    
+    1..4
+ok 1 - Property 78: Replica Creation Idempotency # time=121.674ms
+
+1..1

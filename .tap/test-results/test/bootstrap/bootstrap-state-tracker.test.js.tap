@@ -1,20 +1,193 @@
 TAP version 14
-ok 1 - setup # SKIP filter: /SystemTableCache/
-ok 2 - BootstrapPhase enum # SKIP filter: /SystemTableCache/
-ok 3 - PHASE_DESCRIPTIONS # SKIP filter: /SystemTableCache/
-ok 4 - BootstrapStateTracker initialization # SKIP filter: /SystemTableCache/
-ok 5 - BootstrapStateTracker startTracking # SKIP filter: /SystemTableCache/
-ok 6 - BootstrapStateTracker transitionToPhase # SKIP filter: /SystemTableCache/
-ok 7 - BootstrapStateTracker phase history # SKIP filter: /SystemTableCache/
-ok 8 - BootstrapStateTracker recordServiceCreated # SKIP filter: /SystemTableCache/
-ok 9 - BootstrapStateTracker recordServiceCreated message_group # SKIP filter: /SystemTableCache/
-ok 10 - BootstrapStateTracker recordRaftStateChange # SKIP filter: /SystemTableCache/
-ok 11 - BootstrapStateTracker recordError # SKIP filter: /SystemTableCache/
-ok 12 - BootstrapStateTracker completeTracking success # SKIP filter: /SystemTableCache/
-ok 13 - BootstrapStateTracker completeTracking failure # SKIP filter: /SystemTableCache/
-ok 14 - BootstrapStateTracker isInProgress # SKIP filter: /SystemTableCache/
-ok 15 - BootstrapStateTracker reset # SKIP filter: /SystemTableCache/
-ok 16 - BootstrapStateTracker setNodeId # SKIP filter: /SystemTableCache/
-ok 17 - BootstrapStateTracker getState includes all fields # SKIP filter: /SystemTableCache/
-ok 18 - cleanup # SKIP filter: /SystemTableCache/
+# Subtest: setup
+    ok 1 - configuration initialized
+    1..1
+ok 1 - setup # time=50.61ms
+
+# Subtest: BootstrapPhase enum
+    ok 1 - should have NOT_STARTED
+    ok 2 - should have INFRASTRUCTURE
+    ok 3 - should have MESSAGE_GROUPS
+    ok 4 - should have PARTITIONS
+    ok 5 - should have REGISTRATION
+    ok 6 - should have COMPLETE
+    ok 7 - should have FAILED
+    1..7
+ok 2 - BootstrapPhase enum # time=0.894ms
+
+# Subtest: PHASE_DESCRIPTIONS
+    ok 1 - should have NOT_STARTED description
+    ok 2 - should have INFRASTRUCTURE description
+    ok 3 - should have MESSAGE_GROUPS description
+    ok 4 - should have PARTITIONS description
+    ok 5 - should have REGISTRATION description
+    ok 6 - should have COMPLETE description
+    ok 7 - should have FAILED description
+    1..7
+ok 3 - PHASE_DESCRIPTIONS # time=0.697ms
+
+# Subtest: BootstrapStateTracker initialization
+    ok 1 - should have node ID
+    ok 2 - should start in NOT_STARTED
+    ok 3 - should have zero services
+    ok 4 - should have zero partitions
+    ok 5 - should have zero message groups
+    1..5
+ok 4 - BootstrapStateTracker initialization # time=0.483ms
+
+{"level":30,"time":"2026-01-22T18:03:07.659Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987659,"msg":"Bootstrap tracking started"}
+# Subtest: BootstrapStateTracker startTracking
+    ok 1 - event should have node ID
+    ok 2 - event should have timestamp
+    ok 3 - should emit trackingStarted event
+    ok 4 - should set start time
+    1..4
+ok 5 - BootstrapStateTracker startTracking # time=1.059ms
+
+# Subtest: BootstrapStateTracker transitionToPhase
+    ok 1 - should have previous phase
+    ok 2 - should have new phase
+    ok 3 - should emit phaseTransition event
+    ok 4 - should update phase
+    1..4
+ok 6 - BootstrapStateTracker transitionToPhase # time=0.633ms
+
+# Subtest: BootstrapStateTracker phase history
+    ok 1 - should have 2 completed phases
+    ok 2 - first phase should be INFRASTRUCTURE
+    ok 3 - second phase should be MESSAGE_GROUPS
+    ok 4 - should have duration
+    1..4
+ok 7 - BootstrapStateTracker phase history # time=0.668ms
+
+# Subtest: BootstrapStateTracker recordServiceCreated
+    ok 1 - should have service ID
+    ok 2 - should have service type
+    ok 3 - should emit serviceCreated event
+    ok 4 - should increment services
+    ok 5 - should increment partitions
+    1..5
+ok 8 - BootstrapStateTracker recordServiceCreated # time=0.641ms
+
+# Subtest: BootstrapStateTracker recordServiceCreated message_group
+    ok 1 - should increment services
+    ok 2 - should increment message groups
+    ok 3 - should not increment partitions
+    1..3
+ok 9 - BootstrapStateTracker recordServiceCreated message_group # time=0.425ms
+
+# Subtest: BootstrapStateTracker recordRaftStateChange
+    ok 1 - should have service ID
+    ok 2 - should have previous role
+    ok 3 - should have new role
+    ok 4 - should emit raftStateChange event
+    ok 5 - should record state change
+    1..5
+ok 10 - BootstrapStateTracker recordRaftStateChange # time=0.648ms
+
+# Subtest: BootstrapStateTracker recordError
+    ok 1 - should have error message
+    ok 2 - should have phase
+    ok 3 - should emit error event
+    ok 4 - should record error
+    1..4
+ok 11 - BootstrapStateTracker recordError # time=0.743ms
+
+# Subtest: BootstrapStateTracker completeTracking success
+    ok 1 - should indicate success
+    ok 2 - should have duration
+    ok 3 - should emit trackingComplete event
+    ok 4 - should be complete
+    ok 5 - should not be failed
+    ok 6 - should not be in progress
+    1..6
+ok 12 - BootstrapStateTracker completeTracking success # time=0.946ms
+
+# Subtest: BootstrapStateTracker completeTracking failure
+    ok 1 - should be failed
+    ok 2 - should not be complete
+    ok 3 - should not be in progress
+    1..3
+ok 13 - BootstrapStateTracker completeTracking failure # time=0.542ms
+
+# Subtest: BootstrapStateTracker isInProgress
+    ok 1 - should not be in progress initially
+    ok 2 - should be in progress during phases
+    ok 3 - should not be in progress after completion
+    1..3
+ok 14 - BootstrapStateTracker isInProgress # time=0.603ms
+
+# Subtest: BootstrapStateTracker reset
+    ok 1 - should reset phase
+    ok 2 - should reset services
+    ok 3 - should reset history
+    ok 4 - should reset raft changes
+    ok 5 - should reset errors
+    1..5
+ok 15 - BootstrapStateTracker reset # time=0.666ms
+
+# Subtest: BootstrapStateTracker setNodeId
+    ok 1 - should update node ID
+    1..1
+ok 16 - BootstrapStateTracker setNodeId # time=0.258ms
+
+# Subtest: BootstrapStateTracker getState includes all fields
+    ok 1 - should have nodeId
+    ok 2 - should have currentPhase
+    ok 3 - should have phaseDescription
+    ok 4 - should have startTime
+    ok 5 - should have phaseStartTime
+    ok 6 - should have servicesCreated
+    ok 7 - should have partitionsCreated
+    ok 8 - should have messageGroupsCreated
+    ok 9 - should have phaseHistory
+    ok 10 - should have raftStateChanges
+    ok 11 - should have errors
+    ok 12 - should have duration
+    1..12
+ok 17 - BootstrapStateTracker getState includes all fields # time=1.37ms
+
+# Subtest: cleanup
+    ok 1 - cleanup complete
+    1..1
+ok 18 - cleanup # time=0.228ms
+
+{"level":30,"time":"2026-01-22T18:03:07.660Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987660,"msg":"Bootstrap tracking started"}
+{"level":30,"time":"2026-01-22T18:03:07.660Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"not_started","newPhase":"infrastructure","phaseDescription":"Setting up infrastructure (config, transport)","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":30,"time":"2026-01-22T18:03:07.661Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987661,"msg":"Bootstrap tracking started"}
+{"level":30,"time":"2026-01-22T18:03:07.661Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"not_started","newPhase":"infrastructure","phaseDescription":"Setting up infrastructure (config, transport)","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":30,"time":"2026-01-22T18:03:07.661Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"infrastructure","newPhase":"message_groups","phaseDescription":"Creating message group replicas","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":30,"time":"2026-01-22T18:03:07.661Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"message_groups","newPhase":"partitions","phaseDescription":"Creating system table partitions","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":30,"time":"2026-01-22T18:03:07.662Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987662,"msg":"Bootstrap tracking started"}
+{"level":20,"time":"2026-01-22T18:03:07.662Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","serviceId":"svc-1","serviceType":"partition","partitionId":"p-1","groupId":null,"replicaId":null,"tableId":"tables","totalServicesCreated":1,"msg":"Service created during bootstrap"}
+{"level":30,"time":"2026-01-22T18:03:07.662Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987662,"msg":"Bootstrap tracking started"}
+{"level":20,"time":"2026-01-22T18:03:07.663Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","serviceId":"mg-1","serviceType":"message_group","partitionId":null,"groupId":"mg-1","replicaId":null,"tableId":null,"totalServicesCreated":1,"msg":"Service created during bootstrap"}
+{"level":30,"time":"2026-01-22T18:03:07.663Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987663,"msg":"Bootstrap tracking started"}
+{"level":20,"time":"2026-01-22T18:03:07.663Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","serviceId":"svc-1","serviceType":"partition","previousRole":"follower","newRole":"leader","groupId":"p-1","msg":"Raft state change"}
+{"level":30,"time":"2026-01-22T18:03:07.664Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987664,"msg":"Bootstrap tracking started"}
+{"level":30,"time":"2026-01-22T18:03:07.664Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"not_started","newPhase":"partitions","phaseDescription":"Creating system table partitions","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":50,"time":"2026-01-22T18:03:07.664Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","phase":"partitions","errorMessage":"Test error","serviceId":"svc-1","partitionId":null,"groupId":null,"stack":null,"detail":"test","msg":"Bootstrap error"}
+{"level":30,"time":"2026-01-22T18:03:07.665Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987665,"msg":"Bootstrap tracking started"}
+{"level":30,"time":"2026-01-22T18:03:07.665Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"not_started","newPhase":"infrastructure","phaseDescription":"Setting up infrastructure (config, transport)","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":30,"time":"2026-01-22T18:03:07.665Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"infrastructure","newPhase":"message_groups","phaseDescription":"Creating message group replicas","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":30,"time":"2026-01-22T18:03:07.665Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"message_groups","newPhase":"partitions","phaseDescription":"Creating system table partitions","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":30,"time":"2026-01-22T18:03:07.665Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"partitions","newPhase":"registration","phaseDescription":"Registering services in system tables","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":30,"time":"2026-01-22T18:03:07.665Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"registration","newPhase":"complete","phaseDescription":"Bootstrap completed successfully","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":30,"time":"2026-01-22T18:03:07.665Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","totalDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"phaseCount":4,"raftStateChanges":0,"msg":"Bootstrap completed successfully"}
+{"level":30,"time":"2026-01-22T18:03:07.666Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987666,"msg":"Bootstrap tracking started"}
+{"level":30,"time":"2026-01-22T18:03:07.666Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"not_started","newPhase":"infrastructure","phaseDescription":"Setting up infrastructure (config, transport)","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":50,"time":"2026-01-22T18:03:07.666Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","phase":"infrastructure","errorMessage":"Failed to create service","serviceId":null,"partitionId":null,"groupId":null,"stack":null,"msg":"Bootstrap error"}
+{"level":30,"time":"2026-01-22T18:03:07.666Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"infrastructure","newPhase":"failed","phaseDescription":"Bootstrap failed","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":50,"time":"2026-01-22T18:03:07.666Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","totalDuration":0,"failedPhase":"failed","servicesCreated":0,"errorCount":1,"lastError":"Failed to create service","msg":"Bootstrap failed"}
+{"level":30,"time":"2026-01-22T18:03:07.667Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987667,"msg":"Bootstrap tracking started"}
+{"level":30,"time":"2026-01-22T18:03:07.667Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"not_started","newPhase":"infrastructure","phaseDescription":"Setting up infrastructure (config, transport)","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":30,"time":"2026-01-22T18:03:07.667Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"infrastructure","newPhase":"complete","phaseDescription":"Bootstrap completed successfully","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":30,"time":"2026-01-22T18:03:07.667Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","totalDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"phaseCount":1,"raftStateChanges":0,"msg":"Bootstrap completed successfully"}
+{"level":30,"time":"2026-01-22T18:03:07.667Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987667,"msg":"Bootstrap tracking started"}
+{"level":30,"time":"2026-01-22T18:03:07.667Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"not_started","newPhase":"infrastructure","phaseDescription":"Setting up infrastructure (config, transport)","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
+{"level":20,"time":"2026-01-22T18:03:07.667Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","serviceId":"svc-1","serviceType":"partition","partitionId":null,"groupId":null,"replicaId":null,"tableId":null,"totalServicesCreated":1,"msg":"Service created during bootstrap"}
+{"level":20,"time":"2026-01-22T18:03:07.667Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","serviceId":"svc-1","previousRole":"follower","newRole":"leader","msg":"Raft state change"}
+{"level":50,"time":"2026-01-22T18:03:07.668Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","phase":"infrastructure","errorMessage":"Test error","serviceId":null,"partitionId":null,"groupId":null,"stack":null,"msg":"Bootstrap error"}
+{"level":30,"time":"2026-01-22T18:03:07.669Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","timestamp":1769104987669,"msg":"Bootstrap tracking started"}
+{"level":30,"time":"2026-01-22T18:03:07.669Z","nodeId":"test-node","pid":319763,"subsystem":"bootstrap-tracker","nodeId":"test-node","previousPhase":"not_started","newPhase":"infrastructure","phaseDescription":"Setting up infrastructure (config, transport)","previousPhaseDuration":0,"servicesCreated":0,"partitionsCreated":0,"messageGroupsCreated":0,"msg":"Bootstrap phase transition"}
 1..18

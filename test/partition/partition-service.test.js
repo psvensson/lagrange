@@ -331,6 +331,8 @@ test('PartitionService - generates CDC events on delete', async (t) => {
 
   t.equal(cdcEvents.length, 1);
   t.equal(cdcEvents[0].operation, CDCOperation.DELETE);
+  // Verify DELETE CDC event contains the primary key from whereClause
+  t.equal(cdcEvents[0].data.id, 'cdc-1', 'DELETE CDC event should contain primary key');
 
   await partition.shutdown();
 });
@@ -499,6 +501,211 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
   partition.unsubscribeFromCDC(subscriber);
   await partition.insertData('unsub_test', {id: 'item-2'});
   t.equal(cdcEvents.length, 1); // No new events after unsubscribe
+
+  await partition.shutdown();
+});
+
+// Tests for liferaft-based architecture (Requirements 14.1, 14.2, 14.3, 14.4)
+
+test('PartitionService - handleTransportMessage routes Raft packets to liferaft', async (t) => {
+  // Mock transport to avoid null reference errors when liferaft tries to respond
+  const mockTransport = {
+    register: () => {},
+    unregister: () => {},
+    deliver: () => Promise.resolve({acknowledged: true}),
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition-15',
+    tableId: 'raft_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    transport: mockTransport,
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+
+  // Track if raft.emit was called with the packet
+  let emittedData = null;
+  let emittedEvent = null;
+
+  // Replace raft.emit to track calls without triggering liferaft's state machine
+  partition.raft.emit = (event, data, _write) => {
+    if (event === 'data') {
+      emittedEvent = event;
+      emittedData = data;
+    }
+    // Don't call original emit to avoid triggering liferaft's state machine
+    return true;
+  };
+
+  // Send a Raft packet (vote request)
+  const raftPacket = {
+    type: 'vote',
+    term: 1,
+    address: 'node2/partition/replica-2',
+    state: 1,
+    leader: '',
+    last: {term: 0, index: 0},
+  };
+
+  const result = await partition.handleTransportMessage({payload: raftPacket});
+
+  t.equal(result.acknowledged, true, 'Raft packet should be acknowledged');
+  t.equal(emittedEvent, 'data', 'Should emit data event to liferaft');
+  t.ok(emittedData, 'Raft packet should be emitted to liferaft');
+  t.equal(emittedData.type, 'vote', 'Packet type should be preserved');
+  t.equal(emittedData.term, 1, 'Packet term should be preserved');
+
+  await partition.shutdown();
+});
+
+test('PartitionService - handleTransportMessage handles application messages', async (t) => {
+  const schema = {
+    columns: [
+      {name: 'id', type: 'TEXT', primaryKey: true},
+      {name: 'value', type: 'INTEGER'},
+    ],
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition-16',
+    tableId: 'app_msg_test',
+    tableName: 'app_msg_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    schema,
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+  // Single replica becomes leader immediately
+  await Promise.resolve();
+
+  // Send a FORWARD_WRITE application message
+  const forwardWriteMsg = {
+    payload: {
+      type: 'FORWARD_WRITE',
+      operation: {
+        type: 'INSERT',
+        tableName: 'app_msg_test',
+        data: {id: 'item-1', value: 42},
+        sql: 'INSERT INTO app_msg_test (id, value) VALUES (?, ?)',
+        params: ['item-1', 42],
+      },
+    },
+  };
+
+  const result = await partition.handleTransportMessage(forwardWriteMsg);
+
+  t.equal(result.success, true, 'FORWARD_WRITE should succeed');
+  t.equal(result.changes, 1, 'One row should be inserted');
+
+  // Verify data was inserted
+  const queryResult = await partition.executeQuery(
+    'SELECT * FROM app_msg_test WHERE id = ?',
+    ['item-1'],
+  );
+  t.equal(queryResult.rows.length, 1);
+  t.equal(queryResult.rows[0].value, 42);
+
+  await partition.shutdown();
+});
+
+test('PartitionService - handleTransportMessage rejects unknown message types', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition-17',
+    tableId: 'unknown_msg_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+
+  // Send an unknown message type
+  const unknownMsg = {
+    payload: {
+      type: 'UNKNOWN_TYPE',
+      data: 'some data',
+    },
+  };
+
+  const result = await partition.handleTransportMessage(unknownMsg);
+
+  t.equal(result.acknowledged, false, 'Unknown message should not be acknowledged');
+  t.ok(result.error, 'Error message should be present');
+  t.match(result.error, /Unknown message type/, 'Error should mention unknown type');
+
+  await partition.shutdown();
+});
+
+test('PartitionService - liferaft instance is created with correct configuration', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition-18',
+    tableId: 'liferaft_config_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+
+  // Verify liferaft instance exists
+  t.ok(partition.raft, 'Liferaft instance should exist');
+
+  // Verify unified address format is used
+  t.equal(partition.getUnifiedAddress(), 'node-1/partition/replica-1');
+
+  await partition.shutdown();
+});
+
+test('PartitionService - buildPeerAddress returns correct format', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition-19',
+    tableId: 'peer_addr_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+
+  // Test with simple peer ID (should add nodeId prefix)
+  const addr1 = partition.buildPeerAddress('replica-2');
+  t.equal(addr1, 'node-1/partition/replica-2', 'Should build correct address');
+
+  // Test with already-formatted address (should return as-is)
+  const addr2 = partition.buildPeerAddress('node-2/partition/replica-3');
+  t.equal(addr2, 'node-2/partition/replica-3', 'Should return formatted address as-is');
+
+  await partition.shutdown();
+});
+
+test('PartitionService - emits leaderElected event for single replica', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition-20',
+    tableId: 'leader_event_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+
+  let leaderEvent = null;
+  partition.on('leaderElected', (event) => {
+    leaderEvent = event;
+  });
+
+  await partition.initialize();
+
+  // Single replica should emit leaderElected event
+  t.ok(leaderEvent, 'leaderElected event should be emitted');
+  t.equal(leaderEvent.leaderId, 'replica-1', 'Leader should be this replica');
+  t.equal(leaderEvent.partitionId, 'test-partition-20', 'Partition ID should match');
 
   await partition.shutdown();
 });

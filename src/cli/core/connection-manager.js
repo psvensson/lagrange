@@ -391,7 +391,7 @@ export class ConnectionManager {
     }
 
     this.ws.send(JSON.stringify({
-      type: 'request_cache_dump',
+      type: 'refresh',
     }));
 
     return true;

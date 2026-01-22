@@ -13,93 +13,93 @@ TAP version 14
     ok 11 - Table live_queries should be initialized
     ok 12 - Should have all system tables
     1..12
-ok 1 - SystemTableCache - constructor initializes all system tables # time=5.108ms
+ok 1 - SystemTableCache - constructor initializes all system tables # time=5.218ms
 
 # Subtest: SystemTableCache - get returns undefined for non-existent key
     ok 1 - Should return undefined
     1..1
-ok 2 - SystemTableCache - get returns undefined for non-existent key # time=0.339ms
+ok 2 - SystemTableCache - get returns undefined for non-existent key # time=0.348ms
 
 # Subtest: SystemTableCache - get returns cloned record
     ok 1 - Should return the record
     ok 2 - Original should not be modified
     1..2
-ok 3 - SystemTableCache - get returns cloned record # time=1.446ms
+ok 3 - SystemTableCache - get returns cloned record # time=1.44ms
 
 # Subtest: SystemTableCache - has returns correct boolean
     ok 1 - Should return false initially
     ok 2 - Should return true after insert
     1..2
-ok 4 - SystemTableCache - has returns correct boolean # time=0.387ms
+ok 4 - SystemTableCache - has returns correct boolean # time=0.415ms
 
 # Subtest: SystemTableCache - getAll returns all records
     ok 1 - Should return 2 records
     ok 2 - Should include node-1
     ok 3 - Should include node-2
     1..3
-ok 5 - SystemTableCache - getAll returns all records # time=0.424ms
+ok 5 - SystemTableCache - getAll returns all records # time=0.634ms
 
 # Subtest: SystemTableCache - find returns first matching record
     ok 1 - Should find a record
     ok 2 - Should match predicate
     1..2
-ok 6 - SystemTableCache - find returns first matching record # time=0.431ms
+ok 6 - SystemTableCache - find returns first matching record # time=0.434ms
 
 # Subtest: SystemTableCache - find returns undefined when no match
     ok 1 - Should return undefined
     1..1
-ok 7 - SystemTableCache - find returns undefined when no match # time=0.309ms
+ok 7 - SystemTableCache - find returns undefined when no match # time=0.331ms
 
 # Subtest: SystemTableCache - filter returns all matching records
     ok 1 - Should return 2 matching records
     ok 2 - All should match
     1..2
-ok 8 - SystemTableCache - filter returns all matching records # time=0.441ms
+ok 8 - SystemTableCache - filter returns all matching records # time=0.47ms
 
 # Subtest: SystemTableCache - count returns correct number
     ok 1 - Should be 0 initially
     ok 2 - Should be 1 after insert
     ok 3 - Should be 2 after second insert
     1..3
-ok 9 - SystemTableCache - count returns correct number # time=0.387ms
+ok 9 - SystemTableCache - count returns correct number # time=0.42ms
 
 # Subtest: SystemTableCache - applySystemTableChange INSERT
     ok 1 - Should insert the record
     1..1
-ok 10 - SystemTableCache - applySystemTableChange INSERT # time=0.339ms
+ok 10 - SystemTableCache - applySystemTableChange INSERT # time=0.329ms
 
 # Subtest: SystemTableCache - applySystemTableChange UPDATE
     ok 1 - Should update status
     ok 2 - Should preserve other fields
     1..2
-ok 11 - SystemTableCache - applySystemTableChange UPDATE # time=0.313ms
+ok 11 - SystemTableCache - applySystemTableChange UPDATE # time=0.381ms
 
 # Subtest: SystemTableCache - applySystemTableChange DELETE
     ok 1 - Should exist before delete
     ok 2 - Should not exist after delete
     1..2
-ok 12 - SystemTableCache - applySystemTableChange DELETE # time=0.341ms
+ok 12 - SystemTableCache - applySystemTableChange DELETE # time=0.495ms
 
 # Subtest: SystemTableCache - validates table name
     ok 1 - Should throw for invalid table name
     1..1
-ok 13 - SystemTableCache - validates table name # time=0.568ms
+ok 13 - SystemTableCache - validates table name # time=0.572ms
 
 # Subtest: SystemTableCache - validates CDC operation
     ok 1 - Should throw for invalid operation
     1..1
-ok 14 - SystemTableCache - validates CDC operation # time=0.33ms
+ok 14 - SystemTableCache - validates CDC operation # time=0.363ms
 
 # Subtest: SystemTableCache - requires primary key field in data
     ok 1 - Should throw when primary key is missing
     1..1
-ok 15 - SystemTableCache - requires primary key field in data # time=0.298ms
+ok 15 - SystemTableCache - requires primary key field in data # time=0.322ms
 
 # Subtest: SystemTableCache - clear removes all data
     ok 1 - nodes should be empty
     ok 2 - partitions should be empty
     1..2
-ok 16 - SystemTableCache - clear removes all data # time=0.371ms
+ok 16 - SystemTableCache - clear removes all data # time=0.395ms
 
 # Subtest: SystemTableCache - works with all system tables
     ok 1 - Should work with nodes
@@ -114,7 +114,7 @@ ok 16 - SystemTableCache - clear removes all data # time=0.371ms
     ok 10 - Should work with logs
     ok 11 - Should work with live_queries
     1..11
-ok 17 - SystemTableCache - works with all system tables # time=1.002ms
+ok 17 - SystemTableCache - works with all system tables # time=1.102ms
 
 # Subtest: SystemTableCache - onCacheChange registers listener
     ok 1 - Should receive one event
@@ -122,28 +122,28 @@ ok 17 - SystemTableCache - works with all system tables # time=1.002ms
     ok 3 - Should have correct operation
     ok 4 - Should have correct record
     1..4
-ok 18 - SystemTableCache - onCacheChange registers listener # time=0.588ms
+ok 18 - SystemTableCache - onCacheChange registers listener # time=0.642ms
 
 # Subtest: SystemTableCache - onCacheChange throws for non-function
     ok 1 - Should throw for non-function listener
     1..1
-ok 19 - SystemTableCache - onCacheChange throws for non-function # time=0.284ms
+ok 19 - SystemTableCache - onCacheChange throws for non-function # time=0.454ms
 
 # Subtest: SystemTableCache - offCacheChange removes listener
     ok 1 - Should not receive events after removal
     1..1
-ok 20 - SystemTableCache - offCacheChange removes listener # time=0.637ms
+ok 20 - SystemTableCache - offCacheChange removes listener # time=0.388ms
 
 # Subtest: SystemTableCache - listener errors do not break cache
     ok 1 - Second listener should still receive event
     1..1
-ok 21 - SystemTableCache - listener errors do not break cache # time=0.368ms
+ok 21 - SystemTableCache - listener errors do not break cache # time=0.466ms
 
 # Subtest: SystemTableCache - notifications are non-blocking
     ok 1 - Listener should not be called synchronously
     ok 2 - Listener should be called after setImmediate
     1..2
-ok 22 - SystemTableCache - notifications are non-blocking # time=0.387ms
+ok 22 - SystemTableCache - notifications are non-blocking # time=0.776ms
 
 # Subtest: SystemTableCache - getAllData returns all tables
     ok 1 - nodes should be an array
@@ -152,7 +152,7 @@ ok 22 - SystemTableCache - notifications are non-blocking # time=0.387ms
     ok 4 - partitions should have 1 record
     ok 5 - Should contain correct node data
     1..5
-ok 23 - SystemTableCache - getAllData returns all tables # time=0.526ms
+ok 23 - SystemTableCache - getAllData returns all tables # time=0.54ms
 
 # Subtest: SystemTableCache - getAllData returns cloned data
     ok 1 - Original should not be modified
@@ -164,13 +164,21 @@ ok 24 - SystemTableCache - getAllData returns cloned data # time=0.296ms
     ok 2 - Should have UPDATE operation
     ok 3 - Should have updated status
     1..3
-ok 25 - SystemTableCache - notifies on UPDATE # time=0.448ms
+ok 25 - SystemTableCache - notifies on UPDATE # time=0.478ms
 
 # Subtest: SystemTableCache - notifies on DELETE
     ok 1 - Should receive one event
     ok 2 - Should have DELETE operation
     ok 3 - Should have deleted record
     1..3
-ok 26 - SystemTableCache - notifies on DELETE # time=0.435ms
+ok 26 - SystemTableCache - notifies on DELETE # time=0.457ms
 
-1..26
+# Subtest: SystemTableCache - DELETE with service_id primary key
+    ok 1 - Should exist after insert
+    ok 2 - Should have 1 service
+    ok 3 - Should not exist after delete
+    ok 4 - Should have 0 services
+    1..4
+ok 27 - SystemTableCache - DELETE with service_id primary key # time=0.758ms
+
+1..27

@@ -88,6 +88,12 @@ export class CommandParser {
       description: 'Exit application',
       aliases: ['q', 'exit'],
     });
+
+    this.register('history', {
+      params: ['replica_id'],
+      description: 'Show state transition history for a replica',
+      aliases: ['hist'],
+    });
   }
 
   /**

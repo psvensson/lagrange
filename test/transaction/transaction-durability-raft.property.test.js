@@ -24,6 +24,7 @@ const valueArb = fc.stringOf(
 
 /**
  * Generate a list of operations to perform in a transaction.
+ * Ensures unique IDs within each operation set to avoid UNIQUE constraint violations.
  */
 const operationsArb = fc.array(
   fc.record({
@@ -31,7 +32,13 @@ const operationsArb = fc.array(
     value: valueArb,
   }),
   {minLength: 1, maxLength: 3},
-);
+).map((ops) => {
+  // Ensure unique IDs by using index-based IDs
+  return ops.map((op, index) => ({
+    ...op,
+    id: op.id * 1000 + index, // Make IDs unique within the set
+  }));
+});
 
 test('Property 48: Committed transactions are replicated to Raft log', async (t) => {
   /**

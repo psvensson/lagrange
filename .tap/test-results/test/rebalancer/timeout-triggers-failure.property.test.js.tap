@@ -1,0 +1,296 @@
+TAP version 14
+# Subtest: Property 7: Timeout Triggers Failure
+Creating operation {
+  operationId: '73e7fb07-8577-4b4e-a17d-096c070d7150',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+    # Subtest: operation in PENDING times out and fails
+        ok 1 - Initial step is PENDING
+        ok 2 - Initial status is pending
+CDC integration service not available, skipping persistence
+        ok 3 - Status is failed after timeout
+        ok 4 - Workflow step is FAILED
+        ok 5 - Error message mentions timeout
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..5
+    ok 1 - operation in PENDING times out and fails # time=50.626ms
+    
+Creating operation {
+  operationId: 'f23bcbba-d474-46da-a6ea-b30878f4cd46',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: 'f23bcbba-d474-46da-a6ea-b30878f4cd46',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'test-partition'
+}
+    # Subtest: operation in SENDING times out and fails
+        ok 1 - Step is SENDING
+CDC integration service not available, skipping persistence
+        ok 2 - Status is failed after timeout
+        ok 3 - Error message mentions SENDING step
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..3
+    ok 2 - operation in SENDING times out and fails # time=1.43ms
+    
+Creating operation {
+  operationId: '5c895d17-8242-47d0-9785-1f3d34ded0aa',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '5c895d17-8242-47d0-9785-1f3d34ded0aa',
+  previousStep: 'PENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'test-partition'
+}
+    # Subtest: operation in CREATING times out and fails
+        ok 1 - Step is CREATING
+CDC integration service not available, skipping persistence
+        ok 2 - Status is failed after timeout
+        ok 3 - Error message mentions CREATING step
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..3
+    ok 3 - operation in CREATING times out and fails # time=1.135ms
+    
+Creating operation {
+  operationId: '2f0831ec-5825-4ce6-8b38-6783cea6d138',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '2f0831ec-5825-4ce6-8b38-6783cea6d138',
+  previousStep: 'PENDING',
+  newStep: 'SYNCING',
+  status: 'syncing',
+  partitionId: 'test-partition'
+}
+    # Subtest: operation in SYNCING times out and fails
+        ok 1 - Step is SYNCING
+CDC integration service not available, skipping persistence
+        ok 2 - Status is failed after timeout
+        ok 3 - Error message mentions SYNCING step
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..3
+    ok 4 - operation in SYNCING times out and fails # time=1.223ms
+    
+Creating operation {
+  operationId: '162164ff-0eea-43ab-a0e9-8a9249190eba',
+  type: 'REMOVE',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation step changed {
+  operationId: '162164ff-0eea-43ab-a0e9-8a9249190eba',
+  previousStep: 'PENDING',
+  newStep: 'STOPPING',
+  status: 'removing',
+  partitionId: 'test-partition'
+}
+    # Subtest: operation in STOPPING times out and fails
+        ok 1 - Step is STOPPING
+CDC integration service not available, skipping persistence
+        ok 2 - Status is failed after timeout
+        ok 3 - Error message mentions STOPPING step
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..3
+    ok 5 - operation in STOPPING times out and fails # time=0.969ms
+    
+Creating operation {
+  operationId: 'b03dfc04-ba73-4745-8fd0-e8cc18ea4ce8',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+Operation completed {
+  operationId: 'b03dfc04-ba73-4745-8fd0-e8cc18ea4ce8',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+    # Subtest: completed operation does not timeout
+        ok 1 - Step is ACTIVE
+        ok 2 - Status is still active after timeout check
+        ok 3 - Workflow step is still ACTIVE
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..3
+    ok 6 - completed operation does not timeout # time=1.515ms
+    
+Creating operation {
+  operationId: '2158f7fc-9015-49f3-b0d2-d27e00d7f1f3',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+    # Subtest: failed operation does not timeout again
+        ok 1 - Error message unchanged after timeout check
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..1
+    ok 7 - failed operation does not timeout again # time=0.819ms
+    
+Creating operation {
+  operationId: '007c2068-a6e7-4947-8fb5-d3018f7c8306',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+    # Subtest: timeout increments statistics
+        ok 1 - Initial timeout count is 0
+CDC integration service not available, skipping persistence
+        ok 2 - Timeout count is 1 after timeout
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..2
+    ok 8 - timeout increments statistics # time=1.018ms
+    
+Creating operation {
+  operationId: 'c6810065-e014-4398-84c4-1befe91332e9',
+  type: 'ADD',
+  partitionId: 'test-partition-1',
+  targetNodeId: 'test-node-1'
+}
+CDC integration service not available, skipping persistence
+Creating operation {
+  operationId: 'af514127-9864-4601-82f2-3e3f19b8b195',
+  type: 'ADD',
+  partitionId: 'test-partition-2',
+  targetNodeId: 'test-node-2'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+    # Subtest: multiple operations can timeout in same check
+        ok 1 - Op1 status is failed
+        ok 2 - Op2 status is failed
+        ok 3 - Two operations timed out
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..3
+    ok 9 - multiple operations can timeout in same check # time=1.37ms
+    
+Creating operation {
+  operationId: '54604f46-71b7-4e78-a788-5d6dec955e34',
+  type: 'ADD',
+  partitionId: 'fffffffe-fff9-5fff-bfff-fffe7ff71651',
+  targetNodeId: '00000019-fff1-5fff-bfff-fff9fffffffa'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'be4c9f88-5a4a-48d7-9622-7669df1bc520',
+  type: 'ADD',
+  partitionId: '00000009-001a-1000-8000-00000c69814f',
+  targetNodeId: 'dd6af9c0-001a-1000-8000-001120bf105f'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '3432f5f8-cf4a-4c60-8cfe-94c30f6d400a',
+  type: 'ADD',
+  partitionId: 'dd0092f8-7e32-5cb8-bfff-ffe7ffffffe9',
+  targetNodeId: '607a751f-0000-1000-bfff-ffe500000005'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'd977884b-bd19-4f59-9491-4355043caf9d',
+  type: 'ADD',
+  partitionId: '2efd94ba-fec8-2ab0-9c29-6b3fffffffed',
+  targetNodeId: '14d07309-4076-10e5-bfff-fff6737adf35'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '420f3b1a-d9a6-4890-ba60-d0d75a49c09d',
+  type: 'ADD',
+  partitionId: '5beeeb33-884a-5d87-8000-000900000000',
+  targetNodeId: '3decbcfc-9124-2f80-8e97-926c42632b48'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '1a5d2777-55cd-49f7-a04d-bc3eb19371c7',
+  type: 'ADD',
+  partitionId: 'ffffffeb-0e80-4906-aee3-9eaa1569d8f0',
+  targetNodeId: '172fb6cd-0006-1000-bfff-ffe3b24c84a2'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'c8189c4a-f352-4a2a-aeec-347b2e162d2f',
+  type: 'ADD',
+  partitionId: '6a37fc2d-788f-13a8-8000-000e8767c9aa',
+  targetNodeId: '9766bd54-f134-55a8-a154-d82f00000017'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'a8639ffc-7841-45e9-b820-95693ccb0433',
+  type: 'ADD',
+  partitionId: '503555e8-fffd-5fff-8000-000bfffffff5',
+  targetNodeId: '7934d25f-cb0e-45df-8000-001cffffffe9'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '313fe879-c08d-44b0-a1a7-ac3d65fe2abd',
+  type: 'ADD',
+  partitionId: '0000001e-5ba0-4c08-8000-000c0000001e',
+  targetNodeId: 'ffffffe3-0e14-5f15-9365-928750aa109c'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '1c8448cd-69f8-4fc2-ac00-92e7d0ae4971',
+  type: 'ADD',
+  partitionId: 'c6820615-2161-5585-98ed-c04261e01e86',
+  targetNodeId: '0000000d-0003-1000-8e97-7d78e96f4862'
+}
+CDC integration service not available, skipping persistence
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+    # Subtest: operation within timeout does not fail
+        ok 1 - Operations within timeout do not fail
+        1..1
+    ok 10 - operation within timeout does not fail # time=6.646ms
+    
+Creating operation {
+  operationId: 'c743c2dd-0764-4045-bee4-05fab457cbd7',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+CDC integration service not available, skipping persistence
+CDC integration service not available, skipping persistence
+    # Subtest: operationFailed event is emitted on timeout
+        ok 1 - operationFailed event was emitted
+        ok 2 - Event contains correct operation
+        ok 3 - Event error message mentions timeout
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+        1..3
+    ok 11 - operationFailed event is emitted on timeout # time=1.78ms
+    
+    1..11
+ok 1 - Property 7: Timeout Triggers Failure # time=75.837ms
+
+1..1

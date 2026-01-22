@@ -1,0 +1,31 @@
+TAP version 14
+# Subtest: Property 11: Lifecycle Message Delegation
+    # Subtest: CREATE_REPLICA messages are delegated and return ACK
+        ok 1 - CREATE_REPLICA messages are delegated and return ACK
+        1..1
+    ok 1 - CREATE_REPLICA messages are delegated and return ACK # time=5.917ms
+    
+    # Subtest: REMOVE_REPLICA messages for existing replicas return initiated ACK
+        ok 1 - REMOVE_REPLICA messages for existing replicas return initiated ACK
+        1..1
+    ok 2 - REMOVE_REPLICA messages for existing replicas return initiated ACK # time=2.671ms
+    
+    # Subtest: REMOVE_REPLICA messages for non-existing replicas return not_found ACK
+        ok 1 - REMOVE_REPLICA messages for non-existing replicas return not_found ACK
+        1..1
+    ok 3 - REMOVE_REPLICA messages for non-existing replicas return not_found ACK # time=1.439ms
+    
+    # Subtest: unknown message types return acknowledged false
+        ok 1 - unknown message types return acknowledged false
+        1..1
+    ok 4 - unknown message types return acknowledged false # time=1.567ms
+    
+    # Subtest: messages in envelope.payload are correctly extracted
+        ok 1 - messages in envelope.payload are correctly extracted
+        1..1
+    ok 5 - messages in envelope.payload are correctly extracted # time=1.673ms
+    
+    1..5
+ok 1 - Property 11: Lifecycle Message Delegation # time=109.067ms
+
+1..1

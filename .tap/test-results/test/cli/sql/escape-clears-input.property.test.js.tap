@@ -1,3 +1,36 @@
 TAP version 14
-ok 1 - Property 25: Escape Clears Input # SKIP filter: /SystemTableCache/
+# Subtest: Property 25: Escape Clears Input
+    # Subtest: escape clears any input value
+        ok 1 - escape clears any input value
+        1..1
+    ok 1 - escape clears any input value # time=5.719ms
+    
+    # Subtest: escape clears input regardless of cursor position
+        ok 1 - escape clears input regardless of cursor position
+        1..1
+    ok 2 - escape clears input regardless of cursor position # time=0.744ms
+    
+    # Subtest: escape resets history navigation state
+        ok 1 - escape resets history navigation state
+        1..1
+    ok 3 - escape resets history navigation state # time=1.315ms
+    
+    # Subtest: escape clears multi-line input
+        ok 1 - escape clears multi-line input
+        1..1
+    ok 4 - escape clears multi-line input # time=0.731ms
+    
+    # Subtest: escape is idempotent
+        ok 1 - escape is idempotent
+        1..1
+    ok 5 - escape is idempotent # time=0.516ms
+    
+    # Subtest: escape returns true indicating key was handled
+        ok 1 - escape returns true indicating key was handled
+        1..1
+    ok 6 - escape returns true indicating key was handled # time=0.452ms
+    
+    1..6
+ok 1 - Property 25: Escape Clears Input # time=12.186ms
+
 1..1
