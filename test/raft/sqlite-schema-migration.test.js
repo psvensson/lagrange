@@ -55,10 +55,10 @@ test('SQLite Schema Migration', async (t) => {
 
     // Insert some legacy data
     db.prepare(
-      'INSERT INTO _raft_log (log_index, term, data, timestamp) VALUES (?, ?, ?, ?)'
+      'INSERT INTO _raft_log (log_index, term, data, timestamp) VALUES (?, ?, ?, ?)',
     ).run(1, 1, '{"type":"test","value":"legacy1"}', Date.now());
     db.prepare(
-      'INSERT INTO _raft_log (log_index, term, data, timestamp) VALUES (?, ?, ?, ?)'
+      'INSERT INTO _raft_log (log_index, term, data, timestamp) VALUES (?, ?, ?, ?)',
     ).run(2, 1, '{"type":"test","value":"legacy2"}', Date.now());
 
     // Initialize adapter - this should trigger migration
@@ -102,7 +102,7 @@ test('SQLite Schema Migration', async (t) => {
 
     // Insert data with 'data' column populated but 'command' NULL
     db.prepare(
-      'INSERT INTO _raft_log (log_index, term, data, command, timestamp) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO _raft_log (log_index, term, data, command, timestamp) VALUES (?, ?, ?, ?, ?)',
     ).run(1, 1, '{"type":"partial","value":"data1"}', null, Date.now());
 
     // Initialize adapter - this should complete migration
@@ -135,7 +135,7 @@ test('SQLite Schema Migration', async (t) => {
 
     // Insert legacy data
     db.prepare(
-      'INSERT INTO _raft_log (log_index, term, data, timestamp) VALUES (?, ?, ?, ?)'
+      'INSERT INTO _raft_log (log_index, term, data, timestamp) VALUES (?, ?, ?, ?)',
     ).run(1, 1, '{"type":"idempotent","value":"test"}', Date.now());
 
     // Run migration multiple times by creating multiple adapters
@@ -172,7 +172,7 @@ test('SQLite Schema Migration', async (t) => {
 
     // Insert legacy data
     db.prepare(
-      'INSERT INTO _raft_log (log_index, term, data, timestamp) VALUES (?, ?, ?, ?)'
+      'INSERT INTO _raft_log (log_index, term, data, timestamp) VALUES (?, ?, ?, ?)',
     ).run(1, 1, '{"type":"existing","value":"old"}', Date.now());
 
     // Initialize adapter

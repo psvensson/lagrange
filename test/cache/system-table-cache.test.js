@@ -467,3 +467,272 @@ test('SystemTableCache - DELETE with service_id primary key', async (t) => {
   t.equal(cache.has('services', 'tables-p1-r1'), false, 'Should not exist after delete');
   t.equal(cache.count('services'), 0, 'Should have 0 services');
 });
+
+
+// ============================================================================
+// Epoch Tracking Tests - Requirements 7.1, 7.2
+// ============================================================================
+
+test('SystemTableCache - getEpoch returns 0 initially', async (t) => {
+  const cache = new SystemTableCache();
+
+  t.equal(cache.getEpoch(), 0, 'Should return 0 initially');
+});
+
+test('SystemTableCache - updateFromEpoch updates current epoch', async (t) => {
+  const cache = new SystemTableCache();
+
+  const epoch = {
+    epoch: 42,
+    assignments: {'tables-p1': ['node1', 'node2', 'node3']},
+    timestamp: '2026-01-22T10:30:00.000Z',
+    proposedBy: 'node1',
+  };
+
+  cache.updateFromEpoch(epoch);
+
+  t.equal(cache.getEpoch(), 42, 'Should update to epoch 42');
+});
+
+test('SystemTableCache - updateFromEpoch throws for null epoch', async (t) => {
+  const cache = new SystemTableCache();
+
+  t.throws(
+    () => cache.updateFromEpoch(null),
+    /Epoch must be a valid object/,
+    'Should throw for null epoch',
+  );
+});
+
+test('SystemTableCache - updateFromEpoch throws for non-object epoch', async (t) => {
+  const cache = new SystemTableCache();
+
+  t.throws(
+    () => cache.updateFromEpoch('not an object'),
+    /Epoch must be a valid object/,
+    'Should throw for non-object epoch',
+  );
+});
+
+test('SystemTableCache - updateFromEpoch throws for missing epoch number', async (t) => {
+  const cache = new SystemTableCache();
+
+  t.throws(
+    () => cache.updateFromEpoch({assignments: {}}),
+    /Epoch must have a numeric epoch field/,
+    'Should throw for missing epoch number',
+  );
+});
+
+test('SystemTableCache - updateFromEpoch throws for non-numeric epoch', async (t) => {
+  const cache = new SystemTableCache();
+
+  t.throws(
+    () => cache.updateFromEpoch({epoch: 'not a number', assignments: {}}),
+    /Epoch must have a numeric epoch field/,
+    'Should throw for non-numeric epoch',
+  );
+});
+
+test('SystemTableCache - updateFromEpoch throws for missing assignments', async (t) => {
+  const cache = new SystemTableCache();
+
+  t.throws(
+    () => cache.updateFromEpoch({epoch: 1}),
+    /Epoch must have an assignments object/,
+    'Should throw for missing assignments',
+  );
+});
+
+test('SystemTableCache - updateFromEpoch throws for non-object assignments', async (t) => {
+  const cache = new SystemTableCache();
+
+  t.throws(
+    () => cache.updateFromEpoch({epoch: 1, assignments: 'not an object'}),
+    /Epoch must have an assignments object/,
+    'Should throw for non-object assignments',
+  );
+});
+
+test('SystemTableCache - updateFromEpoch can update multiple times', async (t) => {
+  const cache = new SystemTableCache();
+
+  cache.updateFromEpoch({epoch: 1, assignments: {}});
+  t.equal(cache.getEpoch(), 1, 'Should be epoch 1');
+
+  cache.updateFromEpoch({epoch: 2, assignments: {}});
+  t.equal(cache.getEpoch(), 2, 'Should be epoch 2');
+
+  cache.updateFromEpoch({epoch: 5, assignments: {}});
+  t.equal(cache.getEpoch(), 5, 'Should be epoch 5');
+});
+
+// ============================================================================
+// getReadyNodes Tests - Requirements 5.9
+// ============================================================================
+
+test('SystemTableCache - getReadyNodes returns empty array when no nodes', async (t) => {
+  const cache = new SystemTableCache();
+
+  const readyNodes = cache.getReadyNodes();
+  t.same(readyNodes, [], 'Should return empty array');
+});
+
+test('SystemTableCache - getReadyNodes returns only ready nodes', async (t) => {
+  const cache = new SystemTableCache();
+
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-1',
+    state: 'ready',
+  });
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-2',
+    state: 'joining',
+  });
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-3',
+    state: 'ready',
+  });
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-4',
+    state: 'draining',
+  });
+
+  const readyNodes = cache.getReadyNodes();
+  t.equal(readyNodes.length, 2, 'Should return 2 ready nodes');
+  t.ok(readyNodes.includes('node-1'), 'Should include node-1');
+  t.ok(readyNodes.includes('node-3'), 'Should include node-3');
+  t.notOk(readyNodes.includes('node-2'), 'Should not include joining node');
+  t.notOk(readyNodes.includes('node-4'), 'Should not include draining node');
+});
+
+test('SystemTableCache - getReadyNodes returns empty when no ready nodes', async (t) => {
+  const cache = new SystemTableCache();
+
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-1',
+    state: 'joining',
+  });
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-2',
+    state: 'draining',
+  });
+
+  const readyNodes = cache.getReadyNodes();
+  t.same(readyNodes, [], 'Should return empty array');
+});
+
+test('SystemTableCache - getReadyNodes works with id field fallback', async (t) => {
+  const cache = new SystemTableCache();
+
+  // Some records might use 'id' instead of 'node_id'
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    id: 'node-1',
+    state: 'ready',
+  });
+
+  const readyNodes = cache.getReadyNodes();
+  t.equal(readyNodes.length, 1, 'Should return 1 ready node');
+  t.ok(readyNodes.includes('node-1'), 'Should include node-1');
+});
+
+
+// ============================================================================
+// Epoch-Based Cache Updates Tests - Requirements 7.5
+// ============================================================================
+
+test('SystemTableCache - updateFromEpoch rejects older epochs', async (t) => {
+  const cache = new SystemTableCache();
+
+  // Set initial epoch to 5
+  const result1 = cache.updateFromEpoch({epoch: 5, assignments: {}});
+  t.equal(result1, true, 'Should accept initial epoch');
+  t.equal(cache.getEpoch(), 5, 'Should be epoch 5');
+
+  // Try to update with older epoch (3)
+  const result2 = cache.updateFromEpoch({epoch: 3, assignments: {}});
+  t.equal(result2, false, 'Should reject older epoch');
+  t.equal(cache.getEpoch(), 5, 'Should still be epoch 5');
+});
+
+test('SystemTableCache - updateFromEpoch rejects equal epochs', async (t) => {
+  const cache = new SystemTableCache();
+
+  // Set initial epoch to 5
+  cache.updateFromEpoch({epoch: 5, assignments: {}});
+  t.equal(cache.getEpoch(), 5, 'Should be epoch 5');
+
+  // Try to update with same epoch (5)
+  const result = cache.updateFromEpoch({epoch: 5, assignments: {}});
+  t.equal(result, false, 'Should reject equal epoch');
+  t.equal(cache.getEpoch(), 5, 'Should still be epoch 5');
+});
+
+test('SystemTableCache - updateFromEpoch accepts newer epochs', async (t) => {
+  const cache = new SystemTableCache();
+
+  // Set initial epoch to 5
+  cache.updateFromEpoch({epoch: 5, assignments: {}});
+  t.equal(cache.getEpoch(), 5, 'Should be epoch 5');
+
+  // Update with newer epoch (6)
+  const result = cache.updateFromEpoch({epoch: 6, assignments: {}});
+  t.equal(result, true, 'Should accept newer epoch');
+  t.equal(cache.getEpoch(), 6, 'Should be epoch 6');
+});
+
+test('SystemTableCache - updateFromEpoch returns true for first update', async (t) => {
+  const cache = new SystemTableCache();
+
+  // First update from epoch 0 to 1
+  const result = cache.updateFromEpoch({epoch: 1, assignments: {}});
+  t.equal(result, true, 'Should accept first epoch update');
+  t.equal(cache.getEpoch(), 1, 'Should be epoch 1');
+});
+
+test('SystemTableCache - updateFromEpoch rejects epoch 0 after initialization', async (t) => {
+  const cache = new SystemTableCache();
+
+  // Set epoch to 1
+  cache.updateFromEpoch({epoch: 1, assignments: {}});
+
+  // Try to update with epoch 0
+  const result = cache.updateFromEpoch({epoch: 0, assignments: {}});
+  t.equal(result, false, 'Should reject epoch 0');
+  t.equal(cache.getEpoch(), 1, 'Should still be epoch 1');
+});
+
+test('SystemTableCache - updateFromEpoch atomic update on epoch change', async (t) => {
+  const cache = new SystemTableCache();
+
+  // Set initial epoch
+  cache.updateFromEpoch({epoch: 10, assignments: {'p1': ['node1']}});
+
+  // Update with newer epoch and different assignments
+  const result = cache.updateFromEpoch({
+    epoch: 11,
+    assignments: {'p1': ['node1', 'node2'], 'p2': ['node3']},
+    timestamp: '2026-01-22T10:30:00.000Z',
+    proposedBy: 'node2',
+  });
+
+  t.equal(result, true, 'Should accept newer epoch');
+  t.equal(cache.getEpoch(), 11, 'Epoch should be atomically updated to 11');
+});
+
+test('SystemTableCache - updateFromEpoch sequence of updates', async (t) => {
+  const cache = new SystemTableCache();
+
+  // Sequence of valid updates
+  t.equal(cache.updateFromEpoch({epoch: 1, assignments: {}}), true, 'Accept epoch 1');
+  t.equal(cache.updateFromEpoch({epoch: 2, assignments: {}}), true, 'Accept epoch 2');
+  t.equal(cache.updateFromEpoch({epoch: 3, assignments: {}}), true, 'Accept epoch 3');
+
+  // Try stale update
+  t.equal(cache.updateFromEpoch({epoch: 2, assignments: {}}), false, 'Reject stale epoch 2');
+  t.equal(cache.getEpoch(), 3, 'Should still be epoch 3');
+
+  // Continue with valid update
+  t.equal(cache.updateFromEpoch({epoch: 4, assignments: {}}), true, 'Accept epoch 4');
+  t.equal(cache.getEpoch(), 4, 'Should be epoch 4');
+});

@@ -1,7 +1,7 @@
 /**
  * CDC Integration Service - Routes all system table writes through partitions.
  * Ensures cache consistency by making CDC the single source of truth.
- * Requirements: 5.6, 5.7, 5.8, 5.9, 5.10
+ * Requirements: 3.5, 5.6, 5.7, 5.8, 5.9, 5.10
  */
 
 import {EventEmitter} from 'events';
@@ -10,6 +10,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas.js';
+import {AssignmentEpoch} from '../rebalancer/assignment-epoch.js';
 
 /**
  * Valid system table names for CDC operations.
@@ -24,6 +25,11 @@ const CDCOperationType = {
   UPDATE: 'UPDATE',
   DELETE: 'DELETE',
 };
+
+/**
+ * Config key for the current epoch in the config table.
+ */
+const EPOCH_CONFIG_KEY = 'current_epoch';
 
 /**
  * CDCIntegrationService routes all system table writes through actual partitions.
@@ -59,12 +65,23 @@ class CDCIntegrationService extends EventEmitter {
     this.retryMaxAttempts = config.get('cdc.retryMaxAttempts') || 3;
     this.retryDelayMs = config.get('cdc.retryDelayMs') || 100;
 
+    // Epoch manager reference for CDC epoch change handling
+    this.epochManager = null;
+
+    // Rebalancer reference for node state change handling
+    this.rebalancer = null;
+
+    // Track previous node states for detecting changes
+    this._nodeStates = new Map();
+
     // Statistics
     this.stats = {
       inserts: 0,
       updates: 0,
       deletes: 0,
       failures: 0,
+      epochChanges: 0,
+      nodeStateChanges: 0,
     };
 
     this.initialized = false;
@@ -421,6 +438,8 @@ class CDCIntegrationService extends EventEmitter {
       updates: 0,
       deletes: 0,
       failures: 0,
+      epochChanges: 0,
+      nodeStateChanges: 0,
     };
   }
 
@@ -431,6 +450,277 @@ class CDCIntegrationService extends EventEmitter {
   isInitialized() {
     return this.initialized;
   }
+
+  /**
+   * Set the epoch manager reference for CDC epoch change handling.
+   * @param {AssignmentEpochManager} epochManager - The epoch manager instance.
+   */
+  setEpochManager(epochManager) {
+    if (!epochManager) {
+      throw new Error('epochManager is required');
+    }
+    this.epochManager = epochManager;
+
+    this.logger.debug('Epoch manager set for CDC integration', {
+      nodeId: this.nodeId,
+    });
+  }
+
+  /**
+   * Handle epoch change CDC event.
+   * Listens for epoch changes in the config table and updates the local
+   * AssignmentEpochManager.
+   *
+   * @param {Object} cdcEvent - The CDC event object.
+   * @param {string} cdcEvent.tableName - The table name (should be config).
+   * @param {string} cdcEvent.operation - The operation type (INSERT, UPDATE).
+   * @param {Object} cdcEvent.data - The event data.
+   * @param {string} cdcEvent.data.config_key - The config key.
+   * @param {string} cdcEvent.data.config_value - The config value (epoch JSON).
+   * @return {{applied: boolean, epoch?: number, error?: string}}
+   *   Result object indicating if epoch was applied.
+   */
+  handleEpochChangeCDC(cdcEvent) {
+    // Validate cdcEvent
+    if (!cdcEvent || typeof cdcEvent !== 'object') {
+      return {
+        applied: false,
+        error: 'Invalid CDC event: event must be an object',
+      };
+    }
+
+    // Check if this is an epoch change event
+    const configKey = cdcEvent.data?.config_key;
+    if (configKey !== EPOCH_CONFIG_KEY) {
+      return {
+        applied: false,
+        error: `Not an epoch change event: config_key is '${configKey}'`,
+      };
+    }
+
+    // Check if epoch manager is set
+    if (!this.epochManager) {
+      this.logger.warn('Epoch change CDC received but no epoch manager set', {
+        nodeId: this.nodeId,
+      });
+      return {
+        applied: false,
+        error: 'Epoch manager not set',
+      };
+    }
+
+    // Parse the epoch data from config_value
+    let epochData;
+    try {
+      const configValue = cdcEvent.data?.config_value;
+      if (typeof configValue === 'string') {
+        epochData = JSON.parse(configValue);
+      } else if (typeof configValue === 'object' && configValue !== null) {
+        epochData = configValue;
+      } else {
+        throw new Error('config_value must be a string or object');
+      }
+    } catch (parseError) {
+      this.logger.error('Failed to parse epoch data from CDC event', {
+        nodeId: this.nodeId,
+        error: parseError.message,
+      });
+      return {
+        applied: false,
+        error: `Failed to parse epoch data: ${parseError.message}`,
+      };
+    }
+
+    // Create AssignmentEpoch from the parsed data
+    let epoch;
+    try {
+      epoch = AssignmentEpoch.fromObject(epochData);
+    } catch (epochError) {
+      this.logger.error('Failed to create AssignmentEpoch from CDC data', {
+        nodeId: this.nodeId,
+        error: epochError.message,
+      });
+      return {
+        applied: false,
+        error: `Failed to create epoch: ${epochError.message}`,
+      };
+    }
+
+    // Apply the epoch to the epoch manager
+    const applied = this.epochManager.applyEpoch(epoch);
+
+    if (applied) {
+      this.stats.epochChanges++;
+
+      this.logger.info('Epoch change applied from CDC', {
+        nodeId: this.nodeId,
+        epoch: epoch.epoch,
+        proposedBy: epoch.proposedBy,
+      });
+
+      // Emit epochChange event
+      this.emit('epochChange', {
+        epoch: epoch.epoch,
+        assignments: epoch.assignments,
+        timestamp: epoch.timestamp,
+        proposedBy: epoch.proposedBy,
+        source: 'cdc',
+      });
+
+      return {
+        applied: true,
+        epoch: epoch.epoch,
+      };
+    } else {
+      this.logger.debug('Epoch change not applied (stale or equal epoch)', {
+        nodeId: this.nodeId,
+        incomingEpoch: epoch.epoch,
+      });
+
+      return {
+        applied: false,
+        error: 'Epoch not applied (stale or equal to current)',
+        epoch: epoch.epoch,
+      };
+    }
+  }
+
+  /**
+   * Set the rebalancer reference for node state change handling.
+   * @param {StateAwareRebalancer} rebalancer - The rebalancer instance.
+   */
+  setRebalancer(rebalancer) {
+    if (!rebalancer) {
+      throw new Error('rebalancer is required');
+    }
+    this.rebalancer = rebalancer;
+
+    this.logger.debug('Rebalancer set for CDC integration', {
+      nodeId: this.nodeId,
+    });
+  }
+
+  /**
+   * Handle node state change CDC event.
+   * Listens for node state changes in the nodes table and triggers
+   * the rebalancer when appropriate.
+   *
+   * @param {Object} cdcEvent - The CDC event object.
+   * @param {string} cdcEvent.tableName - The table name (should be nodes).
+   * @param {string} cdcEvent.operation - The operation type (INSERT, UPDATE).
+   * @param {Object} cdcEvent.data - The event data.
+   * @param {string} cdcEvent.data.node_id - The node ID.
+   * @param {string} cdcEvent.data.status - The node status/state.
+   * @return {{processed: boolean, nodeId?: string, oldState?: string,
+   *   newState?: string, error?: string}}
+   *   Result object indicating if the event was processed.
+   */
+  handleNodeStateCDC(cdcEvent) {
+    // Validate cdcEvent
+    if (!cdcEvent || typeof cdcEvent !== 'object') {
+      return {
+        processed: false,
+        error: 'Invalid CDC event: event must be an object',
+      };
+    }
+
+    // Check if this is a nodes table event
+    const tableName = cdcEvent.tableName;
+    if (tableName !== SystemTableName.NODES) {
+      return {
+        processed: false,
+        error: `Not a nodes table event: tableName is '${tableName}'`,
+      };
+    }
+
+    // Extract node data
+    const nodeId = cdcEvent.data?.node_id;
+    const newState = cdcEvent.data?.status;
+
+    if (!nodeId) {
+      return {
+        processed: false,
+        error: 'Missing node_id in CDC event data',
+      };
+    }
+
+    if (!newState) {
+      return {
+        processed: false,
+        error: 'Missing status in CDC event data',
+      };
+    }
+
+    // Get the previous state for this node
+    const oldState = this._nodeStates.get(nodeId) || null;
+
+    // Update tracked state
+    this._nodeStates.set(nodeId, newState);
+
+    // Check if state actually changed
+    if (oldState === newState) {
+      this.logger.debug('Node state unchanged, skipping', {
+        nodeId,
+        state: newState,
+      });
+      return {
+        processed: true,
+        nodeId,
+        oldState,
+        newState,
+        stateChanged: false,
+      };
+    }
+
+    // Increment stats
+    this.stats.nodeStateChanges++;
+
+    this.logger.info('Node state change detected via CDC', {
+      nodeId,
+      oldState,
+      newState,
+    });
+
+    // Emit nodeStateChange event
+    this.emit('nodeStateChange', {
+      nodeId,
+      oldState,
+      newState,
+      timestamp: Date.now(),
+      source: 'cdc',
+    });
+
+    // Trigger rebalancer if set
+    if (this.rebalancer) {
+      try {
+        this.rebalancer.onNodeStateChange(nodeId, oldState, newState);
+        this.logger.debug('Rebalancer notified of node state change', {
+          nodeId,
+          oldState,
+          newState,
+        });
+      } catch (rebalancerError) {
+        this.logger.error('Failed to notify rebalancer of node state change', {
+          nodeId,
+          oldState,
+          newState,
+          error: rebalancerError.message,
+        });
+      }
+    } else {
+      this.logger.debug('No rebalancer set, skipping rebalancer notification', {
+        nodeId,
+      });
+    }
+
+    return {
+      processed: true,
+      nodeId,
+      oldState,
+      newState,
+      stateChanged: true,
+    };
+  }
 }
 
-export {CDCIntegrationService, CDCOperationType, VALID_SYSTEM_TABLES};
+export {CDCIntegrationService, CDCOperationType, VALID_SYSTEM_TABLES, EPOCH_CONFIG_KEY};

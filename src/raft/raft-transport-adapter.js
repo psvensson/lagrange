@@ -1,8 +1,10 @@
 /**
  * RaftTransportAdapter - Bridges liferaft with MessageRouter for WebSocket communication.
  * Implements the write() method required by liferaft for peer communication.
- * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5
+ * Requirements: 1.4, 2.1, 2.2, 2.3, 2.4, 2.5
  */
+
+import {AddressManager} from '../address/address-manager.js';
 
 /**
  * Transport adapter for liferaft that uses MessageRouter.
@@ -48,7 +50,7 @@ class RaftTransportAdapter {
     const peerAddress = this.buildPeerAddress(destinationId);
 
     // Debug logging for Raft message delivery
-    // eslint-disable-next-line no-console
+
     console.log('[RaftTransportAdapter] write:', {
       type: packet.type,
       destination: destinationId,
@@ -73,7 +75,6 @@ class RaftTransportAdapter {
       const result = await this.messageRouter.deliver(peerAddress, message);
       callback(null, result);
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.log('[RaftTransportAdapter] write error:', error.message);
       callback(error);
     }
@@ -82,26 +83,32 @@ class RaftTransportAdapter {
   /**
    * Build unified address for a peer.
    * Format: ${nodeId}/${entityType}/${entityId}
-   * Requirements: 2.3
+   * Requirements: 1.4, 2.3
    * @param {string} peerId - Peer identifier
    * @return {string} Unified address
    */
   buildPeerAddress(peerId) {
-    // If already in unified format, return as-is
+    const addressManager = AddressManager.getInstance();
+
+    // If already in unified format, validate and return as-is
     if (peerId && peerId.includes('/')) {
-      return peerId;
+      const validation = addressManager.validate(peerId);
+      if (validation.valid) {
+        return peerId;
+      }
+      // If invalid unified format, fall through to construct a new address
     }
 
     // Look up nodeId from system table cache if available
     if (this.systemTableCache) {
       const service = this.systemTableCache.get('services', peerId);
       if (service?.node_id) {
-        return `${service.node_id}/${this.entityType}/${peerId}`;
+        return addressManager.format(service.node_id, this.entityType, peerId);
       }
     }
 
     // Fallback: assume same node during bootstrap
-    return `${this.nodeId}/${this.entityType}/${peerId}`;
+    return addressManager.format(this.nodeId, this.entityType, peerId);
   }
 
   /**

@@ -7,43 +7,75 @@ TAP version 14
     ok 5 - infrastructure should come before partitions
     ok 6 - WebSocket server should be running
     ok 7 - self-connection should be established
-{"level":50,"time":"2026-01-22T18:56:15.073Z","nodeId":"test-bootstrap-node","pid":328698,"subsystem":"message-router","nodeId":"test-bootstrap-node","connectionId":"ec406d09-cdd0-4b89-9f43-9b37c8f1774d","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:22:33.715Z","nodeId":"test-bootstrap-node","pid":416543,"subsystem":"message-router","nodeId":"test-bootstrap-node","connectionId":"e736a649-edf8-41d9-9d33-2585e2488ac4","msg":"Self-connection lost - fatal error"}
     1..7
-ok 1 - Bootstrap sequence - server starts before services # time=2759.55ms
+ok 1 - Bootstrap sequence - server starts before services # time=2457.022ms
 
 # Subtest: Bootstrap sequence - self-connection established before services
     ok 1 - bootstrap should succeed
     ok 2 - self-connection should be established before services are created
-{"level":50,"time":"2026-01-22T18:56:17.868Z","nodeId":"test-bootstrap-node","pid":328698,"subsystem":"message-router","nodeId":"test-bootstrap-node","connectionId":"7887c8f6-3c21-4f0d-9cf1-6a4ab12b656f","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:22:36.257Z","nodeId":"test-bootstrap-node","pid":416543,"subsystem":"message-router","nodeId":"test-bootstrap-node","connectionId":"60d4e9ea-e984-48c8-ab36-9d07a48ec3bd","msg":"Self-connection lost - fatal error"}
     1..2
-ok 2 - Bootstrap sequence - self-connection established before services # time=2793.06ms
+ok 2 - Bootstrap sequence - self-connection established before services # time=2540.298ms
 
 # Subtest: Bootstrap sequence - services created after self-connection
     ok 1 - bootstrap should succeed
     ok 2 - message group services should be created
     ok 3 - partition services should be created
     ok 4 - self-connection should still be active after services created
-{"level":50,"time":"2026-01-22T18:56:20.967Z","nodeId":"test-bootstrap-node","pid":328698,"subsystem":"message-router","nodeId":"test-bootstrap-node","connectionId":"a881dccb-f624-4e89-bc2d-e8da41110498","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:22:39.111Z","nodeId":"test-bootstrap-node","pid":416543,"subsystem":"message-router","nodeId":"test-bootstrap-node","connectionId":"d10a2be8-0d3e-4ce4-997d-beb9f6f414c0","msg":"Self-connection lost - fatal error"}
     1..4
-ok 3 - Bootstrap sequence - services created after self-connection # time=3098.931ms
+ok 3 - Bootstrap sequence - services created after self-connection # time=2852.544ms
 
-{"level":50,"time":"2026-01-22T18:56:23.597Z","nodeId":"test-bootstrap-node","pid":328698,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":2515,"error":"Message group mg-1 failed to establish leadership within 1000ms","stack":"Error: Message group mg-1 failed to establish leadership within 1000ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:490:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:720:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:217:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:135:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:176:20)","msg":"Bootstrap phase failed"}
+{"level":50,"time":"2026-01-23T06:22:41.733Z","nodeId":"test-bootstrap-node","pid":416543,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":2502,"error":"Message group mg-1 failed to establish leadership within 1000ms","stack":"Error: Message group mg-1 failed to establish leadership within 1000ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:497:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:738:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:224:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:141:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:176:20)","msg":"Bootstrap phase failed"}
 # Subtest: Bootstrap sequence - without wsPort (no server/self-connection)
     ok 1 - bootstrap should fail without wsPort
     ok 2 - should have error message
     ok 3 - error should mention leadership failure
     1..3
-ok 4 - Bootstrap sequence - without wsPort (no server/self-connection) # time=2634.833ms
+ok 4 - Bootstrap sequence - without wsPort (no server/self-connection) # time=2627.131ms
 
-{"level":50,"time":"2026-01-22T18:56:23.598Z","nodeId":"test-bootstrap-node","pid":328698,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"failed","duration":2617,"error":"Message group mg-1 failed to establish leadership within 1000ms","stack":"Error: Message group mg-1 failed to establish leadership within 1000ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:490:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:720:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:217:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:135:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:176:20)","servicesCreated":39,"msg":"Bootstrap failed"}
+{"level":50,"time":"2026-01-23T06:22:41.734Z","nodeId":"test-bootstrap-node","pid":416543,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"failed","duration":2604,"error":"Message group mg-1 failed to establish leadership within 1000ms","stack":"Error: Message group mg-1 failed to establish leadership within 1000ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:497:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:738:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:224:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:141:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:176:20)","servicesCreated":39,"msg":"Bootstrap failed"}
 # Subtest: Bootstrap sequence - startWebSocketServer after bootstrap
     ok 1 - bootstrap should succeed
     ok 2 - WebSocket server should be running
     ok 3 - self-connection should be established
     ok 4 - WebSocket server should still be running
     ok 5 - self-connection should still be established
-{"level":50,"time":"2026-01-22T18:56:26.116Z","nodeId":"test-bootstrap-node","pid":328698,"subsystem":"message-router","nodeId":"test-bootstrap-node","connectionId":"29e01bce-7c8a-468a-8f65-eedd06540349","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:22:44.366Z","nodeId":"test-bootstrap-node","pid":416543,"subsystem":"message-router","nodeId":"test-bootstrap-node","connectionId":"6c1d1780-f873-4628-8fba-891cb2dcc9cf","msg":"Self-connection lost - fatal error"}
     1..5
-ok 5 - Bootstrap sequence - startWebSocketServer after bootstrap # time=2512.054ms
+ok 5 - Bootstrap sequence - startWebSocketServer after bootstrap # time=2626.972ms
 
-1..5
+# Subtest: Bootstrap sequence - epoch manager initialized with partition assignments
+    ok 1 - bootstrap should succeed
+    ok 2 - should have epochManager in result
+    ok 3 - getEpochManager() should return the manager
+    ok 4 - epoch manager should be initialized
+    ok 5 - initial epoch should be 0
+    ok 6 - epoch should be proposed by seed node
+    ok 7 - should have partition assignments
+    ok 8 - partition tables-p1 should be assigned to seed node
+    ok 9 - partition nodes-p1 should be assigned to seed node
+    ok 10 - partition message_groups-p1 should be assigned to seed node
+    ok 11 - partition partitions-p1 should be assigned to seed node
+    ok 12 - partition services-p1 should be assigned to seed node
+    ok 13 - partition indices-p1 should be assigned to seed node
+    ok 14 - partition logs-p1 should be assigned to seed node
+    ok 15 - partition config-p1 should be assigned to seed node
+    ok 16 - partition live_queries-p1 should be assigned to seed node
+    ok 17 - partition contexts-p1 should be assigned to seed node
+    ok 18 - partition code-p1 should be assigned to seed node
+    ok 19 - partition replica_operations-p1 should be assigned to seed node
+{"level":50,"time":"2026-01-23T06:22:46.694Z","nodeId":"test-bootstrap-node","pid":416543,"subsystem":"message-router","nodeId":"test-bootstrap-node","connectionId":"d9166e30-2836-4547-b9db-d9b585523687","msg":"Self-connection lost - fatal error"}
+    1..19
+ok 6 - Bootstrap sequence - epoch manager initialized with partition assignments # time=2327.075ms
+
+# Subtest: Bootstrap sequence - epoch manager cleaned up on shutdown
+    ok 1 - bootstrap should succeed
+    ok 2 - epoch manager should exist before shutdown
+{"level":50,"time":"2026-01-23T06:22:49.537Z","nodeId":"test-bootstrap-node","pid":416543,"subsystem":"message-router","nodeId":"test-bootstrap-node","connectionId":"88995626-d12b-4aac-8d69-cbe3ff990b58","msg":"Self-connection lost - fatal error"}
+    ok 3 - epoch manager should be null after shutdown
+    1..3
+ok 7 - Bootstrap sequence - epoch manager cleaned up on shutdown # time=2842.451ms
+
+1..7

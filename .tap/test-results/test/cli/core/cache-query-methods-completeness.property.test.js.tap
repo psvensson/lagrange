@@ -2,46 +2,46 @@ TAP version 14
 # Subtest: Property 53: Cache Query Methods - getLogs returns all logs
     ok 1 - getLogs() returns all log entries
     1..1
-ok 1 - Property 53: Cache Query Methods - getLogs returns all logs # time=27.124ms
+ok 1 - Property 53: Cache Query Methods - getLogs returns all logs # time=18.138ms
 
 # Subtest: Property 53: Cache Query Methods - getConfig returns all config
     ok 1 - getConfig() returns all config entries
     1..1
-ok 2 - Property 53: Cache Query Methods - getConfig returns all config # time=2.933ms
+ok 2 - Property 53: Cache Query Methods - getConfig returns all config # time=1.878ms
 
 # Subtest: Property 53: Cache Query Methods - getContexts returns all contexts
     ok 1 - getContexts() returns all context entries
     1..1
-ok 3 - Property 53: Cache Query Methods - getContexts returns all contexts # time=3.918ms
+ok 3 - Property 53: Cache Query Methods - getContexts returns all contexts # time=2.243ms
 
 # Subtest: Property 53: Cache Query Methods - getNodes returns all nodes
     ok 1 - getNodes() returns all node entries
     1..1
-ok 4 - Property 53: Cache Query Methods - getNodes returns all nodes # time=3.603ms
+ok 4 - Property 53: Cache Query Methods - getNodes returns all nodes # time=3.285ms
 
 # Subtest: Property 53: Cache Query Methods - getServices returns all services
     ok 1 - getServices() returns all service entries
     1..1
-ok 5 - Property 53: Cache Query Methods - getServices returns all services # time=3.166ms
+ok 5 - Property 53: Cache Query Methods - getServices returns all services # time=2.7ms
 
 # Subtest: Property 53: Cache Query Methods - getTables returns all tables
     ok 1 - getTables() returns all table entries
     1..1
-ok 6 - Property 53: Cache Query Methods - getTables returns all tables # time=3.328ms
+ok 6 - Property 53: Cache Query Methods - getTables returns all tables # time=2.162ms
 
 # Subtest: Property 53: Cache Query Methods - getPartitions returns all partitions
     ok 1 - getPartitions() returns all partition entries
     1..1
-ok 7 - Property 53: Cache Query Methods - getPartitions returns all partitions # time=3.648ms
+ok 7 - Property 53: Cache Query Methods - getPartitions returns all partitions # time=2.7ms
 
 # Subtest: Property 53: Cache Query Methods - getMessageGroups returns all groups
     ok 1 - getMessageGroups() returns all message group entries
     1..1
-ok 8 - Property 53: Cache Query Methods - getMessageGroups returns all groups # time=3.083ms
+ok 8 - Property 53: Cache Query Methods - getMessageGroups returns all groups # time=1.673ms
 
 # Subtest: Property 53: Cache Query Methods - data integrity preserved
     ok 1 - Query methods preserve data integrity
     1..1
-ok 9 - Property 53: Cache Query Methods - data integrity preserved # time=6.544ms
+ok 9 - Property 53: Cache Query Methods - data integrity preserved # time=4.595ms
 
 1..9

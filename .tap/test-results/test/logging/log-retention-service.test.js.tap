@@ -2,13 +2,13 @@ TAP version 14
 # Subtest: setup
     ok 1 - configuration initialized
     1..1
-ok 1 - setup # time=55.386ms
+ok 1 - setup # time=38.933ms
 
 # Subtest: LogRetentionService singleton
     ok 1 - should return the same instance
 LogRetentionService shutdown
     1..1
-ok 2 - LogRetentionService singleton # time=1.127ms
+ok 2 - LogRetentionService singleton # time=0.8ms
 
 # Subtest: LogRetentionService initialization
     ok 1 - should not be initialized before initialize()
@@ -19,7 +19,7 @@ LogRetentionService initialized
     ok 5 - should not be running
 LogRetentionService shutdown
     1..5
-ok 3 - LogRetentionService initialization # time=1.063ms
+ok 3 - LogRetentionService initialization # time=0.921ms
 
 # Subtest: LogRetentionService default config
     ok 1 - should have 7 day retention
@@ -27,7 +27,7 @@ ok 3 - LogRetentionService initialization # time=1.063ms
     ok 3 - should have batch size
     ok 4 - should have max deletes per run
     1..4
-ok 4 - LogRetentionService default config # time=0.433ms
+ok 4 - LogRetentionService default config # time=0.388ms
 
 LogRetentionService initialized
 Retention period set to 86400000ms
@@ -35,26 +35,26 @@ Retention period set to 86400000ms
     ok 1 - should update retention period
 LogRetentionService shutdown
     1..1
-ok 5 - LogRetentionService setRetentionPeriod # time=0.615ms
+ok 5 - LogRetentionService setRetentionPeriod # time=0.546ms
 
 LogRetentionService initialized
 # Subtest: LogRetentionService setRetentionPeriod rejects negative
     ok 1 - should reject negative retention period
 LogRetentionService shutdown
     1..1
-ok 6 - LogRetentionService setRetentionPeriod rejects negative # time=0.658ms
+ok 6 - LogRetentionService setRetentionPeriod rejects negative # time=0.605ms
 
 LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-15T17:52:29.659Z)
+Running log cleanup (cutoff: 2026-01-16T06:22:45.082Z)
 # Subtest: LogRetentionService runCleanup without engine returns error
     ok 1 - should fail without engine
     ok 2 - should have error message
 LogRetentionService shutdown
     1..2
-ok 7 - LogRetentionService runCleanup without engine returns error # time=1.02ms
+ok 7 - LogRetentionService runCleanup without engine returns error # time=1.27ms
 
 LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-15T17:52:29.660Z)
+Running log cleanup (cutoff: 2026-01-16T06:22:45.084Z)
 Log cleanup completed: 0 entries deleted in 0ms
 # Subtest: LogRetentionService runCleanup with mock engine - no logs to delete
     ok 1 - should succeed
@@ -62,10 +62,10 @@ Log cleanup completed: 0 entries deleted in 0ms
     ok 3 - should have cutoff time
 LogRetentionService shutdown
     1..3
-ok 8 - LogRetentionService runCleanup with mock engine - no logs to delete # time=0.754ms
+ok 8 - LogRetentionService runCleanup with mock engine - no logs to delete # time=0.899ms
 
 LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-15T17:52:29.661Z)
+Running log cleanup (cutoff: 2026-01-16T06:22:45.085Z)
 # Subtest: LogRetentionService runCleanup with mock engine - deletes logs
     ok 1 - should include log-1
     ok 2 - should include log-2
@@ -80,10 +80,10 @@ Log cleanup completed: 3 entries deleted in 0ms
     ok 10 - should update last cleanup time
 LogRetentionService shutdown
     1..10
-ok 9 - LogRetentionService runCleanup with mock engine - deletes logs # time=0.981ms
+ok 9 - LogRetentionService runCleanup with mock engine - deletes logs # time=1.174ms
 
 LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-15T17:52:29.662Z)
+Running log cleanup (cutoff: 2026-01-16T06:22:45.086Z)
 Log cleanup completed: 0 entries deleted in 51ms
 # Subtest: LogRetentionService runCleanup prevents concurrent runs
     ok 1 - one should succeed
@@ -91,10 +91,10 @@ Log cleanup completed: 0 entries deleted in 51ms
     ok 3 - should indicate already running
 LogRetentionService shutdown
     1..3
-ok 10 - LogRetentionService runCleanup prevents concurrent runs # time=51.542ms
+ok 10 - LogRetentionService runCleanup prevents concurrent runs # time=51.547ms
 
 LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-15T17:52:29.714Z)
+Running log cleanup (cutoff: 2026-01-16T06:22:45.138Z)
 Log cleanup completed: 10 entries deleted in 0ms
 # Subtest: LogRetentionService runCleanup batches deletes
     ok 1 - should succeed
@@ -103,20 +103,20 @@ Log cleanup completed: 10 entries deleted in 0ms
     ok 4 - should call DELETE once
 LogRetentionService shutdown
     1..4
-ok 11 - LogRetentionService runCleanup batches deletes # time=0.843ms
+ok 11 - LogRetentionService runCleanup batches deletes # time=1.156ms
 
 LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-21T17:52:29.715Z)
-Log cleanup completed: 0 entries deleted in 0ms
+Running log cleanup (cutoff: 2026-01-22T06:22:45.139Z)
+Log cleanup completed: 0 entries deleted in 1ms
 # Subtest: LogRetentionService uses table policy retention period
     ok 1 - should capture cutoff time
     ok 2 - should use policy retention period
 LogRetentionService shutdown
     1..2
-ok 12 - LogRetentionService uses table policy retention period # time=0.685ms
+ok 12 - LogRetentionService uses table policy retention period # time=1.074ms
 
 LogRetentionService initialized
-Running log cleanup (cutoff: 2026-01-15T17:52:29.716Z)
+Running log cleanup (cutoff: 2026-01-16T06:22:45.141Z)
 Log cleanup completed: 0 entries deleted in 0ms
 # Subtest: LogRetentionService emits cleanup event
     ok 1 - should have deleted count
@@ -125,7 +125,7 @@ Log cleanup completed: 0 entries deleted in 0ms
     ok 4 - should emit cleanup event
 LogRetentionService shutdown
     1..4
-ok 13 - LogRetentionService emits cleanup event # time=0.951ms
+ok 13 - LogRetentionService emits cleanup event # time=2.351ms
 
 LogRetentionService initialized
 LogRetentionService shutdown
@@ -133,11 +133,11 @@ LogRetentionService shutdown
     ok 1 - should not be initialized after shutdown
 LogRetentionService shutdown
     1..1
-ok 14 - LogRetentionService shutdown # time=0.407ms
+ok 14 - LogRetentionService shutdown # time=0.677ms
 
 # Subtest: cleanup
     ok 1 - cleanup complete
     1..1
-ok 15 - cleanup # time=0.159ms
+ok 15 - cleanup # time=0.257ms
 
 1..15

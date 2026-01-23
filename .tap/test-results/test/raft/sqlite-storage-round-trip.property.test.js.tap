@@ -3,49 +3,86 @@ TAP version 14
     # Subtest: currentTerm round-trip preserves value
         ok 1 - currentTerm round-trip preserves value
         1..1
-    ok 1 - currentTerm round-trip preserves value # time=17.255ms
+    ok 1 - currentTerm round-trip preserves value # time=13.126ms
     
     # Subtest: votedFor round-trip preserves value
         ok 1 - votedFor round-trip preserves value
         1..1
-    ok 2 - votedFor round-trip preserves value # time=7.289ms
+    ok 2 - votedFor round-trip preserves value # time=4.464ms
     
     # Subtest: log entries round-trip preserves entries
         ok 1 - log entries round-trip preserves entries
         1..1
-    ok 3 - log entries round-trip preserves entries # time=7.205ms
+    ok 3 - log entries round-trip preserves entries # time=4.207ms
     
     # Subtest: state persists after simulated restart
         ok 1 - state persists after simulated restart
         1..1
-    ok 4 - state persists after simulated restart # time=103.43ms
+    ok 4 - state persists after simulated restart # time=114.469ms
     
     # Subtest: log entries persist after simulated restart
         ok 1 - log entries persist after simulated restart
         1..1
-    ok 5 - log entries persist after simulated restart # time=70.823ms
+    ok 5 - log entries persist after simulated restart # time=78.085ms
     
     # Subtest: getLastEntry returns the last appended entry
-        ok 1 - getLastEntry returns the last appended entry
+        not ok 1 - test unfinished
+          ---
+          at:
+            fileName: test/raft/sqlite-storage-round-trip.property.test.js
+            lineNumber: 276
+            columnNumber: 5
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/raft/sqlite-storage-round-trip.property.test.js:276:5)
+            test/raft/sqlite-storage-round-trip.property.test.js:38:1
+          test: getLastEntry returns the last appended entry
+          source: |2
+               * Property: getLastEntry returns the last appended entry.
+               */
+              t.test('getLastEntry returns the last appended entry', async (t) => {
+            ----^
+                const logEntriesArb = fc.array(
+                  fc.record({
+          ...
+        
         1..1
-    ok 6 - getLastEntry returns the last appended entry # time=4.901ms
+    not ok 6 - getLastEntry returns the last appended entry # time=15.644ms
+      ---
+      at:
+        fileName: test/raft/sqlite-storage-round-trip.property.test.js
+        lineNumber: 276
+        columnNumber: 5
+        typeName: Test
+      source: |2
+           * Property: getLastEntry returns the last appended entry.
+           */
+          t.test('getLastEntry returns the last appended entry', async (t) => {
+        ----^
+            const logEntriesArb = fc.array(
+              fc.record({
+      ...
     
-    # Subtest: getLastEntry returns null for empty log
-        ok 1 - getLastEntry returns null for empty log
-        1..1
-    ok 7 - getLastEntry returns null for empty log # time=0.718ms
-    
-    # Subtest: getLength returns correct count after appends
-        ok 1 - getLength returns correct count after appends
-        1..1
-    ok 8 - getLength returns correct count after appends # time=4.163ms
-    
-    # Subtest: commitIndex round-trip preserves value
-        ok 1 - commitIndex round-trip preserves value
-        1..1
-    ok 9 - commitIndex round-trip preserves value # time=2.895ms
-    
+    not ok 7 - child test left in queue: getLastEntry returns null for empty log
+    not ok 8 - child test left in queue: getLength returns correct count after appends
+    not ok 9 - child test left in queue: commitIndex round-trip preserves value
     1..9
-ok 1 - Property 2: SQLite Storage Round-Trip and Restart Recovery # time=224.703ms
+not ok 1 - Property 2: SQLite Storage Round-Trip and Restart Recovery # time=235.49ms
+  ---
+  at:
+    fileName: test/raft/sqlite-storage-round-trip.property.test.js
+    lineNumber: 38
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+     * should return the same values that were stored.
+     */
+    test('Property 2: SQLite Storage Round-Trip and Restart Recovery', async (t)
+    => {
+  
+    ^
+      /**
+       * Property: currentTerm round-trip.
+  ...
 
 1..1

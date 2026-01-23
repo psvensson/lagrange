@@ -11,10 +11,10 @@ TAP version 14
         ok 5 - should have status initiated
         ok 6 - joining node should receive one message
         ok 7 - should receive CREATE_REPLICA
-{"level":50,"time":"2026-01-22T17:52:28.932Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","connectionId":"43728cbe-7b04-42f6-82c0-f8421a351f80","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:28.933Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","connectionId":"f848e42f-93cd-4760-976a-c3d63a37ee69","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:22:44.232Z","nodeId":"test-node","pid":418208,"subsystem":"message-router","nodeId":"test-node","connectionId":"2f5b71b7-f6da-48d4-82fe-dc5710d31d8e","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:22:44.233Z","nodeId":"test-node","pid":418208,"subsystem":"message-router","nodeId":"test-node","connectionId":"bd92cdb0-3621-406c-8263-58acca5a88d8","msg":"Self-connection lost - fatal error"}
         1..7
-    ok 1 - seed node can send to joining node via incoming connection # time=97.912ms
+    ok 1 - seed node can send to joining node via incoming connection # time=99.886ms
     
     # Subtest: MessageRouter routes to joining node via WebSocket
         ok 1 - seed should have connection to joining node
@@ -22,14 +22,14 @@ TAP version 14
         ok 3 - should have correct request_id
         ok 4 - should have status initiated
         ok 5 - joining node should receive one message
-{"level":50,"time":"2026-01-22T17:52:29.045Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","connectionId":"a354f150-89d2-4959-9bc1-b8f4319aa2ca","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:29.045Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","connectionId":"3e9d8e6f-7679-40a9-9d10-ee29d19a2b60","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:22:44.346Z","nodeId":"test-node","pid":418208,"subsystem":"message-router","nodeId":"test-node","connectionId":"509fc2cf-7891-4ef0-a626-8f350afce616","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:22:44.347Z","nodeId":"test-node","pid":418208,"subsystem":"message-router","nodeId":"test-node","connectionId":"b7de9525-9d54-4a7e-9838-0ce27fde49ab","msg":"Self-connection lost - fatal error"}
         1..5
-    ok 2 - MessageRouter routes to joining node via WebSocket # time=81.09ms
+    ok 2 - MessageRouter routes to joining node via WebSocket # time=81.138ms
     
     1..2
-ok 1 - Bidirectional WebSocket communication # time=251.68ms
+ok 1 - Bidirectional WebSocket communication # time=269.924ms
 
-{"level":50,"time":"2026-01-22T17:52:29.934Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","error":"connect ECONNREFUSED 127.0.0.1:19900","msg":"WebSocket error"}
-{"level":50,"time":"2026-01-22T17:52:30.047Z","nodeId":"test-node","pid":313816,"subsystem":"message-router","nodeId":"test-node","error":"connect ECONNREFUSED 127.0.0.1:19902","msg":"WebSocket error"}
+{"level":50,"time":"2026-01-23T06:22:45.235Z","nodeId":"test-node","pid":418208,"subsystem":"message-router","nodeId":"test-node","error":"connect ECONNREFUSED 127.0.0.1:19900","msg":"WebSocket error"}
+{"level":50,"time":"2026-01-23T06:22:45.348Z","nodeId":"test-node","pid":418208,"subsystem":"message-router","nodeId":"test-node","error":"connect ECONNREFUSED 127.0.0.1:19902","msg":"WebSocket error"}
 1..1

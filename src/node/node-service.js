@@ -1,7 +1,7 @@
 /**
  * Node Service - Administrative component present on every node.
  * Handles service lifecycle, health monitoring, and node statistics.
- * Requirements: 1.3, 2.3
+ * Requirements: 1.3, 2.3, 5.1, 5.4, 5.7
  */
 
 import os from 'os';
@@ -11,6 +11,10 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ServiceThreadManager, ServiceStatus} from '../threading/service-thread-manager.js';
 import {AddressManager} from '../address/address-manager.js';
+import {
+  NodeLifecycleStateMachine,
+  NodeState,
+} from './node-lifecycle-state-machine.js';
 
 /**
  * Node status enumeration.
@@ -27,6 +31,7 @@ const NodeStatus = {
 /**
  * NodeService is the administrative component present on every node.
  * It manages service lifecycle, health monitoring, and node statistics.
+ * Uses NodeLifecycleStateMachine for explicit state management.
  */
 class NodeService extends EventEmitter {
   static instance = null;
@@ -40,6 +45,7 @@ class NodeService extends EventEmitter {
     this.nodeId = null;
     this.nodeAddress = null;
     this.status = NodeStatus.INITIALIZING;
+    this.lifecycleStateMachine = null;
     this.services = new Map();
     this.messageGroupServices = new Map();
     this.heartbeatInterval = null;
@@ -108,13 +114,71 @@ class NodeService extends EventEmitter {
       this.threadManager.initialize();
     }
 
+    // Initialize lifecycle state machine
+    this.lifecycleStateMachine = new NodeLifecycleStateMachine({
+      nodeId: this.nodeId,
+      initialState: NodeState.STARTING,
+    });
+
+    // Forward state change events from the state machine
+    this.lifecycleStateMachine.on('stateChange', (event) => {
+      this._onLifecycleStateChange(event);
+    });
+
     this.startTime = Date.now();
+
+    // Transition through initial states: STARTING -> CONNECTING -> READY
+    // For a simple initialization, we go directly to READY state
+    // In a full cluster setup, this would go through CONNECTING, DISCOVERING, etc.
+    this.lifecycleStateMachine.transition(NodeState.CONNECTING);
+    this.lifecycleStateMachine.transition(NodeState.DISCOVERING);
+    this.lifecycleStateMachine.transition(NodeState.JOINING);
+    this.lifecycleStateMachine.transition(NodeState.SYNCING);
+    this.lifecycleStateMachine.transition(NodeState.READY);
+
+    // Update legacy status for backward compatibility
     this.status = NodeStatus.ACTIVE;
     this.initialized = true;
 
     this.logger.info('Node service initialized', {
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
+      lifecycleState: this.lifecycleStateMachine.getState(),
+    });
+  }
+
+  /**
+   * Handle lifecycle state change events.
+   * Emits CDC events for nodes table updates.
+   * @param {Object} event - State change event.
+   * @param {string} event.from - Previous state.
+   * @param {string} event.to - New state.
+   * @param {number} event.timestamp - Timestamp of the change.
+   * @private
+   */
+  _onLifecycleStateChange(event) {
+    this.logger.info('Node lifecycle state changed', {
+      nodeId: this.nodeId,
+      from: event.from,
+      to: event.to,
+      timestamp: event.timestamp,
+    });
+
+    // Forward the state change event for external listeners
+    this.emit('lifecycleStateChange', {
+      nodeId: this.nodeId,
+      from: event.from,
+      to: event.to,
+      timestamp: event.timestamp,
+    });
+
+    // Emit CDC event for nodes table update
+    // This allows other components to react to state changes
+    this.emit('cdcNodeStateChange', {
+      nodeId: this.nodeId,
+      state: event.to,
+      previousState: event.from,
+      timestamp: event.timestamp,
     });
   }
 
@@ -452,6 +516,41 @@ class NodeService extends EventEmitter {
   }
 
   /**
+   * Get the current lifecycle state from the state machine.
+   * @return {string|null} The current lifecycle state, or null if not initialized.
+   */
+  getLifecycleState() {
+    if (!this.lifecycleStateMachine) {
+      return null;
+    }
+    return this.lifecycleStateMachine.getState();
+  }
+
+  /**
+   * Get the lifecycle state machine instance.
+   * @return {NodeLifecycleStateMachine|null} The state machine, or null if not initialized.
+   */
+  getLifecycleStateMachine() {
+    return this.lifecycleStateMachine;
+  }
+
+  /**
+   * Check if the node is in READY state (accepting traffic).
+   * @return {boolean} True if node is ready.
+   */
+  isReady() {
+    return this.lifecycleStateMachine?.isReady() || false;
+  }
+
+  /**
+   * Check if the node is in DRAINING state.
+   * @return {boolean} True if node is draining.
+   */
+  isDraining() {
+    return this.lifecycleStateMachine?.isDraining() || false;
+  }
+
+  /**
    * Check if the node service is initialized.
    * @return {boolean} True if initialized.
    */
@@ -492,6 +591,12 @@ class NodeService extends EventEmitter {
     this.logger.info('Shutting down node service', {nodeId: this.nodeId});
     this.status = NodeStatus.SHUTTING_DOWN;
 
+    // Transition to DRAINING state if we're in READY state
+    if (this.lifecycleStateMachine &&
+        this.lifecycleStateMachine.getState() === NodeState.READY) {
+      this.lifecycleStateMachine.transition(NodeState.DRAINING);
+    }
+
     // Clear intervals
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
@@ -520,6 +625,17 @@ class NodeService extends EventEmitter {
       this.addressManager.unregisterNodeAddress(this.nodeAddress);
     }
 
+    // Transition to STOPPED state
+    if (this.lifecycleStateMachine &&
+        this.lifecycleStateMachine.getState() === NodeState.DRAINING) {
+      this.lifecycleStateMachine.transition(NodeState.STOPPED);
+    }
+
+    // Clean up state machine event listeners
+    if (this.lifecycleStateMachine) {
+      this.lifecycleStateMachine.removeAllListeners();
+    }
+
     this.status = NodeStatus.STOPPED;
     this.initialized = false;
 
@@ -528,4 +644,4 @@ class NodeService extends EventEmitter {
   }
 }
 
-export {NodeService, NodeStatus};
+export {NodeService, NodeStatus, NodeState};

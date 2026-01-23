@@ -53,6 +53,7 @@ const CDC_OPERATIONS = {
 /**
  * SystemTableCache provides in-memory caching for system tables.
  * Only CDC event handlers should have write access to this cache.
+ * Requirements: 7.1, 7.2 - Cache tracks current epoch and provides epoch methods
  */
 class SystemTableCache {
   /**
@@ -62,11 +63,68 @@ class SystemTableCache {
     this.tables = new Map();
     this.listeners = new Set();
     this.logger = LoggingService.getInstance().forSubsystem('cache');
+    this.currentEpoch = 0;
 
     // Initialize empty maps for each system table
     for (const tableName of SYSTEM_TABLES) {
       this.tables.set(tableName, new Map());
     }
+  }
+
+  /**
+   * Get the current epoch number.
+   * Requirements: 7.1, 7.2
+   * @return {number} The current epoch number
+   */
+  getEpoch() {
+    return this.currentEpoch;
+  }
+
+  /**
+   * Update the cache from an AssignmentEpoch object.
+   * Requirements: 7.1, 7.2, 7.5
+   * @param {Object} epoch - AssignmentEpoch object with epoch, assignments,
+   *                         timestamp, and proposedBy fields
+   * @return {boolean} True if the update was applied, false if rejected
+   *                   due to stale epoch
+   * @throws {Error} If epoch is invalid or missing required fields
+   */
+  updateFromEpoch(epoch) {
+    if (!epoch || typeof epoch !== 'object') {
+      throw new Error('Epoch must be a valid object');
+    }
+
+    if (typeof epoch.epoch !== 'number') {
+      throw new Error('Epoch must have a numeric epoch field');
+    }
+
+    if (!epoch.assignments || typeof epoch.assignments !== 'object') {
+      throw new Error('Epoch must have an assignments object');
+    }
+
+    // Requirement 7.5: Reject updates from older epochs
+    if (epoch.epoch <= this.currentEpoch) {
+      this.logger.debug('Rejected stale epoch update', {
+        incomingEpoch: epoch.epoch,
+        currentEpoch: this.currentEpoch,
+      });
+      return false;
+    }
+
+    // Atomic update: update epoch number
+    this.currentEpoch = epoch.epoch;
+    this.logger.debug('Updated cache epoch', {epoch: this.currentEpoch});
+    return true;
+  }
+
+  /**
+   * Get all nodes that are in the 'ready' state.
+   * Requirements: 5.9 - Cache should filter nodes by state
+   * @return {string[]} Array of node IDs that are in ready state
+   */
+  getReadyNodes() {
+    const readyNodes = this.filter('nodes', (node) => node.state === 'ready');
+    return readyNodes.map((node) => node.node_id || node.id);
   }
 
   /**

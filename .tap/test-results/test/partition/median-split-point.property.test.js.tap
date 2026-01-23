@@ -2,21 +2,57 @@ TAP version 14
 # Subtest: Property 39: Split point is median key
     ok 1 - Split point is median key
     1..1
-ok 1 - Property 39: Split point is median key # time=8.564ms
+ok 1 - Property 39: Split point is median key # time=12.418ms
 
+{"level":50,"time":"2026-01-23T06:22:53.445Z","nodeId":"test-node","pid":419202,"subsystem":"partition-split-merge","partitionId":"partition-1","error":"Partition has insufficient rows for split","nodeId":"test-node","msg":"Partition split failed"}
 # Subtest: Property 39: Median split creates balanced partitions
-    ok 1 - Median split creates balanced partitions
+    not ok 1 - Property failed after 6 tests { seed: 1035874590, path: "5", endOnFailure: true } Counterexample: [[9995]] Shrunk 0 time(s) Got error: Partition has insufficient rows for split     at PartitionSplitMergeManager.calculateMedianKey (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-split-merge-manager.js:124:13)     at async PartitionSplitMergeManager.splitPartition (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-split-merge-manager.js:255:25)     at async file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/partition/median-split-point.property.test.js:130:24     at async AsyncProperty.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/partition/median-split-point.property.test.js:117:3)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+      ---
+      stack: |
+        buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+        asyncThrowIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+      at:
+        fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+        lineNumber: 126
+        columnNumber: 15
+        functionName: buildError
+      tapCaught: returnedPromiseRejection
+      source: |
+        function buildError(errorMessage, out) {
+            if (!out.runConfiguration.errorWithCause) {
+                throw new Error(errorMessage);
+        --------------^
+            }
+            const ErrorWithCause = Error;
+      ...
+    
     1..1
-ok 2 - Property 39: Median split creates balanced partitions # time=2.819ms
+not ok 2 - Property 39: Median split creates balanced partitions # time=29.978ms
+  ---
+  at:
+    fileName: test/partition/median-split-point.property.test.js
+    lineNumber: 116
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+     * After splitting at median, approximately half the keys should be in each
+    partition.
+     */
+    test('Property 39: Median split creates balanced partitions', async (t) => {
+  
+    ^
+      await fc.assert(
+        fc.asyncProperty(
+  ...
 
 # Subtest: Property 39: Split point is within partition range
     ok 1 - Split point is within partition range
     1..1
-ok 3 - Property 39: Split point is within partition range # time=3.35ms
+ok 3 - Property 39: Split point is within partition range # time=3.246ms
 
 # Subtest: Property 39: Resulting partitions have correct ranges
     ok 1 - Resulting partitions have correct ranges
     1..1
-ok 4 - Property 39: Resulting partitions have correct ranges # time=2.427ms
+ok 4 - Property 39: Resulting partitions have correct ranges # time=2.659ms
 
 1..4

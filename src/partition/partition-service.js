@@ -2,7 +2,7 @@
  * Partition Service - SQLite-backed Raft group for data storage.
  * Implements table partitions with Raft consensus for replication.
  * Uses liferaft library for Raft consensus with simplified transport.
- * Requirements: 3.2, 3.3, 3.4, 3.5, 4.4, 8.1, 10.1, 35.1, 35.5
+ * Requirements: 1.4, 3.2, 3.3, 3.4, 3.5, 4.4, 8.1, 10.1, 35.1, 35.5
  */
 
 import {EventEmitter} from 'events';
@@ -18,6 +18,7 @@ import {PendingRequestTracker} from './pending-request-tracker.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas.js';
+import {AddressManager} from '../address/address-manager.js';
 
 /**
  * Partition state enumeration.
@@ -286,9 +287,10 @@ class PartitionService extends EventEmitter {
     this.transport = options.transport || null;
     this.dbPath = options.dbPath || ':memory:';
 
-    // Unified address format: ${nodeId}/partition/${replicaId}
-    // Requirements: 1.1, 5.1
-    this.unifiedAddress = `${this.nodeId}/partition/${this.replicaId}`;
+    // Unified address format: {nodeId}/partition/{replicaId}
+    // Requirements: 1.1, 1.4, 5.1
+    const addressManager = AddressManager.getInstance();
+    this.unifiedAddress = addressManager.format(this.nodeId, 'partition', this.replicaId);
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -378,24 +380,29 @@ class PartitionService extends EventEmitter {
    * Build a unified address for a peer replica.
    * Looks up the nodeId from the system table cache if available.
    * Falls back to using the peerId directly if nodeId cannot be determined.
-   * All addresses use fully qualified network identity format: ${nodeId}/partition/${replicaId}
-   * Requirements: 1.1, 3.1, 3.2, 3.3, 9.1
+   * All addresses use fully qualified network identity format: {nodeId}/partition/{replicaId}
+   * Requirements: 1.1, 1.4, 3.1, 3.2, 3.3, 9.1
    * @param {string} peerId - Peer replica ID.
    * @return {string} Unified address for the peer.
    */
   buildPeerAddress(peerId) {
-    // If peerId is already in unified format, return as-is
+    const addressManager = AddressManager.getInstance();
+
+    // If peerId is already in unified format, validate and return as-is
     if (peerId.includes('/')) {
-      this.logger.debug('Peer address already in unified format', {
-        peerId,
-        partitionId: this.partitionId,
-      });
-      return peerId;
+      const validation = addressManager.validate(peerId);
+      if (validation.valid) {
+        this.logger.debug('Peer address already in unified format', {
+          peerId,
+          partitionId: this.partitionId,
+        });
+        return peerId;
+      }
     }
 
     // Check peerAddresses array (provided during cross-node joining)
     // Format: ['nodeId/partition/replicaId', ...]
-    // Requirements: 1.1, 3.1, 3.2, 3.3
+    // Requirements: 1.1, 1.4, 3.1, 3.2, 3.3
     if (this.peerAddresses && this.peerAddresses.length > 0) {
       const matchingAddress = this.peerAddresses.find((addr) =>
         addr.endsWith(`/partition/${peerId}`) || addr.endsWith(`/${peerId}`));
@@ -413,7 +420,7 @@ class PartitionService extends EventEmitter {
     if (this.systemTableCache) {
       const service = this.systemTableCache.get('services', peerId);
       if (service && service.node_id) {
-        const address = `${service.node_id}/partition/${peerId}`;
+        const address = addressManager.format(service.node_id, 'partition', peerId);
         this.logger.debug('Built peer address from cache', {
           peerId,
           nodeId: service.node_id,
@@ -426,8 +433,8 @@ class PartitionService extends EventEmitter {
 
     // During bootstrap, all replicas are on the same node, so use this.nodeId
     // This enables Raft elections to work before the system table cache is populated
-    // Requirements: 1.1, 3.1, 3.2, 3.3, 9.1
-    const address = `${this.nodeId}/partition/${peerId}`;
+    // Requirements: 1.1, 1.4, 3.1, 3.2, 3.3, 9.1
+    const address = addressManager.format(this.nodeId, 'partition', peerId);
     this.logger.debug('Built peer address using local nodeId', {
       peerId,
       nodeId: this.nodeId,
@@ -2021,9 +2028,10 @@ class PartitionService extends EventEmitter {
     }
 
     // Build unified peer addresses for Raft communication
-    // Format: ${nodeId}/partition/${replicaId}
-    // Requirements: 1.1, 3.1, 3.2, 3.3
+    // Format: {nodeId}/partition/{replicaId}
+    // Requirements: 1.1, 1.4, 3.1, 3.2, 3.3
     let peerAddresses = [];
+    const addressManager = AddressManager.getInstance();
     if (this.systemTableCache) {
       try {
         const partitionServices = this.systemTableCache.filter(
@@ -2033,7 +2041,7 @@ class PartitionService extends EventEmitter {
         );
         peerAddresses = partitionServices
           .filter((svc) => svc.node_id) // Only include services with node_id
-          .map((svc) => `${svc.node_id}/partition/${svc.service_id}`);
+          .map((svc) => addressManager.format(svc.node_id, 'partition', svc.service_id));
         this.logger.debug('Built peer addresses for CREATE_REPLICA', {
           partitionId: this.partitionId,
           peerAddresses,
@@ -2065,8 +2073,8 @@ class PartitionService extends EventEmitter {
     };
 
     // Target the lifecycle handler on the target node using unified address format
-    // Requirements: 1.1, 7.1 - Unified address format ${nodeId}/${entityType}/${entityId}
-    const targetAddress = `${targetNodeId}/lifecycle/manager`;
+    // Requirements: 1.1, 1.4, 7.1 - Unified address format {nodeId}/{entityType}/{entityId}
+    const targetAddress = addressManager.format(targetNodeId, 'lifecycle', 'manager');
 
     // Use messageRouter for cross-node delivery
     // This properly routes through WebSocket to reach remote nodes
@@ -2238,8 +2246,10 @@ class PartitionService extends EventEmitter {
     };
 
     // Target the lifecycle handler on the target node using unified address format
-    // Requirements: 1.1, 7.1 - Unified address format ${nodeId}/${entityType}/${entityId}
-    const targetAddress = `${targetNodeId}/lifecycle/manager`;
+    // Requirements: 1.1, 1.4, 7.1 - Unified address format {nodeId}/{entityType}/{entityId}
+    const targetAddress = AddressManager.getInstance().format(
+      targetNodeId, 'lifecycle', 'manager'
+    );
 
     // Use messageRouter for cross-node delivery
     // This properly routes through WebSocket to reach remote nodes

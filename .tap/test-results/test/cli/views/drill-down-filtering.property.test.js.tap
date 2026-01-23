@@ -3,39 +3,39 @@ TAP version 14
     # Subtest: node filter shows only services for that node
         ok 1 - node filter shows only services for that node
         1..1
-    ok 1 - node filter shows only services for that node # time=8.925ms
+    ok 1 - node filter shows only services for that node # time=11.321ms
     
     # Subtest: type filter shows only services of that type
         ok 1 - type filter shows only services of that type
         1..1
-    ok 2 - type filter shows only services of that type # time=2.394ms
+    ok 2 - type filter shows only services of that type # time=3.983ms
     
     # Subtest: combined filters are conjunctive (AND)
         ok 1 - combined filters are conjunctive (AND)
         1..1
-    ok 3 - combined filters are conjunctive (AND) # time=3.628ms
+    ok 3 - combined filters are conjunctive (AND) # time=3.805ms
     
     # Subtest: clearing filters restores all data
         ok 1 - clearing filters restores all data
         1..1
-    ok 4 - clearing filters restores all data # time=2.611ms
+    ok 4 - clearing filters restores all data # time=3.928ms
     
     # Subtest: filtered count is subset of total
         ok 1 - filtered count is subset of total
         1..1
-    ok 5 - filtered count is subset of total # time=5.215ms
+    ok 5 - filtered count is subset of total # time=2.791ms
     
     # Subtest: drill-down returns correct parent reference
         ok 1 - drill-down returns correct parent reference
         1..1
-    ok 6 - drill-down returns correct parent reference # time=0.992ms
+    ok 6 - drill-down returns correct parent reference # time=1.806ms
     
     # Subtest: message group drill-down returns correct reference
         ok 1 - message group drill-down returns correct reference
         1..1
-    ok 7 - message group drill-down returns correct reference # time=0.663ms
+    ok 7 - message group drill-down returns correct reference # time=1.674ms
     
     1..7
-ok 1 - Property 3: Drill-Down Filtering # time=30.088ms
+ok 1 - Property 3: Drill-Down Filtering # time=37.916ms
 
 1..1

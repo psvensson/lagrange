@@ -674,7 +674,7 @@ class MessageRouter extends EventEmitter {
       throw new Error(
         `Invalid address format: ${address}. ` +
         'Expected format: nodeId/entityType/entityId where entityType is one of: ' +
-        'message-group, partition, lifecycle, service'
+        'message-group, partition, lifecycle, service',
       );
     }
 

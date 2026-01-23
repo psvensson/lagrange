@@ -5,14 +5,14 @@ TAP version 14
     ok 3 - should have fastify instance
     ok 4 - should not be initialized after shutdown
     1..4
-ok 1 - BootstrapAPI - initialization # time=70.833ms
+ok 1 - BootstrapAPI - initialization # time=81.102ms
 
 # Subtest: BootstrapAPI - health endpoint
     ok 1 - should return 200
     ok 2 - should return healthy status
     ok 3 - should return seed node ID
     1..3
-ok 2 - BootstrapAPI - health endpoint # time=30.85ms
+ok 2 - BootstrapAPI - health endpoint # time=37.719ms
 
 # Subtest: BootstrapAPI - bootstrap validation
     ok 1 - should return 400 for missing nodeId
@@ -22,7 +22,7 @@ ok 2 - BootstrapAPI - health endpoint # time=30.85ms
     ok 5 - should return 400 for missing nodeAddress
     ok 6 - error should mention nodeAddress
     1..6
-ok 3 - BootstrapAPI - bootstrap validation # time=21.281ms
+ok 3 - BootstrapAPI - bootstrap validation # time=29.691ms
 
 # Subtest: BootstrapAPI - bootstrap conflict detection
     ok 1 - first bootstrap should succeed
@@ -30,7 +30,7 @@ ok 3 - BootstrapAPI - bootstrap validation # time=21.281ms
     ok 3 - error should mention already registered
     ok 4 - seed node ID should fail validation
     1..4
-ok 4 - BootstrapAPI - bootstrap conflict detection # time=16.107ms
+ok 4 - BootstrapAPI - bootstrap conflict detection # time=24.855ms
 
 # Subtest: BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED
     ok 1 - bootstrap should succeed
@@ -42,7 +42,7 @@ ok 4 - BootstrapAPI - bootstrap conflict detection # time=16.107ms
     ok 7 - should have cluster config
     ok 8 - should have timestamp
     1..8
-ok 5 - BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED # time=16.689ms
+ok 5 - BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED # time=24.011ms
 
 # Subtest: BootstrapAPI - bootstrap with MOVE_REPLICA strategy
     ok 1 - bootstrap should succeed
@@ -54,7 +54,7 @@ ok 5 - BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED # time=16.689
     ok 7 - should identify replica to move
     ok 8 - should have replica addresses
     1..8
-ok 6 - BootstrapAPI - bootstrap with MOVE_REPLICA strategy # time=13.896ms
+ok 6 - BootstrapAPI - bootstrap with MOVE_REPLICA strategy # time=21.666ms
 
 # Subtest: BootstrapAPI - cluster state endpoint
     ok 1 - should return 200
@@ -64,6 +64,6 @@ ok 6 - BootstrapAPI - bootstrap with MOVE_REPLICA strategy # time=13.896ms
     ok 5 - should have seed node
     ok 6 - should have new node
     1..6
-ok 7 - BootstrapAPI - cluster state endpoint # time=14.041ms
+ok 7 - BootstrapAPI - cluster state endpoint # time=23.19ms
 
 1..7

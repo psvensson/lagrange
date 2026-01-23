@@ -84,7 +84,7 @@ class SQLiteLogAdapter {
     } else if (hasDataColumn && hasCommandColumn) {
       // Both columns exist - ensure command has data from legacy column
       this.db.exec(
-        'UPDATE _raft_log SET command = data WHERE command IS NULL AND data IS NOT NULL'
+        'UPDATE _raft_log SET command = data WHERE command IS NULL AND data IS NOT NULL',
       );
       // Set default for any remaining NULL values
       this.db.exec('UPDATE _raft_log SET command = \'{}\' WHERE command IS NULL');

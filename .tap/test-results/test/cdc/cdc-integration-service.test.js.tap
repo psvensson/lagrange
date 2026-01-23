@@ -3,12 +3,12 @@ TAP version 14
     ok 1 - should set nodeId
     ok 2 - should not be initialized
     1..2
-ok 1 - CDCIntegrationService - constructor # time=2.106ms
+ok 1 - CDCIntegrationService - constructor # time=3.981ms
 
 # Subtest: CDCIntegrationService - initialize
     ok 1 - should be initialized
     1..1
-ok 2 - CDCIntegrationService - initialize # time=0.465ms
+ok 2 - CDCIntegrationService - initialize # time=0.875ms
 
 # Subtest: CDCIntegrationService - insertSystemTableRow
     ok 1 - should succeed
@@ -17,13 +17,13 @@ ok 2 - CDCIntegrationService - initialize # time=0.465ms
     ok 4 - should insert one row
     ok 5 - should insert to correct table
     1..5
-ok 3 - CDCIntegrationService - insertSystemTableRow # time=0.69ms
+ok 3 - CDCIntegrationService - insertSystemTableRow # time=1.345ms
 
 # Subtest: CDCIntegrationService - insertSystemTableRow generates id
     ok 1 - should succeed
     ok 2 - should generate node_id
     1..2
-ok 4 - CDCIntegrationService - insertSystemTableRow generates id # time=0.516ms
+ok 4 - CDCIntegrationService - insertSystemTableRow generates id # time=0.915ms
 
 # Subtest: CDCIntegrationService - updateSystemTableRow
     ok 1 - should succeed
@@ -32,7 +32,7 @@ ok 4 - CDCIntegrationService - insertSystemTableRow generates id # time=0.516ms
     ok 4 - should update one row
     ok 5 - should have correct whereClause
     1..5
-ok 5 - CDCIntegrationService - updateSystemTableRow # time=1.053ms
+ok 5 - CDCIntegrationService - updateSystemTableRow # time=1.912ms
 
 # Subtest: CDCIntegrationService - deleteSystemTableRow
     ok 1 - should succeed
@@ -41,39 +41,39 @@ ok 5 - CDCIntegrationService - updateSystemTableRow # time=1.053ms
     ok 4 - should delete one row
     ok 5 - should have correct whereClause
     1..5
-ok 6 - CDCIntegrationService - deleteSystemTableRow # time=0.59ms
+ok 6 - CDCIntegrationService - deleteSystemTableRow # time=1.158ms
 
 # Subtest: CDCIntegrationService - validates table name
     ok 1 - should have error message
     1..1
-ok 7 - CDCIntegrationService - validates table name # time=0.381ms
+ok 7 - CDCIntegrationService - validates table name # time=0.675ms
 
 # Subtest: CDCIntegrationService - validates data object
     ok 1 - should have error message
     1..1
-ok 8 - CDCIntegrationService - validates data object # time=0.431ms
+ok 8 - CDCIntegrationService - validates data object # time=0.818ms
 
 # Subtest: CDCIntegrationService - requires primary key for update
     ok 1 - should have error message
     1..1
-ok 9 - CDCIntegrationService - requires primary key for update # time=0.357ms
+ok 9 - CDCIntegrationService - requires primary key for update # time=0.906ms
 
 # Subtest: CDCIntegrationService - requires primary key for delete
     ok 1 - should have error message
     1..1
-ok 10 - CDCIntegrationService - requires primary key for delete # time=0.33ms
+ok 10 - CDCIntegrationService - requires primary key for delete # time=0.716ms
 
-{"level":50,"time":"2026-01-22T18:49:44.548Z","nodeId":"a0f64adc-7f70-45b6-bbde-6c0ef1ac4a0b","pid":327348,"subsystem":"cdc-integration","tableName":"nodes","id":"1","error":"No partition available for system table: nodes","nodeId":"a0f64adc-7f70-45b6-bbde-6c0ef1ac4a0b","msg":"Failed to insert system table row"}
+{"level":50,"time":"2026-01-23T06:22:33.796Z","nodeId":"6d5016f9-3f30-44ba-8b4c-43c02658aae0","pid":416854,"subsystem":"cdc-integration","tableName":"nodes","id":"1","error":"No partition available for system table: nodes","nodeId":"6d5016f9-3f30-44ba-8b4c-43c02658aae0","msg":"Failed to insert system table row"}
 # Subtest: CDCIntegrationService - throws when partition not available
     ok 1 - should have error message
     1..1
-ok 11 - CDCIntegrationService - throws when partition not available # time=0.927ms
+ok 11 - CDCIntegrationService - throws when partition not available # time=1.908ms
 
-{"level":50,"time":"2026-01-22T18:49:44.558Z","nodeId":"4c13292b-140a-4865-aa55-24c7d57fc75d","pid":327348,"subsystem":"cdc-integration","tableName":"nodes","id":"1","error":"CDCIntegrationService not properly initialized: getPartitionForTable function not provided","nodeId":"4c13292b-140a-4865-aa55-24c7d57fc75d","msg":"Failed to insert system table row"}
+{"level":50,"time":"2026-01-23T06:22:33.817Z","nodeId":"d9f8b86f-ee09-4ae9-8e0e-9881f7c2767d","pid":416854,"subsystem":"cdc-integration","tableName":"nodes","id":"1","error":"CDCIntegrationService not properly initialized: getPartitionForTable function not provided","nodeId":"d9f8b86f-ee09-4ae9-8e0e-9881f7c2767d","msg":"Failed to insert system table row"}
 # Subtest: CDCIntegrationService - throws when not initialized
     ok 1 - should have error message
     1..1
-ok 12 - CDCIntegrationService - throws when not initialized # time=0.47ms
+ok 12 - CDCIntegrationService - throws when not initialized # time=1.099ms
 
 # Subtest: CDCIntegrationService - tracks statistics
     ok 1 - should track inserts
@@ -81,7 +81,7 @@ ok 12 - CDCIntegrationService - throws when not initialized # time=0.47ms
     ok 3 - should track deletes
     ok 4 - should track total
     1..4
-ok 13 - CDCIntegrationService - tracks statistics # time=0.499ms
+ok 13 - CDCIntegrationService - tracks statistics # time=0.696ms
 
 # Subtest: CDCIntegrationService - emits events
     ok 1 - should emit 3 events
@@ -89,7 +89,7 @@ ok 13 - CDCIntegrationService - tracks statistics # time=0.499ms
     ok 3 - should emit update event
     ok 4 - should emit delete event
     1..4
-ok 14 - CDCIntegrationService - emits events # time=0.508ms
+ok 14 - CDCIntegrationService - emits events # time=0.573ms
 
 # Subtest: CDCIntegrationService - VALID_SYSTEM_TABLES contains all system tables
     ok 1 - should include nodes
@@ -101,13 +101,175 @@ ok 14 - CDCIntegrationService - emits events # time=0.508ms
     ok 7 - should include logs
     ok 8 - should include config
     1..8
-ok 15 - CDCIntegrationService - VALID_SYSTEM_TABLES contains all system tables # time=0.511ms
+ok 15 - CDCIntegrationService - VALID_SYSTEM_TABLES contains all system tables # time=0.615ms
 
 # Subtest: CDCIntegrationService - resetStats
     ok 1 - should have 1 insert
     ok 2 - should reset inserts
     ok 3 - should reset total
     1..3
-ok 16 - CDCIntegrationService - resetStats # time=0.435ms
+ok 16 - CDCIntegrationService - resetStats # time=0.563ms
 
-1..16
+# Subtest: CDCIntegrationService - setEpochManager
+    ok 1 - should set epoch manager
+    1..1
+ok 17 - CDCIntegrationService - setEpochManager # time=0.609ms
+
+# Subtest: CDCIntegrationService - setEpochManager throws on null
+    ok 1 - should have error message
+    1..1
+ok 18 - CDCIntegrationService - setEpochManager throws on null # time=0.545ms
+
+# Subtest: CDCIntegrationService - handleEpochChangeCDC applies valid epoch
+    ok 1 - should apply epoch
+    ok 2 - should return epoch number
+    ok 3 - epoch manager should have new epoch
+    1..3
+ok 19 - CDCIntegrationService - handleEpochChangeCDC applies valid epoch # time=1.286ms
+
+# Subtest: CDCIntegrationService - handleEpochChangeCDC emits epochChange event
+    ok 1 - should emit one epochChange event
+    ok 2 - event should have epoch number
+    ok 3 - event should have cdc source
+    ok 4 - event should have proposedBy
+    1..4
+ok 20 - CDCIntegrationService - handleEpochChangeCDC emits epochChange event # time=0.916ms
+
+# Subtest: CDCIntegrationService - handleEpochChangeCDC rejects non-epoch config key
+    ok 1 - should not apply
+    ok 2 - should have error message
+    1..2
+ok 21 - CDCIntegrationService - handleEpochChangeCDC rejects non-epoch config key # time=0.814ms
+
+# Subtest: CDCIntegrationService - handleEpochChangeCDC rejects stale epoch
+    ok 1 - should not apply stale epoch
+    ok 2 - should have stale error message
+    ok 3 - epoch should remain at 5
+    1..3
+ok 22 - CDCIntegrationService - handleEpochChangeCDC rejects stale epoch # time=0.831ms
+
+# Subtest: CDCIntegrationService - handleEpochChangeCDC without epoch manager
+    ok 1 - should not apply without epoch manager
+    ok 2 - should have error message
+    1..2
+ok 23 - CDCIntegrationService - handleEpochChangeCDC without epoch manager # time=0.721ms
+
+# Subtest: CDCIntegrationService - handleEpochChangeCDC with invalid event
+    ok 1 - should not apply null event
+    ok 2 - should have error message
+    1..2
+ok 24 - CDCIntegrationService - handleEpochChangeCDC with invalid event # time=0.401ms
+
+{"level":50,"time":"2026-01-23T06:22:34.016Z","nodeId":"446ed70f-03bf-46f7-a035-c7d66b7d5923","pid":416854,"subsystem":"cdc-integration","nodeId":"446ed70f-03bf-46f7-a035-c7d66b7d5923","error":"Unexpected token 'o', \"not valid json {{{\" is not valid JSON","msg":"Failed to parse epoch data from CDC event"}
+# Subtest: CDCIntegrationService - handleEpochChangeCDC with invalid JSON
+    ok 1 - should not apply with invalid JSON
+    ok 2 - should have parse error
+    1..2
+ok 25 - CDCIntegrationService - handleEpochChangeCDC with invalid JSON # time=0.732ms
+
+{"level":50,"time":"2026-01-23T06:22:34.029Z","nodeId":"a5fc6561-4632-4300-865f-9f9bc1144ab8","pid":416854,"subsystem":"cdc-integration","nodeId":"a5fc6561-4632-4300-865f-9f9bc1144ab8","error":"Epoch must be non-negative","msg":"Failed to create AssignmentEpoch from CDC data"}
+# Subtest: CDCIntegrationService - handleEpochChangeCDC with invalid epoch data
+    ok 1 - should not apply with invalid epoch data
+    ok 2 - should have create error
+    1..2
+ok 26 - CDCIntegrationService - handleEpochChangeCDC with invalid epoch data # time=0.511ms
+
+# Subtest: CDCIntegrationService - tracks epochChanges in stats
+    ok 1 - should track epoch changes
+    1..1
+ok 27 - CDCIntegrationService - tracks epochChanges in stats # time=0.859ms
+
+# Subtest: CDCIntegrationService - EPOCH_CONFIG_KEY is exported
+    ok 1 - should export correct config key
+    1..1
+ok 28 - CDCIntegrationService - EPOCH_CONFIG_KEY is exported # time=0.419ms
+
+# Subtest: CDCIntegrationService - setRebalancer
+    ok 1 - should set rebalancer
+    1..1
+ok 29 - CDCIntegrationService - setRebalancer # time=0.598ms
+
+# Subtest: CDCIntegrationService - setRebalancer throws on null
+    ok 1 - should have error message
+    1..1
+ok 30 - CDCIntegrationService - setRebalancer throws on null # time=0.912ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC processes valid event
+    ok 1 - should process event
+    ok 2 - should return node ID
+    ok 3 - should return new state
+    ok 4 - should indicate state changed
+    1..4
+ok 31 - CDCIntegrationService - handleNodeStateCDC processes valid event # time=1.142ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC emits nodeStateChange event
+    ok 1 - should emit one nodeStateChange event
+    ok 2 - event should have node ID
+    ok 3 - event should have new state
+    ok 4 - event should have cdc source
+    1..4
+ok 32 - CDCIntegrationService - handleNodeStateCDC emits nodeStateChange event # time=0.762ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC triggers rebalancer
+    ok 1 - should trigger rebalancer
+    ok 2 - rebalancer should receive node ID
+    ok 3 - rebalancer should receive new state
+    1..3
+ok 33 - CDCIntegrationService - handleNodeStateCDC triggers rebalancer # time=1.206ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC rejects non-nodes table
+    ok 1 - should not process
+    ok 2 - should have error message
+    1..2
+ok 34 - CDCIntegrationService - handleNodeStateCDC rejects non-nodes table # time=0.724ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC rejects invalid event
+    ok 1 - should not process null event
+    ok 2 - should have error message
+    1..2
+ok 35 - CDCIntegrationService - handleNodeStateCDC rejects invalid event # time=0.718ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC rejects missing node_id
+    ok 1 - should not process
+    ok 2 - should have error message
+    1..2
+ok 36 - CDCIntegrationService - handleNodeStateCDC rejects missing node_id # time=1.008ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC rejects missing status
+    ok 1 - should not process
+    ok 2 - should have error message
+    1..2
+ok 37 - CDCIntegrationService - handleNodeStateCDC rejects missing status # time=0.574ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC tracks state changes
+    ok 1 - first event should have null old state
+    ok 2 - first event should have JOINING new state
+    ok 3 - second event should have JOINING old state
+    ok 4 - second event should have READY new state
+    1..4
+ok 38 - CDCIntegrationService - handleNodeStateCDC tracks state changes # time=0.79ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC skips unchanged state
+    ok 1 - should process event
+    ok 2 - should indicate state not changed
+    ok 3 - should only emit one event (for first change)
+    1..3
+ok 39 - CDCIntegrationService - handleNodeStateCDC skips unchanged state # time=1.106ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC tracks nodeStateChanges in stats
+    ok 1 - should track node state changes
+    1..1
+ok 40 - CDCIntegrationService - handleNodeStateCDC tracks nodeStateChanges in stats # time=0.844ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC without rebalancer
+    ok 1 - should process event without rebalancer
+    ok 2 - should indicate state changed
+    1..2
+ok 41 - CDCIntegrationService - handleNodeStateCDC without rebalancer # time=0.597ms
+
+# Subtest: CDCIntegrationService - handleNodeStateCDC handles DRAINING state
+    ok 1 - should trigger rebalance for draining node
+    1..1
+ok 42 - CDCIntegrationService - handleNodeStateCDC handles DRAINING state # time=0.506ms
+
+1..42

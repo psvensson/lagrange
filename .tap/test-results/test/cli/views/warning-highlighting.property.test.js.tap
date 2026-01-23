@@ -3,44 +3,44 @@ TAP version 14
     # Subtest: failed status nodes have ERROR styling
         ok 1 - failed status nodes have ERROR styling
         1..1
-    ok 1 - failed status nodes have ERROR styling # time=9.34ms
+    ok 1 - failed status nodes have ERROR styling # time=9.571ms
     
     # Subtest: high CPU usage nodes have WARNING styling
         ok 1 - high CPU usage nodes have WARNING styling
         1..1
-    ok 2 - high CPU usage nodes have WARNING styling # time=2.703ms
+    ok 2 - high CPU usage nodes have WARNING styling # time=2.18ms
     
     # Subtest: high memory usage nodes have WARNING styling
         ok 1 - high memory usage nodes have WARNING styling
         1..1
-    ok 3 - high memory usage nodes have WARNING styling # time=1.191ms
+    ok 3 - high memory usage nodes have WARNING styling # time=2.249ms
     
     # Subtest: high disk usage nodes have WARNING styling
         ok 1 - high disk usage nodes have WARNING styling
         1..1
-    ok 4 - high disk usage nodes have WARNING styling # time=0.808ms
+    ok 4 - high disk usage nodes have WARNING styling # time=1.497ms
     
     # Subtest: healthy nodes have NORMAL styling
         ok 1 - healthy nodes have NORMAL styling
         1..1
-    ok 5 - healthy nodes have NORMAL styling # time=0.903ms
+    ok 5 - healthy nodes have NORMAL styling # time=1.499ms
     
     # Subtest: failed status takes precedence over warnings
         ok 1 - failed status takes precedence over warnings
         1..1
-    ok 6 - failed status takes precedence over warnings # time=0.786ms
+    ok 6 - failed status takes precedence over warnings # time=1.513ms
     
     # Subtest: null resource values do not trigger warnings
         ok 1 - null resource values do not trigger warnings
         1..1
-    ok 7 - null resource values do not trigger warnings # time=0.702ms
+    ok 7 - null resource values do not trigger warnings # time=1.196ms
     
     # Subtest: rendered rows have correct status in result
         ok 1 - rendered rows have correct status in result
         1..1
-    ok 8 - rendered rows have correct status in result # time=1.083ms
+    ok 8 - rendered rows have correct status in result # time=1.836ms
     
     1..8
-ok 1 - Property 6: Warning Highlighting # time=30.963ms
+ok 1 - Property 6: Warning Highlighting # time=29.754ms
 
 1..1

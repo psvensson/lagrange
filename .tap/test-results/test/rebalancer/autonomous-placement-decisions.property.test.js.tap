@@ -1,26 +1,46 @@
 TAP version 14
-# Subtest: Property 34: Autonomous Placement Decisions
-    # Subtest: leaders make independent decisions
-        ok 1 - Leaders make independent decisions
+# Subtest: Property 14: Join Assignment Relieves Overloaded Nodes
+    # Subtest: proposed assignments relieve at least one overloaded node
+        ok 1 - proposed assignments relieve at least one overloaded node
         1..1
-    ok 1 - leaders make independent decisions # time=10.254ms
+    ok 1 - proposed assignments relieve at least one overloaded node # time=18.712ms
     
-    # Subtest: decisions converge to consistent state
-        ok 1 - Decisions converge to consistent state
+    # Subtest: joining node receives replicas in proposed assignments
+        ok 1 - joining node receives replicas in proposed assignments
         1..1
-    ok 2 - decisions converge to consistent state # time=3.749ms
+    ok 2 - joining node receives replicas in proposed assignments # time=4.56ms
     
-    # Subtest: no coordination required between leaders
-        ok 1 - No coordination required between leaders
+    # Subtest: proposed assignments have no duplicate replicas per partition
+        ok 1 - proposed assignments have no duplicate replicas per partition
         1..1
-    ok 3 - no coordination required between leaders # time=2.778ms
+    ok 3 - proposed assignments have no duplicate replicas per partition # time=3.432ms
     
-    # Subtest: decisions based on local system table cache
-        ok 1 - Decisions based on local system table cache
+    # Subtest: proposed assignments respect table replication policies
+        ok 1 - proposed assignments respect table replication policies
         1..1
-    ok 4 - decisions based on local system table cache # time=2.893ms
+    ok 4 - proposed assignments respect table replication policies # time=2.626ms
     
-    1..4
-ok 1 - Property 34: Autonomous Placement Decisions # time=91.217ms
+    # Subtest: varying imbalance levels still relieve overloaded nodes
+        ok 1 - varying imbalance levels still relieve overloaded nodes
+        1..1
+    ok 5 - varying imbalance levels still relieve overloaded nodes # time=2.573ms
+    
+    # Subtest: single partition cluster respects placement policy
+        ok 1 - single partition cluster respects placement policy
+        1..1
+    ok 6 - single partition cluster respects placement policy # time=1.744ms
+    
+    # Subtest: multiple replicas per partition handled correctly
+        ok 1 - multiple replicas per partition handled correctly
+        1..1
+    ok 7 - multiple replicas per partition handled correctly # time=3.436ms
+    
+    # Subtest: empty table policies allow valid rebalancing
+        ok 1 - empty table policies allow valid rebalancing
+        1..1
+    ok 8 - empty table policies allow valid rebalancing # time=3.473ms
+    
+    1..8
+ok 1 - Property 14: Join Assignment Relieves Overloaded Nodes # time=47.048ms
 
 1..1

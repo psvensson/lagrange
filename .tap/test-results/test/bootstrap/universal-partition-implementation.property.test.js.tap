@@ -37,16 +37,16 @@ TAP version 14
     ok 35 - System table replica_operations query succeeded
     ok 36 - System table replica_operations exists in SQLite
     1..36
-ok 1 - Property 32: System tables use same PartitionService as user tables # time=3636.517ms
+ok 1 - Property 32: System tables use same PartitionService as user tables # time=3629.186ms
 
 # Subtest: Property 32: User tables use same PartitionService as system tables
     ok 1 - User tables use same PartitionService infrastructure as system tables
     1..1
-ok 2 - Property 32: User tables use same PartitionService as system tables # time=3039.684ms
+ok 2 - Property 32: User tables use same PartitionService as system tables # time=3025.389ms
 
 # Subtest: Property 32: No infrastructure distinction between system and user tables
     ok 1 - No infrastructure distinction between system and user tables
     1..1
-ok 3 - Property 32: No infrastructure distinction between system and user tables # time=3045.253ms
+ok 3 - Property 32: No infrastructure distinction between system and user tables # time=3027.012ms
 
 1..3

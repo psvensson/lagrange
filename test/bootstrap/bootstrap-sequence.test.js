@@ -227,3 +227,79 @@ test('Bootstrap sequence - startWebSocketServer after bootstrap', async (t) => {
     await bootstrap.shutdown();
   }
 });
+
+
+test('Bootstrap sequence - epoch manager initialized with partition assignments', async (t) => {
+  initializeTestEnvironment();
+
+  const wsPort = getRandomPort();
+  const nodeId = `test-node-${Date.now()}`;
+
+  const bootstrap = new BootstrapService({
+    nodeId,
+    nodeAddress: `ws://localhost:${wsPort}`,
+    wsPort,
+    config: {
+      leadershipWaitTimeoutMs: 5000,
+      leadershipWaitInitialDelayMs: 10,
+      partitionDbPath: ':memory:',
+    },
+  });
+
+  try {
+    const result = await bootstrap.bootstrap();
+
+    t.equal(result.success, true, 'bootstrap should succeed');
+
+    // Verify epoch manager is created
+    t.ok(result.epochManager, 'should have epochManager in result');
+    t.ok(bootstrap.getEpochManager(), 'getEpochManager() should return the manager');
+
+    // Verify epoch manager is initialized
+    const epochManager = result.epochManager;
+    t.ok(epochManager.isInitialized(), 'epoch manager should be initialized');
+
+    // Verify initial epoch
+    const currentEpoch = epochManager.getCurrentEpoch();
+    t.equal(currentEpoch.epoch, 0, 'initial epoch should be 0');
+    t.equal(currentEpoch.proposedBy, nodeId, 'epoch should be proposed by seed node');
+
+    // Verify assignments contain partitions
+    const assignments = currentEpoch.assignments;
+    t.ok(Object.keys(assignments).length > 0, 'should have partition assignments');
+
+    // Verify all assignments point to the seed node
+    for (const [partitionId, nodes] of Object.entries(assignments)) {
+      t.ok(nodes.includes(nodeId),
+        `partition ${partitionId} should be assigned to seed node`);
+    }
+  } finally {
+    await bootstrap.shutdown();
+  }
+});
+
+test('Bootstrap sequence - epoch manager cleaned up on shutdown', async (t) => {
+  initializeTestEnvironment();
+
+  const wsPort = getRandomPort();
+  const nodeId = `test-node-${Date.now()}`;
+
+  const bootstrap = new BootstrapService({
+    nodeId,
+    nodeAddress: `ws://localhost:${wsPort}`,
+    wsPort,
+    config: {
+      leadershipWaitTimeoutMs: 5000,
+      leadershipWaitInitialDelayMs: 10,
+      partitionDbPath: ':memory:',
+    },
+  });
+
+  const result = await bootstrap.bootstrap();
+  t.equal(result.success, true, 'bootstrap should succeed');
+  t.ok(bootstrap.getEpochManager(), 'epoch manager should exist before shutdown');
+
+  await bootstrap.shutdown();
+
+  t.equal(bootstrap.getEpochManager(), null, 'epoch manager should be null after shutdown');
+});

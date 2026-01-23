@@ -3,34 +3,34 @@ TAP version 14
     # Subtest: ascending sort produces non-decreasing order
         ok 1 - ascending sort produces non-decreasing order
         1..1
-    ok 1 - ascending sort produces non-decreasing order # time=11.747ms
+    ok 1 - ascending sort produces non-decreasing order # time=9.497ms
     
     # Subtest: descending sort produces non-increasing order
         ok 1 - descending sort produces non-increasing order
         1..1
-    ok 2 - descending sort produces non-increasing order # time=2.277ms
+    ok 2 - descending sort produces non-increasing order # time=2.6ms
     
     # Subtest: sort preserves all elements
         ok 1 - sort preserves all elements
         1..1
-    ok 3 - sort preserves all elements # time=3.926ms
+    ok 3 - sort preserves all elements # time=2.218ms
     
     # Subtest: clearSort returns to original order
         ok 1 - clearSort returns to original order
         1..1
-    ok 4 - clearSort returns to original order # time=1.807ms
+    ok 4 - clearSort returns to original order # time=2.089ms
     
     # Subtest: numeric sort is correct
         ok 1 - numeric sort is correct
         1..1
-    ok 5 - numeric sort is correct # time=0.645ms
+    ok 5 - numeric sort is correct # time=0.557ms
     
     # Subtest: toggle sort direction works
         ok 1 - toggle sort direction works
         1..1
-    ok 6 - toggle sort direction works # time=1.127ms
+    ok 6 - toggle sort direction works # time=1.531ms
     
     1..6
-ok 1 - Property 4: Sort Correctness # time=26.011ms
+ok 1 - Property 4: Sort Correctness # time=22.73ms
 
 1..1

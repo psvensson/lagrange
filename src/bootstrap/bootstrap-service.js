@@ -27,6 +27,8 @@ import {DynamicConfigService} from '../config/dynamic-config-service.js';
 import {CDCIntegrationService} from '../cdc/cdc-integration-service.js';
 import {ReplicaLifecycleManager} from '../node/replica-lifecycle-manager.js';
 import {ReplicaStateMachine, ReplicaState} from '../node/replica-state-machine.js';
+import {AssignmentEpochManager} from '../rebalancer/assignment-epoch-manager.js';
+import {AssignmentEpoch} from '../rebalancer/assignment-epoch.js';
 
 /**
  * Bootstrap phases enumeration.
@@ -87,6 +89,10 @@ class BootstrapService extends EventEmitter {
 
     // Replica state machine for tracking replica lifecycle states
     this.replicaStateMachine = null;
+
+    // Assignment epoch manager for epoch-based partition assignments
+    // Requirements: 3.4, 4.1 - Epoch-based initialization
+    this.epochManager = null;
 
     // Bootstrap state
     this.phase = BootstrapPhase.NOT_STARTED;
@@ -183,6 +189,7 @@ class BootstrapService extends EventEmitter {
         partitionServices: this.partitionServices,
         replicaLifecycleManager: this.replicaLifecycleManager,
         replicaStateMachine: this.replicaStateMachine,
+        epochManager: this.epochManager,
         transport: this.transport,
         messageRouter: this.messageRouter,
       };
@@ -600,6 +607,17 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
+   * Get the AssignmentEpochManager instance.
+   * Returns the epoch manager created during bootstrap for epoch-based
+   * partition assignment coordination.
+   * Requirements: 3.4, 4.1 - Epoch-based initialization
+   * @return {AssignmentEpochManager|null} The epoch manager or null if not initialized.
+   */
+  getEpochManager() {
+    return this.epochManager;
+  }
+
+  /**
    * Phase 3: Partition creation for system tables.
    * Create partitions for all system tables.
    * Elections are deferred until ALL partitions are created to prevent election storms.
@@ -739,9 +757,68 @@ class BootstrapService extends EventEmitter {
       partition.startElection();
     }
 
+    // Initialize AssignmentEpochManager with initial epoch containing partition assignments
+    // Requirements: 3.4, 4.1 - Fetch/create epoch during bootstrap
+    this.initializeEpochManager();
+
     this.logger.debug('All system table partitions created', {
       partitionsCreated: this.partitionsCreated,
       nodeId: this.nodeId,
+    });
+  }
+
+  /**
+   * Initialize the AssignmentEpochManager with the initial epoch.
+   * Creates epoch 0 with all partition assignments from the seed node.
+   * Requirements: 3.4, 4.1 - Epoch-based initialization
+   * @private
+   */
+  initializeEpochManager() {
+    // Build initial assignments from created partitions
+    // Map partitionId -> [nodeId] (all replicas on seed node initially)
+    const initialAssignments = {};
+
+    // Track unique partition IDs (multiple replicas per partition)
+    const partitionNodes = new Map();
+
+    for (const [_replicaId, partition] of this.partitionServices) {
+      const partitionId = partition.partitionId;
+      if (!partitionNodes.has(partitionId)) {
+        partitionNodes.set(partitionId, []);
+      }
+      // All replicas are on this seed node during bootstrap
+      if (!partitionNodes.get(partitionId).includes(this.nodeId)) {
+        partitionNodes.get(partitionId).push(this.nodeId);
+      }
+    }
+
+    // Convert to assignments format
+    for (const [partitionId, nodes] of partitionNodes) {
+      initialAssignments[partitionId] = nodes;
+    }
+
+    // Create the epoch manager
+    this.epochManager = new AssignmentEpochManager({
+      nodeId: this.nodeId,
+      timestampProvider: () => new Date().toISOString(),
+    });
+
+    // Create initial epoch (epoch 0) with the assignments
+    const initialEpoch = new AssignmentEpoch({
+      epoch: 0,
+      assignments: initialAssignments,
+      timestamp: new Date().toISOString(),
+      proposedBy: this.nodeId,
+    });
+
+    // Initialize the manager with the initial epoch
+    this.epochManager.initialize(initialEpoch);
+
+    this.logger.info('AssignmentEpochManager initialized', {
+      nodeId: this.nodeId,
+      epoch: this.epochManager.getCurrentEpoch().epoch,
+      partitionCount: Object.keys(initialAssignments).length,
+      assignments: initialAssignments,
     });
   }
 
@@ -1708,6 +1785,11 @@ class BootstrapService extends EventEmitter {
       this.replicaStateMachine.stopTimeoutChecker();
       this.replicaStateMachine.clear();
       this.replicaStateMachine = null;
+    }
+
+    // Clear epoch manager
+    if (this.epochManager) {
+      this.epochManager = null;
     }
 
     // Shutdown replica lifecycle manager

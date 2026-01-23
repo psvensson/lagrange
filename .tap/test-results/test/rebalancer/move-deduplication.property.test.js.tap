@@ -1,31 +1,41 @@
 TAP version 14
-# Subtest: Property 12: Move Deduplication
-    # Subtest: calculateMoves checks pending_move_map for existing operations
-        ok 1 - calculateMoves checks pending_move_map for existing operations
+# Subtest: Property 15: Rebalancer Batches Moves
+    # Subtest: calculateMoves returns single batched result for multiple moves
+        ok 1 - calculateMoves returns single batched result for multiple moves
         1..1
-    ok 1 - calculateMoves checks pending_move_map for existing operations # time=6.296ms
+    ok 1 - calculateMoves returns single batched result for multiple moves # time=9.832ms
     
-    # Subtest: no duplicate ADD moves for same target node
-        ok 1 - no duplicate ADD moves for same target node
+    # Subtest: proposedAssignments contains all changes in single structure
+        ok 1 - proposedAssignments contains all changes in single structure
         1..1
-    ok 2 - no duplicate ADD moves for same target node # time=1.566ms
+    ok 2 - proposedAssignments contains all changes in single structure # time=3.058ms
     
-    # Subtest: no duplicate REMOVE moves for same replica
-        ok 1 - no duplicate REMOVE moves for same replica
+    # Subtest: moves array and proposedAssignments are consistent
+        ok 1 - moves array and proposedAssignments are consistent
         1..1
-    ok 3 - no duplicate REMOVE moves for same replica # time=1.608ms
+    ok 3 - moves array and proposedAssignments are consistent # time=2.544ms
     
-    # Subtest: completed moves do not trigger deduplication
-        ok 1 - completed moves do not trigger deduplication
+    # Subtest: single calculateMoves call handles all partitions
+        ok 1 - single calculateMoves call handles all partitions
         1..1
-    ok 4 - completed moves do not trigger deduplication # time=1.433ms
+    ok 4 - single calculateMoves call handles all partitions # time=2.411ms
     
-    # Subtest: multiple pending moves are all checked
-        ok 1 - multiple pending moves are all checked
+    # Subtest: batched result has single reason field
+        ok 1 - batched result has single reason field
         1..1
-    ok 5 - multiple pending moves are all checked # time=1.622ms
+    ok 5 - batched result has single reason field # time=2.227ms
     
-    1..5
-ok 1 - Property 12: Move Deduplication # time=134.145ms
+    # Subtest: mixed node states produce single batched proposal
+        ok 1 - mixed node states produce single batched proposal
+        1..1
+    ok 6 - mixed node states produce single batched proposal # time=5.338ms
+    
+    # Subtest: no moves needed returns single result object
+        ok 1 - no moves needed returns single result object
+        1..1
+    ok 7 - no moves needed returns single result object # time=1.025ms
+    
+    1..7
+ok 1 - Property 15: Rebalancer Batches Moves # time=29.98ms
 
 1..1

@@ -1,7 +1,9 @@
 /**
  * Address Manager - Unique address generation and management.
  * Provides unique addresses for nodes and services using UUID v4.
- * Requirements: 1.5, 2.1, 7.1
+ * Also provides unified address parsing, formatting, and validation.
+ * Unified address format: {nodeId}/{serviceType}/{serviceId}
+ * Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 2.1, 7.1
  */
 
 import {v4 as uuidv4, validate as uuidValidate} from 'uuid';
@@ -15,6 +17,39 @@ const AddressType = {
   NODE: 'node',
   SERVICE: 'service',
 };
+
+/**
+ * Error thrown when an address is malformed.
+ */
+class MalformedAddressError extends Error {
+  /**
+   * Create a MalformedAddressError.
+   * @param {string} message - Error message.
+   * @param {string} address - The malformed address.
+   */
+  constructor(message, address) {
+    super(message);
+    this.name = 'MalformedAddressError';
+    this.address = address;
+  }
+}
+
+/**
+ * Error thrown when an address component is empty.
+ */
+class EmptyComponentError extends Error {
+  /**
+   * Create an EmptyComponentError.
+   * @param {string} component - The name of the empty component.
+   * @param {string} address - The address with the empty component.
+   */
+  constructor(component, address) {
+    super(`Address component '${component}' cannot be empty`);
+    this.name = 'EmptyComponentError';
+    this.component = component;
+    this.address = address;
+  }
+}
 
 /**
  * AddressManager provides unique address generation and validation.
@@ -260,6 +295,140 @@ class AddressManager {
       this.logger.debug('Cleared all addresses');
     }
   }
+
+  // ============================================================
+  // Unified Address Methods (format: {nodeId}/{serviceType}/{serviceId})
+  // ============================================================
+
+  /**
+   * Parse a unified address string into components.
+   * @param {string} address - Address in format nodeId/serviceType/serviceId.
+   * @return {{nodeId: string, serviceType: string, serviceId: string}}
+   *   Parsed address components.
+   * @throws {MalformedAddressError} If address doesn't have exactly 3 components.
+   * @throws {EmptyComponentError} If any component is empty.
+   */
+  parse(address) {
+    if (typeof address !== 'string') {
+      throw new MalformedAddressError(
+        'Address must be a string',
+        String(address),
+      );
+    }
+
+    const parts = address.split('/');
+
+    if (parts.length !== 3) {
+      throw new MalformedAddressError(
+        `Address must have exactly 3 components separated by '/', got ${parts.length}`,
+        address,
+      );
+    }
+
+    const [nodeId, serviceType, serviceId] = parts;
+
+    if (!nodeId) {
+      throw new EmptyComponentError('nodeId', address);
+    }
+    if (!serviceType) {
+      throw new EmptyComponentError('serviceType', address);
+    }
+    if (!serviceId) {
+      throw new EmptyComponentError('serviceId', address);
+    }
+
+    return {nodeId, serviceType, serviceId};
+  }
+
+  /**
+   * Format components into a unified address string.
+   * @param {string} nodeId - The node identifier.
+   * @param {string} serviceType - The service type (e.g., 'partition', 'raft').
+   * @param {string} serviceId - The service identifier.
+   * @return {string} The canonical address string.
+   * @throws {EmptyComponentError} If any component is empty.
+   */
+  format(nodeId, serviceType, serviceId) {
+    if (!nodeId) {
+      throw new EmptyComponentError('nodeId', '');
+    }
+    if (!serviceType) {
+      throw new EmptyComponentError('serviceType', '');
+    }
+    if (!serviceId) {
+      throw new EmptyComponentError('serviceId', '');
+    }
+
+    return `${nodeId}/${serviceType}/${serviceId}`;
+  }
+
+  /**
+   * Validate an address without throwing.
+   * @param {string} address - The address to validate.
+   * @return {{valid: boolean, error?: string}} Validation result.
+   */
+  validate(address) {
+    if (typeof address !== 'string') {
+      return {valid: false, error: 'Address must be a string'};
+    }
+
+    const parts = address.split('/');
+
+    if (parts.length !== 3) {
+      return {
+        valid: false,
+        error: 'Address must have exactly 3 components separated by \'/\', ' +
+          `got ${parts.length}`,
+      };
+    }
+
+    const [nodeId, serviceType, serviceId] = parts;
+
+    if (!nodeId) {
+      return {valid: false, error: 'nodeId component cannot be empty'};
+    }
+    if (!serviceType) {
+      return {valid: false, error: 'serviceType component cannot be empty'};
+    }
+    if (!serviceId) {
+      return {valid: false, error: 'serviceId component cannot be empty'};
+    }
+
+    return {valid: true};
+  }
+
+  /**
+   * Extract nodeId from a unified address.
+   * @param {string} address - The unified address.
+   * @return {string} The nodeId component.
+   * @throws {MalformedAddressError} If address is malformed.
+   * @throws {EmptyComponentError} If any component is empty.
+   */
+  getNodeId(address) {
+    return this.parse(address).nodeId;
+  }
+
+  /**
+   * Extract serviceType from a unified address.
+   * @param {string} address - The unified address.
+   * @return {string} The serviceType component.
+   * @throws {MalformedAddressError} If address is malformed.
+   * @throws {EmptyComponentError} If any component is empty.
+   */
+  getServiceType(address) {
+    return this.parse(address).serviceType;
+  }
+
+  /**
+   * Extract serviceId from a unified address.
+   * @param {string} address - The unified address.
+   * @return {string} The serviceId component.
+   * @throws {MalformedAddressError} If address is malformed.
+   * @throws {EmptyComponentError} If any component is empty.
+   */
+  getServiceId(address) {
+    return this.parse(address).serviceId;
+  }
 }
 
-export {AddressManager, AddressType};
+export {AddressManager, AddressType, MalformedAddressError, EmptyComponentError};

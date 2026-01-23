@@ -3,7 +3,7 @@ TAP version 14
     ok 1 - Should not be initialized
     ok 2 - Should have no engine
     1..2
-ok 1 - FunctionQueryExecutor - constructor # time=55.249ms
+ok 1 - FunctionQueryExecutor - constructor # time=50.739ms
 
 Function query executor initialized
 # Subtest: FunctionQueryExecutor - initialize
@@ -11,21 +11,21 @@ Function query executor initialized
     ok 2 - Should have engine
     ok 3 - Should have registry
     1..3
-ok 2 - FunctionQueryExecutor - initialize # time=1.111ms
+ok 2 - FunctionQueryExecutor - initialize # time=1.563ms
 
 Executing query via FunctionQueryExecutor { sql: 'SELECT * FROM test', paramCount: 0, timeout: 30000 }
 Query executed successfully {
   sql: 'SELECT * FROM test',
   rowCount: 1,
   affectedRows: 1,
-  durationMs: 0
+  durationMs: 1
 }
 # Subtest: FunctionQueryExecutor - executeQuery returns results
     ok 1 - Should succeed
     ok 2 - Should return rows
     ok 3 - Should have partitions
     1..3
-ok 3 - FunctionQueryExecutor - executeQuery returns results # time=1.998ms
+ok 3 - FunctionQueryExecutor - executeQuery returns results # time=1.899ms
 
 Executing query via FunctionQueryExecutor {
   sql: 'SELECT * FROM test WHERE id = ?',
@@ -42,18 +42,18 @@ Query executed successfully {
     ok 1 - Should succeed
     ok 2 - Should return 1 row
     1..2
-ok 4 - FunctionQueryExecutor - executeQuery with params # time=0.75ms
+ok 4 - FunctionQueryExecutor - executeQuery with params # time=0.547ms
 
 Executing query via FunctionQueryExecutor { sql: 'SELECT ERROR', paramCount: 0, timeout: 30000 }
 # Subtest: FunctionQueryExecutor - executeQuery throws on error
     ok 1 - Should throw on error
     1..1
-ok 5 - FunctionQueryExecutor - executeQuery throws on error # time=1.789ms
+ok 5 - FunctionQueryExecutor - executeQuery throws on error # time=1.443ms
 
 # Subtest: FunctionQueryExecutor - executeQuery throws without engine
     ok 1 - Should throw without engine
     1..1
-ok 6 - FunctionQueryExecutor - executeQuery throws without engine # time=0.509ms
+ok 6 - FunctionQueryExecutor - executeQuery throws without engine # time=0.466ms
 
 Executing streaming query { sql: 'SELECT * FROM test', batchSize: 2 }
 Streaming query completed { sql: 'SELECT * FROM test', totalRows: 5, durationMs: 0 }
@@ -62,15 +62,15 @@ Streaming query completed { sql: 'SELECT * FROM test', totalRows: 5, durationMs:
     ok 2 - Should count all rows
     ok 3 - Should have batches
     1..3
-ok 7 - FunctionQueryExecutor - executeQueryWithCallback streams batches # time=1.209ms
+ok 7 - FunctionQueryExecutor - executeQueryWithCallback streams batches # time=0.892ms
 
 # Subtest: FunctionQueryExecutor - executeQueryWithCallback requires callback
     ok 1 - Should require function callback
     1..1
-ok 8 - FunctionQueryExecutor - executeQueryWithCallback requires callback # time=0.61ms
+ok 8 - FunctionQueryExecutor - executeQueryWithCallback requires callback # time=0.462ms
 
 Executing query then invoke {
-  invocationId: '0ffbec59-a1e8-4fd7-a412-fc3ed8094ff1',
+  invocationId: '20aa0a5f-1225-4ddd-8081-df1a5207e5db',
   sql: 'SELECT * FROM test',
   nextFunctionId: 'my-function'
 }
@@ -82,10 +82,10 @@ Query executed successfully {
   durationMs: 0
 }
 Query completed, function invoked {
-  invocationId: '0ffbec59-a1e8-4fd7-a412-fc3ed8094ff1',
+  invocationId: '20aa0a5f-1225-4ddd-8081-df1a5207e5db',
   nextFunctionId: 'my-function',
   rowCount: 1,
-  durationMs: 1
+  durationMs: 0
 }
 # Subtest: FunctionQueryExecutor - executeQueryThenInvoke calls function
     ok 1 - Should succeed
@@ -96,10 +96,10 @@ Query completed, function invoked {
     ok 6 - Should pass query result
     ok 7 - Should pass extra context
     1..7
-ok 9 - FunctionQueryExecutor - executeQueryThenInvoke calls function # time=2.338ms
+ok 9 - FunctionQueryExecutor - executeQueryThenInvoke calls function # time=1.641ms
 
 Executing query then invoke {
-  invocationId: 'bde4fcc9-4965-4db2-9409-605f254b9294',
+  invocationId: 'bf1c2a41-3f35-41cb-8aa2-2ad24f80c828',
   sql: 'SELECT * FROM test',
   nextFunctionId: 'error-func'
 }
@@ -116,11 +116,11 @@ Query executed successfully {
     ok 3 - Should have error message
     ok 4 - Should still have query result
     1..4
-ok 10 - FunctionQueryExecutor - executeQueryThenInvoke handles function error # time=1.115ms
+ok 10 - FunctionQueryExecutor - executeQueryThenInvoke handles function error # time=1.018ms
 
 # Subtest: FunctionQueryExecutor - executeQueryThenInvoke throws without registry
     ok 1 - Should throw without registry
     1..1
-ok 11 - FunctionQueryExecutor - executeQueryThenInvoke throws without registry # time=0.567ms
+ok 11 - FunctionQueryExecutor - executeQueryThenInvoke throws without registry # time=0.473ms
 
 1..11

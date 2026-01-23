@@ -39,17 +39,18 @@ This specification defines architectural simplifications to the distributed data
 
 #### Acceptance Criteria
 
-1. THE Node_Lifecycle_Service SHALL implement states: STARTING, CONNECTING, DISCOVERING, SYNCING, READY, DRAINING, STOPPED
+1. THE Node_Lifecycle_Service SHALL implement states: STARTING, CONNECTING, DISCOVERING, JOINING, SYNCING, READY, DRAINING, STOPPED
 2. WHEN a node transitions between states, THE Node_Lifecycle_Service SHALL emit a state change event
 3. THE Node_Lifecycle_Service SHALL enforce valid state transitions only
 4. IF an invalid state transition is attempted, THEN THE Node_Lifecycle_Service SHALL reject it and log an error
 5. WHILE in STARTING state, THE Node SHALL initialize local resources only
 6. WHILE in CONNECTING state, THE Node SHALL establish WebSocket connections to seed nodes
 7. WHILE in DISCOVERING state, THE Node SHALL receive the system cache from seed nodes
-8. WHILE in SYNCING state, THE Node SHALL create assigned partitions locally
-9. WHILE in READY state, THE Node SHALL accept traffic and participate in Raft consensus
-10. WHILE in DRAINING state, THE Node SHALL reject new requests and complete in-flight operations
-11. WHEN all in-flight operations complete during DRAINING, THE Node SHALL transition to STOPPED
+8. WHILE in JOINING state, THE Node SHALL register in the cluster, propose epoch changes, and create local replicas
+9. WHILE in SYNCING state, THE Node SHALL sync replica data from existing nodes
+10. WHILE in READY state, THE Node SHALL accept traffic and participate in Raft consensus
+11. WHILE in DRAINING state, THE Node SHALL reject new requests and complete in-flight operations
+12. WHEN all in-flight operations complete during DRAINING, THE Node SHALL transition to STOPPED
 
 ### Requirement 3: Immutable Assignment Epochs
 
@@ -68,17 +69,20 @@ This specification defines architectural simplifications to the distributed data
 
 ### Requirement 4: Pull-Based Replica Assignment
 
-**User Story:** As a joining node, I want to decide which replicas to pull to myself, so that I control my own lifecycle without complex cross-node RPC.
+**User Story:** As a joining node, I want to decide which replicas to pull to myself based on load balancing and table policies, so that I relieve overloaded nodes while respecting replication constraints.
 
 #### Acceptance Criteria
 
 1. WHEN a node joins the cluster, THE Node SHALL receive the current assignment epoch
-2. THE Joining_Node SHALL analyze the current assignments and propose which replicas to host
-3. THE Joining_Node SHALL propose a new epoch with updated assignments
-4. IF the epoch proposal is accepted, THEN THE Joining_Node SHALL create the replicas locally
-5. THE System SHALL not use push-based CREATE_REPLICA RPC for normal replica placement
-6. WHEN creating a replica locally, THE Node SHALL sync data from existing replicas
-7. IF replica sync fails, THEN THE Node SHALL retry or mark the replica as failed
+2. THE Joining_Node SHALL identify overloaded nodes (nodes with more replicas than average)
+3. THE Joining_Node SHALL select replicas to pull that relieve overloaded nodes
+4. THE Joining_Node SHALL respect table replication policies when selecting replicas
+5. THE Joining_Node SHALL not propose assignments that place multiple replicas of the same partition on the same node
+6. THE Joining_Node SHALL propose a new epoch with updated assignments
+7. IF the epoch proposal is accepted, THEN THE Joining_Node SHALL create the replicas locally
+8. THE System SHALL not use push-based CREATE_REPLICA RPC for normal replica placement
+9. WHEN creating a replica locally, THE Node SHALL sync data from existing replicas
+10. IF replica sync fails, THEN THE Node SHALL retry or mark the replica as failed
 
 ### Requirement 5: CDC-Based Membership with State-Aware Rebalancing
 

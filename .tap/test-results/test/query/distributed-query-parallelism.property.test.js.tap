@@ -1,201 +1,201 @@
 TAP version 14
 # Subtest: Property 49: Distributed Query Parallelism
 Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1769104360086-0-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1769104360099-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1769104360110-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1769104360121-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1769104360132-1-query-executor',
+  partitionCount: 3,
+  timestamp: '1769149376236-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 3,
-  timestamp: '1769104360143-1-query-executor',
+  timestamp: '1769149376247-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769149376258-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 5,
-  timestamp: '1769104360154-1-query-executor',
+  timestamp: '1769149376269-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1769104360165-1-query-executor',
+  partitionCount: 3,
+  timestamp: '1769149376280-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1769104360176-1-query-executor',
+  partitionCount: 3,
+  timestamp: '1769149376290-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769149376301-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769149376312-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769149376323-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1769104360187-1-query-executor',
+  timestamp: '1769149376334-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
     # Subtest: queries execute on all partitions in parallel
         ok 1 - Queries execute on all partitions in parallel
         1..1
-    ok 1 - queries execute on all partitions in parallel # time=118.776ms
+    ok 1 - queries execute on all partitions in parallel # time=116.456ms
     
 Executing distributed SELECT {
   partitionCount: 3,
-  timestamp: '1769104360202-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1769104360203-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1769104360203-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1769104360204-1-query-executor',
+  timestamp: '1769149376349-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 4,
-  timestamp: '1769104360204-1-query-executor',
+  timestamp: '1769149376350-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 3,
-  timestamp: '1769104360204-1-query-executor',
+  timestamp: '1769149376350-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1769104360205-1-query-executor',
+  partitionCount: 2,
+  timestamp: '1769149376351-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 4,
-  timestamp: '1769104360205-1-query-executor',
+  timestamp: '1769149376351-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769149376352-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1769104360205-1-query-executor',
+  timestamp: '1769149376352-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1769104360206-1-query-executor',
+  timestamp: '1769149376352-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1769149376353-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769149376353-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
     # Subtest: all partition results are combined
         ok 1 - All partition results are combined correctly
         1..1
-    ok 2 - all partition results are combined # time=4.77ms
+    ok 2 - all partition results are combined # time=5.027ms
     
 Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1769104360208-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1769104360208-1-query-executor',
+  timestamp: '1769149376355-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 3,
-  timestamp: '1769104360208-1-query-executor',
+  timestamp: '1769149376355-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1769104360209-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1769104360209-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1769104360209-1-query-executor',
+  timestamp: '1769149376356-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 5,
-  timestamp: '1769104360210-1-query-executor',
+  timestamp: '1769149376356-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769149376356-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769149376357-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1769104360210-1-query-executor',
+  timestamp: '1769149376357-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1769149376357-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
   partitionCount: 4,
-  timestamp: '1769104360210-1-query-executor',
+  timestamp: '1769149376358-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Executing distributed SELECT {
-  partitionCount: 4,
-  timestamp: '1769104360211-1-query-executor',
+  partitionCount: 5,
+  timestamp: '1769149376358-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
     # Subtest: partition count is tracked in result
         ok 1 - Partition count is tracked in result
         1..1
-    ok 3 - partition count is tracked in result # time=4.008ms
+    ok 3 - partition count is tracked in result # time=4.254ms
     
     1..3
-ok 1 - Property 49: Distributed Query Parallelism # time=132.74ms
+ok 1 - Property 49: Distributed Query Parallelism # time=130.349ms
 
 1..1

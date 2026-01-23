@@ -31,7 +31,7 @@ TAP version 14
     ok 29 - has() should return true before expiration
     ok 30 - Value should still be available
     1..30
-ok 1 - Property 27: Entries available before TTL expires # time=1085.112ms
+ok 1 - Property 27: Entries available before TTL expires # time=1306.008ms
 
 # Subtest: Property 27: Entries expire after TTL
     ok 1 - Value should be null after expiration
@@ -65,7 +65,7 @@ ok 1 - Property 27: Entries available before TTL expires # time=1085.112ms
     ok 29 - has() should return false after expiration
     ok 30 - Expirations should be tracked
     1..30
-ok 2 - Property 27: Entries expire after TTL # time=717.238ms
+ok 2 - Property 27: Entries expire after TTL # time=706.329ms
 
 # Subtest: Property 27: Custom TTL overrides default
     ok 1 - Default TTL entry should expire
@@ -89,7 +89,7 @@ ok 2 - Property 27: Entries expire after TTL # time=717.238ms
     ok 19 - Default TTL entry should expire
     ok 20 - Custom TTL entry should still be available
     1..20
-ok 3 - Property 27: Custom TTL overrides default # time=981.805ms
+ok 3 - Property 27: Custom TTL overrides default # time=805.302ms
 
 # Subtest: Property 27: Cache statistics reflect TTL behavior
     ok 1 - All accesses should be hits
@@ -123,7 +123,7 @@ ok 3 - Property 27: Custom TTL overrides default # time=981.805ms
     ok 29 - No misses before expiration
     ok 30 - All entries should have expired
     1..30
-ok 4 - Property 27: Cache statistics reflect TTL behavior # time=713.737ms
+ok 4 - Property 27: Cache statistics reflect TTL behavior # time=708.092ms
 
 # Subtest: Property 27: Updating entry resets TTL
     ok 1 - Updated entry should still be available
@@ -137,41 +137,41 @@ ok 4 - Property 27: Cache statistics reflect TTL behavior # time=713.737ms
     ok 9 - Updated entry should still be available
     ok 10 - Updated entry should still be available
     1..10
-ok 5 - Property 27: Updating entry resets TTL # time=916.227ms
+ok 5 - Property 27: Updating entry resets TTL # time=910.57ms
 
 # Subtest: Property 27: Remaining TTL is accurate
-    ok 1 - Remaining TTL 204 should be close to 204
+    ok 1 - Remaining TTL 350 should be close to 350
     ok 2 - Status should be VALID
     ok 3 - Remaining TTL should decrease over time
-    ok 4 - Remaining TTL 384 should be close to 385
+    ok 4 - Remaining TTL 200 should be close to 200
     ok 5 - Status should be VALID
     ok 6 - Remaining TTL should decrease over time
-    ok 7 - Remaining TTL 498 should be close to 498
+    ok 7 - Remaining TTL 496 should be close to 496
     ok 8 - Status should be VALID
     ok 9 - Remaining TTL should decrease over time
-    ok 10 - Remaining TTL 298 should be close to 298
+    ok 10 - Remaining TTL 493 should be close to 493
     ok 11 - Status should be VALID
     ok 12 - Remaining TTL should decrease over time
-    ok 13 - Remaining TTL 207 should be close to 207
+    ok 13 - Remaining TTL 201 should be close to 201
     ok 14 - Status should be VALID
     ok 15 - Remaining TTL should decrease over time
-    ok 16 - Remaining TTL 390 should be close to 390
+    ok 16 - Remaining TTL 482 should be close to 482
     ok 17 - Status should be VALID
     ok 18 - Remaining TTL should decrease over time
-    ok 19 - Remaining TTL 205 should be close to 205
+    ok 19 - Remaining TTL 203 should be close to 203
     ok 20 - Status should be VALID
     ok 21 - Remaining TTL should decrease over time
-    ok 22 - Remaining TTL 200 should be close to 200
+    ok 22 - Remaining TTL 318 should be close to 318
     ok 23 - Status should be VALID
     ok 24 - Remaining TTL should decrease over time
-    ok 25 - Remaining TTL 341 should be close to 341
+    ok 25 - Remaining TTL 416 should be close to 416
     ok 26 - Status should be VALID
     ok 27 - Remaining TTL should decrease over time
-    ok 28 - Remaining TTL 334 should be close to 334
+    ok 28 - Remaining TTL 472 should be close to 472
     ok 29 - Status should be VALID
     ok 30 - Remaining TTL should decrease over time
     1..30
-ok 6 - Property 27: Remaining TTL is accurate # time=1013.599ms
+ok 6 - Property 27: Remaining TTL is accurate # time=1007.746ms
 
 # Subtest: Property 27: Partition cache methods respect TTL
     ok 1 - Partition should be retrievable
@@ -195,6 +195,6 @@ ok 6 - Property 27: Remaining TTL is accurate # time=1013.599ms
     ok 19 - Partition should be retrievable
     ok 20 - Partition should expire
     1..20
-ok 7 - Property 27: Partition cache methods respect TTL # time=715.815ms
+ok 7 - Property 27: Partition cache methods respect TTL # time=709.413ms
 
 1..7

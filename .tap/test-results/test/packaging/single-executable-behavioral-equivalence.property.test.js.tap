@@ -3,24 +3,24 @@ TAP version 14
     # Subtest: Property: CLI version output matches npm cli version
         ok 1 - CLI version output is equivalent
         1..1
-    ok 1 - Property: CLI version output matches npm cli version # time=5241.977ms
+    ok 1 - Property: CLI version output matches npm cli version # time=5443.548ms
     
     # Subtest: Property: CLI help output structure matches npm cli help
         ok 1 - CLI help output structure is equivalent
         1..1
-    ok 2 - Property: CLI help output structure matches npm cli help # time=4934.686ms
+    ok 2 - Property: CLI help output structure matches npm cli help # time=5068.037ms
     
     # Subtest: Property: Exit codes are consistent between SEA and npm versions
         ok 1 - Exit codes are consistent
         1..1
-    ok 3 - Property: Exit codes are consistent between SEA and npm versions # time=3531.901ms
+    ok 3 - Property: Exit codes are consistent between SEA and npm versions # time=4057.813ms
     
     # Subtest: Property: Output format is consistent
         ok 1 - Output format is consistent
         1..1
-    ok 4 - Property: Output format is consistent # time=3113.481ms
+    ok 4 - Property: Output format is consistent # time=3135.67ms
     
     1..4
-ok 1 - Single Executable Behavioral Equivalence - Property Test # time=16825.071ms
+ok 1 - Single Executable Behavioral Equivalence - Property Test # time=17709.134ms
 
 1..1

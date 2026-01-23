@@ -4,7 +4,7 @@ TAP version 14
         ok 1 - should return same instance
         ok 2 - should be NodeService
         1..2
-    ok 1 - singleton pattern # time=6.708ms
+    ok 1 - singleton pattern # time=8.509ms
     
     # Subtest: initialization
         ok 1 - should not be initialized initially
@@ -13,17 +13,17 @@ TAP version 14
         ok 4 - should have node address
         ok 5 - should be active
         1..5
-    ok 2 - initialization # time=3.691ms
+    ok 2 - initialization # time=2.998ms
     
     # Subtest: initialization with custom options
         ok 1 - should use custom node ID
         1..1
-    ok 3 - initialization with custom options # time=1.773ms
+    ok 3 - initialization with custom options # time=1.372ms
     
     # Subtest: double initialization is idempotent
         ok 1 - should keep first node ID
         1..1
-    ok 4 - double initialization is idempotent # time=1.588ms
+    ok 4 - double initialization is idempotent # time=1.642ms
     
     # Subtest: start and stop service
         ok 1 - should return service ID
@@ -34,22 +34,22 @@ TAP version 14
         ok 6 - should be stopped
         ok 7 - should not find service after stop
         1..7
-    ok 5 - start and stop service # time=506.456ms
+    ok 5 - start and stop service # time=522.341ms
     
     # Subtest: start service without initialization throws
         ok 1 - should throw not initialized
         1..1
-    ok 6 - start service without initialization throws # time=1.166ms
+    ok 6 - start service without initialization throws # time=1.654ms
     
     # Subtest: start duplicate service throws
         ok 1 - should throw already exists
         1..1
-    ok 7 - start duplicate service throws # time=584.433ms
+    ok 7 - start duplicate service throws # time=556.277ms
     
     # Subtest: stop non-existent service throws
         ok 1 - should throw not found
         1..1
-    ok 8 - stop non-existent service throws # time=1.853ms
+    ok 8 - stop non-existent service throws # time=1.85ms
     
     # Subtest: get node stats
         ok 1 - should have node ID
@@ -69,7 +69,7 @@ TAP version 14
         ok 15 - should have OS
         ok 16 - should have Node version
         1..16
-    ok 9 - get node stats # time=6.78ms
+    ok 9 - get node stats # time=4.559ms
     
     # Subtest: get service health
         ok 1 - should have service ID
@@ -77,19 +77,19 @@ TAP version 14
         ok 3 - should be healthy
         ok 4 - should have last health check
         1..4
-    ok 10 - get service health # time=447.478ms
+    ok 10 - get service health # time=499.609ms
     
     # Subtest: get health for non-existent service throws
         ok 1 - should throw not found
         1..1
-    ok 11 - get health for non-existent service throws # time=1.759ms
+    ok 11 - get health for non-existent service throws # time=2.062ms
     
     # Subtest: get all services
         ok 1 - should have 2 services
         ok 2 - should include svc-1
         ok 3 - should include svc-2
         1..3
-    ok 12 - get all services # time=531.141ms
+    ok 12 - get all services # time=472.285ms
     
     # Subtest: get running service count
         ok 1 - should start with 0
@@ -97,7 +97,7 @@ TAP version 14
         ok 3 - should have 2 running
         ok 4 - should have 1 after stop
         1..4
-    ok 13 - get running service count # time=480.783ms
+    ok 13 - get running service count # time=571.56ms
     
     # Subtest: message group service tracking
         ok 1 - should have no MG initially
@@ -105,34 +105,100 @@ TAP version 14
         ok 3 - should get MG replica
         ok 4 - should be correct MG
         1..4
-    ok 14 - message group service tracking # time=689.766ms
+    ok 14 - message group service tracking # time=527.845ms
     
     # Subtest: route service message
         ok 1 - should get ok response
         ok 2 - should have service ID
         1..2
-    ok 15 - route service message # time=574.495ms
+    ok 15 - route service message # time=544.783ms
     
     # Subtest: route message to non-existent service throws
         ok 1 - should throw not found
         1..1
-    ok 16 - route message to non-existent service throws # time=2.038ms
+    ok 16 - route message to non-existent service throws # time=1.486ms
     
     # Subtest: emits events on service lifecycle
         ok 1 - should emit 2 events
         ok 2 - should be equivalent
         ok 3 - should be equivalent
         1..3
-    ok 17 - emits events on service lifecycle # time=657.081ms
+    ok 17 - emits events on service lifecycle # time=623.605ms
     
     # Subtest: shutdown cleans up all services
         ok 1 - should have 2 services
         ok 2 - should not be initialized
         ok 3 - should be stopped
         1..3
-    ok 18 - shutdown cleans up all services # time=426.385ms
+    ok 18 - shutdown cleans up all services # time=546.899ms
     
-    1..18
-ok 1 - NodeService # time=5542.781ms
+    # Subtest: lifecycle state machine is initialized on node init
+        ok 1 - should be null before init
+        ok 2 - should be READY after init
+        ok 3 - should have state machine
+        1..3
+    ok 19 - lifecycle state machine is initialized on node init # time=2.225ms
+    
+    # Subtest: getLifecycleState returns current state
+        ok 1 - should return READY state
+        ok 2 - should be string ready
+        1..2
+    ok 20 - getLifecycleState returns current state # time=1.377ms
+    
+    # Subtest: isReady returns true when in READY state
+        ok 1 - should be ready after init
+        ok 2 - should not be draining
+        1..2
+    ok 21 - isReady returns true when in READY state # time=2.083ms
+    
+    # Subtest: emits lifecycleStateChange events during initialization
+        ok 1 - should emit 5 state change events
+        ok 2 - first from STARTING
+        ok 3 - first to CONNECTING
+        ok 4 - should include nodeId
+        ok 5 - last from SYNCING
+        ok 6 - last to READY
+        1..6
+    ok 22 - emits lifecycleStateChange events during initialization # time=2.458ms
+    
+    # Subtest: emits cdcNodeStateChange events for nodes table updates
+        ok 1 - should emit 5 CDC events
+        ok 2 - should have nodeId
+        ok 3 - should have new state
+        ok 4 - should have previous state
+        ok 5 - should have timestamp
+        1..5
+    ok 23 - emits cdcNodeStateChange events for nodes table updates # time=2.398ms
+    
+    # Subtest: shutdown transitions through DRAINING to STOPPED
+        ok 1 - should emit 2 events during shutdown
+        ok 2 - first from READY
+        ok 3 - first to DRAINING
+        ok 4 - second from DRAINING
+        ok 5 - second to STOPPED
+        1..5
+    ok 24 - shutdown transitions through DRAINING to STOPPED # time=2.314ms
+    
+    # Subtest: NodeState enum is exported correctly
+        ok 1 - NodeState should be exported
+        ok 2 - STARTING should be starting
+        ok 3 - CONNECTING should be connecting
+        ok 4 - DISCOVERING should be discovering
+        ok 5 - JOINING should be joining
+        ok 6 - SYNCING should be syncing
+        ok 7 - READY should be ready
+        ok 8 - DRAINING should be draining
+        ok 9 - STOPPED should be stopped
+        1..9
+    ok 25 - NodeState enum is exported correctly # time=4.865ms
+    
+    # Subtest: isReady and isDraining return false before initialization
+        ok 1 - should not be ready before init
+        ok 2 - should not be draining before init
+        1..2
+    ok 26 - isReady and isDraining return false before initialization # time=0.752ms
+    
+    1..26
+ok 1 - NodeService # time=5685.756ms
 
 1..1

@@ -153,9 +153,9 @@ async function main() {
     });
 
     // Ensure seed node address has protocol
-    const seedUrl = seedNodeAddress.startsWith('http')
-      ? seedNodeAddress
-      : `http://${seedNodeAddress}`;
+    const seedUrl = seedNodeAddress.startsWith('http') ?
+      seedNodeAddress :
+      `http://${seedNodeAddress}`;
 
     // Determine WebSocket port for this joining node
     const restApiPort = config.get('node.restApiPort') || 8080;

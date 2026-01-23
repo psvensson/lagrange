@@ -3,29 +3,29 @@ TAP version 14
     # Subtest: transitional states record entry time
         ok 1 - transitional states record entry time
         1..1
-    ok 1 - transitional states record entry time # time=4.404ms
+    ok 1 - transitional states record entry time # time=4.473ms
     
     # Subtest: entry time updates on each transition
         ok 1 - entry time updates on each transition
         1..1
-    ok 2 - entry time updates on each transition # time=1.197ms
+    ok 2 - entry time updates on each transition # time=1.03ms
     
     # Subtest: getTransitionalReplicas returns correct replicas
         ok 1 - getTransitionalReplicas returns correct replicas
         1..1
-    ok 3 - getTransitionalReplicas returns correct replicas # time=1.578ms
+    ok 3 - getTransitionalReplicas returns correct replicas # time=1.568ms
     
     # Subtest: non-transitional states excluded from getTransitionalReplicas
         ok 1 - non-transitional states excluded from getTransitionalReplicas
         1..1
-    ok 4 - non-transitional states excluded from getTransitionalReplicas # time=1.007ms
+    ok 4 - non-transitional states excluded from getTransitionalReplicas # time=1.017ms
     
     # Subtest: previous state tracked for debugging
         ok 1 - previous state tracked for debugging
         1..1
-    ok 5 - previous state tracked for debugging # time=0.897ms
+    ok 5 - previous state tracked for debugging # time=1.158ms
     
     1..5
-ok 1 - Property 9: Entry Time Tracking # time=109.156ms
+ok 1 - Property 9: Entry Time Tracking # time=100.034ms
 
 1..1

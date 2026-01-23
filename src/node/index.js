@@ -47,3 +47,10 @@ export {
   MessageType as ReplicaHandlerMessageType,
   ResponseStatus as ReplicaHandlerResponseStatus,
 } from './replica-handler.js';
+
+export {
+  NodeLifecycleStateMachine,
+  NodeState,
+  VALID_TRANSITIONS as NODE_VALID_TRANSITIONS,
+  InvalidTransitionError,
+} from './node-lifecycle-state-machine.js';

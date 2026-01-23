@@ -5,7 +5,7 @@ TAP version 14
         ok 2 - should not have data column in fresh database
         ok 3 - command column should be NOT NULL
         1..3
-    ok 1 - fresh database creates correct schema # time=8.375ms
+    ok 1 - fresh database creates correct schema # time=6.762ms
     
     # Subtest: legacy database with data column is migrated
         ok 1 - should have command column after migration
@@ -15,21 +15,21 @@ TAP version 14
         ok 5 - entry 1 command value preserved
         ok 6 - entry 2 command value preserved
         1..6
-    ok 2 - legacy database with data column is migrated # time=1.79ms
+    ok 2 - legacy database with data column is migrated # time=1.507ms
     
     # Subtest: database with both columns copies data to command
         ok 1 - entry should exist
         ok 2 - command type should be copied from data
         ok 3 - command value should be copied from data
         1..3
-    ok 3 - database with both columns copies data to command # time=1.195ms
+    ok 3 - database with both columns copies data to command # time=0.978ms
     
     # Subtest: migration is idempotent
         ok 1 - data should be preserved after multiple migrations
         ok 2 - index should be preserved
         ok 3 - term should be preserved
         1..3
-    ok 4 - migration is idempotent # time=2.657ms
+    ok 4 - migration is idempotent # time=2.061ms
     
     # Subtest: raft operations work after migration
         ok 1 - new entry should exist
@@ -42,7 +42,7 @@ TAP version 14
         ok 8 - entry 2 should be removed
         ok 9 - entry 1 should still exist
         1..9
-    ok 5 - raft operations work after migration # time=2.166ms
+    ok 5 - raft operations work after migration # time=1.988ms
     
     # Subtest: empty legacy database migrates correctly
         ok 1 - should have command column
@@ -50,9 +50,9 @@ TAP version 14
         ok 3 - can insert into migrated empty database
         ok 4 - entry has correct command
         1..4
-    ok 6 - empty legacy database migrates correctly # time=1.374ms
+    ok 6 - empty legacy database migrates correctly # time=1.292ms
     
     1..6
-ok 1 - SQLite Schema Migration # time=21.899ms
+ok 1 - SQLite Schema Migration # time=18.152ms
 
 1..1

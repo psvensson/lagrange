@@ -3,29 +3,29 @@ TAP version 14
     # Subtest: CDC persistence called for every transition
         ok 1 - CDC persistence called for every transition
         1..1
-    ok 1 - CDC persistence called for every transition # time=5.613ms
+    ok 1 - CDC persistence called for every transition # time=8.576ms
     
     # Subtest: CDC persistence includes required fields
         ok 1 - CDC persistence includes required fields
         1..1
-    ok 2 - CDC persistence includes required fields # time=5.579ms
+    ok 2 - CDC persistence includes required fields # time=4.282ms
     
     # Subtest: CDC persistence completes synchronously
         ok 1 - CDC persistence completes synchronously
         1..1
-    ok 3 - CDC persistence completes synchronously # time=2.818ms
+    ok 3 - CDC persistence completes synchronously # time=1.548ms
     
     # Subtest: previous state persisted correctly
         ok 1 - previous state persisted correctly
         1..1
-    ok 4 - previous state persisted correctly # time=2.456ms
+    ok 4 - previous state persisted correctly # time=1.416ms
     
     # Subtest: backward compatible without CDC service
         ok 1 - backward compatible without CDC service
         1..1
-    ok 5 - backward compatible without CDC service # time=1.372ms
+    ok 5 - backward compatible without CDC service # time=1.418ms
     
     1..5
-ok 1 - Property 6: State Persistence via CDC # time=176.484ms
+ok 1 - Property 6: State Persistence via CDC # time=151.002ms
 
 1..1

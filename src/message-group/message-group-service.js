@@ -1,7 +1,7 @@
 /**
  * Message Group Service - Reliable inter-service communication.
  * Implements 3-replica Raft groups using liferaft library for consensus.
- * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.4, 6.5
+ * Requirements: 1.4, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.4, 6.5
  */
 
 import {EventEmitter} from 'events';
@@ -15,6 +15,7 @@ import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {InMemoryLogAdapter} from '../raft/in-memory-log-adapter.js';
 import {isRaftPacket, RAFT_PACKET_TYPES} from '../raft/raft-packet-utils.js';
+import {AddressManager} from '../address/address-manager.js';
 
 /**
  * Message status enumeration.
@@ -185,9 +186,17 @@ class MessageGroupService extends EventEmitter {
     // Used when joining an existing message group on a different node
     this.peerAddresses = options.peerAddresses || [];
 
+    // Get AddressManager instance for unified address operations
+    // Requirements: 1.4
+    this.addressManager = AddressManager.getInstance();
+
     // Unified address format: ${nodeId}/message-group/${replicaId}
-    // Requirements: 1.1, 5.1
-    this.unifiedAddress = `${this.nodeId}/message-group/${this.replicaId}`;
+    // Requirements: 1.1, 1.4, 5.1
+    this.unifiedAddress = this.addressManager.format(
+      this.nodeId,
+      'message-group',
+      this.replicaId,
+    );
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -279,21 +288,41 @@ class MessageGroupService extends EventEmitter {
   /**
    * Build a unified address for a peer replica.
    * Looks up the address from peerAddresses array, system table cache, or falls back.
-   * Requirements: 1.1, 9.1
+   * Uses AddressManager for consistent address formatting and validation.
+   * Requirements: 1.1, 1.4, 9.1
    * @param {string} peerId - Peer replica ID.
    * @return {string} Unified address for the peer.
    */
   buildPeerAddress(peerId) {
-    // If peerId is already in unified format, return as-is
+    // If peerId is already in unified format, validate and return as-is
+    // Requirements: 1.4
     if (peerId.includes('/')) {
-      return peerId;
+      const validation = this.addressManager.validate(peerId);
+      if (validation.valid) {
+        return peerId;
+      }
+      // If invalid unified format, log warning and try to extract serviceId
+      this.logger.warn('Invalid unified address format, attempting to parse', {
+        peerId,
+        error: validation.error,
+      });
     }
 
     // Check peerAddresses array (provided during cross-node joining)
     // Format: ['nodeId/message-group/replicaId', ...]
     if (this.peerAddresses && this.peerAddresses.length > 0) {
-      const matchingAddress = this.peerAddresses.find((addr) =>
-        addr.endsWith(`/message-group/${peerId}`) || addr.endsWith(`/${peerId}`));
+      const matchingAddress = this.peerAddresses.find((addr) => {
+        const validation = this.addressManager.validate(addr);
+        if (!validation.valid) {
+          return false;
+        }
+        try {
+          const parsed = this.addressManager.parse(addr);
+          return parsed.serviceId === peerId;
+        } catch (e) {
+          return false;
+        }
+      });
       if (matchingAddress) {
         return matchingAddress;
       }
@@ -303,14 +332,14 @@ class MessageGroupService extends EventEmitter {
     if (this.systemTableCache) {
       const service = this.systemTableCache.get('services', peerId);
       if (service && service.node_id) {
-        return `${service.node_id}/message-group/${peerId}`;
+        return this.addressManager.format(service.node_id, 'message-group', peerId);
       }
     }
 
     // During bootstrap, all replicas are on the same node, so use this.nodeId
     // This enables Raft elections to work before the system table cache is populated
-    // Requirements: 1.1, 9.1
-    return `${this.nodeId}/message-group/${peerId}`;
+    // Requirements: 1.1, 1.4, 9.1
+    return this.addressManager.format(this.nodeId, 'message-group', peerId);
   }
 
 

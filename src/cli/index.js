@@ -1462,10 +1462,10 @@ export class AdminCLI {
 
     // Query logs table for state transition events for this replica
     // The logs contain 'Replica state transition' messages with replicaId in metadata
-    const sql = `SELECT timestamp, level, message, metadata FROM logs ` +
-      `WHERE message LIKE '%Replica state transition%' ` +
+    const sql = 'SELECT timestamp, level, message, metadata FROM logs ' +
+      'WHERE message LIKE \'%Replica state transition%\' ' +
       `AND metadata LIKE '%${replicaId.replace(/'/g, '\'\'')}%' ` +
-      `ORDER BY timestamp ASC LIMIT 100`;
+      'ORDER BY timestamp ASC LIMIT 100';
 
     const queryId = `history_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -1546,7 +1546,7 @@ export class AdminCLI {
     });
 
     // Build the history display content
-    let content = `{bold}{cyan-fg}State Transition History{/cyan-fg}{/bold}\n`;
+    let content = '{bold}{cyan-fg}State Transition History{/cyan-fg}{/bold}\n';
     content += `{cyan-fg}Replica:{/cyan-fg} ${replicaId}\n`;
     content += `{cyan-fg}Entries:{/cyan-fg} ${historyEntries.length}\n\n`;
     content += '{cyan-fg}─────────────────────────────────────────────────{/cyan-fg}\n\n';

@@ -3,39 +3,39 @@ TAP version 14
     # Subtest: starting replicas are marked as failed on recovery
         ok 1 - starting replicas are marked as failed on recovery
         1..1
-    ok 1 - starting replicas are marked as failed on recovery # time=9.006ms
+    ok 1 - starting replicas are marked as failed on recovery # time=5.329ms
     
     # Subtest: syncing replicas are marked as failed on recovery
         ok 1 - syncing replicas are marked as failed on recovery
         1..1
-    ok 2 - syncing replicas are marked as failed on recovery # time=3.241ms
+    ok 2 - syncing replicas are marked as failed on recovery # time=1.897ms
     
     # Subtest: stopping replicas are removed on recovery
         ok 1 - stopping replicas are removed on recovery
         1..1
-    ok 3 - stopping replicas are removed on recovery # time=3.205ms
+    ok 3 - stopping replicas are removed on recovery # time=1.905ms
     
     # Subtest: mixed transitional replicas are all handled
         ok 1 - mixed transitional replicas are all handled
         1..1
-    ok 4 - mixed transitional replicas are all handled # time=4.442ms
+    ok 4 - mixed transitional replicas are all handled # time=3.226ms
     
     # Subtest: active replicas are not affected by recovery
         ok 1 - active replicas are not affected by recovery
         1..1
-    ok 5 - active replicas are not affected by recovery # time=1.317ms
+    ok 5 - active replicas are not affected by recovery # time=1.712ms
     
     # Subtest: replicas on other nodes are not affected
         ok 1 - replicas on other nodes are not affected
         1..1
-    ok 6 - replicas on other nodes are not affected # time=1.668ms
+    ok 6 - replicas on other nodes are not affected # time=1.546ms
     
     # Subtest: recoveryComplete event is emitted with orphan count
         ok 1 - recoveryComplete event is emitted with orphan count
         1..1
-    ok 7 - recoveryComplete event is emitted with orphan count # time=1.344ms
+    ok 7 - recoveryComplete event is emitted with orphan count # time=1.279ms
     
     1..7
-ok 1 - Property 83: Node Recovery Orphan Cleanup # time=215.245ms
+ok 1 - Property 83: Node Recovery Orphan Cleanup # time=148.534ms
 
 1..1

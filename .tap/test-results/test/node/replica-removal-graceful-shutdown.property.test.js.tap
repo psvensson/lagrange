@@ -3,39 +3,39 @@ TAP version 14
     # Subtest: REMOVE_REPLICA returns initiated ACK
         ok 1 - REMOVE_REPLICA returns initiated ACK
         1..1
-    ok 1 - REMOVE_REPLICA returns initiated ACK # time=6.238ms
+    ok 1 - REMOVE_REPLICA returns initiated ACK # time=12.818ms
     
     # Subtest: REMOVE_REPLICA on missing replica returns not_found
         ok 1 - REMOVE_REPLICA on missing replica returns not_found
         1..1
-    ok 2 - REMOVE_REPLICA on missing replica returns not_found # time=1.362ms
+    ok 2 - REMOVE_REPLICA on missing replica returns not_found # time=2.147ms
     
     # Subtest: removal transitions through stopping to stopped
         ok 1 - removal transitions through stopping to stopped
         1..1
-    ok 3 - removal transitions through stopping to stopped # time=1.901ms
+    ok 3 - removal transitions through stopping to stopped # time=3.015ms
     
     # Subtest: graceful shutdown is called on service
         ok 1 - graceful shutdown is called on service
         1..1
-    ok 4 - graceful shutdown is called on service # time=1.841ms
+    ok 4 - graceful shutdown is called on service # time=2.768ms
     
     # Subtest: service row is deleted after shutdown
         ok 1 - service row is deleted after shutdown
         1..1
-    ok 5 - service row is deleted after shutdown # time=2.411ms
+    ok 5 - service row is deleted after shutdown # time=1.834ms
     
     # Subtest: replica is removed from local tracking
         ok 1 - replica is removed from local tracking
         1..1
-    ok 6 - replica is removed from local tracking # time=1.608ms
+    ok 6 - replica is removed from local tracking # time=2.129ms
     
     # Subtest: replicaRemoved event is emitted
         ok 1 - replicaRemoved event is emitted
         1..1
-    ok 7 - replicaRemoved event is emitted # time=1005.443ms
+    ok 7 - replicaRemoved event is emitted # time=1006.669ms
     
     1..7
-ok 1 - Property 82: Replica Removal Graceful Shutdown # time=1127.502ms
+ok 1 - Property 82: Replica Removal Graceful Shutdown # time=1211.341ms
 
 1..1

@@ -2,17 +2,17 @@ TAP version 14
 # Subtest: Property 5: Cache dump contains all six system tables
     ok 1 - Cache dump contains all six system tables
     1..1
-ok 1 - Property 5: Cache dump contains all six system tables # time=105.167ms
+ok 1 - Property 5: Cache dump contains all six system tables # time=118.6ms
 
 # Subtest: Property 5: Cache dump data matches cache contents
     ok 1 - Cache dump data matches cache contents
     1..1
-ok 2 - Property 5: Cache dump data matches cache contents # time=73.735ms
+ok 2 - Property 5: Cache dump data matches cache contents # time=59.537ms
 
 # Subtest: Property 5: Cache dump format matches protocol
     ok 1 - Cache dump format matches protocol
     1..1
-ok 3 - Property 5: Cache dump format matches protocol # time=50.716ms
+ok 3 - Property 5: Cache dump format matches protocol # time=49.115ms
 
 # Subtest: Property 5: Empty cache returns valid dump structure
     ok 1 - should be cache_dump
@@ -23,11 +23,11 @@ ok 3 - Property 5: Cache dump format matches protocol # time=50.716ms
     ok 6 - message_groups should be an array
     ok 7 - indices should be an array
     1..7
-ok 4 - Property 5: Empty cache returns valid dump structure # time=6.947ms
+ok 4 - Property 5: Empty cache returns valid dump structure # time=6.219ms
 
 # Subtest: Property 5: Empty cache fallback queries partitions
     ok 1 - Empty cache fallback queries partitions
     1..1
-ok 5 - Property 5: Empty cache fallback queries partitions # time=54.357ms
+ok 5 - Property 5: Empty cache fallback queries partitions # time=53.915ms
 
 1..5

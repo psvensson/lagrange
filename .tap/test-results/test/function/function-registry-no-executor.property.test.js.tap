@@ -2,26 +2,26 @@ TAP version 14
 # Subtest: Property 37: invoke returns error when no executor registered
     ok 1 - invoke returns error when no executor registered
     1..1
-ok 1 - Property 37: invoke returns error when no executor registered # time=11.142ms
+ok 1 - Property 37: invoke returns error when no executor registered # time=11.562ms
 
 # Subtest: Property 37: error message lists available executor types
     ok 1 - error message lists available executor types
     1..1
-ok 2 - Property 37: error message lists available executor types # time=7.217ms
+ok 2 - Property 37: error message lists available executor types # time=10.496ms
 
 # Subtest: Property 37: invokeByName returns error when no executor
     ok 1 - invokeByName returns error when no executor registered
     1..1
-ok 3 - Property 37: invokeByName returns error when no executor # time=2.154ms
+ok 3 - Property 37: invokeByName returns error when no executor # time=3.416ms
 
 # Subtest: Property 37: unregister executor causes invoke to fail
     ok 1 - unregister executor causes invoke to fail
     1..1
-ok 4 - Property 37: unregister executor causes invoke to fail # time=1.715ms
+ok 4 - Property 37: unregister executor causes invoke to fail # time=3.725ms
 
 # Subtest: Property 37: error shows none when no executors registered
     ok 1 - error shows none when no executors registered
     1..1
-ok 5 - Property 37: error shows none when no executors registered # time=3.441ms
+ok 5 - Property 37: error shows none when no executors registered # time=2.61ms
 
 1..5

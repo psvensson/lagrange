@@ -2,16 +2,16 @@ TAP version 14
 # Subtest: Property 43: Table without PRIMARY KEY is rejected
     ok 1 - Tables without PRIMARY KEY are rejected with appropriate error
     1..1
-ok 1 - Property 43: Table without PRIMARY KEY is rejected # time=11.111ms
+ok 1 - Property 43: Table without PRIMARY KEY is rejected # time=10.047ms
 
 # Subtest: Property 43: Table with null PRIMARY KEY is rejected
     ok 1 - Tables with null PRIMARY KEY are rejected
     1..1
-ok 2 - Property 43: Table with null PRIMARY KEY is rejected # time=2.261ms
+ok 2 - Property 43: Table with null PRIMARY KEY is rejected # time=2.138ms
 
 # Subtest: Property 43: validatePrimaryKey detects missing PRIMARY KEY
     ok 1 - validatePrimaryKey correctly detects missing PRIMARY KEY
     1..1
-ok 3 - Property 43: validatePrimaryKey detects missing PRIMARY KEY # time=3.36ms
+ok 3 - Property 43: validatePrimaryKey detects missing PRIMARY KEY # time=2.122ms
 
 1..3

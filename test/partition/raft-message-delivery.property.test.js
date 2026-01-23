@@ -97,7 +97,7 @@ test('Property 3: Raft messages are delivered to correct handler', async (t) => 
         const replicaId = `${partitionId}-r1`;
         const replicaIds = [replicaId];
 
-        let receivedMessages = [];
+        const receivedMessages = [];
 
         try {
           await router.initialize({startServer: true});
@@ -194,7 +194,7 @@ test('Property 3: Co-located replicas receive messages via router', async (t) =>
         const replicaId2 = `${partitionId}-r2`;
         const replicaIds = [replicaId1, replicaId2];
 
-        let replica2ReceivedMessages = [];
+        const replica2ReceivedMessages = [];
 
         try {
           await router.initialize({startServer: true});

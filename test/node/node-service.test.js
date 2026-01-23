@@ -5,7 +5,7 @@
  */
 
 import {test} from 'tap';
-import {NodeService, NodeStatus} from '../../src/node/node-service.js';
+import {NodeService, NodeStatus, NodeState} from '../../src/node/node-service.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -305,5 +305,122 @@ test('NodeService', async (t) => {
 
     t.equal(nodeService.isInitialized(), false, 'should not be initialized');
     t.equal(nodeService.getStatus(), NodeStatus.STOPPED, 'should be stopped');
+  });
+
+  // Tests for NodeLifecycleStateMachine integration (Requirements: 5.1, 5.4, 5.7)
+
+  t.test('lifecycle state machine is initialized on node init', async (t) => {
+    const nodeService = NodeService.getInstance();
+
+    // Before initialization, lifecycle state should be null
+    t.equal(nodeService.getLifecycleState(), null, 'should be null before init');
+
+    nodeService.initialize();
+
+    // After initialization, should be in READY state
+    t.equal(nodeService.getLifecycleState(), NodeState.READY, 'should be READY after init');
+    t.ok(nodeService.getLifecycleStateMachine(), 'should have state machine');
+  });
+
+  t.test('getLifecycleState returns current state', async (t) => {
+    const nodeService = NodeService.getInstance();
+    nodeService.initialize();
+
+    const state = nodeService.getLifecycleState();
+    t.equal(state, NodeState.READY, 'should return READY state');
+    t.equal(state, 'ready', 'should be string ready');
+  });
+
+  t.test('isReady returns true when in READY state', async (t) => {
+    const nodeService = NodeService.getInstance();
+    nodeService.initialize();
+
+    t.equal(nodeService.isReady(), true, 'should be ready after init');
+    t.equal(nodeService.isDraining(), false, 'should not be draining');
+  });
+
+  t.test('emits lifecycleStateChange events during initialization', async (t) => {
+    const nodeService = NodeService.getInstance();
+    const events = [];
+
+    nodeService.on('lifecycleStateChange', (event) => {
+      events.push(event);
+    });
+
+    nodeService.initialize({nodeId: 'lifecycle-test-node'});
+
+    // Should have emitted events for each state transition
+    // STARTING -> CONNECTING -> DISCOVERING -> JOINING -> SYNCING -> READY
+    t.equal(events.length, 5, 'should emit 5 state change events');
+
+    t.equal(events[0].from, NodeState.STARTING, 'first from STARTING');
+    t.equal(events[0].to, NodeState.CONNECTING, 'first to CONNECTING');
+    t.equal(events[0].nodeId, 'lifecycle-test-node', 'should include nodeId');
+
+    t.equal(events[4].from, NodeState.SYNCING, 'last from SYNCING');
+    t.equal(events[4].to, NodeState.READY, 'last to READY');
+  });
+
+  t.test('emits cdcNodeStateChange events for nodes table updates', async (t) => {
+    const nodeService = NodeService.getInstance();
+    const cdcEvents = [];
+
+    nodeService.on('cdcNodeStateChange', (event) => {
+      cdcEvents.push(event);
+    });
+
+    nodeService.initialize({nodeId: 'cdc-test-node'});
+
+    // Should have emitted CDC events for each state transition
+    t.equal(cdcEvents.length, 5, 'should emit 5 CDC events');
+
+    // Check last CDC event (transition to READY)
+    const lastEvent = cdcEvents[4];
+    t.equal(lastEvent.nodeId, 'cdc-test-node', 'should have nodeId');
+    t.equal(lastEvent.state, NodeState.READY, 'should have new state');
+    t.equal(lastEvent.previousState, NodeState.SYNCING, 'should have previous state');
+    t.ok(lastEvent.timestamp, 'should have timestamp');
+  });
+
+  t.test('shutdown transitions through DRAINING to STOPPED', async (t) => {
+    const nodeService = NodeService.getInstance();
+    const events = [];
+
+    nodeService.initialize({nodeId: 'shutdown-lifecycle-node'});
+
+    // Clear init events and listen for shutdown events
+    nodeService.on('lifecycleStateChange', (event) => {
+      events.push(event);
+    });
+
+    await nodeService.shutdown();
+
+    // Should have READY -> DRAINING -> STOPPED
+    t.equal(events.length, 2, 'should emit 2 events during shutdown');
+
+    t.equal(events[0].from, NodeState.READY, 'first from READY');
+    t.equal(events[0].to, NodeState.DRAINING, 'first to DRAINING');
+
+    t.equal(events[1].from, NodeState.DRAINING, 'second from DRAINING');
+    t.equal(events[1].to, NodeState.STOPPED, 'second to STOPPED');
+  });
+
+  t.test('NodeState enum is exported correctly', async (t) => {
+    t.ok(NodeState, 'NodeState should be exported');
+    t.equal(NodeState.STARTING, 'starting', 'STARTING should be starting');
+    t.equal(NodeState.CONNECTING, 'connecting', 'CONNECTING should be connecting');
+    t.equal(NodeState.DISCOVERING, 'discovering', 'DISCOVERING should be discovering');
+    t.equal(NodeState.JOINING, 'joining', 'JOINING should be joining');
+    t.equal(NodeState.SYNCING, 'syncing', 'SYNCING should be syncing');
+    t.equal(NodeState.READY, 'ready', 'READY should be ready');
+    t.equal(NodeState.DRAINING, 'draining', 'DRAINING should be draining');
+    t.equal(NodeState.STOPPED, 'stopped', 'STOPPED should be stopped');
+  });
+
+  t.test('isReady and isDraining return false before initialization', async (t) => {
+    const nodeService = NodeService.getInstance();
+
+    t.equal(nodeService.isReady(), false, 'should not be ready before init');
+    t.equal(nodeService.isDraining(), false, 'should not be draining before init');
   });
 });

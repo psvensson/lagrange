@@ -51,7 +51,7 @@ TAP version 14
     ok 49 - queryOnMiss should be tracked
     ok 50 - Miss should be tracked
     1..50
-ok 1 - Property 28: Cache miss triggers system partition query # time=16.028ms
+ok 1 - Property 28: Cache miss triggers system partition query # time=16.172ms
 
 # Subtest: Property 28: Query result is cached
     ok 1 - First access should query
@@ -95,7 +95,7 @@ ok 1 - Property 28: Cache miss triggers system partition query # time=16.028ms
     ok 39 - Should return cached result
     ok 40 - Second access should be a hit
     1..40
-ok 2 - Property 28: Query result is cached # time=5.973ms
+ok 2 - Property 28: Query result is cached # time=6.027ms
 
 # Subtest: Property 28: Expired entries trigger fresh query
     ok 1 - First query should return version 1
@@ -139,7 +139,7 @@ ok 2 - Property 28: Query result is cached # time=5.973ms
     ok 39 - Second query should return version 2
     ok 40 - Should have queried twice
     1..40
-ok 3 - Property 28: Expired entries trigger fresh query # time=707.898ms
+ok 3 - Property 28: Expired entries trigger fresh query # time=707.99ms
 
 # Subtest: Property 28: Consecutive failures trigger refresh
     ok 1 - Entry should exist below threshold
@@ -183,7 +183,7 @@ ok 3 - Property 28: Expired entries trigger fresh query # time=707.898ms
     ok 39 - Refresh query should be triggered
     ok 40 - Refresh should be tracked
     1..40
-ok 4 - Property 28: Consecutive failures trigger refresh # time=2.756ms
+ok 4 - Property 28: Consecutive failures trigger refresh # time=3.469ms
 
 # Subtest: Property 28: Null results are not cached
     ok 1 - Should return null
@@ -237,9 +237,9 @@ ok 4 - Property 28: Consecutive failures trigger refresh # time=2.756ms
     ok 49 - Should query again for null result
     ok 50 - Null result should not be cached
     1..50
-ok 5 - Property 28: Null results are not cached # time=4.191ms
+ok 5 - Property 28: Null results are not cached # time=5.731ms
 
-{"level":50,"time":"2026-01-22T18:03:31.482Z","nodeId":"test-node","pid":320075,"subsystem":"metadata-cache","key":"iwD238Te<\\vNadmz","error":"7bEy=mNdh-ld2!cOh6J3","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-23T06:22:47.898Z","nodeId":"test-node","pid":418489,"subsystem":"metadata-cache","key":"oc95MINd\"z5FG;","error":"!4D`|Ta","nodeId":"test-node","msg":"Failed to query system partition"}
 # Subtest: Property 28: Query errors propagate
     ok 1 - Error should be thrown
     ok 2 - Error message should be preserved
@@ -262,7 +262,7 @@ ok 5 - Property 28: Null results are not cached # time=4.191ms
     ok 19 - Error should be thrown
     ok 20 - Error message should be preserved
     1..20
-ok 6 - Property 28: Query errors propagate # time=2.832ms
+ok 6 - Property 28: Query errors propagate # time=5.265ms
 
 # Subtest: Property 28: Partition getters use query-on-miss
     ok 1 - Should query for partition
@@ -296,7 +296,7 @@ ok 6 - Property 28: Query errors propagate # time=2.832ms
     ok 29 - Should query partitions table
     ok 30 - Should return partition data
     1..30
-ok 7 - Property 28: Partition getters use query-on-miss # time=3.047ms
+ok 7 - Property 28: Partition getters use query-on-miss # time=5.158ms
 
 # Subtest: Property 28: No query function returns null on miss
     ok 1 - Should return null without query function
@@ -310,7 +310,7 @@ ok 7 - Property 28: Partition getters use query-on-miss # time=3.047ms
     ok 9 - Should return null without query function
     ok 10 - Should return null without query function
     1..10
-ok 8 - Property 28: No query function returns null on miss # time=1.385ms
+ok 8 - Property 28: No query function returns null on miss # time=2.565ms
 
 # Subtest: Property 28: Dynamic query function setting
     ok 1 - Should return null initially
@@ -334,7 +334,7 @@ ok 8 - Property 28: No query function returns null on miss # time=1.385ms
     ok 19 - Should return null initially
     ok 20 - Should return query result
     1..20
-ok 9 - Property 28: Dynamic query function setting # time=2.09ms
+ok 9 - Property 28: Dynamic query function setting # time=3.78ms
 
 # Subtest: Property 28: Failure counter resets on success
     ok 1 - No refresh after counter reset
@@ -358,15 +358,15 @@ ok 9 - Property 28: Dynamic query function setting # time=2.09ms
     ok 19 - No refresh after counter reset
     ok 20 - Entry should still exist
     1..20
-ok 10 - Property 28: Failure counter resets on success # time=1.557ms
+ok 10 - Property 28: Failure counter resets on success # time=3.046ms
 
-{"level":50,"time":"2026-01-22T18:03:31.482Z","nodeId":"test-node","pid":320075,"subsystem":"metadata-cache","key":"*|\"fS;o%=>rGx;1","error":"vy$#!\"?\"","nodeId":"test-node","msg":"Failed to query system partition"}
-{"level":50,"time":"2026-01-22T18:03:31.483Z","nodeId":"test-node","pid":320075,"subsystem":"metadata-cache","key":"}call~callref\"&","error":"ZX~L^ds.!$4 _x#","nodeId":"test-node","msg":"Failed to query system partition"}
-{"level":50,"time":"2026-01-22T18:03:31.483Z","nodeId":"test-node","pid":320075,"subsystem":"metadata-cache","key":"^7j","error":"%[%#yw  ","nodeId":"test-node","msg":"Failed to query system partition"}
-{"level":50,"time":"2026-01-22T18:03:31.483Z","nodeId":"test-node","pid":320075,"subsystem":"metadata-cache","key":"__pro","error":"lM^@&c oxx~(jj;PX2T","nodeId":"test-node","msg":"Failed to query system partition"}
-{"level":50,"time":"2026-01-22T18:03:31.483Z","nodeId":"test-node","pid":320075,"subsystem":"metadata-cache","key":"|%3\\pr","error":"J.k>$BlM+/(^C-, :$}","nodeId":"test-node","msg":"Failed to query system partition"}
-{"level":50,"time":"2026-01-22T18:03:31.483Z","nodeId":"test-node","pid":320075,"subsystem":"metadata-cache","key":"ev&#","error":"%(J!%!xf","nodeId":"test-node","msg":"Failed to query system partition"}
-{"level":50,"time":"2026-01-22T18:03:31.483Z","nodeId":"test-node","pid":320075,"subsystem":"metadata-cache","key":"ea>'Y*aP>%","error":"7#ringer_p","nodeId":"test-node","msg":"Failed to query system partition"}
-{"level":50,"time":"2026-01-22T18:03:31.484Z","nodeId":"test-node","pid":320075,"subsystem":"metadata-cache","key":"caller","error":"V]Np1ZttF32(%","nodeId":"test-node","msg":"Failed to query system partition"}
-{"level":50,"time":"2026-01-22T18:03:31.484Z","nodeId":"test-node","pid":320075,"subsystem":"metadata-cache","key":"toLocaleString","error":"]J o_gVlN(]$B&x[h3j","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-23T06:22:47.899Z","nodeId":"test-node","pid":418489,"subsystem":"metadata-cache","key":" $\"\" x","error":"U>rP.@Jo@He3p^;,&R!5","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-23T06:22:47.899Z","nodeId":"test-node","pid":418489,"subsystem":"metadata-cache","key":"?__loo","error":"CH|gpx","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-23T06:22:47.899Z","nodeId":"test-node","pid":418489,"subsystem":"metadata-cache","key":"Vx-I J1z+Cn+r","error":"3/+76S3XE/A&uL`)?k","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-23T06:22:47.900Z","nodeId":"test-node","pid":418489,"subsystem":"metadata-cache","key":"__l","error":"%sprototyp","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-23T06:22:47.900Z","nodeId":"test-node","pid":418489,"subsystem":"metadata-cache","key":"eN~E!o$*?8Et@b&","error":"caller","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-23T06:22:47.900Z","nodeId":"test-node","pid":418489,"subsystem":"metadata-cache","key":"constructor","error":"Za~Y$# ","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-23T06:22:47.901Z","nodeId":"test-node","pid":418489,"subsystem":"metadata-cache","key":"}{l'","error":"x~x{$","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-23T06:22:47.901Z","nodeId":"test-node","pid":418489,"subsystem":"metadata-cache","key":"-\"^#&","error":"CKfVVS<TD.vF","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-01-23T06:22:47.902Z","nodeId":"test-node","pid":418489,"subsystem":"metadata-cache","key":"?-=(GWC","error":"T8R $0:?n\"ncI","nodeId":"test-node","msg":"Failed to query system partition"}
 1..10

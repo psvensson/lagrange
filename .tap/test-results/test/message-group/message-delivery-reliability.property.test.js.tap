@@ -22,7 +22,7 @@ TAP version 14
     ok 20 - Raft log should contain entries
     ok 21 - Message should have an ID
     ok 22 - Message should have a status
-    ok 23 - Status should be DELIVERED or PENDING, got: delivered
+    ok 23 - Status should be DELIVERED or PENDING, got: pending
     ok 24 - Raft log should contain entries
     ok 25 - Message should have an ID
     ok 26 - Message should have a status
@@ -41,86 +41,84 @@ TAP version 14
     ok 39 - Status should be DELIVERED or PENDING, got: pending
     ok 40 - Raft log should contain entries
     1..40
-{"level":50,"time":"2026-01-22T18:03:33.536Z","nodeId":"test-node","pid":320041,"subsystem":"message-router","nodeId":"test-node","connectionId":"1035bfaa-f400-43bb-ac86-2375ad9dbf89","msg":"Self-connection lost - fatal error"}
-ok 1 - Property 9: Message Delivery Reliability - messages are persisted # time=2859.634ms
+{"level":50,"time":"2026-01-23T06:22:49.465Z","nodeId":"test-node","pid":418430,"subsystem":"message-router","nodeId":"test-node","connectionId":"c6381a39-063d-44d6-be05-7e6e4722bd0e","msg":"Self-connection lost - fatal error"}
+ok 1 - Property 9: Message Delivery Reliability - messages are persisted # time=3153.484ms
 
 # Subtest: Property 9: Message Delivery Reliability - Raft log persistence
     ok 1 - Log should grow by at least 2 entries
     ok 2 - Log should grow by at least 1 entries
     ok 3 - Log should grow by at least 1 entries
-    ok 4 - Log should grow by at least 4 entries
-    ok 5 - Log should grow by at least 1 entries
-    ok 6 - Log should grow by at least 5 entries
+    ok 4 - Log should grow by at least 1 entries
+    ok 5 - Log should grow by at least 2 entries
+    ok 6 - Log should grow by at least 2 entries
     ok 7 - Log should grow by at least 1 entries
-    ok 8 - Log should grow by at least 3 entries
-    ok 9 - Log should grow by at least 1 entries
+    ok 8 - Log should grow by at least 4 entries
+    ok 9 - Log should grow by at least 2 entries
     ok 10 - Log should grow by at least 2 entries
     1..10
-{"level":50,"time":"2026-01-22T18:03:39.883Z","nodeId":"test-node","pid":320041,"subsystem":"message-router","nodeId":"test-node","connectionId":"af9c9374-427f-48e9-b661-dcc1853a9c6a","msg":"Self-connection lost - fatal error"}
-ok 2 - Property 9: Message Delivery Reliability - Raft log persistence # time=6321.999ms
+{"level":50,"time":"2026-01-23T06:22:55.160Z","nodeId":"test-node","pid":418430,"subsystem":"message-router","nodeId":"test-node","connectionId":"d8fbe4f4-c410-4ebc-b3b0-302e55901fc5","msg":"Self-connection lost - fatal error"}
+ok 2 - Property 9: Message Delivery Reliability - Raft log persistence # time=5658.8ms
 
 # Subtest: Property 9: Message Delivery Reliability - acknowledgment tracking
-    ok 1 - Message 1c05976f-4556-1639-9adf-d1d8d8d5874a should be detected as duplicate
-    ok 2 - Message 1c05976f-4556-1639-9adf-d1d8d8d5874a should be marked as acknowledged
-    ok 3 - Message 327b0fab-b05a-1841-9421-e40b00c0f85b should be detected as duplicate
-    ok 4 - Message 327b0fab-b05a-1841-9421-e40b00c0f85b should be marked as acknowledged
-    ok 5 - Message 33eddead-8d08-4687-b05d-15a88f00866c should be detected as duplicate
-    ok 6 - Message 33eddead-8d08-4687-b05d-15a88f00866c should be marked as acknowledged
-    ok 7 - Message 4f8a7221-6d86-3ba4-bf31-8fa72d40727b should be detected as duplicate
-    ok 8 - Message 4f8a7221-6d86-3ba4-bf31-8fa72d40727b should be marked as acknowledged
-    ok 9 - Message 909a6e13-2ba5-2467-a79e-2d7d14a7a0ce should be detected as duplicate
-    ok 10 - Message 909a6e13-2ba5-2467-a79e-2d7d14a7a0ce should be marked as acknowledged
-    ok 11 - Message 38e6a846-392e-1204-bf88-08941216ace3 should be detected as duplicate
-    ok 12 - Message 38e6a846-392e-1204-bf88-08941216ace3 should be marked as acknowledged
-    ok 13 - Message 32e01c50-76a3-3059-9507-020048e71030 should be detected as duplicate
-    ok 14 - Message 32e01c50-76a3-3059-9507-020048e71030 should be marked as acknowledged
-    ok 15 - Message 7e3565ae-06d1-5c7b-be26-35656d2587de should be detected as duplicate
-    ok 16 - Message 7e3565ae-06d1-5c7b-be26-35656d2587de should be marked as acknowledged
-    ok 17 - Message 223c5673-7344-437c-b679-6e609c5294a0 should be detected as duplicate
-    ok 18 - Message 223c5673-7344-437c-b679-6e609c5294a0 should be marked as acknowledged
-    ok 19 - Message 98373b79-d0a2-50ea-9faa-1069d108dfc3 should be detected as duplicate
-    ok 20 - Message 98373b79-d0a2-50ea-9faa-1069d108dfc3 should be marked as acknowledged
-    ok 21 - Message ffcf27ff-a0be-247a-995d-dfd2acb5fded should be detected as duplicate
-    ok 22 - Message ffcf27ff-a0be-247a-995d-dfd2acb5fded should be marked as acknowledged
-    ok 23 - Message 72a4018a-d0a1-2a01-a78d-e579bf3d55c4 should be detected as duplicate
-    ok 24 - Message 72a4018a-d0a1-2a01-a78d-e579bf3d55c4 should be marked as acknowledged
-    ok 25 - Message ffffffee-d71c-452f-b5c9-106d14f7aae4 should be detected as duplicate
-    ok 26 - Message ffffffee-d71c-452f-b5c9-106d14f7aae4 should be marked as acknowledged
-    ok 27 - Message 0000001c-0001-1000-8000-000f00000010 should be detected as duplicate
-    ok 28 - Message 0000001c-0001-1000-8000-000f00000010 should be marked as acknowledged
-    ok 29 - Message e33e3bfb-000c-1000-bfff-ffef33958eab should be detected as duplicate
-    ok 30 - Message e33e3bfb-000c-1000-bfff-ffef33958eab should be marked as acknowledged
-    ok 31 - Message 0f6866e8-1de1-2f74-82db-d45a8b44fbd2 should be detected as duplicate
-    ok 32 - Message 0f6866e8-1de1-2f74-82db-d45a8b44fbd2 should be marked as acknowledged
-    ok 33 - Message 8cac430b-61c0-5c3c-95cf-2a20bfa6b20e should be detected as duplicate
-    ok 34 - Message 8cac430b-61c0-5c3c-95cf-2a20bfa6b20e should be marked as acknowledged
-    ok 35 - Message a0e0af24-a523-54ff-8b35-5a6a06e16114 should be detected as duplicate
-    ok 36 - Message a0e0af24-a523-54ff-8b35-5a6a06e16114 should be marked as acknowledged
-    ok 37 - Message 3fdac157-0f4f-5faa-b120-d94927d1990c should be detected as duplicate
-    ok 38 - Message 3fdac157-0f4f-5faa-b120-d94927d1990c should be marked as acknowledged
-    ok 39 - Message 87b82712-0aee-4f83-92ca-18bf185f60d4 should be detected as duplicate
-    ok 40 - Message 87b82712-0aee-4f83-92ca-18bf185f60d4 should be marked as acknowledged
-    ok 41 - Message c7d9efe7-60f8-38f0-89ed-765bef15a40e should be detected as duplicate
-    ok 42 - Message c7d9efe7-60f8-38f0-89ed-765bef15a40e should be marked as acknowledged
-    ok 43 - Message e7e26cca-8d7b-2b78-b871-9144c49a9b7f should be detected as duplicate
-    ok 44 - Message e7e26cca-8d7b-2b78-b871-9144c49a9b7f should be marked as acknowledged
-    ok 45 - Message b8afac33-ae25-4ab2-9b73-67c58127e9df should be detected as duplicate
-    ok 46 - Message b8afac33-ae25-4ab2-9b73-67c58127e9df should be marked as acknowledged
-    ok 47 - Message 1d15d0fa-e2e1-43aa-90a1-044b04f4aaa5 should be detected as duplicate
-    ok 48 - Message 1d15d0fa-e2e1-43aa-90a1-044b04f4aaa5 should be marked as acknowledged
-    ok 49 - Message fffffff9-0004-1000-91a9-6b18fffffff7 should be detected as duplicate
-    ok 50 - Message fffffff9-0004-1000-91a9-6b18fffffff7 should be marked as acknowledged
-    ok 51 - Message d064ae6f-0005-1000-a364-bea54a731b03 should be detected as duplicate
-    ok 52 - Message d064ae6f-0005-1000-a364-bea54a731b03 should be marked as acknowledged
-    ok 53 - Message e7abf081-3b0a-547d-92d0-1a42e17cb787 should be detected as duplicate
-    ok 54 - Message e7abf081-3b0a-547d-92d0-1a42e17cb787 should be marked as acknowledged
-    ok 55 - Message 6796b3a4-5ec6-58ca-b8ed-cf1894c6d819 should be detected as duplicate
-    ok 56 - Message 6796b3a4-5ec6-58ca-b8ed-cf1894c6d819 should be marked as acknowledged
-    ok 57 - Message a6d04649-94d8-3a2d-a81b-201e23b98597 should be detected as duplicate
-    ok 58 - Message a6d04649-94d8-3a2d-a81b-201e23b98597 should be marked as acknowledged
-    1..58
-{"level":50,"time":"2026-01-22T18:03:39.914Z","nodeId":"test-node","pid":320041,"subsystem":"message-router","nodeId":"test-node","connectionId":"857c52b9-4063-4169-a258-0e3ad5450375","msg":"Self-connection lost - fatal error"}
-ok 3 - Property 9: Message Delivery Reliability - acknowledgment tracking # time=3.809ms
+    ok 1 - Message fd2978af-b074-184f-9e8c-7b2c1029614e should be detected as duplicate
+    ok 2 - Message fd2978af-b074-184f-9e8c-7b2c1029614e should be marked as acknowledged
+    ok 3 - Message f6f3b72a-5daf-2334-ab59-8f607328ca6f should be detected as duplicate
+    ok 4 - Message f6f3b72a-5daf-2334-ab59-8f607328ca6f should be marked as acknowledged
+    ok 5 - Message d14a8020-9100-13d6-9a89-868f4786d42d should be detected as duplicate
+    ok 6 - Message d14a8020-9100-13d6-9a89-868f4786d42d should be marked as acknowledged
+    ok 7 - Message 3d3e729d-5982-18e4-9729-c5000b6c2223 should be detected as duplicate
+    ok 8 - Message 3d3e729d-5982-18e4-9729-c5000b6c2223 should be marked as acknowledged
+    ok 9 - Message 320a23cb-db19-49e7-9982-9eb7f723fad0 should be detected as duplicate
+    ok 10 - Message 320a23cb-db19-49e7-9982-9eb7f723fad0 should be marked as acknowledged
+    ok 11 - Message 6062d058-e5c7-1896-81f1-60804184fe95 should be detected as duplicate
+    ok 12 - Message 6062d058-e5c7-1896-81f1-60804184fe95 should be marked as acknowledged
+    ok 13 - Message e76b45d4-12ad-46fb-a62a-89ec6cd73598 should be detected as duplicate
+    ok 14 - Message e76b45d4-12ad-46fb-a62a-89ec6cd73598 should be marked as acknowledged
+    ok 15 - Message 192e583e-4459-2344-9bd9-40e20b50227f should be detected as duplicate
+    ok 16 - Message 192e583e-4459-2344-9bd9-40e20b50227f should be marked as acknowledged
+    ok 17 - Message 46e027a9-fe2b-479a-a77f-1d8f6e72a3e8 should be detected as duplicate
+    ok 18 - Message 46e027a9-fe2b-479a-a77f-1d8f6e72a3e8 should be marked as acknowledged
+    ok 19 - Message 354dd717-2299-2981-a7f5-b69bc490b514 should be detected as duplicate
+    ok 20 - Message 354dd717-2299-2981-a7f5-b69bc490b514 should be marked as acknowledged
+    ok 21 - Message ef6c3694-3591-4994-bb06-6c5515ab0114 should be detected as duplicate
+    ok 22 - Message ef6c3694-3591-4994-bb06-6c5515ab0114 should be marked as acknowledged
+    ok 23 - Message 99547a3c-12d8-570c-b84c-1274ffffffeb should be detected as duplicate
+    ok 24 - Message 99547a3c-12d8-570c-b84c-1274ffffffeb should be marked as acknowledged
+    ok 25 - Message fffffffd-9d33-1b4b-bfff-fff70000000b should be detected as duplicate
+    ok 26 - Message fffffffd-9d33-1b4b-bfff-fff70000000b should be marked as acknowledged
+    ok 27 - Message ffffffeb-3673-5b32-88b1-c1399ae9e643 should be detected as duplicate
+    ok 28 - Message ffffffeb-3673-5b32-88b1-c1399ae9e643 should be marked as acknowledged
+    ok 29 - Message ffffffe0-001d-1000-8000-0005a6c603db should be detected as duplicate
+    ok 30 - Message ffffffe0-001d-1000-8000-0005a6c603db should be marked as acknowledged
+    ok 31 - Message 0000000e-ffee-5fff-9c65-62bc00000008 should be detected as duplicate
+    ok 32 - Message 0000000e-ffee-5fff-9c65-62bc00000008 should be marked as acknowledged
+    ok 33 - Message e42d2f92-450a-254d-ba05-84ba00000008 should be detected as duplicate
+    ok 34 - Message e42d2f92-450a-254d-ba05-84ba00000008 should be marked as acknowledged
+    ok 35 - Message 733b692c-3338-1e28-88d7-a1e9e3f05aa4 should be detected as duplicate
+    ok 36 - Message 733b692c-3338-1e28-88d7-a1e9e3f05aa4 should be marked as acknowledged
+    ok 37 - Message 5962e290-3bbf-5b36-8d08-d2efa6a30bf4 should be detected as duplicate
+    ok 38 - Message 5962e290-3bbf-5b36-8d08-d2efa6a30bf4 should be marked as acknowledged
+    ok 39 - Message fee18aae-981e-1310-a8d8-fbe0cf4a4e45 should be detected as duplicate
+    ok 40 - Message fee18aae-981e-1310-a8d8-fbe0cf4a4e45 should be marked as acknowledged
+    ok 41 - Message 61ed49db-1280-22fc-900a-e2193ce0f3a9 should be detected as duplicate
+    ok 42 - Message 61ed49db-1280-22fc-900a-e2193ce0f3a9 should be marked as acknowledged
+    ok 43 - Message 403ed176-2ac5-39e6-97ca-2997f2f8a3ab should be detected as duplicate
+    ok 44 - Message 403ed176-2ac5-39e6-97ca-2997f2f8a3ab should be marked as acknowledged
+    ok 45 - Message 0000000d-0019-1000-8000-001c00000004 should be detected as duplicate
+    ok 46 - Message 0000000d-0019-1000-8000-001c00000004 should be marked as acknowledged
+    ok 47 - Message 0000001f-0007-1000-8000-001800000011 should be detected as duplicate
+    ok 48 - Message 0000001f-0007-1000-8000-001800000011 should be marked as acknowledged
+    ok 49 - Message 0000001d-b3a0-184f-8adb-e49b00000000 should be detected as duplicate
+    ok 50 - Message 0000001d-b3a0-184f-8adb-e49b00000000 should be marked as acknowledged
+    ok 51 - Message 31b46430-583d-3bb2-bfff-ffe400000017 should be detected as duplicate
+    ok 52 - Message 31b46430-583d-3bb2-bfff-ffe400000017 should be marked as acknowledged
+    ok 53 - Message ffffffe9-653f-12df-bfff-fff900000008 should be detected as duplicate
+    ok 54 - Message ffffffe9-653f-12df-bfff-fff900000008 should be marked as acknowledged
+    ok 55 - Message fffffff5-3fee-4c41-8bb5-863066659e25 should be detected as duplicate
+    ok 56 - Message fffffff5-3fee-4c41-8bb5-863066659e25 should be marked as acknowledged
+    1..56
+{"level":50,"time":"2026-01-23T06:22:55.199Z","nodeId":"test-node","pid":418430,"subsystem":"message-router","nodeId":"test-node","connectionId":"127db7d2-b610-4235-905e-7cfd1c6377e0","msg":"Self-connection lost - fatal error"}
+ok 3 - Property 9: Message Delivery Reliability - acknowledgment tracking # time=7.302ms
 
 # Subtest: Property 9: Message Delivery Reliability - transport delivery
     ok 1 - Message should be delivered via transport
@@ -134,37 +132,37 @@ ok 3 - Property 9: Message Delivery Reliability - acknowledgment tracking # time
     ok 9 - Message should be delivered via transport
     ok 10 - Message should be delivered via transport
     1..10
-{"level":50,"time":"2026-01-22T18:03:43.040Z","nodeId":"test-node","pid":320041,"subsystem":"message-router","nodeId":"test-node","connectionId":"b12bfecb-1099-4a52-9d1b-cd42b48e06b9","msg":"Self-connection lost - fatal error"}
-ok 4 - Property 9: Message Delivery Reliability - transport delivery # time=3113.14ms
+{"level":50,"time":"2026-01-23T06:22:58.374Z","nodeId":"test-node","pid":418430,"subsystem":"message-router","nodeId":"test-node","connectionId":"d95e6c6b-716f-4988-8895-b847648349c9","msg":"Self-connection lost - fatal error"}
+ok 4 - Property 9: Message Delivery Reliability - transport delivery # time=3146.437ms
 
 # Subtest: Property 9: Message Delivery Reliability - simultaneous pattern
     ok 1 - Each message should have an ID
     ok 2 - Each message should be delivered or pending
     ok 3 - Each message should have an ID
     ok 4 - Each message should be delivered or pending
-    ok 5 - All message IDs should be unique
-    ok 6 - Each message should have an ID
-    ok 7 - Each message should be delivered or pending
+    ok 5 - Each message should have an ID
+    ok 6 - Each message should be delivered or pending
+    ok 7 - All message IDs should be unique
     ok 8 - Each message should have an ID
     ok 9 - Each message should be delivered or pending
-    ok 10 - All message IDs should be unique
-    ok 11 - Each message should have an ID
-    ok 12 - Each message should be delivered or pending
+    ok 10 - Each message should have an ID
+    ok 11 - Each message should be delivered or pending
+    ok 12 - All message IDs should be unique
     ok 13 - Each message should have an ID
     ok 14 - Each message should be delivered or pending
     ok 15 - All message IDs should be unique
     ok 16 - Each message should have an ID
     ok 17 - Each message should be delivered or pending
-    ok 18 - All message IDs should be unique
-    ok 19 - Each message should have an ID
-    ok 20 - Each message should be delivered or pending
-    ok 21 - Each message should have an ID
-    ok 22 - Each message should be delivered or pending
+    ok 18 - Each message should have an ID
+    ok 19 - Each message should be delivered or pending
+    ok 20 - Each message should have an ID
+    ok 21 - Each message should be delivered or pending
+    ok 22 - All message IDs should be unique
     ok 23 - Each message should have an ID
     ok 24 - Each message should be delivered or pending
-    ok 25 - All message IDs should be unique
-    ok 26 - Each message should have an ID
-    ok 27 - Each message should be delivered or pending
+    ok 25 - Each message should have an ID
+    ok 26 - Each message should be delivered or pending
+    ok 27 - All message IDs should be unique
     ok 28 - Each message should have an ID
     ok 29 - Each message should be delivered or pending
     ok 30 - All message IDs should be unique
@@ -175,9 +173,9 @@ ok 4 - Property 9: Message Delivery Reliability - transport delivery # time=3113
     ok 35 - Each message should be delivered or pending
     ok 36 - Each message should have an ID
     ok 37 - Each message should be delivered or pending
-    ok 38 - Each message should have an ID
-    ok 39 - Each message should be delivered or pending
-    ok 40 - All message IDs should be unique
+    ok 38 - All message IDs should be unique
+    ok 39 - Each message should have an ID
+    ok 40 - Each message should be delivered or pending
     ok 41 - Each message should have an ID
     ok 42 - Each message should be delivered or pending
     ok 43 - Each message should have an ID
@@ -185,11 +183,9 @@ ok 4 - Property 9: Message Delivery Reliability - transport delivery # time=3113
     ok 45 - All message IDs should be unique
     ok 46 - Each message should have an ID
     ok 47 - Each message should be delivered or pending
-    ok 48 - Each message should have an ID
-    ok 49 - Each message should be delivered or pending
-    ok 50 - All message IDs should be unique
-    1..50
-{"level":50,"time":"2026-01-22T18:03:46.281Z","nodeId":"test-node","pid":320041,"subsystem":"message-router","nodeId":"test-node","connectionId":"36025892-bf33-4d47-9d43-c447f239de34","msg":"Self-connection lost - fatal error"}
-ok 5 - Property 9: Message Delivery Reliability - simultaneous pattern # time=3214.553ms
+    ok 48 - All message IDs should be unique
+    1..48
+{"level":50,"time":"2026-01-23T06:23:01.600Z","nodeId":"test-node","pid":418430,"subsystem":"message-router","nodeId":"test-node","connectionId":"93dd492c-9d40-4926-8c83-fc2d47eb1a67","msg":"Self-connection lost - fatal error"}
+ok 5 - Property 9: Message Delivery Reliability - simultaneous pattern # time=3200.026ms
 
 1..5

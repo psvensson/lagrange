@@ -1,12 +1,12 @@
 /**
  * Integration test for CREATE_REPLICA ACK delivery via WebSocket.
- * 
+ *
  * This test uses REAL WebSocket connections through MessageRouter to verify
  * that async handlers (like handleCreateReplica) properly return ACK data.
- * 
+ *
  * CRITICAL: This test does NOT use InMemoryTransport - it uses actual WebSocket
  * connections to catch bugs like async handlers returning Promise objects.
- * 
+ *
  * Requirements: 3.2, 3.3, 6.1, 6.2, 6.3, 6.4
  */
 

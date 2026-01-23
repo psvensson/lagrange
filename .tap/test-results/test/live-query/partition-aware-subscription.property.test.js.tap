@@ -1,125 +1,116 @@
 TAP version 14
 # Subtest: Property 32: Subscribes only to partitions containing key value
-    ok 1 - Key 5 should match exactly one partition
+    ok 1 - Key 76 should match exactly one partition
     ok 2 - Should find the subscribed partition
-    ok 3 - Key 5 should be < 250
-    ok 4 - Key 467 should match exactly one partition
+    ok 3 - Key 76 should be < 250
+    ok 4 - Key 991 should match exactly one partition
     ok 5 - Should find the subscribed partition
-    ok 6 - Key 467 should be in range [250, 500)
-    ok 7 - Key 993 should match exactly one partition
+    ok 6 - Key 991 should be >= 750
+    ok 7 - Key 756 should match exactly one partition
     ok 8 - Should find the subscribed partition
-    ok 9 - Key 993 should be >= 750
-    ok 10 - Key 106 should match exactly one partition
+    ok 9 - Key 756 should be >= 750
+    ok 10 - Key 4 should match exactly one partition
     ok 11 - Should find the subscribed partition
-    ok 12 - Key 106 should be < 250
+    ok 12 - Key 4 should be < 250
     ok 13 - Key 991 should match exactly one partition
     ok 14 - Should find the subscribed partition
     ok 15 - Key 991 should be >= 750
-    ok 16 - Key 793 should match exactly one partition
+    ok 16 - Key 993 should match exactly one partition
     ok 17 - Should find the subscribed partition
-    ok 18 - Key 793 should be >= 750
-    ok 19 - Key 4 should match exactly one partition
+    ok 18 - Key 993 should be >= 750
+    ok 19 - Key 384 should match exactly one partition
     ok 20 - Should find the subscribed partition
-    ok 21 - Key 4 should be < 250
-    ok 22 - Key 201 should match exactly one partition
+    ok 21 - Key 384 should be in range [250, 500)
+    ok 22 - Key 102 should match exactly one partition
     ok 23 - Should find the subscribed partition
-    ok 24 - Key 201 should be < 250
-    ok 25 - Key 231 should match exactly one partition
+    ok 24 - Key 102 should be < 250
+    ok 25 - Key 6 should match exactly one partition
     ok 26 - Should find the subscribed partition
-    ok 27 - Key 231 should be < 250
-    ok 28 - Key 926 should match exactly one partition
+    ok 27 - Key 6 should be < 250
+    ok 28 - Key 994 should match exactly one partition
     ok 29 - Should find the subscribed partition
-    ok 30 - Key 926 should be >= 750
+    ok 30 - Key 994 should be >= 750
     1..30
-ok 1 - Property 32: Subscribes only to partitions containing key value # time=10.613ms
+ok 1 - Property 32: Subscribes only to partitions containing key value # time=7.578ms
 
 # Subtest: Property 32: Subscribes to all partitions without key filter
-    ok 1 - Should subscribe to all 5 partitions
+    ok 1 - Should subscribe to all 2 partitions
     ok 2 - Should include partition p1
     ok 3 - Should include partition p2
-    ok 4 - Should include partition p3
-    ok 5 - Should include partition p4
-    ok 6 - Should include partition p5
-    ok 7 - Should subscribe to all 4 partitions
-    ok 8 - Should include partition p1
-    ok 9 - Should include partition p2
-    ok 10 - Should include partition p3
-    ok 11 - Should include partition p4
-    ok 12 - Should subscribe to all 5 partitions
-    ok 13 - Should include partition p1
-    ok 14 - Should include partition p2
-    ok 15 - Should include partition p3
-    ok 16 - Should include partition p4
-    ok 17 - Should include partition p5
-    ok 18 - Should subscribe to all 4 partitions
+    ok 4 - Should subscribe to all 3 partitions
+    ok 5 - Should include partition p1
+    ok 6 - Should include partition p2
+    ok 7 - Should include partition p3
+    ok 8 - Should subscribe to all 2 partitions
+    ok 9 - Should include partition p1
+    ok 10 - Should include partition p2
+    ok 11 - Should subscribe to all 3 partitions
+    ok 12 - Should include partition p1
+    ok 13 - Should include partition p2
+    ok 14 - Should include partition p3
+    ok 15 - Should subscribe to all 2 partitions
+    ok 16 - Should include partition p1
+    ok 17 - Should include partition p2
+    ok 18 - Should subscribe to all 5 partitions
     ok 19 - Should include partition p1
     ok 20 - Should include partition p2
     ok 21 - Should include partition p3
     ok 22 - Should include partition p4
-    ok 23 - Should subscribe to all 2 partitions
-    ok 24 - Should include partition p1
-    ok 25 - Should include partition p2
-    ok 26 - Should subscribe to all 5 partitions
-    ok 27 - Should include partition p1
-    ok 28 - Should include partition p2
-    ok 29 - Should include partition p3
-    ok 30 - Should include partition p4
-    ok 31 - Should include partition p5
+    ok 23 - Should include partition p5
+    ok 24 - Should subscribe to all 3 partitions
+    ok 25 - Should include partition p1
+    ok 26 - Should include partition p2
+    ok 27 - Should include partition p3
+    ok 28 - Should subscribe to all 3 partitions
+    ok 29 - Should include partition p1
+    ok 30 - Should include partition p2
+    ok 31 - Should include partition p3
     ok 32 - Should subscribe to all 3 partitions
     ok 33 - Should include partition p1
     ok 34 - Should include partition p2
     ok 35 - Should include partition p3
-    ok 36 - Should subscribe to all 3 partitions
+    ok 36 - Should subscribe to all 5 partitions
     ok 37 - Should include partition p1
     ok 38 - Should include partition p2
     ok 39 - Should include partition p3
-    ok 40 - Should subscribe to all 5 partitions
-    ok 41 - Should include partition p1
-    ok 42 - Should include partition p2
-    ok 43 - Should include partition p3
-    ok 44 - Should include partition p4
-    ok 45 - Should include partition p5
-    ok 46 - Should subscribe to all 4 partitions
-    ok 47 - Should include partition p1
-    ok 48 - Should include partition p2
-    ok 49 - Should include partition p3
-    ok 50 - Should include partition p4
-    1..50
-ok 2 - Property 32: Subscribes to all partitions without key filter # time=7.84ms
+    ok 40 - Should include partition p4
+    ok 41 - Should include partition p5
+    1..41
+ok 2 - Property 32: Subscribes to all partitions without key filter # time=6.068ms
 
 # Subtest: Property 32: Subscribes to multiple partitions for IN clause
     ok 1 - Should subscribe to exactly 2 partitions for 2 keys in different ranges
-    ok 2 - Partition p1 should be subscribed for key 4
-    ok 3 - Partition p3 should be subscribed for key 507
+    ok 2 - Partition p1 should be subscribed for key 196
+    ok 3 - Partition p3 should be subscribed for key 588
     ok 4 - Should subscribe to exactly 2 partitions for 2 keys in different ranges
-    ok 5 - Partition p1 should be subscribed for key 120
-    ok 6 - Partition p3 should be subscribed for key 745
+    ok 5 - Partition p1 should be subscribed for key 237
+    ok 6 - Partition p3 should be subscribed for key 749
     ok 7 - Should subscribe to exactly 2 partitions for 2 keys in different ranges
-    ok 8 - Partition p1 should be subscribed for key 248
-    ok 9 - Partition p3 should be subscribed for key 749
+    ok 8 - Partition p1 should be subscribed for key 213
+    ok 9 - Partition p3 should be subscribed for key 667
     ok 10 - Should subscribe to exactly 2 partitions for 2 keys in different ranges
-    ok 11 - Partition p1 should be subscribed for key 107
-    ok 12 - Partition p3 should be subscribed for key 506
+    ok 11 - Partition p1 should be subscribed for key 3
+    ok 12 - Partition p3 should be subscribed for key 512
     ok 13 - Should subscribe to exactly 2 partitions for 2 keys in different ranges
-    ok 14 - Partition p1 should be subscribed for key 51
-    ok 15 - Partition p3 should be subscribed for key 701
+    ok 14 - Partition p1 should be subscribed for key 3
+    ok 15 - Partition p3 should be subscribed for key 745
     ok 16 - Should subscribe to exactly 2 partitions for 2 keys in different ranges
-    ok 17 - Partition p1 should be subscribed for key 3
-    ok 18 - Partition p3 should be subscribed for key 635
+    ok 17 - Partition p1 should be subscribed for key 98
+    ok 18 - Partition p3 should be subscribed for key 506
     ok 19 - Should subscribe to exactly 2 partitions for 2 keys in different ranges
-    ok 20 - Partition p1 should be subscribed for key 3
-    ok 21 - Partition p3 should be subscribed for key 738
+    ok 20 - Partition p1 should be subscribed for key 93
+    ok 21 - Partition p3 should be subscribed for key 745
     ok 22 - Should subscribe to exactly 2 partitions for 2 keys in different ranges
-    ok 23 - Partition p1 should be subscribed for key 247
-    ok 24 - Partition p3 should be subscribed for key 568
+    ok 23 - Partition p1 should be subscribed for key 211
+    ok 24 - Partition p3 should be subscribed for key 501
     ok 25 - Should subscribe to exactly 2 partitions for 2 keys in different ranges
-    ok 26 - Partition p1 should be subscribed for key 243
-    ok 27 - Partition p3 should be subscribed for key 745
+    ok 26 - Partition p1 should be subscribed for key 93
+    ok 27 - Partition p3 should be subscribed for key 505
     ok 28 - Should subscribe to exactly 2 partitions for 2 keys in different ranges
-    ok 29 - Partition p1 should be subscribed for key 37
-    ok 30 - Partition p3 should be subscribed for key 526
+    ok 29 - Partition p1 should be subscribed for key 30
+    ok 30 - Partition p3 should be subscribed for key 729
     1..30
-ok 3 - Property 32: Subscribes to multiple partitions for IN clause # time=3.871ms
+ok 3 - Property 32: Subscribes to multiple partitions for IN clause # time=4.485ms
 
 # Subtest: Property 32: Subscribes to overlapping partitions for range query
     ok 1 - Should subscribe to at least one partition
@@ -133,7 +124,7 @@ ok 3 - Property 32: Subscribes to multiple partitions for IN clause # time=3.871
     ok 9 - Should subscribe to at least one partition
     ok 10 - Should subscribe to at least one partition
     1..10
-ok 4 - Property 32: Subscribes to overlapping partitions for range query # time=2.801ms
+ok 4 - Property 32: Subscribes to overlapping partitions for range query # time=2.454ms
 
 # Subtest: Property 32: Partition key extraction is consistent
     ok 1 - First extraction should match key value
@@ -167,137 +158,136 @@ ok 4 - Property 32: Subscribes to overlapping partitions for range query # time=
     ok 29 - Second extraction should match key value
     ok 30 - Third extraction should match key value
     1..30
-ok 5 - Property 32: Partition key extraction is consistent # time=2.783ms
+ok 5 - Property 32: Partition key extraction is consistent # time=4.399ms
 
 # Subtest: Property 33: Query grouping shares CDC subscriptions
     ok 1 - All 9 clients should share one query group
     ok 2 - Should have exactly one query group
     ok 3 - Query group should have 9 clients
     ok 4 - Partition p1 should have exactly 1 subscription
-    ok 5 - All 3 clients should share one query group
+    ok 5 - All 7 clients should share one query group
     ok 6 - Should have exactly one query group
-    ok 7 - Query group should have 3 clients
-    ok 8 - Partition p2 should have exactly 1 subscription
-    ok 9 - All 5 clients should share one query group
+    ok 7 - Query group should have 7 clients
+    ok 8 - Partition p1 should have exactly 1 subscription
+    ok 9 - All 10 clients should share one query group
     ok 10 - Should have exactly one query group
-    ok 11 - Query group should have 5 clients
-    ok 12 - Partition p1 should have exactly 1 subscription
-    ok 13 - All 3 clients should share one query group
+    ok 11 - Query group should have 10 clients
+    ok 12 - Partition p2 should have exactly 1 subscription
+    ok 13 - All 5 clients should share one query group
     ok 14 - Should have exactly one query group
-    ok 15 - Query group should have 3 clients
-    ok 16 - Partition p2 should have exactly 1 subscription
-    ok 17 - All 8 clients should share one query group
+    ok 15 - Query group should have 5 clients
+    ok 16 - Partition p1 should have exactly 1 subscription
+    ok 17 - All 5 clients should share one query group
     ok 18 - Should have exactly one query group
-    ok 19 - Query group should have 8 clients
+    ok 19 - Query group should have 5 clients
     ok 20 - Partition p1 should have exactly 1 subscription
-    ok 21 - All 10 clients should share one query group
+    ok 21 - All 4 clients should share one query group
     ok 22 - Should have exactly one query group
-    ok 23 - Query group should have 10 clients
-    ok 24 - Partition p2 should have exactly 1 subscription
-    ok 25 - All 2 clients should share one query group
+    ok 23 - Query group should have 4 clients
+    ok 24 - Partition p1 should have exactly 1 subscription
+    ok 25 - All 10 clients should share one query group
     ok 26 - Should have exactly one query group
-    ok 27 - Query group should have 2 clients
-    ok 28 - Partition p1 should have exactly 1 subscription
-    ok 29 - All 3 clients should share one query group
+    ok 27 - Query group should have 10 clients
+    ok 28 - Partition p2 should have exactly 1 subscription
+    ok 29 - All 4 clients should share one query group
     ok 30 - Should have exactly one query group
-    ok 31 - Query group should have 3 clients
-    ok 32 - Partition p2 should have exactly 1 subscription
-    ok 33 - All 10 clients should share one query group
+    ok 31 - Query group should have 4 clients
+    ok 32 - Partition p1 should have exactly 1 subscription
+    ok 33 - All 4 clients should share one query group
     ok 34 - Should have exactly one query group
-    ok 35 - Query group should have 10 clients
+    ok 35 - Query group should have 4 clients
     ok 36 - Partition p1 should have exactly 1 subscription
-    ok 37 - All 9 clients should share one query group
+    ok 37 - All 3 clients should share one query group
     ok 38 - Should have exactly one query group
-    ok 39 - Query group should have 9 clients
-    ok 40 - Partition p1 should have exactly 1 subscription
+    ok 39 - Query group should have 3 clients
+    ok 40 - Partition p2 should have exactly 1 subscription
     1..40
-ok 6 - Property 33: Query grouping shares CDC subscriptions # time=6.758ms
+ok 6 - Property 33: Query grouping shares CDC subscriptions # time=11.457ms
 
 # Subtest: Property 34: Lease expiry cleans up subscriptions
-    ok 1 - Should have 5 client subscriptions
+    ok 1 - Should have 4 client subscriptions
     ok 2 - All client subscriptions should be cleaned up
     ok 3 - Query groups should be removed after all clients expire
     ok 4 - Should have 2 client subscriptions
     ok 5 - All client subscriptions should be cleaned up
     ok 6 - Query groups should be removed after all clients expire
-    ok 7 - Should have 4 client subscriptions
+    ok 7 - Should have 5 client subscriptions
     ok 8 - All client subscriptions should be cleaned up
     ok 9 - Query groups should be removed after all clients expire
-    ok 10 - Should have 3 client subscriptions
+    ok 10 - Should have 5 client subscriptions
     ok 11 - All client subscriptions should be cleaned up
     ok 12 - Query groups should be removed after all clients expire
     ok 13 - Should have 4 client subscriptions
     ok 14 - All client subscriptions should be cleaned up
     ok 15 - Query groups should be removed after all clients expire
-    ok 16 - Should have 3 client subscriptions
+    ok 16 - Should have 4 client subscriptions
     ok 17 - All client subscriptions should be cleaned up
     ok 18 - Query groups should be removed after all clients expire
-    ok 19 - Should have 2 client subscriptions
+    ok 19 - Should have 1 client subscriptions
     ok 20 - All client subscriptions should be cleaned up
     ok 21 - Query groups should be removed after all clients expire
-    ok 22 - Should have 5 client subscriptions
+    ok 22 - Should have 1 client subscriptions
     ok 23 - All client subscriptions should be cleaned up
     ok 24 - Query groups should be removed after all clients expire
-    ok 25 - Should have 1 client subscriptions
+    ok 25 - Should have 3 client subscriptions
     ok 26 - All client subscriptions should be cleaned up
     ok 27 - Query groups should be removed after all clients expire
-    ok 28 - Should have 5 client subscriptions
+    ok 28 - Should have 2 client subscriptions
     ok 29 - All client subscriptions should be cleaned up
     ok 30 - Query groups should be removed after all clients expire
     1..30
-ok 7 - Property 34: Lease expiry cleans up subscriptions # time=5.205ms
+ok 7 - Property 34: Lease expiry cleans up subscriptions # time=6.405ms
 
 # Subtest: Property 35: Change evaluation produces correct notifications
-    ok 1 - INSERT matching predicate should produce result
-    ok 2 - INSERT matching predicate should produce insert notification
-    ok 3 - DELETE matching predicate should produce result
-    ok 4 - DELETE matching predicate should produce delete notification
-    ok 5 - INSERT not matching predicate should produce null
-    ok 6 - DELETE not matching predicate should produce null
-    ok 7 - INSERT not matching predicate should produce null
-    ok 8 - DELETE not matching predicate should produce null
-    ok 9 - INSERT not matching predicate should produce null
-    ok 10 - DELETE not matching predicate should produce null
+    ok 1 - INSERT not matching predicate should produce null
+    ok 2 - DELETE not matching predicate should produce null
+    ok 3 - INSERT matching predicate should produce result
+    ok 4 - INSERT matching predicate should produce insert notification
+    ok 5 - DELETE matching predicate should produce result
+    ok 6 - DELETE matching predicate should produce delete notification
+    ok 7 - INSERT matching predicate should produce result
+    ok 8 - INSERT matching predicate should produce insert notification
+    ok 9 - DELETE matching predicate should produce result
+    ok 10 - DELETE matching predicate should produce delete notification
     ok 11 - INSERT not matching predicate should produce null
     ok 12 - DELETE not matching predicate should produce null
     ok 13 - INSERT matching predicate should produce result
     ok 14 - INSERT matching predicate should produce insert notification
     ok 15 - DELETE matching predicate should produce result
     ok 16 - DELETE matching predicate should produce delete notification
-    ok 17 - INSERT matching predicate should produce result
-    ok 18 - INSERT matching predicate should produce insert notification
-    ok 19 - DELETE matching predicate should produce result
-    ok 20 - DELETE matching predicate should produce delete notification
-    ok 21 - INSERT not matching predicate should produce null
-    ok 22 - DELETE not matching predicate should produce null
-    ok 23 - INSERT matching predicate should produce result
-    ok 24 - INSERT matching predicate should produce insert notification
-    ok 25 - DELETE matching predicate should produce result
-    ok 26 - DELETE matching predicate should produce delete notification
-    ok 27 - INSERT matching predicate should produce result
-    ok 28 - INSERT matching predicate should produce insert notification
-    ok 29 - DELETE matching predicate should produce result
-    ok 30 - DELETE matching predicate should produce delete notification
-    1..30
-ok 8 - Property 35: Change evaluation produces correct notifications # time=3.167ms
+    ok 17 - INSERT not matching predicate should produce null
+    ok 18 - DELETE not matching predicate should produce null
+    ok 19 - INSERT not matching predicate should produce null
+    ok 20 - DELETE not matching predicate should produce null
+    ok 21 - INSERT matching predicate should produce result
+    ok 22 - INSERT matching predicate should produce insert notification
+    ok 23 - DELETE matching predicate should produce result
+    ok 24 - DELETE matching predicate should produce delete notification
+    ok 25 - INSERT not matching predicate should produce null
+    ok 26 - DELETE not matching predicate should produce null
+    ok 27 - INSERT not matching predicate should produce null
+    ok 28 - DELETE not matching predicate should produce null
+    1..28
+ok 8 - Property 35: Change evaluation produces correct notifications # time=3.874ms
 
 # Subtest: Property 35: UPDATE evaluation handles enter/exit/stay correctly
-    ok 1 - Row never matching predicate should produce null
-    ok 2 - Row entering predicate should produce result
-    ok 3 - Row entering predicate should produce insert notification
+    ok 1 - Row staying in predicate should produce result
+    ok 2 - Row staying in predicate should produce update notification
+    ok 3 - Row never matching predicate should produce null
     ok 4 - Row never matching predicate should produce null
-    ok 5 - Row exiting predicate should produce result
-    ok 6 - Row exiting predicate should produce delete notification
+    ok 5 - Row staying in predicate should produce result
+    ok 6 - Row staying in predicate should produce update notification
     ok 7 - Row never matching predicate should produce null
     ok 8 - Row exiting predicate should produce result
     ok 9 - Row exiting predicate should produce delete notification
-    ok 10 - Row never matching predicate should produce null
-    ok 11 - Row entering predicate should produce result
-    ok 12 - Row entering predicate should produce insert notification
-    ok 13 - Row never matching predicate should produce null
-    ok 14 - Row exiting predicate should produce result
-    ok 15 - Row exiting predicate should produce delete notification
-    1..15
-ok 9 - Property 35: UPDATE evaluation handles enter/exit/stay correctly # time=2.716ms
+    ok 10 - Row exiting predicate should produce result
+    ok 11 - Row exiting predicate should produce delete notification
+    ok 12 - Row exiting predicate should produce result
+    ok 13 - Row exiting predicate should produce delete notification
+    ok 14 - Row never matching predicate should produce null
+    ok 15 - Row staying in predicate should produce result
+    ok 16 - Row staying in predicate should produce update notification
+    1..16
+ok 9 - Property 35: UPDATE evaluation handles enter/exit/stay correctly # time=2.855ms
 
 1..9

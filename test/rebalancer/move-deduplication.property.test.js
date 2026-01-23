@@ -1,393 +1,517 @@
 /**
- * Property Test: Move Deduplication
- * **Property 12: Move Deduplication**
- * **Validates: Requirements 5.1, 5.2, 5.3**
+ * Property Test: Rebalancer Batches Moves
+ * **Property 15: Rebalancer Batches Moves**
+ * **Validates: Requirements 6.4**
  *
- * *For any* pending move in the Rebalancer's pending_move_map, the Rebalancer
- * SHALL NOT generate a duplicate move (same type and target) when calculating moves.
+ * Feature: simplified-cluster-architecture, Property 15: Rebalancer Batches Moves
  *
- * Requirements:
- * 5.1 WHEN the Rebalancer calculates moves THEN it SHALL check the pending_move_map
- *     for existing operations
- * 5.2 IF a pending ADD move exists for a target node THEN the Rebalancer SHALL NOT
- *     generate another ADD move for that node
- * 5.3 IF a pending REMOVE move exists for a replica THEN the Rebalancer SHALL NOT
- *     generate another REMOVE move for that replica
+ * *For any* rebalancing calculation that identifies multiple necessary moves,
+ * the Rebalancer SHALL produce a single epoch proposal containing all moves
+ * rather than multiple proposals.
+ *
+ * This property test verifies:
+ * 1. When multiple moves are needed, a single proposal contains all moves
+ * 2. The result is a single object with all proposed assignment changes
+ * 3. No separate proposals for individual moves
  */
 
 import {test} from 'tap';
 import fc from 'fast-check';
-import {
-  UnifiedRebalancer,
-  EntityType,
-  MoveType,
-  ReplicaStatus,
-} from '../../src/rebalancer/unified-rebalancer.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
+import {StateAwareRebalancer} from '../../src/rebalancer/state-aware-rebalancer.js';
+import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
+import {AssignmentEpoch} from '../../src/rebalancer/assignment-epoch.js';
 
 /**
- * Create a mock system table cache.
- * @param {Object} data - Initial cache data.
- * @return {Object} Mock cache.
+ * Generator for valid node IDs.
  */
-function createMockCache(data = {}) {
-  const cache = {
-    nodes: data.nodes || [],
-    services: data.services || [],
-    partitions: data.partitions || [],
-    tables: data.tables || [],
-  };
+const nodeIdArb = fc.stringMatching(/^node-[a-z0-9]{1,8}$/);
 
-  return {
-    getAll(tableName) {
-      return cache[tableName] || [];
-    },
-    filter(tableName, predicate) {
-      const items = cache[tableName] || [];
-      return items.filter(predicate);
-    },
-    get(tableName, id) {
-      const items = cache[tableName] || [];
-      return items.find((item) =>
-        item.id === id ||
-        item.node_id === id ||
-        item.partition_id === id ||
-        item.service_id === id);
-    },
-  };
-}
+/**
+ * Generator for valid partition IDs.
+ */
+const partitionIdArb = fc.stringMatching(/^partition-[a-z0-9]{1,8}$/);
 
-test('Property 12: Move Deduplication', async (t) => {
-  t.beforeEach(async () => {
-    ConfigurationManager.resetInstance();
-    LoggingService.resetInstance();
+/**
+ * Generator for a set of unique node IDs.
+ */
+const uniqueNodeIdsArb = (minLength, maxLength) =>
+  fc.array(nodeIdArb, {minLength, maxLength})
+    .map((ids) => [...new Set(ids)])
+    .filter((ids) => ids.length >= minLength);
 
-    const config = ConfigurationManager.getInstance();
-    config.initialize({});
+/**
+ * Generator for a set of unique partition IDs.
+ */
+const uniquePartitionIdsArb = (minLength, maxLength) =>
+  fc.array(partitionIdArb, {minLength, maxLength})
+    .map((ids) => [...new Set(ids)])
+    .filter((ids) => ids.length >= minLength);
 
-    const logging = LoggingService.getInstance();
-    logging.initialize({level: 'error'});
-  });
-
-  t.afterEach(async () => {
-    ConfigurationManager.resetInstance();
-    LoggingService.resetInstance();
-  });
-
+test('Property 15: Rebalancer Batches Moves', async (t) => {
   /**
-   * Property 12.1: Rebalancer checks pending_move_map when calculating moves
-   * Validates: Requirement 5.1
+   * Property: When multiple partitions need moves, calculateMoves returns
+   * a single result object containing all moves batched together.
    */
-  t.test('calculateMoves checks pending_move_map for existing operations', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.uuid(), // entity_id
-        fc.array(fc.uuid(), {minLength: 1, maxLength: 3}), // node_ids
-        async (entityId, nodeIds) => {
-          const nodes = nodeIds.map((id) => ({node_id: id, status: 'active'}));
+  t.test('calculateMoves returns single batched result for multiple moves', async (t) => {
+    fc.assert(
+      fc.property(
+        uniqueNodeIdsArb(3, 6),
+        uniquePartitionIdsArb(2, 5),
+        fc.nat({max: 1000}),
+        (nodeIds, partitionIds, epochNum) => {
+          if (nodeIds.length < 3 || partitionIds.length < 2) return true;
 
-          const mockCache = createMockCache({
-            nodes,
-            services: [],
-            partitions: [{partition_id: entityId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
-            entityId,
-            entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
+          const rebalancer = new StateAwareRebalancer({
             nodeId: 'test-node',
+            maxMovesPerEpoch: 100, // High limit to not truncate
           });
 
-          rebalancer.initialize();
-          rebalancer.setLeader(true);
+          // Make first node DRAINING, rest READY
+          const drainingNodeId = nodeIds[0];
+          const readyNodeIds = nodeIds.slice(1);
 
-          // Add a pending move for the first node
-          const targetNodeId = nodeIds[0];
-          rebalancer.pendingMoves.set('pending-add-1', {
-            type: MoveType.ADD,
-            replicaId: 'pending-replica-1',
-            nodeId: targetNodeId,
-            entityId,
-            startedAt: Date.now(),
-            status: 'pending',
-          });
-
-          // Calculate moves with target state that would normally add to that node
-          const currentReplicas = [];
-          const targetState = {
-            targetReplicaCount: nodeIds.length,
-            targetNodes: nodeIds,
-          };
-
-          const moves = rebalancer.calculateMoves(currentReplicas, targetState);
-
-          rebalancer.shutdown();
-
-          // When pending moves exist, calculateMoves should return empty
-          // (it checks pending_move_map and blocks new moves)
-          return moves.length === 0;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('calculateMoves checks pending_move_map for existing operations');
-  });
-
-  /**
-   * Property 12.2: No duplicate ADD moves for same target node
-   * Validates: Requirement 5.2
-   *
-   * When hasPendingAddForNode returns true, no ADD move should be generated
-   * for that node.
-   */
-  t.test('no duplicate ADD moves for same target node', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.uuid(), // entity_id
-        fc.uuid(), // target_node_id
-        fc.uuid(), // other_node_id
-        async (entityId, targetNodeId, otherNodeId) => {
-          // Ensure different node IDs
-          if (targetNodeId === otherNodeId) {
-            return true; // Skip this case
+          const nodeStates = new Map();
+          nodeStates.set(drainingNodeId, NodeState.DRAINING);
+          for (const nodeId of readyNodeIds) {
+            nodeStates.set(nodeId, NodeState.READY);
           }
 
-          const mockCache = createMockCache({
-            nodes: [
-              {node_id: targetNodeId, status: 'active'},
-              {node_id: otherNodeId, status: 'active'},
-            ],
-            services: [],
-            partitions: [{partition_id: entityId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
-            entityId,
-            entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
-            nodeId: 'test-node',
-          });
-
-          rebalancer.initialize();
-          rebalancer.setLeader(true);
-
-          // Verify hasPendingAddForNode works correctly
-          const hasPendingBefore = rebalancer.hasPendingAddForNode(targetNodeId);
-
-          // Add a pending ADD move for the target node
-          rebalancer.pendingMoves.set('pending-add', {
-            type: MoveType.ADD,
-            replicaId: 'pending-replica',
-            nodeId: targetNodeId,
-            entityId,
-            startedAt: Date.now(),
-            status: 'pending',
-          });
-
-          const hasPendingAfter = rebalancer.hasPendingAddForNode(targetNodeId);
-          const otherNodeHasPending = rebalancer.hasPendingAddForNode(otherNodeId);
-
-          rebalancer.shutdown();
-
-          // hasPendingAddForNode should return false before, true after for target
-          // and false for other node
-          return !hasPendingBefore && hasPendingAfter && !otherNodeHasPending;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('no duplicate ADD moves for same target node');
-  });
-
-  /**
-   * Property 12.3: No duplicate REMOVE moves for same replica
-   * Validates: Requirement 5.3
-   *
-   * When hasPendingMove returns true for a replica, no REMOVE move should
-   * be generated for that replica.
-   */
-  t.test('no duplicate REMOVE moves for same replica', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.uuid(), // entity_id
-        fc.uuid(), // replica_id
-        fc.uuid(), // node_id
-        async (entityId, replicaId, nodeId) => {
-          const mockCache = createMockCache({
-            nodes: [{node_id: nodeId, status: 'active'}],
-            services: [
-              {
-                service_id: replicaId,
-                partition_id: entityId,
-                node_id: nodeId,
-                service_type: 'partition',
-                status: ReplicaStatus.ACTIVE,
-              },
-            ],
-            partitions: [{partition_id: entityId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
-            entityId,
-            entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
-            nodeId: 'test-node',
-          });
-
-          rebalancer.initialize();
-          rebalancer.setLeader(true);
-
-          // Verify hasPendingMove works correctly
-          const hasPendingBefore = rebalancer.hasPendingMove(replicaId);
-
-          // Add a pending REMOVE move for the replica
-          rebalancer.pendingMoves.set('pending-remove', {
-            type: MoveType.REMOVE,
-            replicaId,
-            nodeId,
-            entityId,
-            startedAt: Date.now(),
-            status: 'pending',
-          });
-
-          const hasPendingAfter = rebalancer.hasPendingMove(replicaId);
-          const otherReplicaHasPending = rebalancer.hasPendingMove('other-replica');
-
-          rebalancer.shutdown();
-
-          // hasPendingMove should return false before, true after for target
-          // and false for other replica
-          return !hasPendingBefore && hasPendingAfter && !otherReplicaHasPending;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('no duplicate REMOVE moves for same replica');
-  });
-
-  /**
-   * Property 12.4: Completed moves don't trigger deduplication
-   * Validates: Requirements 5.1, 5.2, 5.3 (negative case)
-   *
-   * Completed or failed moves should not block new moves for the same target.
-   */
-  t.test('completed moves do not trigger deduplication', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.uuid(), // entity_id
-        fc.uuid(), // node_id
-        fc.constantFrom('completed', 'failed'), // status
-        async (entityId, nodeId, completedStatus) => {
-          const mockCache = createMockCache({
-            nodes: [
-              {node_id: nodeId, status: 'active'},
-              {node_id: 'other-node', status: 'active'},
-              {node_id: 'third-node', status: 'active'},
-            ],
-            services: [],
-            partitions: [{partition_id: entityId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
-            entityId,
-            entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
-            nodeId: 'test-node',
-          });
-
-          rebalancer.initialize();
-          rebalancer.setLeader(true);
-
-          // Add a completed/failed move (should not block)
-          rebalancer.pendingMoves.set('completed-add', {
-            type: MoveType.ADD,
-            replicaId: 'completed-replica',
-            nodeId,
-            entityId,
-            startedAt: Date.now() - 10000,
-            status: completedStatus,
-            completedAt: Date.now() - 5000,
-          });
-
-          // hasPendingAddForNode should return false for completed moves
-          const hasPending = rebalancer.hasPendingAddForNode(nodeId);
-
-          rebalancer.shutdown();
-
-          return !hasPending;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('completed moves do not trigger deduplication');
-  });
-
-  /**
-   * Property 12.5: Multiple pending moves are all checked
-   * Validates: Requirements 5.1, 5.2, 5.3
-   *
-   * When multiple pending moves exist, all should be checked for deduplication.
-   */
-  t.test('multiple pending moves are all checked', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.uuid(), // entity_id
-        fc.array(fc.uuid(), {minLength: 2, maxLength: 4}), // node_ids
-        async (entityId, nodeIds) => {
-          // Ensure unique node IDs
-          const uniqueNodeIds = [...new Set(nodeIds)];
-          if (uniqueNodeIds.length < 2) {
-            return true; // Skip if not enough unique nodes
+          // Create assignments where draining node has multiple partitions
+          // This ensures multiple moves are needed
+          const assignments = {};
+          for (const partitionId of partitionIds) {
+            // Assign only to draining node so each partition needs a move
+            assignments[partitionId] = [drainingNodeId];
           }
 
-          const nodes = uniqueNodeIds.map((id) => ({node_id: id, status: 'active'}));
-
-          const mockCache = createMockCache({
-            nodes,
-            services: [],
-            partitions: [{partition_id: entityId, table_id: 'table-1'}],
+          const epoch = new AssignmentEpoch({
+            epoch: epochNum,
+            assignments,
+            timestamp: '2024-01-01T00:00:00Z',
+            proposedBy: 'test-node',
           });
 
-          const rebalancer = new UnifiedRebalancer({
-            entityId,
-            entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
-            nodeId: 'test-node',
-          });
+          // Call calculateMoves once
+          const result = rebalancer.calculateMoves(epoch, nodeStates);
 
-          rebalancer.initialize();
-          rebalancer.setLeader(true);
+          // Verify we get a single result object (not multiple calls)
+          if (typeof result !== 'object' || result === null) {
+            return false;
+          }
 
-          // Add pending ADD moves for multiple nodes
-          uniqueNodeIds.forEach((nodeId, index) => {
-            rebalancer.pendingMoves.set(`pending-add-${index}`, {
-              type: MoveType.ADD,
-              replicaId: `pending-replica-${index}`,
-              nodeId,
-              entityId,
-              startedAt: Date.now(),
-              status: 'pending',
-            });
-          });
+          // Verify the result contains all moves in a single batch
+          if (!Array.isArray(result.moves)) {
+            return false;
+          }
 
-          // All nodes should show as having pending ADD moves
-          const allHavePending = uniqueNodeIds.every((nodeId) =>
-            rebalancer.hasPendingAddForNode(nodeId));
+          // Should have multiple moves (one per partition)
+          if (result.moves.length < 2) {
+            return false;
+          }
 
-          rebalancer.shutdown();
+          // Verify proposedAssignments is a single object containing all changes
+          if (result.proposedAssignments === null) {
+            return false;
+          }
 
-          return allHavePending;
+          // All partitions should be in the single proposed assignments object
+          for (const partitionId of partitionIds) {
+            if (!(partitionId in result.proposedAssignments)) {
+              return false;
+            }
+          }
+
+          return true;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('multiple pending moves are all checked');
+    t.pass('calculateMoves returns single batched result for multiple moves');
+  });
+
+  /**
+   * Property: The proposedAssignments object contains all partition changes
+   * in a single structure, not separate proposals per partition.
+   */
+  t.test('proposedAssignments contains all changes in single structure', async (t) => {
+    fc.assert(
+      fc.property(
+        uniqueNodeIdsArb(4, 8),
+        uniquePartitionIdsArb(3, 6),
+        fc.nat({max: 1000}),
+        (nodeIds, partitionIds, epochNum) => {
+          if (nodeIds.length < 4 || partitionIds.length < 3) return true;
+
+          const rebalancer = new StateAwareRebalancer({
+            nodeId: 'test-node',
+            maxMovesPerEpoch: 100,
+          });
+
+          // Make multiple nodes DRAINING to force multiple moves
+          const drainingNodes = nodeIds.slice(0, 2);
+          const readyNodes = nodeIds.slice(2);
+
+          const nodeStates = new Map();
+          for (const nodeId of drainingNodes) {
+            nodeStates.set(nodeId, NodeState.DRAINING);
+          }
+          for (const nodeId of readyNodes) {
+            nodeStates.set(nodeId, NodeState.READY);
+          }
+
+          // Distribute partitions across draining nodes
+          const assignments = {};
+          for (let i = 0; i < partitionIds.length; i++) {
+            const drainingNode = drainingNodes[i % drainingNodes.length];
+            assignments[partitionIds[i]] = [drainingNode];
+          }
+
+          const epoch = new AssignmentEpoch({
+            epoch: epochNum,
+            assignments,
+            timestamp: '2024-01-01T00:00:00Z',
+            proposedBy: 'test-node',
+          });
+
+          const result = rebalancer.calculateMoves(epoch, nodeStates);
+
+          // Verify single proposedAssignments object
+          if (!result.proposedAssignments) {
+            return false;
+          }
+
+          // Count how many partitions are in the single proposal
+          const proposedPartitions = Object.keys(result.proposedAssignments);
+
+          // Should contain all partitions that needed moves
+          if (proposedPartitions.length !== partitionIds.length) {
+            return false;
+          }
+
+          return true;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('proposedAssignments contains all changes in single structure');
+  });
+
+  /**
+   * Property: The moves array contains all individual moves batched together,
+   * and each move corresponds to an entry in proposedAssignments.
+   */
+  t.test('moves array and proposedAssignments are consistent', async (t) => {
+    fc.assert(
+      fc.property(
+        uniqueNodeIdsArb(3, 6),
+        uniquePartitionIdsArb(2, 4),
+        fc.nat({max: 1000}),
+        (nodeIds, partitionIds, epochNum) => {
+          if (nodeIds.length < 3 || partitionIds.length < 2) return true;
+
+          const rebalancer = new StateAwareRebalancer({
+            nodeId: 'test-node',
+            maxMovesPerEpoch: 100,
+          });
+
+          const drainingNodeId = nodeIds[0];
+          const readyNodeIds = nodeIds.slice(1);
+
+          const nodeStates = new Map();
+          nodeStates.set(drainingNodeId, NodeState.DRAINING);
+          for (const nodeId of readyNodeIds) {
+            nodeStates.set(nodeId, NodeState.READY);
+          }
+
+          const assignments = {};
+          for (const partitionId of partitionIds) {
+            assignments[partitionId] = [drainingNodeId];
+          }
+
+          const epoch = new AssignmentEpoch({
+            epoch: epochNum,
+            assignments,
+            timestamp: '2024-01-01T00:00:00Z',
+            proposedBy: 'test-node',
+          });
+
+          const result = rebalancer.calculateMoves(epoch, nodeStates);
+
+          if (!result.proposedAssignments || result.moves.length === 0) {
+            return false;
+          }
+
+          // Each move should have a corresponding entry in proposedAssignments
+          for (const move of result.moves) {
+            const partitionId = move.partitionId;
+            if (!(partitionId in result.proposedAssignments)) {
+              return false;
+            }
+
+            // The proposed assignment should reflect the move
+            const proposedNodes = result.proposedAssignments[partitionId];
+            if (!proposedNodes.includes(move.toNode)) {
+              return false;
+            }
+          }
+
+          return true;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('moves array and proposedAssignments are consistent');
+  });
+
+  /**
+   * Property: A single call to calculateMoves handles all necessary moves,
+   * not requiring multiple calls to process all partitions.
+   */
+  t.test('single calculateMoves call handles all partitions', async (t) => {
+    fc.assert(
+      fc.property(
+        uniqueNodeIdsArb(3, 5),
+        uniquePartitionIdsArb(3, 6),
+        fc.nat({max: 1000}),
+        (nodeIds, partitionIds, epochNum) => {
+          if (nodeIds.length < 3 || partitionIds.length < 3) return true;
+
+          const rebalancer = new StateAwareRebalancer({
+            nodeId: 'test-node',
+            maxMovesPerEpoch: 100,
+          });
+
+          const drainingNodeId = nodeIds[0];
+          const readyNodeIds = nodeIds.slice(1);
+
+          const nodeStates = new Map();
+          nodeStates.set(drainingNodeId, NodeState.DRAINING);
+          for (const nodeId of readyNodeIds) {
+            nodeStates.set(nodeId, NodeState.READY);
+          }
+
+          const assignments = {};
+          for (const partitionId of partitionIds) {
+            assignments[partitionId] = [drainingNodeId];
+          }
+
+          const epoch = new AssignmentEpoch({
+            epoch: epochNum,
+            assignments,
+            timestamp: '2024-01-01T00:00:00Z',
+            proposedBy: 'test-node',
+          });
+
+          // Single call to calculateMoves
+          const result = rebalancer.calculateMoves(epoch, nodeStates);
+
+          // Verify all partitions are handled in this single call
+          const movedPartitions = new Set(result.moves.map((m) => m.partitionId));
+
+          // All partitions should have moves
+          for (const partitionId of partitionIds) {
+            if (!movedPartitions.has(partitionId)) {
+              return false;
+            }
+          }
+
+          return true;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('single calculateMoves call handles all partitions');
+  });
+
+  /**
+   * Property: When moves are batched, the result contains exactly one
+   * reason field (not multiple reasons for each move).
+   */
+  t.test('batched result has single reason field', async (t) => {
+    fc.assert(
+      fc.property(
+        uniqueNodeIdsArb(3, 5),
+        uniquePartitionIdsArb(2, 4),
+        fc.nat({max: 1000}),
+        (nodeIds, partitionIds, epochNum) => {
+          if (nodeIds.length < 3 || partitionIds.length < 2) return true;
+
+          const rebalancer = new StateAwareRebalancer({
+            nodeId: 'test-node',
+            maxMovesPerEpoch: 100,
+          });
+
+          const drainingNodeId = nodeIds[0];
+          const readyNodeIds = nodeIds.slice(1);
+
+          const nodeStates = new Map();
+          nodeStates.set(drainingNodeId, NodeState.DRAINING);
+          for (const nodeId of readyNodeIds) {
+            nodeStates.set(nodeId, NodeState.READY);
+          }
+
+          const assignments = {};
+          for (const partitionId of partitionIds) {
+            assignments[partitionId] = [drainingNodeId];
+          }
+
+          const epoch = new AssignmentEpoch({
+            epoch: epochNum,
+            assignments,
+            timestamp: '2024-01-01T00:00:00Z',
+            proposedBy: 'test-node',
+          });
+
+          const result = rebalancer.calculateMoves(epoch, nodeStates);
+
+          // Result should have exactly one top-level reason
+          if (typeof result.reason !== 'string') {
+            return false;
+          }
+
+          // The reason should indicate rebalancing is needed
+          if (result.reason !== 'rebalancing_needed') {
+            return false;
+          }
+
+          return true;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('batched result has single reason field');
+  });
+
+  /**
+   * Property: Mixed node states (DRAINING and non-READY) produce
+   * a single batched proposal for all necessary moves.
+   */
+  t.test('mixed node states produce single batched proposal', async (t) => {
+    fc.assert(
+      fc.property(
+        uniqueNodeIdsArb(4, 7),
+        uniquePartitionIdsArb(2, 5),
+        fc.nat({max: 1000}),
+        (nodeIds, partitionIds, epochNum) => {
+          if (nodeIds.length < 4 || partitionIds.length < 2) return true;
+
+          const rebalancer = new StateAwareRebalancer({
+            nodeId: 'test-node',
+            maxMovesPerEpoch: 100,
+          });
+
+          // Mix of states: DRAINING, JOINING, READY
+          const nodeStates = new Map();
+          nodeStates.set(nodeIds[0], NodeState.DRAINING);
+          nodeStates.set(nodeIds[1], NodeState.JOINING);
+          for (let i = 2; i < nodeIds.length; i++) {
+            nodeStates.set(nodeIds[i], NodeState.READY);
+          }
+
+          // Assign partitions to non-ready nodes
+          const assignments = {};
+          for (let i = 0; i < partitionIds.length; i++) {
+            // Alternate between DRAINING and JOINING nodes
+            const nonReadyNode = nodeIds[i % 2];
+            assignments[partitionIds[i]] = [nonReadyNode];
+          }
+
+          const epoch = new AssignmentEpoch({
+            epoch: epochNum,
+            assignments,
+            timestamp: '2024-01-01T00:00:00Z',
+            proposedBy: 'test-node',
+          });
+
+          const result = rebalancer.calculateMoves(epoch, nodeStates);
+
+          // Should produce a single batched result
+          if (!result.proposedAssignments) {
+            return false;
+          }
+
+          // All moves should be in a single array
+          if (!Array.isArray(result.moves)) {
+            return false;
+          }
+
+          // Should have moves for all partitions
+          if (result.moves.length < partitionIds.length) {
+            return false;
+          }
+
+          return true;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('mixed node states produce single batched proposal');
+  });
+
+  /**
+   * Property: When no moves are needed, the result is still a single
+   * object (not multiple empty results).
+   */
+  t.test('no moves needed returns single result object', async (t) => {
+    fc.assert(
+      fc.property(
+        uniqueNodeIdsArb(2, 5),
+        uniquePartitionIdsArb(1, 3),
+        fc.nat({max: 1000}),
+        (nodeIds, partitionIds, epochNum) => {
+          const rebalancer = new StateAwareRebalancer({
+            nodeId: 'test-node',
+            maxMovesPerEpoch: 100,
+          });
+
+          // All nodes are READY
+          const nodeStates = new Map();
+          for (const nodeId of nodeIds) {
+            nodeStates.set(nodeId, NodeState.READY);
+          }
+
+          // Assign partitions to READY nodes only
+          const assignments = {};
+          for (const partitionId of partitionIds) {
+            assignments[partitionId] = [nodeIds[0]];
+          }
+
+          const epoch = new AssignmentEpoch({
+            epoch: epochNum,
+            assignments,
+            timestamp: '2024-01-01T00:00:00Z',
+            proposedBy: 'test-node',
+          });
+
+          const result = rebalancer.calculateMoves(epoch, nodeStates);
+
+          // Should return a single result object
+          if (typeof result !== 'object' || result === null) {
+            return false;
+          }
+
+          // Should have empty moves array
+          if (!Array.isArray(result.moves) || result.moves.length !== 0) {
+            return false;
+          }
+
+          // Should have reason indicating no moves needed
+          if (result.reason !== 'no_moves_needed') {
+            return false;
+          }
+
+          return true;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('no moves needed returns single result object');
   });
 });

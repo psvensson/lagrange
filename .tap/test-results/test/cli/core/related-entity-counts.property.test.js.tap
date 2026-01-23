@@ -3,34 +3,34 @@ TAP version 14
     # Subtest: node service count matches actual services
         ok 1 - node service count matches actual services
         1..1
-    ok 1 - node service count matches actual services # time=7.961ms
+    ok 1 - node service count matches actual services # time=4.378ms
     
     # Subtest: table partition count matches actual partitions
         ok 1 - table partition count matches actual partitions
         1..1
-    ok 2 - table partition count matches actual partitions # time=2.546ms
+    ok 2 - table partition count matches actual partitions # time=1.743ms
     
     # Subtest: partition replica count from partition record
         ok 1 - partition replica count from partition record
         1..1
-    ok 3 - partition replica count from partition record # time=1.301ms
+    ok 3 - partition replica count from partition record # time=1.437ms
     
     # Subtest: message group replica count from group record
         ok 1 - message group replica count from group record
         1..1
-    ok 4 - message group replica count from group record # time=0.942ms
+    ok 4 - message group replica count from group record # time=0.702ms
     
     # Subtest: unknown entity type returns empty counts
         ok 1 - unknown entity type returns empty counts
         1..1
-    ok 5 - unknown entity type returns empty counts # time=1.207ms
+    ok 5 - unknown entity type returns empty counts # time=0.696ms
     
     # Subtest: missing entity returns zero counts
         ok 1 - missing entity returns zero counts
         1..1
-    ok 6 - missing entity returns zero counts # time=1.14ms
+    ok 6 - missing entity returns zero counts # time=3.209ms
     
     1..6
-ok 1 - Property 9: Related Entity Counts # time=21.394ms
+ok 1 - Property 9: Related Entity Counts # time=16.465ms
 
 1..1

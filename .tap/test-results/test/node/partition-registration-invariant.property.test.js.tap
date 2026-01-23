@@ -3,24 +3,24 @@ TAP version 14
     # Subtest: registered partitions appear in localReplicas with correct metadata
         ok 1 - registered partitions appear in localReplicas with correct metadata
         1..1
-    ok 1 - registered partitions appear in localReplicas with correct metadata # time=9.723ms
+    ok 1 - registered partitions appear in localReplicas with correct metadata # time=6.652ms
     
     # Subtest: registered partitions default to active status
         ok 1 - registered partitions default to active status
         1..1
-    ok 2 - registered partitions default to active status # time=2.23ms
+    ok 2 - registered partitions default to active status # time=1.856ms
     
     # Subtest: duplicate registration is idempotent
         ok 1 - duplicate registration is idempotent
         1..1
-    ok 3 - duplicate registration is idempotent # time=2.623ms
+    ok 3 - duplicate registration is idempotent # time=1.869ms
     
     # Subtest: multiple partitions all registered correctly
         ok 1 - multiple partitions all registered correctly
         1..1
-    ok 4 - multiple partitions all registered correctly # time=3.631ms
+    ok 4 - multiple partitions all registered correctly # time=2.002ms
     
     1..4
-ok 1 - Property 1: Partition Registration Invariant # time=167.242ms
+ok 1 - Property 1: Partition Registration Invariant # time=120.942ms
 
 1..1

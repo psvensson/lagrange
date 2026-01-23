@@ -1,126 +1,126 @@
 TAP version 14
 # Subtest: Property 5: Delivery Semantics
-{"level":50,"time":"2026-01-22T17:52:46.145Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"85d53300-715e-4de9-86ab-dcaa59c81e55","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.148Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"2adc091b-ad6b-4270-8821-b8afedbbe3a5","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.150Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"c84b29ea-0d2c-41a5-9844-06ec817f7e2f","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.152Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"9e23bfcf-61ce-4f20-adde-8c4073e598a6","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.154Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"adee4f35-9bea-48bc-a80a-10aad2e901e5","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.156Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"6cbea99f-49a9-4dea-af5a-817567d4520c","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.158Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"46c2fa5f-2dbf-4e27-9313-0df41420f5d4","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.159Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"00d21b12-5d37-4828-8ccd-b2f12ad1cbc9","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.160Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"9cbce8e6-f515-4c9d-a5a1-27df0dcda460","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.162Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"92b7b9c2-cefd-44f6-bed9-270ecb8de661","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.946Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"ad7c6e71-e47b-4222-8bfd-30af6a954073","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.948Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"9539bfcd-c5d9-4163-b59c-b2898e9f7657","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.950Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"14fb1ed2-6c13-4ac4-8acd-4f65d9243747","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.951Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"323b0ee1-0c5c-437c-ae68-923bee9c712a","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.953Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"9dbe7c67-0bb4-4c32-8d51-a6e3a6791f95","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.954Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"55aca01f-4c14-4792-baa0-4a89da831cda","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.956Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"2213dfa0-c627-430a-bb91-a64f49e0690f","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.958Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"6ffdb914-0d64-4d66-a69e-e6fb202b5d7b","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.960Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"01129218-3d8b-45e4-953c-eebda7b8082c","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.961Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"aebf2b17-0789-4405-805d-0632543358d3","msg":"Self-connection lost - fatal error"}
     # Subtest: successful delivery returns acknowledged true with response
         ok 1 - successful delivery returns acknowledged true with response
         1..1
-    ok 1 - successful delivery returns acknowledged true with response # time=43.739ms
+    ok 1 - successful delivery returns acknowledged true with response # time=36.19ms
     
-{"level":50,"time":"2026-01-22T17:52:46.165Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"37f6454a-70b9-4f04-b55c-2871e5fa648c","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.167Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"55736f6f-6d70-45fc-976b-f63f23629387","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.169Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"d9f2ee71-a015-468f-ad8a-e3e574cbfe52","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.170Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"a775183f-7cf0-42a3-9e15-b8c08a2baf44","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.171Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"98c0ad38-e569-481e-9a3a-09ff7b5a7353","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.172Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"ca5fed30-f3cc-48d2-b0ec-ea8c3e5e5b5f","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.174Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"cfebe54d-240e-4fc1-b0aa-4856c3104516","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.176Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"ef7f2543-e881-44f0-9fd1-ec59f3435fb0","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.177Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"311061fe-2e99-4aa5-85d9-a0e7321925ea","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.179Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"f5b578e1-d26b-4908-90c9-3e825507da3e","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.966Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"819b6262-69e5-4a49-a36c-2e69392f9521","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.968Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"24306f02-11ab-425a-9222-d7e51666ead2","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.970Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"3feb84eb-88f5-4c45-906d-a6b224d6bf3c","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.971Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"750c5684-58fe-478c-9058-7341f859ee36","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.972Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"ff107c15-3b06-46c6-be03-09d4a91c4f2b","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.974Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"f629b292-a0e7-4afc-81e0-8e05b90e7b09","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.975Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"b56dad48-9fb2-40de-adbe-25a3ac92961e","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.976Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"7b9f5ba6-a13b-434c-9518-5dbae08dd2f6","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.978Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"41dc7c72-beb3-4b48-8cbf-7ca3c5bc8482","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.980Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"7fd9d8b8-bf15-411b-8316-87b70766ae29","msg":"Self-connection lost - fatal error"}
     # Subtest: delivery to unregistered address returns noHandler flag
         ok 1 - delivery to unregistered address returns noHandler flag
         1..1
-    ok 2 - delivery to unregistered address returns noHandler flag # time=15.281ms
+    ok 2 - delivery to unregistered address returns noHandler flag # time=16.704ms
     
-{"level":50,"time":"2026-01-22T17:52:46.182Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"0afd729d-77fe-4ebc-bc7d-641c0a9206cd","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.183Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"ba5ee135-ac91-4a58-8613-a0de6c627fe8","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.185Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"c0785f1c-20b5-441f-8b92-5841fb5b1755","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.186Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"51dd9c36-5bc1-43ab-a192-18c03448ad11","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.188Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"04188a67-b367-4963-a856-c02663354ada","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.189Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"5d0498e6-b398-4f76-bc80-6c5299b9008a","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.190Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"393596a8-29d5-49e1-8cfd-02b2c8b92cfc","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.191Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"b7ac8f2f-948b-4905-ab5b-71fde57455c5","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.192Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"d09c9b7a-4870-4365-a5e6-256fdfb80fdd","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.193Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"82bf1b94-e730-4af4-82d6-4208c8f533f6","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.983Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"129ad343-2089-40b4-8520-1da1dffe7a67","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.984Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"1bcdf894-a85c-43b4-bae1-c8c02fa779aa","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.986Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"a1632510-2f16-4ca4-b220-e831b1be640d","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.987Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"3be4c796-f79f-4c73-a660-94ae872ba4a3","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.988Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"1a27c5ab-184b-417f-a16b-1f52980aa8d4","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.989Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"66aeb8c2-7b23-4b94-b1f6-126045609449","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.991Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"67b791c4-0b36-4005-9955-32d692ae2fb0","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.993Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"e040e135-2b3c-4aab-9a58-2f543ad3725b","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.994Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"914b685b-9dba-4b6b-afa0-2b70d7c6f97d","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.996Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"7e0fde4f-17dd-4718-94c2-575eb2f5a714","msg":"Self-connection lost - fatal error"}
     # Subtest: handler exception rejects with error
         ok 1 - handler exception rejects with error
         1..1
-    ok 3 - handler exception rejects with error # time=14.011ms
+    ok 3 - handler exception rejects with error # time=15.265ms
     
-{"level":50,"time":"2026-01-22T17:52:46.195Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"e4908acd-81e3-47e0-9281-6b09de27b774","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.196Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"fca6d227-3d78-485c-aed1-8343459fa11d","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.197Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"e566f117-5004-47a1-a611-dafa5bc2029f","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.198Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"c1c8428e-930e-46ec-b7df-97671f2c5af7","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.199Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"b1c8646e-4a3c-4d81-9718-a94d2a2ac936","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.200Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"f9068aac-d90b-4660-a8b4-eefbd2fc9d2d","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.201Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"36a9c60c-7d28-474b-a5f2-b364ebbd3f67","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.202Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"fad704d3-e977-4180-a6b7-accca2c4a389","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.203Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"6781837d-8382-4e75-b32e-39c8742b6ac1","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.204Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"70efedf8-62e8-42ae-970d-65c0c74be90a","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:03.998Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"f717565a-451f-4b7c-b160-cabe6cecb5db","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.000Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"37d52316-a9c0-41d1-b3aa-8074802a05c9","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.001Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"b46e7fad-4a43-4d07-9efc-66a16acb0a42","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.002Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"24e78d10-094e-44c4-b1c3-06dbfaf9fb8f","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.003Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"5dc5f215-71b6-4dc2-b720-a646187d8495","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.004Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"f0477ba5-052a-436b-8f64-1359e0183c32","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.005Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"c53d1627-4bac-4305-8ea9-86ff73af39b4","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.006Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"a35e842f-fdde-46de-b311-a6a6f32d5246","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.007Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"b7f77b16-b06a-429e-8e91-47a476c1868b","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.008Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"42fbdd53-bb15-4e69-83d2-16d47acc1c3c","msg":"Self-connection lost - fatal error"}
     # Subtest: result always includes messageId
         ok 1 - result always includes messageId
         1..1
-    ok 4 - result always includes messageId # time=10.043ms
+    ok 4 - result always includes messageId # time=11.954ms
     
-{"level":50,"time":"2026-01-22T17:52:46.206Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"2f251e5a-4827-44d4-87f1-f63d0bb9ae3c","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.207Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"3d0e548e-bd15-4ff9-a645-f9fafd6588af","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.208Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"d7932560-85c4-4783-b8c8-bde40a173fc3","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.209Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"6d8ae4a6-dde2-492a-bb50-c079db97c3b6","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.210Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"8fe28838-5871-4279-afe8-7ab5c300a5a7","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.211Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"79df34d2-be54-4a10-bc58-9bfd010127cb","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.212Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"ff1313c4-c2af-4849-a8cc-8f2462819686","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.213Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"5f641c1c-9e20-4fc6-ba2e-1a4b61ffe473","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.215Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"56404d33-615e-45c9-b8c9-d25d12b4a591","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.217Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"72a6fae2-97cf-4665-aed9-59e563b44375","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.012Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"4d878071-2136-4ff6-af63-6f7f7041e483","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.014Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"dae7e09a-4fea-42f5-befd-e6817b48260e","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.016Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"34859cfe-4a79-4eff-8c95-134b3f352579","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.017Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"2d333597-365c-4aed-a94a-03aa12d3c7ab","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.019Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"3aa876a3-ea40-4d56-a519-efdc1cf960ad","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.020Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"eff33434-e60a-4cc3-b3d8-f41097f5ab2c","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.022Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"a6320bc3-2495-4d6e-b7b3-e4bb3121df2a","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.023Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"7c81f4b6-becc-41e3-9001-612710bf104c","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.024Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"83afaad6-4a43-4daf-9765-a0d07c1d66e4","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.025Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"46f4d9ed-7a31-46eb-b985-e335f124287a","msg":"Self-connection lost - fatal error"}
     # Subtest: no silent failures - result is always defined
         ok 1 - no silent failures - result is always defined
         1..1
-    ok 5 - no silent failures - result is always defined # time=12.735ms
+    ok 5 - no silent failures - result is always defined # time=16.749ms
     
-{"level":50,"time":"2026-01-22T17:52:46.219Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"ef254c7b-4b2a-435a-b6c9-971138c03609","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.220Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"b2d34d1b-f1ec-4cbd-b042-69e71c6ed65e","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.221Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"ad917952-0249-434a-916a-eb133a3ee6e7","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.221Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"55b50e0e-aa35-4583-8853-41e1f4f52590","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.223Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"d1af6a5a-802c-4ab9-a7a4-5b6954265979","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.224Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"4b0bf58e-a5a4-4cf1-9ec0-739d4e90fda6","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.225Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"e9de5f49-4f48-4616-b150-33b48c9227b0","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.226Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"99a91b47-cfd5-4006-9242-005424849337","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.226Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"4a66dd80-6c24-41c7-849e-b0659ab9d154","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.228Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"719e869c-c0f8-4e11-bb95-226183e17fd6","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.028Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"66b779bd-6bf8-4d75-9950-cb38300b0c90","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.029Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"6cbe5407-6edf-4ad5-a818-678b06f4adf3","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.031Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"80d852d9-9a69-4cf4-a6cf-b70f8faf5fa1","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.032Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"66f1d9ff-327e-4cc4-a5a1-d5f663029dfd","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.034Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"5d1bb5f4-a14f-4d3f-9a70-e0c659b695fd","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.035Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"f2f6b823-71ea-47ce-bf71-5d29f5296f5d","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.037Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"9bd013ae-d0cb-4e8b-bd84-ad3ea8178030","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.038Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"13b2346a-733e-451d-a526-2d0e5ce8a9ea","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.044Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"0ec1263d-ce27-4c34-a70b-cf5225bbbc1a","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.045Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"6650fbc8-e902-45ec-9faf-2f218a7755af","msg":"Self-connection lost - fatal error"}
     # Subtest: acknowledged is strictly boolean in result
         ok 1 - acknowledged is strictly boolean in result
         1..1
-    ok 6 - acknowledged is strictly boolean in result # time=11.103ms
+    ok 6 - acknowledged is strictly boolean in result # time=19.147ms
     
-{"level":50,"time":"2026-01-22T17:52:46.230Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"f2a4bfb9-5efe-47ee-8599-6168746c516f","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.231Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"d679f3b0-211f-4622-9e0f-0c7588d63126","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.232Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"324b06c5-afd7-498a-8403-683874b454e3","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.233Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"868391d0-c693-4c67-a05f-f3d37baac3a7","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.234Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"ca0f9d99-8d3e-4f91-9644-5767c7e0b3f5","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.235Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"d4d86b39-841e-4f57-9270-ea582e371e88","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.236Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"2cd40c48-5582-4e8e-9100-d5b15d5cef6a","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.237Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"0001f9a3-5933-4b88-a918-db10b73fffd9","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.238Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"f551b07e-b96c-4d52-b37b-ee5caf5e2faa","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.239Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"3f73a529-483f-459e-a6d6-8111f93469ab","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.047Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"2986e740-ce11-4327-9096-8ff4ae709517","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.048Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"47cbd763-013f-4f86-88b0-b91d5cc14ac8","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.049Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"dedf0944-5956-471e-9526-799edc650d32","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.050Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"b3c89d28-7658-4502-9bf0-25d642e2a311","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.051Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"78a170ae-0f1b-4d2d-851f-7518c30e3671","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.052Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"24b94c5e-dbab-4053-8b79-e7c55ac44b07","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.053Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"d63e6d3f-19fb-4bd8-a313-d803cdb00464","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.054Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"c0eadfad-43d0-4c1a-907b-eb3babf86779","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.055Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"6fb322e5-11a8-4310-a008-19742eb9f706","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.056Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"05121b66-87bb-4721-aa86-6d0ed655d5ff","msg":"Self-connection lost - fatal error"}
     # Subtest: error handling is consistent
         ok 1 - error handling is consistent
         1..1
-    ok 7 - error handling is consistent # time=10.995ms
+    ok 7 - error handling is consistent # time=10.377ms
     
-{"level":50,"time":"2026-01-22T17:52:46.247Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"ef34b874-ca3e-466a-aef4-885faf1828ca","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.249Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"665f58b6-606b-4b2a-b68c-f86cc33e3e81","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.250Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"8d2d19a8-ef04-43d7-a63a-f336535cae83","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.252Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"2cf7b329-9571-44b0-be56-853cb58cbfc5","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.253Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"5cd0b5b0-33d6-40f3-a332-114c888cfd57","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.255Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"8c7268c1-3d3e-4f95-8c57-095d63a42c8e","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.256Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"17d0b4bb-aaef-471c-aa96-53c9ba00bdfb","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.258Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"78b2ef46-a5cd-4f04-9328-f432b3aba015","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.260Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"deec7247-f71f-4abb-bf62-20a9ea48ba07","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-22T17:52:46.262Z","nodeId":"test-node","pid":316251,"subsystem":"message-router","nodeId":"test-node","connectionId":"63fbad7b-2b96-4581-b911-faf7b49dab1c","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.058Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"1e71026f-f90e-4eed-9de8-6b3163ab8fb1","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.059Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"273a5b9f-2110-45d0-a9b7-2f6b6d1c30b4","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.061Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"9f250203-1624-4ee2-b351-a658599be362","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.062Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"22656fdb-4fe4-4c74-9d23-dbbd2e19ddbf","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.063Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"47861816-73a7-4189-8b34-b9f58e39a24b","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.064Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"3189fe04-9d14-4958-ad5e-0f2764b314de","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.065Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"65b27b63-4dcc-44c2-b157-e4c364ebaacc","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.066Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"a8f4efce-e678-4fdf-9619-6525b53ead0e","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.068Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"02c71932-01de-4a89-b40c-836e2b1940d6","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-01-23T06:23:04.069Z","nodeId":"test-node","pid":420975,"subsystem":"message-router","nodeId":"test-node","connectionId":"4ee46dba-7f86-4772-9d58-f2fda747f400","msg":"Self-connection lost - fatal error"}
     # Subtest: handler response fields are preserved
         ok 1 - handler response fields are preserved
         1..1
-    ok 8 - handler response fields are preserved # time=22.367ms
+    ok 8 - handler response fields are preserved # time=12.958ms
     
     1..8
-ok 1 - Property 5: Delivery Semantics # time=144.505ms
+ok 1 - Property 5: Delivery Semantics # time=143.902ms
 
 1..1

@@ -1,7 +1,8 @@
 /**
  * Node Joining Service - Handles new node joining an existing cluster.
  * Contacts seed node via HTTP, creates/joins message group, queries system state.
- * Requirements: 7.8, 7.10, 7.11, 7.14
+ * Uses pull-based replica assignment and explicit lifecycle state transitions.
+ * Requirements: 4.1, 4.6, 4.7, 7.8, 7.10, 7.11, 7.14
  */
 
 import {EventEmitter} from 'events';
@@ -14,6 +15,13 @@ import {AssignmentStrategy} from './message-group-assignment.js';
 import {ReplicaLifecycleManager} from '../node/replica-lifecycle-manager.js';
 import {ReplicaStateMachine} from '../node/replica-state-machine.js';
 import {PartitionService} from '../partition/partition-service.js';
+import {
+  NodeLifecycleStateMachine,
+  NodeState,
+} from '../node/node-lifecycle-state-machine.js';
+import {PullBasedReplicaAssigner} from '../rebalancer/pull-based-replica-assigner.js';
+import {AssignmentEpochManager} from '../rebalancer/assignment-epoch-manager.js';
+import {AssignmentEpoch} from '../rebalancer/assignment-epoch.js';
 
 /**
  * Joining phases enumeration.
@@ -80,6 +88,21 @@ class NodeJoiningService extends EventEmitter {
     // Replica state machine for tracking replica lifecycle states
     this.replicaStateMachine = null;
 
+    // Node lifecycle state machine for explicit state transitions
+    // Requirements: 2.1, 2.2, 2.3, 2.4
+    this.lifecycleStateMachine = new NodeLifecycleStateMachine({
+      nodeId: this.nodeId,
+      initialState: NodeState.STARTING,
+    });
+
+    // Pull-based replica assigner for deciding which replicas to pull
+    // Requirements: 4.2, 4.3, 4.4, 4.5
+    this.pullBasedAssigner = null;
+
+    // Assignment epoch manager for epoch-based coordination
+    // Requirements: 3.2, 3.6, 3.7, 3.8
+    this.epochManager = null;
+
     // Bootstrap response from seed node
     this.bootstrapResponse = null;
 
@@ -99,7 +122,7 @@ class NodeJoiningService extends EventEmitter {
 
   /**
    * Execute the full joining process.
-   * Requirements: 8.1, 8.2, 8.3 - Bootstrap sequence: server → self-connect → services.
+   * Requirements: 4.1, 4.6, 4.7, 8.1, 8.2, 8.3 - Bootstrap sequence with lifecycle states.
    * @return {Promise<Object>} Joining result.
    */
   async join() {
@@ -109,9 +132,14 @@ class NodeJoiningService extends EventEmitter {
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
       seedNodeAddress: this.seedNodeAddress,
+      lifecycleState: this.lifecycleStateMachine.getState(),
     });
 
     try {
+      // Transition to CONNECTING state
+      // Requirements: 2.6 - CONNECTING state for establishing WebSocket connections
+      this.lifecycleStateMachine.transition(NodeState.CONNECTING);
+
       // Phase 1: Contact seed node via HTTP
       await this.executePhase(
         JoiningPhase.CONTACTING_SEED,
@@ -124,6 +152,10 @@ class NodeJoiningService extends EventEmitter {
         JoiningPhase.CONNECTING_WEBSOCKET,
         () => this.phaseConnectWebSocket(),
       );
+
+      // Transition to DISCOVERING state
+      // Requirements: 2.7 - DISCOVERING state for receiving system cache
+      this.lifecycleStateMachine.transition(NodeState.DISCOVERING);
 
       // Phase 3: Create or join message group based on assignment
       // Requirements: 8.3 - Services created AFTER self-connection established
@@ -155,12 +187,32 @@ class NodeJoiningService extends EventEmitter {
       // If we initialize after registration, CREATE_REPLICA messages will timeout
       this.initializeReplicaLifecycleManager();
 
+      // Transition to JOINING state
+      // Requirements: 2.8 - JOINING state for registering in cluster and proposing epoch
+      this.lifecycleStateMachine.transition(NodeState.JOINING);
+
       // Phase 5: Query system partitions for cluster state
       // This includes registering the node in the cluster's nodes table
       await this.executePhase(
         JoiningPhase.QUERYING_STATE,
         () => this.phaseQuerySystemState(),
       );
+
+      // Initialize pull-based assigner and propose epoch
+      // Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6
+      await this.initializePullBasedAssignment();
+
+      // Transition to SYNCING state
+      // Requirements: 2.9 - SYNCING state for syncing replica data
+      this.lifecycleStateMachine.transition(NodeState.SYNCING);
+
+      // Sync replica data if we pulled any replicas
+      // Requirements: 4.9, 4.10
+      await this.syncPulledReplicas();
+
+      // Transition to READY state
+      // Requirements: 2.10 - READY state for accepting traffic
+      this.lifecycleStateMachine.transition(NodeState.READY);
 
       // Joining complete
       this.phase = JoiningPhase.COMPLETE;
@@ -170,6 +222,7 @@ class NodeJoiningService extends EventEmitter {
         nodeId: this.nodeId,
         duration,
         messageGroupCount: this.messageGroupServices.size,
+        lifecycleState: this.lifecycleStateMachine.getState(),
       });
 
       this.emit('complete', {
@@ -178,6 +231,7 @@ class NodeJoiningService extends EventEmitter {
         messageGroupServices: this.messageGroupServices,
         transport: this.transport,
         messageRouter: this.messageRouter,
+        lifecycleState: this.lifecycleStateMachine.getState(),
       });
 
       return {
@@ -191,6 +245,9 @@ class NodeJoiningService extends EventEmitter {
         transport: this.transport,
         messageRouter: this.messageRouter,
         bootstrapResponse: this.bootstrapResponse,
+        lifecycleStateMachine: this.lifecycleStateMachine,
+        pullBasedAssigner: this.pullBasedAssigner,
+        epochManager: this.epochManager,
       };
     } catch (error) {
       return this.handleJoiningFailure(error);
@@ -782,6 +839,194 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
+   * Initialize pull-based replica assignment.
+   * Creates PullBasedReplicaAssigner and AssignmentEpochManager,
+   * analyzes current epoch, and proposes new assignments if needed.
+   * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6
+   * @return {Promise<void>}
+   * @private
+   */
+  async initializePullBasedAssignment() {
+    this.logger.debug('Initializing pull-based replica assignment', {
+      nodeId: this.nodeId,
+    });
+
+    // Create PullBasedReplicaAssigner
+    // Requirements: 4.2, 4.3, 4.4, 4.5
+    this.pullBasedAssigner = new PullBasedReplicaAssigner({
+      nodeId: this.nodeId,
+      maxReplicasToPull: 10,
+      syncRetryAttempts: 3,
+      syncRetryDelayMs: 1000,
+      replicaHandler: this.replicaLifecycleManager,
+    });
+
+    // Create AssignmentEpochManager
+    // Requirements: 3.2, 3.6, 3.7, 3.8
+    this.epochManager = new AssignmentEpochManager({
+      nodeId: this.nodeId,
+    });
+
+    // Get current epoch from bootstrap response or create initial
+    const epochData = this.bootstrapResponse?.currentEpoch;
+    if (epochData) {
+      // Apply epoch from seed node
+      const epoch = new AssignmentEpoch(
+        epochData.epoch,
+        epochData.assignments || {},
+        epochData.timestamp || Date.now().toString(),
+        epochData.proposedBy || 'seed',
+      );
+      this.epochManager.initialize(epoch);
+    } else {
+      // Initialize with empty epoch
+      this.epochManager.initialize();
+    }
+
+    // Get list of ready nodes from bootstrap response
+    const readyNodes = this.bootstrapResponse?.readyNodes || [];
+
+    // If no ready nodes provided, we can't do pull-based assignment
+    if (readyNodes.length === 0) {
+      this.logger.debug('No ready nodes available for pull-based assignment', {
+        nodeId: this.nodeId,
+      });
+      return;
+    }
+
+    // Get table policies from bootstrap response
+    const tablePolicies = new Map();
+    const policies = this.bootstrapResponse?.tablePolicies || {};
+    for (const [tableName, policy] of Object.entries(policies)) {
+      tablePolicies.set(tableName, policy);
+    }
+
+    // Analyze current epoch and propose new assignments
+    // Requirements: 4.2, 4.3, 4.4
+    const currentEpoch = this.epochManager.getCurrentEpoch();
+    const proposal = this.pullBasedAssigner.analyzeAndPropose(
+      currentEpoch,
+      this.nodeId,
+      readyNodes,
+      tablePolicies,
+    );
+
+    if (!proposal.success) {
+      this.logger.warn('Pull-based assignment analysis failed', {
+        nodeId: this.nodeId,
+        error: proposal.error,
+        violations: proposal.violations,
+      });
+      return;
+    }
+
+    if (!proposal.proposedAssignments) {
+      this.logger.debug('No rebalancing needed', {
+        nodeId: this.nodeId,
+        reason: proposal.reason,
+      });
+      return;
+    }
+
+    // Propose new epoch with updated assignments
+    // Requirements: 4.6
+    const epochResult = this.epochManager.proposeEpoch(
+      currentEpoch.epoch,
+      proposal.proposedAssignments,
+    );
+
+    if (!epochResult.success) {
+      this.logger.warn('Epoch proposal failed', {
+        nodeId: this.nodeId,
+        error: epochResult.error,
+      });
+      return;
+    }
+
+    this.logger.info('Pull-based assignment epoch proposed', {
+      nodeId: this.nodeId,
+      previousEpoch: currentEpoch.epoch,
+      newEpoch: epochResult.epoch.epoch,
+      replicasToPull: proposal.replicasToPull.length,
+    });
+
+    // Create local replicas for pulled partitions
+    // Requirements: 4.7
+    const partitionIds = proposal.replicasToPull.map((r) => r.partitionId);
+    if (partitionIds.length > 0) {
+      const createResult = await this.pullBasedAssigner.createLocalReplicas(
+        partitionIds,
+      );
+
+      this.logger.info('Local replicas created', {
+        nodeId: this.nodeId,
+        created: createResult.created.length,
+        failed: createResult.failed.length,
+      });
+
+      // Store replicas to pull for syncing phase
+      this._replicasToPull = proposal.replicasToPull;
+    }
+  }
+
+  /**
+   * Sync data for pulled replicas from source nodes.
+   * Requirements: 4.9, 4.10
+   * @return {Promise<void>}
+   * @private
+   */
+  async syncPulledReplicas() {
+    if (!this._replicasToPull || this._replicasToPull.length === 0) {
+      this.logger.debug('No replicas to sync', {
+        nodeId: this.nodeId,
+      });
+      return;
+    }
+
+    this.logger.debug('Syncing pulled replicas', {
+      nodeId: this.nodeId,
+      replicaCount: this._replicasToPull.length,
+    });
+
+    const currentEpoch = this.epochManager.getCurrentEpoch();
+
+    for (const {partitionId, fromNode} of this._replicasToPull) {
+      // Get all source nodes for this partition (excluding this node)
+      const sourceNodes = currentEpoch.getPartitionAssignments(partitionId) || [];
+      const validSources = sourceNodes.filter((n) => n !== this.nodeId);
+
+      // Prefer the original source node, but fall back to others
+      const orderedSources = [fromNode, ...validSources.filter((n) => n !== fromNode)];
+
+      const syncResult = await this.pullBasedAssigner.syncReplicaData(
+        partitionId,
+        orderedSources,
+      );
+
+      if (syncResult.success) {
+        this.logger.debug('Replica synced successfully', {
+          nodeId: this.nodeId,
+          partitionId,
+          syncedFrom: syncResult.syncedFrom,
+        });
+      } else {
+        this.logger.warn('Replica sync failed', {
+          nodeId: this.nodeId,
+          partitionId,
+          error: syncResult.error,
+        });
+      }
+    }
+
+    // Clear the replicas to pull list
+    this._replicasToPull = null;
+
+    this.logger.info('Replica sync phase complete', {
+      nodeId: this.nodeId,
+    });
+  }
+
+  /**
    * Make an HTTP POST request.
    * @param {string} url - URL to post to.
    * @param {Object} body - Request body.
@@ -875,6 +1120,15 @@ class NodeJoiningService extends EventEmitter {
       messageGroupServices: this.messageGroupServices.size,
       partitionServices: this.partitionServices.size,
     });
+
+    // Clear pull-based assigner
+    this.pullBasedAssigner = null;
+
+    // Clear epoch manager
+    this.epochManager = null;
+
+    // Clear replicas to pull list
+    this._replicasToPull = null;
 
     // Shutdown replica state machine
     if (this.replicaStateMachine) {
@@ -1053,11 +1307,36 @@ class NodeJoiningService extends EventEmitter {
     return {
       nodeId: this.nodeId,
       phase: this.phase,
+      lifecycleState: this.lifecycleStateMachine.getState(),
       startTime: this.startTime,
       duration: this.startTime ? Date.now() - this.startTime : 0,
       messageGroupCount: this.messageGroupServices.size,
       lastError: this.lastError?.message || null,
     };
+  }
+
+  /**
+   * Get the node lifecycle state machine.
+   * @return {NodeLifecycleStateMachine} The lifecycle state machine.
+   */
+  getLifecycleStateMachine() {
+    return this.lifecycleStateMachine;
+  }
+
+  /**
+   * Get the pull-based replica assigner.
+   * @return {PullBasedReplicaAssigner|null} The assigner or null if not initialized.
+   */
+  getPullBasedAssigner() {
+    return this.pullBasedAssigner;
+  }
+
+  /**
+   * Get the assignment epoch manager.
+   * @return {AssignmentEpochManager|null} The epoch manager or null if not initialized.
+   */
+  getEpochManager() {
+    return this.epochManager;
   }
 
   /**
@@ -1084,4 +1363,4 @@ class NodeJoiningService extends EventEmitter {
   }
 }
 
-export {NodeJoiningService, JoiningPhase, DEFAULT_JOINING_CONFIG};
+export {NodeJoiningService, JoiningPhase, DEFAULT_JOINING_CONFIG, NodeState};

@@ -3,34 +3,34 @@ TAP version 14
     # Subtest: escape clears any input value
         ok 1 - escape clears any input value
         1..1
-    ok 1 - escape clears any input value # time=5.719ms
+    ok 1 - escape clears any input value # time=5.93ms
     
     # Subtest: escape clears input regardless of cursor position
         ok 1 - escape clears input regardless of cursor position
         1..1
-    ok 2 - escape clears input regardless of cursor position # time=0.744ms
+    ok 2 - escape clears input regardless of cursor position # time=3.276ms
     
     # Subtest: escape resets history navigation state
         ok 1 - escape resets history navigation state
         1..1
-    ok 3 - escape resets history navigation state # time=1.315ms
+    ok 3 - escape resets history navigation state # time=1.478ms
     
     # Subtest: escape clears multi-line input
         ok 1 - escape clears multi-line input
         1..1
-    ok 4 - escape clears multi-line input # time=0.731ms
+    ok 4 - escape clears multi-line input # time=0.738ms
     
     # Subtest: escape is idempotent
         ok 1 - escape is idempotent
         1..1
-    ok 5 - escape is idempotent # time=0.516ms
+    ok 5 - escape is idempotent # time=0.584ms
     
     # Subtest: escape returns true indicating key was handled
         ok 1 - escape returns true indicating key was handled
         1..1
-    ok 6 - escape returns true indicating key was handled # time=0.452ms
+    ok 6 - escape returns true indicating key was handled # time=0.583ms
     
     1..6
-ok 1 - Property 25: Escape Clears Input # time=12.186ms
+ok 1 - Property 25: Escape Clears Input # time=16.309ms
 
 1..1
