@@ -5,6 +5,14 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {TABLES} from '../constants/index.js';
+import {
+  QUERY_AST_NODE,
+  QUERY_DEFAULT_VALUE,
+  QUERY_LOG_MSG,
+  QUERY_OPERATOR,
+  QUERY_SUBSYSTEM,
+} from './query-constants.js';
 
 /**
  * PartitionResolver resolves queries to relevant partitions based on
@@ -30,7 +38,7 @@ class PartitionResolver {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('partition-resolver');
+        return loggingService.forSubsystem(QUERY_SUBSYSTEM.PARTITION_RESOLVER);
       }
     } catch {
       // Logging not available
@@ -55,20 +63,20 @@ class PartitionResolver {
    */
   resolvePartitions(tableName, whereClause, partitions) {
     if (!partitions || partitions.length === 0) {
-      this.logger.warn('No partitions available for table', {tableName});
+      this.logger.warn(QUERY_LOG_MSG.NO_PARTITIONS_FOR_TABLE, {tableName});
       return [];
     }
 
     // Get table metadata to find primary key
     const tableInfo = this.getTableInfo(tableName);
-    const primaryKey = tableInfo?.primaryKey || 'id';
+    const primaryKey = tableInfo?.primaryKey || QUERY_DEFAULT_VALUE.PRIMARY_KEY;
 
     // Extract key conditions from WHERE clause
     const keyConditions = this.extractKeyConditions(whereClause, primaryKey);
 
     if (!keyConditions) {
       // No PRIMARY KEY filter - scatter-gather to all partitions
-      this.logger.debug('No key conditions, using scatter-gather', {
+      this.logger.debug(QUERY_LOG_MSG.NO_KEY_CONDITIONS, {
         tableName,
         partitionCount: partitions.length,
       });
@@ -81,7 +89,7 @@ class PartitionResolver {
       keyConditions,
     );
 
-    this.logger.debug('Resolved partitions for query', {
+    this.logger.debug(QUERY_LOG_MSG.RESOLVED_PARTITIONS, {
       tableName,
       keyConditions,
       matchingCount: matchingPartitions.length,
@@ -104,10 +112,10 @@ class PartitionResolver {
 
     try {
       if (typeof this.systemCache.get === 'function') {
-        return this.systemCache.get('tables', tableName);
+        return this.systemCache.get(TABLES.TABLES, tableName);
       }
       if (typeof this.systemCache.find === 'function') {
-        return this.systemCache.find('tables', (t) =>
+        return this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === tableName || t.tableName === tableName,
         );
       }
@@ -130,7 +138,7 @@ class PartitionResolver {
     }
 
     const conditions = {
-      type: null, // 'equals', 'range', 'in'
+      type: null, // QUERY_KEY_CONDITION_TYPE
       values: [],
       low: null,
       high: null,
@@ -154,13 +162,13 @@ class PartitionResolver {
     if (!expr) return false;
 
     switch (expr.type) {
-    case 'binary':
+    case QUERY_AST_NODE.BINARY:
       return this.handleBinaryExpr(expr, primaryKey, conditions);
 
-    case 'in':
+    case QUERY_AST_NODE.IN:
       return this.handleInExpr(expr, primaryKey, conditions);
 
-    case 'between':
+    case QUERY_AST_NODE.BETWEEN:
       return this.handleBetweenExpr(expr, primaryKey, conditions);
 
     default:
@@ -180,14 +188,14 @@ class PartitionResolver {
     const {operator, left, right} = expr;
 
     // Handle AND - both sides may have key conditions
-    if (operator === 'AND') {
+    if (operator === QUERY_OPERATOR.AND) {
       const leftFound = this.findKeyConditions(left, primaryKey, conditions);
       const rightFound = this.findKeyConditions(right, primaryKey, conditions);
       return leftFound || rightFound;
     }
 
     // Handle OR - need all branches to have key conditions for optimization
-    if (operator === 'OR') {
+    if (operator === QUERY_OPERATOR.OR) {
       // For OR, we can't easily optimize unless all branches are on the key
       // For now, return false to trigger scatter-gather
       return false;
@@ -206,30 +214,30 @@ class PartitionResolver {
 
     // Handle different operators
     switch (operator) {
-    case '=':
+    case QUERY_OPERATOR.EQUALS:
       conditions.type = 'equals';
       conditions.values.push(value);
       return true;
 
-    case '<':
+    case QUERY_OPERATOR.LESS_THAN:
       conditions.type = 'range';
       conditions.high = value;
       conditions.highInclusive = false;
       return true;
 
-    case '<=':
+    case QUERY_OPERATOR.LESS_THAN_OR_EQUAL:
       conditions.type = 'range';
       conditions.high = value;
       conditions.highInclusive = true;
       return true;
 
-    case '>':
+    case QUERY_OPERATOR.GREATER_THAN:
       conditions.type = 'range';
       conditions.low = value;
       conditions.lowInclusive = false;
       return true;
 
-    case '>=':
+    case QUERY_OPERATOR.GREATER_THAN_OR_EQUAL:
       conditions.type = 'range';
       conditions.low = value;
       conditions.lowInclusive = true;
@@ -300,7 +308,7 @@ class PartitionResolver {
   isKeyColumn(expr, primaryKey) {
     if (!expr) return false;
 
-    if (expr.type === 'column_ref') {
+    if (expr.type === QUERY_AST_NODE.COLUMN_REF) {
       const column = expr.column || expr.name;
       return column?.toLowerCase() === primaryKey.toLowerCase();
     }
@@ -317,7 +325,7 @@ class PartitionResolver {
   extractLiteralValue(expr) {
     if (!expr) return undefined;
 
-    if (expr.type === 'literal') {
+    if (expr.type === QUERY_AST_NODE.LITERAL) {
       return expr.value;
     }
 
@@ -494,7 +502,7 @@ class PartitionResolver {
       }
     }
 
-    this.logger.warn('No partition found for key', {tableName, keyValue});
+    this.logger.warn(QUERY_LOG_MSG.NO_PARTITION_FOR_KEY, {tableName, keyValue});
     return null;
   }
 

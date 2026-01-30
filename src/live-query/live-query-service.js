@@ -7,17 +7,29 @@
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {TABLES} from '../constants/index.js';
+import {
+  LIVE_QUERY_AST_TYPE,
+  LIVE_QUERY_CONFIG_KEY,
+  LIVE_QUERY_CURSOR,
+  LIVE_QUERY_DEFAULTS,
+  LIVE_QUERY_DEFAULT_VALUE,
+  LIVE_QUERY_ERROR_MSG,
+  LIVE_QUERY_EVENT,
+  LIVE_QUERY_LOG_MSG,
+  LIVE_QUERY_OPERATOR,
+  LIVE_QUERY_REGEX,
+  LIVE_QUERY_REGEX_FLAG,
+  LIVE_QUERY_REGEX_REPLACE,
+  LIVE_QUERY_SQL,
+  LIVE_QUERY_SUBSYSTEM,
+  TYPEOF,
+} from './live-query-constants.js';
 
 /**
  * Live query event types sent to clients.
  */
-const LiveQueryEventType = {
-  INSERT: 'insert',
-  UPDATE: 'update',
-  DELETE: 'delete',
-  SNAPSHOT: 'snapshot',
-  ERROR: 'error',
-};
+const LiveQueryEventType = LIVE_QUERY_EVENT;
 
 /**
  * Compiles a WHERE clause AST into an efficient evaluation function.
@@ -43,25 +55,25 @@ function evaluateExpression(expr, row) {
   if (!expr) return true;
 
   switch (expr.type) {
-  case 'binary':
+  case LIVE_QUERY_AST_TYPE.BINARY:
     return evaluateBinaryExpression(expr, row);
 
-  case 'unary':
+  case LIVE_QUERY_AST_TYPE.UNARY:
     return evaluateUnaryExpression(expr, row);
 
-  case 'literal':
+  case LIVE_QUERY_AST_TYPE.LITERAL:
     return expr.value;
 
-  case 'column_ref':
+  case LIVE_QUERY_AST_TYPE.COLUMN_REF:
     return getColumnValue(expr, row);
 
-  case 'in':
+  case LIVE_QUERY_AST_TYPE.IN:
     return evaluateInExpression(expr, row);
 
-  case 'between':
+  case LIVE_QUERY_AST_TYPE.BETWEEN:
     return evaluateBetweenExpression(expr, row);
 
-  case 'like':
+  case LIVE_QUERY_AST_TYPE.LIKE:
     return evaluateLikeExpression(expr, row);
 
   default:
@@ -79,35 +91,35 @@ function evaluateBinaryExpression(expr, row) {
   const {operator, left, right} = expr;
 
   switch (operator) {
-  case 'AND':
+  case LIVE_QUERY_OPERATOR.AND:
     return evaluateExpression(left, row) && evaluateExpression(right, row);
 
-  case 'OR':
+  case LIVE_QUERY_OPERATOR.OR:
     return evaluateExpression(left, row) || evaluateExpression(right, row);
 
-  case '=':
+  case LIVE_QUERY_OPERATOR.EQUALS:
     return evaluateExpression(left, row) === evaluateExpression(right, row);
 
-  case '!=':
-  case '<>':
+  case LIVE_QUERY_OPERATOR.NOT_EQUALS:
+  case LIVE_QUERY_OPERATOR.NOT_EQUALS_ALT:
     return evaluateExpression(left, row) !== evaluateExpression(right, row);
 
-  case '<':
+  case LIVE_QUERY_OPERATOR.LESS_THAN:
     return evaluateExpression(left, row) < evaluateExpression(right, row);
 
-  case '<=':
+  case LIVE_QUERY_OPERATOR.LESS_THAN_OR_EQUAL:
     return evaluateExpression(left, row) <= evaluateExpression(right, row);
 
-  case '>':
+  case LIVE_QUERY_OPERATOR.GREATER_THAN:
     return evaluateExpression(left, row) > evaluateExpression(right, row);
 
-  case '>=':
+  case LIVE_QUERY_OPERATOR.GREATER_THAN_OR_EQUAL:
     return evaluateExpression(left, row) >= evaluateExpression(right, row);
 
-  case 'IS NULL':
+  case LIVE_QUERY_OPERATOR.IS_NULL:
     return evaluateExpression(left, row) === null;
 
-  case 'IS NOT NULL':
+  case LIVE_QUERY_OPERATOR.IS_NOT_NULL:
     return evaluateExpression(left, row) !== null;
 
   default:
@@ -125,7 +137,7 @@ function evaluateUnaryExpression(expr, row) {
   const {operator, operand} = expr;
 
   switch (operator) {
-  case 'NOT':
+  case LIVE_QUERY_OPERATOR.NOT:
     return !evaluateExpression(operand, row);
 
   default:
@@ -186,17 +198,17 @@ function evaluateLikeExpression(expr, row) {
   const value = evaluateExpression(expr.expression, row);
   const pattern = evaluateExpression(expr.pattern, row);
 
-  if (typeof value !== 'string' || typeof pattern !== 'string') {
+  if (typeof value !== TYPEOF.STRING || typeof pattern !== TYPEOF.STRING) {
     return false;
   }
 
   // Convert SQL LIKE pattern to regex
   const regexPattern = pattern
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape regex special chars
-    .replace(/%/g, '.*') // % matches any sequence
-    .replace(/_/g, '.'); // _ matches single char
+    .replace(LIVE_QUERY_REGEX.REGEX_SPECIAL, LIVE_QUERY_REGEX_REPLACE.ESCAPE)
+    .replace(LIVE_QUERY_REGEX.PERCENT, LIVE_QUERY_REGEX_REPLACE.WILDCARD)
+    .replace(LIVE_QUERY_REGEX.UNDERSCORE, LIVE_QUERY_REGEX_REPLACE.SINGLE_CHAR);
 
-  const regex = new RegExp(`^${regexPattern}$`, 'i');
+  const regex = new RegExp(`^${regexPattern}$`, LIVE_QUERY_REGEX_FLAG.CASE_INSENSITIVE);
   return regex.test(value);
 }
 
@@ -224,33 +236,35 @@ function findPartitionKeyValue(expr, keyColumn) {
   if (!expr) return null;
 
   switch (expr.type) {
-  case 'binary': {
+  case LIVE_QUERY_AST_TYPE.BINARY: {
     const {operator, left, right} = expr;
 
     // Handle AND - check both sides
-    if (operator === 'AND') {
+    if (operator === LIVE_QUERY_OPERATOR.AND) {
       const leftValue = findPartitionKeyValue(left, keyColumn);
       if (leftValue !== null) return leftValue;
       return findPartitionKeyValue(right, keyColumn);
     }
 
     // Handle equality on partition key
-    if (operator === '=') {
-      if (isPartitionKeyColumn(left, keyColumn) && right.type === 'literal') {
+    if (operator === LIVE_QUERY_OPERATOR.EQUALS) {
+      if (isPartitionKeyColumn(left, keyColumn) &&
+          right.type === LIVE_QUERY_AST_TYPE.LITERAL) {
         return right.value;
       }
-      if (isPartitionKeyColumn(right, keyColumn) && left.type === 'literal') {
+      if (isPartitionKeyColumn(right, keyColumn) &&
+          left.type === LIVE_QUERY_AST_TYPE.LITERAL) {
         return left.value;
       }
     }
     break;
   }
 
-  case 'in': {
+  case LIVE_QUERY_AST_TYPE.IN: {
     // For IN clause, return array of values
     if (isPartitionKeyColumn(expr.expression, keyColumn)) {
       return expr.values
-        .filter((v) => v.type === 'literal')
+        .filter((v) => v.type === LIVE_QUERY_AST_TYPE.LITERAL)
         .map((v) => v.value);
     }
     break;
@@ -267,7 +281,7 @@ function findPartitionKeyValue(expr, keyColumn) {
  * @return {boolean} True if partition key column.
  */
 function isPartitionKeyColumn(expr, keyColumn) {
-  if (!expr || expr.type !== 'column_ref') return false;
+  if (!expr || expr.type !== LIVE_QUERY_AST_TYPE.COLUMN_REF) return false;
   const column = (expr.column || expr.name || '').toLowerCase();
   return column === keyColumn;
 }
@@ -278,7 +292,7 @@ function isPartitionKeyColumn(expr, keyColumn) {
  * @return {string} Canonical string representation.
  */
 function canonicalizePredicate(whereClause) {
-  if (!whereClause) return '';
+  if (!whereClause) return LIVE_QUERY_DEFAULT_VALUE.EMPTY_WHERE;
   return JSON.stringify(sortObject(whereClause));
 }
 
@@ -310,23 +324,23 @@ function sortObject(obj) {
  * @return {Object} Parsed query with isLive flag.
  */
 function parseLiveSelect(sql) {
-  if (!sql || typeof sql !== 'string') {
-    throw new Error('Invalid SQL: expected string');
+  if (!sql || typeof sql !== TYPEOF.STRING) {
+    throw new Error(LIVE_QUERY_ERROR_MSG.INVALID_SQL);
   }
 
   const trimmed = sql.trim();
   const upperSql = trimmed.toUpperCase();
 
   // Check for LIVE prefix
-  if (!upperSql.startsWith('LIVE ')) {
+  if (!upperSql.startsWith(LIVE_QUERY_SQL.LIVE_PREFIX)) {
     return {isLive: false, sql: trimmed};
   }
 
   // Remove LIVE prefix and return the SELECT statement
-  const selectSql = trimmed.substring(5).trim();
+  const selectSql = trimmed.substring(LIVE_QUERY_SQL.LIVE_PREFIX.length).trim();
 
-  if (!selectSql.toUpperCase().startsWith('SELECT')) {
-    throw new Error('LIVE must be followed by SELECT statement');
+  if (!selectSql.toUpperCase().startsWith(LIVE_QUERY_SQL.SELECT_PREFIX)) {
+    throw new Error(LIVE_QUERY_ERROR_MSG.LIVE_REQUIRES_SELECT);
   }
 
   return {
@@ -352,7 +366,7 @@ class LiveQueryService {
     this.parsedQuery = options.parsedQuery || null;
     this.client = options.client || null;
     this.systemCache = options.systemCache || null;
-    this.nodeId = options.nodeId || 'unknown';
+    this.nodeId = options.nodeId || LIVE_QUERY_DEFAULT_VALUE.UNKNOWN;
 
     // Extract table name from query
     this.table = this.parsedQuery?.from?.name || null;
@@ -372,7 +386,8 @@ class LiveQueryService {
 
     // Lifecycle management
     this.config = ConfigurationManager.getInstance();
-    this.ttlMs = this.config.get('liveQuery.defaultTtlMs') || 30000;
+    this.ttlMs = this.config.get(LIVE_QUERY_CONFIG_KEY.DEFAULT_TTL_MS) ||
+      LIVE_QUERY_DEFAULTS.DEFAULT_TTL_MS;
     this.lastRenewal = Date.now();
     this.lastSeenHLC = null;
     this.createdAt = Date.now();
@@ -394,7 +409,7 @@ class LiveQueryService {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('live-query-service');
+        return loggingService.forSubsystem(LIVE_QUERY_SUBSYSTEM.LIVE_QUERY_SERVICE);
       }
     } catch {
       // Logging not available
@@ -416,21 +431,21 @@ class LiveQueryService {
     }
 
     try {
-      const tableInfo = this.systemCache.get('tables', this.table) ||
-        this.systemCache.find('tables', (t) =>
+      const tableInfo = this.systemCache.get(TABLES.TABLES, this.table) ||
+        this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === this.table || t.tableName === this.table,
         );
 
       if (tableInfo) {
         this.partitionKeyColumn = tableInfo.primary_key ||
-          tableInfo.primaryKey || 'id';
+          tableInfo.primaryKey || LIVE_QUERY_DEFAULT_VALUE.PRIMARY_KEY_FALLBACK;
         return this.partitionKeyColumn;
       }
     } catch {
       // Cache not available
     }
 
-    return 'id'; // Default
+    return LIVE_QUERY_DEFAULT_VALUE.PRIMARY_KEY_FALLBACK;
   }
 
   /**
@@ -467,7 +482,7 @@ class LiveQueryService {
       this.lastSeenHLC = cursor;
     }
 
-    this.logger.debug('Live query renewed', {
+    this.logger.debug(LIVE_QUERY_LOG_MSG.RENEWED, {
       queryId: this.queryId,
       cursor,
     });
@@ -510,7 +525,8 @@ class LiveQueryService {
    * @return {string} Query signature.
    */
   getQuerySignature() {
-    return `${this.table}:${canonicalizePredicate(this.whereClause)}`;
+    return `${this.table}${LIVE_QUERY_CURSOR.SEPARATOR}` +
+      `${canonicalizePredicate(this.whereClause)}`;
   }
 
   /**
@@ -537,7 +553,7 @@ class LiveQueryService {
     this.active = false;
     this.subscribedPartitions.clear();
 
-    this.logger.debug('Live query cleaned up', {
+    this.logger.debug(LIVE_QUERY_LOG_MSG.CLEANED_UP, {
       queryId: this.queryId,
       table: this.table,
     });

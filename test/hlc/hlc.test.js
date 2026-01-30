@@ -2,7 +2,7 @@
  * HLC Tests - Hybrid Logical Clock tests.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {HLCClockService} from '../../src/hlc/hlc-clock-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

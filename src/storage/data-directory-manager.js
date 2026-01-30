@@ -8,6 +8,13 @@ import fs from 'fs';
 import path from 'path';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
+import {
+  STORAGE_CONFIG_KEY,
+  STORAGE_DEFAULT,
+  STORAGE_ERROR_MSG,
+  STORAGE_LOG_MSG,
+  STORAGE_SUBSYSTEM,
+} from './storage-constants.js';
 
 /**
  * DataDirectoryManager handles persistent storage directory operations.
@@ -56,11 +63,11 @@ class DataDirectoryManager {
     // Get logger
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('storage') : console;
+      loggingService.forSubsystem(STORAGE_SUBSYSTEM) : console;
 
     // Get data directory from configuration
     const config = ConfigurationManager.getInstance();
-    this.dataDir = config.get('storage.dataDir') || './data';
+    this.dataDir = config.get(STORAGE_CONFIG_KEY.DATA_DIR) || STORAGE_DEFAULT.DATA_DIR;
 
     // Resolve to absolute path
     this.dataDir = path.resolve(this.dataDir);
@@ -72,7 +79,7 @@ class DataDirectoryManager {
     this.validateWritable(this.dataDir);
 
     // Log configured data directory
-    this.logger.info('Data directory configured', {
+    this.logger.info(STORAGE_LOG_MSG.DATA_DIR_CONFIGURED, {
       dataDir: this.dataDir,
     });
 
@@ -90,7 +97,7 @@ class DataDirectoryManager {
     try {
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, {recursive: true});
-        this.logger.debug('Created directory', {path: dirPath});
+        this.logger.debug(STORAGE_LOG_MSG.CREATED_DIRECTORY, {path: dirPath});
       }
     } catch (error) {
       throw new Error(
@@ -106,9 +113,9 @@ class DataDirectoryManager {
    * @private
    */
   validateWritable(dirPath) {
-    const testFile = path.join(dirPath, '.write-test');
+    const testFile = path.join(dirPath, STORAGE_DEFAULT.WRITE_TEST_FILENAME);
     try {
-      fs.writeFileSync(testFile, 'test');
+      fs.writeFileSync(testFile, STORAGE_DEFAULT.WRITE_TEST_CONTENT);
       fs.unlinkSync(testFile);
     } catch (error) {
       throw new Error(
@@ -123,7 +130,7 @@ class DataDirectoryManager {
    */
   getDataDir() {
     if (!this.initialized) {
-      throw new Error('DataDirectoryManager not initialized');
+      throw new Error(STORAGE_ERROR_MSG.NOT_INITIALIZED);
     }
     return this.dataDir;
   }
@@ -133,7 +140,7 @@ class DataDirectoryManager {
    * @return {string} The partitions directory path.
    */
   getPartitionsDir() {
-    return path.join(this.getDataDir(), 'partitions');
+    return path.join(this.getDataDir(), STORAGE_DEFAULT.PARTITIONS_DIRNAME);
   }
 
   /**
@@ -145,12 +152,12 @@ class DataDirectoryManager {
    */
   getPartitionDbPath(partitionId, replicaId) {
     if (!partitionId || !replicaId) {
-      throw new Error('partitionId and replicaId are required');
+      throw new Error(STORAGE_ERROR_MSG.MISSING_PARTITION_REPLICA_ID);
     }
     return path.join(
       this.getPartitionsDir(),
       partitionId,
-      `${replicaId}.db`,
+      `${replicaId}${STORAGE_DEFAULT.DB_EXT}`,
     );
   }
 
@@ -183,9 +190,14 @@ class DataDirectoryManager {
  */
 function getPartitionDbPath(dataDir, partitionId, replicaId) {
   if (!dataDir || !partitionId || !replicaId) {
-    throw new Error('dataDir, partitionId, and replicaId are required');
+    throw new Error(STORAGE_ERROR_MSG.MISSING_DATA_DIR_PARTITION_REPLICA_ID);
   }
-  return path.join(dataDir, 'partitions', partitionId, `${replicaId}.db`);
+  return path.join(
+    dataDir,
+    STORAGE_DEFAULT.PARTITIONS_DIRNAME,
+    partitionId,
+    `${replicaId}${STORAGE_DEFAULT.DB_EXT}`,
+  );
 }
 
 export {DataDirectoryManager, getPartitionDbPath};

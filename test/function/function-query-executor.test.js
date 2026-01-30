@@ -3,7 +3,7 @@
  * Requirements: 34.6, 34.7, 34.8, 34.9
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {FunctionQueryExecutor} from '../../src/function/function-query-executor.js';
 
 // Mock SQL query engine
@@ -172,7 +172,7 @@ test('FunctionQueryExecutor - executeQueryThenInvoke calls function', async (t) 
   t.equal(invocations[0].context.extra, 'context', 'Should pass extra context');
 });
 
-test('FunctionQueryExecutor - executeQueryThenInvoke handles function error', async (t) => {
+test('FunctionQueryExecutor - executeQueryThenInvoke throws on function error', async (t) => {
   const engine = createMockSqlEngine([{id: 1}]);
   const registry = createMockFunctionRegistry();
   const executor = new FunctionQueryExecutor({
@@ -180,17 +180,16 @@ test('FunctionQueryExecutor - executeQueryThenInvoke handles function error', as
     functionRegistry: registry,
   });
 
-  const result = await executor.executeQueryThenInvoke(
-    'SELECT * FROM test',
-    [],
-    'error-func',
-    {},
+  await t.rejects(
+    executor.executeQueryThenInvoke(
+      'SELECT * FROM test',
+      [],
+      'error-func',
+      {},
+    ),
+    /Function error/,
+    'Should throw on function error',
   );
-
-  t.equal(result.success, false, 'Should not succeed');
-  t.equal(result.functionInvoked, false, 'Should not mark as invoked');
-  t.ok(result.error, 'Should have error message');
-  t.ok(result.queryResult, 'Should still have query result');
 });
 
 test('FunctionQueryExecutor - executeQueryThenInvoke throws without registry', async (t) => {

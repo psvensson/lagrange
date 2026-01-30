@@ -88,9 +88,10 @@ export class ServicesView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'unified_address', label: 'Unified Address', width: 45},
-      {key: 'service_type', label: 'Type', width: 15},
-      {key: 'status', label: 'Status', width: 12},
+      {key: 'short_name', label: 'Name', width: 15},
+      {key: 'unified_address', label: 'Unified Address', width: 35},
+      {key: 'node_address', label: 'Node Address', width: 20},
+      {key: 'status', label: 'State', width: 12},
     ];
   }
 
@@ -102,10 +103,52 @@ export class ServicesView extends BaseView {
    */
   formatRow(service) {
     return [
+      this.formatShortName(service),
       this.formatUnifiedAddress(service),
-      this.formatServiceType(service.service_type),
+      this.formatNodeAddress(service),
       this.formatStatus(service),
     ];
+  }
+
+  /**
+   * Format node address for display
+   * Shows the WebSocket address and port for the node
+   * @param {Object} service - Service record
+   * @return {string} Node address
+   */
+  formatNodeAddress(service) {
+    return service.node_address || service.address || 'N/A';
+  }
+
+  /**
+   * Format short name for display
+   * Extracts a concise identifier from the service_id
+   * @param {Object} service - Service record
+   * @return {string} Short name
+   */
+  formatShortName(service) {
+    const serviceId = service.service_id || '';
+    const serviceType = service.service_type || '';
+
+    if (!serviceId) {
+      return 'N/A';
+    }
+
+    // Check if service_id is a UUID (8-4-4-4-12 format)
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidPattern.test(serviceId)) {
+      const prefix = serviceType === 'partition' ? 'p' :
+        serviceType === 'message_group' ? 'mg' : 's';
+      return `${prefix}-${serviceId.substring(0, 8)}`;
+    }
+
+    // If it's already short, use as-is
+    if (serviceId.length <= 20) {
+      return serviceId;
+    }
+
+    // Truncate long names
+    return serviceId.substring(0, 17) + '...';
   }
 
   /**
@@ -367,64 +410,139 @@ export class ServicesView extends BaseView {
     }
 
     const unifiedAddress = this.formatUnifiedAddress(service);
+    const shortName = this.formatShortName(service);
 
     const sections = [
       {
         title: 'Basic Information',
         fields: [
+          {label: 'Short Name', value: shortName},
           {label: 'Unified Address', value: unifiedAddress},
           {label: 'Service ID', value: service.service_id},
           {label: 'Type', value: this.formatServiceType(service.service_type)},
           {label: 'Node ID', value: service.node_id},
-          {label: 'Status', value: this.formatStatus(service)},
         ],
       },
     ];
 
-    // Add state machine info section for replicas with state tracking
-    if (service.state_entered_at || service.previous_state ||
-        service.trigger_reason || service.error_message) {
-      const stateFields = [];
+    // Add replica state section - always show for services
+    const replicaStateFields = [
+      {label: 'Current State', value: service.status || 'unknown'},
+      {label: 'Role', value: service.role || 'N/A'},
+    ];
 
-      // Add time-in-state for transitional states
-      if (TRANSITIONAL_STATES.includes(service.status) &&
-          service.state_entered_at) {
-        stateFields.push({
-          label: 'Time in State',
-          value: this.formatTimeInState(service.state_entered_at),
+    // Add time-in-state for transitional states
+    if (TRANSITIONAL_STATES.includes(service.status) && service.state_entered_at) {
+      replicaStateFields.push({
+        label: 'Time in State',
+        value: this.formatTimeInState(service.state_entered_at),
+      });
+    }
+
+    // Add state entered timestamp
+    if (service.state_entered_at) {
+      replicaStateFields.push({
+        label: 'State Since',
+        value: this.formatTimestamp(service.state_entered_at),
+      });
+    }
+
+    // Add previous state if available
+    if (service.previous_state) {
+      replicaStateFields.push({
+        label: 'Previous State',
+        value: service.previous_state,
+      });
+    }
+
+    // Add trigger reason if available
+    if (service.trigger_reason) {
+      replicaStateFields.push({
+        label: 'Trigger Reason',
+        value: service.trigger_reason,
+      });
+    }
+
+    // Add failure reason for failed replicas (Requirement 8.3)
+    if ((service.status === 'failed' || service.status === 'error') &&
+        service.error_message) {
+      replicaStateFields.push({
+        label: 'Failure Reason',
+        value: service.error_message,
+      });
+    }
+
+    sections.push({
+      title: 'Replica State',
+      fields: replicaStateFields,
+    });
+
+    // Add sync progress section for syncing replicas
+    if (service.status === REPLICA_STATES.SYNCING || service.sync_progress) {
+      const syncFields = [];
+
+      if (service.sync_progress !== undefined) {
+        syncFields.push({
+          label: 'Sync Progress',
+          value: `${(service.sync_progress * 100).toFixed(1)}%`,
         });
       }
 
-      // Add previous state if available
-      if (service.previous_state) {
-        stateFields.push({
-          label: 'Previous State',
-          value: service.previous_state,
+      if (service.sync_source_node) {
+        syncFields.push({
+          label: 'Sync Source',
+          value: service.sync_source_node,
         });
       }
 
-      // Add trigger reason if available
-      if (service.trigger_reason) {
-        stateFields.push({
-          label: 'Trigger Reason',
-          value: service.trigger_reason,
+      if (service.bytes_synced !== undefined) {
+        syncFields.push({
+          label: 'Bytes Synced',
+          value: this.formatBytes(service.bytes_synced),
         });
       }
 
-      // Add failure reason for failed replicas (Requirement 8.3)
-      if (service.status === 'failed' && service.error_message) {
-        stateFields.push({
-          label: 'Failure Reason',
-          value: service.error_message,
+      if (service.bytes_total !== undefined) {
+        syncFields.push({
+          label: 'Total Bytes',
+          value: this.formatBytes(service.bytes_total),
         });
       }
 
-      if (stateFields.length > 0) {
+      if (service.sync_rate_bytes_per_sec !== undefined) {
+        syncFields.push({
+          label: 'Sync Rate',
+          value: `${this.formatBytes(service.sync_rate_bytes_per_sec)}/s`,
+        });
+      }
+
+      if (service.estimated_completion) {
+        syncFields.push({
+          label: 'Est. Completion',
+          value: this.formatTimestamp(service.estimated_completion),
+        });
+      }
+
+      if (syncFields.length > 0) {
         sections.push({
-          title: 'State Information',
-          fields: stateFields,
+          title: 'Sync Progress',
+          fields: syncFields,
         });
       }
+    }
+
+    // Add Raft state section if available
+    if (service.raft_term !== undefined || service.raft_commit_index !== undefined) {
+      sections.push({
+        title: 'Raft State',
+        fields: [
+          {label: 'Term', value: String(service.raft_term ?? 'N/A')},
+          {label: 'Commit Index', value: String(service.raft_commit_index ?? 'N/A')},
+          {label: 'Applied Index', value: String(service.raft_applied_index ?? 'N/A')},
+          {label: 'Last Log Index', value: String(service.raft_last_log_index ?? 'N/A')},
+          {label: 'Leader ID', value: service.raft_leader_id || 'N/A'},
+        ],
+      });
     }
 
     // Add storage info for partition services
@@ -433,8 +551,9 @@ export class ServicesView extends BaseView {
         title: 'Partition Details',
         fields: [
           {label: 'Partition ID', value: service.partition_id || 'N/A'},
+          {label: 'Table ID', value: service.table_id || 'N/A'},
           {label: 'Storage', value: this.formatBytes(service.storage_bytes)},
-          {label: 'Role', value: service.role || 'N/A'},
+          {label: 'Row Count', value: String(service.row_count ?? 'N/A')},
         ],
       });
     }
@@ -446,15 +565,75 @@ export class ServicesView extends BaseView {
         fields: [
           {label: 'Group ID', value: service.group_id || 'N/A'},
           {label: 'Storage', value: this.formatBytes(service.storage_bytes)},
-          {label: 'Role', value: service.role || 'N/A'},
+          {label: 'Message Count', value: String(service.message_count ?? 'N/A')},
         ],
       });
     }
 
+    // Add epoch information if available
+    if (service.epoch !== undefined || service.assignment_epoch !== undefined) {
+      sections.push({
+        title: 'Epoch Information',
+        fields: [
+          {label: 'Current Epoch', value: String(service.epoch ?? 'N/A')},
+          {label: 'Assignment Epoch', value: String(service.assignment_epoch ?? 'N/A')},
+        ],
+      });
+    }
+
+    // Build navigation links
+    const navigationLinks = [];
+
+    if (service.service_type === SERVICE_TYPES.PARTITION && service.partition_id) {
+      navigationLinks.push({
+        label: 'View Partition',
+        target: 'partitions',
+        key: 'p',
+      });
+    }
+
+    if (service.service_type === SERVICE_TYPES.MESSAGE_GROUP && service.group_id) {
+      navigationLinks.push({
+        label: 'View Message Group',
+        target: 'message_groups',
+        key: 'm',
+      });
+    }
+
+    if (service.node_id) {
+      navigationLinks.push({
+        label: 'View Node',
+        target: 'nodes',
+        key: 'n',
+      });
+    }
+
     return {
-      title: `Service: ${unifiedAddress}`,
+      title: `Service: ${shortName}`,
       sections,
+      navigationLinks,
     };
+  }
+
+  /**
+   * Format timestamp for display
+   * @param {number|string|null|undefined} timestamp - Timestamp value
+   * @return {string} Formatted timestamp
+   */
+  formatTimestamp(timestamp) {
+    if (timestamp === null || timestamp === undefined) {
+      return 'N/A';
+    }
+
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) {
+        return 'N/A';
+      }
+      return date.toISOString().replace('T', ' ').substring(0, 19);
+    } catch (_err) {
+      return 'N/A';
+    }
   }
 
   /**

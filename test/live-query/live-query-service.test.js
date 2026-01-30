@@ -3,7 +3,7 @@
  * Requirements: 33.1, 33.4, 33.16
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {
   LiveQueryService,
   compilePredicate,

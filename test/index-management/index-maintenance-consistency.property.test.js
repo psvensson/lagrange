@@ -7,7 +7,7 @@
  * automatically updated to maintain consistency with the base table data.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {IndexService} from '../../src/index-management/index-service.js';
@@ -375,9 +375,13 @@ test('Property 15: Index metadata tracking', async (t) => {
       tableNameArbitrary,
       columnNameArbitrary,
       async (tableName, columnName) => {
-        // Create an IndexService with a mock partition registry
+        // Create an IndexService with a mock system table cache
         const indexService = new IndexService({
-          partitionRegistry: new Map(),
+          systemTableCache: {
+            getAll: () => [],
+            get: () => null,
+            filter: () => [],
+          },
         });
 
         await indexService.initialize();

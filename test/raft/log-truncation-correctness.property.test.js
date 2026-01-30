@@ -10,7 +10,7 @@
  * Property 3: Log Truncation Correctness
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import Database from 'better-sqlite3';
 import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';

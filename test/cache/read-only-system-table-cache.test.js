@@ -3,7 +3,7 @@
  * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   SystemTableCache,
   CDC_OPERATIONS,

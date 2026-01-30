@@ -6,7 +6,7 @@
  * Validates: Requirements 33.4, 33.5
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {QueryGroup} from '../../src/live-query/live-query-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';

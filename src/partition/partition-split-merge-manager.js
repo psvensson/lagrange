@@ -8,27 +8,28 @@
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
+import {NUM} from '../constants/index.js';
+import {
+  PARTITION_SUBSYSTEM,
+  SPLIT_MERGE_DEFAULT,
+  SPLIT_MERGE_ERROR_MSG,
+  SPLIT_MERGE_EVENT,
+  SPLIT_MERGE_ID,
+  SPLIT_MERGE_LOG_MSG,
+  SPLIT_MERGE_REASON,
+  SPLIT_MERGE_SQL,
+  SPLIT_MERGE_STATE,
+} from './partition-constants.js';
 import {KeyRange} from './key-range-manager.js';
 
-/**
- * Default thresholds for split/merge operations.
- */
-const DEFAULT_SPLIT_STORAGE_THRESHOLD = 10 * 1024 * 1024 * 1024; // 10GB
-const DEFAULT_SPLIT_TRAFFIC_THRESHOLD = 1000; // queries per minute
-const DEFAULT_MERGE_STORAGE_THRESHOLD = 2 * 1024 * 1024 * 1024; // 2GB (20% of split)
-const DEFAULT_MERGE_TRAFFIC_THRESHOLD = 200; // queries per minute (20% of split)
-const DEFAULT_EVALUATION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-
-/**
- * Partition split/merge operation states.
- */
-const OperationState = {
-  IDLE: 'IDLE',
-  EVALUATING: 'EVALUATING',
-  SPLITTING: 'SPLITTING',
-  MERGING: 'MERGING',
-};
+const OperationState = SPLIT_MERGE_STATE;
+const DEFAULT_SPLIT_STORAGE_THRESHOLD = SPLIT_MERGE_DEFAULT.SPLIT_STORAGE_THRESHOLD_BYTES;
+const DEFAULT_SPLIT_TRAFFIC_THRESHOLD = SPLIT_MERGE_DEFAULT.SPLIT_TRAFFIC_THRESHOLD_QPM;
+const DEFAULT_MERGE_STORAGE_THRESHOLD = SPLIT_MERGE_DEFAULT.MERGE_STORAGE_THRESHOLD_BYTES;
+const DEFAULT_MERGE_TRAFFIC_THRESHOLD = SPLIT_MERGE_DEFAULT.MERGE_TRAFFIC_THRESHOLD_QPM;
+const DEFAULT_EVALUATION_INTERVAL_MS = SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS;
 
 /**
  * PartitionSplitMergeManager handles automatic partition splitting and merging
@@ -40,7 +41,6 @@ class PartitionSplitMergeManager extends EventEmitter {
    * @param {Object} options - Configuration options.
    * @param {Object} options.keyRangeManager - KeyRangeManager instance.
    * @param {Function} options.getPartitionMetrics - Function to get partition metrics.
-   * @param {Function} options.getTablePolicy - Function to get table policy (deprecated).
    * @param {Object} options.tablePolicyService - TablePolicyService for policy lookup.
    * @param {Function} options.createPartition - Function to create a new partition.
    * @param {Function} options.deletePartition - Function to delete a partition.
@@ -51,23 +51,21 @@ class PartitionSplitMergeManager extends EventEmitter {
     this.keyRangeManager = options.keyRangeManager || null;
     this.getPartitionMetrics = options.getPartitionMetrics || (() => ({}));
     this.tablePolicyService = options.tablePolicyService || null;
-    // Keep getTablePolicy for backward compatibility
-    this._getTablePolicyFn = options.getTablePolicy || (() => ({}));
     this.createPartition = options.createPartition || (() => {});
     this.deletePartition = options.deletePartition || (() => {});
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.splitStorageThreshold = config.get('partition.splitStorageThreshold') ||
-      DEFAULT_SPLIT_STORAGE_THRESHOLD;
-    this.splitTrafficThreshold = config.get('partition.splitTrafficThreshold') ||
-      DEFAULT_SPLIT_TRAFFIC_THRESHOLD;
-    this.mergeStorageThreshold = config.get('partition.mergeStorageThreshold') ||
-      DEFAULT_MERGE_STORAGE_THRESHOLD;
-    this.mergeTrafficThreshold = config.get('partition.mergeTrafficThreshold') ||
-      DEFAULT_MERGE_TRAFFIC_THRESHOLD;
-    this.evaluationIntervalMs = config.get('partition.evaluationIntervalMs') ||
-      DEFAULT_EVALUATION_INTERVAL_MS;
+    this.splitStorageThreshold = config.get(CONFIG_KEY.PARTITION_SPLIT_THRESHOLD_BYTES) ||
+      SPLIT_MERGE_DEFAULT.SPLIT_STORAGE_THRESHOLD_BYTES;
+    this.splitTrafficThreshold = config.get(CONFIG_KEY.PARTITION_SPLIT_THRESHOLD_QPM) ||
+      SPLIT_MERGE_DEFAULT.SPLIT_TRAFFIC_THRESHOLD_QPM;
+    this.mergeStorageThreshold = config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_BYTES) ||
+      SPLIT_MERGE_DEFAULT.MERGE_STORAGE_THRESHOLD_BYTES;
+    this.mergeTrafficThreshold = config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_QPM) ||
+      SPLIT_MERGE_DEFAULT.MERGE_TRAFFIC_THRESHOLD_QPM;
+    this.evaluationIntervalMs = config.get(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS) ||
+      SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS;
 
     // State
     this.state = OperationState.IDLE;
@@ -76,23 +74,19 @@ class PartitionSplitMergeManager extends EventEmitter {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('partition-split-merge') : console;
+      loggingService.forSubsystem(PARTITION_SUBSYSTEM.SPLIT_MERGE) : console;
   }
 
   /**
    * Get the table policy for a partition.
-   * Uses TablePolicyService if available, otherwise falls back to provided function.
    * @param {string} partitionId - Partition ID.
    * @return {Promise<Object>} Table policy.
    */
   async getTablePolicy(partitionId) {
-    // Use TablePolicyService if available (preferred)
     if (this.tablePolicyService) {
       return this.tablePolicyService.getPolicyForPartition(partitionId);
     }
-
-    // Fallback to provided function
-    return this._getTablePolicyFn(partitionId);
+    throw new Error('TablePolicyService is required for split/merge policy lookup');
   }
 
   /**
@@ -105,10 +99,10 @@ class PartitionSplitMergeManager extends EventEmitter {
    */
   async calculateMedianKey(partitionId, partitionService, tableName, primaryKeyColumn) {
     if (!partitionService || !tableName || !primaryKeyColumn) {
-      throw new Error('Missing required parameters for median calculation');
+      throw new Error(SPLIT_MERGE_LOG_MSG.MISSING_MEDIAN_PARAMS);
     }
 
-    this.logger.debug('Calculating median key', {
+    this.logger.debug(SPLIT_MERGE_LOG_MSG.CALCULATING_MEDIAN_KEY, {
       partitionId,
       tableName,
       primaryKeyColumn,
@@ -116,30 +110,29 @@ class PartitionSplitMergeManager extends EventEmitter {
 
     // Get total count
     const countResult = await partitionService.executeQuery(
-      `SELECT COUNT(*) as total FROM ${tableName}`,
+      SPLIT_MERGE_SQL.COUNT_ROWS(tableName),
     );
 
-    const totalRows = countResult.rows[0]?.total || 0;
-    if (totalRows < 2) {
-      throw new Error('Partition has insufficient rows for split');
+    const totalRows = countResult.rows[NUM.ZERO]?.total || NUM.ZERO;
+    if (totalRows < NUM.TWO) {
+      throw new Error(SPLIT_MERGE_LOG_MSG.INSUFFICIENT_ROWS_FOR_SPLIT);
     }
 
-    const medianOffset = Math.floor(totalRows / 2);
+    const medianOffset = Math.floor(totalRows / NUM.TWO);
 
     // Get median value using OFFSET
     const medianResult = await partitionService.executeQuery(
-      `SELECT ${primaryKeyColumn} FROM ${tableName} ` +
-      `ORDER BY ${primaryKeyColumn} LIMIT 1 OFFSET ?`,
+      SPLIT_MERGE_SQL.SELECT_MEDIAN(primaryKeyColumn, tableName),
       [medianOffset],
     );
 
-    if (!medianResult.rows || medianResult.rows.length === 0) {
-      throw new Error('Failed to calculate median key');
+    if (!medianResult.rows || medianResult.rows.length === NUM.ZERO) {
+      throw new Error(SPLIT_MERGE_LOG_MSG.FAILED_MEDIAN_CALC);
     }
 
-    const medianKey = medianResult.rows[0][primaryKeyColumn];
+    const medianKey = medianResult.rows[NUM.ZERO][primaryKeyColumn];
 
-    this.logger.debug('Calculated median key', {
+    this.logger.debug(SPLIT_MERGE_LOG_MSG.CALCULATED_MEDIAN_KEY, {
       partitionId,
       medianKey,
       totalRows,
@@ -162,14 +155,14 @@ class PartitionSplitMergeManager extends EventEmitter {
     const storageThreshold = policy.splitStorageThreshold || this.splitStorageThreshold;
     const trafficThreshold = policy.splitTrafficThreshold || this.splitTrafficThreshold;
 
-    const sizeBytes = metrics.sizeBytes || 0;
-    const queriesPerMinute = metrics.queriesPerMinute || 0;
+    const sizeBytes = metrics.sizeBytes || NUM.ZERO;
+    const queriesPerMinute = metrics.queriesPerMinute || NUM.ZERO;
 
     // Split if EITHER threshold is exceeded
     const shouldSplit = sizeBytes >= storageThreshold ||
                         queriesPerMinute >= trafficThreshold;
 
-    this.logger.debug('Evaluated split criteria', {
+    this.logger.debug(SPLIT_MERGE_LOG_MSG.EVALUATED_SPLIT_CRITERIA, {
       partitionId,
       sizeBytes,
       queriesPerMinute,
@@ -196,15 +189,16 @@ class PartitionSplitMergeManager extends EventEmitter {
     const storageThreshold = policy.mergeStorageThreshold || this.mergeStorageThreshold;
     const trafficThreshold = policy.mergeTrafficThreshold || this.mergeTrafficThreshold;
 
-    const combinedStorage = (leftMetrics.sizeBytes || 0) + (rightMetrics.sizeBytes || 0);
-    const combinedTraffic = (leftMetrics.queriesPerMinute || 0) +
-                            (rightMetrics.queriesPerMinute || 0);
+    const combinedStorage = (leftMetrics.sizeBytes || NUM.ZERO) +
+      (rightMetrics.sizeBytes || NUM.ZERO);
+    const combinedTraffic = (leftMetrics.queriesPerMinute || NUM.ZERO) +
+      (rightMetrics.queriesPerMinute || NUM.ZERO);
 
     // Merge if BOTH thresholds are satisfied
     const shouldMerge = combinedStorage <= storageThreshold &&
                         combinedTraffic <= trafficThreshold;
 
-    this.logger.debug('Evaluated merge criteria', {
+    this.logger.debug(SPLIT_MERGE_LOG_MSG.EVALUATED_MERGE_CRITERIA, {
       leftPartitionId,
       rightPartitionId,
       combinedStorage,
@@ -238,14 +232,14 @@ class PartitionSplitMergeManager extends EventEmitter {
     } = options;
 
     if (this.state !== OperationState.IDLE) {
-      throw new Error(`Cannot split: manager is in ${this.state} state`);
+      throw new Error(SPLIT_MERGE_ERROR_MSG.MANAGER_BUSY(this.state));
     }
 
     this.state = OperationState.SPLITTING;
-    this.emit('splitStarted', {partitionId});
+    this.emit(SPLIT_MERGE_EVENT.SPLIT_STARTED, {partitionId});
 
     try {
-      this.logger.info('Starting partition split', {
+      this.logger.info(SPLIT_MERGE_LOG_MSG.STARTING_SPLIT, {
         partitionId,
         tableName,
         primaryKeyColumn,
@@ -265,12 +259,14 @@ class PartitionSplitMergeManager extends EventEmitter {
         partitionService.getKeyRange();
 
       if (!currentRange) {
-        throw new Error(`Partition ${partitionId} not found in key range manager`);
+        throw new Error(SPLIT_MERGE_ERROR_MSG.PARTITION_RANGE_MISSING(partitionId));
       }
 
       // Generate new partition IDs
-      const leftPartitionId = `${tableId}_p_${uuidv4().substring(0, 8)}_left`;
-      const rightPartitionId = `${tableId}_p_${uuidv4().substring(0, 8)}_right`;
+      const leftPartitionId = `${tableId}${SPLIT_MERGE_ID.PARTITION_SEPARATOR}` +
+        `${uuidv4().substring(NUM.ZERO, NUM.EIGHT)}${SPLIT_MERGE_ID.LEFT_SUFFIX}`;
+      const rightPartitionId = `${tableId}${SPLIT_MERGE_ID.PARTITION_SEPARATOR}` +
+        `${uuidv4().substring(NUM.ZERO, NUM.EIGHT)}${SPLIT_MERGE_ID.RIGHT_SUFFIX}`;
 
       // Create new key ranges
       const leftRange = new KeyRange(currentRange.start, medianKey);
@@ -304,22 +300,22 @@ class PartitionSplitMergeManager extends EventEmitter {
         timestamp: Date.now(),
       };
 
-      this.logger.info('Partition split completed', {
+      this.logger.info(SPLIT_MERGE_LOG_MSG.SPLIT_COMPLETED, {
         partitionId,
         leftPartitionId,
         rightPartitionId,
         medianKey,
       });
 
-      this.emit('splitCompleted', result);
+      this.emit(SPLIT_MERGE_EVENT.SPLIT_COMPLETED, result);
       return result;
     } catch (error) {
-      this.logger.error('Partition split failed', {
+      this.logger.error(SPLIT_MERGE_LOG_MSG.SPLIT_FAILED, {
         partitionId,
         error: error.message,
       });
 
-      this.emit('splitFailed', {partitionId, error: error.message});
+      this.emit(SPLIT_MERGE_EVENT.SPLIT_FAILED, {partitionId, error: error.message});
       throw error;
     } finally {
       this.state = OperationState.IDLE;
@@ -340,43 +336,48 @@ class PartitionSplitMergeManager extends EventEmitter {
     const {leftPartitionId, rightPartitionId, tableId} = options;
 
     if (this.state !== OperationState.IDLE) {
-      throw new Error(`Cannot merge: manager is in ${this.state} state`);
+      throw new Error(SPLIT_MERGE_ERROR_MSG.MERGE_MANAGER_BUSY(this.state));
     }
 
     this.state = OperationState.MERGING;
-    this.emit('mergeStarted', {leftPartitionId, rightPartitionId});
+    this.emit(SPLIT_MERGE_EVENT.MERGE_STARTED, {leftPartitionId, rightPartitionId});
 
     try {
-      this.logger.info('Starting partition merge', {
+      this.logger.info(SPLIT_MERGE_LOG_MSG.STARTING_MERGE, {
         leftPartitionId,
         rightPartitionId,
       });
 
       // Get current key ranges
       if (!this.keyRangeManager) {
-        throw new Error('KeyRangeManager is required for merge operations');
+        throw new Error(SPLIT_MERGE_ERROR_MSG.KEY_RANGE_MANAGER_REQUIRED);
       }
 
       const leftRange = this.keyRangeManager.getRange(leftPartitionId);
       const rightRange = this.keyRangeManager.getRange(rightPartitionId);
 
       if (!leftRange) {
-        throw new Error(`Left partition ${leftPartitionId} not found`);
+        throw new Error(SPLIT_MERGE_ERROR_MSG.LEFT_PARTITION_MISSING(leftPartitionId));
       }
       if (!rightRange) {
-        throw new Error(`Right partition ${rightPartitionId} not found`);
+        throw new Error(SPLIT_MERGE_ERROR_MSG.RIGHT_PARTITION_MISSING(rightPartitionId));
       }
 
       // Verify adjacency: left.end must equal right.start
       if (!leftRange.isAdjacentTo(rightRange)) {
         throw new Error(
-          `Partitions are not adjacent: ${leftPartitionId} end (${leftRange.end}) ` +
-          `!= ${rightPartitionId} start (${rightRange.start})`,
+          SPLIT_MERGE_ERROR_MSG.PARTITIONS_NOT_ADJACENT(
+            leftPartitionId,
+            leftRange.end,
+            rightPartitionId,
+            rightRange.start,
+          ),
         );
       }
 
       // Generate merged partition ID
-      const mergedPartitionId = `${tableId}_p_${uuidv4().substring(0, 8)}_merged`;
+      const mergedPartitionId = `${tableId}${SPLIT_MERGE_ID.PARTITION_SEPARATOR}` +
+        `${uuidv4().substring(NUM.ZERO, NUM.EIGHT)}${SPLIT_MERGE_ID.MERGED_SUFFIX}`;
 
       // Create merged key range
       const mergedRange = new KeyRange(leftRange.start, rightRange.end);
@@ -402,22 +403,26 @@ class PartitionSplitMergeManager extends EventEmitter {
         timestamp: Date.now(),
       };
 
-      this.logger.info('Partition merge completed', {
+      this.logger.info(SPLIT_MERGE_LOG_MSG.MERGE_COMPLETED, {
         leftPartitionId,
         rightPartitionId,
         mergedPartitionId,
       });
 
-      this.emit('mergeCompleted', result);
+      this.emit(SPLIT_MERGE_EVENT.MERGE_COMPLETED, result);
       return result;
     } catch (error) {
-      this.logger.error('Partition merge failed', {
+      this.logger.error(SPLIT_MERGE_LOG_MSG.MERGE_FAILED, {
         leftPartitionId,
         rightPartitionId,
         error: error.message,
       });
 
-      this.emit('mergeFailed', {leftPartitionId, rightPartitionId, error: error.message});
+      this.emit(SPLIT_MERGE_EVENT.MERGE_FAILED, {
+        leftPartitionId,
+        rightPartitionId,
+        error: error.message,
+      });
       throw error;
     } finally {
       this.state = OperationState.IDLE;
@@ -436,33 +441,39 @@ class PartitionSplitMergeManager extends EventEmitter {
     // Left range must start where original started
     if (leftRange.start !== originalRange.start) {
       throw new Error(
-        `Range integrity violation: left start (${leftRange.start}) ` +
-        `!= original start (${originalRange.start})`,
+        SPLIT_MERGE_ERROR_MSG.RANGE_INTEGRITY_LEFT_START(
+          leftRange.start,
+          originalRange.start,
+        ),
       );
     }
 
     // Right range must end where original ended
     if (rightRange.end !== originalRange.end) {
       throw new Error(
-        `Range integrity violation: right end (${rightRange.end}) ` +
-        `!= original end (${originalRange.end})`,
+        SPLIT_MERGE_ERROR_MSG.RANGE_INTEGRITY_RIGHT_END(
+          rightRange.end,
+          originalRange.end,
+        ),
       );
     }
 
     // Left end must equal right start (contiguous)
     if (!leftRange.isAdjacentTo(rightRange)) {
       throw new Error(
-        'Range integrity violation: ranges not contiguous - ' +
-        'left end (' + leftRange.end + ') != right start (' + rightRange.start + ')',
+        SPLIT_MERGE_ERROR_MSG.RANGE_INTEGRITY_NOT_CONTIGUOUS(
+          leftRange.end,
+          rightRange.start,
+        ),
       );
     }
 
     // Ranges must not overlap
     if (leftRange.overlaps(rightRange)) {
-      throw new Error('Range integrity violation: left and right ranges overlap');
+      throw new Error(SPLIT_MERGE_LOG_MSG.RANGE_INTEGRITY_OVERLAP);
     }
 
-    this.logger.debug('Range integrity validated after split', {
+    this.logger.debug(SPLIT_MERGE_LOG_MSG.RANGE_VALID_AFTER_SPLIT, {
       leftStart: leftRange.start,
       leftEnd: leftRange.end,
       rightStart: rightRange.start,
@@ -482,20 +493,24 @@ class PartitionSplitMergeManager extends EventEmitter {
     // Merged range must start where left started
     if (mergedRange.start !== leftRange.start) {
       throw new Error(
-        `Range integrity violation: merged start (${mergedRange.start}) ` +
-        `!= left start (${leftRange.start})`,
+        SPLIT_MERGE_ERROR_MSG.RANGE_INTEGRITY_MERGED_START(
+          mergedRange.start,
+          leftRange.start,
+        ),
       );
     }
 
     // Merged range must end where right ended
     if (mergedRange.end !== rightRange.end) {
       throw new Error(
-        `Range integrity violation: merged end (${mergedRange.end}) ` +
-        `!= right end (${rightRange.end})`,
+        SPLIT_MERGE_ERROR_MSG.RANGE_INTEGRITY_MERGED_END(
+          mergedRange.end,
+          rightRange.end,
+        ),
       );
     }
 
-    this.logger.debug('Range integrity validated after merge', {
+    this.logger.debug(SPLIT_MERGE_LOG_MSG.RANGE_VALID_AFTER_MERGE, {
       mergedStart: mergedRange.start,
       mergedEnd: mergedRange.end,
     });
@@ -511,13 +526,13 @@ class PartitionSplitMergeManager extends EventEmitter {
       return;
     }
 
-    this.logger.info('Starting periodic split/merge evaluation', {
+    this.logger.info(SPLIT_MERGE_LOG_MSG.STARTING_PERIODIC_EVAL, {
       intervalMs: this.evaluationIntervalMs,
     });
 
     this.evaluationTimer = setInterval(() => {
       this.evaluateAllPartitions().catch((error) => {
-        this.logger.error('Periodic evaluation failed', {
+        this.logger.error(SPLIT_MERGE_LOG_MSG.PERIODIC_EVAL_FAILED, {
           error: error.message,
         });
       });
@@ -531,7 +546,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     if (this.evaluationTimer) {
       clearInterval(this.evaluationTimer);
       this.evaluationTimer = null;
-      this.logger.info('Stopped periodic split/merge evaluation');
+      this.logger.info(SPLIT_MERGE_LOG_MSG.STOPPED_PERIODIC_EVAL);
     }
   }
 
@@ -541,10 +556,10 @@ class PartitionSplitMergeManager extends EventEmitter {
    */
   async evaluateAllPartitions() {
     if (this.state !== OperationState.IDLE) {
-      this.logger.debug('Skipping evaluation: manager is busy', {
+      this.logger.debug(SPLIT_MERGE_LOG_MSG.SKIPPING_EVAL_BUSY, {
         state: this.state,
       });
-      return {evaluated: false, reason: 'busy'};
+      return {evaluated: false, reason: SPLIT_MERGE_REASON.BUSY};
     }
 
     this.state = OperationState.EVALUATING;
@@ -552,7 +567,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     try {
       const results = {
         evaluated: true,
-        partitionsEvaluated: 0,
+        partitionsEvaluated: NUM.ZERO,
         splitCandidates: [],
         mergeCandidates: [],
       };
@@ -576,9 +591,9 @@ class PartitionSplitMergeManager extends EventEmitter {
 
       // Check merge criteria for adjacent pairs
       const sortedPartitions = this.keyRangeManager.getSortedPartitions();
-      for (let i = 0; i < sortedPartitions.length - 1; i++) {
+      for (let i = NUM.ZERO; i < sortedPartitions.length - NUM.ONE; i++) {
         const leftId = sortedPartitions[i].partitionId;
-        const rightId = sortedPartitions[i + 1].partitionId;
+        const rightId = sortedPartitions[i + NUM.ONE].partitionId;
 
         const leftMetrics = await this.getPartitionMetrics(leftId);
         const rightMetrics = await this.getPartitionMetrics(rightId);
@@ -589,13 +604,13 @@ class PartitionSplitMergeManager extends EventEmitter {
         }
       }
 
-      this.logger.debug('Partition evaluation completed', {
+      this.logger.debug(SPLIT_MERGE_LOG_MSG.PARTITION_EVAL_COMPLETED, {
         partitionsEvaluated: results.partitionsEvaluated,
         splitCandidates: results.splitCandidates.length,
         mergeCandidates: results.mergeCandidates.length,
       });
 
-      this.emit('evaluationCompleted', results);
+      this.emit(SPLIT_MERGE_EVENT.EVALUATION_COMPLETED, results);
       return results;
     } finally {
       this.state = OperationState.IDLE;
@@ -645,7 +660,7 @@ class PartitionSplitMergeManager extends EventEmitter {
       this.evaluationIntervalMs = thresholds.evaluationIntervalMs;
     }
 
-    this.logger.info('Thresholds updated', this.getThresholds());
+    this.logger.info(SPLIT_MERGE_LOG_MSG.THRESHOLDS_UPDATED, this.getThresholds());
   }
 
   /**
@@ -654,7 +669,7 @@ class PartitionSplitMergeManager extends EventEmitter {
   shutdown() {
     this.stopPeriodicEvaluation();
     this.removeAllListeners();
-    this.logger.info('PartitionSplitMergeManager shutdown');
+    this.logger.info(SPLIT_MERGE_LOG_MSG.MANAGER_SHUTDOWN);
   }
 }
 

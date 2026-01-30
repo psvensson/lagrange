@@ -5,12 +5,8 @@
  * Requirements: 9.1, 9.2, 9.3, 9.4
  */
 
-/**
- * Native liferaft packet types.
- * Used for detecting Raft packets without type conversion.
- * Requirements: 2.1, 2.4, 9.2
- */
-const RAFT_PACKET_TYPES = new Set(['vote', 'voted', 'append', 'appended', 'error']);
+import {TYPEOF} from '../constants/index.js';
+import {RAFT_PACKET_TYPES} from './constants.js';
 
 /**
  * Detect if a payload is a native liferaft Raft packet.
@@ -24,7 +20,7 @@ const RAFT_PACKET_TYPES = new Set(['vote', 'voted', 'append', 'appended', 'error
 function isRaftPacket(payload) {
   return Boolean(
     payload &&
-    typeof payload.type === 'string' &&
+    typeof payload.type === TYPEOF.STRING &&
     RAFT_PACKET_TYPES.has(payload.type),
   );
 }

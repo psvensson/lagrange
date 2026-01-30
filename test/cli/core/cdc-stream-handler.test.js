@@ -4,7 +4,7 @@
  * Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.9
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {CDCStreamHandler} from '../../../src/cli/core/cdc-stream-handler.js';
 import {RemoteCache} from '../../../src/cli/core/remote-cache.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';

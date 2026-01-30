@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {LogsView, LOG_LEVELS, LOG_LEVEL_COLORS} from
   '../../../src/cli/views/logs-view.js';
 import {ROW_STATUS} from '../../../src/cli/core/base-view.js';

@@ -4,7 +4,7 @@
  * Requirements: 2.3, 2.4
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {ServiceThreadManager, ServiceStatus} from '../../src/threading/service-thread-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';

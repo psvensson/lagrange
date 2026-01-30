@@ -8,7 +8,7 @@
  * time spent in each state, failure counts, and peak concurrent operations.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaStateMachine,
@@ -16,6 +16,13 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+function createMockCDCService() {
+  return {
+    updateSystemTableRow: async () => ({success: true}),
+    insertSystemTableRow: async () => ({success: true}),
+  };
+}
 
 // All possible states
 const ALL_STATES = [
@@ -100,6 +107,7 @@ test('Property 14: Metrics Accuracy', async (t) => {
         (replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Track expected transition counts manually
@@ -153,6 +161,7 @@ test('Property 14: Metrics Accuracy', async (t) => {
         (numFailures) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Create replicas and transition them to failed
@@ -197,6 +206,7 @@ test('Property 14: Metrics Accuracy', async (t) => {
         (numReplicas) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             maxConcurrentAdds: 10,
             maxConcurrentRemoves: 10,
           });
@@ -262,6 +272,7 @@ test('Property 14: Metrics Accuracy', async (t) => {
         (targetState, numReplicas) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Transition replicas to the target state
@@ -300,6 +311,7 @@ test('Property 14: Metrics Accuracy', async (t) => {
         (numAdds, numRemoves) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             maxConcurrentAdds: 10,
             maxConcurrentRemoves: 10,
           });

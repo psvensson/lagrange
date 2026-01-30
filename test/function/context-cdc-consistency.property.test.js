@@ -7,7 +7,7 @@
  * via CDC and is eventually visible in all message group caches.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {ContextManager, ContextType} from '../../src/function/context-manager.js';
 import {

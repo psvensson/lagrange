@@ -5,14 +5,14 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-
-/**
- * Assignment strategy types.
- */
-const AssignmentStrategy = {
-  MOVE_REPLICA: 'MOVE_REPLICA',
-  CREATE_SELF_HOSTED: 'CREATE_SELF_HOSTED',
-};
+import {NUM, STRING} from '../constants/index.js';
+import {
+  MESSAGE_GROUP_ASSIGNMENT_DEFAULT,
+  MESSAGE_GROUP_ASSIGNMENT_ERROR,
+  MESSAGE_GROUP_ASSIGNMENT_LOG_MSG,
+  MESSAGE_GROUP_ASSIGNMENT_STRATEGY,
+  MESSAGE_GROUP_ASSIGNMENT_SUBSYSTEM,
+} from './message-group-assignment-constants.js';
 
 /**
  * MessageGroupAssignment handles determining how new nodes get message group access.
@@ -24,12 +24,12 @@ class MessageGroupAssignment {
    * @param {string} options.seedNodeAddress - Seed node address for building addresses.
    */
   constructor(options = {}) {
-    this.seedNodeAddress = options.seedNodeAddress || '';
+    this.seedNodeAddress = options.seedNodeAddress || STRING.EMPTY;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('message-group-assignment') : console;
+      loggingService.forSubsystem(MESSAGE_GROUP_ASSIGNMENT_SUBSYSTEM) : console;
   }
 
   /**
@@ -41,7 +41,7 @@ class MessageGroupAssignment {
    * @return {Object} Assignment instructions.
    */
   determineAssignment(newNodeId, messageGroups) {
-    this.logger.debug('Determining message group assignment', {
+    this.logger.debug(MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.DETERMINING, {
       newNodeId,
       messageGroupCount: messageGroups.length,
     });
@@ -50,7 +50,7 @@ class MessageGroupAssignment {
     const movableReplica = this.findMovableReplica(messageGroups);
 
     if (movableReplica) {
-      this.logger.info('Using MOVE_REPLICA strategy', {
+      this.logger.info(MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.USING_MOVE_REPLICA, {
         newNodeId,
         groupId: movableReplica.groupId,
         sourceNodeId: movableReplica.sourceNodeId,
@@ -58,7 +58,7 @@ class MessageGroupAssignment {
       });
 
       return {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: MESSAGE_GROUP_ASSIGNMENT_STRATEGY.MOVE_REPLICA,
         groupId: movableReplica.groupId,
         sourceNodeId: movableReplica.sourceNodeId,
         replicaToMove: movableReplica.replicaId,
@@ -70,15 +70,15 @@ class MessageGroupAssignment {
     // Strategy 2: Create self-hosted message group
     const newGroupId = this.generateGroupId(newNodeId);
 
-    this.logger.info('Using CREATE_SELF_HOSTED strategy', {
+    this.logger.info(MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.USING_CREATE_SELF_HOSTED, {
       newNodeId,
       newGroupId,
     });
 
     return {
-      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+      strategy: MESSAGE_GROUP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED,
       groupId: newGroupId,
-      replicaCount: 3,
+      replicaCount: MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT,
     };
   }
 
@@ -92,7 +92,7 @@ class MessageGroupAssignment {
       const replicas = group.replicas || [];
 
       // Skip groups with fewer than 3 replicas
-      if (replicas.length < 3) {
+      if (replicas.length < MESSAGE_GROUP_ASSIGNMENT_DEFAULT.MIN_REPLICAS_FOR_MOVE) {
         continue;
       }
 
@@ -101,9 +101,9 @@ class MessageGroupAssignment {
 
       // Find node with 2+ replicas
       for (const [nodeId, nodeReplicas] of replicasByNode) {
-        if (nodeReplicas.length >= 2) {
+        if (nodeReplicas.length >= MESSAGE_GROUP_ASSIGNMENT_DEFAULT.MIN_REPLICAS_ON_NODE_FOR_MOVE) {
           // Found a movable replica - pick the first one
-          const replicaToMove = nodeReplicas[0];
+          const replicaToMove = nodeReplicas[NUM.ZERO];
 
           return {
             groupId: group.group_id,
@@ -145,8 +145,11 @@ class MessageGroupAssignment {
    */
   generateGroupId(nodeId) {
     // Use first 8 characters of node ID for readability
-    const shortId = nodeId.substring(0, 8);
-    return `mg-${shortId}`;
+    const shortId = nodeId.substring(
+      NUM.ZERO,
+      MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_LENGTH,
+    );
+    return `${MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_PREFIX}${shortId}`;
   }
 
   /**
@@ -155,9 +158,9 @@ class MessageGroupAssignment {
    * @param {number} count - Number of replicas (default 3).
    * @return {Array<string>} Replica IDs.
    */
-  generateReplicaIds(groupId, count = 3) {
+  generateReplicaIds(groupId, count = MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT) {
     const replicaIds = [];
-    for (let i = 0; i < count; i++) {
+    for (let i = NUM.ZERO; i < count; i++) {
       replicaIds.push(`${groupId}-r${i}`);
     }
     return replicaIds;
@@ -171,7 +174,11 @@ class MessageGroupAssignment {
    * @param {string} entityType - Entity type (e.g., 'message-group', 'partition').
    * @return {Array<string>} Unified replica addresses.
    */
-  buildReplicaAddresses(nodeId, replicaIds, entityType = 'message-group') {
+  buildReplicaAddresses(
+    nodeId,
+    replicaIds,
+    entityType = MESSAGE_GROUP_ASSIGNMENT_DEFAULT.DEFAULT_ENTITY_TYPE,
+  ) {
     return replicaIds.map((id) => `${nodeId}/${entityType}/${id}`);
   }
 
@@ -184,42 +191,47 @@ class MessageGroupAssignment {
     const errors = [];
 
     if (!assignment) {
-      return {isValid: false, errors: ['Assignment is required']};
+      return {
+        isValid: false,
+        errors: [MESSAGE_GROUP_ASSIGNMENT_ERROR.ASSIGNMENT_REQUIRED],
+      };
     }
 
     if (!assignment.strategy) {
-      errors.push('Strategy is required');
-    } else if (!Object.values(AssignmentStrategy).includes(assignment.strategy)) {
-      errors.push(`Invalid strategy: ${assignment.strategy}`);
+      errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.STRATEGY_REQUIRED);
+    } else if (!Object.values(MESSAGE_GROUP_ASSIGNMENT_STRATEGY).includes(assignment.strategy)) {
+      errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.INVALID_STRATEGY(assignment.strategy));
     }
 
     if (!assignment.groupId) {
-      errors.push('Group ID is required');
+      errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.GROUP_ID_REQUIRED);
     }
 
-    if (assignment.strategy === AssignmentStrategy.MOVE_REPLICA) {
+    if (assignment.strategy === MESSAGE_GROUP_ASSIGNMENT_STRATEGY.MOVE_REPLICA) {
       if (!assignment.sourceNodeId) {
-        errors.push('Source node ID is required for MOVE_REPLICA');
+        errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.SOURCE_NODE_REQUIRED);
       }
       if (!assignment.replicaToMove) {
-        errors.push('Replica to move is required for MOVE_REPLICA');
+        errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.REPLICA_TO_MOVE_REQUIRED);
       }
-      if (!assignment.replicaAddresses || assignment.replicaAddresses.length === 0) {
-        errors.push('Replica addresses are required for MOVE_REPLICA');
+      if (!assignment.replicaAddresses ||
+          assignment.replicaAddresses.length === NUM.ZERO) {
+        errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.REPLICA_ADDRESSES_REQUIRED);
       }
     }
 
-    if (assignment.strategy === AssignmentStrategy.CREATE_SELF_HOSTED) {
-      if (!assignment.replicaCount || assignment.replicaCount < 3) {
-        errors.push('Replica count must be at least 3 for CREATE_SELF_HOSTED');
+    if (assignment.strategy === MESSAGE_GROUP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED) {
+      if (!assignment.replicaCount ||
+          assignment.replicaCount < MESSAGE_GROUP_ASSIGNMENT_DEFAULT.RAFT_MIN_REPLICA_COUNT) {
+        errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.REPLICA_COUNT_MIN);
       }
-      if (assignment.replicaCount % 2 === 0) {
-        errors.push('Replica count must be odd for Raft consensus');
+      if (assignment.replicaCount % MESSAGE_GROUP_ASSIGNMENT_DEFAULT.RAFT_ODD_MODULO === NUM.ZERO) {
+        errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.REPLICA_COUNT_ODD);
       }
     }
 
     return {
-      isValid: errors.length === 0,
+      isValid: errors.length === NUM.ZERO,
       errors,
     };
   }
@@ -231,10 +243,13 @@ class MessageGroupAssignment {
    */
   calculateOptimalDistribution(nodeCount) {
     // Each message group serves up to 3 nodes
-    const messageGroupsNeeded = Math.ceil(nodeCount / 3);
+    const messageGroupsNeeded = Math.ceil(
+      nodeCount / MESSAGE_GROUP_ASSIGNMENT_DEFAULT.DISTRIBUTION_NODES_PER_GROUP,
+    );
 
     // Each message group has exactly 3 replicas
-    const totalReplicas = messageGroupsNeeded * 3;
+    const totalReplicas = messageGroupsNeeded *
+      MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT;
 
     // Average replicas per node
     const avgReplicasPerNode = totalReplicas / nodeCount;
@@ -243,9 +258,11 @@ class MessageGroupAssignment {
       nodeCount,
       messageGroupsNeeded,
       totalReplicas,
-      avgReplicasPerNode: Math.round(avgReplicasPerNode * 100) / 100,
+      avgReplicasPerNode: Math.round(
+        avgReplicasPerNode * MESSAGE_GROUP_ASSIGNMENT_DEFAULT.ROUNDING_MULTIPLIER,
+      ) / MESSAGE_GROUP_ASSIGNMENT_DEFAULT.ROUNDING_DIVISOR,
     };
   }
 }
 
-export {MessageGroupAssignment, AssignmentStrategy};
+export {MessageGroupAssignment, MESSAGE_GROUP_ASSIGNMENT_STRATEGY};

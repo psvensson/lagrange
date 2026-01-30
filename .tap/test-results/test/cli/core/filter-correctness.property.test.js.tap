@@ -3,34 +3,36 @@ TAP version 14
     # Subtest: all filtered results contain filter string
         ok 1 - all filtered results contain filter string
         1..1
-    ok 1 - all filtered results contain filter string # time=9.988ms
+    ok 1 - all filtered results contain filter string # time=6.122ms
     
     # Subtest: empty filter returns all data
         ok 1 - empty filter returns all data
         1..1
-    ok 2 - empty filter returns all data # time=3.548ms
+    ok 2 - empty filter returns all data # time=1.898ms
     
     # Subtest: filter is case insensitive
         ok 1 - filter is case insensitive
         1..1
-    ok 3 - filter is case insensitive # time=0.944ms
+    ok 3 - filter is case insensitive # time=0.619ms
     
     # Subtest: filtered count is less than or equal to total
         ok 1 - filtered count is less than or equal to total
         1..1
-    ok 4 - filtered count is less than or equal to total # time=2.565ms
+    ok 4 - filtered count is less than or equal to total # time=2.591ms
     
     # Subtest: clearFilter restores all data
         ok 1 - clearFilter restores all data
         1..1
-    ok 5 - clearFilter restores all data # time=3.052ms
+    ok 5 - clearFilter restores all data # time=1.458ms
     
     # Subtest: filter matches any field
         ok 1 - filter matches any field
         1..1
-    ok 6 - filter matches any field # time=1.022ms
+    ok 6 - filter matches any field # time=0.607ms
     
     1..6
-ok 1 - Property 2: Filter Correctness # time=27.299ms
+ok 1 - Property 2: Filter Correctness # time=19.168ms
 
 1..1
+# { total: 6, pass: 6 }
+# time=25.041ms

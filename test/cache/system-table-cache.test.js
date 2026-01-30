@@ -3,7 +3,7 @@
  * Requirements: 4.4, 4.5, 4.8
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   SystemTableCache,
   SYSTEM_TABLES,
@@ -580,22 +580,27 @@ test('SystemTableCache - getReadyNodes returns empty array when no nodes', async
 
 test('SystemTableCache - getReadyNodes returns only ready nodes', async (t) => {
   const cache = new SystemTableCache();
+  const now = Date.now();
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-1',
-    state: 'ready',
+    ws_connection_state: 'ready',
+    ready_lease_expires_at: now + 1000,
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-2',
-    state: 'joining',
+    ws_connection_state: 'joining',
+    ready_lease_expires_at: now + 1000,
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-3',
-    state: 'ready',
+    ws_connection_state: 'ready',
+    ready_lease_expires_at: now + 2000,
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-4',
-    state: 'draining',
+    ws_connection_state: 'draining',
+    ready_lease_expires_at: now + 1000,
   });
 
   const readyNodes = cache.getReadyNodes();
@@ -608,32 +613,38 @@ test('SystemTableCache - getReadyNodes returns only ready nodes', async (t) => {
 
 test('SystemTableCache - getReadyNodes returns empty when no ready nodes', async (t) => {
   const cache = new SystemTableCache();
+  const now = Date.now();
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-1',
-    state: 'joining',
+    ws_connection_state: 'joining',
+    ready_lease_expires_at: now + 1000,
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-2',
-    state: 'draining',
+    ws_connection_state: 'draining',
+    ready_lease_expires_at: now + 1000,
   });
 
   const readyNodes = cache.getReadyNodes();
   t.same(readyNodes, [], 'Should return empty array');
 });
 
-test('SystemTableCache - getReadyNodes works with id field fallback', async (t) => {
+test('SystemTableCache - getReadyNodes rejects missing node_id', async (t) => {
   const cache = new SystemTableCache();
+  const now = Date.now();
 
-  // Some records might use 'id' instead of 'node_id'
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     id: 'node-1',
-    state: 'ready',
+    ws_connection_state: 'ready',
+    ready_lease_expires_at: now + 1000,
   });
 
-  const readyNodes = cache.getReadyNodes();
-  t.equal(readyNodes.length, 1, 'Should return 1 ready node');
-  t.ok(readyNodes.includes('node-1'), 'Should include node-1');
+  t.throws(
+    () => cache.getReadyNodes(),
+    /node_id/,
+    'Should reject nodes without node_id',
+  );
 });
 
 

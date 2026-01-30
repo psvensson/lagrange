@@ -4,7 +4,7 @@
  * Requirements: 19.1, 19.2, 19.3, 19.4, 19.5, 19.10
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';

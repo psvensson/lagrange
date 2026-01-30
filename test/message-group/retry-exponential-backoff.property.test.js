@@ -6,7 +6,7 @@
  * Validates: Requirements 17.1, 17.2
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   MessageRetryHandler,
@@ -102,7 +102,7 @@ test('Property 24: Jitter adds bounded randomness to delays', async (t) => {
   await fc.assert(
     fc.asyncProperty(
       // Generate jitter factor
-      fc.double({min: 0.05, max: 0.5}),
+      fc.double({min: 0.05, max: 0.5, noNaN: true, noDefaultInfinity: true}),
       async (jitterFactor) => {
         retryHandler = new MessageRetryHandler({
           maxRetries: 3,

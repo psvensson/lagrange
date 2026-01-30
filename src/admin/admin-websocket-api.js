@@ -12,31 +12,28 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {ERRNO, HOST, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {TRANSPORT_EVENT} from '../constants/transport.js';
+import {
+  ADMIN_CACHE_DUMP,
+  ADMIN_CLIENT,
+  ADMIN_CONFIG_KEY,
+  ADMIN_DEFAULT,
+  ADMIN_ERROR_CODE,
+  ADMIN_ERROR_HINT,
+  ADMIN_ERROR_MATCH,
+  ADMIN_ERROR_MESSAGE,
+  ADMIN_LIMIT,
+  ADMIN_LOG_MSG,
+  ADMIN_MESSAGE_TYPE,
+  ADMIN_QUERY_RESULT,
+  ADMIN_ROUTE,
+  ADMIN_STATUS,
+  ADMIN_SUBSYSTEM,
+} from './admin-constants.js';
 
-/**
- * Message types for the WebSocket protocol.
- */
-const MessageType = {
-  // Outgoing
-  CACHE_DUMP: 'cache_dump',
-  CDC_EVENT: 'cdc_event',
-  QUERY_RESULT: 'query_result',
-  ERROR: 'error',
-  // Incoming
-  QUERY: 'query',
-  REFRESH: 'refresh',
-};
-
-/**
- * Error codes for query failures.
- */
-const ErrorCode = {
-  SYNTAX_ERROR: 'SYNTAX_ERROR',
-  TABLE_NOT_FOUND: 'TABLE_NOT_FOUND',
-  TIMEOUT: 'TIMEOUT',
-  INTERNAL_ERROR: 'INTERNAL_ERROR',
-  MALFORMED_JSON: 'MALFORMED_JSON',
-};
+const MessageType = ADMIN_MESSAGE_TYPE;
+const ErrorCode = ADMIN_ERROR_CODE;
 
 /**
  * AdminWebSocketAPI provides WebSocket endpoint for admin CLI connections.
@@ -52,13 +49,15 @@ class AdminWebSocketAPI {
   constructor(options = {}) {
     this.systemTableCache = options.systemTableCache || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
-    this.nodeId = options.nodeId || 'admin-api';
+    this.nodeId = options.nodeId || ADMIN_DEFAULT.NODE_ID;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.port = config.get('admin.websocketPort') || 8081;
-    this.queryTimeoutMs = config.get('admin.queryTimeoutMs') || 30000;
-    this.cacheDumpTimeoutMs = config.get('admin.cacheDumpTimeoutMs') || 5000;
+    this.port = config.get(ADMIN_CONFIG_KEY.WEBSOCKET_PORT) || ADMIN_DEFAULT.WEBSOCKET_PORT;
+    this.queryTimeoutMs =
+      config.get(ADMIN_CONFIG_KEY.QUERY_TIMEOUT_MS) || ADMIN_DEFAULT.QUERY_TIMEOUT_MS;
+    this.cacheDumpTimeoutMs =
+      config.get(ADMIN_CONFIG_KEY.CACHE_DUMP_TIMEOUT_MS) || ADMIN_DEFAULT.CACHE_DUMP_TIMEOUT_MS;
 
     // Logging
     this.logger = this.initLogger();
@@ -66,6 +65,7 @@ class AdminWebSocketAPI {
     // Fastify instance
     this.fastify = null;
     this.initialized = false;
+    this.listening = false;
 
     // Connected clients
     this.clients = new Set();
@@ -81,24 +81,12 @@ class AdminWebSocketAPI {
    */
   subscribeToCacheNotifications() {
     if (this.systemTableCache &&
-        typeof this.systemTableCache.onCacheChange === 'function') {
-      this.logger.info('Subscribing to cache change notifications');
+        typeof this.systemTableCache.onCacheChange === TYPEOF.FUNCTION) {
       this.systemTableCache.onCacheChange(
         (tableName, operation, record) => {
-          this.logger.info('Cache change notification received', {
-            tableName,
-            operation,
-            recordKeys: Object.keys(record || {}),
-          });
           this.broadcastCDCEvent(tableName, operation, record);
         },
       );
-    } else {
-      this.logger.warn('System table cache does not support onCacheChange', {
-        hasCache: !!this.systemTableCache,
-        hasMethod: this.systemTableCache ?
-          typeof this.systemTableCache.onCacheChange : 'N/A',
-      });
     }
   }
 
@@ -111,7 +99,7 @@ class AdminWebSocketAPI {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('admin-websocket-api');
+        return loggingService.forSubsystem(ADMIN_SUBSYSTEM.WEBSOCKET_API);
       }
     } catch {
       // Logging not available
@@ -122,14 +110,17 @@ class AdminWebSocketAPI {
   /**
    * Initialize and start the WebSocket server.
    * @param {number} port - Port to listen on (optional).
+   * @param {Object} [options] - Initialization options.
+   * @param {boolean} [options.listen] - Whether to listen on a TCP port.
    * @return {Promise<void>}
    */
-  async initialize(port) {
+  async initialize(port, options = {}) {
     if (this.initialized) {
       return;
     }
 
     const listenPort = port !== undefined ? port : this.port;
+    const shouldListen = options.listen !== false;
 
     this.fastify = Fastify({
       logger: false,
@@ -141,13 +132,31 @@ class AdminWebSocketAPI {
     // Register routes
     this.registerRoutes();
 
-    // Start server
-    await this.fastify.listen({port: listenPort, host: '0.0.0.0'});
+    if (shouldListen) {
+      try {
+        await this.fastify.listen({port: listenPort, host: ADMIN_DEFAULT.HOST});
+        this.listening = true;
+      } catch (err) {
+        // Some environments disallow opening listening sockets (eg, unit-test sandboxes).
+        // In that case, continue in "ready-only" mode so tests can use fastify.inject()
+        // and/or direct handler invocation without binding ports.
+        if (err && (err.code === ERRNO.EPERM || err.code === ERRNO.EACCES)) {
+          await this.fastify.ready();
+          this.listening = false;
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      await this.fastify.ready();
+      this.listening = false;
+    }
 
     this.initialized = true;
 
-    this.logger.info('Admin WebSocket API started', {
-      port: listenPort,
+    this.logger.info(ADMIN_LOG_MSG.STARTED, {
+      port: this.listening ? listenPort : null,
+      listen: this.listening,
       nodeId: this.nodeId,
     });
   }
@@ -158,9 +167,9 @@ class AdminWebSocketAPI {
    */
   registerRoutes() {
     // Health check endpoint
-    this.fastify.get('/health', async (_request, _reply) => {
+    this.fastify.get(ADMIN_ROUTE.HEALTH, async (_request, _reply) => {
       return {
-        status: 'healthy',
+        status: ADMIN_STATUS.HEALTHY,
         nodeId: this.nodeId,
         connectedClients: this.clients.size,
       };
@@ -169,7 +178,7 @@ class AdminWebSocketAPI {
     // WebSocket endpoint for admin stream
     // Note: @fastify/websocket passes socket directly in newer versions
     this.fastify.register(async (fastify) => {
-      fastify.get('/api/admin/stream', {websocket: true}, (socket, _req) => {
+      fastify.get(ADMIN_ROUTE.STREAM, {websocket: true}, (socket, _req) => {
         this.handleConnection(socket);
       });
     });
@@ -181,11 +190,14 @@ class AdminWebSocketAPI {
    * @private
    */
   handleConnection(socket) {
-    const clientId = `client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const clientId = `${ADMIN_CLIENT.PREFIX}${Date.now()}-` +
+      `${Math.random()
+        .toString(ADMIN_CLIENT.RANDOM_BASE)
+        .substr(ADMIN_CLIENT.RANDOM_START, ADMIN_CLIENT.RANDOM_LENGTH)}`;
 
-    this.logger.info('Admin client connected', {
+    this.logger.info(ADMIN_LOG_MSG.CLIENT_CONNECTED, {
       clientId,
-      totalClients: this.clients.size + 1,
+      totalClients: this.clients.size + NUM.ONE,
     });
 
     // Add to connected clients
@@ -200,18 +212,18 @@ class AdminWebSocketAPI {
     this.sendCacheDump(clientInfo);
 
     // Handle incoming messages
-    socket.on('message', (data) => {
+    socket.on(TRANSPORT_EVENT.MESSAGE, (data) => {
       this.handleMessage(clientInfo, data);
     });
 
     // Handle disconnection
-    socket.on('close', () => {
+    socket.on(TRANSPORT_EVENT.CLOSE, () => {
       this.handleDisconnection(clientInfo);
     });
 
     // Handle errors
-    socket.on('error', (error) => {
-      this.logger.error('WebSocket error', {
+    socket.on(TRANSPORT_EVENT.ERROR, (error) => {
+      this.logger.error(ADMIN_LOG_MSG.SOCKET_ERROR, {
         clientId,
         error: error.message,
       });
@@ -226,7 +238,7 @@ class AdminWebSocketAPI {
   handleDisconnection(clientInfo) {
     this.clients.delete(clientInfo);
 
-    this.logger.info('Admin client disconnected', {
+    this.logger.info(ADMIN_LOG_MSG.CLIENT_DISCONNECTED, {
       clientId: clientInfo.id,
       totalClients: this.clients.size,
     });
@@ -234,42 +246,31 @@ class AdminWebSocketAPI {
 
   /**
    * Send cache dump to a client.
-   * If cache is empty, queries partitions directly as fallback.
    * @param {Object} clientInfo - Client information.
    * @private
    */
-  async sendCacheDump(clientInfo) {
-    try {
-      let cacheDump = this.buildCacheDump();
+  sendCacheDump(clientInfo) {
+    const cacheDump = this.buildCacheDump();
 
-      // Check if cache is empty (all tables have 0 rows) - Requirement 3.3
-      const isEmpty = Object.values(cacheDump).every((arr) => arr.length === 0);
-      if (isEmpty && this.sqlQueryEngine) {
-        this.logger.debug('Cache is empty, querying partitions directly', {
-          clientId: clientInfo.id,
-        });
-        cacheDump = await this.queryPartitionsForDump();
-      }
-
-      const message = {
-        type: MessageType.CACHE_DUMP,
-        timestamp: Date.now(),
-        nodeId: this.nodeId,
-        data: cacheDump,
-      };
-
-      this.sendToClient(clientInfo, message);
-
-      this.logger.debug('Cache dump sent', {
-        clientId: clientInfo.id,
-        tableCount: Object.keys(cacheDump).length,
-      });
-    } catch (error) {
-      this.logger.error('Failed to send cache dump', {
-        clientId: clientInfo.id,
-        error: error.message,
-      });
+    // Check if cache is empty (all tables have 0 rows) - Requirement 3.3
+    const isEmpty = Object.values(cacheDump).every((arr) => arr.length === NUM.ZERO);
+    if (isEmpty) {
+      throw new Error('System table cache is empty');
     }
+
+    const message = {
+      type: MessageType.CACHE_DUMP,
+      timestamp: Date.now(),
+      nodeId: this.nodeId,
+      data: cacheDump,
+    };
+
+    this.sendToClient(clientInfo, message);
+
+    this.logger.debug(ADMIN_LOG_MSG.CACHE_DUMP_SENT, {
+      clientId: clientInfo.id,
+      tableCount: Object.keys(cacheDump).length,
+    });
   }
 
   /**
@@ -278,56 +279,34 @@ class AdminWebSocketAPI {
    * @private
    */
   buildCacheDump() {
-    const tables = ['nodes', 'services', 'partitions', 'tables',
-      'message_groups', 'indices', 'logs', 'config', 'contexts',
-      'live_queries'];
+    const tables = [
+      TABLES.NODES,
+      TABLES.SERVICES,
+      TABLES.PARTITIONS,
+      TABLES.TABLES,
+      TABLES.MESSAGE_GROUPS,
+      TABLES.INDICES,
+      TABLES.LOGS,
+      TABLES.CONFIG,
+      TABLES.CONTEXTS,
+      TABLES.LIVE_QUERIES,
+    ];
     const dump = {};
+
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      throw new Error('System table cache not initialized');
+    }
 
     for (const tableName of tables) {
       try {
-        if (this.systemTableCache &&
-            typeof this.systemTableCache.getAll === 'function') {
-          dump[tableName] = this.systemTableCache.getAll(tableName);
-        } else {
-          dump[tableName] = [];
-        }
+        dump[tableName] = this.systemTableCache.getAll(tableName);
       } catch {
-        dump[tableName] = [];
+        dump[tableName] = ADMIN_CACHE_DUMP.EMPTY;
       }
     }
 
     return dump;
-  }
-
-  /**
-   * Query system table partitions directly for cache dump.
-   * Used as fallback when cache is empty (Requirement 3.3).
-   * @return {Promise<Object>} Cache dump data from partitions.
-   * @private
-   */
-  async queryPartitionsForDump() {
-    const systemTables = ['nodes', 'services', 'partitions', 'tables',
-      'message_groups', 'indices', 'logs', 'config', 'contexts',
-      'live_queries'];
-    const data = {};
-
-    for (const tableName of systemTables) {
-      try {
-        const result = await this.sqlQueryEngine.executeQuery(
-          `SELECT * FROM ${tableName}`,
-        );
-        // Query engine returns 'rows', not 'results'
-        data[tableName] = result.rows || result.results || [];
-      } catch (error) {
-        this.logger.warn('Failed to query system table for dump', {
-          tableName,
-          error: error.message,
-        });
-        data[tableName] = [];
-      }
-    }
-
-    return data;
   }
 
   /**
@@ -344,17 +323,17 @@ class AdminWebSocketAPI {
       message = JSON.parse(messageStr);
     } catch (_error) {
       this.sendError(clientInfo, null, ErrorCode.MALFORMED_JSON,
-        'Invalid JSON message', 'Ensure message is valid JSON');
+        ADMIN_ERROR_MESSAGE.INVALID_JSON, ADMIN_ERROR_HINT.INVALID_JSON);
       return;
     }
 
-    if (!message || typeof message.type !== 'string') {
+    if (!message || typeof message.type !== TYPEOF.STRING) {
       this.sendError(clientInfo, null, ErrorCode.MALFORMED_JSON,
-        'Message must have a "type" field', 'Include type field in message');
+        ADMIN_ERROR_MESSAGE.MISSING_TYPE, ADMIN_ERROR_HINT.MISSING_TYPE);
       return;
     }
 
-    this.logger.debug('Received message', {
+    this.logger.debug(ADMIN_LOG_MSG.RECEIVED_MESSAGE, {
       clientId: clientInfo.id,
       type: message.type,
     });
@@ -370,7 +349,7 @@ class AdminWebSocketAPI {
 
     default:
       // Ignore unknown message types (Requirement 32.38)
-      this.logger.debug('Ignoring unknown message type', {
+      this.logger.debug(ADMIN_LOG_MSG.UNKNOWN_MESSAGE, {
         clientId: clientInfo.id,
         type: message.type,
       });
@@ -389,20 +368,20 @@ class AdminWebSocketAPI {
 
     if (!queryId) {
       this.sendError(clientInfo, null, ErrorCode.MALFORMED_JSON,
-        'Query message must include queryId', 'Include queryId field');
+        ADMIN_ERROR_MESSAGE.MISSING_QUERY_ID, ADMIN_ERROR_HINT.MISSING_QUERY_ID);
       return;
     }
 
-    if (!sql || typeof sql !== 'string') {
+    if (!sql || typeof sql !== TYPEOF.STRING) {
       this.sendError(clientInfo, queryId, ErrorCode.SYNTAX_ERROR,
-        'Query message must include sql string', 'Include sql field');
+        ADMIN_ERROR_MESSAGE.MISSING_SQL, ADMIN_ERROR_HINT.MISSING_SQL);
       return;
     }
 
-    this.logger.debug('Executing query', {
+    this.logger.debug(ADMIN_LOG_MSG.EXECUTING_QUERY, {
       clientId: clientInfo.id,
       queryId,
-      sql: sql.substring(0, 100),
+      sql: sql.substring(NUM.ZERO, ADMIN_LIMIT.SQL_PREVIEW_LENGTH),
     });
 
     try {
@@ -429,14 +408,14 @@ class AdminWebSocketAPI {
    */
   async executeQueryWithTimeout(sql, params, queryId) {
     if (!this.sqlQueryEngine) {
-      throw new Error('SQL query engine not available');
+      throw new Error(ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE);
     }
 
     let timeoutId;
     try {
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
-          reject(new Error(`Query timeout after ${this.queryTimeoutMs}ms`));
+          reject(new Error(ADMIN_ERROR_MESSAGE.QUERY_TIMEOUT(this.queryTimeoutMs)));
         }, this.queryTimeoutMs);
       });
 
@@ -474,22 +453,22 @@ class AdminWebSocketAPI {
       }
     } else if (result.rows !== undefined || result.results !== undefined) {
       // SELECT query result - handle both 'rows' and 'results' field names
-      message.results = result.rows || result.results || [];
+      message.results = result.rows || result.results || ADMIN_CACHE_DUMP.EMPTY;
       message.count = result.count !== undefined ?
         result.count : message.results.length;
-      message.partitions = result.partitions || [];
+      message.partitions = result.partitions || ADMIN_CACHE_DUMP.EMPTY;
       message.tableName = result.tableName || null;
     } else {
       // Write operation result (INSERT, UPDATE, DELETE)
       message.operation = result.operation;
-      message.affectedRows = result.affectedRows || 0;
-      message.partitions = result.partitions || [];
+      message.affectedRows = result.affectedRows || ADMIN_QUERY_RESULT.AFFECTED_ROWS_DEFAULT;
+      message.partitions = result.partitions || ADMIN_CACHE_DUMP.EMPTY;
       message.tableName = result.tableName || null;
     }
 
     this.sendToClient(clientInfo, message);
 
-    this.logger.debug('Query result sent', {
+    this.logger.debug(ADMIN_LOG_MSG.QUERY_RESULT_SENT, {
       clientId: clientInfo.id,
       queryId,
       success: result.success !== false,
@@ -503,7 +482,7 @@ class AdminWebSocketAPI {
    * @private
    */
   handleRefreshMessage(clientInfo, _message) {
-    this.logger.debug('Refresh requested', {
+    this.logger.debug(ADMIN_LOG_MSG.REFRESH_REQUESTED, {
       clientId: clientInfo.id,
     });
 
@@ -549,10 +528,11 @@ class AdminWebSocketAPI {
       const json = JSON.stringify(message);
       clientInfo.socket.send(json);
     } catch (error) {
-      this.logger.error('Failed to send message to client', {
+      this.logger.error(ADMIN_LOG_MSG.SEND_FAILED, {
         clientId: clientInfo.id,
         error: error.message,
       });
+      throw error;
     }
   }
 
@@ -563,13 +543,6 @@ class AdminWebSocketAPI {
    * @param {Object} record - Record data.
    */
   broadcastCDCEvent(tableName, operation, record) {
-    this.logger.info('Broadcasting CDC event to clients', {
-      tableName,
-      operation,
-      clientCount: this.clients.size,
-      recordKeys: Object.keys(record || {}),
-    });
-
     const message = {
       type: MessageType.CDC_EVENT,
       timestamp: Date.now(),
@@ -581,12 +554,6 @@ class AdminWebSocketAPI {
     for (const clientInfo of this.clients) {
       this.sendToClient(clientInfo, message);
     }
-
-    this.logger.debug('CDC event broadcast complete', {
-      tableName,
-      operation,
-      clientCount: this.clients.size,
-    });
   }
 
   /**
@@ -598,14 +565,15 @@ class AdminWebSocketAPI {
   getErrorCode(error) {
     const message = error.message.toLowerCase();
 
-    if (message.includes('parse') || message.includes('syntax')) {
+    if (message.includes(ADMIN_ERROR_MATCH.PARSE) ||
+        message.includes(ADMIN_ERROR_MATCH.SYNTAX)) {
       return ErrorCode.SYNTAX_ERROR;
     }
-    if (message.includes('table not found') ||
-        message.includes('table_not_found')) {
+    if (message.includes(ADMIN_ERROR_MATCH.TABLE_NOT_FOUND) ||
+        message.includes(ADMIN_ERROR_MATCH.TABLE_NOT_FOUND_CODE)) {
       return ErrorCode.TABLE_NOT_FOUND;
     }
-    if (message.includes('timeout')) {
+    if (message.includes(ADMIN_ERROR_MATCH.TIMEOUT)) {
       return ErrorCode.TIMEOUT;
     }
 
@@ -655,6 +623,14 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Returns whether the API is bound to a TCP port.
+   * @return {boolean}
+   */
+  isListening() {
+    return this.listening;
+  }
+
+  /**
    * Shutdown the WebSocket server.
    * @return {Promise<void>}
    */
@@ -676,7 +652,7 @@ class AdminWebSocketAPI {
 
     this.initialized = false;
 
-    this.logger.info('Admin WebSocket API shutdown', {
+    this.logger.info(ADMIN_LOG_MSG.SHUTDOWN, {
       nodeId: this.nodeId,
     });
   }

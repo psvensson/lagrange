@@ -9,7 +9,7 @@
  * Validates: Requirements 12.2, 12.3, 13.4
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {RemoteCache} from '../../../src/cli/core/remote-cache.js';
 

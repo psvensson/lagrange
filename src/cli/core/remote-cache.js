@@ -194,7 +194,18 @@ export class RemoteCache {
     if (filter.type) {
       services = services.filter((s) => s.service_type === filter.type);
     }
-    return services;
+
+    // Enrich services with node_address from nodes table
+    return services.map((service) => {
+      if (service.node_address) {
+        return service;
+      }
+      const node = this.tables.nodes.get(service.node_id);
+      if (node && node.node_address) {
+        return {...service, node_address: node.node_address};
+      }
+      return service;
+    });
   }
 
   /**

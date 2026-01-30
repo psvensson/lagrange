@@ -9,7 +9,7 @@
  * Property 4: Partition Packet Round-Trip Preservation
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {isRaftPacket} from '../../src/raft/raft-packet-utils.js';
 

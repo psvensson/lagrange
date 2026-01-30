@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {ViewManager} from '../../../src/cli/core/view-manager.js';
 import {BaseView} from '../../../src/cli/core/base-view.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';

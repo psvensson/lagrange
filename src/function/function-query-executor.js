@@ -7,6 +7,15 @@
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {
+  FUNCTION_CONFIG_KEY,
+  FUNCTION_DEFAULT,
+  FUNCTION_ERROR_MSG,
+  FUNCTION_LOG_LIMIT,
+  FUNCTION_LOG_MSG,
+  FUNCTION_SUBSYSTEM,
+  TYPEOF,
+} from './function-constants.js';
 
 /**
  * FunctionQueryExecutor provides programmatic query execution for
@@ -26,8 +35,10 @@ class FunctionQueryExecutor {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.defaultTimeoutMs = config.get('function.queryTimeoutMs') || 30000;
-    this.defaultBatchSize = config.get('function.queryBatchSize') || 100;
+    this.defaultTimeoutMs =
+      config.get(FUNCTION_CONFIG_KEY.QUERY_TIMEOUT_MS) || FUNCTION_DEFAULT.QUERY_TIMEOUT_MS;
+    this.defaultBatchSize =
+      config.get(FUNCTION_CONFIG_KEY.QUERY_BATCH_SIZE) || FUNCTION_DEFAULT.QUERY_BATCH_SIZE;
 
     this.initialized = false;
   }
@@ -41,7 +52,7 @@ class FunctionQueryExecutor {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('function-query-executor');
+        return loggingService.forSubsystem(FUNCTION_SUBSYSTEM.QUERY_EXECUTOR);
       }
     } catch {
       // Logging not available
@@ -65,7 +76,7 @@ class FunctionQueryExecutor {
 
     this.initialized = true;
 
-    this.logger.info('Function query executor initialized');
+    this.logger.info(FUNCTION_LOG_MSG.QUERY_EXECUTOR_INITIALIZED);
   }
 
   /**
@@ -78,14 +89,14 @@ class FunctionQueryExecutor {
    */
   async executeQuery(sql, params = [], options = {}) {
     if (!this.sqlQueryEngine) {
-      throw new Error('SQL query engine not available');
+      throw new Error(FUNCTION_ERROR_MSG.SQL_ENGINE_UNAVAILABLE);
     }
 
     const timeout = options.timeout || this.defaultTimeoutMs;
     const startTime = Date.now();
 
-    this.logger.debug('Executing query via FunctionQueryExecutor', {
-      sql: sql.substring(0, 100),
+    this.logger.debug(FUNCTION_LOG_MSG.QUERY_EXECUTE_START, {
+      sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
       paramCount: params.length,
       timeout,
     });
@@ -93,7 +104,10 @@ class FunctionQueryExecutor {
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = setTimeout(
-        () => reject(new Error(`Query timeout after ${timeout}ms`)),
+        () => reject(new Error(
+          `${FUNCTION_ERROR_MSG.QUERY_TIMEOUT_PREFIX}${timeout}` +
+          `${FUNCTION_ERROR_MSG.QUERY_TIMEOUT_SUFFIX}`,
+        )),
         timeout,
       );
     });
@@ -106,8 +120,8 @@ class FunctionQueryExecutor {
 
       const duration = Date.now() - startTime;
 
-      this.logger.debug('Query executed successfully', {
-        sql: sql.substring(0, 100),
+      this.logger.debug(FUNCTION_LOG_MSG.QUERY_EXECUTE_SUCCESS, {
+        sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
         rowCount: result.results?.length || result.rows?.length || 0,
         affectedRows: result.affectedRows || 0,
         durationMs: duration,
@@ -120,8 +134,8 @@ class FunctionQueryExecutor {
         success: true,
       };
     } catch (error) {
-      this.logger.error('Query execution failed', {
-        sql: sql.substring(0, 100),
+      this.logger.error(FUNCTION_LOG_MSG.QUERY_EXECUTE_FAILURE, {
+        sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
         error: error.message,
       });
       throw error;
@@ -141,23 +155,23 @@ class FunctionQueryExecutor {
    */
   async executeQueryWithCallback(sql, params, callback, options = {}) {
     if (!this.sqlQueryEngine) {
-      throw new Error('SQL query engine not available');
+      throw new Error(FUNCTION_ERROR_MSG.SQL_ENGINE_UNAVAILABLE);
     }
 
-    if (typeof callback !== 'function') {
-      throw new Error('Callback must be a function');
+    if (typeof callback !== TYPEOF.FUNCTION) {
+      throw new Error(FUNCTION_ERROR_MSG.CALLBACK_MUST_BE_FUNCTION);
     }
 
     const batchSize = options.batchSize || this.defaultBatchSize;
     const startTime = Date.now();
 
-    this.logger.debug('Executing streaming query', {
-      sql: sql.substring(0, 100),
+    this.logger.debug(FUNCTION_LOG_MSG.STREAMING_EXECUTE_START, {
+      sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
       batchSize,
     });
 
     // Check if engine supports streaming
-    if (typeof this.sqlQueryEngine.executeStreaming === 'function') {
+    if (typeof this.sqlQueryEngine.executeStreaming === TYPEOF.FUNCTION) {
       let totalRows = 0;
 
       await this.sqlQueryEngine.executeStreaming(sql, params, async (rows) => {
@@ -167,8 +181,8 @@ class FunctionQueryExecutor {
 
       const duration = Date.now() - startTime;
 
-      this.logger.debug('Streaming query completed', {
-        sql: sql.substring(0, 100),
+      this.logger.debug(FUNCTION_LOG_MSG.STREAMING_EXECUTE_COMPLETE, {
+        sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
         totalRows,
         durationMs: duration,
       });
@@ -192,8 +206,8 @@ class FunctionQueryExecutor {
 
     const duration = Date.now() - startTime;
 
-    this.logger.debug('Batched query completed', {
-      sql: sql.substring(0, 100),
+    this.logger.debug(FUNCTION_LOG_MSG.BATCHED_EXECUTE_COMPLETE, {
+      sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
       totalRows,
       durationMs: duration,
     });
@@ -215,15 +229,15 @@ class FunctionQueryExecutor {
    */
   async executeQueryThenInvoke(sql, params, nextFunctionId, nextFunctionContext = {}) {
     if (!this.functionRegistry) {
-      throw new Error('Function registry not available');
+      throw new Error(FUNCTION_ERROR_MSG.FUNCTION_REGISTRY_UNAVAILABLE);
     }
 
     const invocationId = uuidv4();
     const startTime = Date.now();
 
-    this.logger.info('Executing query then invoke', {
+    this.logger.info(FUNCTION_LOG_MSG.QUERY_INVOKE_START, {
       invocationId,
-      sql: sql.substring(0, 100),
+      sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
       nextFunctionId,
     });
 
@@ -240,7 +254,7 @@ class FunctionQueryExecutor {
 
       const duration = Date.now() - startTime;
 
-      this.logger.info('Query completed, function invoked', {
+      this.logger.info(FUNCTION_LOG_MSG.QUERY_INVOKE_SUCCESS, {
         invocationId,
         nextFunctionId,
         rowCount: result.rows?.length || 0,
@@ -254,19 +268,12 @@ class FunctionQueryExecutor {
         success: true,
       };
     } catch (error) {
-      this.logger.error('Function invocation failed after query', {
+      this.logger.error(FUNCTION_LOG_MSG.QUERY_INVOKE_FAILURE, {
         invocationId,
         nextFunctionId,
         error: error.message,
       });
-
-      return {
-        invocationId,
-        queryResult: result,
-        functionInvoked: false,
-        error: error.message,
-        success: false,
-      };
+      throw error;
     }
   }
 

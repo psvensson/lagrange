@@ -3,6 +3,7 @@
 ## Linting Compliance
 
 All code must be written with ESLint rules in mind from the start. This project uses the Google JavaScript style guide as a base with custom overrides.
+NEVER introduce eslint override comments!
 
 ## Key Rules to Follow
 
@@ -13,6 +14,11 @@ When writing or modifying code:
 3. **Semicolons**: Always include semicolons at end of statements
 4. **Line Length**: Maximum 100 characters per line
 5. **Unused Variables**: Prefix unused function parameters with underscore (e.g., `_unused`)
+
+There must be no legacy or fallback code. When something chnages, it changes completely. Just onde codepath for any given logic.
+There must be just one way of doing something. Do not allow several ways to define a property (like m.typ and m.operation, m.foo.t, et.c.) simplify and unify logic
+Collect all scalars into constants that can be imported and only defined once
+Do not use strings and number directly in the code, but import them from files containing constants
 
 ## Before Completing Code Changes
 

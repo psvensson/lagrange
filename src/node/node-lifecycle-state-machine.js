@@ -6,30 +6,14 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-
-/**
- * Node state enumeration.
- * These are the only valid states a node can be in.
- * @enum {string}
- */
-const NodeState = {
-  // Process started, initializing local resources
-  STARTING: 'starting',
-  // Establishing WebSocket to seed nodes
-  CONNECTING: 'connecting',
-  // Receiving system cache from seed
-  DISCOVERING: 'discovering',
-  // Registered in cluster, proposing epoch, creating replicas
-  JOINING: 'joining',
-  // Syncing replica data from existing nodes
-  SYNCING: 'syncing',
-  // Accepting traffic, participating in Raft
-  READY: 'ready',
-  // Rejecting new requests, completing in-flight
-  DRAINING: 'draining',
-  // Fully stopped
-  STOPPED: 'stopped',
-};
+import {STATE, STRING} from '../constants/index.js';
+import {
+  NODE_LIFECYCLE_SUBSYSTEM,
+  NODE_LIFECYCLE_EVENT,
+  NODE_LIFECYCLE_LOG_MSG,
+  NODE_LIFECYCLE_ERROR_NAME,
+  NODE_LIFECYCLE_ERROR_MSG,
+} from './node-constants.js';
 
 /**
  * Valid state transitions map.
@@ -37,15 +21,17 @@ const NodeState = {
  * Value: array of valid next states
  */
 const VALID_TRANSITIONS = {
-  [NodeState.STARTING]: [NodeState.CONNECTING],
-  [NodeState.CONNECTING]: [NodeState.DISCOVERING, NodeState.STOPPED],
-  [NodeState.DISCOVERING]: [NodeState.JOINING, NodeState.STOPPED],
-  [NodeState.JOINING]: [NodeState.SYNCING, NodeState.STOPPED],
-  [NodeState.SYNCING]: [NodeState.READY, NodeState.STOPPED],
-  [NodeState.READY]: [NodeState.DRAINING],
-  [NodeState.DRAINING]: [NodeState.STOPPED],
-  [NodeState.STOPPED]: [],
+  [STATE.STARTING]: [STATE.CONNECTING],
+  [STATE.CONNECTING]: [STATE.DISCOVERING, STATE.STOPPED],
+  [STATE.DISCOVERING]: [STATE.JOINING, STATE.STOPPED],
+  [STATE.JOINING]: [STATE.SYNCING, STATE.STOPPED],
+  [STATE.SYNCING]: [STATE.READY, STATE.STOPPED],
+  [STATE.READY]: [STATE.DRAINING],
+  [STATE.DRAINING]: [STATE.STOPPED],
+  [STATE.STOPPED]: [],
 };
+
+const NodeState = STATE;
 
 /**
  * Error thrown when an invalid state transition is attempted.
@@ -55,16 +41,17 @@ class InvalidTransitionError extends Error {
    * Create an InvalidTransitionError.
    * @param {string} currentState - The current state.
    * @param {string} attemptedState - The attempted target state.
-   * @param {string[]} validTransitions - Valid transitions from current state.
-   */
+  * @param {string[]} validTransitions - Valid transitions from current state.
+  */
   constructor(currentState, attemptedState, validTransitions) {
-    const validStr = validTransitions.length > 0 ?
-      validTransitions.join(', ') : 'none';
     super(
-      `Invalid state transition from '${currentState}' to '${attemptedState}'. ` +
-      `Valid transitions from '${currentState}': ${validStr}`,
+      NODE_LIFECYCLE_ERROR_MSG.INVALID_TRANSITION(
+        currentState,
+        attemptedState,
+        validTransitions,
+      ),
     );
-    this.name = 'InvalidTransitionError';
+    this.name = NODE_LIFECYCLE_ERROR_NAME.INVALID_TRANSITION;
     this.currentState = currentState;
     this.attemptedState = attemptedState;
     this.validTransitions = validTransitions;
@@ -85,15 +72,15 @@ class NodeLifecycleStateMachine extends EventEmitter {
   constructor(options = {}) {
     super();
 
-    this.nodeId = options.nodeId || 'unknown';
+    this.nodeId = options.nodeId || STRING.UNKNOWN;
 
     // Initialize state to STARTING by default
-    this.state = options.initialState || NodeState.STARTING;
+    this.state = options.initialState || STATE.STARTING;
 
     // Set up subsystem logger
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('node-lifecycle-state-machine') : console;
+      loggingService.forSubsystem(NODE_LIFECYCLE_SUBSYSTEM) : console;
   }
 
   /**
@@ -134,7 +121,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
     if (!this.isValidTransition(currentState, newState)) {
       const validTransitions = VALID_TRANSITIONS[currentState] || [];
 
-      this.logger.error('Invalid state transition attempted', {
+      this.logger.error(NODE_LIFECYCLE_LOG_MSG.INVALID_TRANSITION_ATTEMPT, {
         nodeId: this.nodeId,
         currentState,
         attemptedState: newState,
@@ -150,7 +137,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
     // Update state
     this.state = newState;
 
-    this.logger.info('Node state transition', {
+    this.logger.info(NODE_LIFECYCLE_LOG_MSG.STATE_TRANSITION, {
       nodeId: this.nodeId,
       from: previousState,
       to: newState,
@@ -158,7 +145,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
     });
 
     // Emit state change event
-    this.emit('stateChange', {
+    this.emit(NODE_LIFECYCLE_EVENT.STATE_CHANGE, {
       from: previousState,
       to: newState,
       timestamp,
@@ -172,7 +159,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
    * @return {boolean} True if node is in READY state.
    */
   isReady() {
-    return this.state === NodeState.READY;
+    return this.state === STATE.READY;
   }
 
   /**
@@ -180,7 +167,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
    * @return {boolean} True if node is in DRAINING state.
    */
   isDraining() {
-    return this.state === NodeState.DRAINING;
+    return this.state === STATE.DRAINING;
   }
 
   /**
@@ -188,7 +175,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
    * @return {boolean} True if node is in JOINING state.
    */
   isJoining() {
-    return this.state === NodeState.JOINING;
+    return this.state === STATE.JOINING;
   }
 
   /**

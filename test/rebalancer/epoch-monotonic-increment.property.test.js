@@ -15,7 +15,7 @@
  * 4. Epoch increment is independent of assignment content
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   AssignmentEpochManager,

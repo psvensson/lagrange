@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {TablesView, SIZE_UNITS, POLICY_SUMMARY_MAX_LENGTH} from
   '../../../src/cli/views/tables-view.js';
 import {ROW_STATUS} from '../../../src/cli/core/base-view.js';

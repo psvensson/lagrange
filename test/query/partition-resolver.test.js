@@ -4,7 +4,7 @@
  * Requirements: 20.6, 20.7
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {PartitionResolver} from '../../src/query/partition-resolver.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 

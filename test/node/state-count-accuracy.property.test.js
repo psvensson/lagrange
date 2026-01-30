@@ -8,7 +8,7 @@
  * `getStateCounts()`.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaStateMachine,
@@ -16,6 +16,13 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+function createMockCDCService() {
+  return {
+    updateSystemTableRow: async () => ({success: true}),
+    insertSystemTableRow: async () => ({success: true}),
+  };
+}
 
 // All possible states
 const ALL_STATES = [
@@ -66,6 +73,7 @@ test('Property 11: State Count Accuracy', async (t) => {
         (replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Transition each replica through various states
@@ -102,6 +110,7 @@ test('Property 11: State Count Accuracy', async (t) => {
         (replicaIds, transitionDepth) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Transition replicas to different depths
@@ -142,6 +151,7 @@ test('Property 11: State Count Accuracy', async (t) => {
         (replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Transition replicas to pending
@@ -180,6 +190,7 @@ test('Property 11: State Count Accuracy', async (t) => {
         (replicaIds, targetStates) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Transition each replica to its target state
@@ -229,6 +240,7 @@ test('Property 11: State Count Accuracy', async (t) => {
         (replicaIds, numToRemove) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // First get all replicas to active state

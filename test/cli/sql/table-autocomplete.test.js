@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {
   TableAutocomplete,
   TABLE_CONTEXTS,

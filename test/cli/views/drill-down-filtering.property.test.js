@@ -7,7 +7,7 @@
  * **Validates: Requirements 2.3, 3.1, 4.2**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {ServicesView} from '../../../src/cli/views/services-view.js';
 

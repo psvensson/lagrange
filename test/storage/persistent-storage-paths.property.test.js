@@ -6,7 +6,7 @@
  * **Validates: Requirements 35.5**
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import path from 'path';
 import {getPartitionDbPath} from '../../src/storage/data-directory-manager.js';

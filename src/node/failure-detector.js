@@ -7,28 +7,21 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
-
-/**
- * Node status values.
- */
-const NodeStatus = {
-  ACTIVE: 'active',
-  SUSPECTED: 'suspected',
-  FAILED: 'failed',
-  RECOVERING: 'recovering',
-};
-
-/**
- * Replica status values.
- */
-const ReplicaStatus = {
-  ACTIVE: 'active',
-  INACTIVE: 'inactive',
-  FAILED: 'failed',
-  STARTING: 'starting',
-  STOPPING: 'stopping',
-};
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {NUM, SERVICE_TYPE} from '../constants/index.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  FAILURE_DETECTOR_ACTION,
+  FAILURE_DETECTOR_DEFAULT,
+  FAILURE_DETECTOR_ERROR_MSG,
+  FAILURE_DETECTOR_EVENT,
+  FAILURE_DETECTOR_LOG_MSG,
+  FAILURE_DETECTOR_REPLICA_TYPE,
+  FAILURE_DETECTOR_SUBSYSTEM,
+  NODE_STATUS,
+} from './node-constants.js';
 
 /**
  * FailureDetector monitors node health via heartbeat timeouts.
@@ -38,6 +31,8 @@ const ReplicaStatus = {
  * - Layer 1 (Raft-Level): Fast detection of replica failures (150-500ms)
  * - Layer 2 (Node-Level): Confirmation of node failures (15 seconds)
  */
+const NodeStatus = NODE_STATUS;
+
 class FailureDetector extends EventEmitter {
   /**
    * Create a new FailureDetector.
@@ -55,24 +50,32 @@ class FailureDetector extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.checkIntervalMs = config.get('failureDetector.checkIntervalMs') || 5000;
+    this.checkIntervalMs =
+      config.get(CONFIG_KEY.FAILURE_DETECTOR_CHECK_INTERVAL_MS) ||
+      FAILURE_DETECTOR_DEFAULT.CHECK_INTERVAL_MS;
     this.suspicionThresholdMs =
-      config.get('failureDetector.suspicionThresholdMs') || 10000;
+      config.get(CONFIG_KEY.FAILURE_DETECTOR_SUSPICION_THRESHOLD_MS) ||
+      FAILURE_DETECTOR_DEFAULT.SUSPICION_THRESHOLD_MS;
     this.failureThresholdMs =
-      config.get('failureDetector.failureThresholdMs') || 15000;
+      config.get(CONFIG_KEY.FAILURE_DETECTOR_FAILURE_THRESHOLD_MS) ||
+      FAILURE_DETECTOR_DEFAULT.FAILURE_THRESHOLD_MS;
     this.flappingWindowMs =
-      config.get('failureDetector.flappingWindowMs') || 30000;
+      config.get(CONFIG_KEY.FAILURE_DETECTOR_FLAPPING_WINDOW_MS) ||
+      FAILURE_DETECTOR_DEFAULT.FLAPPING_WINDOW_MS;
     this.flappingThreshold =
-      config.get('failureDetector.flappingThreshold') || 3;
+      config.get(CONFIG_KEY.FAILURE_DETECTOR_FLAPPING_THRESHOLD) ||
+      FAILURE_DETECTOR_DEFAULT.FLAPPING_THRESHOLD;
     this.adaptiveMaxThresholdMs =
-      config.get('failureDetector.adaptiveMaxThresholdMs') || 60000;
+      config.get(CONFIG_KEY.FAILURE_DETECTOR_ADAPTIVE_MAX_THRESHOLD_MS) ||
+      FAILURE_DETECTOR_DEFAULT.ADAPTIVE_MAX_THRESHOLD_MS;
     this.stabilityPeriodMs =
-      config.get('failureDetector.stabilityPeriodMs') || 300000;
+      config.get(CONFIG_KEY.FAILURE_DETECTOR_STABILITY_PERIOD_MS) ||
+      FAILURE_DETECTOR_DEFAULT.STABILITY_PERIOD_MS;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('failure-detector') : console;
+      loggingService.forSubsystem(FAILURE_DETECTOR_SUBSYSTEM) : console;
 
     // State
     this.checkTimer = null;
@@ -99,12 +102,20 @@ class FailureDetector extends EventEmitter {
     }
 
     if (!this.nodeId) {
-      throw new Error('FailureDetector requires nodeId');
+      throw new Error(FAILURE_DETECTOR_ERROR_MSG.MISSING_NODE_ID);
     }
+    this.systemTableCache = assertCritical(
+      this.systemTableCache,
+      FAILURE_DETECTOR_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
+    this.cdcIntegrationService = assertCritical(
+      this.cdcIntegrationService,
+      FAILURE_DETECTOR_ERROR_MSG.MISSING_CDC_SERVICE,
+    );
 
     this.initialized = true;
 
-    this.logger.info('Failure detector initialized', {
+    this.logger.info(FAILURE_DETECTOR_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
       checkIntervalMs: this.checkIntervalMs,
       suspicionThresholdMs: this.suspicionThresholdMs,
@@ -117,14 +128,14 @@ class FailureDetector extends EventEmitter {
    */
   start() {
     if (!this.initialized) {
-      throw new Error('FailureDetector not initialized');
+      throw new Error(FAILURE_DETECTOR_ERROR_MSG.NOT_INITIALIZED);
     }
 
     if (this.checkTimer) {
       return; // Already running
     }
 
-    this.logger.info('Starting failure detection', {
+    this.logger.info(FAILURE_DETECTOR_LOG_MSG.STARTING, {
       nodeId: this.nodeId,
       intervalMs: this.checkIntervalMs,
     });
@@ -133,10 +144,14 @@ class FailureDetector extends EventEmitter {
       try {
         await this.checkNodeHealth();
       } catch (error) {
-        this.logger.error('Error during failure detection check', {
+        if (error?.isCritical) {
+          throw error;
+        }
+        this.logger.error(FAILURE_DETECTOR_LOG_MSG.CHECK_ERROR, {
           nodeId: this.nodeId,
           error: error.message,
         });
+        throw error;
       }
     }, this.checkIntervalMs);
 
@@ -158,7 +173,7 @@ class FailureDetector extends EventEmitter {
       this.adaptiveResetTimer = null;
     }
 
-    this.logger.info('Stopped failure detection', {
+    this.logger.info(FAILURE_DETECTOR_LOG_MSG.STOPPED, {
       nodeId: this.nodeId,
     });
   }
@@ -189,27 +204,27 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async evaluateNodeHealth(node, now) {
-    const lastHeartbeat = node.last_heartbeat || 0;
+    const lastHeartbeat = node.last_heartbeat || NUM.ZERO;
     const timeSinceHeartbeat = now - lastHeartbeat;
 
     // Node recovery detected
-    if (node.status === NodeStatus.FAILED &&
+    if (node.status === NODE_STATUS.FAILED &&
         timeSinceHeartbeat < this.currentFailureThreshold) {
       await this.handleNodeRecovery(node, now);
       return;
     }
 
     // Skip already failed nodes
-    if (node.status === NodeStatus.FAILED) {
+    if (node.status === NODE_STATUS.FAILED) {
       return;
     }
 
     // Node has failed (no heartbeat for too long)
     if (timeSinceHeartbeat > this.currentFailureThreshold) {
-      if (node.status === NodeStatus.SUSPECTED) {
+      if (node.status === NODE_STATUS.SUSPECTED) {
         // Already suspected, now confirm failure
         await this.handleNodeFailure(node, now);
-      } else if (node.status === NodeStatus.ACTIVE) {
+      } else if (node.status === NODE_STATUS.ACTIVE) {
         // First timeout, mark as suspected
         await this.handleNodeSuspicion(node, now, timeSinceHeartbeat);
       }
@@ -218,7 +233,7 @@ class FailureDetector extends EventEmitter {
 
     // Node is suspected (slow to respond)
     if (timeSinceHeartbeat > this.suspicionThresholdMs &&
-        node.status === NodeStatus.ACTIVE) {
+        node.status === NODE_STATUS.ACTIVE) {
       await this.handleNodeSuspicion(node, now, timeSinceHeartbeat);
     }
   }
@@ -232,31 +247,30 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async handleNodeSuspicion(node, now, timeSinceHeartbeat) {
-    this.logger.warn('Node suspected of failure', {
+    this.logger.warn(FAILURE_DETECTOR_LOG_MSG.NODE_SUSPECTED, {
       nodeId: node.node_id,
       timeSinceHeartbeat,
       threshold: this.suspicionThresholdMs,
     });
 
-    if (this.cdcIntegrationService) {
-      try {
-        await this.cdcIntegrationService.updateSystemTableRow(
-          SystemTableName.NODES,
-          {node_id: node.node_id},
-          {
-            status: NodeStatus.SUSPECTED,
-            updated_at: now,
-          },
-        );
-      } catch (error) {
-        this.logger.error('Failed to mark node as suspected', {
-          nodeId: node.node_id,
-          error: error.message,
-        });
-      }
+    try {
+      await this.cdcIntegrationService.updateSystemTableRow(
+        SystemTableName.NODES,
+        {node_id: node.node_id},
+        {
+          status: NODE_STATUS.SUSPECTED,
+          updated_at: now,
+        },
+      );
+    } catch (error) {
+      this.logger.error(FAILURE_DETECTOR_LOG_MSG.MARK_NODE_SUSPECTED_FAILED, {
+        nodeId: node.node_id,
+        error: error.message,
+      });
+      throw error;
     }
 
-    this.emit('nodeSuspected', {
+    this.emit(FAILURE_DETECTOR_EVENT.NODE_SUSPECTED, {
       nodeId: node.node_id,
       timeSinceHeartbeat,
     });
@@ -270,9 +284,9 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async handleNodeFailure(node, now) {
-    this.logger.error('Node failure detected', {
+    this.logger.error(FAILURE_DETECTOR_LOG_MSG.NODE_FAILURE_DETECTED, {
       nodeId: node.node_id,
-      lastHeartbeat: new Date(node.last_heartbeat || 0).toISOString(),
+      lastHeartbeat: new Date(node.last_heartbeat || NUM.ZERO).toISOString(),
       threshold: this.currentFailureThreshold,
     });
 
@@ -280,29 +294,28 @@ class FailureDetector extends EventEmitter {
     await this.checkFlapping(node.node_id, now);
 
     // Mark node as failed
-    if (this.cdcIntegrationService) {
-      try {
-        await this.cdcIntegrationService.updateSystemTableRow(
-          SystemTableName.NODES,
-          {node_id: node.node_id},
-          {
-            status: NodeStatus.FAILED,
-            failed_at: now,
-            updated_at: now,
-          },
-        );
-      } catch (error) {
-        this.logger.error('Failed to mark node as failed', {
-          nodeId: node.node_id,
-          error: error.message,
-        });
-      }
+    try {
+      await this.cdcIntegrationService.updateSystemTableRow(
+        SystemTableName.NODES,
+        {node_id: node.node_id},
+        {
+          status: NODE_STATUS.FAILED,
+          failed_at: now,
+          updated_at: now,
+        },
+      );
+    } catch (error) {
+      this.logger.error(FAILURE_DETECTOR_LOG_MSG.MARK_NODE_FAILED_FAILED, {
+        nodeId: node.node_id,
+        error: error.message,
+      });
+      throw error;
     }
 
     // Mark all replicas on this node as failed
     await this.markReplicasAsFailed(node.node_id, now);
 
-    this.emit('nodeFailure', {
+    this.emit(FAILURE_DETECTOR_EVENT.NODE_FAILURE, {
       nodeId: node.node_id,
       timestamp: now,
     });
@@ -318,31 +331,30 @@ class FailureDetector extends EventEmitter {
   async handleNodeRecovery(node, now) {
     const downtime = now - (node.failed_at || node.last_heartbeat || now);
 
-    this.logger.info('Node recovery detected', {
+    this.logger.info(FAILURE_DETECTOR_LOG_MSG.NODE_RECOVERY_DETECTED, {
       nodeId: node.node_id,
       downtime,
     });
 
-    if (this.cdcIntegrationService) {
-      try {
-        await this.cdcIntegrationService.updateSystemTableRow(
-          SystemTableName.NODES,
-          {node_id: node.node_id},
-          {
-            status: NodeStatus.RECOVERING,
-            recovered_at: now,
-            updated_at: now,
-          },
-        );
-      } catch (error) {
-        this.logger.error('Failed to mark node as recovering', {
-          nodeId: node.node_id,
-          error: error.message,
-        });
-      }
+    try {
+      await this.cdcIntegrationService.updateSystemTableRow(
+        SystemTableName.NODES,
+        {node_id: node.node_id},
+        {
+          status: NODE_STATUS.RECOVERING,
+          recovered_at: now,
+          updated_at: now,
+        },
+      );
+    } catch (error) {
+      this.logger.error(FAILURE_DETECTOR_LOG_MSG.MARK_NODE_RECOVERING_FAILED, {
+        nodeId: node.node_id,
+        error: error.message,
+      });
+      throw error;
     }
 
-    this.emit('nodeRecovery', {
+    this.emit(FAILURE_DETECTOR_EVENT.NODE_RECOVERY, {
       nodeId: node.node_id,
       downtime,
       timestamp: now,
@@ -369,7 +381,7 @@ class FailureDetector extends EventEmitter {
       await this.markMessageGroupReplicaAsFailed(replica, nodeId, now);
     }
 
-    this.logger.info('Marked replicas as failed', {
+    this.logger.info(FAILURE_DETECTOR_LOG_MSG.MARKED_REPLICAS_FAILED, {
       nodeId,
       partitionReplicas: partitionReplicas.length,
       messageGroupReplicas: messageGroupReplicas.length,
@@ -385,10 +397,6 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async markReplicaAsFailed(replica, nodeId, now) {
-    if (!this.cdcIntegrationService) {
-      return;
-    }
-
     try {
       await this.cdcIntegrationService.updateSystemTableRow(
         SystemTableName.SERVICES,
@@ -399,23 +407,27 @@ class FailureDetector extends EventEmitter {
         },
       );
 
-      this.logger.warn('Marked partition replica as failed', {
+      this.logger.warn(FAILURE_DETECTOR_LOG_MSG.MARK_PARTITION_REPLICA_FAILED, {
         serviceId: replica.service_id,
         partitionId: replica.partition_id,
         nodeId,
       });
 
-      this.emit('replicaFailed', {
-        type: 'partition',
+      this.emit(FAILURE_DETECTOR_EVENT.REPLICA_FAILED, {
+        type: FAILURE_DETECTOR_REPLICA_TYPE.PARTITION,
         serviceId: replica.service_id,
         partitionId: replica.partition_id,
         nodeId,
       });
     } catch (error) {
-      this.logger.error('Failed to mark partition replica as failed', {
-        serviceId: replica.service_id,
-        error: error.message,
-      });
+      this.logger.error(
+        FAILURE_DETECTOR_LOG_MSG.MARK_PARTITION_REPLICA_FAILED_FAILED,
+        {
+          serviceId: replica.service_id,
+          error: error.message,
+        },
+      );
+      throw error;
     }
   }
 
@@ -428,10 +440,6 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async markMessageGroupReplicaAsFailed(replica, nodeId, now) {
-    if (!this.cdcIntegrationService) {
-      return;
-    }
-
     try {
       await this.cdcIntegrationService.updateSystemTableRow(
         SystemTableName.SERVICES,
@@ -442,23 +450,30 @@ class FailureDetector extends EventEmitter {
         },
       );
 
-      this.logger.warn('Marked message group replica as failed', {
-        serviceId: replica.service_id,
-        groupId: replica.group_id,
-        nodeId,
-      });
+      this.logger.warn(
+        FAILURE_DETECTOR_LOG_MSG.MARK_MESSAGE_GROUP_REPLICA_FAILED,
+        {
+          serviceId: replica.service_id,
+          groupId: replica.group_id,
+          nodeId,
+        },
+      );
 
-      this.emit('replicaFailed', {
-        type: 'message_group',
+      this.emit(FAILURE_DETECTOR_EVENT.REPLICA_FAILED, {
+        type: FAILURE_DETECTOR_REPLICA_TYPE.MESSAGE_GROUP,
         serviceId: replica.service_id,
         groupId: replica.group_id,
         nodeId,
       });
     } catch (error) {
-      this.logger.error('Failed to mark message group replica as failed', {
-        serviceId: replica.service_id,
-        error: error.message,
-      });
+      this.logger.error(
+        FAILURE_DETECTOR_LOG_MSG.MARK_MESSAGE_GROUP_REPLICA_FAILED_FAILED,
+        {
+          serviceId: replica.service_id,
+          error: error.message,
+        },
+      );
+      throw error;
     }
   }
 
@@ -478,16 +493,16 @@ class FailureDetector extends EventEmitter {
     ).length;
 
     if (recentCount >= this.flappingThreshold) {
-      this.logger.error('Node flapping detected', {
+      this.logger.error(FAILURE_DETECTOR_LOG_MSG.NODE_FLAPPING_DETECTED, {
         nodeId,
         failureCount: recentCount,
         window: this.flappingWindowMs,
-        action: 'Increasing failure threshold adaptively',
+        action: FAILURE_DETECTOR_ACTION.ADAPTIVE_THRESHOLD_INCREASE,
       });
 
       // Increase threshold adaptively (up to max)
       this.currentFailureThreshold = Math.min(
-        this.currentFailureThreshold * 1.5,
+        this.currentFailureThreshold * FAILURE_DETECTOR_DEFAULT.ADAPTIVE_MULTIPLIER,
         this.adaptiveMaxThresholdMs,
       );
     }
@@ -510,7 +525,7 @@ class FailureDetector extends EventEmitter {
       const now = Date.now();
 
       for (const [nodeId, failures] of this.recentFailures) {
-        if (failures.length === 0) {
+        if (failures.length === NUM.ZERO) {
           continue;
         }
 
@@ -521,13 +536,13 @@ class FailureDetector extends EventEmitter {
           this.currentFailureThreshold = this.failureThresholdMs;
           this.recentFailures.delete(nodeId);
 
-          this.logger.info('Reset adaptive threshold for stable node', {
+          this.logger.info(FAILURE_DETECTOR_LOG_MSG.RESET_ADAPTIVE_THRESHOLD, {
             nodeId,
             newThreshold: this.currentFailureThreshold,
           });
         }
       }
-    }, 60000); // Check every minute
+    }, FAILURE_DETECTOR_DEFAULT.ADAPTIVE_RESET_INTERVAL_MS);
   }
 
   /**
@@ -536,15 +551,12 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   getNodes() {
-    if (!this.systemTableCache) {
-      return [];
-    }
+    assertCritical(
+      this.systemTableCache,
+      FAILURE_DETECTOR_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
-    try {
-      return this.systemTableCache.getAll('nodes') || [];
-    } catch (_error) {
-      return [];
-    }
+    return this.systemTableCache.getAll(SystemTableName.NODES);
   }
 
   /**
@@ -554,18 +566,15 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   getPartitionReplicasOnNode(nodeId) {
-    if (!this.systemTableCache) {
-      return [];
-    }
+    assertCritical(
+      this.systemTableCache,
+      FAILURE_DETECTOR_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
-    try {
-      return this.systemTableCache.filter('services', (service) => {
-        return service.node_id === nodeId &&
-          service.service_type === 'partition';
-      }) || [];
-    } catch (_error) {
-      return [];
-    }
+    return this.systemTableCache.filter(SystemTableName.SERVICES, (service) => {
+      return service.node_id === nodeId &&
+        service.service_type === SERVICE_TYPE.PARTITION;
+    });
   }
 
   /**
@@ -575,18 +584,15 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   getMessageGroupReplicasOnNode(nodeId) {
-    if (!this.systemTableCache) {
-      return [];
-    }
+    assertCritical(
+      this.systemTableCache,
+      FAILURE_DETECTOR_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
-    try {
-      return this.systemTableCache.filter('services', (service) => {
-        return service.node_id === nodeId &&
-          service.service_type === 'message_group_replica';
-      }) || [];
-    } catch (_error) {
-      return [];
-    }
+    return this.systemTableCache.filter(SystemTableName.SERVICES, (service) => {
+      return service.node_id === nodeId &&
+        service.service_type === SERVICE_TYPE.MESSAGE_GROUP_REPLICA;
+    });
   }
 
   /**
@@ -637,7 +643,7 @@ class FailureDetector extends EventEmitter {
     this.currentFailureThreshold = this.failureThresholdMs;
     this.initialized = false;
 
-    this.logger.info('Failure detector shutdown', {
+    this.logger.info(FAILURE_DETECTOR_LOG_MSG.SHUTDOWN, {
       nodeId: this.nodeId,
     });
   }

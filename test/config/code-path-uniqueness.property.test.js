@@ -13,7 +13,7 @@
  * 3. Only observability-related flags are allowed
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import fs from 'fs';
 import path from 'path';

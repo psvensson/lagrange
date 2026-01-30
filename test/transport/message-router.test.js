@@ -4,7 +4,7 @@
  * Requirements: 4.21, 4.22, 11.6, 11.7, 11.8, 11.9
  */
 
-import {test} from 'tap';
+import t from '../../src/test-helpers/tap.js';
 import {MessageRouter, ConnectionState, RouterMessageType} from
   '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -35,7 +35,7 @@ function cleanupTestEnvironment() {
   LoggingService.resetInstance();
 }
 
-test('MessageRouter unit tests', async (t) => {
+t.test('MessageRouter unit tests', async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });
@@ -141,22 +141,23 @@ test('MessageRouter unit tests', async (t) => {
     await router.shutdown();
   });
 
-  t.test('should allow skipValidation option for legacy addresses', async (t) => {
+  t.test('should reject non-unified addresses', async (t) => {
     const router = new MessageRouter({nodeId: 'test-node'});
     await router.initialize();
 
     const handler = () => ({acknowledged: true});
 
-    // Should not throw with skipValidation
-    router.register('legacy-address', handler, {skipValidation: true});
-    t.ok(router.isRegistered('legacy-address'), 'should register legacy address');
+    t.throws(
+      () => router.register('legacy-address', handler),
+      /Invalid address format/,
+      'should reject non-unified address formats',
+    );
 
     await router.shutdown();
   });
 
   t.test('should return error when delivering without connection', async (t) => {
-    // In the unified transport architecture, all messages go through WebSocket
-    // Without a self-connection, delivery to local handlers will fail
+    // Without a self-connection, local delivery should fail rather than bypass transport.
     const router = new MessageRouter({nodeId: 'test-node'});
     await router.initialize();
 
@@ -166,22 +167,21 @@ test('MessageRouter unit tests', async (t) => {
       return {acknowledged: true, data: 'response'};
     });
 
-    // Without self-connection, delivery should fail
+    // Without self-connection, delivery should fail with a connection error.
     const result = await router.deliver('test-node/service/local-service', {
       type: 'TEST_MESSAGE',
       data: 'hello',
     });
 
     t.ok(result.messageId, 'should have message ID');
-    t.equal(result.acknowledged, false, 'should not be acknowledged without connection');
-    t.ok(result.error, 'should have error message');
-    t.equal(receivedMessages.length, 0, 'should not receive message without connection');
+    t.equal(result.acknowledged, false, 'should not be acknowledged');
+    t.ok(result.error, 'should include error message');
+    t.equal(receivedMessages.length, 0, 'should not invoke handler');
 
     await router.shutdown();
   });
 
   t.test('should return error for async handler without connection', async (t) => {
-    // In the unified transport architecture, all messages go through WebSocket
     const router = new MessageRouter({nodeId: 'test-node'});
     await router.initialize();
 
@@ -190,11 +190,10 @@ test('MessageRouter unit tests', async (t) => {
       return {acknowledged: true, processed: envelope.payload.data};
     });
 
-    // Without self-connection, delivery should fail
     const result = await router.deliver('test-node/service/async-service', {data: 'async-test'});
 
-    t.equal(result.acknowledged, false, 'should not be acknowledged without connection');
-    t.ok(result.error, 'should have error message');
+    t.equal(result.acknowledged, false, 'should not be acknowledged');
+    t.ok(result.error, 'should include error message');
 
     await router.shutdown();
   });
@@ -218,15 +217,13 @@ test('MessageRouter unit tests', async (t) => {
   });
 
   t.test('should return error for unknown service without connection', async (t) => {
-    // In the unified transport architecture, all messages go through WebSocket
     const router = new MessageRouter({nodeId: 'test-node'});
     await router.initialize();
 
-    // Without self-connection, delivery should fail with connection error
     const result = await router.deliver('test-node/service/unknown-service', {data: 'test'});
 
     t.equal(result.acknowledged, false, 'should not be acknowledged');
-    t.ok(result.error, 'should have error message');
+    t.ok(result.error, 'should include error message');
 
     await router.shutdown();
   });
@@ -321,6 +318,44 @@ test('MessageRouter unit tests', async (t) => {
     t.equal(RouterMessageType.IDENTIFY, 'identify');
     t.equal(RouterMessageType.PING, 'ping');
     t.equal(RouterMessageType.PONG, 'pong');
+  });
+
+  t.test('should emit nodeConnected on identification', async (t) => {
+    const router = new MessageRouter({nodeId: 'local-node'});
+    await router.initialize({startServer: false});
+
+    const connectionId = 'incoming-connection';
+    router.nodeConnections.set(connectionId, {
+      connectionId,
+      nodeId: null,
+      nodeAddress: null,
+      ws: {},
+      state: ConnectionState.CONNECTED,
+      reconnectAttempts: 0,
+      isIncoming: true,
+      isSelfConnection: false,
+      createdAt: Date.now(),
+    });
+
+    let eventPayload = null;
+    router.on('nodeConnected', (payload) => {
+      eventPayload = payload;
+    });
+
+    router.handleIdentification(connectionId, {}, {
+      type: RouterMessageType.IDENTIFY,
+      nodeId: 'remote-node',
+      nodeAddress: 'ws://remote-node:9999',
+    });
+
+    t.ok(eventPayload, 'should emit nodeConnected');
+    t.equal(eventPayload.nodeId, 'remote-node', 'should include nodeId');
+    t.equal(eventPayload.nodeAddress, 'ws://remote-node:9999', 'should include nodeAddress');
+    t.equal(eventPayload.connectionId, connectionId, 'should include connectionId');
+    t.ok(router.nodeConnections.has('remote-node'), 'should re-key connection by nodeId');
+    t.notOk(router.nodeConnections.has(connectionId), 'should remove old connection key');
+
+    await router.shutdown();
   });
 
   t.test('should emit initialized event', async (t) => {
@@ -491,7 +526,11 @@ test('MessageRouter unit tests', async (t) => {
 
     // Regular connections should not be marked as self-connection
     // (we can't easily test this without another node, but we verify the flag exists)
-    t.equal(typeof selfConnection.isSelfConnection, 'boolean', 'isSelfConnection should be boolean');
+    t.equal(
+      typeof selfConnection.isSelfConnection,
+      'boolean',
+      'isSelfConnection should be boolean',
+    );
 
     await router.shutdown();
   });
@@ -532,5 +571,56 @@ test('MessageRouter unit tests', async (t) => {
 
     await router1.shutdown();
     // router2 doesn't need shutdown since it failed to initialize
+  });
+
+  t.test('outbound queue enforces per-node concurrency', async (t) => {
+    const router = new MessageRouter({nodeId: 'test-node'});
+    await router.initialize({startServer: false});
+    router.outboundQueueMaxConcurrent = 1;
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const deliveries = [];
+
+    for (let i = 0; i < 3; i++) {
+      deliveries.push(router.enqueueOutbound('node-1', async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await Promise.resolve();
+        inFlight -= 1;
+        return {acknowledged: true};
+      }));
+    }
+
+    await Promise.all(deliveries);
+    t.equal(maxInFlight, 1, 'limits in-flight per node');
+
+    await router.shutdown();
+  });
+
+  t.test('failOutboundQueue rejects pending deliveries', async (t) => {
+    const router = new MessageRouter({nodeId: 'test-node'});
+    await router.initialize({startServer: false});
+    router.outboundQueueMaxConcurrent = 1;
+
+    let releaseFirst = null;
+    const firstPromise = router.enqueueOutbound('node-1', () => {
+      return new Promise((resolve) => {
+        releaseFirst = resolve;
+      });
+    });
+
+    const secondPromise = router.enqueueOutbound('node-1', async () => {
+      return {acknowledged: true};
+    });
+
+    router.failOutboundQueue('node-1', new Error('disconnect'));
+
+    await t.rejects(secondPromise, /disconnect/, 'pending delivery rejected');
+
+    releaseFirst({acknowledged: true});
+    await firstPromise;
+
+    await router.shutdown();
   });
 });

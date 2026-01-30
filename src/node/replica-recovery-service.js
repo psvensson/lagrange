@@ -8,35 +8,39 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {NUM, SERVICE_TYPE} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  REPLICA_RECOVERY_DEFAULT,
+  REPLICA_RECOVERY_ENTITY_TYPE,
+  REPLICA_RECOVERY_ERROR_MSG,
+  REPLICA_RECOVERY_EVENT,
+  REPLICA_RECOVERY_KEY_PREFIX,
+  REPLICA_RECOVERY_LOG_MSG,
+  REPLICA_RECOVERY_NODE_STATUS,
+  REPLICA_RECOVERY_NUM,
+  REPLICA_RECOVERY_REPLICA_STATUS,
+  REPLICA_RECOVERY_SUBSYSTEM,
+} from './replica-recovery-constants.js';
 
 /**
  * Node status values.
  */
-const NodeStatus = {
-  ACTIVE: 'active',
-  SUSPECTED: 'suspected',
-  FAILED: 'failed',
-  RECOVERING: 'recovering',
-};
+const NodeStatus = REPLICA_RECOVERY_NODE_STATUS;
 
 /**
  * Replica status values.
  */
-const ReplicaStatus = {
-  ACTIVE: 'active',
-  INACTIVE: 'inactive',
-  FAILED: 'failed',
-  STARTING: 'starting',
-  STOPPING: 'stopping',
-};
+const ReplicaStatus = REPLICA_RECOVERY_REPLICA_STATUS;
 
 /**
  * Service types.
  */
 const ServiceType = {
-  PARTITION_REPLICA: 'partition',
-  MESSAGE_GROUP_REPLICA: 'message_group',
+  PARTITION_REPLICA: SERVICE_TYPE.PARTITION,
+  MESSAGE_GROUP_REPLICA: SERVICE_TYPE.MESSAGE_GROUP,
 };
 
 /**
@@ -61,16 +65,20 @@ class ReplicaRecoveryService extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.checkIntervalMs = config.get('replicaRecovery.checkIntervalMs') || 10000;
-    this.minPartitionReplicas = config.get('replicaRecovery.minPartitionReplicas') || 3;
+    this.checkIntervalMs = config.get(CONFIG_KEY.REPLICA_RECOVERY_CHECK_INTERVAL_MS) ||
+      REPLICA_RECOVERY_DEFAULT.CHECK_INTERVAL_MS;
+    this.minPartitionReplicas = config.get(CONFIG_KEY.REPLICA_RECOVERY_MIN_PARTITION_REPLICAS) ||
+      REPLICA_RECOVERY_DEFAULT.MIN_PARTITION_REPLICAS;
     this.minMessageGroupReplicas =
-      config.get('replicaRecovery.minMessageGroupReplicas') || 3;
-    this.recoveryDelayMs = config.get('replicaRecovery.recoveryDelayMs') || 5000;
+      config.get(CONFIG_KEY.REPLICA_RECOVERY_MIN_MESSAGE_GROUP_REPLICAS) ||
+      REPLICA_RECOVERY_DEFAULT.MIN_MESSAGE_GROUP_REPLICAS;
+    this.recoveryDelayMs = config.get(CONFIG_KEY.REPLICA_RECOVERY_DELAY_MS) ||
+      REPLICA_RECOVERY_DEFAULT.RECOVERY_DELAY_MS;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('replica-recovery') : console;
+      loggingService.forSubsystem(REPLICA_RECOVERY_SUBSYSTEM) : console;
 
     // State
     this.checkTimer = null;
@@ -96,12 +104,20 @@ class ReplicaRecoveryService extends EventEmitter {
     }
 
     if (!this.nodeId) {
-      throw new Error('ReplicaRecoveryService requires nodeId');
+      throw new Error(REPLICA_RECOVERY_ERROR_MSG.MISSING_NODE_ID);
     }
+    this.systemTableCache = assertCritical(
+      this.systemTableCache,
+      REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
+    this.cdcIntegrationService = assertCritical(
+      this.cdcIntegrationService,
+      REPLICA_RECOVERY_ERROR_MSG.MISSING_CDC_SERVICE,
+    );
 
     this.initialized = true;
 
-    this.logger.info('Replica recovery service initialized', {
+    this.logger.info(REPLICA_RECOVERY_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
       checkIntervalMs: this.checkIntervalMs,
       minPartitionReplicas: this.minPartitionReplicas,
@@ -114,14 +130,14 @@ class ReplicaRecoveryService extends EventEmitter {
    */
   start() {
     if (!this.initialized) {
-      throw new Error('ReplicaRecoveryService not initialized');
+      throw new Error(REPLICA_RECOVERY_ERROR_MSG.NOT_INITIALIZED);
     }
 
     if (this.checkTimer) {
       return; // Already running
     }
 
-    this.logger.info('Starting replica recovery monitoring', {
+    this.logger.info(REPLICA_RECOVERY_LOG_MSG.STARTING_MONITORING, {
       nodeId: this.nodeId,
       intervalMs: this.checkIntervalMs,
     });
@@ -130,10 +146,14 @@ class ReplicaRecoveryService extends EventEmitter {
       try {
         await this.checkReplicaCounts();
       } catch (error) {
-        this.logger.error('Error during replica recovery check', {
+        if (error?.isCritical) {
+          throw error;
+        }
+        this.logger.error(REPLICA_RECOVERY_LOG_MSG.CHECK_ERROR, {
           nodeId: this.nodeId,
           error: error.message,
         });
+        throw error;
       }
     }, this.checkIntervalMs);
   }
@@ -147,7 +167,7 @@ class ReplicaRecoveryService extends EventEmitter {
       this.checkTimer = null;
     }
 
-    this.logger.info('Stopped replica recovery monitoring', {
+    this.logger.info(REPLICA_RECOVERY_LOG_MSG.STOPPED_MONITORING, {
       nodeId: this.nodeId,
     });
   }
@@ -207,14 +227,14 @@ class ReplicaRecoveryService extends EventEmitter {
    */
   async triggerPartitionRecovery(partition, healthyReplicas, targetCount) {
     const needed = targetCount - healthyReplicas.length;
-    const recoveryKey = `partition:${partition.partition_id}`;
+    const recoveryKey = `${REPLICA_RECOVERY_KEY_PREFIX.PARTITION}${partition.partition_id}`;
 
     // Check if recovery is already pending
     if (this.pendingRecoveries.has(recoveryKey)) {
       return;
     }
 
-    this.logger.warn('Partition replica count below minimum', {
+    this.logger.warn(REPLICA_RECOVERY_LOG_MSG.PARTITION_BELOW_MIN, {
       partitionId: partition.partition_id,
       tableId: partition.table_id,
       healthyCount: healthyReplicas.length,
@@ -232,8 +252,8 @@ class ReplicaRecoveryService extends EventEmitter {
     // If not enough candidate nodes, allow duplicates on existing nodes
     const targetNodes = this.selectTargetNodes(candidateNodes, healthyNodes, needed);
 
-    if (targetNodes.length === 0) {
-      this.logger.error('No healthy nodes available for partition recovery', {
+    if (targetNodes.length === REPLICA_RECOVERY_NUM.ZERO) {
+      this.logger.error(REPLICA_RECOVERY_LOG_MSG.NO_HEALTHY_NODES_PARTITION, {
         partitionId: partition.partition_id,
         needed,
       });
@@ -242,7 +262,7 @@ class ReplicaRecoveryService extends EventEmitter {
 
     // Mark recovery as pending
     this.pendingRecoveries.set(recoveryKey, {
-      type: 'partition',
+      type: REPLICA_RECOVERY_ENTITY_TYPE.PARTITION,
       entityId: partition.partition_id,
       startedAt: Date.now(),
       targetNodes,
@@ -267,14 +287,14 @@ class ReplicaRecoveryService extends EventEmitter {
    */
   async triggerMessageGroupRecovery(group, healthyReplicas, targetCount) {
     const needed = targetCount - healthyReplicas.length;
-    const recoveryKey = `message_group:${group.group_id}`;
+    const recoveryKey = `${REPLICA_RECOVERY_KEY_PREFIX.MESSAGE_GROUP}${group.group_id}`;
 
     // Check if recovery is already pending
     if (this.pendingRecoveries.has(recoveryKey)) {
       return;
     }
 
-    this.logger.warn('Message group replica count below minimum', {
+    this.logger.warn(REPLICA_RECOVERY_LOG_MSG.MESSAGE_GROUP_BELOW_MIN, {
       groupId: group.group_id,
       healthyCount: healthyReplicas.length,
       targetCount,
@@ -291,8 +311,8 @@ class ReplicaRecoveryService extends EventEmitter {
     // If not enough candidate nodes, allow duplicates on existing nodes
     const targetNodes = this.selectTargetNodes(candidateNodes, healthyNodes, needed);
 
-    if (targetNodes.length === 0) {
-      this.logger.error('No healthy nodes available for message group recovery', {
+    if (targetNodes.length === REPLICA_RECOVERY_NUM.ZERO) {
+      this.logger.error(REPLICA_RECOVERY_LOG_MSG.NO_HEALTHY_NODES_MESSAGE_GROUP, {
         groupId: group.group_id,
         needed,
       });
@@ -301,7 +321,7 @@ class ReplicaRecoveryService extends EventEmitter {
 
     // Mark recovery as pending
     this.pendingRecoveries.set(recoveryKey, {
-      type: 'message_group',
+      type: REPLICA_RECOVERY_ENTITY_TYPE.MESSAGE_GROUP,
       entityId: group.group_id,
       startedAt: Date.now(),
       targetNodes,
@@ -328,16 +348,21 @@ class ReplicaRecoveryService extends EventEmitter {
     const selected = [];
 
     // First, use preferred nodes (no existing replicas)
-    for (let i = 0; i < Math.min(needed, preferredNodes.length); i++) {
+    for (let i = REPLICA_RECOVERY_NUM.ZERO;
+      i < Math.min(needed, preferredNodes.length);
+      i++) {
       selected.push(preferredNodes[i]);
     }
 
     // If still need more, use any healthy node
     const remaining = needed - selected.length;
-    if (remaining > 0 && allNodes.length > 0) {
+    if (remaining > REPLICA_RECOVERY_NUM.ZERO &&
+      allNodes.length > REPLICA_RECOVERY_NUM.ZERO) {
       // Sort by load (prefer less loaded nodes)
       const sortedNodes = this.sortNodesByLoad(allNodes);
-      for (let i = 0; i < remaining && i < sortedNodes.length; i++) {
+      for (let i = REPLICA_RECOVERY_NUM.ZERO;
+        i < remaining && i < sortedNodes.length;
+        i++) {
         selected.push(sortedNodes[i]);
       }
     }
@@ -353,12 +378,12 @@ class ReplicaRecoveryService extends EventEmitter {
    */
   sortNodesByLoad(nodes) {
     return [...nodes].sort((a, b) => {
-      const loadA = (a.cpu_usage_percent || 0) +
-        (a.memory_usage_percent || 0) +
-        (a.disk_usage_percent || 0);
-      const loadB = (b.cpu_usage_percent || 0) +
-        (b.memory_usage_percent || 0) +
-        (b.disk_usage_percent || 0);
+      const loadA = (a.cpu_usage_percent || NUM.ZERO) +
+        (a.memory_usage_percent || NUM.ZERO) +
+        (a.disk_usage_percent || NUM.ZERO);
+      const loadB = (b.cpu_usage_percent || NUM.ZERO) +
+        (b.memory_usage_percent || NUM.ZERO) +
+        (b.disk_usage_percent || NUM.ZERO);
       return loadA - loadB;
     });
   }
@@ -373,55 +398,51 @@ class ReplicaRecoveryService extends EventEmitter {
   async createPartitionReplica(partition, nodeId) {
     const serviceId = uuidv4();
 
-    this.logger.info('Creating replacement partition replica', {
+    this.logger.info(REPLICA_RECOVERY_LOG_MSG.CREATE_PARTITION_REPLICA, {
       partitionId: partition.partition_id,
       tableId: partition.table_id,
       nodeId,
       serviceId,
     });
 
-    if (this.cdcIntegrationService) {
-      try {
-        await this.cdcIntegrationService.insertSystemTableRow(
-          SystemTableName.SERVICES,
-          {
-            service_id: serviceId,
-            node_id: nodeId,
-            service_type: ServiceType.PARTITION_REPLICA,
-            partition_id: partition.partition_id,
-            table_id: partition.table_id,
-            status: ReplicaStatus.STARTING,
-            created_at: Date.now(),
-            id: serviceId,
-          },
-        );
+    try {
+      await this.cdcIntegrationService.insertSystemTableRow(
+        SystemTableName.SERVICES,
+        {
+          service_id: serviceId,
+          node_id: nodeId,
+          service_type: ServiceType.PARTITION_REPLICA,
+          partition_id: partition.partition_id,
+          table_id: partition.table_id,
+          status: ReplicaStatus.STARTING,
+          created_at: Date.now(),
+          id: serviceId,
+        },
+      );
 
-        this.recoveryCount++;
+      this.recoveryCount++;
 
-        this.emit('replicaCreated', {
-          type: 'partition',
-          serviceId,
-          partitionId: partition.partition_id,
-          nodeId,
-        });
+      this.emit(REPLICA_RECOVERY_EVENT.REPLICA_CREATED, {
+        type: REPLICA_RECOVERY_ENTITY_TYPE.PARTITION,
+        serviceId,
+        partitionId: partition.partition_id,
+        nodeId,
+      });
 
-        return {
-          success: true,
-          serviceId,
-          partitionId: partition.partition_id,
-          nodeId,
-        };
-      } catch (error) {
-        this.logger.error('Failed to create partition replica', {
-          partitionId: partition.partition_id,
-          nodeId,
-          error: error.message,
-        });
-        throw error;
-      }
+      return {
+        success: true,
+        serviceId,
+        partitionId: partition.partition_id,
+        nodeId,
+      };
+    } catch (error) {
+      this.logger.error(REPLICA_RECOVERY_LOG_MSG.CREATE_PARTITION_FAILED, {
+        partitionId: partition.partition_id,
+        nodeId,
+        error: error.message,
+      });
+      throw error;
     }
-
-    return {success: false, reason: 'no_cdc_service'};
   }
 
   /**
@@ -434,53 +455,49 @@ class ReplicaRecoveryService extends EventEmitter {
   async createMessageGroupReplica(group, nodeId) {
     const serviceId = uuidv4();
 
-    this.logger.info('Creating replacement message group replica', {
+    this.logger.info(REPLICA_RECOVERY_LOG_MSG.CREATE_MESSAGE_GROUP_REPLICA, {
       groupId: group.group_id,
       nodeId,
       serviceId,
     });
 
-    if (this.cdcIntegrationService) {
-      try {
-        await this.cdcIntegrationService.insertSystemTableRow(
-          SystemTableName.SERVICES,
-          {
-            service_id: serviceId,
-            node_id: nodeId,
-            service_type: ServiceType.MESSAGE_GROUP_REPLICA,
-            group_id: group.group_id,
-            status: ReplicaStatus.STARTING,
-            created_at: Date.now(),
-            id: serviceId,
-          },
-        );
+    try {
+      await this.cdcIntegrationService.insertSystemTableRow(
+        SystemTableName.SERVICES,
+        {
+          service_id: serviceId,
+          node_id: nodeId,
+          service_type: ServiceType.MESSAGE_GROUP_REPLICA,
+          group_id: group.group_id,
+          status: ReplicaStatus.STARTING,
+          created_at: Date.now(),
+          id: serviceId,
+        },
+      );
 
-        this.recoveryCount++;
+      this.recoveryCount++;
 
-        this.emit('replicaCreated', {
-          type: 'message_group',
-          serviceId,
-          groupId: group.group_id,
-          nodeId,
-        });
+      this.emit(REPLICA_RECOVERY_EVENT.REPLICA_CREATED, {
+        type: REPLICA_RECOVERY_ENTITY_TYPE.MESSAGE_GROUP,
+        serviceId,
+        groupId: group.group_id,
+        nodeId,
+      });
 
-        return {
-          success: true,
-          serviceId,
-          groupId: group.group_id,
-          nodeId,
-        };
-      } catch (error) {
-        this.logger.error('Failed to create message group replica', {
-          groupId: group.group_id,
-          nodeId,
-          error: error.message,
-        });
-        throw error;
-      }
+      return {
+        success: true,
+        serviceId,
+        groupId: group.group_id,
+        nodeId,
+      };
+    } catch (error) {
+      this.logger.error(REPLICA_RECOVERY_LOG_MSG.CREATE_MESSAGE_GROUP_FAILED, {
+        groupId: group.group_id,
+        nodeId,
+        error: error.message,
+      });
+      throw error;
     }
-
-    return {success: false, reason: 'no_cdc_service'};
   }
 
   /**
@@ -489,15 +506,12 @@ class ReplicaRecoveryService extends EventEmitter {
    * @private
    */
   getPartitions() {
-    if (!this.systemTableCache) {
-      return [];
-    }
+    assertCritical(
+      this.systemTableCache,
+      REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
-    try {
-      return this.systemTableCache.getAll('partitions') || [];
-    } catch (_error) {
-      return [];
-    }
+    return this.systemTableCache.getAll(SystemTableName.PARTITIONS);
   }
 
   /**
@@ -506,15 +520,12 @@ class ReplicaRecoveryService extends EventEmitter {
    * @private
    */
   getMessageGroups() {
-    if (!this.systemTableCache) {
-      return [];
-    }
+    assertCritical(
+      this.systemTableCache,
+      REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
-    try {
-      return this.systemTableCache.getAll('message_groups') || [];
-    } catch (_error) {
-      return [];
-    }
+    return this.systemTableCache.getAll(SystemTableName.MESSAGE_GROUPS);
   }
 
   /**
@@ -524,25 +535,22 @@ class ReplicaRecoveryService extends EventEmitter {
    * @private
    */
   getHealthyPartitionReplicas(partitionId) {
-    if (!this.systemTableCache) {
-      return [];
-    }
+    assertCritical(
+      this.systemTableCache,
+      REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
-    try {
-      const services = this.systemTableCache.filter('services', (service) => {
-        return service.partition_id === partitionId &&
-          service.service_type === ServiceType.PARTITION_REPLICA &&
-          service.status === ReplicaStatus.ACTIVE;
-      }) || [];
+    const services = this.systemTableCache.filter(SystemTableName.SERVICES, (service) => {
+      return service.partition_id === partitionId &&
+        service.service_type === ServiceType.PARTITION_REPLICA &&
+        service.status === ReplicaStatus.ACTIVE;
+    });
 
-      // Also check that the node is healthy
-      return services.filter((service) => {
-        const node = this.getNode(service.node_id);
-        return node && node.status === NodeStatus.ACTIVE;
-      });
-    } catch (_error) {
-      return [];
-    }
+    // Also check that the node is healthy
+    return services.filter((service) => {
+      const node = this.getNode(service.node_id);
+      return node && node.status === NodeStatus.ACTIVE;
+    });
   }
 
   /**
@@ -552,25 +560,22 @@ class ReplicaRecoveryService extends EventEmitter {
    * @private
    */
   getHealthyMessageGroupReplicas(groupId) {
-    if (!this.systemTableCache) {
-      return [];
-    }
+    assertCritical(
+      this.systemTableCache,
+      REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
-    try {
-      const services = this.systemTableCache.filter('services', (service) => {
-        return service.group_id === groupId &&
-          service.service_type === ServiceType.MESSAGE_GROUP_REPLICA &&
-          service.status === ReplicaStatus.ACTIVE;
-      }) || [];
+    const services = this.systemTableCache.filter(SystemTableName.SERVICES, (service) => {
+      return service.group_id === groupId &&
+        service.service_type === ServiceType.MESSAGE_GROUP_REPLICA &&
+        service.status === ReplicaStatus.ACTIVE;
+    });
 
-      // Also check that the node is healthy
-      return services.filter((service) => {
-        const node = this.getNode(service.node_id);
-        return node && node.status === NodeStatus.ACTIVE;
-      });
-    } catch (_error) {
-      return [];
-    }
+    // Also check that the node is healthy
+    return services.filter((service) => {
+      const node = this.getNode(service.node_id);
+      return node && node.status === NodeStatus.ACTIVE;
+    });
   }
 
   /**
@@ -579,17 +584,14 @@ class ReplicaRecoveryService extends EventEmitter {
    * @private
    */
   getHealthyNodes() {
-    if (!this.systemTableCache) {
-      return [];
-    }
+    assertCritical(
+      this.systemTableCache,
+      REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
-    try {
-      return this.systemTableCache.filter('nodes', (node) => {
-        return node.status === NodeStatus.ACTIVE;
-      }) || [];
-    } catch (_error) {
-      return [];
-    }
+    return this.systemTableCache.filter(SystemTableName.NODES, (node) => {
+      return node.status === NodeStatus.ACTIVE;
+    });
   }
 
   /**
@@ -599,18 +601,15 @@ class ReplicaRecoveryService extends EventEmitter {
    * @private
    */
   getNode(nodeId) {
-    if (!this.systemTableCache) {
-      return null;
-    }
+    assertCritical(
+      this.systemTableCache,
+      REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
-    try {
-      const nodes = this.systemTableCache.filter('nodes', (node) => {
-        return node.node_id === nodeId;
-      }) || [];
-      return nodes[0] || null;
-    } catch (_error) {
-      return null;
-    }
+    const nodes = this.systemTableCache.filter(SystemTableName.NODES, (node) => {
+      return node.node_id === nodeId;
+    });
+    return nodes[NUM.ZERO] || null;
   }
 
   /**
@@ -654,7 +653,7 @@ class ReplicaRecoveryService extends EventEmitter {
     this.pendingRecoveries.clear();
     this.initialized = false;
 
-    this.logger.info('Replica recovery service shutdown', {
+    this.logger.info(REPLICA_RECOVERY_LOG_MSG.SHUTDOWN, {
       nodeId: this.nodeId,
       totalRecoveries: this.recoveryCount,
     });

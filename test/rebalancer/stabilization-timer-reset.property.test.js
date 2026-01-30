@@ -9,14 +9,12 @@
  * Feature: node-joining-rebalancer-fixes, Property 6: Stabilization Timer Reset
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {
-  UnifiedRebalancer,
-  EntityType,
-} from '../../src/rebalancer/unified-rebalancer.js';
+import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createTestRebalancer} from './test-helpers.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -44,7 +42,7 @@ test('Property 6: Stabilization Timer Reset', async (t) => {
         (firstReason, secondReason) => {
           initializeTestEnvironment();
 
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-1',
@@ -84,7 +82,7 @@ test('Property 6: Stabilization Timer Reset', async (t) => {
         (numChanges) => {
           initializeTestEnvironment();
 
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-1',
@@ -120,7 +118,7 @@ test('Property 6: Stabilization Timer Reset', async (t) => {
   await t.test('stabilization timer is cleared on shutdown', async (t) => {
     initializeTestEnvironment();
 
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -154,7 +152,7 @@ test('Property 6: Stabilization Timer Reset', async (t) => {
         (firstReason, secondReason) => {
           initializeTestEnvironment();
 
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-1',
@@ -189,7 +187,7 @@ test('Property 6: Stabilization Timer Reset', async (t) => {
   await t.test('time until stabilized resets on each state change', async (t) => {
     initializeTestEnvironment();
 
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -226,7 +224,7 @@ test('Property 6: Stabilization Timer Reset', async (t) => {
   await t.test('stabilization timer only created when leader', async (t) => {
     initializeTestEnvironment();
 
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -253,7 +251,7 @@ test('Property 6: Stabilization Timer Reset', async (t) => {
   await t.test('stabilization timer created when leader', async (t) => {
     initializeTestEnvironment();
 
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',

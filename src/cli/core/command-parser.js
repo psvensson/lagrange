@@ -19,6 +19,11 @@
  * @property {string} [error] - Error message if parsing failed
  */
 
+import {
+  CLI_COMMAND_DEFINITIONS,
+  CLI_COMMAND_ERROR,
+} from '../cli-constants.js';
+
 export class CommandParser {
   /**
    * @param {Object} options - Configuration options
@@ -41,59 +46,13 @@ export class CommandParser {
    * Register default CLI commands
    */
   registerDefaultCommands() {
-    this.register('connect', {
-      params: ['address'],
-      description: 'Connect to node at specified address',
-      aliases: ['c'],
-    });
-
-    this.register('refresh', {
-      params: [],
-      description: 'Force refresh cache from server',
-      aliases: ['r'],
-    });
-
-    this.register('filter', {
-      params: ['pattern'],
-      description: 'Filter current view by pattern',
-      aliases: ['f', '/'],
-    });
-
-    this.register('sort', {
-      params: ['column', 'direction?'],
-      description: 'Sort by column (direction: asc/desc)',
-      aliases: ['s'],
-    });
-
-    this.register('goto', {
-      params: ['view'],
-      description: 'Go to specified view',
-      aliases: ['g'],
-    });
-
-    this.register('sql', {
-      params: [],
-      description: 'Open SQL query view',
-      aliases: [],
-    });
-
-    this.register('help', {
-      params: ['command?'],
-      description: 'Show help (optionally for specific command)',
-      aliases: ['h', '?'],
-    });
-
-    this.register('quit', {
-      params: [],
-      description: 'Exit application',
-      aliases: ['q', 'exit'],
-    });
-
-    this.register('history', {
-      params: ['replica_id'],
-      description: 'Show state transition history for a replica',
-      aliases: ['hist'],
-    });
+    for (const definition of CLI_COMMAND_DEFINITIONS) {
+      this.register(definition.name, {
+        params: definition.params,
+        description: definition.description,
+        aliases: definition.aliases,
+      });
+    }
   }
 
   /**
@@ -121,7 +80,7 @@ export class CommandParser {
     const trimmed = (input || '').trim();
 
     if (!trimmed) {
-      return {error: 'Empty command'};
+      return {error: CLI_COMMAND_ERROR.EMPTY_COMMAND};
     }
 
     // Split input into parts, respecting quoted strings
@@ -132,7 +91,7 @@ export class CommandParser {
     // Look up command
     const definition = this.commands.get(commandName);
     if (!definition) {
-      return {error: `Unknown command: ${commandName}`};
+      return {error: `${CLI_COMMAND_ERROR.UNKNOWN_COMMAND_PREFIX}${commandName}`};
     }
 
     // Get canonical command name (resolve aliases)
@@ -145,7 +104,7 @@ export class CommandParser {
     if (args.length < requiredParams.length) {
       const missing = requiredParams.slice(args.length);
       return {
-        error: `Missing required parameter(s): ${missing.join(', ')}`,
+        error: `${CLI_COMMAND_ERROR.MISSING_PARAMS_PREFIX}${missing.join(', ')}`,
       };
     }
 

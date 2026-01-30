@@ -4,6 +4,8 @@
  * Requirements: 6.1, 6.2, 6.5, 14.6, 14.7, 31.3, 31.4
  */
 
+import {TABLES} from '../constants/index.js';
+
 /**
  * Column type definitions for schema.
  */
@@ -18,18 +20,18 @@ const ColumnType = {
  * System table names.
  */
 const SystemTableName = {
-  TABLES: 'tables',
-  PARTITIONS: 'partitions',
-  INDICES: 'indices',
-  MESSAGE_GROUPS: 'message_groups',
-  NODES: 'nodes',
-  SERVICES: 'services',
-  LOGS: 'logs',
-  CONFIG: 'config',
-  LIVE_QUERIES: 'live_queries',
-  CONTEXTS: 'contexts',
-  CODE: 'code',
-  REPLICA_OPERATIONS: 'replica_operations',
+  TABLES: TABLES.TABLES,
+  PARTITIONS: TABLES.PARTITIONS,
+  INDICES: TABLES.INDICES,
+  MESSAGE_GROUPS: TABLES.MESSAGE_GROUPS,
+  NODES: TABLES.NODES,
+  SERVICES: TABLES.SERVICES,
+  LOGS: TABLES.LOGS,
+  CONFIG: TABLES.CONFIG,
+  LIVE_QUERIES: TABLES.LIVE_QUERIES,
+  CONTEXTS: TABLES.CONTEXTS,
+  CODE: TABLES.CODE,
+  REPLICA_OPERATIONS: TABLES.REPLICA_OPERATIONS,
 };
 
 /**
@@ -62,6 +64,7 @@ const PARTITIONS_SCHEMA = {
   columns: [
     {name: 'partition_id', type: ColumnType.TEXT, primaryKey: true},
     {name: 'table_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'table_name', type: ColumnType.TEXT},
     {name: 'partition_key_start', type: ColumnType.TEXT},
     {name: 'partition_key_end', type: ColumnType.TEXT},
     {name: 'replica_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 3},
@@ -106,6 +109,7 @@ const MESSAGE_GROUPS_SCHEMA = {
     {name: 'group_id', type: ColumnType.TEXT, primaryKey: true},
     {name: 'group_name', type: ColumnType.TEXT, notNull: true, unique: true},
     {name: 'replica_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 3},
+    {name: 'leader_node_id', type: ColumnType.TEXT},
     {name: 'policy', type: ColumnType.TEXT, notNull: true, defaultValue: '\'{}\''},
     {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
     {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
@@ -131,7 +135,15 @@ const NODES_SCHEMA = {
     {name: 'memory_usage_percent', type: ColumnType.REAL, defaultValue: 0},
     {name: 'disk_usage_percent', type: ColumnType.REAL, defaultValue: 0},
     {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
+    {
+      name: 'ws_connection_state',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'disconnected\'',
+    },
+    {name: 'capabilities', type: ColumnType.TEXT, defaultValue: '\'[]\''},
     {name: 'last_heartbeat', type: ColumnType.INTEGER, notNull: true},
+    {name: 'ready_lease_expires_at', type: ColumnType.INTEGER},
     {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
   ],
   indices: [

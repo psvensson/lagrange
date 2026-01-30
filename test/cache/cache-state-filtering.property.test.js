@@ -9,7 +9,7 @@
  * SHALL return exactly the nodes matching that state.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   SystemTableCache,
@@ -43,7 +43,8 @@ const ALL_NODE_STATES = Object.values(NodeState);
  */
 const nodeRecordArbitrary = fc.record({
   node_id: fc.uuid(),
-  state: fc.constantFrom(...ALL_NODE_STATES),
+  ws_connection_state: fc.constantFrom(...ALL_NODE_STATES),
+  ready_lease_expires_at: fc.integer({min: 0, max: 2_000_000_000_000}),
   address: fc.webUrl(),
   lastStateChange: fc.date().map((d) => d.toISOString()),
 });
@@ -79,8 +80,12 @@ test('Property 10: getReadyNodes returns exactly nodes with ready state', async 
         const readyNodeIds = cache.getReadyNodes();
 
         // Calculate expected ready nodes
+        const now = Date.now();
         const expectedReadyNodeIds = nodes
-          .filter((node) => node.state === 'ready')
+          .filter((node) =>
+            node.ws_connection_state === 'ready' &&
+            node.ready_lease_expires_at > now,
+          )
           .map((node) => node.node_id);
 
         // Verify: same count
@@ -121,6 +126,7 @@ test('Property 10: getReadyNodes excludes all non-ready nodes', async (t) => {
     fc.property(
       nodeListArbitrary,
       (nodes) => {
+        const now = Date.now();
         const cache = new SystemTableCache();
 
         // Insert all nodes into the cache
@@ -133,7 +139,10 @@ test('Property 10: getReadyNodes excludes all non-ready nodes', async (t) => {
         const readyNodeIdSet = new Set(readyNodeIds);
 
         // Verify: no non-ready nodes are included
-        const nonReadyNodes = nodes.filter((node) => node.state !== 'ready');
+        const nonReadyNodes = nodes.filter((node) =>
+          node.ws_connection_state !== 'ready' ||
+          node.ready_lease_expires_at <= now,
+        );
         for (const node of nonReadyNodes) {
           if (readyNodeIdSet.has(node.node_id)) {
             return false;
@@ -157,6 +166,7 @@ test('Property 10: getReadyNodes includes all ready nodes', async (t) => {
     fc.property(
       nodeListArbitrary,
       (nodes) => {
+        const now = Date.now();
         const cache = new SystemTableCache();
 
         // Insert all nodes into the cache
@@ -169,7 +179,10 @@ test('Property 10: getReadyNodes includes all ready nodes', async (t) => {
         const readyNodeIdSet = new Set(readyNodeIds);
 
         // Verify: all ready nodes are included
-        const expectedReadyNodes = nodes.filter((node) => node.state === 'ready');
+        const expectedReadyNodes = nodes.filter((node) =>
+          node.ws_connection_state === 'ready' &&
+          node.ready_lease_expires_at > now,
+        );
         for (const node of expectedReadyNodes) {
           if (!readyNodeIdSet.has(node.node_id)) {
             return false;
@@ -201,6 +214,7 @@ test('Property 10: State filtering reflects node state updates', async (t) => {
       ),
       (nodeIds, stateUpdates) => {
         const cache = new SystemTableCache();
+        const now = Date.now();
 
         // Track current state of each node
         const nodeStates = new Map();
@@ -209,23 +223,32 @@ test('Property 10: State filtering reflects node state updates', async (t) => {
         for (const nodeId of nodeIds) {
           const node = {
             node_id: nodeId,
-            state: 'joining',
+            ws_connection_state: 'joining',
+            ready_lease_expires_at: now - 1000,
             address: 'ws://localhost:3000',
           };
           cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, node);
-          nodeStates.set(nodeId, 'joining');
+          nodeStates.set(nodeId, {
+            state: 'joining',
+            lease: now - 1000,
+          });
         }
 
         // Apply state updates
         for (const update of stateUpdates) {
           const nodeIndex = update.nodeIndex % nodeIds.length;
           const nodeId = nodeIds[nodeIndex];
+          const leaseExpiry = update.newState === 'ready' ? now + 10_000 : now - 1000;
           const updateData = {
             node_id: nodeId,
-            state: update.newState,
+            ws_connection_state: update.newState,
+            ready_lease_expires_at: leaseExpiry,
           };
           cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, updateData);
-          nodeStates.set(nodeId, update.newState);
+          nodeStates.set(nodeId, {
+            state: update.newState,
+            lease: leaseExpiry,
+          });
         }
 
         // Get ready nodes from cache
@@ -233,8 +256,8 @@ test('Property 10: State filtering reflects node state updates', async (t) => {
         const readyNodeIdSet = new Set(readyNodeIds);
 
         // Verify filtering matches current state
-        for (const [nodeId, state] of nodeStates) {
-          const isReady = state === 'ready';
+        for (const [nodeId, stateData] of nodeStates) {
+          const isReady = stateData.state === 'ready' && stateData.lease > now;
           const inReadySet = readyNodeIdSet.has(nodeId);
 
           if (isReady !== inReadySet) {
@@ -272,7 +295,8 @@ test('Property 10: Cache with only non-ready nodes returns empty array', async (
       fc.array(
         fc.record({
           node_id: fc.uuid(),
-          state: fc.constantFrom(...nonReadyStates),
+          ws_connection_state: fc.constantFrom(...nonReadyStates),
+          ready_lease_expires_at: fc.integer({min: 0, max: 2_000_000_000_000}),
           address: fc.webUrl(),
         }),
         {minLength: 1, maxLength: 10},
@@ -295,4 +319,3 @@ test('Property 10: Cache with only non-ready nodes returns empty array', async (
 
   t.pass('Cache with only non-ready nodes returns empty array');
 });
-

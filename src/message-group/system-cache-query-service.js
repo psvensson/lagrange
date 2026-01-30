@@ -7,6 +7,8 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {ERRORS} from '../constants/index.js';
 
 /**
  * Query types supported by the service.
@@ -38,7 +40,7 @@ class SystemCacheQueryService extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.queryTimeoutMs = config.get('messageGroup.cacheTtlMs') || 30000;
+    this.queryTimeoutMs = config.get(CONFIG_KEY.MESSAGE_GROUP_CACHE_TTL_MS) || 30000;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -119,7 +121,7 @@ class SystemCacheQueryService extends EventEmitter {
       return result;
     } catch (error) {
       this.cacheMisses++;
-      this.logger.error('Query failed', {
+      this.logger.error(ERRORS.QUERY_FAILED, {
         tableName,
         error: error.message,
       });

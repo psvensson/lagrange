@@ -8,6 +8,13 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import {
+  CLI_COLOR_SCHEME,
+  CLI_DEFAULT,
+  CLI_ENV,
+  CLI_PATH,
+  CLI_VIEW_LIST,
+} from '../cli-constants.js';
 
 /**
  * @typedef {Object} Config
@@ -31,12 +38,9 @@ const CONFIG_SCHEMA = {
   refresh_interval: {type: 'number', min: 1000, max: 60000},
   default_view: {
     type: 'string',
-    enum: [
-      'nodes', 'services', 'tables', 'partitions',
-      'message_groups', 'sql', 'logs', 'config', 'contexts',
-    ],
+    enum: [...CLI_VIEW_LIST],
   },
-  color_scheme: {type: 'string', enum: ['default', 'monochrome']},
+  color_scheme: {type: 'string', enum: [CLI_COLOR_SCHEME.DEFAULT, CLI_COLOR_SCHEME.MONOCHROME]},
   cache_persistence: {type: 'boolean'},
   cache_path: {type: 'string'},
   log_path: {type: 'string'},
@@ -49,14 +53,14 @@ export class ConfigManager {
   constructor() {
     /** @type {Config} */
     this.defaults = {
-      refresh_interval: 2000,
-      default_view: 'nodes',
-      color_scheme: 'default',
-      cache_persistence: true,
-      cache_path: path.join(os.homedir(), '.ddb-admin', 'cache.json'),
-      log_path: path.join(os.homedir(), '.ddb-admin', 'error.log'),
-      cdc_lag_threshold: 5000,
-      read_only_mode: false,
+      refresh_interval: CLI_DEFAULT.REFRESH_INTERVAL_MS,
+      default_view: CLI_DEFAULT.DEFAULT_VIEW,
+      color_scheme: CLI_DEFAULT.COLOR_SCHEME,
+      cache_persistence: CLI_DEFAULT.CACHE_PERSISTENCE,
+      cache_path: path.join(os.homedir(), CLI_PATH.CONFIG_DIR_NAME, CLI_PATH.CACHE_FILE),
+      log_path: path.join(os.homedir(), CLI_PATH.CONFIG_DIR_NAME, CLI_PATH.ERROR_LOG_FILE),
+      cdc_lag_threshold: CLI_DEFAULT.CDC_LAG_THRESHOLD_MS,
+      read_only_mode: CLI_DEFAULT.READ_ONLY_MODE,
       keybindings: {},
     };
 
@@ -72,7 +76,7 @@ export class ConfigManager {
    * @returns {string}
    */
   getConfigDir() {
-    return path.join(os.homedir(), '.ddb-admin');
+    return path.join(os.homedir(), CLI_PATH.CONFIG_DIR_NAME);
   }
 
   /**
@@ -80,7 +84,7 @@ export class ConfigManager {
    * @returns {string}
    */
   getConfigPath() {
-    return path.join(this.getConfigDir(), 'config.json');
+    return path.join(this.getConfigDir(), CLI_PATH.CONFIG_FILE);
   }
 
   /**
@@ -144,19 +148,19 @@ export class ConfigManager {
    */
   loadFromEnvironment() {
     // DDB_NODE_ADDRESS
-    if (process.env.DDB_NODE_ADDRESS) {
-      this.config.node_address = process.env.DDB_NODE_ADDRESS;
+    if (process.env[CLI_ENV.NODE_ADDRESS]) {
+      this.config.node_address = process.env[CLI_ENV.NODE_ADDRESS];
     }
 
     // DDB_REFRESH_INTERVAL
-    if (process.env.DDB_REFRESH_INTERVAL) {
-      const interval = parseInt(process.env.DDB_REFRESH_INTERVAL, 10);
+    if (process.env[CLI_ENV.REFRESH_INTERVAL]) {
+      const interval = parseInt(process.env[CLI_ENV.REFRESH_INTERVAL], 10);
       const validationResult = this.validateField('refresh_interval', interval);
       if (validationResult.valid) {
         this.config.refresh_interval = interval;
       } else {
         this.warnings.push(
-          `Environment: Invalid DDB_REFRESH_INTERVAL: ${validationResult.error}. ` +
+          `Environment: Invalid ${CLI_ENV.REFRESH_INTERVAL}: ${validationResult.error}. ` +
             `Using: ${this.config.refresh_interval}`,
         );
       }
@@ -205,7 +209,7 @@ export class ConfigManager {
     }
 
     if (args.monochrome) {
-      this.config.color_scheme = 'monochrome';
+      this.config.color_scheme = CLI_COLOR_SCHEME.MONOCHROME;
     }
 
     if (args.readOnly) {

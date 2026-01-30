@@ -5,7 +5,10 @@
  */
 
 import {EventEmitter} from 'events';
+import {v4 as uuidv4} from 'uuid';
 import {ReplicaStatus} from './replica-status.js';
+import {PULL_ASSIGNER_ERROR_MSG} from './rebalancer-constants.js';
+import {assertCritical} from '../utils/assert.js';
 
 /**
  * Error thrown when placement policy is violated.
@@ -57,8 +60,14 @@ class PullBasedReplicaAssigner extends EventEmitter {
     this._maxReplicasToPull = options.maxReplicasToPull || 10;
     this._syncRetryAttempts = options.syncRetryAttempts || 3;
     this._syncRetryDelayMs = options.syncRetryDelayMs || 1000;
-    this._replicaHandler = options.replicaHandler || null;
-    this._rpcClient = options.rpcClient || null;
+    this._replicaHandler = assertCritical(
+      options.replicaHandler,
+      PULL_ASSIGNER_ERROR_MSG.REPLICA_HANDLER_REQUIRED,
+    );
+    this._rpcClient = assertCritical(
+      options.rpcClient,
+      PULL_ASSIGNER_ERROR_MSG.RPC_CLIENT_REQUIRED,
+    );
 
     // Track local replicas being created
     this._localReplicas = new Map();
@@ -467,17 +476,15 @@ class PullBasedReplicaAssigner extends EventEmitter {
           createdAt: Date.now(),
         });
 
-        // If we have a replica handler, use it to create the replica
-        if (this._replicaHandler) {
-          const result = await this._replicaHandler.handleCreateReplica({
-            partitionId,
-            replicaId: `${partitionId}-${this._nodeId}`,
-            nodeId: this._nodeId,
-          });
+        const result = await this._replicaHandler.handleCreateReplica({
+          operationId: uuidv4(),
+          partitionId,
+          replicaId: `${partitionId}-${this._nodeId}`,
+          nodeId: this._nodeId,
+        });
 
-          if (result.status === 'error') {
-            throw new Error(result.error || 'Replica creation failed');
-          }
+        if (result.status === 'error') {
+          throw new Error(result.error || 'Replica creation failed');
         }
 
         // Update status to created
@@ -618,25 +625,15 @@ class PullBasedReplicaAssigner extends EventEmitter {
    * @private
    */
   async _syncFromNode(partitionId, sourceNode) {
-    // If we have an RPC client, use it to request data sync
-    if (this._rpcClient) {
-      const response = await this._rpcClient.send(sourceNode, {
-        type: 'SYNC_REPLICA_DATA',
-        partitionId,
-        targetNode: this._nodeId,
-      });
-
-      if (response.status === 'error') {
-        throw new Error(response.error || 'Sync request failed');
-      }
-    }
-
-    // If no RPC client, just emit an event for external handling
-    this.emit('syncRequested', {
+    const response = await this._rpcClient.call(sourceNode, {
+      type: 'SYNC_REPLICA_DATA',
       partitionId,
-      sourceNode,
       targetNode: this._nodeId,
     });
+
+    if (response.status === 'error') {
+      throw new Error(response.error || 'Sync request failed');
+    }
   }
 
   /**

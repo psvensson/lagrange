@@ -3,11 +3,9 @@
  * Requirements: 13.1, 13.2, 13.3, 13.4
  */
 
-import {test} from 'tap';
-import {
-  TablePolicyService,
-  DEFAULT_TABLE_POLICY,
-} from '../../src/policy/table-policy-service.js';
+import {test} from '../../src/test-helpers/tap.js';
+import {TablePolicyService} from '../../src/policy/table-policy-service.js';
+import {POLICY_ERROR_MSG} from '../../src/policy/policy-constants.js';
 
 // Mock system table cache
 function createMockCache(tables = {}) {
@@ -61,11 +59,14 @@ test('TablePolicyService - getDefaultPolicy returns complete policy', async (t) 
   t.end();
 });
 
-test('TablePolicyService - getTablePolicy with no cache returns defaults', async (t) => {
+test('TablePolicyService - getTablePolicy without cache throws', async (t) => {
   const service = new TablePolicyService();
-  const policy = service.getTablePolicy('non-existent');
 
-  t.same(policy, DEFAULT_TABLE_POLICY, 'Should return default policy');
+  t.throws(
+    () => service.getTablePolicy('non-existent'),
+    new RegExp(POLICY_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED),
+    'Missing system table cache should throw',
+  );
   t.end();
 });
 

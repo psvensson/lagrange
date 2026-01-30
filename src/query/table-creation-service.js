@@ -7,6 +7,15 @@
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {NUM, STATE, TABLES} from '../constants/index.js';
+import {
+  QUERY_ERROR_CODE,
+  QUERY_ERROR_MSG,
+  QUERY_LOG_MSG,
+  QUERY_OPERATION,
+  QUERY_SUBSYSTEM,
+} from './query-constants.js';
 
 /**
  * TableCreationService handles table creation with automatic partition key
@@ -18,16 +27,15 @@ class TableCreationService {
    * @param {Object} options - Configuration options.
    * @param {Object} options.systemCache - System table cache.
    * @param {Object} options.cdcIntegrationService - CDC integration service.
-   * @param {Object} options.partitionRegistry - Registry of partition services.
    */
   constructor(options = {}) {
     this.systemCache = options.systemCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.partitionRegistry = options.partitionRegistry || new Map();
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.defaultReplicaCount = config.get('partition.defaultReplicaCount') || 3;
+    this.defaultReplicaCount =
+      config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) || NUM.THREE;
 
     this.logger = this.initLogger();
   }
@@ -41,7 +49,7 @@ class TableCreationService {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('table-creation-service');
+        return loggingService.forSubsystem(QUERY_SUBSYSTEM.TABLE_CREATION_SERVICE);
       }
     } catch {
       // Logging not available
@@ -75,7 +83,7 @@ class TableCreationService {
   async createTable(ast) {
     const {tableName, columns, primaryKey, ifNotExists} = ast;
 
-    this.logger.info('Creating table', {
+    this.logger.info(QUERY_LOG_MSG.TABLE_CREATE_START, {
       tableName,
       columnCount: columns.length,
       primaryKey,
@@ -85,27 +93,32 @@ class TableCreationService {
     // Validate PRIMARY KEY requirement (Requirement 20.2)
     if (!primaryKey || primaryKey.length === 0) {
       const error = new Error(
-        `Table '${tableName}' must have a PRIMARY KEY defined. ` +
-        'User tables require a PRIMARY KEY for partition key derivation.',
+        `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_PREFIX}${tableName}` +
+        `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_SUFFIX}. ` +
+        QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_DETAIL,
       );
-      error.code = 'PRIMARY_KEY_REQUIRED';
+      error.code = QUERY_ERROR_CODE.PRIMARY_KEY_REQUIRED;
       throw error;
     }
 
     // Check if table already exists
     if (this.tableExists(tableName)) {
       if (ifNotExists) {
-        this.logger.debug('Table already exists, skipping creation', {tableName});
+        this.logger.debug(QUERY_LOG_MSG.TABLE_EXISTS_SKIP, {tableName});
         return {
           success: true,
-          operation: 'CREATE_TABLE',
+          operation: QUERY_OPERATION.CREATE_TABLE,
           tableName,
           skipped: true,
-          message: `Table '${tableName}' already exists`,
+          message: `${QUERY_ERROR_MSG.TABLE_EXISTS_PREFIX}${tableName}` +
+            QUERY_ERROR_MSG.TABLE_EXISTS_SUFFIX,
         };
       }
-      const error = new Error(`Table '${tableName}' already exists`);
-      error.code = 'TABLE_EXISTS';
+      const error = new Error(
+        `${QUERY_ERROR_MSG.TABLE_EXISTS_PREFIX}${tableName}` +
+        QUERY_ERROR_MSG.TABLE_EXISTS_SUFFIX,
+      );
+      error.code = QUERY_ERROR_CODE.TABLE_EXISTS;
       throw error;
     }
 
@@ -140,21 +153,21 @@ class TableCreationService {
       replica_count: this.defaultReplicaCount,
       size_bytes: 0,
       leader_node_id: null,
-      state: 'NORMAL',
+      state: STATE.NORMAL,
       created_at: Date.now(),
       updated_at: Date.now(),
     };
 
     // Write to system tables via CDC
     if (this.cdcIntegrationService) {
-      await this.cdcIntegrationService.insertSystemTableRow('tables', tableMetadata);
+      await this.cdcIntegrationService.insertSystemTableRow(TABLES.TABLES, tableMetadata);
       await this.cdcIntegrationService.insertSystemTableRow(
-        'partitions',
+        TABLES.PARTITIONS,
         partitionMetadata,
       );
     }
 
-    this.logger.info('Table created successfully', {
+    this.logger.info(QUERY_LOG_MSG.TABLE_CREATED_SUCCESS, {
       tableId,
       tableName,
       partitionKey,
@@ -163,7 +176,7 @@ class TableCreationService {
 
     return {
       success: true,
-      operation: 'CREATE_TABLE',
+      operation: QUERY_OPERATION.CREATE_TABLE,
       tableId,
       tableName,
       partitionKey,
@@ -181,7 +194,7 @@ class TableCreationService {
    */
   derivePartitionKey(primaryKey) {
     if (!primaryKey || primaryKey.length === 0) {
-      throw new Error('PRIMARY KEY is required for partition key derivation');
+      throw new Error(QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_DETAIL);
     }
 
     // For composite PRIMARY KEY, use all columns as partition key
@@ -255,7 +268,7 @@ class TableCreationService {
 
     try {
       if (typeof this.systemCache.find === 'function') {
-        const table = this.systemCache.find('tables', (t) =>
+        const table = this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === tableName || t.tableName === tableName,
         );
         return !!table;
@@ -297,8 +310,9 @@ class TableCreationService {
 
     return {
       valid: false,
-      error: `Table '${tableName}' must have a PRIMARY KEY defined`,
-      code: 'PRIMARY_KEY_REQUIRED',
+      error: `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_PREFIX}${tableName}` +
+        QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_SUFFIX,
+      code: QUERY_ERROR_CODE.PRIMARY_KEY_REQUIRED,
     };
   }
 
@@ -314,7 +328,7 @@ class TableCreationService {
 
     try {
       if (typeof this.systemCache.find === 'function') {
-        const table = this.systemCache.find('tables', (t) =>
+        const table = this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === tableName || t.tableName === tableName,
         );
         return table?.partition_key || table?.partitionKey || null;
@@ -338,7 +352,7 @@ class TableCreationService {
 
     try {
       if (typeof this.systemCache.find === 'function') {
-        const table = this.systemCache.find('tables', (t) =>
+        const table = this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === tableName || t.tableName === tableName,
         );
         if (table?.schema_definition) {

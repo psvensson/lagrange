@@ -4,7 +4,7 @@
  * Requirements: 20.1, 20.2, 20.3, 20.4, 20.5
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {HelpOverlay} from '../../../src/cli/core/help-overlay.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';
 

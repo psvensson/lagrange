@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {ComponentRegistry} from '../../../src/cli/core/component-registry.js';
 
 test('ComponentRegistry - register and get singleton', async (t) => {

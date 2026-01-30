@@ -12,7 +12,7 @@
  * 4. The NodeService has valid identity after initialization
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {NodeService, NodeStatus} from '../../src/node/node-service.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';

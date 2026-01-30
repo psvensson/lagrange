@@ -3,14 +3,14 @@ TAP version 14
     ok 1 - Should not be initialized
     ok 2 - Should have no executors
     1..2
-ok 1 - FunctionRegistry - constructor # time=4.846ms
+ok 1 - FunctionRegistry - constructor # time=4.242ms
 
 Function registry initialized { registeredExecutors: [] }
 # Subtest: FunctionRegistry - initialize
     ok 1 - Should be initialized
     ok 2 - Should have cache
     1..2
-ok 2 - FunctionRegistry - initialize # time=0.999ms
+ok 2 - FunctionRegistry - initialize # time=0.783ms
 
 Function executor registered { executorType: 'wasm', executorName: 'mock-executor' }
 # Subtest: FunctionRegistry - registerExecutor adds executor
@@ -18,27 +18,27 @@ Function executor registered { executorType: 'wasm', executorName: 'mock-executo
     ok 2 - Should have wasm executor
     ok 3 - Should list wasm
     1..3
-ok 3 - FunctionRegistry - registerExecutor adds executor # time=1.511ms
+ok 3 - FunctionRegistry - registerExecutor adds executor # time=1.227ms
 
 # Subtest: FunctionRegistry - registerExecutor validates type
     ok 1 - Should reject empty type
     ok 2 - Should reject null type
     1..2
-ok 4 - FunctionRegistry - registerExecutor validates type # time=0.721ms
+ok 4 - FunctionRegistry - registerExecutor validates type # time=0.539ms
 
 # Subtest: FunctionRegistry - registerExecutor validates executor
     ok 1 - Should reject null executor
     ok 2 - Should reject executor without execute
     ok 3 - Should reject non-function execute
     1..3
-ok 5 - FunctionRegistry - registerExecutor validates executor # time=0.503ms
+ok 5 - FunctionRegistry - registerExecutor validates executor # time=0.304ms
 
 Function executor registered { executorType: 'wasm', executorName: 'exec1' }
 Function executor registered { executorType: 'wasm', executorName: 'exec2' }
 # Subtest: FunctionRegistry - registerExecutor overwrites existing
     ok 1 - Should still have 1 executor
     1..1
-ok 6 - FunctionRegistry - registerExecutor overwrites existing # time=0.763ms
+ok 6 - FunctionRegistry - registerExecutor overwrites existing # time=0.533ms
 
 Function executor registered { executorType: 'wasm', executorName: 'mock-executor' }
 Function executor unregistered { executorType: 'wasm' }
@@ -47,12 +47,12 @@ Function executor unregistered { executorType: 'wasm' }
     ok 2 - Should not have wasm
     ok 3 - Should have 0 executors
     1..3
-ok 7 - FunctionRegistry - unregisterExecutor removes executor # time=0.966ms
+ok 7 - FunctionRegistry - unregisterExecutor removes executor # time=0.447ms
 
 # Subtest: FunctionRegistry - unregisterExecutor returns false for nonexistent
     ok 1 - Should return false
     1..1
-ok 8 - FunctionRegistry - unregisterExecutor returns false for nonexistent # time=0.267ms
+ok 8 - FunctionRegistry - unregisterExecutor returns false for nonexistent # time=0.141ms
 
 Function executor registered { executorType: 'wasm', executorName: 'mock-executor' }
 Invoking function {
@@ -68,17 +68,17 @@ Function completed { functionId: 'func-1', hasResult: true }
     ok 4 - Should pass context
     ok 5 - Should pass args
     1..5
-ok 9 - FunctionRegistry - invoke executes function # time=1.734ms
+ok 9 - FunctionRegistry - invoke executes function # time=0.799ms
 
 # Subtest: FunctionRegistry - invoke throws for unknown function
     ok 1 - Should throw for unknown function
     1..1
-ok 10 - FunctionRegistry - invoke throws for unknown function # time=0.866ms
+ok 10 - FunctionRegistry - invoke throws for unknown function # time=0.696ms
 
 # Subtest: FunctionRegistry - invoke throws for unregistered executor
     ok 1 - Should throw for unregistered executor
     1..1
-ok 11 - FunctionRegistry - invoke throws for unregistered executor # time=0.539ms
+ok 11 - FunctionRegistry - invoke throws for unregistered executor # time=0.475ms
 
 Function executor registered { executorType: 'wasm', executorName: 'mock-executor' }
 Invoking function {
@@ -91,23 +91,23 @@ Function completed { functionId: 'func-1', hasResult: true }
     ok 1 - Should return result
     ok 2 - Should execute correct function
     1..2
-ok 12 - FunctionRegistry - invokeByName finds and executes function # time=0.742ms
+ok 12 - FunctionRegistry - invokeByName finds and executes function # time=0.983ms
 
 # Subtest: FunctionRegistry - invokeByName throws for unknown function
     ok 1 - Should throw for unknown function
     1..1
-ok 13 - FunctionRegistry - invokeByName throws for unknown function # time=0.54ms
+ok 13 - FunctionRegistry - invokeByName throws for unknown function # time=0.688ms
 
 # Subtest: FunctionRegistry - getFunction returns function from cache
     ok 1 - Should return function
     ok 2 - Should have correct ID
     1..2
-ok 14 - FunctionRegistry - getFunction returns function from cache # time=0.232ms
+ok 14 - FunctionRegistry - getFunction returns function from cache # time=0.336ms
 
-# Subtest: FunctionRegistry - getFunction returns null without cache
-    ok 1 - Should return null
+# Subtest: FunctionRegistry - getFunction throws without cache
+    ok 1 - Should throw when cache is missing
     1..1
-ok 15 - FunctionRegistry - getFunction returns null without cache # time=0.331ms
+ok 15 - FunctionRegistry - getFunction throws without cache # time=0.693ms
 
 Function executor registered { executorType: 'wasm', executorName: 'wasm' }
 Function executor registered { executorType: 'javascript', executorName: 'js' }
@@ -127,6 +127,8 @@ Function completed { functionId: 'js-func', hasResult: true }
     ok 1 - WASM executor called once
     ok 2 - JS executor called once
     1..2
-ok 16 - FunctionRegistry - multiple executors # time=0.694ms
+ok 16 - FunctionRegistry - multiple executors # time=1.158ms
 
 1..16
+# { total: 32, pass: 32 }
+# time=24.533ms

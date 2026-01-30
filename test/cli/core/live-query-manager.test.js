@@ -7,7 +7,7 @@
  * Requirements: 32.1, 32.7, 32.9, 32.10, 32.11
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {LiveQueryManager} from '../../../src/cli/core/live-query-manager.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';
 

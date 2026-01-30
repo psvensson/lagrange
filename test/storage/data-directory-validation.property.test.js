@@ -6,7 +6,7 @@
  * **Validates: Requirements 35.4, 35.6, 35.7**
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import fs from 'fs';
 import path from 'path';

@@ -3,109 +3,93 @@ TAP version 14
     ok 1 - Should create service
     ok 2 - Should have zero queries
     1..2
-{"level":50,"time":"2026-01-23T06:22:47.327Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"0cba5a61-93b8-4fe0-8a3a-9899d4a80905","msg":"Self-connection lost - fatal error"}
-ok 1 - SystemCacheQueryService - constructor creates service # time=2.219ms
+ok 1 - SystemCacheQueryService - constructor creates service # time=1.893ms
 
 # Subtest: SystemCacheQueryService - registerMessageGroup adds replica
     ok 1 - Should have 1 registered replica
     1..1
-{"level":50,"time":"2026-01-23T06:22:47.347Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"993be5db-d9eb-4c0d-abd9-9f4b88c3b375","msg":"Self-connection lost - fatal error"}
-ok 2 - SystemCacheQueryService - registerMessageGroup adds replica # time=0.421ms
+ok 2 - SystemCacheQueryService - registerMessageGroup adds replica # time=0.293ms
 
 # Subtest: SystemCacheQueryService - unregisterMessageGroup removes replica
     ok 1 - Should have 0 registered replicas
     1..1
-{"level":50,"time":"2026-01-23T06:22:47.364Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"9531083f-bffb-4675-a329-5cde648cd545","msg":"Self-connection lost - fatal error"}
-ok 3 - SystemCacheQueryService - unregisterMessageGroup removes replica # time=0.381ms
+ok 3 - SystemCacheQueryService - unregisterMessageGroup removes replica # time=0.262ms
 
 # Subtest: SystemCacheQueryService - querySystemCache routes to replica
     ok 1 - Should return result
     ok 2 - Should return correct record
     ok 3 - Should have correct status
     1..3
-{"level":50,"time":"2026-01-23T06:22:47.378Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"b3cdafe3-fab7-4ff9-ad0a-cc28824fdce3","msg":"Self-connection lost - fatal error"}
-ok 4 - SystemCacheQueryService - querySystemCache routes to replica # time=0.539ms
+ok 4 - SystemCacheQueryService - querySystemCache routes to replica # time=0.491ms
 
 # Subtest: SystemCacheQueryService - throws when no replica available
     ok 1 - Should throw when no replica
     1..1
-{"level":50,"time":"2026-01-23T06:22:47.392Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"37d35658-df2b-49d1-951f-e0c442300421","msg":"Self-connection lost - fatal error"}
-ok 5 - SystemCacheQueryService - throws when no replica available # time=1.717ms
+ok 5 - SystemCacheQueryService - throws when no replica available # time=1.247ms
 
 # Subtest: SystemCacheQueryService - get returns record by key
     ok 1 - Should return result
     ok 2 - Should return correct record
     1..2
-{"level":50,"time":"2026-01-23T06:22:47.403Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"7996c10c-a327-4261-8eef-dafe3f9edf2d","msg":"Self-connection lost - fatal error"}
-ok 6 - SystemCacheQueryService - get returns record by key # time=0.357ms
+ok 6 - SystemCacheQueryService - get returns record by key # time=0.341ms
 
 # Subtest: SystemCacheQueryService - get returns undefined for missing key
     ok 1 - Should return undefined
     1..1
-{"level":50,"time":"2026-01-23T06:22:47.416Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"75a2d736-fb90-4e4d-b553-026cb304849c","msg":"Self-connection lost - fatal error"}
-ok 7 - SystemCacheQueryService - get returns undefined for missing key # time=0.256ms
+ok 7 - SystemCacheQueryService - get returns undefined for missing key # time=0.272ms
 
 # Subtest: SystemCacheQueryService - find returns first match
     ok 1 - Should return result
     ok 2 - Should match predicate
     1..2
-{"level":50,"time":"2026-01-23T06:22:47.428Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"88aa7998-841d-4de0-937e-66dbb8c7be21","msg":"Self-connection lost - fatal error"}
-ok 8 - SystemCacheQueryService - find returns first match # time=0.368ms
+ok 8 - SystemCacheQueryService - find returns first match # time=0.404ms
 
 # Subtest: SystemCacheQueryService - filter returns all matches
     ok 1 - Should return 1 match
     ok 2 - Should return correct record
     1..2
-{"level":50,"time":"2026-01-23T06:22:47.439Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"e421ac9d-4f2d-460d-a4ff-ecb15ce7313a","msg":"Self-connection lost - fatal error"}
-ok 9 - SystemCacheQueryService - filter returns all matches # time=0.45ms
+ok 9 - SystemCacheQueryService - filter returns all matches # time=0.402ms
 
 # Subtest: SystemCacheQueryService - getAll returns all records
     ok 1 - Should return all records
     1..1
-{"level":50,"time":"2026-01-23T06:22:47.452Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"2659e2a7-8cb6-4231-bccb-3fa096d876c1","msg":"Self-connection lost - fatal error"}
-ok 10 - SystemCacheQueryService - getAll returns all records # time=0.456ms
+ok 10 - SystemCacheQueryService - getAll returns all records # time=0.298ms
 
 # Subtest: SystemCacheQueryService - has returns true for existing key
     ok 1 - Should return true
     1..1
-{"level":50,"time":"2026-01-23T06:22:47.467Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"51fca9b6-fe84-4123-9853-eb4ed84f3480","msg":"Self-connection lost - fatal error"}
-ok 11 - SystemCacheQueryService - has returns true for existing key # time=0.482ms
+ok 11 - SystemCacheQueryService - has returns true for existing key # time=0.408ms
 
 # Subtest: SystemCacheQueryService - has returns false for missing key
     ok 1 - Should return false
     1..1
-{"level":50,"time":"2026-01-23T06:22:47.481Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"a05d0cf0-86c7-49e5-9d69-57726f3667b1","msg":"Self-connection lost - fatal error"}
-ok 12 - SystemCacheQueryService - has returns false for missing key # time=0.28ms
+ok 12 - SystemCacheQueryService - has returns false for missing key # time=0.256ms
 
 # Subtest: SystemCacheQueryService - count returns record count
     ok 1 - Should return correct count
     1..1
-{"level":50,"time":"2026-01-23T06:22:47.493Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"4610579b-f2f9-42c5-9510-91ea133ee0ff","msg":"Self-connection lost - fatal error"}
-ok 13 - SystemCacheQueryService - count returns record count # time=0.415ms
+ok 13 - SystemCacheQueryService - count returns record count # time=0.278ms
 
 # Subtest: SystemCacheQueryService - getNodes returns nodes
     ok 1 - Should return all nodes
     ok 2 - Should filter by nodeId
     ok 3 - Should filter by status
     1..3
-{"level":50,"time":"2026-01-23T06:22:47.505Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"7ecba91f-c931-4772-8fde-6967e9abcecf","msg":"Self-connection lost - fatal error"}
-ok 14 - SystemCacheQueryService - getNodes returns nodes # time=0.477ms
+ok 14 - SystemCacheQueryService - getNodes returns nodes # time=0.535ms
 
 # Subtest: SystemCacheQueryService - getPartitions returns partitions
     ok 1 - Should return all partitions
     ok 2 - Should filter by partitionId
     ok 3 - Should filter by tableId
     1..3
-{"level":50,"time":"2026-01-23T06:22:47.520Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"ba594aa6-de56-481f-bb57-9addec5b563d","msg":"Self-connection lost - fatal error"}
-ok 15 - SystemCacheQueryService - getPartitions returns partitions # time=1.027ms
+ok 15 - SystemCacheQueryService - getPartitions returns partitions # time=0.469ms
 
 # Subtest: SystemCacheQueryService - getTables returns tables
     ok 1 - Should return all tables
     ok 2 - Should filter by tableId
     ok 3 - Should filter by tableName
     1..3
-{"level":50,"time":"2026-01-23T06:22:47.540Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"530e5f0e-69e1-431e-bed6-dd209f0d27a7","msg":"Self-connection lost - fatal error"}
-ok 16 - SystemCacheQueryService - getTables returns tables # time=0.956ms
+ok 16 - SystemCacheQueryService - getTables returns tables # time=0.431ms
 
 # Subtest: SystemCacheQueryService - getStats returns statistics
     ok 1 - Should count queries
@@ -113,21 +97,20 @@ ok 16 - SystemCacheQueryService - getTables returns tables # time=0.956ms
     ok 3 - Should have no misses
     ok 4 - Should have hit rate
     1..4
-{"level":50,"time":"2026-01-23T06:22:47.561Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"91e553ee-386a-458d-9020-645a97102503","msg":"Self-connection lost - fatal error"}
-ok 17 - SystemCacheQueryService - getStats returns statistics # time=0.777ms
+ok 17 - SystemCacheQueryService - getStats returns statistics # time=0.416ms
 
 # Subtest: SystemCacheQueryService - resetStats clears statistics
     ok 1 - Should reset query count
     ok 2 - Should reset hits
     1..2
-{"level":50,"time":"2026-01-23T06:22:47.580Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"da512235-3ecf-4657-a7ec-1caa962758bf","msg":"Self-connection lost - fatal error"}
-ok 18 - SystemCacheQueryService - resetStats clears statistics # time=0.534ms
+ok 18 - SystemCacheQueryService - resetStats clears statistics # time=0.308ms
 
 # Subtest: SystemCacheQueryService - uses getLocalReplica function
     ok 1 - Should use provided function
     ok 2 - Should return correct record
     1..2
-{"level":50,"time":"2026-01-23T06:22:47.601Z","nodeId":"test-node","pid":418538,"subsystem":"message-router","nodeId":"test-node","connectionId":"73fcf5fb-1681-4e09-9511-b13f2450d95e","msg":"Self-connection lost - fatal error"}
-ok 19 - SystemCacheQueryService - uses getLocalReplica function # time=0.539ms
+ok 19 - SystemCacheQueryService - uses getLocalReplica function # time=0.304ms
 
 1..19
+# { total: 36, pass: 36 }
+# time=279.732ms

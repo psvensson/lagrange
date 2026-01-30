@@ -41,77 +41,78 @@ TAP version 14
     ok 39 - Should have 1 message group
     ok 40 - Seed node should have 3 replicas
     1..40
-ok 1 - Property 8: Message Group Replica Distribution - seed node # time=6.76ms
+ok 1 - Property 8: Message Group Replica Distribution - seed node # time=6.744ms
 
 # Subtest: Property 8: Message Group Replica Distribution - node joining
     ok 1 - After node 2 joins, every node should have local replica
-    ok 2 - After node 2 joins, every node should have local replica
-    ok 3 - After node 3 joins, every node should have local replica
-    ok 4 - After node 2 joins, every node should have local replica
-    ok 5 - After node 3 joins, every node should have local replica
-    ok 6 - After node 4 joins, every node should have local replica
-    ok 7 - After node 5 joins, every node should have local replica
-    ok 8 - After node 2 joins, every node should have local replica
-    ok 9 - After node 3 joins, every node should have local replica
+    ok 2 - After node 3 joins, every node should have local replica
+    ok 3 - After node 2 joins, every node should have local replica
+    ok 4 - After node 3 joins, every node should have local replica
+    ok 5 - After node 2 joins, every node should have local replica
+    ok 6 - After node 3 joins, every node should have local replica
+    ok 7 - After node 2 joins, every node should have local replica
+    ok 8 - After node 3 joins, every node should have local replica
+    ok 9 - After node 4 joins, every node should have local replica
     ok 10 - After node 2 joins, every node should have local replica
     ok 11 - After node 3 joins, every node should have local replica
-    ok 12 - After node 4 joins, every node should have local replica
-    ok 13 - After node 5 joins, every node should have local replica
-    ok 14 - After node 2 joins, every node should have local replica
-    ok 15 - After node 3 joins, every node should have local replica
-    ok 16 - After node 4 joins, every node should have local replica
+    ok 12 - After node 2 joins, every node should have local replica
+    ok 13 - After node 3 joins, every node should have local replica
+    ok 14 - After node 4 joins, every node should have local replica
+    ok 15 - After node 5 joins, every node should have local replica
+    ok 16 - After node 2 joins, every node should have local replica
     ok 17 - After node 2 joins, every node should have local replica
     ok 18 - After node 3 joins, every node should have local replica
-    ok 19 - After node 2 joins, every node should have local replica
-    ok 20 - After node 3 joins, every node should have local replica
+    ok 19 - After node 4 joins, every node should have local replica
+    ok 20 - After node 5 joins, every node should have local replica
     1..20
-ok 2 - Property 8: Message Group Replica Distribution - node joining # time=2.877ms
+ok 2 - Property 8: Message Group Replica Distribution - node joining # time=2.838ms
 
 # Subtest: Property 8: Message Group Replica Distribution - replica count
     ok 1 - Message group mg-1 should have 3 replicas
     ok 2 - Message group mg-1 should have 3 replicas
     ok 3 - Message group mg-node-3 should have 3 replicas
-    ok 4 - Message group mg-node-6 should have 3 replicas
-    ok 5 - Message group mg-1 should have 3 replicas
-    ok 6 - Message group mg-node-3 should have 3 replicas
-    ok 7 - Message group mg-1 should have 3 replicas
+    ok 4 - Message group mg-1 should have 3 replicas
+    ok 5 - Message group mg-node-3 should have 3 replicas
+    ok 6 - Message group mg-1 should have 3 replicas
+    ok 7 - Message group mg-node-3 should have 3 replicas
     ok 8 - Message group mg-1 should have 3 replicas
-    ok 9 - Message group mg-1 should have 3 replicas
-    ok 10 - Message group mg-node-3 should have 3 replicas
+    ok 9 - Message group mg-node-3 should have 3 replicas
+    ok 10 - Message group mg-node-6 should have 3 replicas
     ok 11 - Message group mg-1 should have 3 replicas
-    ok 12 - Message group mg-node-3 should have 3 replicas
+    ok 12 - Message group mg-1 should have 3 replicas
     ok 13 - Message group mg-1 should have 3 replicas
     ok 14 - Message group mg-node-3 should have 3 replicas
     ok 15 - Message group mg-1 should have 3 replicas
     ok 16 - Message group mg-node-3 should have 3 replicas
-    ok 17 - Message group mg-1 should have 3 replicas
-    ok 18 - Message group mg-node-3 should have 3 replicas
-    1..18
-ok 3 - Property 8: Message Group Replica Distribution - replica count # time=2.106ms
+    ok 17 - Message group mg-node-6 should have 3 replicas
+    ok 18 - Message group mg-1 should have 3 replicas
+    ok 19 - Message group mg-node-3 should have 3 replicas
+    1..19
+ok 3 - Property 8: Message Group Replica Distribution - replica count # time=1.753ms
 
 # Subtest: Property 8: Message Group Replica Distribution - scaling
-    ok 1 - Should have at least 1 message groups for 1 nodes
+    ok 1 - Should have at least 1 message groups for 2 nodes
     ok 2 - Every node should have local replica after scaling
-    ok 3 - Should have at least 1 message groups for 3 nodes
+    ok 3 - Should have at least 3 message groups for 9 nodes
     ok 4 - Every node should have local replica after scaling
-    ok 5 - Should have at least 1 message groups for 1 nodes
+    ok 5 - Should have at least 3 message groups for 8 nodes
     ok 6 - Every node should have local replica after scaling
-    ok 7 - Should have at least 3 message groups for 9 nodes
+    ok 7 - Should have at least 1 message groups for 1 nodes
     ok 8 - Every node should have local replica after scaling
-    ok 9 - Should have at least 2 message groups for 4 nodes
+    ok 9 - Should have at least 1 message groups for 3 nodes
     ok 10 - Every node should have local replica after scaling
-    ok 11 - Should have at least 2 message groups for 6 nodes
+    ok 11 - Should have at least 1 message groups for 1 nodes
     ok 12 - Every node should have local replica after scaling
-    ok 13 - Should have at least 3 message groups for 9 nodes
+    ok 13 - Should have at least 2 message groups for 5 nodes
     ok 14 - Every node should have local replica after scaling
-    ok 15 - Should have at least 1 message groups for 3 nodes
+    ok 15 - Should have at least 1 message groups for 1 nodes
     ok 16 - Every node should have local replica after scaling
-    ok 17 - Should have at least 4 message groups for 10 nodes
+    ok 17 - Should have at least 2 message groups for 4 nodes
     ok 18 - Every node should have local replica after scaling
-    ok 19 - Should have at least 3 message groups for 7 nodes
+    ok 19 - Should have at least 2 message groups for 4 nodes
     ok 20 - Every node should have local replica after scaling
     1..20
-ok 4 - Property 8: Message Group Replica Distribution - scaling # time=2.269ms
+ok 4 - Property 8: Message Group Replica Distribution - scaling # time=1.533ms
 
 # Subtest: Property 8: Message Group Replica Distribution - service instantiation
     ok 1 - Service should be created
@@ -119,72 +120,77 @@ ok 4 - Property 8: Message Group Replica Distribution - scaling # time=2.269ms
     ok 3 - Should have correct replicaId
     ok 4 - Should have correct nodeId
     ok 5 - Should have 3 replica IDs
-    ok 6 - Service should be initialized
-{"level":50,"time":"2026-01-23T06:22:46.472Z","nodeId":"test-node","pid":418438,"subsystem":"message-router","nodeId":"test-node","connectionId":"dd819df8-85e3-46bf-9147-b3964949fffa","msg":"Self-connection lost - fatal error"}
-    ok 7 - Service should be created
-    ok 8 - Should have correct groupId
-    ok 9 - Should have correct replicaId
-    ok 10 - Should have correct nodeId
-    ok 11 - Should have 3 replica IDs
-    ok 12 - Service should be initialized
-{"level":50,"time":"2026-01-23T06:22:46.475Z","nodeId":"test-node","pid":418438,"subsystem":"message-router","nodeId":"test-node","connectionId":"40573760-6245-4893-a3da-d614d54b6c2f","msg":"Self-connection lost - fatal error"}
-    ok 13 - Service should be created
-    ok 14 - Should have correct groupId
-    ok 15 - Should have correct replicaId
-    ok 16 - Should have correct nodeId
-    ok 17 - Should have 3 replica IDs
-    ok 18 - Service should be initialized
-{"level":50,"time":"2026-01-23T06:22:46.476Z","nodeId":"test-node","pid":418438,"subsystem":"message-router","nodeId":"test-node","connectionId":"25471c6f-2133-48a7-b78b-353fc121d93a","msg":"Self-connection lost - fatal error"}
-    ok 19 - Service should be created
-    ok 20 - Should have correct groupId
-    ok 21 - Should have correct replicaId
-    ok 22 - Should have correct nodeId
-    ok 23 - Should have 3 replica IDs
-    ok 24 - Service should be initialized
-{"level":50,"time":"2026-01-23T06:22:46.478Z","nodeId":"test-node","pid":418438,"subsystem":"message-router","nodeId":"test-node","connectionId":"d1395fce-6f0a-4397-b515-f6668d61b997","msg":"Self-connection lost - fatal error"}
-    ok 25 - Service should be created
-    ok 26 - Should have correct groupId
-    ok 27 - Should have correct replicaId
-    ok 28 - Should have correct nodeId
-    ok 29 - Should have 3 replica IDs
-    ok 30 - Service should be initialized
-{"level":50,"time":"2026-01-23T06:22:46.479Z","nodeId":"test-node","pid":418438,"subsystem":"message-router","nodeId":"test-node","connectionId":"cfbf38d1-7fba-477f-8d63-63e812eecebb","msg":"Self-connection lost - fatal error"}
-    ok 31 - Service should be created
-    ok 32 - Should have correct groupId
-    ok 33 - Should have correct replicaId
-    ok 34 - Should have correct nodeId
-    ok 35 - Should have 3 replica IDs
-    ok 36 - Service should be initialized
-{"level":50,"time":"2026-01-23T06:22:46.480Z","nodeId":"test-node","pid":418438,"subsystem":"message-router","nodeId":"test-node","connectionId":"22182442-4385-49a4-8476-b672809790a1","msg":"Self-connection lost - fatal error"}
-    ok 37 - Service should be created
-    ok 38 - Should have correct groupId
-    ok 39 - Should have correct replicaId
-    ok 40 - Should have correct nodeId
-    ok 41 - Should have 3 replica IDs
-    ok 42 - Service should be initialized
-{"level":50,"time":"2026-01-23T06:22:46.482Z","nodeId":"test-node","pid":418438,"subsystem":"message-router","nodeId":"test-node","connectionId":"c25bfd1e-f366-443a-9b43-fdeb992cf4b5","msg":"Self-connection lost - fatal error"}
-    ok 43 - Service should be created
-    ok 44 - Should have correct groupId
-    ok 45 - Should have correct replicaId
-    ok 46 - Should have correct nodeId
-    ok 47 - Should have 3 replica IDs
-    ok 48 - Service should be initialized
-{"level":50,"time":"2026-01-23T06:22:46.483Z","nodeId":"test-node","pid":418438,"subsystem":"message-router","nodeId":"test-node","connectionId":"060b2566-6d21-4a1a-bf22-85547c7abcc5","msg":"Self-connection lost - fatal error"}
-    ok 49 - Service should be created
-    ok 50 - Should have correct groupId
-    ok 51 - Should have correct replicaId
-    ok 52 - Should have correct nodeId
-    ok 53 - Should have 3 replica IDs
-    ok 54 - Service should be initialized
-{"level":50,"time":"2026-01-23T06:22:46.484Z","nodeId":"test-node","pid":418438,"subsystem":"message-router","nodeId":"test-node","connectionId":"2e945b15-ac97-48cc-9819-7eb7be6d9f70","msg":"Self-connection lost - fatal error"}
-    ok 55 - Service should be created
-    ok 56 - Should have correct groupId
-    ok 57 - Should have correct replicaId
-    ok 58 - Should have correct nodeId
-    ok 59 - Should have 3 replica IDs
-    ok 60 - Service should be initialized
-{"level":50,"time":"2026-01-23T06:22:46.486Z","nodeId":"test-node","pid":418438,"subsystem":"message-router","nodeId":"test-node","connectionId":"04c9267a-472e-451d-98de-7de2ce33b4ea","msg":"Self-connection lost - fatal error"}
-    1..60
-ok 5 - Property 8: Message Group Replica Distribution - service instantiation # time=27.896ms
+    ok 6 - Service should be created
+    ok 7 - Should have correct groupId
+    ok 8 - Should have correct replicaId
+    ok 9 - Should have correct nodeId
+    ok 10 - Should have 3 replica IDs
+    ok 11 - Service should be created
+    ok 12 - Should have correct groupId
+    ok 13 - Should have correct replicaId
+    ok 14 - Should have correct nodeId
+    ok 15 - Should have 3 replica IDs
+    ok 16 - Service should be created
+    ok 17 - Should have correct groupId
+    ok 18 - Should have correct replicaId
+    ok 19 - Should have correct nodeId
+    ok 20 - Should have 3 replica IDs
+    ok 21 - Service should be created
+    ok 22 - Should have correct groupId
+    ok 23 - Should have correct replicaId
+    ok 24 - Should have correct nodeId
+    ok 25 - Should have 3 replica IDs
+    ok 26 - Service should be created
+    ok 27 - Should have correct groupId
+    ok 28 - Should have correct replicaId
+    ok 29 - Should have correct nodeId
+    ok 30 - Should have 3 replica IDs
+    not ok 31 - Property failed after 1 tests { seed: -1558439145, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: [{"groupId":"aaa","replicaIndex":0}] Shrunk 5 time(s) Got error: Unable to resolve unified peer address for aaa-r1     at MessageGroupService.buildPeerAddress (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/message-group/message-group-service.js:361:11)     at MessageGroupService.initialize (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/message-group/message-group-service.js:564:34)     at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/message-group/message-group-replica-distribution.property.test.js:466:25     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)     at async AsyncProperty.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/message-group/message-group-replica-distribution.property.test.js:432:3)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+      ---
+      stack: |
+        buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+        asyncThrowIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+      at:
+        fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+        lineNumber: 126
+        columnNumber: 15
+        functionName: buildError
+      tapCaught: returnedPromiseRejection
+      source: |
+        function buildError(errorMessage, out) {
+            if (!out.runConfiguration.errorWithCause) {
+                throw new Error(errorMessage);
+        --------------^
+            }
+            const ErrorWithCause = Error;
+      ...
+    
+    1..31
+not ok 5 - Property 8: Message Group Replica Distribution - service instantiation # time=38.575ms
+  ---
+  at:
+    fileName: test/message-group/message-group-replica-distribution.property.test.js
+    lineNumber: 431
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+     * Validates: Requirements 4.3, 7.6, 7.7, 8.6
+     */
+    test('Property 8: Message Group Replica Distribution - service instantiation',
+    async (t) => {
+  
+    ^
+      await fc.assert(
+        fc.asyncProperty(
+  ...
 
-1..5
+not ok 6 - timeout!
+  ---
+  signal: SIGALRM
+  expired: TAP
+  test: TAP
+  ...
+
+1..6
+# { total: 131, pass: 129, fail: 2 }
+# time=29605.456ms

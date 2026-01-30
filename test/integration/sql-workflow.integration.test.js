@@ -4,7 +4,7 @@
  * Requirements: 6.1-6.5, 15.1-15.6, 22.1-22.7
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -23,6 +23,7 @@ function initializeTestEnvironment() {
   config.initialize({
     node: {id: 'test-node'},
     logging: {level: 'error'},
+    transport: {wsHost: '127.0.0.1'},
   });
 
   const logging = LoggingService.getInstance();

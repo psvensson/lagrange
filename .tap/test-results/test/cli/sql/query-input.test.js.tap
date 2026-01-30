@@ -5,19 +5,19 @@ TAP version 14
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - constructor initializes with default state # time=21.296ms
+    ok 1 - constructor initializes with default state # time=15.818ms
     
     # Subtest: setValue sets value and moves cursor to end
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 2 - setValue sets value and moves cursor to end # time=0.63ms
+    ok 2 - setValue sets value and moves cursor to end # time=0.408ms
     
     # Subtest: setValue handles null/undefined
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 3 - setValue handles null/undefined # time=0.502ms
+    ok 3 - setValue handles null/undefined # time=0.339ms
     
     # Subtest: clear resets all state
         ok 1 - should be equal
@@ -25,266 +25,268 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 4 - clear resets all state # time=0.769ms
+    ok 4 - clear resets all state # time=0.615ms
     
     # Subtest: insertChar inserts character at cursor
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 5 - insertChar inserts character at cursor # time=0.554ms
+    ok 5 - insertChar inserts character at cursor # time=0.374ms
     
     # Subtest: insertNewline inserts newline character
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 6 - insertNewline inserts newline character # time=0.5ms
+    ok 6 - insertNewline inserts newline character # time=0.341ms
     
     # Subtest: insertText inserts multiple characters
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 7 - insertText inserts multiple characters # time=0.53ms
+    ok 7 - insertText inserts multiple characters # time=0.355ms
     
     # Subtest: deleteBackward removes character before cursor
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 8 - deleteBackward removes character before cursor # time=0.506ms
+    ok 8 - deleteBackward removes character before cursor # time=0.34ms
     
     # Subtest: deleteBackward does nothing at start
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 9 - deleteBackward does nothing at start # time=0.476ms
+    ok 9 - deleteBackward does nothing at start # time=0.296ms
     
     # Subtest: deleteForward removes character after cursor
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 10 - deleteForward removes character after cursor # time=0.49ms
+    ok 10 - deleteForward removes character after cursor # time=0.448ms
     
     # Subtest: deleteForward does nothing at end
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 11 - deleteForward does nothing at end # time=0.47ms
+    ok 11 - deleteForward does nothing at end # time=0.371ms
     
     # Subtest: moveCursorLeft moves cursor left
         ok 1 - should be equal
         1..1
-    ok 12 - moveCursorLeft moves cursor left # time=0.361ms
+    ok 12 - moveCursorLeft moves cursor left # time=0.335ms
     
     # Subtest: moveCursorLeft stops at start
         ok 1 - should be equal
         1..1
-    ok 13 - moveCursorLeft stops at start # time=0.366ms
+    ok 13 - moveCursorLeft stops at start # time=0.227ms
     
     # Subtest: moveCursorRight moves cursor right
         ok 1 - should be equal
         1..1
-    ok 14 - moveCursorRight moves cursor right # time=0.359ms
+    ok 14 - moveCursorRight moves cursor right # time=0.219ms
     
     # Subtest: moveCursorRight stops at end
         ok 1 - should be equal
         1..1
-    ok 15 - moveCursorRight stops at end # time=0.331ms
+    ok 15 - moveCursorRight stops at end # time=0.184ms
     
     # Subtest: moveCursorToLineStart moves to line start
         ok 1 - should be equal
         1..1
-    ok 16 - moveCursorToLineStart moves to line start # time=0.415ms
+    ok 16 - moveCursorToLineStart moves to line start # time=0.205ms
     
     # Subtest: moveCursorToLineEnd moves to line end
         ok 1 - should be equal
         1..1
-    ok 17 - moveCursorToLineEnd moves to line end # time=0.373ms
+    ok 17 - moveCursorToLineEnd moves to line end # time=0.215ms
     
     # Subtest: handleKey handles escape to clear
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 18 - handleKey handles escape to clear # time=0.503ms
+    ok 18 - handleKey handles escape to clear # time=0.307ms
     
     # Subtest: handleKey handles backspace
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 19 - handleKey handles backspace # time=0.467ms
+    ok 19 - handleKey handles backspace # time=0.336ms
     
     # Subtest: handleKey handles delete
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 20 - handleKey handles delete # time=0.49ms
+    ok 20 - handleKey handles delete # time=0.387ms
     
     # Subtest: handleKey handles arrow keys
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 21 - handleKey handles arrow keys # time=0.547ms
+    ok 21 - handleKey handles arrow keys # time=2.413ms
     
     # Subtest: handleKey handles home/end
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 22 - handleKey handles home/end # time=0.462ms
+    ok 22 - handleKey handles home/end # time=0.513ms
     
     # Subtest: handleKey handles enter for newline
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 23 - handleKey handles enter for newline # time=0.43ms
+    ok 23 - handleKey handles enter for newline # time=0.4ms
     
     # Subtest: handleKey handles character input
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 24 - handleKey handles character input # time=2.254ms
+    ok 24 - handleKey handles character input # time=0.386ms
     
     # Subtest: handleKey ignores ctrl+char
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 25 - handleKey ignores ctrl+char # time=0.427ms
+    ok 25 - handleKey ignores ctrl+char # time=0.389ms
     
     # Subtest: handleKey returns false for unhandled keys
         ok 1 - should be equal
         1..1
-    ok 26 - handleKey returns false for unhandled keys # time=0.308ms
+    ok 26 - handleKey returns false for unhandled keys # time=0.303ms
     
     # Subtest: navigateHistoryUp navigates to previous entry
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 27 - navigateHistoryUp navigates to previous entry # time=0.617ms
+    ok 27 - navigateHistoryUp navigates to previous entry # time=0.404ms
     
     # Subtest: navigateHistoryUp continues through history
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 28 - navigateHistoryUp continues through history # time=0.431ms
+    ok 28 - navigateHistoryUp continues through history # time=0.233ms
     
     # Subtest: navigateHistoryUp stops at end of history
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 29 - navigateHistoryUp stops at end of history # time=0.431ms
+    ok 29 - navigateHistoryUp stops at end of history # time=0.232ms
     
     # Subtest: navigateHistoryDown returns to newer entries
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 30 - navigateHistoryDown returns to newer entries # time=0.493ms
+    ok 30 - navigateHistoryDown returns to newer entries # time=0.273ms
     
     # Subtest: navigateHistoryDown returns to saved input
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 31 - navigateHistoryDown returns to saved input # time=0.402ms
+    ok 31 - navigateHistoryDown returns to saved input # time=0.248ms
     
     # Subtest: navigateHistoryUp does nothing without history
         ok 1 - should be equal
         1..1
-    ok 32 - navigateHistoryUp does nothing without history # time=0.288ms
+    ok 32 - navigateHistoryUp does nothing without history # time=0.246ms
     
     # Subtest: getCurrentWord returns word at cursor
         ok 1 - should be equal
         1..1
-    ok 33 - getCurrentWord returns word at cursor # time=0.351ms
+    ok 33 - getCurrentWord returns word at cursor # time=0.301ms
     
     # Subtest: getCurrentWord returns partial word
         ok 1 - should be equal
         1..1
-    ok 34 - getCurrentWord returns partial word # time=0.329ms
+    ok 34 - getCurrentWord returns partial word # time=0.317ms
     
     # Subtest: getCurrentWord returns empty for non-word position
         ok 1 - should be equal
         1..1
-    ok 35 - getCurrentWord returns empty for non-word position # time=0.405ms
+    ok 35 - getCurrentWord returns empty for non-word position # time=0.383ms
     
     # Subtest: applyCompletion replaces current word
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 36 - applyCompletion replaces current word # time=0.491ms
+    ok 36 - applyCompletion replaces current word # time=0.437ms
     
     # Subtest: isEmpty returns true for empty input
         ok 1 - should be equal
         1..1
-    ok 37 - isEmpty returns true for empty input # time=0.333ms
+    ok 37 - isEmpty returns true for empty input # time=0.313ms
     
     # Subtest: isEmpty returns true for whitespace only
         ok 1 - should be equal
         1..1
-    ok 38 - isEmpty returns true for whitespace only # time=0.327ms
+    ok 38 - isEmpty returns true for whitespace only # time=0.235ms
     
     # Subtest: isEmpty returns false for non-empty input
         ok 1 - should be equal
         1..1
-    ok 39 - isEmpty returns false for non-empty input # time=0.293ms
+    ok 39 - isEmpty returns false for non-empty input # time=0.281ms
     
     # Subtest: getCursorLineColumn returns correct position
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 40 - getCursorLineColumn returns correct position # time=0.419ms
+    ok 40 - getCursorLineColumn returns correct position # time=0.39ms
     
     # Subtest: getLineCount returns correct count
         ok 1 - should be equal
         1..1
-    ok 41 - getLineCount returns correct count # time=0.359ms
+    ok 41 - getLineCount returns correct count # time=0.204ms
     
     # Subtest: getLineCount returns 1 for single line
         ok 1 - should be equal
         1..1
-    ok 42 - getLineCount returns 1 for single line # time=0.287ms
+    ok 42 - getLineCount returns 1 for single line # time=0.156ms
     
     # Subtest: emits change events
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 43 - emits change events # time=1.22ms
+    ok 43 - emits change events # time=0.318ms
     
     # Subtest: emits change event on clear
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 44 - emits change event on clear # time=0.555ms
+    ok 44 - emits change event on clear # time=0.298ms
     
     # Subtest: setCursorPosition clamps to valid range
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 45 - setCursorPosition clamps to valid range # time=0.41ms
+    ok 45 - setCursorPosition clamps to valid range # time=0.207ms
     
     # Subtest: getHighlightedContent returns value without highlighter
         ok 1 - should be equal
         1..1
-    ok 46 - getHighlightedContent returns value without highlighter # time=0.293ms
+    ok 46 - getHighlightedContent returns value without highlighter # time=0.153ms
     
     # Subtest: getHighlightedContent uses syntax highlighter
         ok 1 - should be equal
         1..1
-    ok 47 - getHighlightedContent uses syntax highlighter # time=0.366ms
+    ok 47 - getHighlightedContent uses syntax highlighter # time=0.183ms
     
     # Subtest: triggerAutocomplete applies single suggestion
         ok 1 - should be equal
         1..1
-    ok 48 - triggerAutocomplete applies single suggestion # time=0.429ms
+    ok 48 - triggerAutocomplete applies single suggestion # time=0.235ms
     
     # Subtest: triggerAutocomplete emits event for multiple suggestions
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 49 - triggerAutocomplete emits event for multiple suggestions # time=0.465ms
+    ok 49 - triggerAutocomplete emits event for multiple suggestions # time=0.382ms
     
     # Subtest: triggerAutocomplete does nothing without autocomplete
         ok 1 - should be equal
         1..1
-    ok 50 - triggerAutocomplete does nothing without autocomplete # time=0.31ms
+    ok 50 - triggerAutocomplete does nothing without autocomplete # time=0.275ms
     
     1..50
-ok 1 - QueryInput # time=60.011ms
+ok 1 - QueryInput # time=44.054ms
 
 1..1
+# { total: 84, pass: 84 }
+# time=48.85ms

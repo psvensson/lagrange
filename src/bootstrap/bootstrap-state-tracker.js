@@ -6,32 +6,17 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
+import {NUM, STRING, SERVICE_TYPE} from '../constants/index.js';
+import {BOOTSTRAP_PHASE} from './bootstrap-constants.js';
+import {
+  BOOTSTRAP_TRACKER_EVENT,
+  BOOTSTRAP_TRACKER_LOG_MSG,
+  BOOTSTRAP_TRACKER_PHASE_DESCRIPTION,
+  BOOTSTRAP_TRACKER_SUBSYSTEM,
+} from './bootstrap-tracker-constants.js';
 
-/**
- * Bootstrap phases enumeration.
- */
-const BootstrapPhase = {
-  NOT_STARTED: 'not_started',
-  INFRASTRUCTURE: 'infrastructure',
-  MESSAGE_GROUPS: 'message_groups',
-  PARTITIONS: 'partitions',
-  REGISTRATION: 'registration',
-  COMPLETE: 'complete',
-  FAILED: 'failed',
-};
-
-/**
- * Phase descriptions for logging.
- */
-const PHASE_DESCRIPTIONS = {
-  [BootstrapPhase.NOT_STARTED]: 'Bootstrap not started',
-  [BootstrapPhase.INFRASTRUCTURE]: 'Setting up infrastructure (config, transport)',
-  [BootstrapPhase.MESSAGE_GROUPS]: 'Creating message group replicas',
-  [BootstrapPhase.PARTITIONS]: 'Creating system table partitions',
-  [BootstrapPhase.REGISTRATION]: 'Registering services in system tables',
-  [BootstrapPhase.COMPLETE]: 'Bootstrap completed successfully',
-  [BootstrapPhase.FAILED]: 'Bootstrap failed',
-};
+const BootstrapPhase = BOOTSTRAP_PHASE;
+const PHASE_DESCRIPTIONS = BOOTSTRAP_TRACKER_PHASE_DESCRIPTION;
 
 /**
  * BootstrapStateTracker tracks and logs bootstrap initialization state.
@@ -46,14 +31,14 @@ class BootstrapStateTracker extends EventEmitter {
   constructor(options = {}) {
     super();
 
-    this.nodeId = options.nodeId || 'unknown';
+    this.nodeId = options.nodeId || STRING.UNKNOWN;
     this.currentPhase = BootstrapPhase.NOT_STARTED;
     this.phaseHistory = [];
     this.startTime = null;
     this.phaseStartTime = null;
-    this.servicesCreated = 0;
-    this.partitionsCreated = 0;
-    this.messageGroupsCreated = 0;
+    this.servicesCreated = NUM.ZERO;
+    this.partitionsCreated = NUM.ZERO;
+    this.messageGroupsCreated = NUM.ZERO;
     this.raftStateChanges = [];
     this.errors = [];
 
@@ -70,7 +55,7 @@ class BootstrapStateTracker extends EventEmitter {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('bootstrap-tracker');
+        return loggingService.forSubsystem(BOOTSTRAP_TRACKER_SUBSYSTEM);
       }
     } catch {
       // Logging not available
@@ -93,12 +78,12 @@ class BootstrapStateTracker extends EventEmitter {
     this.startTime = Date.now();
     this.currentPhase = BootstrapPhase.NOT_STARTED;
 
-    this.logger.info('Bootstrap tracking started', {
+    this.logger.info(BOOTSTRAP_TRACKER_LOG_MSG.TRACKING_STARTED, {
       nodeId: this.nodeId,
       timestamp: this.startTime,
     });
 
-    this.emit('trackingStarted', {
+    this.emit(BOOTSTRAP_TRACKER_EVENT.TRACKING_STARTED, {
       nodeId: this.nodeId,
       timestamp: this.startTime,
     });
@@ -112,7 +97,7 @@ class BootstrapStateTracker extends EventEmitter {
   transitionToPhase(phase, context = {}) {
     const previousPhase = this.currentPhase;
     const now = Date.now();
-    const phaseDuration = this.phaseStartTime ? now - this.phaseStartTime : 0;
+    const phaseDuration = this.phaseStartTime ? now - this.phaseStartTime : NUM.ZERO;
 
     // Record phase completion
     if (previousPhase !== BootstrapPhase.NOT_STARTED) {
@@ -129,7 +114,7 @@ class BootstrapStateTracker extends EventEmitter {
     this.phaseStartTime = now;
 
     // Log phase transition at INFO level (Requirement 28.1)
-    this.logger.info('Bootstrap phase transition', {
+    this.logger.info(BOOTSTRAP_TRACKER_LOG_MSG.PHASE_TRANSITION, {
       nodeId: this.nodeId,
       previousPhase,
       newPhase: phase,
@@ -141,7 +126,7 @@ class BootstrapStateTracker extends EventEmitter {
       ...context,
     });
 
-    this.emit('phaseTransition', {
+    this.emit(BOOTSTRAP_TRACKER_EVENT.PHASE_TRANSITION, {
       nodeId: this.nodeId,
       previousPhase,
       newPhase: phase,
@@ -170,7 +155,7 @@ class BootstrapStateTracker extends EventEmitter {
     this.raftStateChanges.push(record);
 
     // Log Raft state changes at DEBUG level (Requirement 28.5)
-    this.logger.debug('Raft state change', {
+    this.logger.debug(BOOTSTRAP_TRACKER_LOG_MSG.RAFT_STATE_CHANGE, {
       nodeId: this.nodeId,
       serviceId: change.serviceId,
       serviceType: change.serviceType,
@@ -181,7 +166,7 @@ class BootstrapStateTracker extends EventEmitter {
       replicaId: change.replicaId,
     });
 
-    this.emit('raftStateChange', record);
+    this.emit(BOOTSTRAP_TRACKER_EVENT.RAFT_STATE_CHANGE, record);
   }
 
   /**
@@ -196,7 +181,7 @@ class BootstrapStateTracker extends EventEmitter {
     this.servicesCreated++;
 
     // Log at DEBUG level with relevant identifiers (Requirement 28.6)
-    this.logger.debug('Service created during bootstrap', {
+    this.logger.debug(BOOTSTRAP_TRACKER_LOG_MSG.SERVICE_CREATED, {
       nodeId: this.nodeId,
       serviceId: service.serviceId,
       serviceType: service.serviceType,
@@ -207,13 +192,13 @@ class BootstrapStateTracker extends EventEmitter {
       totalServicesCreated: this.servicesCreated,
     });
 
-    if (service.serviceType === 'partition') {
+    if (service.serviceType === SERVICE_TYPE.PARTITION) {
       this.partitionsCreated++;
-    } else if (service.serviceType === 'message_group') {
+    } else if (service.serviceType === SERVICE_TYPE.MESSAGE_GROUP) {
       this.messageGroupsCreated++;
     }
 
-    this.emit('serviceCreated', {
+    this.emit(BOOTSTRAP_TRACKER_EVENT.SERVICE_CREATED, {
       ...service,
       nodeId: this.nodeId,
     });
@@ -239,7 +224,7 @@ class BootstrapStateTracker extends EventEmitter {
     this.errors.push(record);
 
     // Log errors at ERROR level with full context (Requirement 28.3)
-    this.logger.error('Bootstrap error', {
+    this.logger.error(BOOTSTRAP_TRACKER_LOG_MSG.ERROR, {
       nodeId: this.nodeId,
       phase: this.currentPhase,
       errorMessage: error.message,
@@ -250,7 +235,7 @@ class BootstrapStateTracker extends EventEmitter {
       ...error.context,
     });
 
-    this.emit('error', record);
+    this.emit(BOOTSTRAP_TRACKER_EVENT.ERROR, record);
   }
 
   /**
@@ -260,7 +245,7 @@ class BootstrapStateTracker extends EventEmitter {
    */
   completeTracking(success, context = {}) {
     const endTime = Date.now();
-    const totalDuration = this.startTime ? endTime - this.startTime : 0;
+    const totalDuration = this.startTime ? endTime - this.startTime : NUM.ZERO;
 
     // Transition to final phase
     this.transitionToPhase(
@@ -270,7 +255,7 @@ class BootstrapStateTracker extends EventEmitter {
 
     // Log summary at INFO level (Requirement 28.4)
     if (success) {
-      this.logger.info('Bootstrap completed successfully', {
+      this.logger.info(BOOTSTRAP_TRACKER_LOG_MSG.TRACKING_COMPLETE, {
         nodeId: this.nodeId,
         totalDuration,
         servicesCreated: this.servicesCreated,
@@ -281,18 +266,18 @@ class BootstrapStateTracker extends EventEmitter {
         ...context,
       });
     } else {
-      this.logger.error('Bootstrap failed', {
+      this.logger.error(BOOTSTRAP_TRACKER_LOG_MSG.TRACKING_FAILED, {
         nodeId: this.nodeId,
         totalDuration,
         failedPhase: this.currentPhase,
         servicesCreated: this.servicesCreated,
         errorCount: this.errors.length,
-        lastError: this.errors[this.errors.length - 1]?.message || null,
+        lastError: this.errors[this.errors.length - NUM.ONE]?.message || null,
         ...context,
       });
     }
 
-    this.emit('trackingComplete', {
+    this.emit(BOOTSTRAP_TRACKER_EVENT.TRACKING_COMPLETE, {
       nodeId: this.nodeId,
       success,
       totalDuration,
@@ -319,7 +304,7 @@ class BootstrapStateTracker extends EventEmitter {
       phaseHistory: [...this.phaseHistory],
       raftStateChanges: this.raftStateChanges.length,
       errors: this.errors.length,
-      duration: this.startTime ? Date.now() - this.startTime : 0,
+      duration: this.startTime ? Date.now() - this.startTime : NUM.ZERO,
     };
   }
 
@@ -381,9 +366,9 @@ class BootstrapStateTracker extends EventEmitter {
     this.phaseHistory = [];
     this.startTime = null;
     this.phaseStartTime = null;
-    this.servicesCreated = 0;
-    this.partitionsCreated = 0;
-    this.messageGroupsCreated = 0;
+    this.servicesCreated = NUM.ZERO;
+    this.partitionsCreated = NUM.ZERO;
+    this.messageGroupsCreated = NUM.ZERO;
     this.raftStateChanges = [];
     this.errors = [];
   }

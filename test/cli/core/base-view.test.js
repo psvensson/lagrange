@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {BaseView, ROW_STATUS, STATUS_COLORS} from
   '../../../src/cli/core/base-view.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';

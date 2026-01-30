@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {ServicesView, SERVICE_TYPES, REPLICA_STATES, REPLICA_STATE_COLORS,
   TRANSITIONAL_STATES} from
   '../../../src/cli/views/services-view.js';
@@ -38,21 +38,23 @@ test('ServicesView', async (t) => {
     const view = new ServicesView();
     const columns = view.getColumns();
 
-    t.equal(columns.length, 3);
-    t.equal(columns[0].key, 'unified_address');
-    t.equal(columns[1].key, 'service_type');
-    t.equal(columns[2].key, 'status');
+    t.equal(columns.length, 4);
+    t.equal(columns[0].key, 'short_name');
+    t.equal(columns[1].key, 'unified_address');
+    t.equal(columns[2].key, 'node_address');
+    t.equal(columns[3].key, 'status');
   });
 
   t.test('formatRow formats service data correctly', async (t) => {
     const view = new ServicesView();
-    const service = createService();
+    const service = createService({node_address: '192.168.1.1:8080'});
 
     const row = view.formatRow(service);
 
-    t.equal(row[0], 'node-1/partition/svc-1');
-    t.equal(row[1], 'Partition');
-    t.equal(row[2], 'active');
+    t.equal(row[0], 'svc-1'); // short name
+    t.equal(row[1], 'node-1/partition/svc-1'); // unified address
+    t.equal(row[2], '192.168.1.1:8080'); // node address
+    t.equal(row[3], 'active'); // status
   });
 
   t.test('formatRow handles missing values', async (t) => {
@@ -63,13 +65,63 @@ test('ServicesView', async (t) => {
       node_id: undefined,
       status: null,
       address: null,
+      node_address: null,
     };
 
     const row = view.formatRow(service);
 
-    t.equal(row[0], 'unknown/unknown/unknown');
-    t.equal(row[1], 'N/A');
-    t.equal(row[2], 'unknown');
+    t.equal(row[0], 'N/A'); // short name
+    t.equal(row[1], 'unknown/unknown/unknown'); // unified address
+    t.equal(row[2], 'N/A'); // node address
+    t.equal(row[3], 'unknown'); // status
+  });
+
+  t.test('formatNodeAddress formats address correctly', async (t) => {
+    const view = new ServicesView();
+
+    // With node_address
+    const service1 = createService({node_address: '10.0.0.1:9000'});
+    t.equal(view.formatNodeAddress(service1), '10.0.0.1:9000');
+
+    // Falls back to address field
+    const service2 = createService({node_address: null, address: '192.168.1.1:8080'});
+    t.equal(view.formatNodeAddress(service2), '192.168.1.1:8080');
+
+    // Returns N/A when both are missing
+    const service3 = createService({node_address: null, address: null});
+    t.equal(view.formatNodeAddress(service3), 'N/A');
+  });
+
+  t.test('formatShortName formats names correctly', async (t) => {
+    const view = new ServicesView();
+
+    // Short service ID
+    const shortService = createService({service_id: 'svc-1'});
+    t.equal(view.formatShortName(shortService), 'svc-1');
+
+    // UUID service ID for partition
+    const uuidPartition = createService({
+      service_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      service_type: 'partition',
+    });
+    t.equal(view.formatShortName(uuidPartition), 'p-a1b2c3d4');
+
+    // UUID service ID for message group
+    const uuidMsgGroup = createService({
+      service_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      service_type: 'message_group',
+    });
+    t.equal(view.formatShortName(uuidMsgGroup), 'mg-a1b2c3d4');
+
+    // Long non-UUID name
+    const longService = createService({
+      service_id: 'this-is-a-very-long-service-name-that-needs-truncation',
+    });
+    t.equal(view.formatShortName(longService), 'this-is-a-very-lo...');
+
+    // Null service ID
+    const nullService = createService({service_id: null});
+    t.equal(view.formatShortName(nullService), 'N/A');
   });
 
   t.test('formatUnifiedAddress formats address correctly', async (t) => {
@@ -284,9 +336,10 @@ test('ServicesView', async (t) => {
 
     const details = view.getSelectedDetails();
 
-    t.equal(details.title, 'Service: node-1/partition/svc-1');
-    t.ok(details.sections.length >= 1);
+    t.equal(details.title, 'Service: svc-1');
+    t.ok(details.sections.length >= 2);
     t.equal(details.sections[0].title, 'Basic Information');
+    t.equal(details.sections[1].title, 'Replica State');
   });
 
   t.test('getSelectedDetails includes partition details', async (t) => {
@@ -300,8 +353,10 @@ test('ServicesView', async (t) => {
 
     const details = view.getSelectedDetails();
 
-    t.equal(details.sections.length, 2);
-    t.equal(details.sections[1].title, 'Partition Details');
+    const partitionSection = details.sections.find((s) =>
+      s.title === 'Partition Details');
+    t.ok(partitionSection);
+    t.ok(partitionSection.fields.some((f) => f.label === 'Partition ID'));
   });
 
   t.test('getSelectedDetails includes message group details', async (t) => {
@@ -315,8 +370,10 @@ test('ServicesView', async (t) => {
 
     const details = view.getSelectedDetails();
 
-    t.equal(details.sections.length, 2);
-    t.equal(details.sections[1].title, 'Message Group Details');
+    const mgSection = details.sections.find((s) =>
+      s.title === 'Message Group Details');
+    t.ok(mgSection);
+    t.ok(mgSection.fields.some((f) => f.label === 'Group ID'));
   });
 
   t.test('formatBytes formats sizes correctly', async (t) => {
@@ -440,7 +497,7 @@ test('ServicesView', async (t) => {
       t.notOk(result.includes('['));
     });
 
-  t.test('getSelectedDetails includes state information section', async (t) => {
+  t.test('getSelectedDetails includes replica state section', async (t) => {
     const view = new ServicesView();
     const now = Date.now();
 
@@ -453,10 +510,10 @@ test('ServicesView', async (t) => {
 
     const details = view.getSelectedDetails();
 
-    t.ok(details.sections.length >= 2);
     const stateSection = details.sections.find((s) =>
-      s.title === 'State Information');
+      s.title === 'Replica State');
     t.ok(stateSection);
+    t.ok(stateSection.fields.some((f) => f.label === 'Current State'));
     t.ok(stateSection.fields.some((f) => f.label === 'Time in State'));
     t.ok(stateSection.fields.some((f) => f.label === 'Previous State'));
     t.ok(stateSection.fields.some((f) => f.label === 'Trigger Reason'));
@@ -475,7 +532,7 @@ test('ServicesView', async (t) => {
       const details = view.getSelectedDetails();
 
       const stateSection = details.sections.find((s) =>
-        s.title === 'State Information');
+        s.title === 'Replica State');
       t.ok(stateSection);
       const failureField = stateSection.fields.find((f) =>
         f.label === 'Failure Reason');
@@ -495,13 +552,85 @@ test('ServicesView', async (t) => {
       const details = view.getSelectedDetails();
 
       const stateSection = details.sections.find((s) =>
-        s.title === 'State Information');
-      if (stateSection) {
-        const failureField = stateSection.fields.find((f) =>
-          f.label === 'Failure Reason');
-        t.notOk(failureField);
-      } else {
-        t.pass('No state section for active service without state tracking');
-      }
+        s.title === 'Replica State');
+      t.ok(stateSection);
+      const failureField = stateSection.fields.find((f) =>
+        f.label === 'Failure Reason');
+      t.notOk(failureField);
     });
+
+  t.test('getSelectedDetails includes sync progress for syncing replicas',
+    async (t) => {
+      const view = new ServicesView();
+
+      view.setData([createService({
+        status: 'syncing',
+        sync_progress: 0.75,
+        sync_source_node: 'node-2',
+        bytes_synced: 768000,
+        bytes_total: 1024000,
+      })]);
+
+      const details = view.getSelectedDetails();
+
+      const syncSection = details.sections.find((s) =>
+        s.title === 'Sync Progress');
+      t.ok(syncSection);
+      t.ok(syncSection.fields.some((f) => f.label === 'Sync Progress'));
+      t.ok(syncSection.fields.some((f) => f.label === 'Sync Source'));
+      t.ok(syncSection.fields.some((f) => f.label === 'Bytes Synced'));
+    });
+
+  t.test('getSelectedDetails includes navigation links', async (t) => {
+    const view = new ServicesView();
+
+    view.setData([createService({
+      service_type: 'partition',
+      partition_id: 'part-1',
+      node_id: 'node-1',
+    })]);
+
+    const details = view.getSelectedDetails();
+
+    t.ok(details.navigationLinks);
+    t.ok(details.navigationLinks.some((l) => l.target === 'partitions'));
+    t.ok(details.navigationLinks.some((l) => l.target === 'nodes'));
+  });
+
+  t.test('getSelectedDetails includes Raft state when available', async (t) => {
+    const view = new ServicesView();
+
+    view.setData([createService({
+      raft_term: 5,
+      raft_commit_index: 100,
+      raft_applied_index: 99,
+      raft_last_log_index: 101,
+      raft_leader_id: 'node-2',
+    })]);
+
+    const details = view.getSelectedDetails();
+
+    const raftSection = details.sections.find((s) =>
+      s.title === 'Raft State');
+    t.ok(raftSection);
+    t.ok(raftSection.fields.some((f) => f.label === 'Term'));
+    t.ok(raftSection.fields.some((f) => f.label === 'Commit Index'));
+  });
+
+  t.test('getSelectedDetails includes epoch info when available', async (t) => {
+    const view = new ServicesView();
+
+    view.setData([createService({
+      epoch: 3,
+      assignment_epoch: 2,
+    })]);
+
+    const details = view.getSelectedDetails();
+
+    const epochSection = details.sections.find((s) =>
+      s.title === 'Epoch Information');
+    t.ok(epochSection);
+    t.ok(epochSection.fields.some((f) => f.label === 'Current Epoch'));
+    t.ok(epochSection.fields.some((f) => f.label === 'Assignment Epoch'));
+  });
 });

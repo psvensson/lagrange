@@ -1,0 +1,249 @@
+const DEFAULT_REPLICA_STAGGER_DELAY_MS = 50;
+
+const BOOTSTRAP_ASSIGNMENT_STRATEGY = Object.freeze({
+  MOVE_REPLICA: 'MOVE_REPLICA',
+  CREATE_SELF_HOSTED: 'CREATE_SELF_HOSTED',
+});
+
+const BOOTSTRAP_PHASE = Object.freeze({
+  NOT_STARTED: 'not_started',
+  INFRASTRUCTURE: 'infrastructure',
+  MESSAGE_GROUPS: 'message_groups',
+  PARTITIONS: 'partitions',
+  REGISTRATION: 'registration',
+  CACHE_HYDRATION: 'cache_hydration',
+  COMPLETE: 'complete',
+  FAILED: 'failed',
+});
+
+const BOOTSTRAP_PIPELINE_PHASE = Object.freeze({
+  INFRA: 'infra',
+  RAFT_ELECTION: 'raft_election',
+  SYSTEM_TABLE_SEED: 'system_table_seed',
+  CACHE_HYDRATION: 'cache_hydration',
+  CDC_SUBSCRIBE: 'cdc_subscribe',
+  CONTROL_PLANE_REGISTER: 'control_plane_register',
+  READY: 'ready',
+  FAILED: 'failed',
+});
+
+const BOOTSTRAP_PIPELINE_ERROR_CODE = Object.freeze({
+  BOOTSTRAP_NOT_READY: 'BOOTSTRAP_NOT_READY',
+  LEADER_METADATA_INCOMPLETE: 'LEADER_METADATA_INCOMPLETE',
+  SQL_ENGINE_UNAVAILABLE: 'SQL_ENGINE_UNAVAILABLE',
+});
+
+const BOOTSTRAP_PIPELINE_TIMEOUT_MS = Object.freeze({
+  INFRA: 5000,
+  RAFT_ELECTION: 30000,
+  SYSTEM_TABLE_SEED: 10000,
+  CACHE_HYDRATION: 10000,
+  CDC_SUBSCRIBE: 5000,
+  CONTROL_PLANE_REGISTER: 10000,
+});
+
+const JOINING_PHASE = Object.freeze({
+  CONTACTING_SEED: 'contacting_seed',
+  CONNECTING_WEBSOCKET: 'connecting_websocket',
+  CREATING_MESSAGE_GROUP: 'creating_message_group',
+  JOINING_MESSAGE_GROUP: 'joining_message_group',
+  WAITING_LEADERSHIP: 'waiting_leadership',
+  QUERYING_STATE: 'querying_state',
+});
+
+const BOOTSTRAP_SUBSYSTEM = Object.freeze({
+  SERVICE: 'bootstrap',
+  API: 'bootstrap-api',
+  TRACKER: 'bootstrap-tracker',
+  NODE_JOINING: 'node-joining',
+});
+
+const BOOTSTRAP_LOG_PREFIX = Object.freeze({
+  JOIN_DEBUG: '[JOIN-DEBUG]',
+});
+
+const BOOTSTRAP_READY_MESSAGE = Object.freeze({
+  TYPE: 'NODE_READY',
+  PATH: 'ready',
+});
+
+const BOOTSTRAP_REBALANCE_REASON = Object.freeze({
+  NODE_READY: 'node_ready',
+});
+
+// Delay before triggering rebalancing after a node becomes ready
+// This gives new replicas time to stabilize as learners before rebalancing
+// adds more replicas that could disrupt leadership
+const BOOTSTRAP_REBALANCE_DELAY_MS = 45000; // 45 seconds - wait for learners to stabilize
+
+const BOOTSTRAP_MESSAGE_GROUP = Object.freeze({
+  NAME: 'message_group_seed',
+  REPLICA_COUNT: 3,
+  POLICY: Object.freeze({
+    TARGET_REPLICA_COUNT: 3,
+    MAX_REPLICA_COUNT: 5,
+    ENSURE_LOCAL_ACCESS: true,
+  }),
+});
+
+const BOOTSTRAP_REPLICA_REGISTRATION_REASON = Object.freeze({
+  BOOTSTRAP_REGISTRATION: 'bootstrap_registration',
+});
+
+const BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT = Object.freeze({
+  TIMEOUT_CAP_MS: 5000,
+  INITIAL_DELAY_MS: 10,
+  MAX_DELAY_MS: 100,
+  BACKOFF_MULTIPLIER: 1.5,
+});
+
+const BOOTSTRAP_EVENT = Object.freeze({
+  COMPLETE: 'complete',
+  FAILED: 'failed',
+  PHASE_START: 'phaseStart',
+  PHASE_COMPLETE: 'phaseComplete',
+  PHASE_FAILED: 'phaseFailed',
+  SHUTDOWN: 'shutdown',
+});
+
+const BOOTSTRAP_LOG_MSG = Object.freeze({
+  STARTING: 'Starting bootstrap process',
+  COMPLETED: 'Bootstrap completed successfully',
+  PHASE_STARTING: 'Starting bootstrap phase',
+  PHASE_COMPLETED: 'Bootstrap phase completed',
+  PHASE_FAILED: 'Bootstrap phase failed',
+  WS_SELF_CONNECTED: 'WebSocket server started and self-connection established',
+  ROUTER_INIT_FAILED: 'MessageRouter initialization failed',
+  INFRA_READY: 'Infrastructure setup complete',
+  CREATING_MESSAGE_GROUP: 'Creating initial message group',
+  MESSAGE_GROUP_REPLICA_CREATED: 'Message group replica created',
+  MESSAGE_GROUPS_CREATED_DEFERRED: 'Message group replicas created, elections deferred',
+  WAITING_MESSAGE_GROUP_LEADER: 'Waiting for message group leadership',
+  MESSAGE_GROUP_LEADER_IMMEDIATE: 'Message group leader found immediately',
+  MESSAGE_GROUP_LEADER_FOUND: 'Message group leader found',
+  WAITING_PARTITION_LEADERS: 'Waiting for partition leadership',
+  PARTITION_LEADERS_IMMEDIATE: 'All partition leaders found immediately',
+  PARTITION_LEADERS_FOUND: 'All partition leaders found',
+  PARTITION_LEADERS_PENDING: 'Some partitions still electing leaders, failing bootstrap',
+  CREATING_SYSTEM_PARTITION: 'Creating system table partition',
+  PARTITION_REPLICA_CREATED: 'Partition replica created',
+  STARTING_MG_ELECTIONS: 'Starting elections for message group replicas',
+  MESSAGE_GROUP_LEADERSHIP_READY: 'Message group leadership established',
+  STARTING_PARTITION_ELECTIONS: 'Starting elections for all partition replicas',
+  PARTITIONS_CREATED: 'All system table partitions created',
+  EPOCH_MANAGER_READY: 'AssignmentEpochManager initialized',
+  CDC_SUBSCRIPTION_START: 'Setting up CDC subscription',
+  CDC_PARTITION_MISSING: 'Partition not found for CDC subscription',
+  CDC_EVENT_RECEIVED: 'CDC event received by bootstrap handler',
+  CDC_SUBSCRIPTION_REGISTERED: 'CDC subscription registered on replica',
+  REBALANCE_TRIGGER: 'Triggering rebalancing on all partitions',
+  BOOTSTRAP_MODE_ENABLED: 'Bootstrap mode enabled for direct partition writes',
+  BOOTSTRAP_MODE_DISABLED: 'Bootstrap mode disabled, routing through SQL engine',
+  SERVICE_REGISTRATION_COMPLETE: 'Service registration complete',
+  CDC_MG_UNAVAILABLE: 'CDC integration service not available for message group registration',
+  MESSAGE_GROUP_REGISTERED: 'Message group registered',
+  MESSAGE_GROUP_REGISTER_FAILED: 'Failed to register message group',
+  CDC_SERVICE_UNAVAILABLE: 'CDC integration service not available for service registration',
+  MESSAGE_GROUP_SERVICE_REGISTER_FAILED: 'Failed to register message group service',
+  PARTITION_SERVICE_REGISTER_FAILED: 'Failed to register partition service',
+  SERVICES_REGISTERED: 'Services registered',
+  CDC_TABLE_UNAVAILABLE: 'CDC integration service not available for table registration',
+  TABLE_REGISTER_FAILED: 'Failed to register table',
+  PARTITION_REGISTER_FAILED: 'Failed to register partition',
+  SYSTEM_TABLES_REGISTERED: 'System tables registered',
+  CDC_SIZE_UNAVAILABLE: 'CDC integration service not available for size update',
+  PARTITION_SIZE_UPDATED: 'Updated partition size',
+  PARTITION_SIZE_UPDATE_FAILED: 'Failed to update partition size',
+  PARTITION_SIZES_UPDATED: 'Partition sizes updated',
+  CONFIG_LEADER_MISSING: 'Config partition leader not available for seeding',
+  CONFIG_ALREADY_SEEDED: 'Config already seeded, skipping',
+  CONFIG_CHECK_FAILED: 'Could not check existing config, proceeding with seeding',
+  CONFIG_SEEDED: 'Dynamic configuration seeded',
+  CONFIG_SEED_FAILED: 'Failed to seed dynamic configuration',
+  CACHE_UNAVAILABLE: 'No system table cache available for hydration',
+  CDC_HYDRATION_MISSING: 'No message group available for CDC hydration',
+  CACHE_HYDRATION_STARTING: 'Starting cache hydration from local partitions',
+  CACHE_HYDRATION_READING: 'Reading system table data from local partitions',
+  TABLE_HYDRATED: 'System table hydrated from local partition',
+  TABLE_HYDRATION_FAILED: 'Failed to hydrate system table from local partition',
+  CACHE_HYDRATION_COMPLETE: 'Cache hydration complete',
+  CACHE_HYDRATION_INCOMPLETE: 'Cache hydration incomplete - some tables missing or empty',
+  CACHE_HYDRATION_VERIFIED: 'Cache hydration verified - all expected tables populated',
+  CDC_DYNAMIC_PARTITION_EVENT: 'CDC event received from dynamically created partition',
+  CDC_DYNAMIC_SUBSCRIPTION: 'CDC subscription set up for dynamically created partition',
+  REPLICA_HANDLER_READY: 'ReplicaHandler initialized',
+  REPLICA_HANDLER_MISSING: 'No replica handler provided for partition registration',
+  REPLICA_HANDLER_REGISTER_FAILED: 'Failed to register partition with replica handler',
+  REPLICA_HANDLER_REGISTERED: 'Registered partitions with replica handler',
+  CONTROL_PLANE_READY: 'Control plane service initialized',
+  CONTROL_PLANE_REGISTER_FAILED: 'Failed to register seed node via control plane',
+  STATE_MACHINE_MISSING: 'No state machine provided for replica registration',
+  STATE_MACHINE_REGISTER_FAILED: 'Failed to register replica with state machine',
+  STATE_MACHINE_REGISTERED: 'Registered replicas with state machine',
+  BOOTSTRAP_FAILED: 'Bootstrap failed',
+  CLEANUP_START: 'Cleaning up partially initialized services',
+  PARTITION_CLEANED: 'Partition service cleaned up',
+  PARTITION_CLEANUP_FAILED: 'Error cleaning up partition service',
+  MESSAGE_GROUP_CLEANED: 'Message group service cleaned up',
+  MESSAGE_GROUP_CLEANUP_FAILED: 'Error cleaning up message group service',
+  CLEANUP_COMPLETE: 'Cleanup complete',
+  WS_PORT_MISSING: 'No WebSocket port configured, skipping server start',
+  WS_ALREADY_RUNNING: 'WebSocket server already running',
+  WS_SERVER_STARTED: 'WebSocket server started for cross-node communication',
+  SHUTDOWN: 'Shutting down bootstrap service',
+  BOOTSTRAP_EXIT_FAILED: 'Bootstrap failed, exiting with non-zero exit code',
+});
+
+const BOOTSTRAP_ERROR = Object.freeze({
+  ROUTER_INIT_FAILED: (message) => `MessageRouter initialization failed: ${message}`,
+  MESSAGE_GROUP_LEADERSHIP_TIMEOUT: (groupId, timeoutMs) =>
+    `Message group ${groupId} failed to establish leadership within ${timeoutMs}ms`,
+  PARTITION_LEADERSHIP_TIMEOUT: (missingLeaders, timeoutMs) =>
+    `Partition leaders not established within ${timeoutMs}ms: ${missingLeaders.join(', ')}`,
+  PARTITION_REPLICAS_MISSING: 'Partition replica set not configured',
+  NODES_LEADER_MISSING: 'Nodes partition leader not available',
+  ROUTER_NOT_READY: 'MessageRouter not initialized - bootstrap must complete first',
+  CDC_REPLICA_HANDLER_MISSING: 'CDC integration service not initialized for replica handler',
+  CDC_CONTROL_PLANE_MISSING: 'CDC integration service not initialized for control plane',
+  CDC_HYDRATION_MISSING: 'No message group available for CDC hydration',
+  SYSTEM_CACHE_MISSING: 'System table cache not available',
+  SEED_READY_TIMEOUT: (nodeId, timeoutMs) =>
+    `Seed node ${nodeId} not ready in system cache within ${timeoutMs}ms`,
+});
+
+const BOOTSTRAP_SQL = Object.freeze({
+  CONFIG_COUNT: 'SELECT COUNT(*) as count FROM config',
+});
+
+const BOOTSTRAP_DEFAULT = Object.freeze({
+  leadershipWaitTimeoutMs: 30000,
+  leadershipWaitInitialDelayMs: 100,
+  leadershipWaitMaxDelayMs: 5000,
+  leadershipWaitBackoffMultiplier: 2,
+  partitionDbPath: ':memory:',
+  replicaStaggerDelayMs: DEFAULT_REPLICA_STAGGER_DELAY_MS,
+  wsPort: null,
+});
+
+export {
+  BOOTSTRAP_ASSIGNMENT_STRATEGY,
+  BOOTSTRAP_DEFAULT,
+  BOOTSTRAP_ERROR,
+  BOOTSTRAP_EVENT,
+  BOOTSTRAP_LOG_MSG,
+  BOOTSTRAP_LOG_PREFIX,
+  BOOTSTRAP_MESSAGE_GROUP,
+  BOOTSTRAP_PIPELINE_ERROR_CODE,
+  BOOTSTRAP_PIPELINE_PHASE,
+  BOOTSTRAP_PIPELINE_TIMEOUT_MS,
+  BOOTSTRAP_PHASE,
+  BOOTSTRAP_READY_MESSAGE,
+  BOOTSTRAP_REBALANCE_DELAY_MS,
+  BOOTSTRAP_REBALANCE_REASON,
+  BOOTSTRAP_REPLICA_REGISTRATION_REASON,
+  BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT,
+  BOOTSTRAP_SQL,
+  BOOTSTRAP_SUBSYSTEM,
+  DEFAULT_REPLICA_STAGGER_DELAY_MS,
+  JOINING_PHASE,
+};

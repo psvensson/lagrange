@@ -2,10 +2,11 @@
  * Property Test: Cross-Partition Transaction Rejection
  * Property 47: For any transaction that attempts to modify data in multiple partitions,
  * the system should return an error indicating cross-partition transactions are not supported.
+ * All queries route through message router using service addresses from system cache.
  * Validates: Requirements 21.3
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 
@@ -14,44 +15,52 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
-/**
- * Create a mock partition with transaction support.
- */
-function createMockPartition(tableName, keyStart, keyEnd) {
-  let inTransaction = false;
+// Mock partition data storage
+const mockPartitionData = new Map();
 
+/**
+ * Create a mock message router that routes queries to mock partition data.
+ */
+function createMockMessageRouter() {
   return {
-    tableName,
-    keyRange: {start: keyStart, end: keyEnd},
-    isInTransaction: () => inTransaction,
-    beginTransaction: async function() {
-      inTransaction = true;
-      return {success: true};
-    },
-    commitTransaction: async function() {
-      inTransaction = false;
-      return {success: true, operation: 'COMMIT'};
-    },
-    rollbackTransaction: async function() {
-      inTransaction = false;
-      return {success: true, operation: 'ROLLBACK'};
-    },
-    executeQuery: async function(sql, _params) {
-      if (sql.toUpperCase().startsWith('SELECT')) {
-        return {rows: [], changes: 0};
+    deliver: async function(address, message) {
+      const parts = address.split('/');
+      const partitionId = parts[2];
+
+      if (message.type === 'QUERY') {
+        const data = mockPartitionData.get(partitionId) || [];
+        return {
+          acknowledged: true,
+          success: true,
+          rows: data,
+          changes: 1,
+        };
       }
-      return {rows: [], changes: 1};
+      if (message.type === 'TRANSACTION') {
+        return {acknowledged: true, success: true};
+      }
+      return {acknowledged: true, success: true, changes: 1};
     },
   };
 }
 
 /**
- * Create a mock system cache.
+ * Create a mock system cache with services for routing.
  */
 function createMockSystemCache(tables, partitions) {
+  const services = partitions.map((p) => ({
+    service_id: p.partition_id,
+    service_type: 'partition',
+    partition_id: p.partition_id,
+    node_id: 'test-node',
+    address: `test-node/partition/${p.partition_id}`,
+    status: 'active',
+  }));
+
   return {
     tables,
     partitions,
+    services,
     get: function(type, key) {
       if (type === 'tables') {
         return this.tables.find((t) => t.table_name === key);
@@ -62,27 +71,19 @@ function createMockSystemCache(tables, partitions) {
       if (type === 'partitions') {
         return this.partitions.filter(predicate);
       }
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
       return [];
     },
     getAll: function(type) {
       if (type === 'partitions') return this.partitions;
       if (type === 'tables') return this.tables;
+      if (type === 'services') return this.services;
       return [];
     },
   };
 }
-
-/**
- * Generate partition boundaries that create multiple partitions.
- */
-const _partitionBoundaryArb = fc.array(
-  fc.stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz'), {minLength: 1, maxLength: 3}),
-  {minLength: 1, maxLength: 3},
-).map((boundaries) => {
-  // Sort and dedupe boundaries
-  const sorted = [...new Set(boundaries)].sort();
-  return sorted;
-});
 
 /**
  * Generate keys that span multiple partitions.
@@ -101,13 +102,8 @@ test('Property 47: Cross-partition INSERT is rejected', async (t) => {
     fc.asyncProperty(
       crossPartitionKeysArb,
       async ([key1, key2]) => {
-        const engine = new SQLQueryEngine();
-
-        // Create two partitions with boundary at 'm'
-        const p1 = createMockPartition('users', null, 'm');
-        const p2 = createMockPartition('users', 'm', null);
-
-        engine.setPartitionRegistry(new Map([['p1', p1], ['p2', p2]]));
+        mockPartitionData.set('p1', []);
+        mockPartitionData.set('p2', []);
 
         const cache = createMockSystemCache(
           [{table_name: 'users', primaryKey: 'id'}],
@@ -118,7 +114,11 @@ test('Property 47: Cross-partition INSERT is rejected', async (t) => {
               partition_key_end: null},
           ],
         );
-        engine.setSystemCache(cache);
+
+        const engine = new SQLQueryEngine({
+          messageRouter: createMockMessageRouter(),
+          systemCache: cache,
+        });
 
         const sessionId = `session-${Date.now()}-${Math.random()}`;
 
@@ -132,6 +132,8 @@ test('Property 47: Cross-partition INSERT is rejected', async (t) => {
           [],
           {sessionId},
         );
+
+        mockPartitionData.clear();
 
         // Should be rejected with cross-partition error
         return result.success === false &&
@@ -153,13 +155,8 @@ test('Property 47: Cross-partition UPDATE is rejected', async (t) => {
     fc.asyncProperty(
       fc.stringOf(fc.constantFrom(...'abc'), {minLength: 1, maxLength: 2}),
       async (key) => {
-        const engine = new SQLQueryEngine();
-
-        // Create two partitions
-        const p1 = createMockPartition('users', null, 'm');
-        const p2 = createMockPartition('users', 'm', null);
-
-        engine.setPartitionRegistry(new Map([['p1', p1], ['p2', p2]]));
+        mockPartitionData.set('p1', []);
+        mockPartitionData.set('p2', []);
 
         const cache = createMockSystemCache(
           [{table_name: 'users', primaryKey: 'id'}],
@@ -170,7 +167,11 @@ test('Property 47: Cross-partition UPDATE is rejected', async (t) => {
               partition_key_end: null},
           ],
         );
-        engine.setSystemCache(cache);
+
+        const engine = new SQLQueryEngine({
+          messageRouter: createMockMessageRouter(),
+          systemCache: cache,
+        });
 
         const sessionId = `session-${Date.now()}-${Math.random()}`;
 
@@ -190,6 +191,8 @@ test('Property 47: Cross-partition UPDATE is rejected', async (t) => {
           [],
           {sessionId},
         );
+
+        mockPartitionData.clear();
 
         // Should be rejected because UPDATE affects multiple partitions
         return result.success === false &&
@@ -211,13 +214,8 @@ test('Property 47: Cross-partition DELETE is rejected', async (t) => {
     fc.asyncProperty(
       fc.stringOf(fc.constantFrom(...'abc'), {minLength: 1, maxLength: 2}),
       async (key) => {
-        const engine = new SQLQueryEngine();
-
-        // Create two partitions
-        const p1 = createMockPartition('users', null, 'm');
-        const p2 = createMockPartition('users', 'm', null);
-
-        engine.setPartitionRegistry(new Map([['p1', p1], ['p2', p2]]));
+        mockPartitionData.set('p1', []);
+        mockPartitionData.set('p2', []);
 
         const cache = createMockSystemCache(
           [{table_name: 'users', primaryKey: 'id'}],
@@ -228,7 +226,11 @@ test('Property 47: Cross-partition DELETE is rejected', async (t) => {
               partition_key_end: null},
           ],
         );
-        engine.setSystemCache(cache);
+
+        const engine = new SQLQueryEngine({
+          messageRouter: createMockMessageRouter(),
+          systemCache: cache,
+        });
 
         const sessionId = `session-${Date.now()}-${Math.random()}`;
 
@@ -248,6 +250,8 @@ test('Property 47: Cross-partition DELETE is rejected', async (t) => {
           [],
           {sessionId},
         );
+
+        mockPartitionData.clear();
 
         // Should be rejected because DELETE affects multiple partitions
         return result.success === false &&
@@ -269,12 +273,8 @@ test('Property 47: Error message indicates cross-partition not supported', async
     fc.asyncProperty(
       crossPartitionKeysArb,
       async ([key1, key2]) => {
-        const engine = new SQLQueryEngine();
-
-        const p1 = createMockPartition('users', null, 'm');
-        const p2 = createMockPartition('users', 'm', null);
-
-        engine.setPartitionRegistry(new Map([['p1', p1], ['p2', p2]]));
+        mockPartitionData.set('p1', []);
+        mockPartitionData.set('p2', []);
 
         const cache = createMockSystemCache(
           [{table_name: 'users', primaryKey: 'id'}],
@@ -285,7 +285,11 @@ test('Property 47: Error message indicates cross-partition not supported', async
               partition_key_end: null},
           ],
         );
-        engine.setSystemCache(cache);
+
+        const engine = new SQLQueryEngine({
+          messageRouter: createMockMessageRouter(),
+          systemCache: cache,
+        });
 
         const sessionId = `session-${Date.now()}-${Math.random()}`;
 
@@ -296,6 +300,8 @@ test('Property 47: Error message indicates cross-partition not supported', async
           [],
           {sessionId},
         );
+
+        mockPartitionData.clear();
 
         // Error message should mention cross-partition
         return result.success === false &&

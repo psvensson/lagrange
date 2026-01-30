@@ -6,7 +6,7 @@
  * **Validates: Requirements 32.12**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {LiveStreamPanel} from '../../../src/cli/sql/live-stream-panel.js';
 

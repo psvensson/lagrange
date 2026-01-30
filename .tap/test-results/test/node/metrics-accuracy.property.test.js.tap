@@ -3,29 +3,31 @@ TAP version 14
     # Subtest: transition counts are accurate per state pair
         ok 1 - transition counts are accurate per state pair
         1..1
-    ok 1 - transition counts are accurate per state pair # time=5.415ms
+    ok 1 - transition counts are accurate per state pair # time=5.578ms
     
     # Subtest: failure counts are accurate
         ok 1 - failure counts are accurate
         1..1
-    ok 2 - failure counts are accurate # time=1.049ms
+    ok 2 - failure counts are accurate # time=1.27ms
     
     # Subtest: peak concurrent operations are accurate
         ok 1 - peak concurrent operations are accurate
         1..1
-    ok 3 - peak concurrent operations are accurate # time=1.369ms
+    ok 3 - peak concurrent operations are accurate # time=1.818ms
     
     # Subtest: state counts in metrics match actual states
         ok 1 - state counts in metrics match actual states
         1..1
-    ok 4 - state counts in metrics match actual states # time=1.062ms
+    ok 4 - state counts in metrics match actual states # time=1.294ms
     
     # Subtest: current concurrent operations are accurate
         ok 1 - current concurrent operations are accurate
         1..1
-    ok 5 - current concurrent operations are accurate # time=1.158ms
+    ok 5 - current concurrent operations are accurate # time=1.602ms
     
     1..5
-ok 1 - Property 14: Metrics Accuracy # time=114.654ms
+ok 1 - Property 14: Metrics Accuracy # time=103.448ms
 
 1..1
+# { total: 5, pass: 5 }
+# time=119.253ms

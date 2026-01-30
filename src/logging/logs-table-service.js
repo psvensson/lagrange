@@ -7,17 +7,13 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from './logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
-
-/**
- * Default configuration for logs table service.
- */
-const DEFAULT_CONFIG = {
-  batchSize: 100,
-  flushIntervalMs: 5000,
-  maxRetries: 3,
-  retryDelayMs: 1000,
-};
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  LOGGING_ERROR_MSG,
+  LOGGING_LOG_MSG,
+  LOGS_TABLE_DEFAULT,
+} from './logging-constants.js';
 
 /**
  * LogsTableService manages writing log entries to the logs system table.
@@ -40,13 +36,14 @@ class LogsTableService extends EventEmitter {
     // Configuration
     const config = ConfigurationManager.getInstance();
     this.batchSize = options.batchSize ||
-      config.get('logging.batchSize') || DEFAULT_CONFIG.batchSize;
+      config.get(CONFIG_KEY.LOGGING_BATCH_SIZE) || LOGS_TABLE_DEFAULT.BATCH_SIZE;
     this.flushIntervalMs = options.flushIntervalMs ||
-      config.get('logging.flushIntervalMs') || DEFAULT_CONFIG.flushIntervalMs;
+      config.get(CONFIG_KEY.LOGGING_FLUSH_INTERVAL_MS) ||
+      LOGS_TABLE_DEFAULT.FLUSH_INTERVAL_MS;
     this.maxRetries = options.maxRetries ||
-      config.get('logging.maxRetries') || DEFAULT_CONFIG.maxRetries;
+      config.get(CONFIG_KEY.LOGGING_MAX_RETRIES) || LOGS_TABLE_DEFAULT.MAX_RETRIES;
     this.retryDelayMs = options.retryDelayMs ||
-      config.get('logging.retryDelayMs') || DEFAULT_CONFIG.retryDelayMs;
+      config.get(CONFIG_KEY.LOGGING_RETRY_DELAY_MS) || LOGS_TABLE_DEFAULT.RETRY_DELAY_MS;
 
     // State
     this.initialized = false;
@@ -104,7 +101,7 @@ class LogsTableService extends EventEmitter {
     this.startFlushTimer();
 
     this.initialized = true;
-    this.logger.log('LogsTableService initialized');
+    this.logger.log(LOGGING_LOG_MSG.LOGS_TABLE_SERVICE_INITIALIZED);
   }
 
   /**
@@ -116,7 +113,7 @@ class LogsTableService extends EventEmitter {
     const loggingService = LoggingService.getInstance();
 
     if (!loggingService.isInitialized()) {
-      throw new Error('LoggingService must be initialized first');
+      throw new Error(LOGGING_ERROR_MSG.LOGGING_SERVICE_REQUIRED);
     }
 
     // Register our write callback with the logging service
@@ -124,7 +121,7 @@ class LogsTableService extends EventEmitter {
       (entry) => this.writeLogEntry(entry),
     );
 
-    this.logger.log(`Connected to LoggingService, flushed ${flushedCount} buffered entries`);
+    this.logger.log(LOGGING_LOG_MSG.CONNECTED_LOGGING_SERVICE(flushedCount));
     this.emit('connected', {flushedCount});
 
     return flushedCount;
@@ -206,13 +203,8 @@ class LogsTableService extends EventEmitter {
       }
     }
 
-    // Log to console as fallback (avoid recursion)
-    console.error('Failed to write log entry after retries:', {
-      logId: entry.logId,
-      error: lastError?.message,
-    });
-
-    return false;
+    const error = lastError || new Error(LOGGING_ERROR_MSG.WRITE_ENTRY_FAILED);
+    throw error;
   }
 
   /**
@@ -250,7 +242,7 @@ class LogsTableService extends EventEmitter {
       return;
     }
 
-    throw new Error('No write mechanism available for logs table');
+    throw new Error(LOGGING_ERROR_MSG.NO_WRITE_MECHANISM);
   }
 
   /**
@@ -264,7 +256,7 @@ class LogsTableService extends EventEmitter {
 
     this.flushTimer = setInterval(() => {
       this.flush().catch((error) => {
-        console.error('Periodic flush failed:', error.message);
+        console.error(LOGGING_ERROR_MSG.PERIODIC_FLUSH_FAILED, error.message);
       });
     }, this.flushIntervalMs);
 
@@ -322,7 +314,7 @@ class LogsTableService extends EventEmitter {
 
     this.initialized = false;
     this.removeAllListeners();
-    this.logger.log('LogsTableService shutdown');
+    this.logger.log(LOGGING_LOG_MSG.LOGS_TABLE_SERVICE_SHUTDOWN);
   }
 
   /**
@@ -336,4 +328,4 @@ class LogsTableService extends EventEmitter {
   }
 }
 
-export {LogsTableService, DEFAULT_CONFIG};
+export {LogsTableService, LOGS_TABLE_DEFAULT};

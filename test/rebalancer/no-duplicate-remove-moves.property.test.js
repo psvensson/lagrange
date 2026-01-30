@@ -7,96 +7,19 @@
  * SHALL NOT generate a REMOVE move for that replica.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
-  UnifiedRebalancer,
   EntityType,
   MoveType,
   ReplicaStatus,
 } from '../../src/rebalancer/unified-rebalancer.js';
-import {
-  ReplicaStateMachine,
-  ReplicaState,
-} from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createTestRebalancer} from './test-helpers.js';
 
-/**
- * Create a mock system table cache.
- * @param {Object} data - Initial cache data.
- * @return {Object} Mock cache.
- */
-function createMockCache(data = {}) {
-  const cache = {
-    nodes: data.nodes || [],
-    services: data.services || [],
-    partitions: data.partitions || [],
-    tables: data.tables || [],
-  };
-
-  return {
-    getAll(tableName) {
-      return cache[tableName] || [];
-    },
-    filter(tableName, predicate) {
-      const items = cache[tableName] || [];
-      return items.filter(predicate);
-    },
-    get(tableName, id) {
-      const items = cache[tableName] || [];
-      return items.find((item) =>
-        item.id === id ||
-        item.node_id === id ||
-        item.partition_id === id ||
-        item.service_id === id);
-    },
-  };
-}
-
-/**
- * Get a valid path of transitions to reach a target state from null.
- * @param {string} targetState - The state to reach.
- * @return {Array<string>} Array of states to transition through.
- */
-function getPathToState(targetState) {
-  const paths = {
-    [ReplicaState.PENDING]: [ReplicaState.PENDING],
-    [ReplicaState.CREATING]: [ReplicaState.PENDING, ReplicaState.CREATING],
-    [ReplicaState.SYNCING]: [
-      ReplicaState.PENDING,
-      ReplicaState.CREATING,
-      ReplicaState.SYNCING,
-    ],
-    [ReplicaState.ACTIVE]: [
-      ReplicaState.PENDING,
-      ReplicaState.CREATING,
-      ReplicaState.SYNCING,
-      ReplicaState.ACTIVE,
-    ],
-    [ReplicaState.REMOVING]: [
-      ReplicaState.PENDING,
-      ReplicaState.CREATING,
-      ReplicaState.SYNCING,
-      ReplicaState.ACTIVE,
-      ReplicaState.REMOVING,
-    ],
-    [ReplicaState.REMOVED]: [
-      ReplicaState.PENDING,
-      ReplicaState.CREATING,
-      ReplicaState.SYNCING,
-      ReplicaState.ACTIVE,
-      ReplicaState.REMOVING,
-      ReplicaState.REMOVED,
-    ],
-    [ReplicaState.FAILED]: [
-      ReplicaState.PENDING,
-      ReplicaState.FAILED,
-    ],
-  };
-
-  return paths[targetState] || [];
-}
+// Transitional workflow steps for REMOVE operations (used in replica_operations table)
+const REMOVE_TRANSITIONAL_STEPS = ['pending', 'sending', 'stopping'];
 
 test('Property 4: No Duplicate REMOVE Moves for Removing Replicas', async (t) => {
   t.beforeEach(async () => {
@@ -125,48 +48,38 @@ test('Property 4: No Duplicate REMOVE Moves for Removing Replicas', async (t) =>
         fc.uuid(), // partition_id
         fc.uuid(), // node_id
         fc.uuid(), // replica_id
-        async (partitionId, nodeId, replicaId) => {
-          const stateMachine = new ReplicaStateMachine({
-            nodeId: 'coordinator-node',
-          });
+        fc.uuid(), // operation_id
+        fc.constantFrom(...REMOVE_TRANSITIONAL_STEPS),
+        async (partitionId, nodeId, replicaId, operationId, workflowStep) => {
+          // Create an in-flight REMOVE operation in the cache
+          const replicaOperations = [{
+            operation_id: operationId,
+            type: 'REMOVE',
+            partition_id: partitionId,
+            replica_id: replicaId,
+            target_node_id: nodeId,
+            status: workflowStep,
+            workflow_step: workflowStep,
+          }];
 
-          // Set up replica in removing state
-          const pathToRemoving = getPathToState(ReplicaState.REMOVING);
-          for (const state of pathToRemoving) {
-            stateMachine.transition(replicaId, state, {
-              partitionId,
-              nodeId,
-              reason: 'test setup',
-            });
-          }
-
-          // Verify replica is in removing state
-          const replicaState = stateMachine.getState(replicaId);
-          if (replicaState?.state !== ReplicaState.REMOVING) {
-            stateMachine.clear();
-            return true; // Skip if setup failed
-          }
-
-          const mockCache = createMockCache({
-            nodes: [{node_id: nodeId, status: 'active'}],
-            services: [
-              {
-                service_id: replicaId,
-                partition_id: partitionId,
-                node_id: nodeId,
-                service_type: 'partition',
-                status: ReplicaStatus.ACTIVE,
-              },
-            ],
-            partitions: [{partition_id: partitionId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: partitionId,
             entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
             nodeId: 'coordinator-node',
-            replicaStateMachine: stateMachine,
+            cacheData: {
+              nodes: [{node_id: nodeId, status: 'active'}],
+              services: [
+                {
+                  service_id: replicaId,
+                  partition_id: partitionId,
+                  node_id: nodeId,
+                  service_type: 'partition',
+                  status: ReplicaStatus.ACTIVE,
+                },
+              ],
+              partitions: [{partition_id: partitionId, table_id: 'table-1'}],
+              replicaOperations,
+            },
           });
 
           rebalancer.initialize();
@@ -190,13 +103,10 @@ test('Property 4: No Duplicate REMOVE Moves for Removing Replicas', async (t) =>
 
           // Clean up
           rebalancer.shutdown();
-          stateMachine.clear();
 
-          // No REMOVE moves should be generated for replica in removing state
-          const removeMovesForReplica = moves.filter((m) =>
-            m.type === MoveType.REMOVE && m.replicaId === replicaId);
-
-          return removeMovesForReplica.length === 0;
+          // With in-flight operations, calculateMoves should return empty
+          // (it waits for pending operations to complete)
+          return moves.length === 0;
         },
       ),
       {numRuns: 10},
@@ -206,121 +116,83 @@ test('Property 4: No Duplicate REMOVE Moves for Removing Replicas', async (t) =>
   });
 
   /**
-   * Property: State machine correctly identifies replicas in removing state.
+   * Property: The system correctly tracks in-flight REMOVE operations via cache.
    */
-  t.test('state machine identifies removing replicas', async (t) => {
+  t.test('cache correctly tracks in-flight REMOVE operations', async (t) => {
     await fc.assert(
       fc.property(
         fc.uuid(), // partition_id
         fc.uuid(), // node_id
-        fc.array(fc.uuid(), {minLength: 1, maxLength: 3}), // replica_ids
-        (partitionId, nodeId, replicaIds) => {
-          const stateMachine = new ReplicaStateMachine({
+        fc.array(fc.uuid(), {minLength: 1, maxLength: 3}), // operation_ids
+        fc.constantFrom(...REMOVE_TRANSITIONAL_STEPS),
+        (partitionId, nodeId, operationIds, workflowStep) => {
+          // Create in-flight REMOVE operations in the cache
+          const replicaOperations = operationIds.map((opId) => ({
+            operation_id: opId,
+            type: 'REMOVE',
+            partition_id: partitionId,
+            replica_id: `replica-${opId}`,
+            target_node_id: nodeId,
+            status: workflowStep,
+            workflow_step: workflowStep,
+          }));
+
+          const rebalancer = createTestRebalancer({
+            entityId: partitionId,
+            entityType: EntityType.PARTITION,
             nodeId: 'test-node',
+            cacheData: {
+              nodes: [{node_id: nodeId, status: 'active'}],
+              replicaOperations,
+            },
           });
 
-          // Set up replicas in removing state
-          for (const replicaId of replicaIds) {
-            const pathToRemoving = getPathToState(ReplicaState.REMOVING);
-            for (const state of pathToRemoving) {
-              stateMachine.transition(replicaId, state, {
-                partitionId,
-                nodeId,
-                reason: 'test setup',
-              });
-            }
-          }
+          // Query in-flight operations
+          const inFlight = rebalancer.getInFlightOperations();
 
-          // Query transitional replicas
-          const transitional = stateMachine.getTransitionalReplicas();
+          // All operations should be in-flight (non-terminal status)
+          const allInFlight = operationIds.every((opId) =>
+            inFlight.some((op) => op.operation_id === opId));
 
-          // Filter for removing state
-          const removingReplicas = transitional.filter((r) =>
-            r.state === ReplicaState.REMOVING);
-
-          stateMachine.clear();
-
-          // All replicas should be in removing state
-          return removingReplicas.length === replicaIds.length;
+          return allInFlight && inFlight.length === operationIds.length;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('state machine identifies removing replicas');
+    t.pass('cache correctly tracks in-flight REMOVE operations');
   });
 
   /**
-   * Property: REMOVE moves are allowed for active replicas not in
-   * removing state.
+   * Property: REMOVE moves are allowed for active replicas without
+   * in-flight operations.
    */
-  t.test('REMOVE moves allowed for active replicas', async (t) => {
+  t.test('REMOVE moves allowed for active replicas without in-flight ops', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.uuid(), // partition_id
         fc.uuid(), // node_id
         fc.uuid(), // active_replica_id
-        fc.uuid(), // removing_replica_id
-        async (partitionId, nodeId, activeReplicaId, removingReplicaId) => {
-          // Ensure replica IDs are different
-          if (activeReplicaId === removingReplicaId) {
-            return true; // Skip this case
-          }
-
-          const stateMachine = new ReplicaStateMachine({
-            nodeId: 'coordinator-node',
-          });
-
-          // Set up one replica in active state
-          const pathToActive = getPathToState(ReplicaState.ACTIVE);
-          for (const state of pathToActive) {
-            stateMachine.transition(activeReplicaId, state, {
-              partitionId,
-              nodeId,
-              reason: 'test setup',
-            });
-          }
-
-          // Set up another replica in removing state
-          const pathToRemoving = getPathToState(ReplicaState.REMOVING);
-          for (const state of pathToRemoving) {
-            stateMachine.transition(removingReplicaId, state, {
-              partitionId,
-              nodeId: 'other-node',
-              reason: 'test setup',
-            });
-          }
-
-          const mockCache = createMockCache({
-            nodes: [
-              {node_id: nodeId, status: 'active'},
-              {node_id: 'other-node', status: 'active'},
-            ],
-            services: [
-              {
-                service_id: activeReplicaId,
-                partition_id: partitionId,
-                node_id: nodeId,
-                service_type: 'partition',
-                status: ReplicaStatus.ACTIVE,
-              },
-              {
-                service_id: removingReplicaId,
-                partition_id: partitionId,
-                node_id: 'other-node',
-                service_type: 'partition',
-                status: ReplicaStatus.ACTIVE,
-              },
-            ],
-            partitions: [{partition_id: partitionId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
+        async (partitionId, nodeId, activeReplicaId) => {
+          // No in-flight operations - rebalancer should generate REMOVE moves
+          const rebalancer = createTestRebalancer({
             entityId: partitionId,
             entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
             nodeId: 'coordinator-node',
-            replicaStateMachine: stateMachine,
+            cacheData: {
+              nodes: [{node_id: nodeId, status: 'active'}],
+              services: [
+                {
+                  service_id: activeReplicaId,
+                  partition_id: partitionId,
+                  node_id: nodeId,
+                  service_type: 'partition',
+                  status: ReplicaStatus.ACTIVE,
+                },
+              ],
+              partitions: [{partition_id: partitionId, table_id: 'table-1'}],
+              replicaOperations: [], // No in-flight operations
+            },
           });
 
           rebalancer.initialize();
@@ -334,12 +206,6 @@ test('Property 4: No Duplicate REMOVE Moves for Removing Replicas', async (t) =>
               node_id: nodeId,
               status: ReplicaStatus.ACTIVE,
             },
-            {
-              service_id: removingReplicaId,
-              replica_id: removingReplicaId,
-              node_id: 'other-node',
-              status: ReplicaStatus.ACTIVE,
-            },
           ];
           const targetState = {
             targetReplicaCount: 0,
@@ -350,23 +216,79 @@ test('Property 4: No Duplicate REMOVE Moves for Removing Replicas', async (t) =>
 
           // Clean up
           rebalancer.shutdown();
-          stateMachine.clear();
 
-          // REMOVE move should be generated for active replica
+          // REMOVE moves should be generated for active replica
           const removeMovesForActive = moves.filter((m) =>
             m.type === MoveType.REMOVE && m.replicaId === activeReplicaId);
 
-          // No REMOVE move for removing replica
-          const removeMovesForRemoving = moves.filter((m) =>
-            m.type === MoveType.REMOVE && m.replicaId === removingReplicaId);
-
-          return removeMovesForActive.length > 0 &&
-                 removeMovesForRemoving.length === 0;
+          return removeMovesForActive.length > 0;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('REMOVE moves allowed for active replicas');
+    t.pass('REMOVE moves allowed for active replicas without in-flight ops');
+  });
+
+  /**
+   * Property: Completed REMOVE operations (terminal status) don't block new moves.
+   */
+  t.test('completed REMOVE operations do not block new moves', async (t) => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uuid(), // partition_id
+        fc.uuid(), // node_id
+        fc.uuid(), // replica_id
+        fc.uuid(), // operation_id
+        fc.constantFrom('removed', 'failed'), // terminal statuses
+        async (partitionId, nodeId, replicaId, operationId, terminalStatus) => {
+          // Create a completed REMOVE operation in the cache
+          const replicaOperations = [{
+            operation_id: operationId,
+            type: 'REMOVE',
+            partition_id: partitionId,
+            replica_id: replicaId,
+            target_node_id: nodeId,
+            status: terminalStatus,
+            workflow_step: terminalStatus,
+          }];
+
+          const rebalancer = createTestRebalancer({
+            entityId: partitionId,
+            entityType: EntityType.PARTITION,
+            nodeId: 'coordinator-node',
+            cacheData: {
+              nodes: [{node_id: nodeId, status: 'active'}],
+              services: [
+                {
+                  service_id: replicaId,
+                  partition_id: partitionId,
+                  node_id: nodeId,
+                  service_type: 'partition',
+                  status: ReplicaStatus.ACTIVE,
+                },
+              ],
+              partitions: [{partition_id: partitionId, table_id: 'table-1'}],
+              replicaOperations,
+            },
+          });
+
+          rebalancer.initialize();
+          rebalancer.setLeader(true);
+
+          // Query in-flight operations - terminal ones should not be included
+          const inFlight = rebalancer.getInFlightOperations();
+
+          // Clean up
+          rebalancer.shutdown();
+
+          // Terminal operations should not be in-flight
+          return inFlight.length === 0;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('completed REMOVE operations do not block new moves');
   });
 });

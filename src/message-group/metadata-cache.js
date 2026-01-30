@@ -7,7 +7,12 @@
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
+import {
+  MESSAGE_GROUP_METADATA_SQL,
+  MESSAGE_GROUP_METADATA_TABLE,
+} from './constants.js';
 
 /**
  * Cache entry status enumeration.
@@ -107,7 +112,7 @@ class MetadataCache extends EventEmitter {
     // Load configuration
     const config = ConfigurationManager.getInstance();
     this.defaultTtlMs = options.defaultTtlMs ??
-      config.get('messageGroup.cacheTtlMs') ??
+      config.get(CONFIG_KEY.MESSAGE_GROUP_CACHE_TTL_MS) ??
       DEFAULT_CACHE_CONFIG.defaultTtlMs;
     this.maxEntries = options.maxEntries ??
       DEFAULT_CACHE_CONFIG.maxEntries;
@@ -344,6 +349,7 @@ class MetadataCache extends EventEmitter {
             key,
             error: error.message,
           });
+          throw error;
         }
       }
     }
@@ -368,8 +374,8 @@ class MetadataCache extends EventEmitter {
   async getPartition(partitionId) {
     const key = `partition:${partitionId}`;
     return this.getOrQuery(key, {
-      tableName: 'partitions',
-      sql: 'SELECT * FROM partitions WHERE partition_id = ?',
+      tableName: MESSAGE_GROUP_METADATA_TABLE.PARTITIONS,
+      sql: MESSAGE_GROUP_METADATA_SQL.SELECT_PARTITION_BY_ID,
       params: [partitionId],
     });
   }
@@ -393,8 +399,8 @@ class MetadataCache extends EventEmitter {
   async getService(serviceId) {
     const key = `service:${serviceId}`;
     return this.getOrQuery(key, {
-      tableName: 'services',
-      sql: 'SELECT * FROM services WHERE service_id = ?',
+      tableName: MESSAGE_GROUP_METADATA_TABLE.SERVICES,
+      sql: MESSAGE_GROUP_METADATA_SQL.SELECT_SERVICE_BY_ID,
       params: [serviceId],
     });
   }
@@ -418,8 +424,8 @@ class MetadataCache extends EventEmitter {
   async getNode(nodeId) {
     const key = `node:${nodeId}`;
     return this.getOrQuery(key, {
-      tableName: 'nodes',
-      sql: 'SELECT * FROM nodes WHERE node_id = ?',
+      tableName: MESSAGE_GROUP_METADATA_TABLE.NODES,
+      sql: MESSAGE_GROUP_METADATA_SQL.SELECT_NODE_BY_ID,
       params: [nodeId],
     });
   }

@@ -3,7 +3,7 @@
  * Requirements: 4.5, 4.8
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {SystemCacheQueryService} from '../../src/message-group/system-cache-query-service.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';

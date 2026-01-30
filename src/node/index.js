@@ -16,6 +16,10 @@ export {
 } from './failure-detector.js';
 
 export {
+  NODE_STATUS,
+} from './node-constants.js';
+
+export {
   ReplicaRecoveryService,
   NodeStatus as RecoveryNodeStatus,
   ReplicaStatus as RecoveryReplicaStatus,
@@ -44,9 +48,12 @@ export {
 
 export {
   ReplicaHandler,
-  MessageType as ReplicaHandlerMessageType,
-  ResponseStatus as ReplicaHandlerResponseStatus,
 } from './replica-handler.js';
+
+export {
+  ReplicaOperationMessageType as ReplicaHandlerMessageType,
+  ReplicaOperationResponseStatus as ReplicaHandlerResponseStatus,
+} from '../rebalancer/replica-operation-constants.js';
 
 export {
   NodeLifecycleStateMachine,

@@ -8,7 +8,7 @@
  * resolve with that ACK.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {PendingRequestTracker} from '../../src/partition/pending-request-tracker.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

@@ -1,22 +1,21 @@
 /**
- * Property Test: Unified Rebalancer Behavior (Property 12)
+ * Property Test: Stabilization Period Configuration Bounds (Property 3)
  *
- * For any rebalancing trigger (node join, node leave, policy change),
- * the same rebalancing algorithm should be used for both partitions
- * and message groups, with behavior determined solely by the applicable policy.
+ * For any stabilization period configuration value, the effective value
+ * SHALL be clamped to the range [1000ms, 10000ms] with a default of 1000ms.
  *
- * Validates: Requirements 8.1, 8.7, 8.8
+ * Validates: Requirements 2.1
+ *
+ * Feature: node-joining-rebalancer-fixes, Property 3: Stabilization Period
+ * Configuration Bounds
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {
-  UnifiedRebalancer,
-  EntityType,
-  NodeStatus,
-} from '../../src/rebalancer/unified-rebalancer.js';
+import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createTestRebalancer} from './test-helpers.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -35,193 +34,180 @@ function initializeTestEnvironment() {
   }
 }
 
-// Create a mock system table cache
-function createMockCache(nodes, services = []) {
-  const cache = {
-    nodes: new Map(nodes.map((n) => [n.node_id, n])),
-    services: new Map(services.map((s) => [s.service_id, s])),
-    partitions: new Map(),
-    tables: new Map(),
-    message_groups: new Map(),
-  };
+test('Property 3: Stabilization Period Configuration Bounds', async (t) => {
+  await t.test('default stabilization period is 1000ms', async (t) => {
+    // Reset and initialize without stabilization config
+    initializeTestEnvironment();
 
-  return {
-    get: (tableName, key) => cache[tableName]?.get(key),
-    filter: (tableName, predicate) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values()).filter(predicate);
-    },
-    getAll: (tableName) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values());
-    },
-  };
-}
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
 
-// Arbitrary for generating node configurations
-const nodeArb = fc.record({
-  node_id: fc.uuid(),
-  status: fc.constantFrom(NodeStatus.ACTIVE, NodeStatus.FAILED),
-  cpu_usage_percent: fc.integer({min: 0, max: 100}),
-  memory_usage_percent: fc.integer({min: 0, max: 100}),
-  disk_usage_percent: fc.integer({min: 0, max: 100}),
-});
+    const effectiveValue = rebalancer.getStabilizationPeriodMs();
 
-// Arbitrary for generating policies
-const policyArb = fc.record({
-  replicaCount: fc.constantFrom(3, 5, 7),
-  minReplicaCount: fc.constant(3),
-  maxReplicaCount: fc.constantFrom(5, 7, 9),
-  placementConstraints: fc.record({
-    spreadAcrossNodes: fc.boolean(),
-    considerCpuLoad: fc.boolean(),
-    considerMemoryLoad: fc.boolean(),
-    considerDiskSpace: fc.boolean(),
-  }),
-});
-
-test('Property 12: Unified Rebalancer Behavior', async (t) => {
-  initializeTestEnvironment();
-
-  await t.test('same algorithm for partitions and message groups', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.array(nodeArb, {minLength: 3, maxLength: 5}),
-        policyArb,
-        async (nodes, _policy) => {
-          // Ensure at least 3 active nodes
-          const activeNodes = nodes.map((n, i) => ({
-            ...n,
-            node_id: `node-${i}`,
-            status: i < 3 ? NodeStatus.ACTIVE : n.status,
-          }));
-
-          const mockCache = createMockCache(activeNodes);
-
-          // Create partition rebalancer
-          const partitionRebalancer = new UnifiedRebalancer({
-            entityId: 'partition-1',
-            entityType: EntityType.PARTITION,
-            nodeId: 'node-0',
-            systemTableCache: mockCache,
-          });
-
-          // Create message group rebalancer
-          const messageGroupRebalancer = new UnifiedRebalancer({
-            entityId: 'mg-1',
-            entityType: EntityType.MESSAGE_GROUP,
-            nodeId: 'node-0',
-            systemTableCache: mockCache,
-          });
-
-          // Both should use the same available nodes
-          const partitionNodes = partitionRebalancer.getAvailableNodes();
-          const messageGroupNodes = messageGroupRebalancer.getAvailableNodes();
-
-          // Same nodes should be available to both
-          const partitionNodeIds = new Set(partitionNodes.map((n) => n.node_id));
-          const messageGroupNodeIds = new Set(messageGroupNodes.map((n) => n.node_id));
-
-          return partitionNodeIds.size === messageGroupNodeIds.size &&
-            [...partitionNodeIds].every((id) => messageGroupNodeIds.has(id));
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('Same algorithm used for partitions and message groups');
+    t.equal(effectiveValue, 1000, 'Default stabilization period should be 1000ms');
   });
 
-  await t.test('behavior determined by policy', async (t) => {
+  await t.test('values within valid range are preserved', async (t) => {
     await fc.assert(
-      fc.asyncProperty(
-        policyArb,
-        async (policy) => {
-          const nodes = [
-            {node_id: 'node-1', status: NodeStatus.ACTIVE},
-            {node_id: 'node-2', status: NodeStatus.ACTIVE},
-            {node_id: 'node-3', status: NodeStatus.ACTIVE},
-          ];
+      fc.property(
+        // Schema allows 1000-10000, so test within that range
+        fc.integer({min: 1000, max: 10000}),
+        (configuredValue) => {
+          ConfigurationManager.resetInstance();
+          const config = ConfigurationManager.getInstance();
+          config.initialize({
+            node: {id: 'test-node'},
+            logging: {level: 'error'},
+            rebalancer: {stabilizationPeriodMs: configuredValue},
+          });
 
-          const mockCache = createMockCache(nodes);
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-1',
-            systemTableCache: mockCache,
           });
 
-          // Validate replica count based on policy
-          const validatedCount = rebalancer.validateReplicaCount(
-            policy.replicaCount,
-            policy,
-          );
+          const effectiveValue = rebalancer.getStabilizationPeriodMs();
 
-          // Result should be within policy bounds
-          const withinBounds = validatedCount >= policy.minReplicaCount &&
-            validatedCount <= policy.maxReplicaCount;
-
-          // Result should be odd (for Raft quorum)
-          const isOdd = validatedCount % 2 === 1;
-
-          return withinBounds && isOdd;
+          // Values within range should be preserved exactly
+          return effectiveValue === configuredValue;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('Behavior determined by policy');
+    t.pass('Values within range [1000ms, 10000ms] are preserved');
   });
 
-  await t.test('independent leader decisions converge', async (t) => {
+  await t.test('clampStabilizationPeriod clamps values below minimum', async (t) => {
     await fc.assert(
-      fc.asyncProperty(
-        fc.array(nodeArb, {minLength: 3, maxLength: 5}),
-        async (nodes) => {
-          // Ensure at least 3 active nodes
-          const activeNodes = nodes.map((n, i) => ({
-            ...n,
-            node_id: `node-${i}`,
-            status: i < 3 ? NodeStatus.ACTIVE : n.status,
-          }));
+      fc.property(
+        fc.integer({min: -10000, max: 999}),
+        (inputValue) => {
+          initializeTestEnvironment();
 
-          const mockCache = createMockCache(activeNodes);
-
-          // Create multiple rebalancers (simulating different partition leaders)
-          const rebalancer1 = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
-            nodeId: 'node-0',
-            systemTableCache: mockCache,
-          });
-
-          const rebalancer2 = new UnifiedRebalancer({
-            entityId: 'partition-2',
-            entityType: EntityType.PARTITION,
             nodeId: 'node-1',
-            systemTableCache: mockCache,
           });
 
-          // Both should see the same available nodes
-          const nodes1 = rebalancer1.getAvailableNodes();
-          const nodes2 = rebalancer2.getAvailableNodes();
+          // Test the clamping method directly
+          const clampedValue = rebalancer.clampStabilizationPeriod(inputValue);
 
-          // Both should calculate the same target state for same policy
-          const testPolicy = {replicaCount: 3, minReplicaCount: 3, maxReplicaCount: 7};
-          const target1 = rebalancer1.calculateTargetState([], testPolicy);
-          const target2 = rebalancer2.calculateTargetState([], testPolicy);
-
-          // Target replica counts should match
-          return nodes1.length === nodes2.length &&
-            target1.targetReplicaCount === target2.targetReplicaCount;
+          // Values below 1000 should be clamped to 1000
+          return clampedValue === 1000;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('Independent leader decisions converge');
+    t.pass('clampStabilizationPeriod clamps values below minimum to 1000ms');
+  });
+
+  await t.test('clampStabilizationPeriod clamps values above maximum', async (t) => {
+    await fc.assert(
+      fc.property(
+        fc.integer({min: 10001, max: 100000}),
+        (inputValue) => {
+          initializeTestEnvironment();
+
+          const rebalancer = createTestRebalancer({
+            entityId: 'partition-1',
+            entityType: EntityType.PARTITION,
+            nodeId: 'node-1',
+          });
+
+          // Test the clamping method directly
+          const clampedValue = rebalancer.clampStabilizationPeriod(inputValue);
+
+          // Values above 10000 should be clamped to 10000
+          return clampedValue === 10000;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('clampStabilizationPeriod clamps values above maximum to 10000ms');
+  });
+
+  await t.test('clampStabilizationPeriod preserves values within range', async (t) => {
+    await fc.assert(
+      fc.property(
+        fc.integer({min: 1000, max: 10000}),
+        (inputValue) => {
+          initializeTestEnvironment();
+
+          const rebalancer = createTestRebalancer({
+            entityId: 'partition-1',
+            entityType: EntityType.PARTITION,
+            nodeId: 'node-1',
+          });
+
+          // Test the clamping method directly
+          const clampedValue = rebalancer.clampStabilizationPeriod(inputValue);
+
+          // Values within range should be preserved
+          return clampedValue === inputValue;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('clampStabilizationPeriod preserves values within range');
+  });
+
+  await t.test('clampStabilizationPeriod handles non-numeric values', async (t) => {
+    initializeTestEnvironment();
+
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    // Test with various non-numeric values
+    t.equal(rebalancer.clampStabilizationPeriod(undefined), 1000,
+      'undefined should return default');
+    t.equal(rebalancer.clampStabilizationPeriod(null), 1000,
+      'null should return default');
+    t.equal(rebalancer.clampStabilizationPeriod(NaN), 1000,
+      'NaN should return default');
+    t.equal(rebalancer.clampStabilizationPeriod('invalid'), 1000,
+      'string should return default');
+  });
+
+  await t.test('effective value is always in valid range', async (t) => {
+    await fc.assert(
+      fc.property(
+        fc.integer({min: 1000, max: 10000}),
+        (configuredValue) => {
+          ConfigurationManager.resetInstance();
+          const config = ConfigurationManager.getInstance();
+          config.initialize({
+            node: {id: 'test-node'},
+            logging: {level: 'error'},
+            rebalancer: {stabilizationPeriodMs: configuredValue},
+          });
+
+          const rebalancer = createTestRebalancer({
+            entityId: 'partition-1',
+            entityType: EntityType.PARTITION,
+            nodeId: 'node-1',
+          });
+
+          const effectiveValue = rebalancer.getStabilizationPeriodMs();
+
+          // Property: effective value must always be in range [1000, 10000]
+          return effectiveValue >= 1000 && effectiveValue <= 10000;
+        },
+      ),
+      {numRuns: 10},
+    );
+
+    t.pass('Effective stabilization period is always in valid range');
   });
 });

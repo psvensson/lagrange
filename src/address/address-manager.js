@@ -7,16 +7,24 @@
  */
 
 import {v4 as uuidv4, validate as uuidValidate} from 'uuid';
+import {ADDRESS} from '../constants/index.js';
 import {LoggingService} from '../logging/logging-service.js';
+import {
+  ADDRESS_COMPONENT,
+  ADDRESS_ERROR_MSG,
+  ADDRESS_ERROR_NAME,
+  ADDRESS_FORMAT,
+  ADDRESS_LOG_MSG,
+  ADDRESS_SUBSYSTEM,
+  ADDRESS_TYPE,
+  ADDRESS_VALIDATE,
+} from './constants.js';
 
 /**
  * Address types supported by the system.
  * @enum {string}
  */
-const AddressType = {
-  NODE: 'node',
-  SERVICE: 'service',
-};
+const AddressType = ADDRESS_TYPE;
 
 /**
  * Error thrown when an address is malformed.
@@ -29,7 +37,7 @@ class MalformedAddressError extends Error {
    */
   constructor(message, address) {
     super(message);
-    this.name = 'MalformedAddressError';
+    this.name = ADDRESS_ERROR_NAME.MALFORMED;
     this.address = address;
   }
 }
@@ -44,8 +52,8 @@ class EmptyComponentError extends Error {
    * @param {string} address - The address with the empty component.
    */
   constructor(component, address) {
-    super(`Address component '${component}' cannot be empty`);
-    this.name = 'EmptyComponentError';
+    super(ADDRESS_ERROR_MSG.COMPONENT_EMPTY(component));
+    this.name = ADDRESS_ERROR_NAME.EMPTY_COMPONENT;
     this.component = component;
     this.address = address;
   }
@@ -70,7 +78,7 @@ class AddressManager {
     // Set up subsystem logger
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('address') : null;
+      loggingService.forSubsystem(ADDRESS_SUBSYSTEM.NAME) : null;
   }
 
   /**
@@ -100,7 +108,7 @@ class AddressManager {
     this.nodeAddresses.add(address);
 
     if (this.logger) {
-      this.logger.debug('Generated node address', {address});
+      this.logger.debug(ADDRESS_LOG_MSG.GENERATED_NODE, {address});
     }
 
     return address;
@@ -116,7 +124,7 @@ class AddressManager {
     this.serviceAddresses.add(address);
 
     if (this.logger) {
-      this.logger.debug('Generated service address', {
+      this.logger.debug(ADDRESS_LOG_MSG.GENERATED_SERVICE, {
         address,
         nodeAddress,
       });
@@ -131,7 +139,7 @@ class AddressManager {
    * @return {boolean} True if the address is a valid UUID v4.
    */
   validateAddress(address) {
-    if (typeof address !== 'string') {
+    if (typeof address !== ADDRESS_VALIDATE.TYPEOF_STRING) {
       return false;
     }
     return uuidValidate(address);
@@ -172,14 +180,14 @@ class AddressManager {
   registerNodeAddress(address) {
     if (!this.validateAddress(address)) {
       if (this.logger) {
-        this.logger.warn('Invalid node address format', {address});
+        this.logger.warn(ADDRESS_LOG_MSG.INVALID_NODE_FORMAT, {address});
       }
       return false;
     }
 
     if (this.hasAddressConflict(address)) {
       if (this.logger) {
-        this.logger.warn('Node address conflict detected', {address});
+        this.logger.warn(ADDRESS_LOG_MSG.NODE_CONFLICT, {address});
       }
       return false;
     }
@@ -187,7 +195,7 @@ class AddressManager {
     this.nodeAddresses.add(address);
 
     if (this.logger) {
-      this.logger.debug('Registered node address', {address});
+      this.logger.debug(ADDRESS_LOG_MSG.REGISTERED_NODE, {address});
     }
 
     return true;
@@ -201,14 +209,14 @@ class AddressManager {
   registerServiceAddress(address) {
     if (!this.validateAddress(address)) {
       if (this.logger) {
-        this.logger.warn('Invalid service address format', {address});
+        this.logger.warn(ADDRESS_LOG_MSG.INVALID_SERVICE_FORMAT, {address});
       }
       return false;
     }
 
     if (this.hasAddressConflict(address)) {
       if (this.logger) {
-        this.logger.warn('Service address conflict detected', {address});
+        this.logger.warn(ADDRESS_LOG_MSG.SERVICE_CONFLICT, {address});
       }
       return false;
     }
@@ -216,7 +224,7 @@ class AddressManager {
     this.serviceAddresses.add(address);
 
     if (this.logger) {
-      this.logger.debug('Registered service address', {address});
+      this.logger.debug(ADDRESS_LOG_MSG.REGISTERED_SERVICE, {address});
     }
 
     return true;
@@ -231,7 +239,7 @@ class AddressManager {
     const removed = this.nodeAddresses.delete(address);
 
     if (removed && this.logger) {
-      this.logger.debug('Unregistered node address', {address});
+      this.logger.debug(ADDRESS_LOG_MSG.UNREGISTERED_NODE, {address});
     }
 
     return removed;
@@ -246,7 +254,7 @@ class AddressManager {
     const removed = this.serviceAddresses.delete(address);
 
     if (removed && this.logger) {
-      this.logger.debug('Unregistered service address', {address});
+      this.logger.debug(ADDRESS_LOG_MSG.UNREGISTERED_SERVICE, {address});
     }
 
     return removed;
@@ -292,7 +300,7 @@ class AddressManager {
     this.serviceAddresses.clear();
 
     if (this.logger) {
-      this.logger.debug('Cleared all addresses');
+      this.logger.debug(ADDRESS_LOG_MSG.CLEARED);
     }
   }
 
@@ -309,18 +317,18 @@ class AddressManager {
    * @throws {EmptyComponentError} If any component is empty.
    */
   parse(address) {
-    if (typeof address !== 'string') {
+    if (typeof address !== ADDRESS_VALIDATE.TYPEOF_STRING) {
       throw new MalformedAddressError(
-        'Address must be a string',
+        ADDRESS_ERROR_MSG.MUST_BE_STRING,
         String(address),
       );
     }
 
-    const parts = address.split('/');
+    const parts = address.split(ADDRESS.SEPARATOR);
 
-    if (parts.length !== 3) {
+    if (parts.length !== ADDRESS_VALIDATE.COMPONENT_COUNT) {
       throw new MalformedAddressError(
-        `Address must have exactly 3 components separated by '/', got ${parts.length}`,
+        ADDRESS_ERROR_MSG.MUST_HAVE_COMPONENTS(parts.length),
         address,
       );
     }
@@ -328,13 +336,13 @@ class AddressManager {
     const [nodeId, serviceType, serviceId] = parts;
 
     if (!nodeId) {
-      throw new EmptyComponentError('nodeId', address);
+      throw new EmptyComponentError(ADDRESS_COMPONENT.NODE_ID, address);
     }
     if (!serviceType) {
-      throw new EmptyComponentError('serviceType', address);
+      throw new EmptyComponentError(ADDRESS_COMPONENT.SERVICE_TYPE, address);
     }
     if (!serviceId) {
-      throw new EmptyComponentError('serviceId', address);
+      throw new EmptyComponentError(ADDRESS_COMPONENT.SERVICE_ID, address);
     }
 
     return {nodeId, serviceType, serviceId};
@@ -350,16 +358,16 @@ class AddressManager {
    */
   format(nodeId, serviceType, serviceId) {
     if (!nodeId) {
-      throw new EmptyComponentError('nodeId', '');
+      throw new EmptyComponentError(ADDRESS_COMPONENT.NODE_ID, ADDRESS_FORMAT.EMPTY);
     }
     if (!serviceType) {
-      throw new EmptyComponentError('serviceType', '');
+      throw new EmptyComponentError(ADDRESS_COMPONENT.SERVICE_TYPE, ADDRESS_FORMAT.EMPTY);
     }
     if (!serviceId) {
-      throw new EmptyComponentError('serviceId', '');
+      throw new EmptyComponentError(ADDRESS_COMPONENT.SERVICE_ID, ADDRESS_FORMAT.EMPTY);
     }
 
-    return `${nodeId}/${serviceType}/${serviceId}`;
+    return ADDRESS_FORMAT.build(nodeId, serviceType, serviceId);
   }
 
   /**
@@ -368,30 +376,44 @@ class AddressManager {
    * @return {{valid: boolean, error?: string}} Validation result.
    */
   validate(address) {
-    if (typeof address !== 'string') {
-      return {valid: false, error: 'Address must be a string'};
+    if (typeof address !== ADDRESS_VALIDATE.TYPEOF_STRING) {
+      return {valid: false, error: ADDRESS_ERROR_MSG.MUST_BE_STRING};
     }
 
-    const parts = address.split('/');
+    const parts = address.split(ADDRESS.SEPARATOR);
 
-    if (parts.length !== 3) {
+    if (parts.length !== ADDRESS_VALIDATE.COMPONENT_COUNT) {
       return {
         valid: false,
-        error: 'Address must have exactly 3 components separated by \'/\', ' +
-          `got ${parts.length}`,
+        error: ADDRESS_ERROR_MSG.MUST_HAVE_COMPONENTS(parts.length),
       };
     }
 
     const [nodeId, serviceType, serviceId] = parts;
 
     if (!nodeId) {
-      return {valid: false, error: 'nodeId component cannot be empty'};
+      return {
+        valid: false,
+        error: ADDRESS_ERROR_MSG.COMPONENT_CANNOT_BE_EMPTY(
+          ADDRESS_COMPONENT.NODE_ID,
+        ),
+      };
     }
     if (!serviceType) {
-      return {valid: false, error: 'serviceType component cannot be empty'};
+      return {
+        valid: false,
+        error: ADDRESS_ERROR_MSG.COMPONENT_CANNOT_BE_EMPTY(
+          ADDRESS_COMPONENT.SERVICE_TYPE,
+        ),
+      };
     }
     if (!serviceId) {
-      return {valid: false, error: 'serviceId component cannot be empty'};
+      return {
+        valid: false,
+        error: ADDRESS_ERROR_MSG.COMPONENT_CANNOT_BE_EMPTY(
+          ADDRESS_COMPONENT.SERVICE_ID,
+        ),
+      };
     }
 
     return {valid: true};

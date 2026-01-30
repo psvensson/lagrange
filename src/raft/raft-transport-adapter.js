@@ -5,6 +5,12 @@
  */
 
 import {AddressManager} from '../address/address-manager.js';
+import {ADDRESS, TABLES} from '../constants/index.js';
+import {
+  RAFT_PACKET_MESSAGE_TYPE,
+  RAFT_TRANSPORT_ERROR_MSG,
+  RAFT_TRANSPORT_LOG_MSG,
+} from './constants.js';
 
 /**
  * Transport adapter for liferaft that uses MessageRouter.
@@ -20,13 +26,13 @@ class RaftTransportAdapter {
    */
   constructor(options) {
     if (!options.messageRouter) {
-      throw new Error('messageRouter is required');
+      throw new Error(RAFT_TRANSPORT_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
     }
     if (!options.entityType) {
-      throw new Error('entityType is required');
+      throw new Error(RAFT_TRANSPORT_ERROR_MSG.ENTITY_TYPE_REQUIRED);
     }
     if (!options.nodeId) {
-      throw new Error('nodeId is required');
+      throw new Error(RAFT_TRANSPORT_ERROR_MSG.NODE_ID_REQUIRED);
     }
 
     this.messageRouter = options.messageRouter;
@@ -51,7 +57,7 @@ class RaftTransportAdapter {
 
     // Debug logging for Raft message delivery
 
-    console.log('[RaftTransportAdapter] write:', {
+    console.log(RAFT_TRANSPORT_LOG_MSG.WRITE, {
       type: packet.type,
       destination: destinationId,
       peerAddress,
@@ -75,7 +81,7 @@ class RaftTransportAdapter {
       const result = await this.messageRouter.deliver(peerAddress, message);
       callback(null, result);
     } catch (error) {
-      console.log('[RaftTransportAdapter] write error:', error.message);
+      console.log(RAFT_TRANSPORT_LOG_MSG.WRITE_ERROR, error.message);
       callback(error);
     }
   }
@@ -91,24 +97,23 @@ class RaftTransportAdapter {
     const addressManager = AddressManager.getInstance();
 
     // If already in unified format, validate and return as-is
-    if (peerId && peerId.includes('/')) {
+    if (peerId && peerId.includes(ADDRESS.SEPARATOR)) {
       const validation = addressManager.validate(peerId);
       if (validation.valid) {
         return peerId;
       }
-      // If invalid unified format, fall through to construct a new address
+      throw new Error(`Invalid unified address format: ${validation.error}`);
     }
 
     // Look up nodeId from system table cache if available
     if (this.systemTableCache) {
-      const service = this.systemTableCache.get('services', peerId);
+      const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
       if (service?.node_id) {
         return addressManager.format(service.node_id, this.entityType, peerId);
       }
     }
 
-    // Fallback: assume same node during bootstrap
-    return addressManager.format(this.nodeId, this.entityType, peerId);
+    throw new Error(`Unable to resolve unified peer address for ${peerId}`);
   }
 
   /**
@@ -117,13 +122,7 @@ class RaftTransportAdapter {
    * @return {string} Our message type
    */
   getRaftMessageType(packetType) {
-    const typeMap = {
-      'vote': 'RAFT_REQUEST_VOTE',
-      'voted': 'RAFT_REQUEST_VOTE_RESPONSE',
-      'append': 'RAFT_APPEND_ENTRIES',
-      'appended': 'RAFT_APPEND_ENTRIES_RESPONSE',
-    };
-    return typeMap[packetType] || packetType;
+    return RAFT_PACKET_MESSAGE_TYPE[packetType] || packetType;
   }
 }
 

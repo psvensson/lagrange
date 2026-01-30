@@ -5,6 +5,12 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {NUM, TYPEOF} from '../constants/index.js';
+import {
+  KEY_RANGE_ERROR_MSG,
+  KEY_RANGE_LOG_MSG,
+  PARTITION_SUBSYSTEM,
+} from './partition-constants.js';
 
 /**
  * Represents a partition key range.
@@ -35,15 +41,15 @@ class KeyRange {
     }
 
     if (this.start === null) {
-      return this.compareKeys(key, this.end) < 0;
+      return this.compareKeys(key, this.end) < NUM.ZERO;
     }
 
     if (this.end === null) {
-      return this.compareKeys(key, this.start) >= 0;
+      return this.compareKeys(key, this.start) >= NUM.ZERO;
     }
 
-    return this.compareKeys(key, this.start) >= 0 &&
-           this.compareKeys(key, this.end) < 0;
+    return this.compareKeys(key, this.start) >= NUM.ZERO &&
+           this.compareKeys(key, this.end) < NUM.ZERO;
   }
 
   /**
@@ -53,15 +59,15 @@ class KeyRange {
    * @return {number} Negative if a < b, positive if a > b, 0 if equal.
    */
   compareKeys(a, b) {
-    if (a === null && b === null) return 0;
-    if (a === null) return -1;
-    if (b === null) return 1;
+    if (a === null && b === null) return NUM.ZERO;
+    if (a === null) return NUM.NEGATIVE_ONE;
+    if (b === null) return NUM.ONE;
 
-    if (typeof a === 'string' && typeof b === 'string') {
+    if (typeof a === TYPEOF.STRING && typeof b === TYPEOF.STRING) {
       return a.localeCompare(b);
     }
 
-    if (typeof a === 'number' && typeof b === 'number') {
+    if (typeof a === TYPEOF.NUMBER && typeof b === TYPEOF.NUMBER) {
       return a - b;
     }
 
@@ -78,7 +84,7 @@ class KeyRange {
     if (this.end === null || other.start === null) {
       return false;
     }
-    return this.compareKeys(this.end, other.start) === 0;
+    return this.compareKeys(this.end, other.start) === NUM.ZERO;
   }
 
   /**
@@ -89,13 +95,13 @@ class KeyRange {
   overlaps(other) {
     // Check if one range is completely before the other
     if (this.end !== null && other.start !== null) {
-      if (this.compareKeys(this.end, other.start) <= 0) {
+      if (this.compareKeys(this.end, other.start) <= NUM.ZERO) {
         return false;
       }
     }
 
     if (other.end !== null && this.start !== null) {
-      if (this.compareKeys(other.end, this.start) <= 0) {
+      if (this.compareKeys(other.end, this.start) <= NUM.ZERO) {
         return false;
       }
     }
@@ -162,7 +168,7 @@ class KeyRangeManager {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('key-range-manager') : console;
+      loggingService.forSubsystem(PARTITION_SUBSYSTEM.KEY_RANGE_MANAGER) : console;
   }
 
   /**
@@ -178,16 +184,13 @@ class KeyRangeManager {
     // Check for overlaps with existing ranges
     for (const [existingId, existingRange] of this.ranges) {
       if (existingId !== partitionId && keyRange.overlaps(existingRange)) {
-        throw new Error(
-          `Key range overlap detected: partition ${partitionId} ` +
-          `overlaps with ${existingId}`,
-        );
+        throw new Error(KEY_RANGE_ERROR_MSG.OVERLAP(partitionId, existingId));
       }
     }
 
     this.ranges.set(partitionId, keyRange);
 
-    this.logger.debug('Added partition range', {
+    this.logger.debug(KEY_RANGE_LOG_MSG.ADDED_PARTITION_RANGE, {
       tableId: this.tableId,
       partitionId,
       start: keyRange.start,
@@ -202,7 +205,7 @@ class KeyRangeManager {
   removePartition(partitionId) {
     this.ranges.delete(partitionId);
 
-    this.logger.debug('Removed partition range', {
+    this.logger.debug(KEY_RANGE_LOG_MSG.REMOVED_PARTITION_RANGE, {
       tableId: this.tableId,
       partitionId,
     });
@@ -266,10 +269,10 @@ class KeyRangeManager {
       .map(([partitionId, range]) => ({partitionId, range}));
 
     entries.sort((a, b) => {
-      if (a.range.start === null) return -1;
-      if (b.range.start === null) return 1;
-      return a.range.compareKeys(a.range.start, b.range.start);
-    });
+    if (a.range.start === null) return NUM.NEGATIVE_ONE;
+    if (b.range.start === null) return NUM.ONE;
+    return a.range.compareKeys(a.range.start, b.range.start);
+  });
 
     return entries;
   }
@@ -301,51 +304,58 @@ class KeyRangeManager {
     const errors = [];
     const sorted = this.getSortedPartitions();
 
-    if (sorted.length === 0) {
+    if (sorted.length === NUM.ZERO) {
       return {valid: true, errors: []};
     }
 
     // Check first partition starts at NULL (unbounded)
-    if (sorted[0].range.start !== null) {
+    if (sorted[NUM.ZERO].range.start !== null) {
       errors.push(
-        `First partition ${sorted[0].partitionId} does not start at NULL`,
+        KEY_RANGE_ERROR_MSG.FIRST_PARTITION_STARTS(sorted[NUM.ZERO].partitionId),
       );
     }
 
     // Check last partition ends at NULL (unbounded)
-    if (sorted[sorted.length - 1].range.end !== null) {
+    if (sorted[sorted.length - NUM.ONE].range.end !== null) {
       errors.push(
-        `Last partition ${sorted[sorted.length - 1].partitionId} ` +
-        'does not end at NULL',
+        KEY_RANGE_ERROR_MSG.LAST_PARTITION_ENDS(
+          sorted[sorted.length - NUM.ONE].partitionId,
+        ),
       );
     }
 
     // Check contiguity and no overlaps
-    for (let i = 0; i < sorted.length - 1; i++) {
+    for (let i = NUM.ZERO; i < sorted.length - NUM.ONE; i++) {
       const current = sorted[i];
-      const next = sorted[i + 1];
+      const next = sorted[i + NUM.ONE];
 
       // Check for gap
       if (!current.range.isAdjacentTo(next.range)) {
         const currentEnd = current.range.end;
         const nextStart = next.range.start;
 
-        if (current.range.compareKeys(currentEnd, nextStart) < 0) {
+        if (current.range.compareKeys(currentEnd, nextStart) < NUM.ZERO) {
           errors.push(
-            `Gap between partitions ${current.partitionId} and ` +
-            `${next.partitionId}: [${currentEnd}, ${nextStart})`,
+            KEY_RANGE_ERROR_MSG.GAP_BETWEEN_PARTITIONS(
+              current.partitionId,
+              next.partitionId,
+              currentEnd,
+              nextStart,
+            ),
           );
-        } else if (current.range.compareKeys(currentEnd, nextStart) > 0) {
+        } else if (current.range.compareKeys(currentEnd, nextStart) > NUM.ZERO) {
           errors.push(
-            `Overlap between partitions ${current.partitionId} and ` +
-            `${next.partitionId}`,
+            KEY_RANGE_ERROR_MSG.OVERLAP_BETWEEN_PARTITIONS(
+              current.partitionId,
+              next.partitionId,
+            ),
           );
         }
       }
     }
 
     return {
-      valid: errors.length === 0,
+      valid: errors.length === NUM.ZERO,
       errors,
     };
   }
@@ -361,11 +371,11 @@ class KeyRangeManager {
   splitPartition(partitionId, splitKey, leftPartitionId, rightPartitionId) {
     const range = this.ranges.get(partitionId);
     if (!range) {
-      throw new Error(`Partition ${partitionId} not found`);
+      throw new Error(KEY_RANGE_ERROR_MSG.PARTITION_NOT_FOUND(partitionId));
     }
 
     if (!range.contains(splitKey)) {
-      throw new Error(`Split key ${splitKey} is not in partition range`);
+      throw new Error(KEY_RANGE_ERROR_MSG.SPLIT_KEY_OUT_OF_RANGE(splitKey));
     }
 
     const leftRange = new KeyRange(range.start, splitKey);
@@ -378,7 +388,7 @@ class KeyRangeManager {
     this.ranges.set(leftPartitionId, leftRange);
     this.ranges.set(rightPartitionId, rightRange);
 
-    this.logger.info('Split partition', {
+    this.logger.info(KEY_RANGE_LOG_MSG.SPLIT_PARTITION, {
       tableId: this.tableId,
       originalPartition: partitionId,
       leftPartition: leftPartitionId,
@@ -401,15 +411,18 @@ class KeyRangeManager {
     const rightRange = this.ranges.get(rightPartitionId);
 
     if (!leftRange) {
-      throw new Error(`Left partition ${leftPartitionId} not found`);
+      throw new Error(KEY_RANGE_ERROR_MSG.LEFT_PARTITION_NOT_FOUND(leftPartitionId));
     }
     if (!rightRange) {
-      throw new Error(`Right partition ${rightPartitionId} not found`);
+      throw new Error(KEY_RANGE_ERROR_MSG.RIGHT_PARTITION_NOT_FOUND(rightPartitionId));
     }
 
     if (!leftRange.isAdjacentTo(rightRange)) {
       throw new Error(
-        `Partitions ${leftPartitionId} and ${rightPartitionId} are not adjacent`,
+        KEY_RANGE_ERROR_MSG.PARTITIONS_NOT_ADJACENT(
+          leftPartitionId,
+          rightPartitionId,
+        ),
       );
     }
 
@@ -422,7 +435,7 @@ class KeyRangeManager {
     // Add merged partition
     this.ranges.set(mergedPartitionId, mergedRange);
 
-    this.logger.info('Merged partitions', {
+    this.logger.info(KEY_RANGE_LOG_MSG.MERGED_PARTITIONS, {
       tableId: this.tableId,
       leftPartition: leftPartitionId,
       rightPartition: rightPartitionId,

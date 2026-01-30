@@ -4,39 +4,50 @@
  * Requirements: 10.2, 3.1
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import {
-  ReplicaHandler,
-  MessageType,
-  ResponseStatus,
-} from '../../src/node/replica-handler.js';
+import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
+import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  ReplicaOperationMessageType,
+  ReplicaOperationResponseStatus,
+} from '../../src/rebalancer/replica-operation-constants.js';
 
 /**
  * Create a mock CDC integration service.
+ * @param {SystemTableCache} [cache] - Optional cache to update.
  * @return {Object} Mock CDC service.
  */
-function createMockCDCService() {
+function createMockCDCService(cache) {
   const operations = [];
 
   return {
     operations,
     async insertSystemTableRow(tableName, data) {
       operations.push({type: 'insert', tableName, data});
+      cache?.applySystemTableChange(tableName, 'INSERT', data);
       return {success: true, operation: 'INSERT', tableName, data};
     },
     async updateSystemTableRow(tableName, whereClause, data) {
-      operations.push({type: 'update', tableName, whereClause, data});
-      return {success: true, operation: 'UPDATE', tableName, whereClause, data};
+      const merged = {...whereClause, ...data};
+      operations.push({type: 'update', tableName, whereClause, data: merged});
+      cache?.applySystemTableChange(tableName, 'UPDATE', merged);
+      return {success: true, operation: 'UPDATE', tableName, whereClause, data: merged};
+    },
+    async upsertSystemTableRow(tableName, data) {
+      operations.push({type: 'upsert', tableName, data});
+      cache?.applySystemTableChange(tableName, 'INSERT', data);
+      return {success: true, operation: 'UPSERT', tableName, data};
     },
     async deleteSystemTableRow(tableName, whereClause) {
       operations.push({type: 'delete', tableName, whereClause});
+      cache?.applySystemTableChange(tableName, 'DELETE', whereClause);
       return {success: true, operation: 'DELETE', tableName, whereClause};
     },
     reset() {
@@ -61,10 +72,95 @@ function createMockPartitionServiceFactory() {
   };
 }
 
+/**
+ * Seed a system table cache with table/partition/service rows.
+ * @param {Object} options - Seed options.
+ * @return {SystemTableCache} Seeded cache.
+ */
+function createSeededCache(options = {}) {
+  const cache = new SystemTableCache();
+  const tableId = options.tableId || 'table-1';
+  const tableName = options.tableName || 'test_table';
+  const partitionId = options.partitionId || 'partition-1';
+  const leaderNodeId = options.leaderNodeId || 'leader-node';
+  const leaderReplicaId = options.leaderReplicaId || 'leader-replica';
+  const schema = options.schema || {
+    columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+  };
+
+  cache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+    table_id: tableId,
+    table_name: tableName,
+    schema_definition: JSON.stringify(schema),
+  });
+
+  cache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+    partition_id: partitionId,
+    table_id: tableId,
+    partition_key_start: null,
+    partition_key_end: null,
+    leader_node_id: leaderNodeId,
+  });
+
+  cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    service_id: leaderReplicaId,
+    service_type: 'partition',
+    partition_id: partitionId,
+    node_id: leaderNodeId,
+    raft_role: 'leader',
+    status: ReplicaStatus.ACTIVE,
+    address: `${leaderNodeId}/partition/${leaderReplicaId}`,
+    created_at: Date.now(),
+    updated_at: Date.now(),
+  });
+
+  return cache;
+}
+
+/**
+ * Seed a replica operation row.
+ * @param {SystemTableCache} cache - Cache to update.
+ * @param {string} operationId - Operation ID.
+ * @param {Object} overrides - Field overrides.
+ */
+function seedReplicaOperation(cache, operationId, overrides = {}) {
+  const now = Date.now();
+  cache.applySystemTableChange(SystemTableName.REPLICA_OPERATIONS, 'INSERT', {
+    operation_id: operationId,
+    type: overrides.type || 'ADD',
+    partition_id: overrides.partitionId || 'partition-1',
+    replica_id: overrides.replicaId || 'replica-1',
+    source_node_id: overrides.sourceNodeId || 'seed-node',
+    target_node_id: overrides.targetNodeId || 'test-node',
+    status: ReplicaStatus.PENDING,
+    workflow_step: 'PENDING',
+    created_at: now,
+    updated_at: now,
+    steps_history: '[]',
+    ...overrides,
+  });
+}
+
+/**
+ * Wait for a replica event or failure.
+ * @param {ReplicaHandler} handler - Replica handler.
+ * @param {string} successEvent - Success event name.
+ * @param {string} failureEvent - Failure event name.
+ * @return {Promise<Object>} Event payload.
+ */
+function waitForReplicaEvent(handler, successEvent, failureEvent) {
+  return new Promise((resolve, reject) => {
+    handler.once(successEvent, resolve);
+    handler.once(failureEvent, (event) => {
+      reject(new Error(event?.error || 'operation failed'));
+    });
+  });
+}
+
 test('ReplicaHandler', async (t) => {
   let tempDir;
 
-  t.beforeEach(async () => {
+  t.beforeEach(() => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
 
@@ -78,7 +174,7 @@ test('ReplicaHandler', async (t) => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'replica-handler-test-'));
   });
 
-  t.afterEach(async () => {
+  t.afterEach(() => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
 
@@ -89,9 +185,15 @@ test('ReplicaHandler', async (t) => {
   });
 
   t.test('initialization', async (t) => {
+    const cache = createSeededCache();
+    const mockCDC = createMockCDCService(cache);
+
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       dataDir: tempDir,
+      systemTableCache: cache,
+      cdcIntegrationService: mockCDC,
+      createPartitionService: createMockPartitionServiceFactory(),
     });
 
     t.equal(handler.initialized, false, 'not initialized before init');
@@ -106,32 +208,49 @@ test('ReplicaHandler', async (t) => {
   });
 
   t.test('handleMessage routes to correct handler', async (t) => {
+    const cache = createSeededCache();
+    seedReplicaOperation(cache, 'op-1');
+    const mockCDC = createMockCDCService(cache);
+
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       dataDir: tempDir,
+      systemTableCache: cache,
+      cdcIntegrationService: mockCDC,
+      createPartitionService: createMockPartitionServiceFactory(),
     });
 
     handler.initialize();
+
+    const created = waitForReplicaEvent(
+      handler,
+      'replicaCreated',
+      'replicaCreationFailed',
+    );
 
     // Test CREATE_REPLICA routing
     const createEnvelope = {
       correlationId: 'corr-1',
       payload: {
-        type: MessageType.CREATE_REPLICA,
+        type: ReplicaOperationMessageType.CREATE_REPLICA,
         operationId: 'op-1',
         partitionId: 'partition-1',
+        replicaId: 'replica-1',
       },
     };
 
     const createResponse = await handler.handleMessage(createEnvelope);
     t.equal(createResponse.correlationId, 'corr-1', 'correlationId preserved');
-    t.equal(createResponse.status, ResponseStatus.INITIATED, 'create initiated');
+    t.equal(createResponse.status, ReplicaOperationResponseStatus.INITIATED,
+      'create initiated');
+
+    await created;
 
     // Test REMOVE_REPLICA routing for non-existent replica
     const removeEnvelope = {
       correlationId: 'corr-2',
       payload: {
-        type: MessageType.REMOVE_REPLICA,
+        type: ReplicaOperationMessageType.REMOVE_REPLICA,
         operationId: 'op-2',
         partitionId: 'partition-1',
         replicaId: 'nonexistent',
@@ -140,7 +259,8 @@ test('ReplicaHandler', async (t) => {
 
     const removeResponse = await handler.handleMessage(removeEnvelope);
     t.equal(removeResponse.correlationId, 'corr-2', 'correlationId preserved');
-    t.equal(removeResponse.status, ResponseStatus.NOT_FOUND, 'not found');
+    t.equal(removeResponse.status, ReplicaOperationResponseStatus.NOT_FOUND,
+      'not found');
 
     // Test unknown message type
     const unknownEnvelope = {
@@ -151,35 +271,43 @@ test('ReplicaHandler', async (t) => {
     };
 
     const unknownResponse = await handler.handleMessage(unknownEnvelope);
-    t.equal(unknownResponse.status, ResponseStatus.ERROR, 'error for unknown');
+    t.equal(unknownResponse.status, ReplicaOperationResponseStatus.ERROR,
+      'error for unknown');
 
     handler.shutdown();
   });
 
   t.test('handleCreateReplica - returns initiated for new replica', async (t) => {
-    const mockCDC = createMockCDCService();
+    const cache = createSeededCache();
+    seedReplicaOperation(cache, 'op-1');
+    const mockCDC = createMockCDCService(cache);
 
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       cdcIntegrationService: mockCDC,
+      systemTableCache: cache,
       createPartitionService: createMockPartitionServiceFactory(),
       dataDir: tempDir,
     });
 
     handler.initialize();
 
+    const created = waitForReplicaEvent(
+      handler,
+      'replicaCreated',
+      'replicaCreationFailed',
+    );
+
     const request = {
       operationId: 'op-1',
       partitionId: 'partition-1',
       replicaId: 'replica-1',
-      tableName: 'test_table',
-      tableId: 'table-1',
-      schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]},
     };
 
     const response = await handler.handleCreateReplica(request);
 
-    t.equal(response.status, ResponseStatus.INITIATED, 'status is initiated');
+    t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
+      'status is initiated');
     t.equal(response.replicaId, 'replica-1', 'replicaId in response');
     t.equal(response.nodeId, 'test-node', 'nodeId in response');
     t.equal(response.operationId, 'op-1', 'operationId in response');
@@ -189,17 +317,22 @@ test('ReplicaHandler', async (t) => {
     t.ok(localReplica, 'local replica tracked');
     t.equal(localReplica.status, ReplicaStatus.CREATING, 'status is creating');
 
-    // Wait for async creation to complete
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await created;
 
     handler.shutdown();
   });
 
   t.test('handleCreateReplica - returns already_exists for active replica',
     async (t) => {
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
         dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
       });
 
       handler.initialize();
@@ -215,12 +348,12 @@ test('ReplicaHandler', async (t) => {
         operationId: 'op-1',
         partitionId: 'partition-1',
         replicaId: 'replica-1',
-        tableName: 'test_table',
       };
 
       const response = await handler.handleCreateReplica(request);
 
-      t.equal(response.status, ResponseStatus.ALREADY_EXISTS, 'already_exists');
+      t.equal(response.status, ReplicaOperationResponseStatus.ALREADY_EXISTS,
+        'already_exists');
       t.equal(response.replicaId, 'replica-1', 'replicaId in response');
 
       handler.shutdown();
@@ -228,9 +361,15 @@ test('ReplicaHandler', async (t) => {
 
   t.test('handleCreateReplica - returns in_progress for creating replica',
     async (t) => {
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
         dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
       });
 
       handler.initialize();
@@ -246,28 +385,34 @@ test('ReplicaHandler', async (t) => {
         operationId: 'op-1',
         partitionId: 'partition-1',
         replicaId: 'replica-1',
-        tableName: 'test_table',
       };
 
       const response = await handler.handleCreateReplica(request);
 
-      t.equal(response.status, ResponseStatus.IN_PROGRESS, 'in_progress');
+      t.equal(response.status, ReplicaOperationResponseStatus.IN_PROGRESS,
+        'in_progress');
       t.equal(response.replicaId, 'replica-1', 'replicaId in response');
 
       handler.shutdown();
     });
 
   t.test('handleCreateReplica - idempotent for same operationId', async (t) => {
+    const cache = createSeededCache();
+    const mockCDC = createMockCDCService(cache);
+
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       dataDir: tempDir,
+      systemTableCache: cache,
+      cdcIntegrationService: mockCDC,
+      createPartitionService: createMockPartitionServiceFactory(),
     });
 
     handler.initialize();
 
     // Pre-populate in-progress operation
     handler.inProgressOperations.set('op-1', {
-      type: MessageType.CREATE_REPLICA,
+      type: ReplicaOperationMessageType.CREATE_REPLICA,
       replicaId: 'replica-1',
       partitionId: 'partition-1',
       startedAt: Date.now(),
@@ -276,12 +421,13 @@ test('ReplicaHandler', async (t) => {
     const request = {
       operationId: 'op-1',
       partitionId: 'partition-1',
-      tableName: 'test_table',
+      replicaId: 'replica-1',
     };
 
     const response = await handler.handleCreateReplica(request);
 
-    t.equal(response.status, ResponseStatus.IN_PROGRESS, 'in_progress');
+    t.equal(response.status, ReplicaOperationResponseStatus.IN_PROGRESS,
+      'in_progress');
     t.equal(response.operationId, 'op-1', 'operationId in response');
 
     handler.shutdown();
@@ -289,9 +435,15 @@ test('ReplicaHandler', async (t) => {
 
   t.test('handleRemoveReplica - returns not_found for missing replica',
     async (t) => {
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
         dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
       });
 
       handler.initialize();
@@ -305,23 +457,39 @@ test('ReplicaHandler', async (t) => {
 
       const response = await handler.handleRemoveReplica(request);
 
-      t.equal(response.status, ResponseStatus.NOT_FOUND, 'not_found');
-      t.equal(response.replicaId, 'nonexistent-replica', 'replicaId in response');
+      t.equal(response.status, ReplicaOperationResponseStatus.NOT_FOUND,
+        'not_found');
+      t.equal(response.replicaId, 'nonexistent-replica',
+        'replicaId in response');
 
       handler.shutdown();
     });
 
   t.test('handleRemoveReplica - returns initiated for existing replica',
     async (t) => {
-      const mockCDC = createMockCDCService();
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-1', {type: 'REMOVE'});
+      const mockCDC = createMockCDCService(cache);
 
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
         dataDir: tempDir,
+        createPartitionService: createMockPartitionServiceFactory(),
       });
 
       handler.initialize();
+
+      const removed = waitForReplicaEvent(
+        handler,
+        'replicaRemoved',
+        'replicaRemovalFailed',
+      );
+
+      // Create partition directory structure for cleanup
+      const partitionDir = path.join(tempDir, 'partitions', 'partition-1');
+      fs.mkdirSync(partitionDir, {recursive: true});
 
       // Pre-populate local replica
       handler.localReplicas.set('replica-1', {
@@ -342,7 +510,8 @@ test('ReplicaHandler', async (t) => {
 
       const response = await handler.handleRemoveReplica(request);
 
-      t.equal(response.status, ResponseStatus.INITIATED, 'initiated');
+      t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
+        'initiated');
       t.equal(response.replicaId, 'replica-1', 'replicaId in response');
       t.equal(response.operationId, 'op-1', 'operationId in response');
 
@@ -350,17 +519,22 @@ test('ReplicaHandler', async (t) => {
       const localReplica = handler.getLocalReplica('replica-1');
       t.equal(localReplica.status, ReplicaStatus.REMOVING, 'status is removing');
 
-      // Wait for async removal to complete
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await removed;
 
       handler.shutdown();
     });
 
   t.test('handleRemoveReplica - returns in_progress for removing replica',
     async (t) => {
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
         dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
       });
 
       handler.initialize();
@@ -381,7 +555,8 @@ test('ReplicaHandler', async (t) => {
 
       const response = await handler.handleRemoveReplica(request);
 
-      t.equal(response.status, ResponseStatus.IN_PROGRESS, 'in_progress');
+      t.equal(response.status, ReplicaOperationResponseStatus.IN_PROGRESS,
+        'in_progress');
       t.equal(response.replicaId, 'replica-1', 'replicaId in response');
 
       handler.shutdown();
@@ -389,9 +564,15 @@ test('ReplicaHandler', async (t) => {
 
   t.test('handleRemoveReplica - returns completed for removed replica',
     async (t) => {
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
         dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
       });
 
       handler.initialize();
@@ -412,16 +593,23 @@ test('ReplicaHandler', async (t) => {
 
       const response = await handler.handleRemoveReplica(request);
 
-      t.equal(response.status, ResponseStatus.COMPLETED, 'completed');
+      t.equal(response.status, ReplicaOperationResponseStatus.COMPLETED,
+        'completed');
       t.equal(response.replicaId, 'replica-1', 'replicaId in response');
 
       handler.shutdown();
     });
 
   t.test('registerExistingReplica - registers and is idempotent', async (t) => {
+    const cache = createSeededCache();
+    const mockCDC = createMockCDCService(cache);
+
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       dataDir: tempDir,
+      systemTableCache: cache,
+      cdcIntegrationService: mockCDC,
+      createPartitionService: createMockPartitionServiceFactory(),
     });
 
     handler.initialize();
@@ -454,9 +642,15 @@ test('ReplicaHandler', async (t) => {
   });
 
   t.test('getStats returns correct statistics', async (t) => {
+    const cache = createSeededCache();
+    const mockCDC = createMockCDCService(cache);
+
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       dataDir: tempDir,
+      systemTableCache: cache,
+      cdcIntegrationService: mockCDC,
+      createPartitionService: createMockPartitionServiceFactory(),
     });
 
     handler.initialize();
@@ -479,34 +673,39 @@ test('ReplicaHandler', async (t) => {
   });
 
   t.test('emits events during lifecycle operations', async (t) => {
-    const mockCDC = createMockCDCService();
+    const cache = createSeededCache();
+    seedReplicaOperation(cache, 'op-1');
+    const mockCDC = createMockCDCService(cache);
     const events = [];
 
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       cdcIntegrationService: mockCDC,
+      systemTableCache: cache,
       createPartitionService: createMockPartitionServiceFactory(),
       dataDir: tempDir,
     });
 
     handler.on('replicaCreated', (e) => events.push({type: 'replicaCreated', ...e}));
-    handler.on('replicaRemoved', (e) => events.push({type: 'replicaRemoved', ...e}));
 
     handler.initialize();
+
+    const created = waitForReplicaEvent(
+      handler,
+      'replicaCreated',
+      'replicaCreationFailed',
+    );
 
     // Create a replica
     const createRequest = {
       operationId: 'op-1',
       partitionId: 'partition-1',
       replicaId: 'replica-1',
-      tableName: 'test_table',
-      tableId: 'table-1',
     };
 
     await handler.handleCreateReplica(createRequest);
 
-    // Wait for async creation
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await created;
 
     // Check events were emitted
     const createdEvents = events.filter((e) => e.type === 'replicaCreated');
@@ -517,37 +716,43 @@ test('ReplicaHandler', async (t) => {
   });
 
   t.test('async creation updates status via CDC', async (t) => {
-    const mockCDC = createMockCDCService();
+    const cache = createSeededCache();
+    seedReplicaOperation(cache, 'op-1');
+    const mockCDC = createMockCDCService(cache);
 
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       cdcIntegrationService: mockCDC,
+      systemTableCache: cache,
       createPartitionService: createMockPartitionServiceFactory(),
       dataDir: tempDir,
     });
 
     handler.initialize();
 
+    const created = waitForReplicaEvent(
+      handler,
+      'replicaCreated',
+      'replicaCreationFailed',
+    );
+
     const request = {
       operationId: 'op-1',
       partitionId: 'partition-1',
       replicaId: 'replica-1',
-      tableName: 'test_table',
     };
 
     await handler.handleCreateReplica(request);
-
-    // Wait for async creation
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await created;
 
     // Check CDC operations
     const syncingUpdate = mockCDC.operations.find(
-      (op) => op.type === 'update' && op.data.status === ReplicaStatus.SYNCING,
+      (op) => op.type === 'upsert' && op.data.status === ReplicaStatus.SYNCING,
     );
     t.ok(syncingUpdate, 'syncing status update via CDC');
 
     const activeUpdate = mockCDC.operations.find(
-      (op) => op.type === 'update' && op.data.status === ReplicaStatus.ACTIVE,
+      (op) => op.type === 'upsert' && op.data.status === ReplicaStatus.ACTIVE,
     );
     t.ok(activeUpdate, 'active status update via CDC');
 
@@ -555,15 +760,29 @@ test('ReplicaHandler', async (t) => {
   });
 
   t.test('async removal updates status via CDC', async (t) => {
-    const mockCDC = createMockCDCService();
+    const cache = createSeededCache();
+    seedReplicaOperation(cache, 'op-1', {type: 'REMOVE'});
+    const mockCDC = createMockCDCService(cache);
 
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       cdcIntegrationService: mockCDC,
+      systemTableCache: cache,
       dataDir: tempDir,
+      createPartitionService: createMockPartitionServiceFactory(),
     });
 
     handler.initialize();
+
+    const removed = waitForReplicaEvent(
+      handler,
+      'replicaRemoved',
+      'replicaRemovalFailed',
+    );
+
+    // Create partition directory structure for cleanup
+    const partitionDir = path.join(tempDir, 'partitions', 'partition-1');
+    fs.mkdirSync(partitionDir, {recursive: true});
 
     // Pre-populate local replica
     handler.localReplicas.set('replica-1', {
@@ -583,18 +802,16 @@ test('ReplicaHandler', async (t) => {
     };
 
     await handler.handleRemoveReplica(request);
-
-    // Wait for async removal
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await removed;
 
     // Check CDC operations
     const removingUpdate = mockCDC.operations.find(
-      (op) => op.type === 'update' && op.data.status === ReplicaStatus.REMOVING,
+      (op) => op.type === 'upsert' && op.data.status === ReplicaStatus.REMOVING,
     );
     t.ok(removingUpdate, 'removing status update via CDC');
 
     const removedUpdate = mockCDC.operations.find(
-      (op) => op.type === 'update' && op.data.status === ReplicaStatus.REMOVED,
+      (op) => op.type === 'upsert' && op.data.status === ReplicaStatus.REMOVED,
     );
     t.ok(removedUpdate, 'removed status update via CDC');
 
@@ -607,12 +824,25 @@ test('ReplicaHandler', async (t) => {
   });
 
   t.test('registerWithRouter registers handler at correct address', async (t) => {
+    const cache = createSeededCache();
+    seedReplicaOperation(cache, 'op-1');
+    const mockCDC = createMockCDCService(cache);
+
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       dataDir: tempDir,
+      systemTableCache: cache,
+      cdcIntegrationService: mockCDC,
+      createPartitionService: createMockPartitionServiceFactory(),
     });
 
     handler.initialize();
+
+    const created = waitForReplicaEvent(
+      handler,
+      'replicaCreated',
+      'replicaCreationFailed',
+    );
 
     // Create mock message router
     const registeredHandlers = new Map();
@@ -629,33 +859,43 @@ test('ReplicaHandler', async (t) => {
 
     // Check handler was registered at correct address
     t.ok(
-      registeredHandlers.has('test-node/replica-handler'),
+      registeredHandlers.has('test-node/service/replica-handler'),
       'handler registered at correct address',
     );
 
     // Test the registered handler works
-    const registeredHandler = registeredHandlers.get('test-node/replica-handler');
+    const registeredHandler = registeredHandlers.get('test-node/service/replica-handler');
     const envelope = {
       correlationId: 'corr-1',
       payload: {
-        type: MessageType.CREATE_REPLICA,
+        type: ReplicaOperationMessageType.CREATE_REPLICA,
         operationId: 'op-1',
         partitionId: 'partition-1',
+        replicaId: 'replica-1',
       },
     };
 
     const response = await registeredHandler(envelope);
     t.equal(response.acknowledged, true, 'response acknowledged');
-    t.equal(response.status, ResponseStatus.INITIATED, 'create initiated');
+    t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
+      'create initiated');
     t.equal(response.correlationId, 'corr-1', 'correlationId preserved');
+
+    await created;
 
     handler.shutdown();
   });
 
   t.test('unregisterFromRouter removes handler', async (t) => {
+    const cache = createSeededCache();
+    const mockCDC = createMockCDCService(cache);
+
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       dataDir: tempDir,
+      systemTableCache: cache,
+      cdcIntegrationService: mockCDC,
+      createPartitionService: createMockPartitionServiceFactory(),
     });
 
     handler.initialize();
@@ -673,13 +913,13 @@ test('ReplicaHandler', async (t) => {
 
     handler.registerWithRouter(mockRouter);
     t.ok(
-      registeredHandlers.has('test-node/replica-handler'),
+      registeredHandlers.has('test-node/service/replica-handler'),
       'handler registered',
     );
 
     handler.unregisterFromRouter(mockRouter);
     t.notOk(
-      registeredHandlers.has('test-node/replica-handler'),
+      registeredHandlers.has('test-node/service/replica-handler'),
       'handler unregistered',
     );
 
@@ -687,12 +927,25 @@ test('ReplicaHandler', async (t) => {
   });
 
   t.test('registerWithRouter with RPC client notifies on response', async (t) => {
+    const cache = createSeededCache();
+    seedReplicaOperation(cache, 'op-1');
+    const mockCDC = createMockCDCService(cache);
+
     const handler = new ReplicaHandler({
       nodeId: 'test-node',
       dataDir: tempDir,
+      systemTableCache: cache,
+      cdcIntegrationService: mockCDC,
+      createPartitionService: createMockPartitionServiceFactory(),
     });
 
     handler.initialize();
+
+    const created = waitForReplicaEvent(
+      handler,
+      'replicaCreated',
+      'replicaCreationFailed',
+    );
 
     // Create mock RPC client
     const rpcResponses = [];
@@ -716,22 +969,25 @@ test('ReplicaHandler', async (t) => {
     handler.registerWithRouter(mockRouter, {rpcClient: mockRpcClient});
 
     // Test the registered handler notifies RPC client
-    const registeredHandler = registeredHandlers.get('test-node/replica-handler');
+    const registeredHandler = registeredHandlers.get('test-node/service/replica-handler');
     const envelope = {
       correlationId: 'corr-1',
       payload: {
-        type: MessageType.CREATE_REPLICA,
+        type: ReplicaOperationMessageType.CREATE_REPLICA,
         operationId: 'op-1',
         partitionId: 'partition-1',
+        replicaId: 'replica-1',
       },
     };
 
     await registeredHandler(envelope);
+    await created;
 
     // Check RPC client was notified
     t.equal(rpcResponses.length, 1, 'RPC client notified');
     t.equal(rpcResponses[0].correlationId, 'corr-1', 'correct correlationId');
-    t.equal(rpcResponses[0].response.status, ResponseStatus.INITIATED, 'correct status');
+    t.equal(rpcResponses[0].response.status,
+      ReplicaOperationResponseStatus.INITIATED, 'correct status');
 
     handler.shutdown();
   });

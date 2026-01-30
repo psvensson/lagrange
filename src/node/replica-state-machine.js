@@ -2,82 +2,58 @@
  * Replica State Machine - Formal state machine for replica lifecycle management.
  * Provides a single source of truth for replica status across all components.
  *
- * @deprecated This class is deprecated in favor of RebalanceCoordinator.
- * The RebalanceCoordinator now owns state tracking for replica operations.
- * This class is kept for backward compatibility during migration.
- * New code should use RebalanceCoordinator instead.
- *
  * Requirements: 1.1, 1.2, 1.3, 2.1-2.8
  */
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
+import {SERVICE_TYPE, TABLES} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  REPLICA_STATE_MACHINE_DEFAULT,
+  REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS,
+  REPLICA_STATE_MACHINE_ERROR_MSG,
+  REPLICA_STATE_MACHINE_EVENT,
+  REPLICA_STATE_MACHINE_EVENT_TYPE,
+  REPLICA_STATE_MACHINE_LOG_MSG,
+  REPLICA_STATE_MACHINE_NUM,
+  REPLICA_STATE_MACHINE_OPERATION,
+  REPLICA_STATE_MACHINE_REASON,
+  REPLICA_STATE_MACHINE_STATE,
+  REPLICA_STATE_MACHINE_SUBSYSTEM,
+  REPLICA_STATE_MACHINE_TRANSITION,
+  REPLICA_STATE_MACHINE_VALID_TRANSITIONS,
+} from './replica-state-machine-constants.js';
 
 /**
  * Replica state constants.
  * These are the only valid states a replica can be in.
- *
- * @deprecated Use ReplicaStatus from '../rebalancer/replica-status.js' instead.
  */
-const ReplicaState = {
-  PENDING: 'pending',
-  CREATING: 'creating',
-  SYNCING: 'syncing',
-  ACTIVE: 'active',
-  REMOVING: 'removing',
-  REMOVED: 'removed',
-  FAILED: 'failed',
-};
+const ReplicaState = REPLICA_STATE_MACHINE_STATE;
 
 /**
  * Valid state transitions matrix.
  * Key: current state (or null for new replica)
  * Value: array of valid next states
  */
-const VALID_TRANSITIONS = {
-  [null]: [ReplicaState.PENDING],
-  [ReplicaState.PENDING]: [ReplicaState.CREATING, ReplicaState.FAILED],
-  [ReplicaState.CREATING]: [ReplicaState.SYNCING, ReplicaState.FAILED],
-  [ReplicaState.SYNCING]: [ReplicaState.ACTIVE, ReplicaState.FAILED],
-  [ReplicaState.ACTIVE]: [ReplicaState.REMOVING, ReplicaState.FAILED],
-  [ReplicaState.REMOVING]: [ReplicaState.REMOVED, ReplicaState.FAILED],
-  [ReplicaState.FAILED]: [ReplicaState.REMOVED],
-  [ReplicaState.REMOVED]: [],
-};
+const VALID_TRANSITIONS = REPLICA_STATE_MACHINE_VALID_TRANSITIONS;
 
 /**
  * Default timeout values for transitional states (in milliseconds).
  */
-const DEFAULT_TIMEOUTS = {
-  [ReplicaState.PENDING]: 30000, // 30 seconds
-  [ReplicaState.CREATING]: 60000, // 60 seconds
-  [ReplicaState.SYNCING]: 300000, // 5 minutes
-  [ReplicaState.REMOVING]: 60000, // 60 seconds
-};
+const DEFAULT_TIMEOUTS = REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS;
 
 /**
  * ReplicaStateMachine - Central state machine for replica lifecycle.
  * Enforces valid transitions and emits events for all state changes.
  *
- * @deprecated This class is deprecated in favor of RebalanceCoordinator.
- * The RebalanceCoordinator now owns state tracking for replica operations.
- * This class is kept for backward compatibility during migration.
- *
- * Migration guide:
- * - Use RebalanceCoordinator.createOperation() instead of transition() for new operations
- * - Use RebalanceCoordinator.getInFlightOperations() instead of getTransitionalReplicas()
- * - Use RebalanceCoordinator.getOperation() instead of getState()
- * - Use ReplicaStatus from '../rebalancer/replica-status.js' instead of ReplicaState
  */
 class ReplicaStateMachine extends EventEmitter {
   /**
    * Create a new ReplicaStateMachine.
-   *
-   * @deprecated Use RebalanceCoordinator instead.
-   *
    * @param {Object} options - Configuration options.
    * @param {string} options.nodeId - Node ID for this state machine.
-   * @param {Object} [options.cdcIntegrationService] - CDC service for
+   * @param {Object} options.cdcIntegrationService - CDC service for
    *   persistence.
    * @param {number} [options.pendingTimeoutMs] - Timeout for pending state.
    * @param {number} [options.creatingTimeoutMs] - Timeout for creating state.
@@ -89,31 +65,33 @@ class ReplicaStateMachine extends EventEmitter {
   constructor(options = {}) {
     super();
 
-    // Log deprecation warning
     const loggingService = LoggingService.getInstance();
     const logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('replica-state-machine') : console;
-    logger.warn('ReplicaStateMachine is deprecated. Use RebalanceCoordinator instead.', {
-      nodeId: options.nodeId,
-    });
+      loggingService.forSubsystem(REPLICA_STATE_MACHINE_SUBSYSTEM) : console;
 
-    this.nodeId = options.nodeId || 'unknown';
+    this.nodeId = assertCritical(
+      options.nodeId,
+      REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_NODE_ID,
+    );
 
-    // CDC integration service for state persistence (optional)
-    this.cdcIntegrationService = options.cdcIntegrationService || null;
+    // CDC integration service for state persistence
+    this.cdcIntegrationService = assertCritical(
+      options.cdcIntegrationService,
+      REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_CDC_SERVICE,
+    );
 
     // State tracking: Map<replicaId, ReplicaStateInfo>
     this.replicas = new Map();
 
     // State counts for quick lookup
     this.stateCounts = {
-      [ReplicaState.PENDING]: 0,
-      [ReplicaState.CREATING]: 0,
-      [ReplicaState.SYNCING]: 0,
-      [ReplicaState.ACTIVE]: 0,
-      [ReplicaState.REMOVING]: 0,
-      [ReplicaState.REMOVED]: 0,
-      [ReplicaState.FAILED]: 0,
+      [ReplicaState.PENDING]: REPLICA_STATE_MACHINE_NUM.ZERO,
+      [ReplicaState.CREATING]: REPLICA_STATE_MACHINE_NUM.ZERO,
+      [ReplicaState.SYNCING]: REPLICA_STATE_MACHINE_NUM.ZERO,
+      [ReplicaState.ACTIVE]: REPLICA_STATE_MACHINE_NUM.ZERO,
+      [ReplicaState.REMOVING]: REPLICA_STATE_MACHINE_NUM.ZERO,
+      [ReplicaState.REMOVED]: REPLICA_STATE_MACHINE_NUM.ZERO,
+      [ReplicaState.FAILED]: REPLICA_STATE_MACHINE_NUM.ZERO,
     };
 
     // Timeout configuration (ms)
@@ -129,15 +107,18 @@ class ReplicaStateMachine extends EventEmitter {
     };
 
     // Timeout check interval (default 5 seconds)
-    this.timeoutCheckIntervalMs = options.timeoutCheckIntervalMs ?? 5000;
+    this.timeoutCheckIntervalMs = options.timeoutCheckIntervalMs ??
+      REPLICA_STATE_MACHINE_DEFAULT.TIMEOUT_CHECK_INTERVAL_MS;
 
     // Timeout checker interval handle
     this.timeoutCheckInterval = null;
 
     // Concurrent operation limits
     this.limits = {
-      maxConcurrentAdds: options.maxConcurrentAdds ?? 5,
-      maxConcurrentRemoves: options.maxConcurrentRemoves ?? 5,
+      maxConcurrentAdds: options.maxConcurrentAdds ??
+        REPLICA_STATE_MACHINE_DEFAULT.MAX_CONCURRENT_ADDS,
+      maxConcurrentRemoves: options.maxConcurrentRemoves ??
+        REPLICA_STATE_MACHINE_DEFAULT.MAX_CONCURRENT_REMOVES,
     };
 
     // Metrics tracking
@@ -158,16 +139,16 @@ class ReplicaStateMachine extends EventEmitter {
     // Time spent in each state: Map<state, totalMs>
     this.timeInState = new Map();
     for (const state of Object.values(ReplicaState)) {
-      this.timeInState.set(state, 0);
+      this.timeInState.set(state, REPLICA_STATE_MACHINE_NUM.ZERO);
     }
 
     // Failure and timeout counts
-    this.failureCount = 0;
-    this.timeoutCount = 0;
+    this.failureCount = REPLICA_STATE_MACHINE_NUM.ZERO;
+    this.timeoutCount = REPLICA_STATE_MACHINE_NUM.ZERO;
 
     // Peak concurrent operations
-    this.peakConcurrentAdds = 0;
-    this.peakConcurrentRemoves = 0;
+    this.peakConcurrentAdds = REPLICA_STATE_MACHINE_NUM.ZERO;
+    this.peakConcurrentRemoves = REPLICA_STATE_MACHINE_NUM.ZERO;
   }
 
   /**
@@ -189,7 +170,7 @@ class ReplicaStateMachine extends EventEmitter {
 
   /**
    * Transition a replica to a new state.
-   * Persists state to CDC if cdcIntegrationService is configured.
+   * Persists state to CDC.
    * @param {string} replicaId - Replica identifier.
    * @param {string} newState - Target state.
    * @param {Object} context - Additional context.
@@ -207,7 +188,7 @@ class ReplicaStateMachine extends EventEmitter {
 
     // Validate transition
     if (!this.isValidTransition(currentState, newState)) {
-      this.logger.error('Invalid state transition attempted', {
+      this.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.INVALID_TRANSITION, {
         replicaId,
         currentState,
         attemptedState: newState,
@@ -215,7 +196,7 @@ class ReplicaStateMachine extends EventEmitter {
         nodeId: this.nodeId,
       });
 
-      this.emit('transitionError', {
+      this.emit(REPLICA_STATE_MACHINE_EVENT.TRANSITION_ERROR, {
         replicaId,
         currentState,
         attemptedState: newState,
@@ -229,7 +210,7 @@ class ReplicaStateMachine extends EventEmitter {
     const now = Date.now();
     const previousState = currentState;
     const timeInPreviousState = existingState ?
-      now - existingState.stateEnteredAt : 0;
+      now - existingState.stateEnteredAt : REPLICA_STATE_MACHINE_NUM.ZERO;
 
     // Update state counts
     if (previousState !== null) {
@@ -238,13 +219,19 @@ class ReplicaStateMachine extends EventEmitter {
     this.stateCounts[newState]++;
 
     // Track metrics: transition counts
-    const transitionKey = `${previousState}->${newState}`;
-    const currentTransitionCount = this.transitionCounts.get(transitionKey) || 0;
-    this.transitionCounts.set(transitionKey, currentTransitionCount + 1);
+    const transitionKey =
+      `${previousState}${REPLICA_STATE_MACHINE_TRANSITION.SEPARATOR}${newState}`;
+    const currentTransitionCount = this.transitionCounts.get(transitionKey) ||
+      REPLICA_STATE_MACHINE_NUM.ZERO;
+    this.transitionCounts.set(
+      transitionKey,
+      currentTransitionCount + REPLICA_STATE_MACHINE_NUM.ONE,
+    );
 
     // Track metrics: time spent in previous state
-    if (previousState !== null && timeInPreviousState > 0) {
-      const currentTimeInState = this.timeInState.get(previousState) || 0;
+    if (previousState !== null && timeInPreviousState > REPLICA_STATE_MACHINE_NUM.ZERO) {
+      const currentTimeInState = this.timeInState.get(previousState) ||
+        REPLICA_STATE_MACHINE_NUM.ZERO;
       this.timeInState.set(previousState, currentTimeInState + timeInPreviousState);
     }
 
@@ -264,7 +251,7 @@ class ReplicaStateMachine extends EventEmitter {
       state: newState,
       stateEnteredAt: now,
       previousState,
-      triggerReason: context.reason || 'unknown',
+      triggerReason: context.reason || REPLICA_STATE_MACHINE_REASON.UNKNOWN,
       errorMessage: context.errorMessage || null,
       metadata: context.metadata || existingState?.metadata || {},
       serviceId: context.serviceId || existingState?.serviceId || null,
@@ -272,7 +259,7 @@ class ReplicaStateMachine extends EventEmitter {
 
     this.replicas.set(replicaId, replicaState);
 
-    this.logger.info('Replica state transition', {
+    this.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.STATE_TRANSITION, {
       replicaId,
       previousState,
       newState,
@@ -281,8 +268,8 @@ class ReplicaStateMachine extends EventEmitter {
     });
 
     // Emit state transition event
-    this.emit('stateTransition', {
-      eventType: 'replica_state_transition',
+    this.emit(REPLICA_STATE_MACHINE_EVENT.STATE_TRANSITION, {
+      eventType: REPLICA_STATE_MACHINE_EVENT_TYPE.REPLICA_STATE_TRANSITION,
       replicaId,
       partitionId: replicaState.partitionId,
       nodeId: replicaState.nodeId,
@@ -294,12 +281,8 @@ class ReplicaStateMachine extends EventEmitter {
       timeInPreviousState,
     });
 
-    // Persist state via CDC if service is configured
-    if (this.cdcIntegrationService) {
-      return this._persistStateToCdc(replicaState, previousState);
-    }
-
-    return true;
+    // Persist state via CDC
+    return this._persistStateToCdc(replicaState, previousState);
   }
 
   /**
@@ -327,7 +310,7 @@ class ReplicaStateMachine extends EventEmitter {
       // If we have a service_id, update the existing row
       if (replicaState.serviceId) {
         await this.cdcIntegrationService.updateSystemTableRow(
-          'services',
+          TABLES.SERVICES,
           {service_id: replicaState.serviceId},
           cdcData,
         );
@@ -336,19 +319,19 @@ class ReplicaStateMachine extends EventEmitter {
         const insertData = {
           ...cdcData,
           service_id: replicaState.replicaId,
-          service_type: 'partition',
+          service_type: SERVICE_TYPE.PARTITION,
           node_id: replicaState.nodeId,
           partition_id: replicaState.partitionId,
           replica_id: replicaState.replicaId,
           created_at: replicaState.stateEnteredAt,
         };
         await this.cdcIntegrationService.insertSystemTableRow(
-          'services',
+          TABLES.SERVICES,
           insertData,
         );
       }
 
-      this.logger.debug('State persisted to CDC', {
+      this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
         replicaId: replicaState.replicaId,
         state: replicaState.state,
         nodeId: this.nodeId,
@@ -356,22 +339,20 @@ class ReplicaStateMachine extends EventEmitter {
 
       return true;
     } catch (error) {
-      this.logger.error('Failed to persist state to CDC', {
+      this.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSIST_FAILED, {
         replicaId: replicaState.replicaId,
         state: replicaState.state,
         error: error.message,
         nodeId: this.nodeId,
       });
 
-      this.emit('persistenceError', {
+      this.emit(REPLICA_STATE_MACHINE_EVENT.PERSISTENCE_ERROR, {
         replicaId: replicaState.replicaId,
         state: replicaState.state,
         error: error.message,
       });
 
-      // Return true anyway - state machine update succeeded,
-      // CDC persistence failure is logged but doesn't block
-      return true;
+      throw error;
     }
   }
 
@@ -443,7 +424,7 @@ class ReplicaStateMachine extends EventEmitter {
    * @return {boolean} True if operation can proceed.
    */
   canStartOperation(operationType) {
-    if (operationType === 'add') {
+    if (operationType === REPLICA_STATE_MACHINE_OPERATION.ADD) {
       // Add operations are limited by pending + creating + syncing count
       const addTransitionalCount =
         this.stateCounts[ReplicaState.PENDING] +
@@ -451,7 +432,7 @@ class ReplicaStateMachine extends EventEmitter {
         this.stateCounts[ReplicaState.SYNCING];
 
       if (addTransitionalCount >= this.limits.maxConcurrentAdds) {
-        this.logger.warn('Concurrent ADD limit reached', {
+        this.logger.warn(REPLICA_STATE_MACHINE_LOG_MSG.CONCURRENT_ADD_LIMIT, {
           currentCount: addTransitionalCount,
           limit: this.limits.maxConcurrentAdds,
           nodeId: this.nodeId,
@@ -459,12 +440,12 @@ class ReplicaStateMachine extends EventEmitter {
         return false;
       }
       return true;
-    } else if (operationType === 'remove') {
+    } else if (operationType === REPLICA_STATE_MACHINE_OPERATION.REMOVE) {
       // Remove operations are limited by removing count
       const removeTransitionalCount = this.stateCounts[ReplicaState.REMOVING];
 
       if (removeTransitionalCount >= this.limits.maxConcurrentRemoves) {
-        this.logger.warn('Concurrent REMOVE limit reached', {
+        this.logger.warn(REPLICA_STATE_MACHINE_LOG_MSG.CONCURRENT_REMOVE_LIMIT, {
           currentCount: removeTransitionalCount,
           limit: this.limits.maxConcurrentRemoves,
           nodeId: this.nodeId,
@@ -475,7 +456,7 @@ class ReplicaStateMachine extends EventEmitter {
     }
 
     // Unknown operation type
-    this.logger.warn('Unknown operation type for canStartOperation', {
+    this.logger.warn(REPLICA_STATE_MACHINE_LOG_MSG.UNKNOWN_OPERATION, {
       operationType,
       nodeId: this.nodeId,
     });
@@ -503,7 +484,7 @@ class ReplicaStateMachine extends EventEmitter {
 
     // Only allow removal from tracking if in REMOVED state
     if (state.state !== ReplicaState.REMOVED) {
-      this.logger.warn('Cannot remove replica from tracking - not in REMOVED state', {
+      this.logger.warn(REPLICA_STATE_MACHINE_LOG_MSG.REMOVE_TRACKING_INVALID, {
         replicaId,
         currentState: state.state,
         nodeId: this.nodeId,
@@ -514,7 +495,7 @@ class ReplicaStateMachine extends EventEmitter {
     this.stateCounts[state.state]--;
     this.replicas.delete(replicaId);
 
-    this.logger.debug('Removed replica from tracking', {
+    this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.REMOVE_TRACKING_SUCCESS, {
       replicaId,
       nodeId: this.nodeId,
     });
@@ -550,7 +531,7 @@ class ReplicaStateMachine extends EventEmitter {
    * Called when a timeout-triggered failure occurs.
    */
   incrementTimeoutCount() {
-    this.timeoutCount++;
+    this.timeoutCount += REPLICA_STATE_MACHINE_NUM.ONE;
   }
 
   /**
@@ -616,7 +597,7 @@ class ReplicaStateMachine extends EventEmitter {
     this.stopTimeoutChecker();
     this.replicas.clear();
     for (const state of Object.keys(this.stateCounts)) {
-      this.stateCounts[state] = 0;
+      this.stateCounts[state] = REPLICA_STATE_MACHINE_NUM.ZERO;
     }
     this._initializeMetrics();
   }
@@ -644,7 +625,7 @@ class ReplicaStateMachine extends EventEmitter {
       this._checkTimeouts();
     }, this.timeoutCheckIntervalMs);
 
-    this.logger.debug('Timeout checker started', {
+    this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.TIMEOUT_CHECKER_STARTED, {
       intervalMs: this.timeoutCheckIntervalMs,
       nodeId: this.nodeId,
     });
@@ -658,7 +639,7 @@ class ReplicaStateMachine extends EventEmitter {
       clearInterval(this.timeoutCheckInterval);
       this.timeoutCheckInterval = null;
 
-      this.logger.debug('Timeout checker stopped', {
+      this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.TIMEOUT_CHECKER_STOPPED, {
         nodeId: this.nodeId,
       });
     }
@@ -694,7 +675,7 @@ class ReplicaStateMachine extends EventEmitter {
 
     // Transition timed out replicas to failed
     for (const timedOut of timedOutReplicas) {
-      this.logger.warn('Replica operation timed out', {
+      this.logger.warn(REPLICA_STATE_MACHINE_LOG_MSG.OPERATION_TIMEOUT, {
         replicaId: timedOut.replicaId,
         state: timedOut.state,
         elapsed: timedOut.elapsed,
@@ -703,9 +684,9 @@ class ReplicaStateMachine extends EventEmitter {
       });
 
       // Increment timeout count
-      this.timeoutCount++;
+      this.timeoutCount += REPLICA_STATE_MACHINE_NUM.ONE;
 
-      this.emit('timeout', {
+      this.emit(REPLICA_STATE_MACHINE_EVENT.TIMEOUT, {
         replicaId: timedOut.replicaId,
         partitionId: timedOut.partitionId,
         nodeId: timedOut.nodeId,
@@ -717,8 +698,13 @@ class ReplicaStateMachine extends EventEmitter {
       this.transition(timedOut.replicaId, ReplicaState.FAILED, {
         partitionId: timedOut.partitionId,
         nodeId: timedOut.nodeId,
-        reason: `Timeout in ${timedOut.state} state after ${timedOut.elapsed}ms`,
-        errorMessage: `Operation timed out after ${timedOut.timeout}ms`,
+        reason: REPLICA_STATE_MACHINE_ERROR_MSG.TIMEOUT_REASON(
+          timedOut.state,
+          timedOut.elapsed,
+        ),
+        errorMessage: REPLICA_STATE_MACHINE_ERROR_MSG.TIMEOUT_MESSAGE(
+          timedOut.timeout,
+        ),
       });
     }
   }
@@ -752,59 +738,47 @@ class ReplicaStateMachine extends EventEmitter {
     const {systemTableCache} = options;
     const nodeId = options.nodeId || this.nodeId;
 
-    this.logger.info('Handling node recovery in state machine', {
+    this.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.RECOVERY_START, {
       nodeId,
     });
 
-    if (!systemTableCache) {
-      this.logger.warn('No system table cache provided for recovery');
-      return {
-        nodeId,
-        creatingToFailed: 0,
-        syncingToFailed: 0,
-        removingToRemoved: 0,
-        total: 0,
-      };
-    }
+    assertCritical(
+      systemTableCache,
+      REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
     // Query services table for replicas on this node in transitional states
     let services = [];
     try {
       services = systemTableCache.filter(
-        'services',
+        TABLES.SERVICES,
         (service) =>
           service.node_id === nodeId &&
-          service.service_type === 'partition' &&
-          ['creating', 'syncing', 'removing'].includes(service.status),
+          service.service_type === SERVICE_TYPE.PARTITION &&
+          [ReplicaState.CREATING, ReplicaState.SYNCING, ReplicaState.REMOVING]
+            .includes(service.status),
       );
     } catch (error) {
-      this.logger.error('Failed to query services table for recovery', {
+      this.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.RECOVERY_QUERY_FAILED, {
         nodeId,
         error: error.message,
       });
-      return {
-        nodeId,
-        creatingToFailed: 0,
-        syncingToFailed: 0,
-        removingToRemoved: 0,
-        total: 0,
-        error: error.message,
-      };
+      throw error;
     }
 
-    this.logger.info('Found replicas in transitional states for recovery', {
+    this.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.RECOVERY_FOUND, {
       count: services.length,
       nodeId,
     });
 
-    let creatingToFailed = 0;
-    let syncingToFailed = 0;
-    let removingToRemoved = 0;
+    let creatingToFailed = REPLICA_STATE_MACHINE_NUM.ZERO;
+    let syncingToFailed = REPLICA_STATE_MACHINE_NUM.ZERO;
+    let removingToRemoved = REPLICA_STATE_MACHINE_NUM.ZERO;
 
     for (const service of services) {
       const {service_id: replicaId, partition_id: partitionId, status} = service;
 
-      this.logger.info('Processing replica for recovery', {
+      this.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.RECOVERY_PROCESSING, {
         replicaId,
         partitionId,
         status,
@@ -826,47 +800,49 @@ class ReplicaStateMachine extends EventEmitter {
           });
         }
 
-        if (status === 'creating' || status === 'syncing') {
+        if (status === ReplicaState.CREATING || status === ReplicaState.SYNCING) {
           // Transition creating/syncing replicas to failed
           const result = this.transition(replicaId, ReplicaState.FAILED, {
             partitionId,
             nodeId,
-            reason: 'Node recovery - incomplete operation',
-            errorMessage: `Replica was in ${status} state during node failure`,
+            reason: REPLICA_STATE_MACHINE_REASON.RECOVERY_INCOMPLETE,
+            errorMessage: REPLICA_STATE_MACHINE_ERROR_MSG.RECOVERY_INCOMPLETE_OPERATION(
+              status,
+            ),
             serviceId: service.service_id,
           });
 
           if (result === true || result instanceof Promise && await result) {
-            if (status === 'creating') {
-              creatingToFailed++;
+            if (status === ReplicaState.CREATING) {
+              creatingToFailed += REPLICA_STATE_MACHINE_NUM.ONE;
             } else {
-              syncingToFailed++;
+              syncingToFailed += REPLICA_STATE_MACHINE_NUM.ONE;
             }
-            this.logger.info('Transitioned replica to failed during recovery', {
+            this.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.RECOVERY_TO_FAILED, {
               replicaId,
               previousStatus: status,
               nodeId,
             });
           }
-        } else if (status === 'removing') {
+        } else if (status === ReplicaState.REMOVING) {
           // Complete removal for removing replicas
           const result = this.transition(replicaId, ReplicaState.REMOVED, {
             partitionId,
             nodeId,
-            reason: 'Node recovery - completing removal',
+            reason: REPLICA_STATE_MACHINE_REASON.RECOVERY_COMPLETE_REMOVAL,
             serviceId: service.service_id,
           });
 
           if (result === true || result instanceof Promise && await result) {
-            removingToRemoved++;
-            this.logger.info('Completed replica removal during recovery', {
+            removingToRemoved += REPLICA_STATE_MACHINE_NUM.ONE;
+            this.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.RECOVERY_REMOVED, {
               replicaId,
               nodeId,
             });
           }
         }
       } catch (error) {
-        this.logger.error('Failed to process replica during recovery', {
+        this.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.RECOVERY_FAILED, {
           replicaId,
           status,
           error: error.message,
@@ -877,7 +853,7 @@ class ReplicaStateMachine extends EventEmitter {
 
     const total = creatingToFailed + syncingToFailed + removingToRemoved;
 
-    this.logger.info('Node recovery complete in state machine', {
+    this.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.RECOVERY_COMPLETE, {
       nodeId,
       creatingToFailed,
       syncingToFailed,
@@ -886,7 +862,7 @@ class ReplicaStateMachine extends EventEmitter {
     });
 
     // Emit recovery complete event
-    this.emit('recoveryComplete', {
+    this.emit(REPLICA_STATE_MACHINE_EVENT.RECOVERY_COMPLETE, {
       nodeId,
       creatingToFailed,
       syncingToFailed,
@@ -929,7 +905,7 @@ class ReplicaStateMachine extends EventEmitter {
       state,
       stateEnteredAt: now,
       previousState: null,
-      triggerReason: 'recovery_registration',
+      triggerReason: REPLICA_STATE_MACHINE_REASON.RECOVERY_REGISTRATION,
       errorMessage: null,
       metadata: {},
       serviceId: context.serviceId || null,
@@ -937,7 +913,7 @@ class ReplicaStateMachine extends EventEmitter {
 
     this.replicas.set(replicaId, replicaState);
 
-    this.logger.debug('Registered replica for recovery', {
+    this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.RECOVERY_REGISTERED, {
       replicaId,
       state,
       nodeId: this.nodeId,

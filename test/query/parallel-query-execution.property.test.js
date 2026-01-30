@@ -7,7 +7,7 @@
  * slowest partition response.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {ParallelQueryCoordinator} from '../../src/query/parallel-query-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -16,6 +16,34 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
+}
+
+/**
+ * Create a mock system cache that wraps a partition map.
+ * @param {Map} partitions - Partition map.
+ * @return {Object} Mock system cache.
+ */
+function createMockSystemCache(partitions) {
+  return {
+    get: (tableName, id) => {
+      if (tableName === 'partitions') {
+        return partitions.get(id) || null;
+      }
+      return null;
+    },
+    getAll: (tableName) => {
+      if (tableName === 'partitions') {
+        return Array.from(partitions.values());
+      }
+      return [];
+    },
+    filter: (tableName, predicate) => {
+      if (tableName === 'partitions') {
+        return Array.from(partitions.values()).filter(predicate);
+      }
+      return [];
+    },
+  };
 }
 
 /**
@@ -71,7 +99,7 @@ test('Property 70: Parallel Query Execution', async (t) => {
           }
 
           const coordinator = new ParallelQueryCoordinator({
-            partitionRegistry: partitions,
+            systemCache: createMockSystemCache(partitions),
           });
           // Disable speculative execution for cleaner test
           coordinator.speculativeExecutionEnabled = false;
@@ -112,7 +140,7 @@ test('Property 70: Parallel Query Execution', async (t) => {
           }
 
           const coordinator = new ParallelQueryCoordinator({
-            partitionRegistry: partitions,
+            systemCache: createMockSystemCache(partitions),
           });
           coordinator.speculativeExecutionEnabled = false;
 
@@ -152,7 +180,7 @@ test('Property 70: Parallel Query Execution', async (t) => {
           }
 
           const coordinator = new ParallelQueryCoordinator({
-            partitionRegistry: partitions,
+            systemCache: createMockSystemCache(partitions),
           });
           coordinator.speculativeExecutionEnabled = false;
 
@@ -191,7 +219,7 @@ test('Property 70: Parallel Query Execution', async (t) => {
           }
 
           const coordinator = new ParallelQueryCoordinator({
-            partitionRegistry: partitions,
+            systemCache: createMockSystemCache(partitions),
           });
           coordinator.speculativeExecutionEnabled = false;
 

@@ -10,7 +10,7 @@
  * Property 2: SQLite Storage Round-Trip and Restart Recovery
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import Database from 'better-sqlite3';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
@@ -290,7 +290,7 @@ test('Property 2: SQLite Storage Round-Trip and Restart Recovery', async (t) => 
           const adapter = new SQLiteLogAdapter(db);
 
           await promisify(adapter, 'append', entries);
-          const lastEntry = await promisify(adapter, 'getLastEntry');
+          const lastEntry = await promisify(adapter, 'getLastEntryCallback');
 
           db.close();
 
@@ -313,7 +313,7 @@ test('Property 2: SQLite Storage Round-Trip and Restart Recovery', async (t) => 
   t.test('getLastEntry returns null for empty log', async (t) => {
     const db = new Database(':memory:');
     const adapter = new SQLiteLogAdapter(db);
-    const lastEntry = await promisify(adapter, 'getLastEntry');
+    const lastEntry = await promisify(adapter, 'getLastEntryCallback');
     db.close();
     t.equal(lastEntry, null, 'getLastEntry returns null for empty log');
   });

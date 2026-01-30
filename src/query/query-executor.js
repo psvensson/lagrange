@@ -1,39 +1,72 @@
 /**
  * Query Executor - Executes queries across partitions in parallel.
  * Implements parallel query execution and result aggregation.
+ * All queries route through message router using service addresses from system cache.
  * Requirements: 7.2, 7.4, 22.1, 22.2, 22.3, 22.4, 22.5, 22.6, 22.7
  */
 
 import {LoggingService} from '../logging/logging-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {NodeService as nodeServiceClass} from '../node/node-service.js';
+import {
+  ERRORS,
+  LOG_MSG,
+  NUM,
+  SQL,
+  TABLES,
+  SERVICE_TYPE,
+  STATE,
+} from '../constants/index.js';
+import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {
+  QUERY_CONFIG_KEY,
+  QUERY_DEFAULTS,
+  QUERY_ERROR_MSG,
+  QUERY_JOIN_TYPE,
+  QUERY_LOG_MSG,
+  QUERY_MESSAGE_TYPE,
+  QUERY_OPERATOR,
+  QUERY_AST_NODE,
+  QUERY_SQL,
+  QUERY_SUBSYSTEM,
+} from './query-constants.js';
+
+const getNodeService = () => nodeServiceClass.getInstance();
 
 /**
  * QueryExecutor handles parallel query execution across partitions
  * and aggregates results while preserving SQL semantics.
  * Supports distributed read-only queries with cross-partition JOINs
  * and aggregate functions (COUNT, SUM, AVG, MIN, MAX).
+ * Routes ALL queries through message router - no local vs remote distinction.
  */
 class QueryExecutor {
   /**
    * Create a new query executor.
    * @param {Object} options - Configuration options.
-   * @param {Object} options.partitionRegistry - Registry of partition services.
-   * @param {Object} options.replicaRegistry - Registry of replica services for load distribution.
+   * @param {Object} options.messageRouter - Message router for query routing.
+   * @param {Object} options.systemCache - System table cache for service address lookup.
    * @param {string} options.nodeId - Node ID for HLC.
    */
   constructor(options = {}) {
-    this.partitionRegistry = options.partitionRegistry || new Map();
-    this.replicaRegistry = options.replicaRegistry || new Map();
-    this.nodeId = options.nodeId || 'query-executor';
+    this.messageRouter = options.messageRouter || null;
+    this.systemCache = options.systemCache || null;
+    this.nodeId = options.nodeId || QUERY_SUBSYSTEM.QUERY_EXECUTOR;
     this.hlcClock = new HLCClockService(this.nodeId);
     this.logger = this.initLogger();
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.queryTimeoutMs = config.get('query.timeoutMs') || 30000;
-    this.maxParallelPartitions = config.get('query.maxParallelPartitions') || 1000;
-    this.distributeReads = config.get('query.distributeReads') !== false;
+    this.queryTimeoutMs = config.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
+      QUERY_DEFAULTS.QUERY_TIMEOUT_MS;
+    this.maxParallelPartitions = config.get(QUERY_CONFIG_KEY.MAX_PARALLEL_PARTITIONS) ||
+      QUERY_DEFAULTS.MAX_PARALLEL_PARTITIONS;
+    this.leaderRetryAttempts = config.get(QUERY_CONFIG_KEY.LEADER_RETRY_ATTEMPTS) ||
+      QUERY_DEFAULTS.LEADER_RETRY_ATTEMPTS;
+    this.leaderRetryDelayMs = config.get(QUERY_CONFIG_KEY.LEADER_RETRY_DELAY_MS) ||
+      QUERY_DEFAULTS.LEADER_RETRY_DELAY_MS;
   }
 
   /**
@@ -45,7 +78,7 @@ class QueryExecutor {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('query-executor');
+        return loggingService.forSubsystem(QUERY_SUBSYSTEM.QUERY_EXECUTOR);
       }
     } catch {
       // Logging not available
@@ -54,79 +87,19 @@ class QueryExecutor {
   }
 
   /**
-   * Set the partition registry.
-   * @param {Map|Object} registry - Partition registry.
+   * Set the message router for query routing.
+   * @param {Object} router - Message router instance.
    */
-  setPartitionRegistry(registry) {
-    this.partitionRegistry = registry;
+  setMessageRouter(router) {
+    this.messageRouter = router;
   }
 
   /**
-   * Set the replica registry for read load distribution.
-   * @param {Map|Object} registry - Replica registry mapping partitionId to replica list.
+   * Set the system cache for service address lookup.
+   * @param {Object} cache - System table cache instance.
    */
-  setReplicaRegistry(registry) {
-    this.replicaRegistry = registry;
-  }
-
-  /**
-   * Get a partition service by ID, optionally selecting a replica for reads.
-   * Implements read load distribution by routing to any available replica.
-   * Requirements: 22.4, 22.5
-   * @param {string} partitionId - Partition ID.
-   * @param {boolean} forRead - If true, can route to any replica (not just leader).
-   * @return {Object|null} Partition service or null.
-   * @private
-   */
-  getPartition(partitionId, forRead = false) {
-    // If read distribution is enabled and this is a read operation,
-    // try to select a replica to distribute load
-    if (forRead && this.distributeReads) {
-      const replica = this.selectReplicaForRead(partitionId);
-      if (replica) {
-        return replica;
-      }
-    }
-
-    // Fall back to partition registry
-    if (this.partitionRegistry instanceof Map) {
-      return this.partitionRegistry.get(partitionId);
-    }
-    return this.partitionRegistry[partitionId] || null;
-  }
-
-  /**
-   * Select a replica for read operations to distribute load.
-   * Requirements: 22.4, 22.5
-   * @param {string} partitionId - Partition ID.
-   * @return {Object|null} Selected replica or null.
-   * @private
-   */
-  selectReplicaForRead(partitionId) {
-    let replicas;
-
-    if (this.replicaRegistry instanceof Map) {
-      replicas = this.replicaRegistry.get(partitionId);
-    } else {
-      replicas = this.replicaRegistry[partitionId];
-    }
-
-    if (!replicas || replicas.length === 0) {
-      return null;
-    }
-
-    // Filter to only active replicas
-    const activeReplicas = replicas.filter((r) =>
-      r.status === 'active' || r.status === undefined,
-    );
-
-    if (activeReplicas.length === 0) {
-      return null;
-    }
-
-    // Simple round-robin or random selection for load distribution
-    const index = Math.floor(Math.random() * activeReplicas.length);
-    return activeReplicas[index];
+  setSystemCache(cache) {
+    this.systemCache = cache;
   }
 
   /**
@@ -141,11 +114,11 @@ class QueryExecutor {
    * @return {Promise<Object>} Query result.
    */
   async executeSelect(ast, partitionIds, params = [], options = {}) {
-    if (partitionIds.length === 0) {
+    if (partitionIds.length === NUM.ZERO) {
       return {
         success: true,
         rows: [],
-        count: 0,
+        count: NUM.ZERO,
         partitions: [],
       };
     }
@@ -153,15 +126,15 @@ class QueryExecutor {
     // Get consistent snapshot timestamp
     const queryTimestamp = this.hlcClock.now();
 
-    this.logger.debug('Executing distributed SELECT', {
+    this.logger.debug(QUERY_LOG_MSG.EXECUTING_DISTRIBUTED_SELECT, {
       partitionCount: partitionIds.length,
       timestamp: queryTimestamp.toString(),
-      hasJoins: (ast.joins && ast.joins.length > 0) || false,
+      hasJoins: (ast.joins && ast.joins.length > NUM.ZERO) || false,
       hasAggregates: this.hasAggregates(ast),
     });
 
     // Check if this is a cross-partition JOIN query
-    if (ast.joins && ast.joins.length > 0 && options.joinPartitions) {
+    if (ast.joins && ast.joins.length > NUM.ZERO && options.joinPartitions) {
       return this.executeCrossPartitionJoin(ast, partitionIds, params, options, queryTimestamp);
     }
 
@@ -175,6 +148,7 @@ class QueryExecutor {
       params,
       queryTimestamp,
       true, // forRead = true for SELECT
+      options.preferLeader || false,
     );
 
     // Aggregate results
@@ -203,7 +177,7 @@ class QueryExecutor {
   async executeCrossPartitionJoin(ast, mainPartitionIds, params, options, queryTimestamp) {
     const {joinPartitions} = options;
 
-    this.logger.debug('Executing cross-partition JOIN', {
+    this.logger.debug(QUERY_LOG_MSG.EXECUTING_CROSS_PARTITION_JOIN, {
       mainTable: ast.from.name,
       mainPartitionCount: mainPartitionIds.length,
       joinCount: ast.joins.length,
@@ -236,14 +210,15 @@ class QueryExecutor {
       const joinTableName = join.table.name;
       const joinTablePartitions = joinPartitions.get(joinTableName) || [];
 
-      if (joinTablePartitions.length > 0) {
-        const joinSql = `SELECT * FROM ${joinTableName}`;
+      if (joinTablePartitions.length > NUM.ZERO) {
+        const joinSql = `${QUERY_SQL.SELECT_ALL_FROM_PREFIX}${joinTableName}`;
         const joinResults = await this.executeOnPartitions(
           joinTablePartitions,
           joinSql,
           [],
           queryTimestamp,
           true,
+          options.preferLeader || false,
         );
 
         let joinRows = [];
@@ -295,7 +270,7 @@ class QueryExecutor {
    * @private
    */
   performJoin(leftRows, rightRows, join, leftTableName, rightTableName) {
-    const joinType = (join.joinType || 'INNER').toUpperCase();
+    const joinType = (join.joinType || QUERY_JOIN_TYPE.INNER).toUpperCase();
     const condition = join.condition;
 
     // Extract join columns from condition
@@ -332,7 +307,8 @@ class QueryExecutor {
           result.push({...leftRow, ...rightRow});
           matchedRight.add(rightRow);
         }
-      } else if (joinType === 'LEFT' || joinType === 'LEFT OUTER') {
+      } else if (joinType === QUERY_JOIN_TYPE.LEFT ||
+        joinType === QUERY_JOIN_TYPE.LEFT_OUTER) {
         // Include left row with nulls for right columns
         const nullRight = {};
         if (rightRows.length > 0) {
@@ -345,7 +321,8 @@ class QueryExecutor {
     }
 
     // Handle RIGHT JOIN
-    if (joinType === 'RIGHT' || joinType === 'RIGHT OUTER') {
+    if (joinType === QUERY_JOIN_TYPE.RIGHT ||
+      joinType === QUERY_JOIN_TYPE.RIGHT_OUTER) {
       for (const rightRow of rightRows) {
         if (!matchedRight.has(rightRow)) {
           const nullLeft = {};
@@ -371,14 +348,17 @@ class QueryExecutor {
    * @private
    */
   extractJoinColumns(condition, leftTable, rightTable) {
-    if (!condition || condition.type !== 'binary' || condition.operator !== '=') {
+    if (!condition ||
+      condition.type !== QUERY_AST_NODE.BINARY ||
+      condition.operator !== QUERY_OPERATOR.EQUALS) {
       return {leftColumn: null, rightColumn: null};
     }
 
     const left = condition.left;
     const right = condition.right;
 
-    if (left.type !== 'column_ref' || right.type !== 'column_ref') {
+    if (left.type !== QUERY_AST_NODE.COLUMN_REF ||
+      right.type !== QUERY_AST_NODE.COLUMN_REF) {
       return {leftColumn: null, rightColumn: null};
     }
 
@@ -409,7 +389,7 @@ class QueryExecutor {
   }
 
   /**
-   * Perform a nested loop join (fallback for complex conditions).
+   * Perform a nested loop join for complex conditions.
    * @param {Array} leftRows - Left table rows.
    * @param {Array} rightRows - Right table rows.
    * @param {Object} condition - JOIN condition.
@@ -433,7 +413,8 @@ class QueryExecutor {
         }
       }
 
-      if (!hasMatch && (joinType === 'LEFT' || joinType === 'LEFT OUTER')) {
+      if (!hasMatch && (joinType === QUERY_JOIN_TYPE.LEFT ||
+        joinType === QUERY_JOIN_TYPE.LEFT_OUTER)) {
         const nullRight = {};
         if (rightRows.length > 0) {
           for (const col of Object.keys(rightRows[0])) {
@@ -444,7 +425,8 @@ class QueryExecutor {
       }
     }
 
-    if (joinType === 'RIGHT' || joinType === 'RIGHT OUTER') {
+    if (joinType === QUERY_JOIN_TYPE.RIGHT ||
+      joinType === QUERY_JOIN_TYPE.RIGHT_OUTER) {
       for (const rightRow of rightRows) {
         if (!matchedRight.has(rightRow)) {
           const nullLeft = {};
@@ -511,16 +493,24 @@ class QueryExecutor {
 
   /**
    * Execute a query on multiple partitions in parallel.
+   * All queries route through message router using service addresses from system cache.
    * Requirements: 22.1, 22.4, 22.5
    * @param {Array} partitionIds - Partition IDs.
    * @param {string} sql - SQL query.
    * @param {Array} params - Query parameters.
-   * @param {Object} timestamp - HLC timestamp for consistent snapshot.
-   * @param {boolean} forRead - If true, can route to any replica for load distribution.
+   * @param {Object} _timestamp - HLC timestamp (unused for now).
+   * @param {boolean} forRead - True when executing read-only queries.
    * @return {Promise<Array>} Array of partition results.
    * @private
    */
-  async executeOnPartitions(partitionIds, sql, params, timestamp, forRead = false) {
+  async executeOnPartitions(
+    partitionIds,
+    sql,
+    params,
+    _timestamp,
+    forRead = false,
+    preferLeader = false,
+  ) {
     // Limit parallel partitions
     const limitedIds = partitionIds.slice(0, this.maxParallelPartitions);
 
@@ -532,15 +522,17 @@ class QueryExecutor {
     }
 
     // Create promises for parallel execution
-    // Read operations don't block writes (they can go to any replica)
     const promises = limitedIds.map((partitionId) =>
-      this.executeOnPartition(partitionId, sql, params, timestamp, forRead),
+      this.executeOnPartition(partitionId, sql, params, forRead, preferLeader),
     );
 
     // Execute with timeout - ensure timer is always cleared
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('Query timeout')), this.queryTimeoutMs);
+      timeoutId = setTimeout(
+        () => reject(new Error(QUERY_ERROR_MSG.QUERY_TIMEOUT)),
+        this.queryTimeoutMs,
+      );
     });
 
     try {
@@ -550,8 +542,8 @@ class QueryExecutor {
       ]);
       return results;
     } catch (error) {
-      if (error.message === 'Query timeout') {
-        this.logger.error('Query timed out', {
+      if (error.message === QUERY_ERROR_MSG.QUERY_TIMEOUT) {
+        this.logger.error(QUERY_LOG_MSG.QUERY_TIMED_OUT, {
           partitionCount: limitedIds.length,
           timeoutMs: this.queryTimeoutMs,
         });
@@ -564,48 +556,313 @@ class QueryExecutor {
 
   /**
    * Execute a query on a single partition.
+   * Routes ALL queries through message router - no local vs remote distinction.
+   * Looks up service address from system cache and delivers via message router.
    * Requirements: 22.4, 22.5
    * @param {string} partitionId - Partition ID.
    * @param {string} sql - SQL query.
    * @param {Array} params - Query parameters.
-   * @param {Object} _timestamp - HLC timestamp (unused for now).
-   * @param {boolean} forRead - If true, can route to any replica.
    * @return {Promise<Object>} Partition result.
    * @private
    */
-  async executeOnPartition(partitionId, sql, params, _timestamp, forRead = false) {
-    const partition = this.getPartition(partitionId, forRead);
-
-    if (!partition) {
-      this.logger.warn('Partition not found', {partitionId});
+  async executeOnPartition(partitionId, sql, params, forRead, preferLeader) {
+    // Validate dependencies
+    if (!this.messageRouter) {
+      this.logger.error(QUERY_LOG_MSG.MESSAGE_ROUTER_UNAVAILABLE, {partitionId});
       return {
         partitionId,
         success: false,
-        error: 'Partition not found',
+        error: QUERY_ERROR_MSG.MESSAGE_ROUTER_UNAVAILABLE,
         rows: [],
       };
     }
 
-    try {
-      const result = await partition.executeQuery(sql, params);
+    if (!this.systemCache) {
+      this.logger.error(LOG_MSG.SYSTEM_CACHE_NOT_AVAILABLE, {partitionId});
       return {
         partitionId,
-        success: true,
-        rows: result.rows || [],
-        changes: result.changes,
+        success: false,
+        error: ERRORS.SYSTEM_CACHE_NOT_AVAILABLE,
+        rows: [],
       };
-    } catch (error) {
-      this.logger.error('Partition query failed', {
+    }
+
+    const maxAttempts = forRead ? 1 : this.leaderRetryAttempts;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const serviceCandidates = this.getPartitionServiceCandidates(
         partitionId,
-        error: error.message,
+        forRead,
+        preferLeader,
+      );
+      if (serviceCandidates.length === 0) {
+        if (!forRead && attempt < maxAttempts) {
+          lastError = ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE;
+          await this.delay(this.leaderRetryDelayMs);
+          continue;
+        }
+        this.logger.warn(QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION, {partitionId});
+        return {
+          partitionId,
+          success: false,
+          error: QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
+          rows: [],
+        };
+      }
+
+      for (const serviceInfo of serviceCandidates) {
+        const {address} = serviceInfo;
+        this.logger.debug(QUERY_LOG_MSG.ROUTING_QUERY_TO_PARTITION, {
+          partitionId,
+          address,
+        });
+
+        try {
+          const response = await this.messageRouter.deliver(address, {
+            type: QUERY_MESSAGE_TYPE.QUERY,
+            sql,
+            params,
+          });
+
+          if (response.acknowledged && response.success) {
+            return {
+              partitionId,
+              success: true,
+              rows: response.rows || [],
+              changes: response.changes,
+            };
+          }
+
+          if (response.noHandler) {
+            const errorMessage = response.error ||
+              `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`;
+            this.logger.warn(QUERY_LOG_MSG.NO_HANDLER_FOR_PARTITION, {
+              partitionId,
+              address,
+            });
+            lastError = errorMessage;
+            if (!forRead && this.isLeaderUnavailable(errorMessage)) {
+              continue;
+            }
+            continue;
+          }
+
+          const errorMessage = response.error || ERRORS.QUERY_FAILED;
+          if (!forRead && this.isLeaderUnavailable(errorMessage)) {
+            lastError = errorMessage;
+            continue;
+          }
+
+          return {
+            partitionId,
+            success: false,
+            error: errorMessage,
+            rows: [],
+          };
+        } catch (error) {
+          if (!forRead && this.isLeaderUnavailable(error.message)) {
+            lastError = error.message;
+            continue;
+          }
+
+          this.logger.error(QUERY_LOG_MSG.QUERY_ROUTING_FAILED, {
+            partitionId,
+            address,
+            error: error.message,
+          });
+          throw error;
+        }
+      }
+
+      if (!forRead && attempt < maxAttempts) {
+        await this.delay(this.leaderRetryDelayMs);
+      }
+    }
+
+    return {
+      partitionId,
+      success: false,
+      error: lastError || ERRORS.QUERY_FAILED,
+      rows: [],
+    };
+  }
+
+  /**
+   * Check if an error indicates missing partition leadership.
+   * @param {string} errorMessage - Error message.
+   * @return {boolean} True if leader is unavailable.
+   * @private
+   */
+  isLeaderUnavailable(errorMessage) {
+    return errorMessage &&
+      (
+        errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+        errorMessage.includes(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT) ||
+        errorMessage.includes(ERRORS.NO_HANDLER_FOR_ADDRESS) ||
+        errorMessage.includes('No connection to node') ||
+        errorMessage.includes('Failed to forward write to leader')
+      );
+  }
+
+  /**
+   * Delay helper for retry backoff.
+   * @param {number} delayMs - Delay duration in ms.
+   * @return {Promise<void>}
+   * @private
+   */
+  async delay(delayMs) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  /**
+   * Get partition service candidates in preferred order.
+   * @param {string} partitionId - Partition ID.
+   * @param {boolean} forRead - True when executing read-only queries.
+   * @return {Array<Object>} Ordered list of service info objects.
+   * @private
+   */
+  getPartitionServiceCandidates(partitionId, forRead = false, preferLeader = false) {
+    const leaderCandidate = this.getPartitionLeaderCandidate(partitionId);
+    const prioritizeLeader = preferLeader || !forRead;
+
+    if (!this.systemCache) {
+      if (leaderCandidate && prioritizeLeader) {
+        return [leaderCandidate];
+      }
+      if (leaderCandidate) {
+        return [leaderCandidate];
+      }
+      this.logger.warn(LOG_MSG.SYSTEM_CACHE_PARTITION_LOOKUP_UNAVAILABLE, {partitionId});
+      return [];
+    }
+
+    if (typeof this.systemCache.filter !== 'function') {
+      this.logger.warn(QUERY_LOG_MSG.SYSTEM_CACHE_FILTER_UNSUPPORTED, {partitionId});
+      return [];
+    }
+
+    const services = this.systemCache.filter(TABLES.SERVICES, (s) =>
+      s.partition_id === partitionId &&
+      s.service_type === SERVICE_TYPE.PARTITION &&
+      s.status === STATE.ACTIVE,
+    ) || [];
+
+    if (services.length === 0) {
+      if (leaderCandidate) {
+        return [leaderCandidate];
+      }
+
+      this.logger.warn(QUERY_LOG_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION, {partitionId});
+      return [];
+    }
+
+    const candidates = [];
+    const seen = new Set();
+    const addService = (service) => {
+      if (!service) {
+        return;
+      }
+      const key = service.service_id || service.replica_id || service.address;
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      candidates.push({
+        address: service.address,
+        nodeId: service.node_id,
+        replicaId: service.service_id || service.replica_id,
       });
-      return {
-        partitionId,
-        success: false,
-        error: error.message,
-        rows: [],
-      };
+    };
+
+    if (leaderCandidate) {
+      addService(leaderCandidate);
     }
+    const leaders = services.filter((service) => service.raft_role === RAFT_ROLE.LEADER);
+
+    if (prioritizeLeader) {
+      leaders.forEach(addService);
+
+      if (!forRead && leaders.length === 0) {
+        this.logger.warn(QUERY_LOG_MSG.NO_LEADER_SERVICE_FOR_PARTITION, {partitionId});
+      }
+
+      services
+        .filter((service) => service.node_id === this.nodeId)
+        .forEach(addService);
+    }
+
+    services.forEach(addService);
+
+    return candidates;
+  }
+
+  /**
+   * Get a cached leader candidate for a partition.
+   * @param {string} partitionId - Partition ID.
+   * @return {Object|null} Leader service info or null.
+   * @private
+   */
+  getPartitionLeaderCandidate(partitionId) {
+    const nodeService = getNodeService();
+    const leader = nodeService.getPartitionLeader(partitionId);
+    if (!leader || !leader.address) {
+      return null;
+    }
+    return {
+      address: leader.address,
+      nodeId: leader.nodeId,
+      replicaId: leader.replicaId,
+    };
+  }
+
+  /**
+   * Find partition leader address from system cache.
+   * Queries the services table in the cache for the partition leader.
+   * Returns the leader address for routing write queries.
+   * Handles missing leader gracefully by returning null.
+   * Requirements: 5.2
+   * @param {string} partitionId - Partition ID.
+   * @return {string|null} Leader address or null if not found.
+   */
+  findPartitionLeaderAddress(partitionId) {
+    if (!this.systemCache) {
+      this.logger.warn(LOG_MSG.SYSTEM_CACHE_NOT_AVAILABLE, {partitionId});
+      return null;
+    }
+
+    if (typeof this.systemCache.filter !== 'function') {
+      this.logger.warn(QUERY_LOG_MSG.SYSTEM_CACHE_FILTER_UNSUPPORTED, {partitionId});
+      return null;
+    }
+
+    // Query services table for partition leader
+    const services = this.systemCache.filter(TABLES.SERVICES, (s) =>
+      s.partition_id === partitionId &&
+      s.service_type === SERVICE_TYPE.PARTITION &&
+      s.raft_role === RAFT_ROLE.LEADER &&
+      s.status === STATE.ACTIVE,
+    ) || [];
+
+    if (services.length === 0) {
+      this.logger.debug(QUERY_LOG_MSG.NO_LEADER_SERVICE_FOR_PARTITION, {partitionId});
+      return null;
+    }
+
+    return services[0].address;
+  }
+
+  /**
+   * Find partition service information from system cache.
+   * Returns the service address for routing queries.
+   * Uses ONLY the system cache - no fallbacks.
+   * @param {string} partitionId - Partition ID.
+   * @return {Object|null} {address, nodeId, replicaId} or null if not found.
+   * @private
+   */
+  findPartitionService(partitionId, forRead = false) {
+    const candidates = this.getPartitionServiceCandidates(partitionId, forRead);
+    return candidates[0] || null;
   }
 
   /**
@@ -1123,18 +1380,13 @@ class QueryExecutor {
 
   /**
    * Execute an INSERT statement.
+   * Routes ALL queries through message router - no local vs remote distinction.
    * @param {Object} ast - Parsed INSERT AST.
    * @param {string} partitionId - Target partition ID.
    * @param {Array} params - Query parameters.
    * @return {Promise<Object>} Insert result.
    */
   async executeInsert(ast, partitionId, params = []) {
-    const partition = this.getPartition(partitionId);
-
-    if (!partition) {
-      throw new Error(`Partition not found: ${partitionId}`);
-    }
-
     const sql = this.buildInsertSQL(ast);
 
     this.logger.debug('Executing INSERT', {
@@ -1143,7 +1395,12 @@ class QueryExecutor {
       rowCount: ast.values.length,
     });
 
-    const result = await partition.executeQuery(sql, params);
+    // Route through message router like all other operations
+    const result = await this.executeOnPartition(partitionId, sql, params);
+
+    if (!result.success) {
+      throw new Error(result.error || `Insert failed on partition: ${partitionId}`);
+    }
 
     return {
       success: true,
@@ -1160,13 +1417,16 @@ class QueryExecutor {
    * @private
    */
   buildInsertSQL(ast) {
-    let sql = `INSERT INTO ${ast.table}`;
+    let sql = ast.orReplace ?
+      `${SQL.INSERT_OR_REPLACE_INTO} ` :
+      `${SQL.INSERT_INTO} `;
+    sql += ast.table;
 
     if (ast.columns) {
       sql += ` (${ast.columns.join(', ')})`;
     }
 
-    sql += ' VALUES ';
+    sql += ` ${SQL.VALUES} `;
 
     const rows = ast.values.map((row) => {
       const vals = row.map((v) => this.buildExpressionSQL(v));

@@ -5,6 +5,15 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {TABLES} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  FUNCTION_ERROR_MSG,
+  FUNCTION_LOG_MSG,
+  FUNCTION_SUBSYSTEM,
+  FUNCTION_DEFAULT_VALUE,
+  TYPEOF,
+} from './function-constants.js';
 
 /**
  * FunctionRegistry provides a plugin architecture for registering
@@ -34,7 +43,7 @@ class FunctionRegistry {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('function-registry');
+        return loggingService.forSubsystem(FUNCTION_SUBSYSTEM.REGISTRY);
       }
     } catch {
       // Logging not available
@@ -58,7 +67,7 @@ class FunctionRegistry {
 
     this.initialized = true;
 
-    this.logger.info('Function registry initialized', {
+    this.logger.info(FUNCTION_LOG_MSG.REGISTRY_INITIALIZED, {
       registeredExecutors: this.getRegisteredExecutorTypes(),
     });
   }
@@ -70,23 +79,23 @@ class FunctionRegistry {
    * @throws {Error} If executor is invalid.
    */
   registerExecutor(executorType, executor) {
-    if (!executorType || typeof executorType !== 'string') {
-      throw new Error('Executor type must be a non-empty string');
+    if (!executorType || typeof executorType !== TYPEOF.STRING) {
+      throw new Error(FUNCTION_ERROR_MSG.EXECUTOR_TYPE_REQUIRED);
     }
 
-    if (!executor || typeof executor.execute !== 'function') {
-      throw new Error('Executor must have an execute(func, context, args) method');
+    if (!executor || typeof executor.execute !== TYPEOF.FUNCTION) {
+      throw new Error(FUNCTION_ERROR_MSG.EXECUTOR_METHOD_REQUIRED);
     }
 
     if (this.executors.has(executorType)) {
-      this.logger.warn('Overwriting existing executor', {executorType});
+      this.logger.warn(FUNCTION_LOG_MSG.EXECUTOR_OVERWRITE, {executorType});
     }
 
     this.executors.set(executorType, executor);
 
-    this.logger.info('Function executor registered', {
+    this.logger.info(FUNCTION_LOG_MSG.EXECUTOR_REGISTERED, {
       executorType,
-      executorName: executor.name || 'anonymous',
+      executorName: executor.name || FUNCTION_DEFAULT_VALUE.EXECUTOR_NAME_FALLBACK,
     });
   }
 
@@ -100,7 +109,7 @@ class FunctionRegistry {
     this.executors.delete(executorType);
 
     if (existed) {
-      this.logger.info('Function executor unregistered', {executorType});
+      this.logger.info(FUNCTION_LOG_MSG.EXECUTOR_UNREGISTERED, {executorType});
     }
 
     return existed;
@@ -118,7 +127,7 @@ class FunctionRegistry {
     const func = await this.getFunction(functionId);
 
     if (!func) {
-      throw new Error(`Function not found: ${functionId}`);
+      throw new Error(`${FUNCTION_ERROR_MSG.FUNCTION_NOT_FOUND_PREFIX}${functionId}`);
     }
 
     // Get executor for this function type
@@ -127,12 +136,15 @@ class FunctionRegistry {
     if (!executor) {
       const availableTypes = this.getRegisteredExecutorTypes();
       throw new Error(
-        `No executor registered for type '${func.executor_type}'. ` +
-        `Available types: ${availableTypes.length > 0 ? availableTypes.join(', ') : 'none'}`,
+        `${FUNCTION_ERROR_MSG.EXECUTOR_NOT_FOUND_PREFIX}` +
+        `'${func.executor_type}'` +
+        `${FUNCTION_ERROR_MSG.EXECUTOR_NOT_FOUND_SUFFIX} ` +
+        `${FUNCTION_ERROR_MSG.EXECUTOR_AVAILABLE_PREFIX}` +
+        `${availableTypes.length > 0 ? availableTypes.join(', ') : FUNCTION_ERROR_MSG.EXECUTOR_AVAILABLE_NONE}`,
       );
     }
 
-    this.logger.debug('Invoking function', {
+    this.logger.debug(FUNCTION_LOG_MSG.INVOKING_FUNCTION, {
       functionId,
       functionName: func.function_name,
       executorType: func.executor_type,
@@ -141,7 +153,7 @@ class FunctionRegistry {
     // Execute the function
     const result = await executor.execute(func, context, args);
 
-    this.logger.debug('Function completed', {
+    this.logger.debug(FUNCTION_LOG_MSG.FUNCTION_COMPLETED, {
       functionId,
       hasResult: result !== undefined,
     });
@@ -160,7 +172,7 @@ class FunctionRegistry {
     const func = await this.getFunctionByName(functionName);
 
     if (!func) {
-      throw new Error(`Function not found: ${functionName}`);
+      throw new Error(`${FUNCTION_ERROR_MSG.FUNCTION_NOT_FOUND_PREFIX}${functionName}`);
     }
 
     return this.invoke(func.function_id, context, args);
@@ -172,28 +184,28 @@ class FunctionRegistry {
    * @return {Promise<Object|null>} Function definition or null.
    */
   async getFunction(functionId) {
-    if (!this.systemTableCache) {
-      this.logger.warn('System table cache not available');
-      return null;
-    }
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
 
     try {
       // Try direct lookup first
-      const func = this.systemTableCache.get('code', functionId);
+      const func = systemTableCache.get(TABLES.CODE, functionId);
       if (func) {
         return func;
       }
 
       // Try find by function_id field
-      return this.systemTableCache.find('code', (f) =>
+      return systemTableCache.find(TABLES.CODE, (f) =>
         f.function_id === functionId,
       );
     } catch (error) {
-      this.logger.error('Failed to get function', {
+      this.logger.error(FUNCTION_LOG_MSG.FUNCTION_LOOKUP_FAILED, {
         functionId,
         error: error.message,
       });
-      return null;
+      throw error;
     }
   }
 
@@ -203,21 +215,21 @@ class FunctionRegistry {
    * @return {Promise<Object|null>} Function definition or null.
    */
   async getFunctionByName(functionName) {
-    if (!this.systemTableCache) {
-      this.logger.warn('System table cache not available');
-      return null;
-    }
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
 
     try {
-      return this.systemTableCache.find('code', (f) =>
+      return systemTableCache.find(TABLES.CODE, (f) =>
         f.function_name === functionName,
       );
     } catch (error) {
-      this.logger.error('Failed to get function by name', {
+      this.logger.error(FUNCTION_LOG_MSG.FUNCTION_LOOKUP_BY_NAME_FAILED, {
         functionName,
         error: error.message,
       });
-      return null;
+      throw error;
     }
   }
 

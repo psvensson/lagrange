@@ -1,0 +1,36 @@
+import {COLUMN, TABLES} from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+
+const MESSAGE_STATUS = Object.freeze({
+  PENDING: 'pending',
+  DELIVERED: 'delivered',
+  ACKNOWLEDGED: 'acknowledged',
+  FAILED: 'failed',
+});
+
+const MESSAGE_GROUP_SUBSYSTEM = Object.freeze({
+  NAME: 'message-group',
+});
+
+const MESSAGE_GROUP_METADATA_TABLE = Object.freeze({
+  PARTITIONS: TABLES.PARTITIONS,
+  SERVICES: TABLES.SERVICES,
+  NODES: TABLES.NODES,
+});
+
+const MESSAGE_GROUP_METADATA_SQL = Object.freeze({
+  SELECT_PARTITION_BY_ID:
+    `SELECT * FROM ${TABLES.PARTITIONS} WHERE ${COLUMN.PARTITION_ID} = ?`,
+  SELECT_SERVICE_BY_ID:
+    `SELECT * FROM ${TABLES.SERVICES} WHERE ${COLUMN.SERVICE_ID} = ?`,
+  SELECT_NODE_BY_ID:
+    `SELECT * FROM ${TABLES.NODES} WHERE ${COLUMN.NODE_ID} = ?`,
+});
+
+export {
+  MESSAGE_GROUP_SUBSYSTEM,
+  MESSAGE_STATUS,
+  MESSAGE_GROUP_METADATA_TABLE,
+  MESSAGE_GROUP_METADATA_SQL,
+  RAFT_ROLE,
+};

@@ -10,16 +10,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import {CLI_DEFAULT, CLI_PATH} from '../cli-constants.js';
 
 /**
  * Default maximum number of history entries
  */
-export const DEFAULT_MAX_ENTRIES = 100;
+export const DEFAULT_MAX_ENTRIES = CLI_DEFAULT.MAX_HISTORY;
 
 /**
  * Default persistence path
  */
-export const DEFAULT_PERSIST_PATH = '~/.ddb-admin/query_history.json';
+export const DEFAULT_PERSIST_PATH = path.posix.join(
+  '~',
+  CLI_PATH.CONFIG_DIR_NAME,
+  CLI_PATH.QUERY_HISTORY_FILE,
+);
 
 /**
  * QueryHistory class for managing query history

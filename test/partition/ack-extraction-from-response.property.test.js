@@ -8,18 +8,17 @@
  * immediately without waiting for events.
  *
  * Note: With the unified flat message structure, ACK fields are spread
- * directly into the response. The extraction method handles both flat
- * and legacy nested structures for backward compatibility.
+ * directly into the response.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
 /**
  * Helper function that mirrors the extractAckFromResponse logic from PartitionService.
- * Handles both flat structure (primary) and nested structures (backward compatibility).
+ * Handles flat structure only.
  * @param {Object} result - Transport result.
  * @param {string} requestId - Expected request ID.
  * @return {Object|null} ACK or null.
@@ -30,16 +29,6 @@ function extractAckFromResponse(result, requestId) {
   // Primary case: flat structure - request_id directly on result
   if (result.request_id === requestId) {
     return result;
-  }
-
-  // Backward compatibility: search through nested result structures
-  let current = result;
-  for (let depth = 0; depth < 5; depth++) {
-    if (!current?.result) break;
-    current = current.result;
-    if (current?.request_id === requestId) {
-      return current;
-    }
   }
 
   return null;
@@ -93,38 +82,6 @@ test('Property 14: ACK Extraction From Response', async (t) => {
     );
 
     t.pass('extracts ACK from flat response');
-  });
-
-  /**
-   * Property: For backward compatibility, nested structures are still supported.
-   */
-  t.test('extracts ACK from nested structure (backward compatibility)', async (t) => {
-    await fc.assert(
-      fc.property(
-        fc.uuid(), // requestId
-        fc.constantFrom('success', 'initiated', 'completed'), // status
-        (requestId, status) => {
-          // Legacy nested structure
-          const response = {
-            acknowledged: true,
-            result: {
-              request_id: requestId,
-              status,
-              acknowledged: true,
-            },
-          };
-
-          const extracted = extractAckFromResponse(response, requestId);
-
-          return extracted !== null &&
-            extracted.request_id === requestId &&
-            extracted.status === status;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('extracts ACK from nested structure for backward compatibility');
   });
 
   /**

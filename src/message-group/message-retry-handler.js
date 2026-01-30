@@ -7,6 +7,7 @@
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
 
 /**
@@ -53,19 +54,19 @@ class MessageRetryHandler extends EventEmitter {
     // Load configuration from ConfigurationManager or use provided options
     const config = ConfigurationManager.getInstance();
     this.maxRetries = options.maxRetries ??
-      config.get('messageGroup.retryMaxAttempts') ??
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_MAX_ATTEMPTS) ??
       DEFAULT_RETRY_CONFIG.maxRetries;
     this.initialDelayMs = options.initialDelayMs ??
-      config.get('messageGroup.retryInitialDelayMs') ??
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_INITIAL_DELAY_MS) ??
       DEFAULT_RETRY_CONFIG.initialDelayMs;
     this.maxDelayMs = options.maxDelayMs ??
-      config.get('messageGroup.retryMaxDelayMs') ??
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_MAX_DELAY_MS) ??
       DEFAULT_RETRY_CONFIG.maxDelayMs;
     this.backoffMultiplier = options.backoffMultiplier ??
-      config.get('messageGroup.retryBackoffMultiplier') ??
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_BACKOFF_MULTIPLIER) ??
       DEFAULT_RETRY_CONFIG.backoffMultiplier;
     this.jitterFactor = options.jitterFactor ??
-      config.get('messageGroup.retryJitterFactor') ??
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_JITTER_FACTOR) ??
       DEFAULT_RETRY_CONFIG.jitterFactor;
 
     // Function to get alternative replicas for a target

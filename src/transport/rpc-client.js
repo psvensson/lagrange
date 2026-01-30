@@ -10,6 +10,14 @@
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
+import {
+  RPC_DEFAULT,
+  RPC_ERROR_MSG,
+  RPC_LOG_MSG,
+  TRANSPORT_EVENT,
+  TRANSPORT_NUM,
+  TRANSPORT_SUBSYSTEM,
+} from '../constants/transport.js';
 
 /**
  * RPCClient provides request-response semantics over message groups.
@@ -26,7 +34,7 @@ class RPCClient extends EventEmitter {
     super();
 
     this.messageGroupService = options.messageGroupService || null;
-    this.defaultTimeoutMs = options.defaultTimeoutMs || 30000;
+    this.defaultTimeoutMs = options.defaultTimeoutMs || RPC_DEFAULT.TIMEOUT_MS;
 
     // Pending requests: correlationId -> {resolve, reject, timeout, sentAt}
     this.pendingRequests = new Map();
@@ -34,14 +42,14 @@ class RPCClient extends EventEmitter {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('rpc-client') : console;
+      loggingService.forSubsystem(TRANSPORT_SUBSYSTEM.RPC) : console;
 
     // Statistics
     this.stats = {
-      requestsSent: 0,
-      responsesReceived: 0,
-      timeouts: 0,
-      errors: 0,
+      requestsSent: TRANSPORT_NUM.ZERO,
+      responsesReceived: TRANSPORT_NUM.ZERO,
+      timeouts: TRANSPORT_NUM.ZERO,
+      errors: TRANSPORT_NUM.ZERO,
     };
   }
 
@@ -63,13 +71,13 @@ class RPCClient extends EventEmitter {
    */
   async call(target, request, options = {}) {
     if (!this.messageGroupService) {
-      throw new Error('RPCClient: No message group service configured');
+      throw new Error(RPC_ERROR_MSG.NO_MESSAGE_GROUP);
     }
 
     const correlationId = uuidv4();
     const timeoutMs = options.timeout || this.defaultTimeoutMs;
 
-    this.logger.debug('RPC call initiated', {
+    this.logger.debug(RPC_LOG_MSG.CALL_INITIATED, {
       correlationId,
       target,
       timeoutMs,
@@ -83,14 +91,14 @@ class RPCClient extends EventEmitter {
           this.pendingRequests.delete(correlationId);
           this.stats.timeouts++;
 
-          this.logger.debug('RPC timeout', {
+          this.logger.debug(RPC_LOG_MSG.TIMEOUT, {
             correlationId,
             target,
             timeoutMs,
           });
 
-          this.emit('timeout', {correlationId, target, timeoutMs});
-          reject(new Error(`RPC timeout after ${timeoutMs}ms`));
+          this.emit(TRANSPORT_EVENT.TIMEOUT, {correlationId, target, timeoutMs});
+          reject(new Error(RPC_ERROR_MSG.TIMEOUT(timeoutMs)));
         }
       }, timeoutMs);
 
@@ -128,7 +136,7 @@ class RPCClient extends EventEmitter {
           this.pendingRequests.delete(correlationId);
           this.stats.errors++;
 
-          this.logger.error('RPC send failed', {
+          this.logger.error(RPC_LOG_MSG.SEND_FAILED, {
             correlationId,
             target,
             error: error.message,
@@ -150,7 +158,7 @@ class RPCClient extends EventEmitter {
     const pending = this.pendingRequests.get(correlationId);
 
     if (!pending) {
-      this.logger.debug('No pending request for correlation ID', {
+      this.logger.debug(RPC_LOG_MSG.NO_PENDING, {
         correlationId,
       });
       return false;
@@ -162,12 +170,12 @@ class RPCClient extends EventEmitter {
 
     const latencyMs = Date.now() - pending.sentAt;
 
-    this.logger.debug('RPC response received', {
+    this.logger.debug(RPC_LOG_MSG.RESPONSE_RECEIVED, {
       correlationId,
       latencyMs,
     });
 
-    this.emit('response', {correlationId, latencyMs, response});
+    this.emit(TRANSPORT_EVENT.RESPONSE, {correlationId, latencyMs, response});
     pending.resolve(response);
 
     return true;
@@ -207,7 +215,7 @@ class RPCClient extends EventEmitter {
    * @param {string} [reason='Cancelled'] - Reason for cancellation.
    * @return {boolean} True if request was cancelled.
    */
-  cancelRequest(correlationId, reason = 'Cancelled') {
+  cancelRequest(correlationId, reason = RPC_DEFAULT.CANCEL_REASON) {
     const pending = this.pendingRequests.get(correlationId);
 
     if (!pending) {
@@ -217,12 +225,12 @@ class RPCClient extends EventEmitter {
     clearTimeout(pending.timeout);
     this.pendingRequests.delete(correlationId);
 
-    this.logger.debug('RPC request cancelled', {
+    this.logger.debug(RPC_LOG_MSG.REQUEST_CANCELLED, {
       correlationId,
       reason,
     });
 
-    pending.reject(new Error(`RPC cancelled: ${reason}`));
+    pending.reject(new Error(RPC_ERROR_MSG.CANCELLED(reason)));
     return true;
   }
 
@@ -231,18 +239,18 @@ class RPCClient extends EventEmitter {
    * @return {Promise<void>}
    */
   async shutdown() {
-    this.logger.debug('Shutting down RPC client', {
+    this.logger.debug(RPC_LOG_MSG.SHUTTING_DOWN, {
       pendingRequests: this.pendingRequests.size,
     });
 
     // Cancel all pending requests
     for (const [_correlationId, pending] of this.pendingRequests) {
       clearTimeout(pending.timeout);
-      pending.reject(new Error('RPC client shutdown'));
+      pending.reject(new Error(RPC_ERROR_MSG.SHUTDOWN));
     }
 
     this.pendingRequests.clear();
-    this.emit('shutdown');
+    this.emit(TRANSPORT_EVENT.SHUTDOWN);
   }
 }
 

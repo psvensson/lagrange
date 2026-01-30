@@ -10,15 +10,12 @@
  * Before Moves
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {
-  UnifiedRebalancer,
-  EntityType,
-  NodeStatus,
-} from '../../src/rebalancer/unified-rebalancer.js';
+import {EntityType, NodeStatus} from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createTestRebalancer, createMockCache} from './test-helpers.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -37,37 +34,12 @@ function initializeTestEnvironment() {
   }
 }
 
-// Create a mock system table cache
-function createMockCache(nodes = [], services = []) {
-  const cache = {
-    nodes: new Map(nodes.map((n) => [n.node_id, n])),
-    services: new Map(services.map((s) => [s.service_id, s])),
-    partitions: new Map(),
-    tables: new Map(),
-    message_groups: new Map(),
-  };
-
-  return {
-    get: (tableName, key) => cache[tableName]?.get(key),
-    filter: (tableName, predicate) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values()).filter(predicate);
-    },
-    getAll: (tableName) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values());
-    },
-  };
-}
-
 test('Property 4: Stabilization Waiting Before Moves', async (t) => {
   await t.test('isStabilized returns false on fresh rebalancer (bootstrap protection)',
     async (t) => {
       initializeTestEnvironment();
 
-      const rebalancer = new UnifiedRebalancer({
+      const rebalancer = createTestRebalancer({
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
@@ -86,7 +58,7 @@ test('Property 4: Stabilization Waiting Before Moves', async (t) => {
         (reason) => {
           initializeTestEnvironment();
 
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-1',
@@ -118,7 +90,7 @@ test('Property 4: Stabilization Waiting Before Moves', async (t) => {
           (reason) => {
             initializeTestEnvironment();
 
-            const rebalancer = new UnifiedRebalancer({
+            const rebalancer = createTestRebalancer({
               entityId: 'partition-1',
               entityType: EntityType.PARTITION,
               nodeId: 'node-1',
@@ -148,7 +120,7 @@ test('Property 4: Stabilization Waiting Before Moves', async (t) => {
     async (t) => {
       initializeTestEnvironment();
 
-      const rebalancer = new UnifiedRebalancer({
+      const rebalancer = createTestRebalancer({
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
@@ -185,13 +157,14 @@ test('Property 4: Stabilization Waiting Before Moves', async (t) => {
             status: 'active',
           }];
 
-          const mockCache = createMockCache(nodes, services);
+          const mockCache = createMockCache({nodes, services});
 
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
             systemTableCache: mockCache,
+            cacheData: {nodes, services},
           });
 
           rebalancer.initialize();
@@ -241,13 +214,11 @@ test('Property 4: Stabilization Waiting Before Moves', async (t) => {
       status: 'active',
     }];
 
-    const mockCache = createMockCache(nodes, services);
-
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-0',
-      systemTableCache: mockCache,
+      cacheData: {nodes, services},
     });
 
     rebalancer.initialize();
@@ -283,13 +254,11 @@ test('Property 4: Stabilization Waiting Before Moves', async (t) => {
         status: 'active',
       }];
 
-      const mockCache = createMockCache(nodes, services);
-
-      const rebalancer = new UnifiedRebalancer({
+      const rebalancer = createTestRebalancer({
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-0',
-        systemTableCache: mockCache,
+        cacheData: {nodes, services},
       });
 
       rebalancer.initialize();

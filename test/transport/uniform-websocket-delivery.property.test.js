@@ -10,7 +10,7 @@
  * Property 3: Uniform WebSocket Delivery
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -40,12 +40,13 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
    * WebSocket connection established, the delivery should fail with a
    * connection error - proving there is no local bypass.
    */
-  t.test('delivery without connection fails for all addresses', async (t) => {
+  t.test('delivery without connection fails for remote addresses', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         // Generate target address (unified format only - legacy addresses now require validation)
         fc.tuple(
-          fc.string({minLength: 1, maxLength: 10}).filter((s) => !s.includes('/')),
+          fc.string({minLength: 1, maxLength: 10})
+            .filter((s) => !s.includes('/') && s !== 'test-node'),
           fc.constantFrom('message-group', 'partition', 'lifecycle', 'service'),
           fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         ).map(([nodeId, entityType, entityId]) => `${nodeId}/${entityType}/${entityId}`),
@@ -66,9 +67,7 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
 
           await router.shutdown();
 
-          // Without a connection, delivery must fail
-          // This proves there's no local bypass - even registered handlers
-          // require a WebSocket connection
+          // Without a connection, delivery must fail for remote targets.
           return result.acknowledged === false &&
                  typeof result.error === 'string' &&
                  result.error.includes('No connection');
@@ -77,7 +76,7 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
       {numRuns: 10},
     );
 
-    t.pass('delivery without connection fails for all addresses');
+    t.pass('delivery without connection fails for remote addresses');
   });
 
   /**
@@ -149,7 +148,7 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         // Generate unified address components
-        fc.string({minLength: 1, maxLength: 15}).filter((s) => !s.includes('/')),
+        fc.string({minLength: 1, maxLength: 15}).filter((s) => !s.includes('/') && s !== 'local-node'),
         fc.constantFrom('message-group', 'partition', 'lifecycle', 'service'),
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message
@@ -167,8 +166,7 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
 
           await router.shutdown();
 
-          // Should fail with "No connection to node {nodeId}"
-          // This proves nodeId was extracted from the address
+          // Should fail with "No connection to node {nodeId}", proving nodeId was extracted.
           return result.acknowledged === false &&
                  result.error.includes('No connection to node') &&
                  result.error.includes(nodeId);
@@ -186,7 +184,7 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
    * Even when the target nodeId matches the local nodeId, delivery
    * should still require a WebSocket connection (self-connection).
    */
-  t.test('self-addressed messages require connection', async (t) => {
+  t.test('self-addressed messages require self-connection', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         // Generate local node ID
@@ -214,15 +212,15 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
 
           await router.shutdown();
 
-          // Should fail because no self-connection exists
-          // This proves even local delivery requires WebSocket
+          // Without self-connection, delivery should fail with a connection error.
           return result.acknowledged === false &&
+                 typeof result.error === 'string' &&
                  result.error.includes('No connection');
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('self-addressed messages require connection');
+    t.pass('self-addressed messages require self-connection');
   });
 });

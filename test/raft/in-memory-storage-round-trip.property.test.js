@@ -9,7 +9,7 @@
  * Property 1: In-Memory Storage Round-Trip
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
 

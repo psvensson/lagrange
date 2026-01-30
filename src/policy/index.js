@@ -4,9 +4,12 @@
 
 export {
   TablePolicyService,
-  DEFAULT_TABLE_POLICY,
-  PolicyFieldTypes,
 } from './table-policy-service.js';
+
+export {
+  DEFAULT_TABLE_POLICY,
+  POLICY_FIELD_TYPES as PolicyFieldTypes,
+} from './policy-constants.js';
 
 export {
   RaftRoleTracker,

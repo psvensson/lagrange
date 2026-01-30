@@ -12,78 +12,21 @@
  * Incomplete Operations
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
+import {
+  createMockCache,
+  createMockPolicyService,
+  createMockMessageRouter,
+} from './test-helpers.js';
 
 /**
- * Create a mock system table cache for testing.
- * @param {Object} options - Options for the mock.
- * @return {Object} Mock system table cache.
- */
-function createMockSystemTableCache(options = {}) {
-  const operations = options.operations || [];
-  const services = options.services || [];
-
-  return {
-    filter: (tableName, predicate) => {
-      if (tableName === SystemTableName.REPLICA_OPERATIONS) {
-        return operations.filter(predicate);
-      }
-      if (tableName === SystemTableName.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    get: (tableName, id) => {
-      if (tableName === SystemTableName.REPLICA_OPERATIONS) {
-        return operations.find((op) => op.operation_id === id) || null;
-      }
-      if (tableName === SystemTableName.SERVICES) {
-        return services.find((s) => s.service_id === id) || null;
-      }
-      return null;
-    },
-  };
-}
-
-/**
- * Create a mock CDC integration service for testing.
- * @return {Object} Mock CDC integration service.
- */
-function createMockCdcService() {
-  return {
-    updateSystemTableRow: async () => {},
-    insertSystemTableRow: async () => {},
-  };
-}
-
-/**
- * Create a RebalanceCoordinator for testing.
- * @param {Object} options - Options for the coordinator.
- * @return {RebalanceCoordinator} Coordinator instance.
- */
-function createTestCoordinator(options = {}) {
-  const coordinator = new RebalanceCoordinator({
-    nodeId: options.nodeId || 'test-node-1',
-    rpcClient: options.rpcClient || null,
-    systemTableCache: options.systemTableCache || null,
-    cdcIntegrationService: options.cdcIntegrationService || createMockCdcService(),
-  });
-
-  // Don't start timeout checking in tests
-  coordinator.timeoutCheckIntervalMs = 1000000;
-
-  return coordinator;
-}
-
-/**
- * Create a mock operation row for the system table cache.
+ * Create a mock operation row for the SQL engine.
  * @param {Object} params - Operation parameters.
  * @return {Object} Operation row.
  */
@@ -106,6 +49,161 @@ function createOperationRow(params) {
   };
 }
 
+/**
+ * Create a RebalanceCoordinator for recovery testing.
+ * @param {Object} options - Options for the coordinator.
+ * @return {Object} Coordinator and helper functions.
+ */
+function createRecoveryTestCoordinator(options = {}) {
+  const {
+    operations = [],
+    services = [],
+  } = options;
+
+  // Track operations in a map (simulating SQL storage)
+  const trackedOperations = new Map();
+  operations.forEach((op) => trackedOperations.set(op.operation_id, {...op}));
+
+  // Track services for replica status lookup
+  const trackedServices = new Map();
+  services.forEach((s) => trackedServices.set(s.service_id, {...s}));
+
+  // Mock CDC service
+  const cdcService = {
+    insertSystemTableRow: async () => ({success: true}),
+    updateSystemTableRow: async () => ({success: true}),
+  };
+
+  // SQL engine that handles operations and services queries
+  const sqlEngine = {
+    executeQuery: async (sql, params) => {
+      // Handle INSERT operations
+      if (sql.includes('INSERT INTO replica_operations')) {
+        const [
+          operationId, type, partitionId, replicaId, sourceNodeId, targetNodeId,
+          status, workflowStep, createdAt, updatedAt, completedAt, errorMessage,
+          stepsHistory,
+        ] = params;
+
+        trackedOperations.set(operationId, {
+          operation_id: operationId,
+          type,
+          partition_id: partitionId,
+          replica_id: replicaId,
+          source_node_id: sourceNodeId,
+          target_node_id: targetNodeId,
+          status,
+          workflow_step: workflowStep,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          completed_at: completedAt,
+          error_message: errorMessage,
+          steps_history: stepsHistory,
+        });
+        return {success: true};
+      }
+
+      // Handle UPDATE operations
+      if (sql.includes('UPDATE replica_operations')) {
+        const [
+          status, workflowStep, updatedAt, completedAt, errorMessage,
+          stepsHistory, replicaId, operationId,
+        ] = params;
+
+        const existing = trackedOperations.get(operationId);
+        if (existing) {
+          trackedOperations.set(operationId, {
+            ...existing,
+            status,
+            workflow_step: workflowStep,
+            updated_at: updatedAt,
+            completed_at: completedAt,
+            error_message: errorMessage,
+            steps_history: stepsHistory,
+            replica_id: replicaId,
+          });
+        }
+        return {success: true};
+      }
+
+      // Handle SELECT for services (replica status lookup)
+      if (sql.includes('services') && sql.includes('service_id = ?')) {
+        const [serviceId] = params;
+        const service = trackedServices.get(serviceId);
+        if (service) {
+          return {success: true, rows: [{status: service.status}]};
+        }
+        return {success: true, rows: []};
+      }
+
+      // Handle SELECT for services by partition/node
+      if (sql.includes('services') && sql.includes('partition_id = ?')) {
+        const [partitionId, nodeId] = params;
+        const matching = Array.from(trackedServices.values()).filter((s) =>
+          s.partition_id === partitionId && s.node_id === nodeId);
+        if (matching.length > 0) {
+          return {success: true, rows: [{status: matching[0].status}]};
+        }
+        return {success: true, rows: []};
+      }
+
+      // Handle SELECT for replica_operations
+      if (sql.includes('replica_operations')) {
+        const allOps = Array.from(trackedOperations.values());
+
+        // Handle operation by ID query
+        if (sql.includes('operation_id = ?')) {
+          const [operationId] = params;
+          const op = trackedOperations.get(operationId);
+          return {success: true, rows: op ? [op] : []};
+        }
+
+        // Handle deduplication query
+        if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
+          const [partitionId, targetNodeId] = params;
+          const matching = allOps.filter((op) =>
+            op.partition_id === partitionId &&
+            op.target_node_id === targetNodeId &&
+            !['active', 'removed', 'failed'].includes(op.status));
+          return {success: true, rows: matching};
+        }
+
+        // Filter for non-terminal operations
+        if (sql.includes('NOT IN')) {
+          const incompleteOps = allOps.filter((op) =>
+            !['active', 'removed', 'failed'].includes(op.status));
+          return {success: true, rows: incompleteOps};
+        }
+
+        return {success: true, rows: allOps};
+      }
+
+      return {success: true, rows: []};
+    },
+  };
+
+  const coordinator = new RebalanceCoordinator({
+    nodeId: options.nodeId || 'test-node-1',
+    systemTableCache: createMockCache(),
+    cdcIntegrationService: cdcService,
+    tablePolicyService: createMockPolicyService(),
+    messageRouter: createMockMessageRouter(),
+    sqlQueryEngine: sqlEngine,
+    enableTimeouts: false,
+  });
+
+  /**
+   * Get an operation from the tracked store.
+   * @param {string} operationId - Operation ID.
+   * @return {Object|null} Operation or null.
+   */
+  const getTrackedOperation = (operationId) => {
+    return trackedOperations.get(operationId) || null;
+  };
+
+  return {coordinator, getTrackedOperation, trackedOperations};
+}
+
 test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
   await t.test('operations in PENDING state are marked FAILED', async (t) => {
     await fc.assert(
@@ -122,20 +220,17 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             status: ReplicaStatus.PENDING,
           });
 
-          const systemTableCache = createMockSystemTableCache({
+          const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
             operations: [opRow],
           });
-
-          const coordinator = createTestCoordinator({systemTableCache});
 
           try {
             const result = await coordinator.handleRecovery();
 
-            // Verify operation was marked as failed
-            const operation = coordinator.getOperation(params.operationId);
+            const operation = getTrackedOperation(params.operationId);
             return operation !== null &&
               operation.status === ReplicaStatus.FAILED &&
-              operation.workflowStep === 'FAILED' &&
+              operation.workflow_step === 'FAILED' &&
               result.markedFailed === 1;
           } finally {
             await coordinator.shutdown();
@@ -163,19 +258,17 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             status: ReplicaStatus.PENDING,
           });
 
-          const systemTableCache = createMockSystemTableCache({
+          const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
             operations: [opRow],
           });
-
-          const coordinator = createTestCoordinator({systemTableCache});
 
           try {
             const result = await coordinator.handleRecovery();
 
-            const operation = coordinator.getOperation(params.operationId);
+            const operation = getTrackedOperation(params.operationId);
             return operation !== null &&
               operation.status === ReplicaStatus.FAILED &&
-              operation.workflowStep === 'FAILED' &&
+              operation.workflow_step === 'FAILED' &&
               result.markedFailed === 1;
           } finally {
             await coordinator.shutdown();
@@ -203,19 +296,17 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             status: ReplicaStatus.CREATING,
           });
 
-          const systemTableCache = createMockSystemTableCache({
+          const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
             operations: [opRow],
           });
-
-          const coordinator = createTestCoordinator({systemTableCache});
 
           try {
             const result = await coordinator.handleRecovery();
 
-            const operation = coordinator.getOperation(params.operationId);
+            const operation = getTrackedOperation(params.operationId);
             return operation !== null &&
               operation.status === ReplicaStatus.FAILED &&
-              operation.workflowStep === 'FAILED' &&
+              operation.workflow_step === 'FAILED' &&
               result.markedFailed === 1;
           } finally {
             await coordinator.shutdown();
@@ -245,19 +336,17 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             status: ReplicaStatus.REMOVING,
           });
 
-          const systemTableCache = createMockSystemTableCache({
+          const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
             operations: [opRow],
           });
-
-          const coordinator = createTestCoordinator({systemTableCache});
 
           try {
             const result = await coordinator.handleRecovery();
 
-            const operation = coordinator.getOperation(params.operationId);
+            const operation = getTrackedOperation(params.operationId);
             return operation !== null &&
               operation.status === ReplicaStatus.FAILED &&
-              operation.workflowStep === 'FAILED' &&
+              operation.workflow_step === 'FAILED' &&
               result.markedFailed === 1;
           } finally {
             await coordinator.shutdown();
@@ -286,7 +375,6 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             status: ReplicaStatus.SYNCING,
           });
 
-          // Create a service entry showing the replica is ACTIVE
           const serviceRow = {
             service_id: params.replicaId,
             partition_id: params.partitionId,
@@ -294,20 +382,18 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             status: ReplicaStatus.ACTIVE,
           };
 
-          const systemTableCache = createMockSystemTableCache({
+          const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
             operations: [opRow],
             services: [serviceRow],
           });
 
-          const coordinator = createTestCoordinator({systemTableCache});
-
           try {
             const result = await coordinator.handleRecovery();
 
-            const operation = coordinator.getOperation(params.operationId);
+            const operation = getTrackedOperation(params.operationId);
             return operation !== null &&
               operation.status === ReplicaStatus.ACTIVE &&
-              operation.workflowStep === 'ACTIVE' &&
+              operation.workflow_step === 'ACTIVE' &&
               result.reconciled === 1;
           } finally {
             await coordinator.shutdown();
@@ -336,7 +422,6 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             status: ReplicaStatus.SYNCING,
           });
 
-          // Create a service entry showing the replica FAILED
           const serviceRow = {
             service_id: params.replicaId,
             partition_id: params.partitionId,
@@ -344,20 +429,18 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             status: ReplicaStatus.FAILED,
           };
 
-          const systemTableCache = createMockSystemTableCache({
+          const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
             operations: [opRow],
             services: [serviceRow],
           });
 
-          const coordinator = createTestCoordinator({systemTableCache});
-
           try {
             const result = await coordinator.handleRecovery();
 
-            const operation = coordinator.getOperation(params.operationId);
+            const operation = getTrackedOperation(params.operationId);
             return operation !== null &&
               operation.status === ReplicaStatus.FAILED &&
-              operation.workflowStep === 'FAILED' &&
+              operation.workflow_step === 'FAILED' &&
               result.reconciled === 1;
           } finally {
             await coordinator.shutdown();
@@ -386,21 +469,18 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             status: ReplicaStatus.SYNCING,
           });
 
-          // No service entry - replica doesn't exist
-          const systemTableCache = createMockSystemTableCache({
+          const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
             operations: [opRow],
             services: [],
           });
 
-          const coordinator = createTestCoordinator({systemTableCache});
-
           try {
             const result = await coordinator.handleRecovery();
 
-            const operation = coordinator.getOperation(params.operationId);
+            const operation = getTrackedOperation(params.operationId);
             return operation !== null &&
               operation.status === ReplicaStatus.FAILED &&
-              operation.workflowStep === 'FAILED' &&
+              operation.workflow_step === 'FAILED' &&
               result.reconciled === 1;
           } finally {
             await coordinator.shutdown();
@@ -432,8 +512,9 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
       }),
     ];
 
-    const systemTableCache = createMockSystemTableCache({operations});
-    const coordinator = createTestCoordinator({systemTableCache});
+    const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
+      operations,
+    });
 
     try {
       const result = await coordinator.handleRecovery();
@@ -441,9 +522,8 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
       t.equal(result.totalIncomplete, 3, 'All 3 incomplete operations found');
       t.equal(result.markedFailed, 3, 'All 3 operations marked as failed');
 
-      // Verify each operation is failed
       for (const opRow of operations) {
-        const op = coordinator.getOperation(opRow.operation_id);
+        const op = getTrackedOperation(opRow.operation_id);
         t.equal(op.status, ReplicaStatus.FAILED,
           `Operation ${opRow.operation_id} is failed`);
       }
@@ -459,11 +539,10 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
       status: ReplicaStatus.PENDING,
     });
 
-    const systemTableCache = createMockSystemTableCache({
+    const {coordinator} = createRecoveryTestCoordinator({
       operations: [opRow],
     });
 
-    const coordinator = createTestCoordinator({systemTableCache});
     let eventEmitted = false;
     let eventResult = null;
 
@@ -484,11 +563,9 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
   });
 
   await t.test('recovery with no incomplete operations succeeds', async (t) => {
-    const systemTableCache = createMockSystemTableCache({
+    const {coordinator} = createRecoveryTestCoordinator({
       operations: [],
     });
-
-    const coordinator = createTestCoordinator({systemTableCache});
 
     try {
       const result = await coordinator.handleRecovery();
@@ -509,19 +586,17 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
       status: ReplicaStatus.CREATING,
     });
 
-    const systemTableCache = createMockSystemTableCache({
+    const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
       operations: [opRow],
     });
-
-    const coordinator = createTestCoordinator({systemTableCache});
 
     try {
       await coordinator.handleRecovery();
 
-      const operation = coordinator.getOperation('test-op');
-      t.ok(operation.errorMessage.includes('recovery'),
+      const operation = getTrackedOperation('test-op');
+      t.ok(operation.error_message.includes('recovery'),
         'Error message mentions recovery');
-      t.ok(operation.errorMessage.includes('incomplete'),
+      t.ok(operation.error_message.includes('incomplete'),
         'Error message mentions incomplete');
     } finally {
       await coordinator.shutdown();

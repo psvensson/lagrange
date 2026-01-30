@@ -3,7 +3,7 @@
  * Exports all bootstrap-related components.
  */
 
-export * from './system-table-schemas.js';
+export * from './system-table-schemas-constants.js';
 export * from './bootstrap-service.js';
 export * from './bootstrap-api.js';
 export * from './message-group-assignment.js';

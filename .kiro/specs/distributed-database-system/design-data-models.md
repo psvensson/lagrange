@@ -56,6 +56,7 @@ CREATE TABLE message_groups (
   group_id TEXT PRIMARY KEY,
   group_name TEXT UNIQUE NOT NULL,
   replica_count INTEGER NOT NULL DEFAULT 3,
+  leader_node_id TEXT,
   policy TEXT NOT NULL DEFAULT '{}', -- JSON: Message_Group_Policy
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL

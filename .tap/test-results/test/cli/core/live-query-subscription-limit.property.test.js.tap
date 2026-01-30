@@ -3,19 +3,21 @@ TAP version 14
     # Subtest: subscription fails when at maximum capacity
         ok 1 - Subscription limit is enforced correctly
         1..1
-    ok 1 - subscription fails when at maximum capacity # time=8.351ms
+    ok 1 - subscription fails when at maximum capacity # time=10.984ms
     
     # Subtest: isAtCapacity returns true when at limit
         ok 1 - isAtCapacity correctly reports capacity status
         1..1
-    ok 2 - isAtCapacity returns true when at limit # time=1.212ms
+    ok 2 - isAtCapacity returns true when at limit # time=1.113ms
     
     # Subtest: cancelling subscription allows new subscription
         ok 1 - Cancelling subscription frees up capacity
         1..1
-    ok 3 - cancelling subscription allows new subscription # time=1.045ms
+    ok 3 - cancelling subscription allows new subscription # time=1.139ms
     
     1..3
-ok 1 - Property 48: Live Query Subscription Limit # time=14.541ms
+ok 1 - Property 48: Live Query Subscription Limit # time=25.331ms
 
 1..1
+# { total: 3, pass: 3 }
+# time=46.105ms

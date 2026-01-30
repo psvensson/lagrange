@@ -8,7 +8,7 @@
  * ReplicaLifecycleManager method and the ACK SHALL be returned.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {EventEmitter} from 'events';
 import {
@@ -18,6 +18,65 @@ import {
 } from '../../src/node/replica-lifecycle-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+/**
+ * Create a mock system table cache.
+ * @return {Object} Mock system table cache.
+ */
+function createMockSystemTableCache() {
+  return {
+    filter: (_tableName, _predicate) => [],
+    get: (_tableName, _key) => null,
+    set: (_tableName, _key, _value) => {},
+  };
+}
+
+/**
+ * Create a mock CDC integration service.
+ * @return {Object} Mock CDC service.
+ */
+function createMockCDCService() {
+  const operations = [];
+  return {
+    operations,
+    async insertSystemTableRow(_tableName, _data) {
+      operations.push({type: 'insert'});
+      return {success: true};
+    },
+    async updateSystemTableRow(_tableName, _whereClause, _data) {
+      operations.push({type: 'update'});
+      return {success: true};
+    },
+    async deleteSystemTableRow(_tableName, _whereClause) {
+      operations.push({type: 'delete'});
+      return {success: true};
+    },
+    reset() {
+      operations.length = 0;
+    },
+  };
+}
+
+/**
+ * Create a mock partition service factory.
+ * @return {Object} Factory and tracking.
+ */
+function createMockPartitionServiceFactory() {
+  const createdServices = [];
+  return {
+    factory: async (options) => {
+      createdServices.push(options);
+      return {
+        partitionId: options.partitionId,
+        replicaId: options.replicaId,
+        initialized: true,
+        async shutdown() {},
+        async syncFromLeader() {},
+      };
+    },
+    createdServices,
+  };
+}
 
 /**
  * Create a lifecycle handler function that delegates to ReplicaLifecycleManager.
@@ -79,10 +138,16 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
         async (requestId, partitionId, replicaId, tableName) => {
           const nodeId = 'test-node';
           const messageGroupService = new EventEmitter();
+          const mockCache = createMockSystemTableCache();
+          const mockCDC = createMockCDCService();
+          const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             dataDir: '/tmp/test-lifecycle',
+            systemTableCache: mockCache,
+            cdcIntegrationService: mockCDC,
+            createPartitionService: factory,
           });
           manager.initialize();
 
@@ -143,10 +208,16 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
         async (requestId, partitionId, replicaId, tableName) => {
           const nodeId = 'test-node';
           const messageGroupService = new EventEmitter();
+          const mockCache = createMockSystemTableCache();
+          const mockCDC = createMockCDCService();
+          const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             dataDir: '/tmp/test-lifecycle',
+            systemTableCache: mockCache,
+            cdcIntegrationService: mockCDC,
+            createPartitionService: factory,
           });
           manager.initialize();
 
@@ -213,10 +284,16 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
         async (requestId, partitionId, replicaId) => {
           const nodeId = 'test-node';
           const messageGroupService = new EventEmitter();
+          const mockCache = createMockSystemTableCache();
+          const mockCDC = createMockCDCService();
+          const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             dataDir: '/tmp/test-lifecycle',
+            systemTableCache: mockCache,
+            cdcIntegrationService: mockCDC,
+            createPartitionService: factory,
           });
           manager.initialize();
 
@@ -272,10 +349,16 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
         async (unknownType, requestId) => {
           const nodeId = 'test-node';
           const messageGroupService = new EventEmitter();
+          const mockCache = createMockSystemTableCache();
+          const mockCDC = createMockCDCService();
+          const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             dataDir: '/tmp/test-lifecycle',
+            systemTableCache: mockCache,
+            cdcIntegrationService: mockCDC,
+            createPartitionService: factory,
           });
           manager.initialize();
 
@@ -314,10 +397,16 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
         async (requestId, partitionId, replicaId, tableName) => {
           const nodeId = 'test-node';
           const messageGroupService = new EventEmitter();
+          const mockCache = createMockSystemTableCache();
+          const mockCDC = createMockCDCService();
+          const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             dataDir: '/tmp/test-lifecycle',
+            systemTableCache: mockCache,
+            cdcIntegrationService: mockCDC,
+            createPartitionService: factory,
           });
           manager.initialize();
 

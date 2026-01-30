@@ -11,75 +11,19 @@
  * Replicas After Recovery
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
-
-/**
- * Create a mock system table cache for testing.
- * @param {Object} options - Options for the mock.
- * @return {Object} Mock system table cache.
- */
-function createMockSystemTableCache(options = {}) {
-  const operations = options.operations || [];
-  const services = options.services || [];
-
-  return {
-    filter: (tableName, predicate) => {
-      if (tableName === SystemTableName.REPLICA_OPERATIONS) {
-        return operations.filter(predicate);
-      }
-      if (tableName === SystemTableName.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    get: (tableName, id) => {
-      if (tableName === SystemTableName.REPLICA_OPERATIONS) {
-        return operations.find((op) => op.operation_id === id) || null;
-      }
-      if (tableName === SystemTableName.SERVICES) {
-        return services.find((s) => s.service_id === id) || null;
-      }
-      return null;
-    },
-  };
-}
-
-/**
- * Create a mock CDC integration service for testing.
- * @return {Object} Mock CDC integration service.
- */
-function createMockCdcService() {
-  return {
-    updateSystemTableRow: async () => {},
-    insertSystemTableRow: async () => {},
-  };
-}
-
-/**
- * Create a RebalanceCoordinator for testing.
- * @param {Object} options - Options for the coordinator.
- * @return {RebalanceCoordinator} Coordinator instance.
- */
-function createTestCoordinator(options = {}) {
-  const coordinator = new RebalanceCoordinator({
-    nodeId: options.nodeId || 'test-node-1',
-    rpcClient: options.rpcClient || null,
-    systemTableCache: options.systemTableCache || null,
-    cdcIntegrationService: options.cdcIntegrationService || createMockCdcService(),
-  });
-
-  // Don't start timeout checking in tests
-  coordinator.timeoutCheckIntervalMs = 1000000;
-
-  return coordinator;
-}
+import {
+  createMockCache,
+  createMockCdcService,
+  createMockPolicyService,
+  createMockMessageRouter,
+} from './test-helpers.js';
+import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 
 /**
  * Create a mock operation row for the system table cache.
@@ -101,19 +45,133 @@ function createOperationRow(params) {
     updated_at: params.updatedAt || now,
     completed_at: params.completedAt || null,
     error_message: params.errorMessage || null,
-    steps_history: params.stepsHistory || JSON.stringify([{step: 'PENDING', timestamp: now}]),
+    steps_history: params.stepsHistory ||
+      JSON.stringify([{step: 'PENDING', timestamp: now}]),
   };
 }
 
 /**
- * Transitional states that indicate a replica is not fully operational.
+ * Create a coordinator with custom SQL query results for recovery testing.
+ * Tracks operations in memory to simulate SQL engine behavior.
+ * @param {Object} options - Options including operations and services.
+ * @return {Object} Coordinator instance and tracked operations map.
  */
-const TRANSITIONAL_STATES = [
-  ReplicaStatus.PENDING,
-  ReplicaStatus.CREATING,
-  ReplicaStatus.SYNCING,
-  ReplicaStatus.REMOVING,
-];
+function createRecoveryTestCoordinator(options = {}) {
+  const {operations = [], services = []} = options;
+
+  // Track operations in memory (simulates SQL engine storage)
+  const trackedOperations = new Map();
+
+  // Initialize with provided operations
+  for (const op of operations) {
+    trackedOperations.set(op.operation_id, {...op});
+  }
+
+  // SQL engine that tracks operations via INSERT/UPDATE queries
+  const sqlQueryEngine = {
+    executeQuery: async (sql, params) => {
+      // Handle INSERT operations
+      if (sql.includes('INSERT INTO replica_operations')) {
+        const [
+          operationId, type, partitionId, replicaId, sourceNodeId, targetNodeId,
+          status, workflowStep, createdAt, updatedAt, completedAt, errorMessage,
+          stepsHistory,
+        ] = params;
+
+        trackedOperations.set(operationId, {
+          operation_id: operationId,
+          type,
+          partition_id: partitionId,
+          replica_id: replicaId,
+          source_node_id: sourceNodeId,
+          target_node_id: targetNodeId,
+          status,
+          workflow_step: workflowStep,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          completed_at: completedAt,
+          error_message: errorMessage,
+          steps_history: stepsHistory,
+        });
+        return {success: true};
+      }
+
+      // Handle UPDATE operations
+      if (sql.includes('UPDATE replica_operations')) {
+        const [
+          status, workflowStep, updatedAt, completedAt, errorMessage,
+          stepsHistory, replicaId, operationId,
+        ] = params;
+
+        const existing = trackedOperations.get(operationId);
+        if (existing) {
+          trackedOperations.set(operationId, {
+            ...existing,
+            status,
+            workflow_step: workflowStep,
+            updated_at: updatedAt,
+            completed_at: completedAt,
+            error_message: errorMessage,
+            steps_history: stepsHistory,
+            replica_id: replicaId,
+          });
+        }
+        return {success: true};
+      }
+
+      // Handle SELECT by operation_id
+      if (sql.includes('WHERE operation_id = ?')) {
+        const [operationId] = params;
+        const op = trackedOperations.get(operationId);
+        return {success: true, rows: op ? [op] : []};
+      }
+
+      // Handle SELECT incomplete operations (for recovery)
+      if (sql.includes('replica_operations') && sql.includes('NOT IN')) {
+        const allOps = Array.from(trackedOperations.values());
+        const incompleteOps = allOps.filter((op) =>
+          !['active', 'removed', 'failed'].includes(op.status));
+        return {success: true, rows: incompleteOps};
+      }
+
+      // Handle SELECT all operations
+      if (sql.includes('SELECT * FROM replica_operations') &&
+          sql.includes('ORDER BY')) {
+        return {success: true, rows: Array.from(trackedOperations.values())};
+      }
+
+      // Handle SELECT services (for reconciliation)
+      if (sql.includes('services') && sql.includes('service_id = ?')) {
+        const [serviceId] = params;
+        const service = services.find((s) => s.service_id === serviceId);
+        return {success: true, rows: service ? [service] : []};
+      }
+
+      // Handle SELECT services by partition and node
+      if (sql.includes('services') && sql.includes('partition_id = ?') &&
+          sql.includes('node_id = ?')) {
+        const [partitionId, nodeId] = params;
+        const service = services.find((s) =>
+          s.partition_id === partitionId && s.node_id === nodeId);
+        return {success: true, rows: service ? [service] : []};
+      }
+
+      return {success: true, rows: []};
+    },
+  };
+
+  const coordinator = new RebalanceCoordinator({
+    nodeId: options.nodeId || 'test-node-1',
+    systemTableCache: createMockCache(),
+    cdcIntegrationService: createMockCdcService(),
+    tablePolicyService: createMockPolicyService(),
+    messageRouter: createMockMessageRouter(),
+    sqlQueryEngine,
+    enableTimeouts: false,
+  });
+
+  return {coordinator, trackedOperations};
+}
 
 /**
  * Terminal states that indicate a replica operation is complete.
@@ -144,19 +202,19 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
               ReplicaStatus.CREATING : ReplicaStatus.PENDING,
           }));
 
-          const systemTableCache = createMockSystemTableCache({operations});
-          const coordinator = createTestCoordinator({systemTableCache});
+          const {coordinator, trackedOperations} =
+            createRecoveryTestCoordinator({operations});
 
           try {
             await coordinator.handleRecovery();
 
             // After recovery, all operations should be in terminal state
             for (const opRow of operations) {
-              const op = coordinator.getOperation(opRow.operation_id);
-              if (!op) {
+              const tracked = trackedOperations.get(opRow.operation_id);
+              if (!tracked) {
                 return false; // Operation should be tracked
               }
-              if (!TERMINAL_STATES.includes(op.status)) {
+              if (!TERMINAL_STATES.includes(tracked.status)) {
                 return false; // Should be in terminal state
               }
             }
@@ -204,23 +262,21 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
             status: params.actualReplicaStatus,
           }] : [];
 
-          const systemTableCache = createMockSystemTableCache({
+          const {coordinator, trackedOperations} = createRecoveryTestCoordinator({
             operations: [opRow],
             services,
           });
 
-          const coordinator = createTestCoordinator({systemTableCache});
-
           try {
             await coordinator.handleRecovery();
 
-            const op = coordinator.getOperation(params.operationId);
-            if (!op) {
+            const tracked = trackedOperations.get(params.operationId);
+            if (!tracked) {
               return false;
             }
 
             // Operation should be in terminal state after reconciliation
-            return TERMINAL_STATES.includes(op.status);
+            return TERMINAL_STATES.includes(tracked.status);
           } finally {
             await coordinator.shutdown();
           }
@@ -266,20 +322,17 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
             return createOperationRow({...params, status});
           });
 
-          const systemTableCache = createMockSystemTableCache({
+          const {coordinator, trackedOperations} = createRecoveryTestCoordinator({
             operations,
             services: [], // No actual replicas
           });
-
-          const coordinator = createTestCoordinator({systemTableCache});
 
           try {
             await coordinator.handleRecovery();
 
             // Check no operations are in transitional state
-            const allOps = coordinator.getAllOperations();
-            for (const op of allOps) {
-              if (TRANSITIONAL_STATES.includes(op.status)) {
+            for (const op of trackedOperations.values()) {
+              if (!TERMINAL_STATES.includes(op.status)) {
                 return false; // Found transitional state - fail
               }
             }
@@ -318,11 +371,13 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
     // Syncing replica is actually active
     const services = [{
       service_id: 'replica-syncing',
+      partition_id: 'test-partition',
+      node_id: 'target-node',
       status: ReplicaStatus.ACTIVE,
     }];
 
-    const systemTableCache = createMockSystemTableCache({operations, services});
-    const coordinator = createTestCoordinator({systemTableCache});
+    const {coordinator, trackedOperations} =
+      createRecoveryTestCoordinator({operations, services});
 
     try {
       const result = await coordinator.handleRecovery();
@@ -333,10 +388,10 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
       t.equal(result.markedFailed, 2, 'Marked failed is 2');
       t.equal(result.reconciled, 1, 'Reconciled is 1');
 
-      // Verify actual states
-      const opPending = coordinator.getOperation('op-pending');
-      const opCreating = coordinator.getOperation('op-creating');
-      const opSyncing = coordinator.getOperation('op-syncing');
+      // Verify actual states from tracked operations
+      const opPending = trackedOperations.get('op-pending');
+      const opCreating = trackedOperations.get('op-creating');
+      const opSyncing = trackedOperations.get('op-syncing');
 
       t.equal(opPending.status, ReplicaStatus.FAILED, 'PENDING op is FAILED');
       t.equal(opCreating.status, ReplicaStatus.FAILED, 'CREATING op is FAILED');
@@ -364,20 +419,20 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
             status: ReplicaStatus.PENDING,
           }));
 
-          const systemTableCache = createMockSystemTableCache({operations});
-          const coordinator = createTestCoordinator({systemTableCache});
+          const {coordinator, trackedOperations} =
+            createRecoveryTestCoordinator({operations});
 
           try {
-            // Before recovery, no operations in memory
-            const beforeCount = coordinator.getAllOperations().length;
-            if (beforeCount !== 0) {
+            // Before recovery, operations are already in trackedOperations
+            const beforeCount = trackedOperations.size;
+            if (beforeCount !== operations.length) {
               return false;
             }
 
             await coordinator.handleRecovery();
 
-            // After recovery, all operations should be in memory
-            const afterCount = coordinator.getAllOperations().length;
+            // After recovery, all operations should still be tracked
+            const afterCount = trackedOperations.size;
             return afterCount === operations.length;
           } finally {
             await coordinator.shutdown();
@@ -407,20 +462,18 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
             status: ReplicaStatus.REMOVING,
           });
 
-          const systemTableCache = createMockSystemTableCache({
+          const {coordinator, trackedOperations} = createRecoveryTestCoordinator({
             operations: [opRow],
           });
-
-          const coordinator = createTestCoordinator({systemTableCache});
 
           try {
             await coordinator.handleRecovery();
 
-            const op = coordinator.getOperation(params.operationId);
+            const tracked = trackedOperations.get(params.operationId);
             // STOPPING operations should be marked as FAILED
-            return op !== null &&
-              op.status === ReplicaStatus.FAILED &&
-              op.workflowStep === 'FAILED';
+            return tracked !== null &&
+              tracked.status === ReplicaStatus.FAILED &&
+              tracked.workflow_step === 'FAILED';
           } finally {
             await coordinator.shutdown();
           }
@@ -433,19 +486,10 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
   });
 
   await t.test('completed operations are not affected by recovery', async (t) => {
-    const completedOp = createOperationRow({
-      operationId: 'completed-op',
-      workflowStep: 'ACTIVE',
-      status: ReplicaStatus.ACTIVE,
-      completedAt: Date.now(),
-    });
-
-    // This operation is already complete, so it won't be in the incomplete list
-    const systemTableCache = createMockSystemTableCache({
+    // No incomplete operations - completed ones won't be returned by query
+    const {coordinator} = createRecoveryTestCoordinator({
       operations: [], // No incomplete operations
     });
-
-    const coordinator = createTestCoordinator({systemTableCache});
 
     try {
       const result = await coordinator.handleRecovery();
@@ -459,20 +503,10 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
   });
 
   await t.test('failed operations are not reprocessed', async (t) => {
-    const failedOp = createOperationRow({
-      operationId: 'failed-op',
-      workflowStep: 'FAILED',
-      status: ReplicaStatus.FAILED,
-      completedAt: Date.now(),
-      errorMessage: 'Previous failure',
-    });
-
     // Failed operations are terminal, so they won't be in incomplete list
-    const systemTableCache = createMockSystemTableCache({
+    const {coordinator} = createRecoveryTestCoordinator({
       operations: [], // No incomplete operations
     });
-
-    const coordinator = createTestCoordinator({systemTableCache});
 
     try {
       const result = await coordinator.handleRecovery();
@@ -500,8 +534,8 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
       }),
     ];
 
-    const systemTableCache = createMockSystemTableCache({operations});
-    const coordinator = createTestCoordinator({systemTableCache});
+    const {coordinator, trackedOperations} =
+      createRecoveryTestCoordinator({operations});
 
     try {
       const result = await coordinator.handleRecovery();
@@ -509,8 +543,8 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
       t.equal(result.totalIncomplete, 2, 'Both operations found');
       t.equal(result.markedFailed, 2, 'Both operations marked failed');
 
-      const addOp = coordinator.getOperation('add-op');
-      const removeOp = coordinator.getOperation('remove-op');
+      const addOp = trackedOperations.get('add-op');
+      const removeOp = trackedOperations.get('remove-op');
 
       t.equal(addOp.status, ReplicaStatus.FAILED, 'ADD op is FAILED');
       t.equal(removeOp.status, ReplicaStatus.FAILED, 'REMOVE op is FAILED');

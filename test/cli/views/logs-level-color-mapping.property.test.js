@@ -7,7 +7,7 @@
  * **Validates: Requirements 29.8**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {LogsView, LOG_LEVELS, LOG_LEVEL_COLORS} from
   '../../../src/cli/views/logs-view.js';

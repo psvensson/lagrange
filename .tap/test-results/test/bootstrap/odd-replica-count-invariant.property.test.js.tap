@@ -25,44 +25,46 @@ TAP version 14
     ok 23 - System table replica_operations has odd replica count: 3
     ok 24 - System table replica_operations has at least 3 replicas: 3
     1..24
-ok 1 - Property 33: All system table partitions have odd replica counts # time=8.616ms
+ok 1 - Property 33: All system table partitions have odd replica counts # time=7.451ms
 
 # Subtest: Property 33: Initial message group has odd replica count
     ok 1 - Initial message group has odd replica count: 3
     ok 2 - Initial message group has at least 3 replicas: 3
     1..2
-ok 2 - Property 33: Initial message group has odd replica count # time=0.861ms
+ok 2 - Property 33: Initial message group has odd replica count # time=0.715ms
 
 # Subtest: Property 33: Default partition replica count is odd
     ok 1 - Default partition replica count is odd: 3
     ok 2 - Default partition replica count is at least 3: 3
     1..2
-ok 3 - Property 33: Default partition replica count is odd # time=0.468ms
+ok 3 - Property 33: Default partition replica count is odd # time=0.538ms
 
 # Subtest: Property 33: Default message group replica count is odd
     ok 1 - Default message group replica count is odd: 3
     ok 2 - Default message group replica count is at least 3: 3
     1..2
-ok 4 - Property 33: Default message group replica count is odd # time=0.493ms
+ok 4 - Property 33: Default message group replica count is odd # time=0.379ms
 
 # Subtest: Property 33: Valid replica counts are always odd
     ok 1 - Valid replica counts are always odd
     1..1
-ok 5 - Property 33: Valid replica counts are always odd # time=2.178ms
+ok 5 - Property 33: Valid replica counts are always odd # time=1.91ms
 
 # Subtest: Property 33: Replica count growth maintains odd invariant
     ok 1 - Replica count growth maintains odd invariant
     1..1
-ok 6 - Property 33: Replica count growth maintains odd invariant # time=0.704ms
+ok 6 - Property 33: Replica count growth maintains odd invariant # time=1.178ms
 
 # Subtest: Property 33: Replica count shrink maintains odd invariant
     ok 1 - Replica count shrink maintains odd invariant
     1..1
-ok 7 - Property 33: Replica count shrink maintains odd invariant # time=0.705ms
+ok 7 - Property 33: Replica count shrink maintains odd invariant # time=0.853ms
 
 # Subtest: Property 33: Quorum calculation requires odd replica count
     ok 1 - Quorum calculation requires odd replica count
     1..1
-ok 8 - Property 33: Quorum calculation requires odd replica count # time=0.48ms
+ok 8 - Property 33: Quorum calculation requires odd replica count # time=0.614ms
 
 1..8
+# { total: 34, pass: 34 }
+# time=252.987ms

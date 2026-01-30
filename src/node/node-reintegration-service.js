@@ -7,27 +7,23 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {NUM} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  NODE_REINTEGRATION_DEFAULT,
+  NODE_REINTEGRATION_ERROR_MSG,
+  NODE_REINTEGRATION_EVENT,
+  NODE_REINTEGRATION_LOG_MSG,
+  NODE_REINTEGRATION_REASON,
+  NODE_REINTEGRATION_STATUS,
+  NODE_REINTEGRATION_SUBSYSTEM,
+  NODE_STATUS,
+} from './node-constants.js';
 
-/**
- * Node status values.
- */
-const NodeStatus = {
-  ACTIVE: 'active',
-  SUSPECTED: 'suspected',
-  FAILED: 'failed',
-  RECOVERING: 'recovering',
-};
-
-/**
- * Reintegration status values.
- */
-const ReintegrationStatus = {
-  PENDING: 'pending',
-  IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-};
+const NodeStatus = NODE_STATUS;
+const ReintegrationStatus = NODE_REINTEGRATION_STATUS;
 
 /**
  * NodeReintegrationService monitors for recovering nodes and reintegrates them.
@@ -51,24 +47,29 @@ class NodeReintegrationService extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.checkIntervalMs = config.get('nodeReintegration.checkIntervalMs') || 10000;
+    this.checkIntervalMs =
+      config.get(CONFIG_KEY.NODE_REINTEGRATION_CHECK_INTERVAL_MS) ||
+      NODE_REINTEGRATION_DEFAULT.CHECK_INTERVAL_MS;
     this.reintegrationDelayMs =
-      config.get('nodeReintegration.reintegrationDelayMs') || 5000;
+      config.get(CONFIG_KEY.NODE_REINTEGRATION_DELAY_MS) ||
+      NODE_REINTEGRATION_DEFAULT.REINTEGRATION_DELAY_MS;
     this.healthCheckCount =
-      config.get('nodeReintegration.healthCheckCount') || 3;
+      config.get(CONFIG_KEY.NODE_REINTEGRATION_HEALTH_CHECK_COUNT) ||
+      NODE_REINTEGRATION_DEFAULT.HEALTH_CHECK_COUNT;
     this.healthCheckIntervalMs =
-      config.get('nodeReintegration.healthCheckIntervalMs') || 2000;
+      config.get(CONFIG_KEY.NODE_REINTEGRATION_HEALTH_CHECK_INTERVAL_MS) ||
+      NODE_REINTEGRATION_DEFAULT.HEALTH_CHECK_INTERVAL_MS;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('node-reintegration') : console;
+      loggingService.forSubsystem(NODE_REINTEGRATION_SUBSYSTEM) : console;
 
     // State
     this.checkTimer = null;
     this.pendingReintegrations = new Map(); // nodeId -> reintegration info
     this.cleanupTimers = new Map(); // nodeId -> cleanup timer
-    this.reintegrationCount = 0;
+    this.reintegrationCount = NUM.ZERO;
 
     this.initialized = false;
   }
@@ -89,12 +90,20 @@ class NodeReintegrationService extends EventEmitter {
     }
 
     if (!this.nodeId) {
-      throw new Error('NodeReintegrationService requires nodeId');
+      throw new Error(NODE_REINTEGRATION_ERROR_MSG.MISSING_NODE_ID);
     }
+    this.systemTableCache = assertCritical(
+      this.systemTableCache,
+      NODE_REINTEGRATION_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
+    this.cdcIntegrationService = assertCritical(
+      this.cdcIntegrationService,
+      NODE_REINTEGRATION_ERROR_MSG.MISSING_CDC_SERVICE,
+    );
 
     this.initialized = true;
 
-    this.logger.info('Node reintegration service initialized', {
+    this.logger.info(NODE_REINTEGRATION_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
       checkIntervalMs: this.checkIntervalMs,
       healthCheckCount: this.healthCheckCount,
@@ -106,14 +115,14 @@ class NodeReintegrationService extends EventEmitter {
    */
   start() {
     if (!this.initialized) {
-      throw new Error('NodeReintegrationService not initialized');
+      throw new Error(NODE_REINTEGRATION_ERROR_MSG.NOT_INITIALIZED);
     }
 
     if (this.checkTimer) {
       return; // Already running
     }
 
-    this.logger.info('Starting node reintegration monitoring', {
+    this.logger.info(NODE_REINTEGRATION_LOG_MSG.STARTING_MONITORING, {
       nodeId: this.nodeId,
       intervalMs: this.checkIntervalMs,
     });
@@ -122,7 +131,10 @@ class NodeReintegrationService extends EventEmitter {
       try {
         await this.checkRecoveringNodes();
       } catch (error) {
-        this.logger.error('Error during node reintegration check', {
+        if (error?.isCritical) {
+          throw error;
+        }
+        this.logger.error(NODE_REINTEGRATION_LOG_MSG.CHECK_ERROR, {
           nodeId: this.nodeId,
           error: error.message,
         });
@@ -139,7 +151,7 @@ class NodeReintegrationService extends EventEmitter {
       this.checkTimer = null;
     }
 
-    this.logger.info('Stopped node reintegration monitoring', {
+    this.logger.info(NODE_REINTEGRATION_LOG_MSG.STOPPED_MONITORING, {
       nodeId: this.nodeId,
     });
   }
@@ -158,9 +170,9 @@ class NodeReintegrationService extends EventEmitter {
       }
 
       // Process recovering nodes
-      if (node.status === NodeStatus.RECOVERING) {
-        await this.processRecoveringNode(node);
-      }
+    if (node.status === NODE_STATUS.RECOVERING) {
+      await this.processRecoveringNode(node);
+    }
     }
   }
 
@@ -182,7 +194,7 @@ class NodeReintegrationService extends EventEmitter {
     }
 
     // Start reintegration process
-    this.logger.info('Starting node reintegration', {
+    this.logger.info(NODE_REINTEGRATION_LOG_MSG.STARTING_REINTEGRATION, {
       nodeId,
       recoveredAt: node.recovered_at,
     });
@@ -191,7 +203,7 @@ class NodeReintegrationService extends EventEmitter {
       nodeId,
       status: ReintegrationStatus.IN_PROGRESS,
       startedAt: Date.now(),
-      healthChecks: 0,
+      healthChecks: NUM.ZERO,
     });
 
     try {
@@ -201,7 +213,7 @@ class NodeReintegrationService extends EventEmitter {
       if (isHealthy) {
         await this.completeReintegration(node);
       } else {
-        await this.failReintegration(node, 'health_check_failed');
+        await this.failReintegration(node, NODE_REINTEGRATION_REASON.HEALTH_CHECK_FAILED);
       }
     } catch (error) {
       await this.failReintegration(node, error.message);
@@ -216,38 +228,38 @@ class NodeReintegrationService extends EventEmitter {
    */
   async verifyNodeHealth(node) {
     const nodeId = node.node_id;
-    let successfulChecks = 0;
+    let successfulChecks = NUM.ZERO;
 
-    for (let i = 0; i < this.healthCheckCount; i++) {
+    for (let i = NUM.ZERO; i < this.healthCheckCount; i += NUM.ONE) {
       // Wait between checks
-      if (i > 0) {
+      if (i > NUM.ZERO) {
         await this.sleep(this.healthCheckIntervalMs);
       }
 
       // Check if node is still sending heartbeats
       const currentNode = this.getNode(nodeId);
       if (!currentNode) {
-        this.logger.warn('Node not found during health check', {nodeId});
+        this.logger.warn(NODE_REINTEGRATION_LOG_MSG.NODE_NOT_FOUND, {nodeId});
         return false;
       }
 
       const now = Date.now();
-      const lastHeartbeat = currentNode.last_heartbeat || 0;
+      const lastHeartbeat = currentNode.last_heartbeat || NUM.ZERO;
       const timeSinceHeartbeat = now - lastHeartbeat;
 
       // Consider healthy if heartbeat within last 10 seconds
-      if (timeSinceHeartbeat < 10000) {
-        successfulChecks++;
-        this.logger.debug('Node health check passed', {
+      if (timeSinceHeartbeat < NODE_REINTEGRATION_DEFAULT.HEALTHY_HEARTBEAT_WINDOW_MS) {
+        successfulChecks += NUM.ONE;
+        this.logger.debug(NODE_REINTEGRATION_LOG_MSG.HEALTH_CHECK_PASSED, {
           nodeId,
-          check: i + 1,
+          check: i + NUM.ONE,
           total: this.healthCheckCount,
           timeSinceHeartbeat,
         });
       } else {
-        this.logger.warn('Node health check failed', {
+        this.logger.warn(NODE_REINTEGRATION_LOG_MSG.HEALTH_CHECK_FAILED, {
           nodeId,
-          check: i + 1,
+          check: i + NUM.ONE,
           total: this.healthCheckCount,
           timeSinceHeartbeat,
         });
@@ -274,30 +286,28 @@ class NodeReintegrationService extends EventEmitter {
     const nodeId = node.node_id;
     const now = Date.now();
 
-    this.logger.info('Completing node reintegration', {
+    this.logger.info(NODE_REINTEGRATION_LOG_MSG.COMPLETING_REINTEGRATION, {
       nodeId,
       downtime: now - (node.failed_at || node.recovered_at || now),
     });
 
     // Mark node as active
-    if (this.cdcIntegrationService) {
-      try {
-        await this.cdcIntegrationService.updateSystemTableRow(
-          SystemTableName.NODES,
-          {node_id: nodeId},
-          {
-            status: NodeStatus.ACTIVE,
-            reintegrated_at: now,
-            updated_at: now,
-          },
-        );
-      } catch (error) {
-        this.logger.error('Failed to mark node as active', {
-          nodeId,
-          error: error.message,
-        });
-        throw error;
-      }
+    try {
+      await this.cdcIntegrationService.updateSystemTableRow(
+        SystemTableName.NODES,
+        {node_id: nodeId},
+        {
+          status: NodeStatus.ACTIVE,
+          reintegrated_at: now,
+          updated_at: now,
+        },
+      );
+    } catch (error) {
+      this.logger.error(NODE_REINTEGRATION_LOG_MSG.MARK_NODE_ACTIVE_FAILED, {
+        nodeId,
+        error: error.message,
+      });
+      throw error;
     }
 
     // Update pending reintegration status
@@ -307,31 +317,31 @@ class NodeReintegrationService extends EventEmitter {
       pending.completedAt = now;
     }
 
-    this.reintegrationCount++;
+    this.reintegrationCount += NUM.ONE;
 
     // Emit events
-    this.emit('nodeReintegrated', {
+    this.emit(NODE_REINTEGRATION_EVENT.NODE_REINTEGRATED, {
       nodeId,
       timestamp: now,
     });
 
     // Trigger rebalancing
-    this.emit('triggerRebalancing', {
+    this.emit(NODE_REINTEGRATION_EVENT.TRIGGER_REBALANCING, {
       nodeId,
-      reason: 'node_reintegration',
+      reason: NODE_REINTEGRATION_REASON.NODE_REINTEGRATION,
       timestamp: now,
     });
 
-    this.logger.info('Node reintegration completed', {
+    this.logger.info(NODE_REINTEGRATION_LOG_MSG.REINTEGRATION_COMPLETED, {
       nodeId,
-      message: 'Rebalancer will gradually restore replicas to this node',
+      message: NODE_REINTEGRATION_LOG_MSG.REBALANCER_NOTICE,
     });
 
     // Clean up pending reintegration after a delay
     const cleanupTimer = setTimeout(() => {
       this.pendingReintegrations.delete(nodeId);
       this.cleanupTimers.delete(nodeId);
-    }, 60000);
+    }, NODE_REINTEGRATION_DEFAULT.CLEANUP_DELAY_MS);
     this.cleanupTimers.set(nodeId, cleanupTimer);
   }
 
@@ -345,7 +355,7 @@ class NodeReintegrationService extends EventEmitter {
   async failReintegration(node, reason) {
     const nodeId = node.node_id;
 
-    this.logger.error('Node reintegration failed', {
+    this.logger.error(NODE_REINTEGRATION_LOG_MSG.REINTEGRATION_FAILED, {
       nodeId,
       reason,
     });
@@ -353,13 +363,13 @@ class NodeReintegrationService extends EventEmitter {
     // Update pending reintegration status
     const pending = this.pendingReintegrations.get(nodeId);
     if (pending) {
-      pending.status = ReintegrationStatus.FAILED;
+      pending.status = NODE_REINTEGRATION_STATUS.FAILED;
       pending.failedAt = Date.now();
       pending.failureReason = reason;
     }
 
     // Mark node back to failed status if health checks failed
-    if (this.cdcIntegrationService && reason === 'health_check_failed') {
+    if (reason === NODE_REINTEGRATION_REASON.HEALTH_CHECK_FAILED) {
       try {
         await this.cdcIntegrationService.updateSystemTableRow(
           SystemTableName.NODES,
@@ -370,14 +380,15 @@ class NodeReintegrationService extends EventEmitter {
           },
         );
       } catch (error) {
-        this.logger.error('Failed to mark node as failed', {
+        this.logger.error(NODE_REINTEGRATION_LOG_MSG.MARK_NODE_FAILED_FAILED, {
           nodeId,
           error: error.message,
         });
+        throw error;
       }
     }
 
-    this.emit('reintegrationFailed', {
+    this.emit(NODE_REINTEGRATION_EVENT.REINTEGRATION_FAILED, {
       nodeId,
       reason,
     });
@@ -386,7 +397,7 @@ class NodeReintegrationService extends EventEmitter {
     const cleanupTimer = setTimeout(() => {
       this.pendingReintegrations.delete(nodeId);
       this.cleanupTimers.delete(nodeId);
-    }, 60000);
+    }, NODE_REINTEGRATION_DEFAULT.CLEANUP_DELAY_MS);
     this.cleanupTimers.set(nodeId, cleanupTimer);
   }
 
@@ -396,15 +407,12 @@ class NodeReintegrationService extends EventEmitter {
    * @private
    */
   getNodes() {
-    if (!this.systemTableCache) {
-      return [];
-    }
+    assertCritical(
+      this.systemTableCache,
+      NODE_REINTEGRATION_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
-    try {
-      return this.systemTableCache.getAll('nodes') || [];
-    } catch (_error) {
-      return [];
-    }
+    return this.systemTableCache.getAll(SystemTableName.NODES);
   }
 
   /**
@@ -414,18 +422,15 @@ class NodeReintegrationService extends EventEmitter {
    * @private
    */
   getNode(nodeId) {
-    if (!this.systemTableCache) {
-      return null;
-    }
+    assertCritical(
+      this.systemTableCache,
+      NODE_REINTEGRATION_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
-    try {
-      const nodes = this.systemTableCache.filter('nodes', (node) => {
-        return node.node_id === nodeId;
-      }) || [];
-      return nodes[0] || null;
-    } catch (_error) {
-      return null;
-    }
+    const nodes = this.systemTableCache.filter(SystemTableName.NODES, (node) => {
+      return node.node_id === nodeId;
+    });
+    return nodes[NUM.ZERO] || null;
   }
 
   /**
@@ -493,7 +498,7 @@ class NodeReintegrationService extends EventEmitter {
     this.pendingReintegrations.clear();
     this.initialized = false;
 
-    this.logger.info('Node reintegration service shutdown', {
+    this.logger.info(NODE_REINTEGRATION_LOG_MSG.SHUTDOWN, {
       nodeId: this.nodeId,
       totalReintegrations: this.reintegrationCount,
     });
@@ -503,5 +508,5 @@ class NodeReintegrationService extends EventEmitter {
 export {
   NodeReintegrationService,
   NodeStatus,
-  ReintegrationStatus,
+  NODE_REINTEGRATION_STATUS as ReintegrationStatus,
 };

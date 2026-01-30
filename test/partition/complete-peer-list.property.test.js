@@ -7,15 +7,17 @@
  * SHALL contain all peer replica IDs for that partition.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {AddressManager} from '../../src/address/address-manager.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
+  AddressManager.resetInstance();
   const config = ConfigurationManager.getInstance();
   config.initialize({node: {id: 'test-node'}});
   const logger = LoggingService.getInstance();
@@ -25,6 +27,7 @@ beforeEach(() => {
 afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
+  AddressManager.resetInstance();
 });
 
 /**
@@ -100,6 +103,12 @@ test('Property 4: PartitionService receives complete peer list', async (t) => {
           expectedReplicaIds.push(`${partitionId}-r${i + 1}`);
         }
 
+        // Generate peer addresses for all replicas
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = expectedReplicaIds.map((replicaId) =>
+          addressManager.format(nodeId, 'partition', replicaId),
+        );
+
         const mockTransport = createMockTransport();
         const partitions = [];
 
@@ -111,6 +120,7 @@ test('Property 4: PartitionService receives complete peer list', async (t) => {
               tableId,
               replicaId: expectedReplicaIds[i],
               replicaIds: expectedReplicaIds,
+              peerAddresses,
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
@@ -178,6 +188,12 @@ test('Property 4: Peer list includes self', async (t) => {
           replicaIds.push(`${partitionId}-r${i + 1}`);
         }
 
+        // Generate peer addresses for all replicas
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((replicaId) =>
+          addressManager.format(nodeId, 'partition', replicaId),
+        );
+
         const mockTransport = createMockTransport();
         const partitions = [];
 
@@ -188,6 +204,7 @@ test('Property 4: Peer list includes self', async (t) => {
               tableId,
               replicaId: replicaIds[i],
               replicaIds,
+              peerAddresses,
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
@@ -237,6 +254,12 @@ test('Property 4: Peer list enables Raft group formation', async (t) => {
           replicaIds.push(`${partitionId}-r${i + 1}`);
         }
 
+        // Generate peer addresses for all replicas
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((replicaId) =>
+          addressManager.format(nodeId, 'partition', replicaId),
+        );
+
         const mockTransport = createMockTransport();
         const partitions = [];
 
@@ -247,6 +270,7 @@ test('Property 4: Peer list enables Raft group formation', async (t) => {
               tableId,
               replicaId: replicaIds[i],
               replicaIds,
+              peerAddresses,
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
@@ -310,6 +334,12 @@ test('Property 4: Incomplete peer list prevents premature leadership', async (t)
         const replicaId = `${partitionId}-r1`;
         const incompleteReplicaIds = [replicaId]; // Only knows about self
 
+        // Generate peer addresses for the single replica
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = incompleteReplicaIds.map((rid) =>
+          addressManager.format(nodeId, 'partition', rid),
+        );
+
         const mockTransport = createMockTransport();
 
         const partition = new PartitionService({
@@ -317,6 +347,7 @@ test('Property 4: Incomplete peer list prevents premature leadership', async (t)
           tableId,
           replicaId,
           replicaIds: incompleteReplicaIds,
+          peerAddresses,
           nodeId,
           transport: mockTransport,
           dbPath: ':memory:',
@@ -362,7 +393,14 @@ test('Property 4: Peer addresses use unified format', async (t) => {
       nodeIdArbitrary,
       async (partitionId, tableId, nodeId) => {
         const replicaId = `${partitionId}-r1`;
-        const replicaIds = [replicaId];
+        const otherReplicaId = `${partitionId}-r2`;
+        const replicaIds = [replicaId, otherReplicaId];
+
+        // Generate peer addresses for all replicas
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((rid) =>
+          addressManager.format(nodeId, 'partition', rid),
+        );
 
         const mockTransport = createMockTransport();
 
@@ -371,6 +409,7 @@ test('Property 4: Peer addresses use unified format', async (t) => {
           tableId,
           replicaId,
           replicaIds,
+          peerAddresses,
           nodeId,
           transport: mockTransport,
           dbPath: ':memory:',
@@ -387,14 +426,14 @@ test('Property 4: Peer addresses use unified format', async (t) => {
             return false;
           }
 
-          // Property: buildPeerAddress should return unified format for simple IDs
-          const peerAddress = partition.buildPeerAddress('other-replica');
+          // Property: buildPeerAddress should return unified format for known peers
+          const peerAddress = partition.buildPeerAddress(otherReplicaId);
           if (!peerAddress.includes('/partition/')) {
             return false;
           }
 
           // Property: buildPeerAddress should preserve already-unified addresses
-          const alreadyUnified = 'other-node/partition/other-replica';
+          const alreadyUnified = `${nodeId}/partition/${otherReplicaId}`;
           const preserved = partition.buildPeerAddress(alreadyUnified);
           if (preserved !== alreadyUnified) {
             return false;

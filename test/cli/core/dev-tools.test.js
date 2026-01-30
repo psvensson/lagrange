@@ -4,7 +4,7 @@
  * Requirements: 26.1, 26.2, 26.3, 26.4, 26.5, 26.6, 26.7, 26.8
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {DevTools} from '../../../src/cli/core/dev-tools.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';
 import {StateManager} from '../../../src/cli/core/state-manager.js';

@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {ConfigManager} from '../../../src/cli/core/config-manager.js';
 import fs from 'fs';
 import path from 'path';

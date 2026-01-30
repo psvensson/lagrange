@@ -6,49 +6,32 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {COLUMN, NUM, STATE, TABLES, TYPEOF} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  CACHE_CDC_OPERATIONS,
+  CACHE_DEFAULT,
+  CACHE_ERROR_MSG,
+  CACHE_LOG_MSG,
+  CACHE_PRIMARY_KEY_FIELDS,
+  CACHE_SUBSYSTEM,
+  CACHE_SYSTEM_TABLES,
+} from './cache-constants.js';
 
 /**
  * System table names that are cached.
  */
-const SYSTEM_TABLES = [
-  'nodes',
-  'partitions',
-  'tables',
-  'services',
-  'message_groups',
-  'indices',
-  'contexts',
-  'code',
-  'config',
-  'logs',
-  'live_queries',
-];
+const SYSTEM_TABLES = CACHE_SYSTEM_TABLES;
 
 /**
  * Primary key field names for each system table.
  */
-const PRIMARY_KEY_FIELDS = {
-  nodes: 'node_id',
-  partitions: 'partition_id',
-  tables: 'table_id',
-  services: 'service_id',
-  message_groups: 'group_id',
-  indices: 'index_id',
-  logs: 'log_id',
-  config: 'config_key',
-  live_queries: 'query_id',
-  contexts: 'context_id',
-  code: 'function_id',
-};
+const PRIMARY_KEY_FIELDS = CACHE_PRIMARY_KEY_FIELDS;
 
 /**
  * CDC operation types.
  */
-const CDC_OPERATIONS = {
-  INSERT: 'INSERT',
-  UPDATE: 'UPDATE',
-  DELETE: 'DELETE',
-};
+const CDC_OPERATIONS = CACHE_CDC_OPERATIONS;
 
 /**
  * SystemTableCache provides in-memory caching for system tables.
@@ -62,8 +45,12 @@ class SystemTableCache {
   constructor() {
     this.tables = new Map();
     this.listeners = new Set();
-    this.logger = LoggingService.getInstance().forSubsystem('cache');
-    this.currentEpoch = 0;
+    this.logger = LoggingService.getInstance().forSubsystem(CACHE_SUBSYSTEM.CACHE);
+    this.currentEpoch = CACHE_DEFAULT.INITIAL_EPOCH;
+    // Unique ID for debugging cache instance issues
+    this._cacheId = `${CACHE_DEFAULT.CACHE_ID_PREFIX}${Date.now()}-` +
+      `${Math.random().toString(CACHE_DEFAULT.CACHE_ID_RADIX)
+        .substr(CACHE_DEFAULT.CACHE_ID_START, CACHE_DEFAULT.CACHE_ID_LENGTH)}`;
 
     // Initialize empty maps for each system table
     for (const tableName of SYSTEM_TABLES) {
@@ -90,21 +77,21 @@ class SystemTableCache {
    * @throws {Error} If epoch is invalid or missing required fields
    */
   updateFromEpoch(epoch) {
-    if (!epoch || typeof epoch !== 'object') {
-      throw new Error('Epoch must be a valid object');
+    if (!epoch || typeof epoch !== TYPEOF.OBJECT) {
+      throw new Error(CACHE_ERROR_MSG.EPOCH_INVALID_OBJECT);
     }
 
-    if (typeof epoch.epoch !== 'number') {
-      throw new Error('Epoch must have a numeric epoch field');
+    if (typeof epoch.epoch !== TYPEOF.NUMBER) {
+      throw new Error(CACHE_ERROR_MSG.EPOCH_MISSING_NUMBER);
     }
 
-    if (!epoch.assignments || typeof epoch.assignments !== 'object') {
-      throw new Error('Epoch must have an assignments object');
+    if (!epoch.assignments || typeof epoch.assignments !== TYPEOF.OBJECT) {
+      throw new Error(CACHE_ERROR_MSG.EPOCH_MISSING_ASSIGNMENTS);
     }
 
     // Requirement 7.5: Reject updates from older epochs
     if (epoch.epoch <= this.currentEpoch) {
-      this.logger.debug('Rejected stale epoch update', {
+      this.logger.debug(CACHE_LOG_MSG.REJECTED_STALE_EPOCH, {
         incomingEpoch: epoch.epoch,
         currentEpoch: this.currentEpoch,
       });
@@ -113,7 +100,7 @@ class SystemTableCache {
 
     // Atomic update: update epoch number
     this.currentEpoch = epoch.epoch;
-    this.logger.debug('Updated cache epoch', {epoch: this.currentEpoch});
+    this.logger.debug(CACHE_LOG_MSG.UPDATED_EPOCH, {epoch: this.currentEpoch});
     return true;
   }
 
@@ -123,8 +110,18 @@ class SystemTableCache {
    * @return {string[]} Array of node IDs that are in ready state
    */
   getReadyNodes() {
-    const readyNodes = this.filter('nodes', (node) => node.state === 'ready');
-    return readyNodes.map((node) => node.node_id || node.id);
+    const now = Date.now();
+    const readyNodes = this.filter(TABLES.NODES, (node) => {
+      const wsState = node?.[COLUMN.WS_CONNECTION_STATE];
+      const leaseExpiry = node?.[COLUMN.READY_LEASE_EXPIRES_AT];
+      return wsState === STATE.READY && leaseExpiry && leaseExpiry > now;
+    });
+
+    return readyNodes.map((node) => {
+      const nodeId = node?.[COLUMN.NODE_ID];
+      assertCritical(nodeId, CACHE_ERROR_MSG.NODE_ID_MISSING);
+      return nodeId;
+    });
   }
 
   /**
@@ -133,8 +130,8 @@ class SystemTableCache {
    * @param {Function} listener - Called with (tableName, operation, record)
    */
   onCacheChange(listener) {
-    if (typeof listener !== 'function') {
-      throw new Error('Listener must be a function');
+    if (typeof listener !== TYPEOF.FUNCTION) {
+      throw new Error(CACHE_ERROR_MSG.LISTENER_REQUIRED);
     }
     this.listeners.add(listener);
   }
@@ -157,7 +154,7 @@ class SystemTableCache {
    * @private
    */
   notifyListeners(tableName, operation, record) {
-    if (this.listeners.size === 0) {
+    if (this.listeners.size === NUM.ZERO) {
       return;
     }
 
@@ -167,8 +164,8 @@ class SystemTableCache {
         try {
           listener(tableName, operation, record);
         } catch (error) {
-          // Don't let listener errors break the cache
-          this.logger.warn('Cache listener error', {error: error.message});
+          // Log but don't re-throw - listener errors should not break other listeners
+          this.logger.warn(CACHE_LOG_MSG.CACHE_LISTENER_ERROR, {error: error.message});
         }
       }
     });
@@ -274,7 +271,7 @@ class SystemTableCache {
 
   /**
    * Apply a CDC change to the cache.
-   * This method should ONLY be called by CDC event handlers.
+   * This method should ONLY be called by CDC event handlers or bootstrap hydration.
    * @param {string} tableName - Name of the system table.
    * @param {string} operation - CDC operation (INSERT, UPDATE, DELETE).
    * @param {Object} data - Record data (must include primary key field).
@@ -285,13 +282,11 @@ class SystemTableCache {
     this.validateOperation(operation);
 
     // Get the primary key field for this table
-    const pkField = PRIMARY_KEY_FIELDS[tableName] || 'id';
-    const key = data[pkField] || data.id;
+    const pkField = PRIMARY_KEY_FIELDS[tableName] || CACHE_DEFAULT.PRIMARY_KEY_FALLBACK;
+    const key = data[pkField] || data[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
 
-    if (!data || typeof key === 'undefined') {
-      throw new Error(
-        `CDC data must include primary key field "${pkField}" or "id"`,
-      );
+    if (!data || typeof key === TYPEOF.UNDEFINED) {
+      throw new Error(CACHE_ERROR_MSG.PRIMARY_KEY_MISSING(pkField));
     }
 
     const table = this.tables.get(tableName);
@@ -300,7 +295,7 @@ class SystemTableCache {
     switch (operation) {
     case CDC_OPERATIONS.INSERT:
       if (table.has(key)) {
-        this.logger.warn('INSERT on existing key, treating as UPDATE', {
+        this.logger.warn(CACHE_LOG_MSG.INSERT_ON_EXISTING_KEY_TREAT_UPDATE, {
           tableName,
           key,
         });
@@ -311,7 +306,7 @@ class SystemTableCache {
 
     case CDC_OPERATIONS.UPDATE:
       if (!table.has(key)) {
-        this.logger.warn('UPDATE on non-existing key, treating as INSERT', {
+        this.logger.warn(CACHE_LOG_MSG.UPDATE_ON_MISSING_KEY_TREAT_INSERT, {
           tableName,
           key,
         });
@@ -323,9 +318,19 @@ class SystemTableCache {
       recordForNotification = table.get(key);
       break;
 
+    case CDC_OPERATIONS.UPSERT:
+      if (!table.has(key)) {
+        table.set(key, this.deepClone(data));
+      } else {
+        const existing = table.get(key);
+        table.set(key, {...existing, ...this.deepClone(data)});
+      }
+      recordForNotification = table.get(key);
+      break;
+
     case CDC_OPERATIONS.DELETE:
       if (!table.has(key)) {
-        this.logger.warn('DELETE on non-existing key, ignoring', {
+        this.logger.warn(CACHE_LOG_MSG.DELETE_ON_MISSING_KEY_IGNORED, {
           tableName,
           key,
         });
@@ -336,7 +341,7 @@ class SystemTableCache {
       break;
     }
 
-    this.logger.debug('Applied CDC event to cache', {
+    this.logger.debug(CACHE_LOG_MSG.APPLIED_CDC_EVENT, {
       tableName,
       operation,
       key,
@@ -356,7 +361,7 @@ class SystemTableCache {
     for (const tableName of SYSTEM_TABLES) {
       this.tables.get(tableName).clear();
     }
-    this.logger.debug('Cache cleared');
+    this.logger.debug(CACHE_LOG_MSG.CACHE_CLEARED);
   }
 
   /**
@@ -376,8 +381,7 @@ class SystemTableCache {
   validateTableName(tableName) {
     if (!SYSTEM_TABLES.includes(tableName)) {
       throw new Error(
-        `Invalid system table name: ${tableName}. ` +
-        `Valid tables are: ${SYSTEM_TABLES.join(', ')}`,
+        CACHE_ERROR_MSG.INVALID_TABLE_NAME(tableName, SYSTEM_TABLES),
       );
     }
   }
@@ -391,8 +395,10 @@ class SystemTableCache {
   validateOperation(operation) {
     if (!Object.values(CDC_OPERATIONS).includes(operation)) {
       throw new Error(
-        `Invalid CDC operation: ${operation}. ` +
-        `Valid operations are: ${Object.values(CDC_OPERATIONS).join(', ')}`,
+        CACHE_ERROR_MSG.INVALID_CDC_OPERATION(
+          operation,
+          Object.values(CDC_OPERATIONS),
+        ),
       );
     }
   }

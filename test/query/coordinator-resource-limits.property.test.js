@@ -6,7 +6,7 @@
  * max result buffer size, and max concurrent connections.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {ParallelQueryCoordinator} from '../../src/query/parallel-query-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -29,13 +29,41 @@ function createMockPartition(data) {
 }
 
 /**
+ * Create a mock system cache that wraps a partition map.
+ * @param {Map} partitions - Partition map.
+ * @return {Object} Mock system cache.
+ */
+function createMockSystemCache(partitions) {
+  return {
+    get: (tableName, id) => {
+      if (tableName === 'partitions') {
+        return partitions.get(id) || null;
+      }
+      return null;
+    },
+    getAll: (tableName) => {
+      if (tableName === 'partitions') {
+        return Array.from(partitions.values());
+      }
+      return [];
+    },
+    filter: (tableName, predicate) => {
+      if (tableName === 'partitions') {
+        return Array.from(partitions.values()).filter(predicate);
+      }
+      return [];
+    },
+  };
+}
+
+/**
  * Create a coordinator with speculative execution disabled for fast tests.
- * @param {Map} partitions - Partition registry.
+ * @param {Map} partitions - Partition map.
  * @return {ParallelQueryCoordinator} Coordinator instance.
  */
 function createFastCoordinator(partitions) {
   const coordinator = new ParallelQueryCoordinator({
-    partitionRegistry: partitions,
+    systemCache: createMockSystemCache(partitions),
   });
   // Disable speculative execution to avoid interval timers
   coordinator.speculativeExecutionEnabled = false;

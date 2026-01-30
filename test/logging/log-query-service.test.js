@@ -3,7 +3,7 @@
  * Requirements: 27.6, 27.7
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {
   LogQueryService,
   DEFAULT_CONFIG,
@@ -181,9 +181,11 @@ test('LogQueryService buildQuerySQL sanitizes order column', async (t) => {
   const service = LogQueryService.getInstance();
   service.initialize();
 
-  const sql = service.getQuerySQL({orderBy: 'invalid_column'});
-
-  t.ok(sql.includes('ORDER BY timestamp'), 'should fallback to timestamp for invalid column');
+  t.throws(
+    () => service.getQuerySQL({orderBy: 'invalid_column'}),
+    /Invalid orderBy column/,
+    'should reject invalid orderBy column',
+  );
 
   LogQueryService.resetInstance();
 });

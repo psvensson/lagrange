@@ -7,28 +7,21 @@
 import {EventEmitter} from 'events';
 // LoggingService imported for type reference only
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  LOG_LEVEL_ORDER,
+  LOG_QUERY_DEFAULT,
+  LOG_QUERY_ERROR_CODE,
+  LOG_QUERY_ERROR_MSG,
+  LOG_QUERY_LOG_MSG,
+} from './logging-constants.js';
 
-/**
- * Default configuration for log query service.
- */
-const DEFAULT_CONFIG = {
-  defaultLimit: 100,
-  maxLimit: 10000,
-  defaultTimeRangeMs: 3600000, // 1 hour
-};
-
-/**
- * Log levels in order of severity.
- */
-const LOG_LEVEL_ORDER = {
-  TRACE: 0,
-  DEBUG: 1,
-  INFO: 2,
-  WARN: 3,
-  ERROR: 4,
-  FATAL: 5,
-};
+const DEFAULT_CONFIG = Object.freeze({
+  defaultLimit: LOG_QUERY_DEFAULT.DEFAULT_LIMIT,
+  maxLimit: LOG_QUERY_DEFAULT.MAX_LIMIT,
+  defaultTimeRangeMs: LOG_QUERY_DEFAULT.DEFAULT_TIME_RANGE_MS,
+});
 
 /**
  * LogQueryService provides SQL interface for querying logs.
@@ -52,11 +45,12 @@ class LogQueryService extends EventEmitter {
     // Configuration
     const config = ConfigurationManager.getInstance();
     this.defaultLimit = options.defaultLimit ||
-      config.get('logging.queryDefaultLimit') || DEFAULT_CONFIG.defaultLimit;
+      config.get(CONFIG_KEY.LOGGING_QUERY_DEFAULT_LIMIT) || LOG_QUERY_DEFAULT.DEFAULT_LIMIT;
     this.maxLimit = options.maxLimit ||
-      config.get('logging.queryMaxLimit') || DEFAULT_CONFIG.maxLimit;
+      config.get(CONFIG_KEY.LOGGING_QUERY_MAX_LIMIT) || LOG_QUERY_DEFAULT.MAX_LIMIT;
     this.defaultTimeRangeMs = options.defaultTimeRangeMs ||
-      config.get('logging.defaultTimeRangeMs') || DEFAULT_CONFIG.defaultTimeRangeMs;
+      config.get(CONFIG_KEY.LOGGING_DEFAULT_TIME_RANGE_MS) ||
+      LOG_QUERY_DEFAULT.DEFAULT_TIME_RANGE_MS;
 
     // Logging (use console to avoid recursion)
     this.logger = console;
@@ -102,7 +96,7 @@ class LogQueryService extends EventEmitter {
     }
 
     this.initialized = true;
-    this.logger.log('LogQueryService initialized');
+    this.logger.log(LOG_QUERY_LOG_MSG.INITIALIZED);
   }
 
   /**
@@ -382,13 +376,20 @@ class LogQueryService extends EventEmitter {
     const whereClause = conditions.length > 0 ?
       `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Validate and sanitize order
+    // Validate order
     const validColumns = [
       'log_id', 'timestamp', 'level', 'node_id',
       'service_id', 'service_type', 'message', 'created_at',
     ];
-    const safeOrderBy = validColumns.includes(orderBy) ? orderBy : 'timestamp';
-    const safeOrderDir = orderDir.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    if (!validColumns.includes(orderBy)) {
+      throw new Error(LOG_QUERY_ERROR_MSG.INVALID_ORDER_BY(orderBy));
+    }
+    const normalizedDir = orderDir.toUpperCase();
+    if (normalizedDir !== 'ASC' && normalizedDir !== 'DESC') {
+      throw new Error(LOG_QUERY_ERROR_MSG.INVALID_ORDER_DIR(orderDir));
+    }
+    const safeOrderBy = orderBy;
+    const safeOrderDir = normalizedDir;
 
     // Limit
     const safeLimit = Math.min(Math.max(1, limit), this.maxLimit);
@@ -417,8 +418,8 @@ class LogQueryService extends EventEmitter {
     if (!this.sqlQueryEngine) {
       return {
         success: false,
-        error: 'SQL query engine not available',
-        errorCode: 'ENGINE_NOT_AVAILABLE',
+        error: LOG_QUERY_ERROR_MSG.ENGINE_NOT_AVAILABLE,
+        errorCode: LOG_QUERY_ERROR_CODE.ENGINE_NOT_AVAILABLE,
       };
     }
 
@@ -429,7 +430,7 @@ class LogQueryService extends EventEmitter {
       return {
         success: false,
         error: error.message,
-        errorCode: 'QUERY_FAILED',
+        errorCode: LOG_QUERY_ERROR_CODE.QUERY_FAILED,
       };
     }
   }
@@ -470,8 +471,12 @@ class LogQueryService extends EventEmitter {
   shutdown() {
     this.initialized = false;
     this.removeAllListeners();
-    this.logger.log('LogQueryService shutdown');
+    this.logger.log(LOG_QUERY_LOG_MSG.SHUTDOWN);
   }
 }
 
-export {LogQueryService, DEFAULT_CONFIG, LOG_LEVEL_ORDER};
+export {
+  LogQueryService,
+  DEFAULT_CONFIG,
+  LOG_LEVEL_ORDER,
+};

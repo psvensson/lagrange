@@ -1,0 +1,95 @@
+/**
+ * Control plane message types and defaults.
+ */
+
+import {
+  FIELD,
+  MESSAGE_TYPE,
+  NODE_CAPABILITY,
+  STATE,
+  TIME_MS,
+} from '../constants/index.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+
+const ControlPlaneMessageType = Object.freeze({
+  NODE_STATE_UPDATE: MESSAGE_TYPE.NODE_STATE_UPDATE,
+  REPLICA_OPERATION_DISPATCH: MESSAGE_TYPE.REPLICA_OPERATION_DISPATCH,
+});
+
+const ControlPlaneField = Object.freeze({
+  TYPE: FIELD.TYPE,
+  NODE_ID: FIELD.NODE_ID,
+  NODE_ADDRESS: FIELD.NODE_ADDRESS,
+  STATE: FIELD.STATE,
+  CAPABILITIES: FIELD.CAPABILITIES,
+  HEARTBEAT_AT: FIELD.HEARTBEAT_AT,
+  READY_LEASE_EXPIRES_AT: FIELD.READY_LEASE_EXPIRES_AT,
+  OPERATION_ID: FIELD.OPERATION_ID,
+  PARTITION_ID: FIELD.PARTITION_ID,
+  REPLICA_ID: FIELD.REPLICA_ID,
+  TARGET_NODE_ID: FIELD.TARGET_NODE_ID,
+  FORWARDED_BY: FIELD.FORWARDED_BY,
+});
+
+const DEFAULT_READY_LEASE_MS = TIME_MS.CONTROL_PLANE_READY_LEASE;
+const DEFAULT_HEARTBEAT_INTERVAL_MS = TIME_MS.CONTROL_PLANE_HEARTBEAT_INTERVAL;
+const DEFAULT_LEASE_SWEEP_INTERVAL_MS = TIME_MS.CONTROL_PLANE_LEASE_SWEEP_INTERVAL;
+const DEFAULT_NODE_CAPABILITIES = Object.freeze([
+  NODE_CAPABILITY.PARTITION_REPLICA,
+  NODE_CAPABILITY.MESSAGE_GROUP_REPLICA,
+]);
+
+const CONTROL_PLANE_SUBSYSTEM = 'control-plane';
+
+const CONTROL_PLANE_CONFIG_KEY = Object.freeze({
+  READY_LEASE_MS: CONFIG_KEY.CONTROL_PLANE_READY_LEASE_MS,
+  HEARTBEAT_INTERVAL_MS: CONFIG_KEY.CONTROL_PLANE_HEARTBEAT_INTERVAL_MS,
+  LEASE_SWEEP_INTERVAL_MS: CONFIG_KEY.CONTROL_PLANE_LEASE_SWEEP_INTERVAL_MS,
+});
+
+const CONTROL_PLANE_EVENT = Object.freeze({
+  MESSAGE_RECEIVED: 'messageReceived',
+  CDC_APPLIED: 'cdcApplied',
+});
+
+const CONTROL_PLANE_LOG_MSG = Object.freeze({
+  INITIALIZED: 'Control plane service initialized',
+  MESSAGE_HANDLING_FAILED: 'Control plane message handling failed',
+  CDC_HANDLING_FAILED: 'Control plane CDC handling failed',
+  ATTACHED_MESSAGE_GROUP: 'Attached control plane to message group service',
+  LEASE_SWEEP_FAILED: 'Lease sweep failed',
+  LOCAL_HEARTBEAT_FAILED: 'Control plane local heartbeat failed',
+  SHUTDOWN: 'Control plane service shutdown',
+  IGNORE_UNKNOWN_NODE_STATE: 'Ignoring unknown node state update',
+});
+
+const CONTROL_PLANE_ERROR_MSG = Object.freeze({
+  MISSING_NODE_ID: 'ControlPlaneService requires nodeId',
+  MISSING_NODE_ADDRESS: 'ControlPlaneService requires nodeAddress',
+  MISSING_ROUTER: 'ControlPlaneService requires messageRouter',
+  MISSING_CACHE: 'ControlPlaneService requires systemTableCache',
+  MISSING_CDC: 'ControlPlaneService requires cdcIntegrationService',
+  MISSING_COORDINATOR: 'ControlPlaneService requires rebalanceCoordinator',
+  MISSING_MESSAGE_GROUP_SERVICE: 'MessageGroupService is required',
+});
+
+const CONTROL_PLANE_ALLOWED_STATES = Object.freeze([
+  STATE.CONNECTED,
+  STATE.READY,
+  STATE.DISCONNECTED,
+]);
+
+export {
+  ControlPlaneMessageType,
+  ControlPlaneField,
+  DEFAULT_READY_LEASE_MS,
+  DEFAULT_HEARTBEAT_INTERVAL_MS,
+  DEFAULT_LEASE_SWEEP_INTERVAL_MS,
+  DEFAULT_NODE_CAPABILITIES,
+  CONTROL_PLANE_SUBSYSTEM,
+  CONTROL_PLANE_CONFIG_KEY,
+  CONTROL_PLANE_EVENT,
+  CONTROL_PLANE_LOG_MSG,
+  CONTROL_PLANE_ERROR_MSG,
+  CONTROL_PLANE_ALLOWED_STATES,
+};

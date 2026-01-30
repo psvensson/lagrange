@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {StateManager} from '../../../src/cli/core/state-manager.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';
 

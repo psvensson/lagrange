@@ -6,15 +6,22 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
+import {TABLES} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  POLICY_ERROR_MSG,
+  POLICY_EVENT,
+  POLICY_LOG_MSG,
+  POLICY_RESULT_REASON,
+  POLICY_SUBSYSTEM,
+  RAFT_ROLE,
+  TYPEOF,
+} from './policy-constants.js';
 
 /**
  * Valid Raft roles.
  */
-const RaftRole = {
-  LEADER: 'leader',
-  FOLLOWER: 'follower',
-  CANDIDATE: 'candidate',
-};
+const RaftRole = RAFT_ROLE;
 
 /**
  * RaftRoleTracker monitors Raft role changes and updates the services system table.
@@ -39,7 +46,7 @@ class RaftRoleTracker extends EventEmitter {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('raft-role-tracker') : console;
+      loggingService.forSubsystem(POLICY_SUBSYSTEM.RAFT_ROLE_TRACKER) : console;
 
     this.initialized = false;
   }
@@ -52,7 +59,7 @@ class RaftRoleTracker extends EventEmitter {
       return;
     }
 
-    this.logger.info('RaftRoleTracker initialized');
+    this.logger.info(POLICY_LOG_MSG.RAFT_TRACKER_INITIALIZED);
     this.initialized = true;
   }
 
@@ -63,11 +70,11 @@ class RaftRoleTracker extends EventEmitter {
    */
   registerService(serviceId, service) {
     if (!serviceId) {
-      throw new Error('serviceId is required');
+      throw new Error(POLICY_ERROR_MSG.SERVICE_ID_REQUIRED);
     }
 
     if (this.trackedServices.has(serviceId)) {
-      this.logger.debug('Service already registered', {serviceId});
+      this.logger.debug(POLICY_LOG_MSG.SERVICE_ALREADY_REGISTERED, {serviceId});
       return;
     }
 
@@ -77,13 +84,13 @@ class RaftRoleTracker extends EventEmitter {
     });
 
     // Listen for role change events if service supports them
-    if (service && typeof service.on === 'function') {
-      service.on('roleChanged', (event) => {
+    if (service && typeof service.on === TYPEOF.FUNCTION) {
+      service.on(POLICY_EVENT.ROLE_CHANGED, (event) => {
         this.handleRoleChange(serviceId, event.newRole, event.oldRole);
       });
     }
 
-    this.logger.debug('Service registered for role tracking', {serviceId});
+    this.logger.debug(POLICY_LOG_MSG.SERVICE_REGISTERED, {serviceId});
   }
 
   /**
@@ -97,12 +104,12 @@ class RaftRoleTracker extends EventEmitter {
     }
 
     // Remove event listener if possible
-    if (tracked.service && typeof tracked.service.removeAllListeners === 'function') {
-      tracked.service.removeAllListeners('roleChanged');
+    if (tracked.service && typeof tracked.service.removeAllListeners === TYPEOF.FUNCTION) {
+      tracked.service.removeAllListeners(POLICY_EVENT.ROLE_CHANGED);
     }
 
     this.trackedServices.delete(serviceId);
-    this.logger.debug('Service unregistered from role tracking', {serviceId});
+    this.logger.debug(POLICY_LOG_MSG.SERVICE_UNREGISTERED, {serviceId});
   }
 
 
@@ -114,7 +121,7 @@ class RaftRoleTracker extends EventEmitter {
    */
   async handleRoleChange(serviceId, newRole, oldRole) {
     if (!this.isValidRole(newRole)) {
-      this.logger.warn('Invalid Raft role', {serviceId, newRole});
+      this.logger.warn(POLICY_LOG_MSG.INVALID_RAFT_ROLE, {serviceId, newRole});
       return;
     }
 
@@ -123,7 +130,7 @@ class RaftRoleTracker extends EventEmitter {
       tracked.currentRole = newRole;
     }
 
-    this.logger.debug('Raft role changed', {
+    this.logger.debug(POLICY_LOG_MSG.ROLE_CHANGED, {
       serviceId,
       oldRole,
       newRole,
@@ -133,7 +140,7 @@ class RaftRoleTracker extends EventEmitter {
     await this.updateServiceRole(serviceId, newRole);
 
     // Emit event for listeners
-    this.emit('roleChanged', {
+    this.emit(POLICY_EVENT.ROLE_CHANGED, {
       serviceId,
       oldRole,
       newRole,
@@ -149,27 +156,27 @@ class RaftRoleTracker extends EventEmitter {
    */
   async updateServiceRole(serviceId, role) {
     if (!this.cdcIntegrationService) {
-      this.logger.warn('CDC integration service not available, skipping role update', {
+      this.logger.warn(POLICY_LOG_MSG.UPDATE_SKIPPED_NO_CDC, {
         serviceId,
         role,
       });
-      return {success: false, reason: 'no_cdc_service'};
+      return {success: false, reason: POLICY_RESULT_REASON.NO_CDC_SERVICE};
     }
 
     try {
-      await this.cdcIntegrationService.updateSystemTableRow('services', serviceId, {
+      await this.cdcIntegrationService.updateSystemTableRow(TABLES.SERVICES, serviceId, {
         raft_role: role,
         updated_at: Date.now(),
       });
 
-      this.logger.info('Updated service Raft role', {
+      this.logger.info(POLICY_LOG_MSG.UPDATED_SERVICE_ROLE, {
         serviceId,
         role,
       });
 
       return {success: true, serviceId, role};
     } catch (error) {
-      this.logger.error('Failed to update service Raft role', {
+      this.logger.error(POLICY_LOG_MSG.UPDATE_SERVICE_ROLE_FAILED, {
         serviceId,
         role,
         error: error.message,
@@ -187,7 +194,7 @@ class RaftRoleTracker extends EventEmitter {
    */
   async setServiceRole(serviceId, newRole) {
     if (!this.isValidRole(newRole)) {
-      throw new Error(`Invalid Raft role: ${newRole}`);
+      throw new Error(`${POLICY_ERROR_MSG.INVALID_RAFT_ROLE_PREFIX}${newRole}`);
     }
 
     const tracked = this.trackedServices.get(serviceId);
@@ -213,11 +220,13 @@ class RaftRoleTracker extends EventEmitter {
     }
 
     // Fall back to system table cache
-    if (this.systemTableCache) {
-      const service = this.systemTableCache.get('services', serviceId);
-      if (service && service.raft_role) {
-        return service.raft_role;
-      }
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      POLICY_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    const service = systemTableCache.get(TABLES.SERVICES, serviceId);
+    if (service && service.raft_role) {
+      return service.raft_role;
     }
 
     return null;
@@ -229,11 +238,11 @@ class RaftRoleTracker extends EventEmitter {
    * @return {Array<Object>} Services with the specified role.
    */
   getServicesByRole(role) {
-    if (!this.systemTableCache) {
-      return [];
-    }
-
-    return this.systemTableCache.filter('services', (service) => {
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      POLICY_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    return systemTableCache.filter(TABLES.SERVICES, (service) => {
       return service.raft_role === role;
     });
   }
@@ -281,7 +290,7 @@ class RaftRoleTracker extends EventEmitter {
     }
 
     this.removeAllListeners();
-    this.logger.info('RaftRoleTracker shutdown');
+    this.logger.info(POLICY_LOG_MSG.TRACKER_SHUTDOWN);
   }
 }
 

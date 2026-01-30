@@ -10,7 +10,7 @@
  * Feature: simplified-rebalancing-architecture, Property 4: RPC Timeout Behavior
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {RPCClient} from '../../src/transport/rpc-client.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

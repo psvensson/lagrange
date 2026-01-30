@@ -9,7 +9,7 @@
  * Property 5: Unified Address Format
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {RaftTransportAdapter} from '../../src/raft/raft-transport-adapter.js';
 
@@ -28,27 +28,41 @@ test('Property 5: Unified Address Format', async (t) => {
    * Property: buildPeerAddress generates unified format for simple peer IDs.
    *
    * For any simple peer ID (without slashes), buildPeerAddress should return
-   * an address in the format ${nodeId}/${entityType}/${peerId}.
+   * an address in the format ${nodeId}/${entityType}/${peerId} when the peer
+   * is found in the system table cache.
    */
   t.test('buildPeerAddress generates unified format for simple peer IDs', async (t) => {
     await fc.assert(
       fc.property(
-        // Generate node ID (no slashes)
-        fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
+        // Generate node ID (no slashes, alphanumeric)
+        fc.string({minLength: 1, maxLength: 20}).filter((s) =>
+          !s.includes('/') && /^[a-zA-Z0-9_-]+$/.test(s)),
         // Generate entity type
         fc.constantFrom(...VALID_ENTITY_TYPES),
-        // Generate peer ID (no slashes)
-        fc.string({minLength: 1, maxLength: 30}).filter((s) => !s.includes('/')),
+        // Generate peer ID (no slashes, alphanumeric)
+        fc.string({minLength: 1, maxLength: 30}).filter((s) =>
+          !s.includes('/') && /^[a-zA-Z0-9_-]+$/.test(s)),
         (nodeId, entityType, peerId) => {
           // Create mock message router
           const mockRouter = {
             deliver: async () => ({acknowledged: true}),
           };
 
+          // Mock systemTableCache that returns the peer's node_id
+          const mockCache = {
+            get: (table, id) => {
+              if (table === 'services' && id === peerId) {
+                return {node_id: nodeId};
+              }
+              return null;
+            },
+          };
+
           const adapter = new RaftTransportAdapter({
             messageRouter: mockRouter,
             entityType,
             nodeId,
+            systemTableCache: mockCache,
           });
 
           const address = adapter.buildPeerAddress(peerId);
@@ -118,14 +132,17 @@ test('Property 5: Unified Address Format', async (t) => {
   t.test('buildPeerAddress uses systemTableCache when available', async (t) => {
     await fc.assert(
       fc.property(
-        // Generate adapter's node ID
-        fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
+        // Generate adapter's node ID (alphanumeric)
+        fc.string({minLength: 1, maxLength: 20}).filter((s) =>
+          !s.includes('/') && /^[a-zA-Z0-9_-]+$/.test(s)),
         // Generate entity type
         fc.constantFrom(...VALID_ENTITY_TYPES),
-        // Generate peer ID
-        fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
-        // Generate cached node ID (different from adapter's)
-        fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
+        // Generate peer ID (alphanumeric)
+        fc.string({minLength: 1, maxLength: 20}).filter((s) =>
+          !s.includes('/') && /^[a-zA-Z0-9_-]+$/.test(s)),
+        // Generate cached node ID (different from adapter's, alphanumeric)
+        fc.string({minLength: 1, maxLength: 20}).filter((s) =>
+          !s.includes('/') && /^[a-zA-Z0-9_-]+$/.test(s)),
         (adapterNodeId, entityType, peerId, cachedNodeId) => {
           const mockRouter = {
             deliver: async () => ({acknowledged: true}),
@@ -165,20 +182,22 @@ test('Property 5: Unified Address Format', async (t) => {
   });
 
   /**
-   * Property: buildPeerAddress falls back to adapter nodeId when cache misses.
+   * Property: buildPeerAddress throws when cache misses.
    *
    * When systemTableCache doesn't have the peer, buildPeerAddress should
-   * fall back to using the adapter's nodeId.
+   * throw an error since it cannot resolve the peer address.
    */
-  t.test('buildPeerAddress falls back when cache misses', async (t) => {
+  t.test('buildPeerAddress throws when cache misses', async (t) => {
     await fc.assert(
       fc.property(
-        // Generate adapter's node ID
-        fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
+        // Generate adapter's node ID (alphanumeric)
+        fc.string({minLength: 1, maxLength: 20}).filter((s) =>
+          !s.includes('/') && /^[a-zA-Z0-9_-]+$/.test(s)),
         // Generate entity type
         fc.constantFrom(...VALID_ENTITY_TYPES),
-        // Generate peer ID
-        fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
+        // Generate peer ID (alphanumeric)
+        fc.string({minLength: 1, maxLength: 20}).filter((s) =>
+          !s.includes('/') && /^[a-zA-Z0-9_-]+$/.test(s)),
         (adapterNodeId, entityType, peerId) => {
           const mockRouter = {
             deliver: async () => ({acknowledged: true}),
@@ -196,20 +215,19 @@ test('Property 5: Unified Address Format', async (t) => {
             systemTableCache: mockCache,
           });
 
-          const address = adapter.buildPeerAddress(peerId);
-
-          // Should fall back to adapter's nodeId
-          const parts = address.split('/');
-          return parts.length === 3 &&
-                 parts[0] === adapterNodeId &&
-                 parts[1] === entityType &&
-                 parts[2] === peerId;
+          // Should throw when peer is not in cache
+          try {
+            adapter.buildPeerAddress(peerId);
+            return false; // Should have thrown
+          } catch (error) {
+            return error.message.includes('Unable to resolve');
+          }
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('buildPeerAddress falls back when cache misses');
+    t.pass('buildPeerAddress throws when cache misses');
   });
 
   /**

@@ -7,7 +7,7 @@
  * the system rejects the creation with an appropriate error.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {TableCreationService} from '../../src/query/table-creation-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

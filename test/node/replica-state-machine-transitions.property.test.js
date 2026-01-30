@@ -9,7 +9,7 @@
  * be rejected and logged.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaStateMachine,
@@ -18,6 +18,27 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+function createMockCDCService() {
+  return {
+    updateSystemTableRow: async () => ({success: true}),
+    insertSystemTableRow: async () => ({success: true}),
+    deleteSystemTableRow: async () => ({success: true}),
+    upsertSystemTableRow: async () => ({success: true}),
+  };
+}
+
+/**
+ * Create a mock system table cache.
+ * @return {Object} Mock system table cache.
+ */
+function createMockSystemTableCache() {
+  return {
+    filter: (_tableName, _predicate) => [],
+    get: (_tableName, _key) => null,
+    set: (_tableName, _key, _value) => {},
+  };
+}
 
 // All possible states
 const ALL_STATES = [
@@ -29,9 +50,6 @@ const ALL_STATES = [
   ReplicaState.REMOVED,
   ReplicaState.FAILED,
 ];
-
-// All possible current states including null (new replica)
-const ALL_CURRENT_STATES = [null, ...ALL_STATES];
 
 test('Property 1: Valid Transition Enforcement', async (t) => {
   t.beforeEach(async () => {
@@ -55,12 +73,15 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
    * the transition should succeed.
    */
   t.test('valid transitions succeed', async (t) => {
-    // Generate valid transition pairs
+    // Generate valid transition pairs (excluding null -> pending which is tested separately)
     const validTransitions = [];
     for (const [fromState, toStates] of Object.entries(VALID_TRANSITIONS)) {
-      const from = fromState === 'null' ? null : fromState;
+      // Skip null key - it becomes 'null' string in Object.entries
+      if (fromState === 'null') {
+        continue;
+      }
       for (const toState of toStates) {
-        validTransitions.push({from, to: toState});
+        validTransitions.push({from: fromState, to: toState});
       }
     }
 
@@ -70,29 +91,27 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
     }
 
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.constantFrom(...validTransitions),
         fc.uuid(),
         fc.uuid(),
-        (transition, replicaId, partitionId) => {
+        async (transition, replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
-          // If from state is not null, set up the replica in that state first
-          if (transition.from !== null) {
-            // We need to get to the from state through valid transitions
-            const setupPath = getPathToState(transition.from);
-            for (const state of setupPath) {
-              stateMachine.transition(replicaId, state, {
-                partitionId,
-                reason: 'setup',
-              });
-            }
+          // Set up the replica in the from state through valid transitions
+          const setupPath = getPathToState(transition.from);
+          for (const state of setupPath) {
+            await stateMachine.transition(replicaId, state, {
+              partitionId,
+              reason: 'setup',
+            });
           }
 
-          // Attempt the transition
-          const result = stateMachine.transition(replicaId, transition.to, {
+          // Attempt the transition - returns Promise<boolean>
+          const result = await stateMachine.transition(replicaId, transition.to, {
             partitionId,
             reason: 'test transition',
           });
@@ -113,9 +132,9 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
    * the transition should fail.
    */
   t.test('invalid transitions fail', async (t) => {
-    // Generate invalid transition pairs
+    // Generate invalid transition pairs (excluding null as from state)
     const invalidTransitions = [];
-    for (const fromState of ALL_CURRENT_STATES) {
+    for (const fromState of ALL_STATES) {
       const validNextStates = VALID_TRANSITIONS[fromState] || [];
       for (const toState of ALL_STATES) {
         if (!validNextStates.includes(toState)) {
@@ -130,13 +149,14 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
     }
 
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.constantFrom(...invalidTransitions),
         fc.uuid(),
         fc.uuid(),
-        (transition, replicaId, partitionId) => {
+        async (transition, replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Track if transitionError event was emitted
@@ -145,15 +165,13 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
             errorEmitted = true;
           });
 
-          // If from state is not null, set up the replica in that state first
-          if (transition.from !== null) {
-            const setupPath = getPathToState(transition.from);
-            for (const state of setupPath) {
-              stateMachine.transition(replicaId, state, {
-                partitionId,
-                reason: 'setup',
-              });
-            }
+          // Set up the replica in the from state first
+          const setupPath = getPathToState(transition.from);
+          for (const state of setupPath) {
+            await stateMachine.transition(replicaId, state, {
+              partitionId,
+              reason: 'setup',
+            });
           }
 
           // Attempt the invalid transition
@@ -180,11 +198,12 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
   t.test('isValidTransition validates correctly', async (t) => {
     await fc.assert(
       fc.property(
-        fc.constantFrom(...ALL_CURRENT_STATES),
+        fc.constantFrom(...ALL_STATES),
         fc.constantFrom(...ALL_STATES),
         (fromState, toState) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const isValid = stateMachine.isValidTransition(fromState, toState);
@@ -209,16 +228,17 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
    */
   t.test('state counts updated correctly', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 1, maxLength: 5}),
-        (replicaIds) => {
+        async (replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Transition all replicas to pending
           for (const replicaId of replicaIds) {
-            stateMachine.transition(replicaId, ReplicaState.PENDING, {
+            await stateMachine.transition(replicaId, ReplicaState.PENDING, {
               partitionId: 'test-partition',
               reason: 'test',
             });
@@ -242,18 +262,19 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
    */
   t.test('REMOVED state has no outgoing transitions', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.constantFrom(...ALL_STATES),
         fc.uuid(),
-        (targetState, replicaId) => {
+        async (targetState, replicaId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Get replica to REMOVED state
           const pathToRemoved = getPathToState(ReplicaState.REMOVED);
           for (const state of pathToRemoved) {
-            stateMachine.transition(replicaId, state, {
+            await stateMachine.transition(replicaId, state, {
               partitionId: 'test-partition',
               reason: 'setup',
             });

@@ -7,15 +7,17 @@
  * it should have exactly three replicas by default.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {AddressManager} from '../../src/address/address-manager.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
+  AddressManager.resetInstance();
   const config = ConfigurationManager.getInstance();
   config.initialize({node: {id: 'test-node'}});
   const logger = LoggingService.getInstance();
@@ -25,6 +27,7 @@ beforeEach(() => {
 afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
+  AddressManager.resetInstance();
 });
 
 /**
@@ -60,11 +63,18 @@ test('Property 5: Default replica count is 3', async (t) => {
           `${partitionId}-r3`,
         ];
 
+        // Generate peer addresses for all replicas
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((replicaId) =>
+          addressManager.format('test-node', 'partition', replicaId),
+        );
+
         const partition = new PartitionService({
           partitionId,
           tableId,
           replicaId: replicaIds[0],
           replicaIds,
+          peerAddresses,
           dbPath: ':memory:',
         });
 
@@ -114,11 +124,18 @@ test('Property 5: Partition reports correct replica count', async (t) => {
           replicaIds.push(`${partitionId}-r${i + 1}`);
         }
 
+        // Generate peer addresses for all replicas
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((replicaId) =>
+          addressManager.format('test-node', 'partition', replicaId),
+        );
+
         const partition = new PartitionService({
           partitionId,
           tableId,
           replicaId: replicaIds[0],
           replicaIds,
+          peerAddresses,
           dbPath: ':memory:',
         });
 
@@ -173,11 +190,18 @@ test('Property 5: Replica count is odd for Raft quorum', async (t) => {
           replicaIds.push(`${partitionId}-r${i + 1}`);
         }
 
+        // Generate peer addresses for all replicas
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((replicaId) =>
+          addressManager.format('test-node', 'partition', replicaId),
+        );
+
         const partition = new PartitionService({
           partitionId,
           tableId,
           replicaId: replicaIds[0],
           replicaIds,
+          peerAddresses,
           dbPath: ':memory:',
         });
 

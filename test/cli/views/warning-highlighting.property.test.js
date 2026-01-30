@@ -7,7 +7,7 @@
  * **Validates: Requirements 2.4, 5.6, 6.4**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {NodesView, WARNING_THRESHOLDS} from
   '../../../src/cli/views/nodes-view.js';

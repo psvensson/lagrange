@@ -3,8 +3,8 @@
  * Requirements: 27.1, 27.3
  */
 
-import {test} from 'tap';
-import {LogsTableService, DEFAULT_CONFIG} from '../../src/logging/logs-table-service.js';
+import {test} from '../../src/test-helpers/tap.js';
+import {LogsTableService, LOGS_TABLE_DEFAULT} from '../../src/logging/logs-table-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
@@ -46,10 +46,10 @@ test('LogsTableService initialization', async (t) => {
 });
 
 test('LogsTableService default config', async (t) => {
-  t.equal(DEFAULT_CONFIG.batchSize, 100, 'should have default batch size');
-  t.equal(DEFAULT_CONFIG.flushIntervalMs, 5000, 'should have default flush interval');
-  t.equal(DEFAULT_CONFIG.maxRetries, 3, 'should have default max retries');
-  t.equal(DEFAULT_CONFIG.retryDelayMs, 1000, 'should have default retry delay');
+  t.equal(LOGS_TABLE_DEFAULT.BATCH_SIZE, 100, 'should have default batch size');
+  t.equal(LOGS_TABLE_DEFAULT.FLUSH_INTERVAL_MS, 5000, 'should have default flush interval');
+  t.equal(LOGS_TABLE_DEFAULT.MAX_RETRIES, 3, 'should have default max retries');
+  t.equal(LOGS_TABLE_DEFAULT.RETRY_DELAY_MS, 1000, 'should have default retry delay');
 });
 
 test('LogsTableService writeLogEntry queues entries', async (t) => {

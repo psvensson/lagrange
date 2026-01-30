@@ -6,7 +6,7 @@
  * **Validates: Requirements 22.6**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {StateManager} from '../../../src/cli/core/state-manager.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';

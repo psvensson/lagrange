@@ -3,7 +3,7 @@
  * Requirements: 3.2, 3.6, 3.7, 3.8
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   AssignmentEpochManager,
 } from '../../src/rebalancer/assignment-epoch-manager.js';

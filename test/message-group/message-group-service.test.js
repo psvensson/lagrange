@@ -3,7 +3,7 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   MessageGroupService,
   MessageStatus,
@@ -13,6 +13,18 @@ import {
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {
+  SystemTableName,
+  INITIAL_PARTITION_IDS,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {
+  COLUMN,
+  CDC_OPERATION,
+  SERVICE_TYPE,
+  STATE,
+  TABLES,
+} from '../../src/constants/index.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 24000;
@@ -139,6 +151,114 @@ test('MessageGroupService - initialize becomes leader for single replica', async
     t.equal(service.initialized, true, 'Should be initialized');
     // Single replica services become leader immediately (no election needed)
     t.equal(service.getRole(), RaftRole.LEADER, 'Should become leader for single replica');
+
+    await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
+test('MessageGroupService - persists raft role updates to services table', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  const updates = [];
+  const mockCdcIntegrationService = {
+    updateSystemTableRow: async (tableName, whereClause, data) => {
+      updates.push({tableName, whereClause, data});
+      return {success: true};
+    },
+  };
+  const systemTableCache = new SystemTableCache();
+  const servicesPartitionId = INITIAL_PARTITION_IDS[SystemTableName.SERVICES];
+  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.TABLE_ID]: SystemTableName.SERVICES,
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    [COLUMN.SERVICE_ID]: 'services-leader',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
+  });
+
+  try {
+    const service = new MessageGroupService({
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r1',
+      nodeId,
+      transport: router,
+      cdcIntegrationService: mockCdcIntegrationService,
+    });
+
+    await service.initialize();
+    service.systemTableCache = systemTableCache;
+    service.setCdcIntegrationService(mockCdcIntegrationService);
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const roleUpdate = updates.find(
+      (update) =>
+        update.tableName === SystemTableName.SERVICES &&
+        update.whereClause?.service_id === 'mg-1-r1' &&
+        update.data?.raft_role === RaftRole.LEADER,
+    );
+
+    t.ok(roleUpdate, 'raft role update should be persisted via CDC');
+
+    await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
+test('MessageGroupService - persists leader node updates to message groups table', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  const updates = [];
+  const mockCdcIntegrationService = {
+    updateSystemTableRow: async (tableName, whereClause, data) => {
+      updates.push({tableName, whereClause, data});
+      return {success: true};
+    },
+  };
+  const systemTableCache = new SystemTableCache();
+  const messageGroupsPartitionId = INITIAL_PARTITION_IDS[SystemTableName.MESSAGE_GROUPS];
+  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
+    [COLUMN.PARTITION_ID]: messageGroupsPartitionId,
+    [COLUMN.TABLE_ID]: SystemTableName.MESSAGE_GROUPS,
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    [COLUMN.SERVICE_ID]: 'message-groups-leader',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: messageGroupsPartitionId,
+    [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.ADDRESS]: `${nodeId}/partition/message-groups-leader`,
+  });
+
+  try {
+    const service = new MessageGroupService({
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r1',
+      nodeId,
+      transport: router,
+      cdcIntegrationService: mockCdcIntegrationService,
+    });
+
+    await service.initialize();
+    service.systemTableCache = systemTableCache;
+    service.setCdcIntegrationService(mockCdcIntegrationService);
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const leaderUpdate = updates.find(
+      (update) =>
+        update.tableName === SystemTableName.MESSAGE_GROUPS &&
+        update.whereClause?.[COLUMN.GROUP_ID] === 'mg-1' &&
+        update.data?.[COLUMN.LEADER_NODE_ID] === nodeId,
+    );
+
+    t.ok(leaderUpdate, 'leader node update should be persisted via CDC');
 
     await service.shutdown();
   } finally {

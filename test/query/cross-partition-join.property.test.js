@@ -4,9 +4,10 @@
  *
  * For any JOIN operation between tables in different partitions, the system
  * should aggregate results correctly while preserving SQL semantics.
+ * All queries route through message router using service addresses from system cache.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
@@ -16,30 +17,54 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
-/**
- * Create a mock partition with specific data.
- * @param {Array} data - Data to return.
- * @return {Object} Mock partition.
- */
-function createMockPartition(data) {
+// Mock partition data storage
+const mockPartitionData = new Map();
+
+// Mock message router that routes queries to mock partition data
+function createMockMessageRouter() {
   return {
-    data,
-    executeQuery: async function(sql, _params) {
-      if (sql.toUpperCase().startsWith('SELECT')) {
-        return {rows: this.data, changes: 0};
+    deliver: async function(address, message) {
+      const parts = address.split('/');
+      const partitionId = parts[2];
+
+      if (message.type === 'QUERY') {
+        const data = mockPartitionData.get(partitionId) || [];
+        return {
+          acknowledged: true,
+          success: true,
+          rows: data,
+          changes: data.length || 1,
+        };
       }
-      return {rows: [], changes: 1};
+      return {acknowledged: true, success: true, changes: 1};
+    },
+  };
+}
+
+// Mock system cache with services for routing
+function createMockSystemCache(partitionIds) {
+  const services = partitionIds.map((pid) => ({
+    service_id: pid,
+    service_type: 'partition',
+    partition_id: pid,
+    node_id: 'test-node',
+    address: `test-node/partition/${pid}`,
+    status: 'active',
+  }));
+
+  return {
+    services,
+    filter: function(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      return [];
     },
   };
 }
 
 /**
  * Perform a reference INNER JOIN in JavaScript for comparison.
- * @param {Array} leftRows - Left table rows.
- * @param {Array} rightRows - Right table rows.
- * @param {string} leftCol - Left join column.
- * @param {string} rightCol - Right join column.
- * @return {Array} Joined rows.
  */
 function referenceInnerJoin(leftRows, rightRows, leftCol, rightCol) {
   const result = [];
@@ -53,12 +78,6 @@ function referenceInnerJoin(leftRows, rightRows, leftCol, rightCol) {
   return result;
 }
 
-/**
- * Property 50: Cross-Partition JOIN Support
- * For any JOIN operation between tables in different partitions, the system
- * should aggregate results correctly while preserving SQL semantics.
- * **Validates: Requirements 22.2, 22.3**
- */
 test('Property 50: Cross-Partition JOIN Support', async (t) => {
   await t.test('INNER JOIN produces correct results across partitions', async (t) => {
     await fc.assert(
@@ -81,13 +100,13 @@ test('Property 50: Cross-Partition JOIN Support', async (t) => {
           {minLength: 1, maxLength: 5},
         ),
         async (users, orders) => {
-          // Create partitions for users and orders tables
-          const partitions = new Map();
-          partitions.set('users_p1', createMockPartition(users));
-          partitions.set('orders_p1', createMockPartition(orders));
+          mockPartitionData.set('users_p1', users);
+          mockPartitionData.set('orders_p1', orders);
 
-          const executor = new QueryExecutor();
-          executor.setPartitionRegistry(partitions);
+          const executor = new QueryExecutor({
+            messageRouter: createMockMessageRouter(),
+            systemCache: createMockSystemCache(['users_p1', 'orders_p1']),
+          });
 
           // Create JOIN AST
           const ast = {
@@ -122,6 +141,8 @@ test('Property 50: Cross-Partition JOIN Support', async (t) => {
             {joinPartitions},
           );
 
+          mockPartitionData.clear();
+
           // Compute expected result using reference implementation
           const expected = referenceInnerJoin(users, orders, 'user_id', 'user_id');
 
@@ -149,15 +170,18 @@ test('Property 50: Cross-Partition JOIN Support', async (t) => {
           const partition1Data = rows.filter((_, i) => i % 2 === 0);
           const partition2Data = rows.filter((_, i) => i % 2 === 1);
 
-          const partitions = new Map();
-          partitions.set('table_p1', createMockPartition(partition1Data));
-          partitions.set('table_p2', createMockPartition(partition2Data));
+          mockPartitionData.set('table_p1', partition1Data);
+          mockPartitionData.set('table_p2', partition2Data);
 
-          const executor = new QueryExecutor();
-          executor.setPartitionRegistry(partitions);
+          const executor = new QueryExecutor({
+            messageRouter: createMockMessageRouter(),
+            systemCache: createMockSystemCache(['table_p1', 'table_p2']),
+          });
 
           const ast = new SQLParser('SELECT * FROM test').parse();
           const result = await executor.executeSelect(ast, ['table_p1', 'table_p2']);
+
+          mockPartitionData.clear();
 
           // Property: All rows from both partitions should be in result
           return result.success === true && result.rows.length === rows.length;
@@ -180,21 +204,25 @@ test('Property 50: Cross-Partition JOIN Support', async (t) => {
           {minLength: 1, maxLength: 10},
         ),
         async (partitionCount, rows) => {
-          const partitions = new Map();
+          const partitionIds = [];
 
           // Distribute rows across partitions
           for (let i = 0; i < partitionCount; i++) {
+            const pid = `p${i}`;
+            partitionIds.push(pid);
             const partitionRows = rows.filter((_, idx) => idx % partitionCount === i);
-            partitions.set(`p${i}`, createMockPartition(partitionRows));
+            mockPartitionData.set(pid, partitionRows);
           }
 
-          const executor = new QueryExecutor();
-          executor.setPartitionRegistry(partitions);
+          const executor = new QueryExecutor({
+            messageRouter: createMockMessageRouter(),
+            systemCache: createMockSystemCache(partitionIds),
+          });
 
           const ast = new SQLParser('SELECT * FROM test').parse();
-          const partitionIds = Array.from(partitions.keys());
-
           const result = await executor.executeSelect(ast, partitionIds);
+
+          mockPartitionData.clear();
 
           // Property: Result should be a single array containing all rows
           if (!result.success) return false;
@@ -224,15 +252,18 @@ test('Property 50: Cross-Partition JOIN Support', async (t) => {
           const p1Data = rows.slice(0, Math.ceil(rows.length / 2));
           const p2Data = rows.slice(Math.ceil(rows.length / 2));
 
-          const partitions = new Map();
-          partitions.set('p1', createMockPartition(p1Data));
-          partitions.set('p2', createMockPartition(p2Data));
+          mockPartitionData.set('p1', p1Data);
+          mockPartitionData.set('p2', p2Data);
 
-          const executor = new QueryExecutor();
-          executor.setPartitionRegistry(partitions);
+          const executor = new QueryExecutor({
+            messageRouter: createMockMessageRouter(),
+            systemCache: createMockSystemCache(['p1', 'p2']),
+          });
 
           const ast = new SQLParser('SELECT * FROM test ORDER BY value ASC').parse();
           const result = await executor.executeSelect(ast, ['p1', 'p2']);
+
+          mockPartitionData.clear();
 
           // Property: Results should be sorted by value ascending
           if (!result.success || result.rows.length < 2) return true;

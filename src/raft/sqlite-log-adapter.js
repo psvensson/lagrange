@@ -61,51 +61,8 @@ class SQLiteLogAdapter {
     const hasDataColumn = tableInfo.some((col) => col.name === 'data');
     const hasCommandColumn = tableInfo.some((col) => col.name === 'command');
 
-    // Migration: handle legacy data → command column rename
-    if (hasDataColumn && !hasCommandColumn) {
-      // Old schema: has 'data' but no 'command'
-      // Need to recreate table to remove 'data' column NOT NULL constraint
-      // SQLite doesn't support DROP COLUMN or ALTER COLUMN, so we recreate
-      this.db.exec('ALTER TABLE _raft_log RENAME TO _raft_log_old');
-      this.db.exec(`
-        CREATE TABLE _raft_log (
-          log_index INTEGER PRIMARY KEY,
-          term INTEGER NOT NULL,
-          command TEXT NOT NULL,
-          timestamp INTEGER NOT NULL
-        )
-      `);
-      // Copy data from old table, mapping 'data' to 'command'
-      this.db.exec(`
-        INSERT INTO _raft_log (log_index, term, command, timestamp)
-        SELECT log_index, term, data, timestamp FROM _raft_log_old
-      `);
-      this.db.exec('DROP TABLE _raft_log_old');
-    } else if (hasDataColumn && hasCommandColumn) {
-      // Both columns exist - ensure command has data from legacy column
-      this.db.exec(
-        'UPDATE _raft_log SET command = data WHERE command IS NULL AND data IS NOT NULL',
-      );
-      // Set default for any remaining NULL values
-      this.db.exec('UPDATE _raft_log SET command = \'{}\' WHERE command IS NULL');
-      // Recreate table without 'data' column
-      this.db.exec('ALTER TABLE _raft_log RENAME TO _raft_log_old');
-      this.db.exec(`
-        CREATE TABLE _raft_log (
-          log_index INTEGER PRIMARY KEY,
-          term INTEGER NOT NULL,
-          command TEXT NOT NULL,
-          timestamp INTEGER NOT NULL
-        )
-      `);
-      this.db.exec(`
-        INSERT INTO _raft_log (log_index, term, command, timestamp)
-        SELECT log_index, term, command, timestamp FROM _raft_log_old
-      `);
-      this.db.exec('DROP TABLE _raft_log_old');
-    } else if (!hasCommandColumn) {
-      // No command column at all - add it with default
-      this.db.exec('ALTER TABLE _raft_log ADD COLUMN command TEXT NOT NULL DEFAULT \'{}\'');
+    if (hasDataColumn || !hasCommandColumn) {
+      throw new Error('Legacy raft log schema detected; manual migration required');
     }
 
     this.db.exec(`
@@ -514,10 +471,6 @@ class SQLiteLogAdapter {
       'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
     ).run('committedIndex', String(index));
   }
-
-  // ============================================================
-  // Legacy callback-based methods (for backward compatibility)
-  // ============================================================
 
   /**
    * Append entries to the log.

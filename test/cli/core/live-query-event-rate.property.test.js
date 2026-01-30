@@ -6,7 +6,7 @@
  * **Validates: Requirements 32.10**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {LiveQueryManager} from '../../../src/cli/core/live-query-manager.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';

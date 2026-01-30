@@ -2,26 +2,28 @@ TAP version 14
 # Subtest: Property 5: CDC Cache Consistency - INSERT adds records
     ok 1 - INSERT operations correctly add records to cache
     1..1
-ok 1 - Property 5: CDC Cache Consistency - INSERT adds records # time=11.077ms
+ok 1 - Property 5: CDC Cache Consistency - INSERT adds records # time=9.752ms
 
 # Subtest: Property 5: CDC Cache Consistency - UPDATE modifies records
     ok 1 - UPDATE operations correctly modify records in cache
     1..1
-ok 2 - Property 5: CDC Cache Consistency - UPDATE modifies records # time=2.03ms
+ok 2 - Property 5: CDC Cache Consistency - UPDATE modifies records # time=1.735ms
 
 # Subtest: Property 5: CDC Cache Consistency - DELETE removes records
     ok 1 - DELETE operations correctly remove records from cache
     1..1
-ok 3 - Property 5: CDC Cache Consistency - DELETE removes records # time=1.551ms
+ok 3 - Property 5: CDC Cache Consistency - DELETE removes records # time=1.474ms
 
 # Subtest: Property 5: CDC Cache Consistency - sequence of events
     ok 1 - Sequence of CDC events produces consistent cache state
     1..1
-ok 4 - Property 5: CDC Cache Consistency - sequence of events # time=5.703ms
+ok 4 - Property 5: CDC Cache Consistency - sequence of events # time=4.473ms
 
 # Subtest: Property 5: CDC Cache Consistency - lastUpdate is updated
     ok 1 - lastUpdate is updated after applying CDC events
     1..1
-ok 5 - Property 5: CDC Cache Consistency - lastUpdate is updated # time=1.027ms
+ok 5 - Property 5: CDC Cache Consistency - lastUpdate is updated # time=1.196ms
 
 1..5
+# { total: 5, pass: 5 }
+# time=29.29ms

@@ -7,10 +7,9 @@
  * cleanup move to transition it to `removed` state.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
-  UnifiedRebalancer,
   EntityType,
   MoveType,
   ReplicaStatus,
@@ -21,38 +20,7 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-
-/**
- * Create a mock system table cache.
- * @param {Object} data - Initial cache data.
- * @return {Object} Mock cache.
- */
-function createMockCache(data = {}) {
-  const cache = {
-    nodes: data.nodes || [],
-    services: data.services || [],
-    partitions: data.partitions || [],
-    tables: data.tables || [],
-  };
-
-  return {
-    getAll(tableName) {
-      return cache[tableName] || [];
-    },
-    filter(tableName, predicate) {
-      const items = cache[tableName] || [];
-      return items.filter(predicate);
-    },
-    get(tableName, id) {
-      const items = cache[tableName] || [];
-      return items.find((item) =>
-        item.id === id ||
-        item.node_id === id ||
-        item.partition_id === id ||
-        item.service_id === id);
-    },
-  };
-}
+import {createMockCache, createMockCdcService, createTestRebalancer} from './test-helpers.js';
 
 test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
   t.beforeEach(async () => {
@@ -84,6 +52,7 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
         async (partitionId, nodeId, replicaId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'coordinator-node',
+            cdcIntegrationService: createMockCdcService(),
           });
 
           // Set up replica in failed state (via pending -> failed)
@@ -106,28 +75,26 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
             return true; // Skip if setup failed
           }
 
-          const mockCache = createMockCache({
-            nodes: [{node_id: nodeId, status: 'active'}],
-            services: [
-              {
-                service_id: replicaId,
-                partition_id: partitionId,
-                node_id: nodeId,
-                service_type: 'partition',
-                status: ReplicaStatus.FAILED,
-              },
-            ],
-            partitions: [{partition_id: partitionId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: partitionId,
             entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
             nodeId: 'coordinator-node',
-            replicaStateMachine: stateMachine,
+            cacheData: {
+              nodes: [{node_id: nodeId, status: 'active'}],
+              services: [
+                {
+                  service_id: replicaId,
+                  partition_id: partitionId,
+                  node_id: nodeId,
+                  service_type: 'partition',
+                  status: ReplicaStatus.FAILED,
+                },
+              ],
+              partitions: [{partition_id: partitionId, table_id: 'table-1'}],
+            },
           });
 
+          rebalancer.replicaStateMachine = stateMachine;
           rebalancer.initialize();
           rebalancer.setLeader(true);
 
@@ -178,6 +145,7 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
         (partitionId, nodeId, replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCdcService(),
           });
 
           // Set up replicas in failed state
@@ -220,25 +188,23 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
         fc.uuid(), // node_id
         fc.uuid(), // replica_id
         async (partitionId, nodeId, replicaId) => {
-          const mockCache = createMockCache({
-            nodes: [{node_id: nodeId, status: 'active'}],
-            services: [
-              {
-                service_id: replicaId,
-                partition_id: partitionId,
-                node_id: nodeId,
-                service_type: 'partition',
-                status: ReplicaStatus.FAILED,
-              },
-            ],
-            partitions: [{partition_id: partitionId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: partitionId,
             entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
             nodeId: 'coordinator-node',
+            cacheData: {
+              nodes: [{node_id: nodeId, status: 'active'}],
+              services: [
+                {
+                  service_id: replicaId,
+                  partition_id: partitionId,
+                  node_id: nodeId,
+                  service_type: 'partition',
+                  status: ReplicaStatus.FAILED,
+                },
+              ],
+              partitions: [{partition_id: partitionId, table_id: 'table-1'}],
+            },
           });
 
           rebalancer.initialize();
@@ -280,71 +246,4 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
     t.pass('cleanup moves have replica_failed reason');
   });
 
-  /**
-   * Property: Inactive replicas also get cleanup moves.
-   */
-  t.test('cleanup moves generated for inactive replicas', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.uuid(), // partition_id
-        fc.uuid(), // node_id
-        fc.uuid(), // replica_id
-        async (partitionId, nodeId, replicaId) => {
-          const mockCache = createMockCache({
-            nodes: [{node_id: nodeId, status: 'active'}],
-            services: [
-              {
-                service_id: replicaId,
-                partition_id: partitionId,
-                node_id: nodeId,
-                service_type: 'partition',
-                status: ReplicaStatus.INACTIVE,
-              },
-            ],
-            partitions: [{partition_id: partitionId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
-            entityId: partitionId,
-            entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
-            nodeId: 'coordinator-node',
-          });
-
-          rebalancer.initialize();
-          rebalancer.setLeader(true);
-
-          // Calculate moves with inactive replica
-          const currentReplicas = [
-            {
-              service_id: replicaId,
-              replica_id: replicaId,
-              node_id: nodeId,
-              status: ReplicaStatus.INACTIVE,
-            },
-          ];
-          const targetState = {
-            targetReplicaCount: 1,
-            targetNodes: [nodeId],
-          };
-
-          const moves = rebalancer.calculateMoves(currentReplicas, targetState);
-
-          // Clean up
-          rebalancer.shutdown();
-
-          // A cleanup REMOVE move should be generated for the inactive replica
-          const cleanupMoves = moves.filter((m) =>
-            m.type === MoveType.REMOVE &&
-            m.replicaId === replicaId &&
-            m.reason === 'replica_failed');
-
-          return cleanupMoves.length > 0;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('cleanup moves generated for inactive replicas');
-  });
 });

@@ -1,34 +1,66 @@
 /**
  * SQL Query Processing Property-Based Tests
  * Property tests for SQL query distribution, routing, and durability.
+ * All queries route through message router using service addresses from system cache.
  * Requirements: 6.1, 6.2, 6.4, 6.5, 15.1, 15.2, 15.3, 15.4, 20.6, 20.7
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {PartitionResolver} from '../../src/query/partition-resolver.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
-// SQLQueryEngine imported for potential future use
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
-// Arbitraries for generating test data
-const identifierArb = fc.stringOf(
-  fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz'),
-  {minLength: 1, maxLength: 10},
-);
+// Mock partition data storage
+const mockPartitionData = new Map();
 
-const _columnNameArb = identifierArb;
-const _tableNameArb = identifierArb;
+// Mock message router that routes queries to mock partition data
+function createMockMessageRouter() {
+  return {
+    deliver: async function(address, message) {
+      const parts = address.split('/');
+      const partitionId = parts[2];
 
-const literalValueArb = fc.oneof(
-  fc.integer({min: -1000, max: 1000}),
-  fc.stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz '), {minLength: 1, maxLength: 20}),
-);
+      if (message.type === 'QUERY') {
+        const data = mockPartitionData.get(partitionId) || [];
+        return {
+          acknowledged: true,
+          success: true,
+          rows: data,
+          changes: data.length || 1,
+        };
+      }
+      return {acknowledged: true, success: true, changes: 1};
+    },
+  };
+}
+
+// Mock system cache with services for routing
+function createMockSystemCache(partitionIds) {
+  const services = partitionIds.map((pid) => ({
+    service_id: pid,
+    service_type: 'partition',
+    partition_id: pid,
+    node_id: 'test-node',
+    address: `test-node/partition/${pid}`,
+    status: 'active',
+  }));
+
+  return {
+    services,
+    filter: function(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      return [];
+    },
+  };
+}
 
 // Generate partition key values (strings for simplicity)
 const keyValueArb = fc.stringOf(
@@ -42,18 +74,10 @@ const partitionBoundaryArb = fc.array(
   {minLength: 1, maxLength: 5},
 ).map((arr) => [...new Set(arr)].sort());
 
-// Mock partition for testing
-function createMockPartition(data = []) {
-  return {
-    data,
-    executeQuery: async function(sql, _params) {
-      if (sql.toUpperCase().startsWith('SELECT')) {
-        return {rows: this.data, changes: 0};
-      }
-      return {rows: [], changes: 1};
-    },
-  };
-}
+const literalValueArb = fc.oneof(
+  fc.integer({min: -1000, max: 1000}),
+  fc.stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz '), {minLength: 1, maxLength: 20}),
+);
 
 /**
  * Property 10: SQL Query Distribution
@@ -72,24 +96,23 @@ test('Property 10: SQL Query Distribution', async (t) => {
       fc.integer({min: 1, max: 3}),
       async (rows, partitionCount) => {
         // Distribute rows across partitions
-        const partitions = new Map();
-        const partitionData = Array.from({length: partitionCount}, () => []);
-
-        for (let i = 0; i < rows.length; i++) {
-          partitionData[i % partitionCount].push(rows[i]);
-        }
-
+        const partitionIds = [];
         for (let i = 0; i < partitionCount; i++) {
-          partitions.set(`p${i}`, createMockPartition(partitionData[i]));
+          const pid = `p${i}`;
+          partitionIds.push(pid);
+          const partitionRows = rows.filter((_, idx) => idx % partitionCount === i);
+          mockPartitionData.set(pid, partitionRows);
         }
 
-        const executor = new QueryExecutor();
-        executor.setPartitionRegistry(partitions);
+        const executor = new QueryExecutor({
+          messageRouter: createMockMessageRouter(),
+          systemCache: createMockSystemCache(partitionIds),
+        });
 
         const ast = new SQLParser('SELECT * FROM test').parse();
-        const partitionIds = Array.from(partitions.keys());
-
         const result = await executor.executeSelect(ast, partitionIds);
+
+        mockPartitionData.clear();
 
         // Property: All rows from all partitions should be in result
         return result.success === true && result.rows.length === rows.length;
@@ -115,16 +138,18 @@ test('Property 10b: ORDER BY preserves ordering', async (t) => {
         const p1Data = rows.filter((_, i) => i % 2 === 0);
         const p2Data = rows.filter((_, i) => i % 2 === 1);
 
-        const partitions = new Map([
-          ['p1', createMockPartition(p1Data)],
-          ['p2', createMockPartition(p2Data)],
-        ]);
+        mockPartitionData.set('p1', p1Data);
+        mockPartitionData.set('p2', p2Data);
 
-        const executor = new QueryExecutor();
-        executor.setPartitionRegistry(partitions);
+        const executor = new QueryExecutor({
+          messageRouter: createMockMessageRouter(),
+          systemCache: createMockSystemCache(['p1', 'p2']),
+        });
 
         const ast = new SQLParser('SELECT * FROM test ORDER BY value ASC').parse();
         const result = await executor.executeSelect(ast, ['p1', 'p2']);
+
+        mockPartitionData.clear();
 
         // Property: Result should be sorted by value
         for (let i = 1; i < result.rows.length; i++) {
@@ -152,16 +177,18 @@ test('Property 10c: LIMIT respects count', async (t) => {
         const p1Data = rows.slice(0, Math.floor(rows.length / 2));
         const p2Data = rows.slice(Math.floor(rows.length / 2));
 
-        const partitions = new Map([
-          ['p1', createMockPartition(p1Data)],
-          ['p2', createMockPartition(p2Data)],
-        ]);
+        mockPartitionData.set('p1', p1Data);
+        mockPartitionData.set('p2', p2Data);
 
-        const executor = new QueryExecutor();
-        executor.setPartitionRegistry(partitions);
+        const executor = new QueryExecutor({
+          messageRouter: createMockMessageRouter(),
+          systemCache: createMockSystemCache(['p1', 'p2']),
+        });
 
         const ast = new SQLParser(`SELECT * FROM test LIMIT ${limit}`).parse();
         const result = await executor.executeSelect(ast, ['p1', 'p2']);
+
+        mockPartitionData.clear();
 
         // Property: Result count should not exceed limit
         return result.rows.length <= limit;
@@ -442,4 +469,3 @@ test('Property 18c: DELETE without key filter affects all partitions', async (t)
   );
   t.pass('DELETE without key filter affects all partitions');
 });
-

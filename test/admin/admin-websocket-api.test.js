@@ -3,13 +3,13 @@
  * Requirements: 32.1-32.39
  */
 
-import {test} from 'tap';
-import WebSocket from 'ws';
+import {test} from '../../src/test-helpers/tap.js';
 import {AdminWebSocketAPI, MessageType, ErrorCode} from
   '../../src/admin/admin-websocket-api.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
 
 // Initialize services for tests
 ConfigurationManager.getInstance().initialize();
@@ -118,36 +118,17 @@ function createPopulatedCache() {
 }
 
 /**
- * Connect to WebSocket and wait for first message.
- * @param {string} url - WebSocket URL.
+ * Connect to AdminWebSocketAPI in-process and wait for first message.
+ * Avoids binding TCP ports (not permitted in some test sandboxes).
+ * @param {AdminWebSocketAPI} api - Admin API instance.
  * @param {number} timeout - Timeout in ms.
- * @return {Promise<{ws: WebSocket, message: Object}>}
+ * @return {Promise<{ws: Object, message: Object}>}
  */
-function connectAndReceive(url, timeout = 2000) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(url);
-
-    const timer = setTimeout(() => {
-      ws.close();
-      reject(new Error('Timeout waiting for connection/message'));
-    }, timeout);
-
-    ws.on('message', (data) => {
-      clearTimeout(timer);
-      try {
-        const message = JSON.parse(data.toString());
-        resolve({ws, message});
-      } catch (e) {
-        ws.close();
-        reject(e);
-      }
-    });
-
-    ws.on('error', (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-  });
+async function connectAndReceive(api, timeout = 2000) {
+  const {clientSocket, serverSocket} = createInProcWebSocketPair();
+  api.handleConnection(serverSocket);
+  const message = await waitForMessage(clientSocket, timeout);
+  return {ws: clientSocket, message};
 }
 
 /**
@@ -178,7 +159,7 @@ test('AdminWebSocketAPI - initialization', async (t) => {
 
   t.equal(api.isInitialized(), false, 'should not be initialized initially');
 
-  await api.initialize(0);
+  await api.initialize(0, {listen: false});
 
   t.equal(api.isInitialized(), true, 'should be initialized after init');
   t.equal(api.getClientCount(), 0, 'should have no clients initially');
@@ -194,12 +175,8 @@ test('AdminWebSocketAPI - cache dump on connection', async (t) => {
     systemTableCache: cache,
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws, message} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws, message} = await connectAndReceive(api);
 
   t.equal(message.type, MessageType.CACHE_DUMP, 'should receive cache_dump');
   t.ok(message.timestamp, 'should have timestamp');
@@ -223,14 +200,12 @@ test('AdminWebSocketAPI - multiple concurrent connections', async (t) => {
     systemTableCache: createPopulatedCache(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-  const url = `ws://localhost:${port}/api/admin/stream`;
+  await api.initialize(0, {listen: false});
 
   const [conn1, conn2, conn3] = await Promise.all([
-    connectAndReceive(url),
-    connectAndReceive(url),
-    connectAndReceive(url),
+    connectAndReceive(api),
+    connectAndReceive(api),
+    connectAndReceive(api),
   ]);
 
   t.equal(api.getClientCount(), 3, 'should have 3 connected clients');
@@ -252,12 +227,8 @@ test('AdminWebSocketAPI - query execution SELECT', async (t) => {
     sqlQueryEngine: createMockQueryEngine(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
 
   ws.send(JSON.stringify({
     type: MessageType.QUERY,
@@ -285,12 +256,8 @@ test('AdminWebSocketAPI - query execution INSERT', async (t) => {
     sqlQueryEngine: createMockQueryEngine(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
 
   ws.send(JSON.stringify({
     type: MessageType.QUERY,
@@ -318,12 +285,8 @@ test('AdminWebSocketAPI - query execution UPDATE', async (t) => {
     sqlQueryEngine: createMockQueryEngine(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
 
   ws.send(JSON.stringify({
     type: MessageType.QUERY,
@@ -347,12 +310,8 @@ test('AdminWebSocketAPI - query execution DELETE', async (t) => {
     sqlQueryEngine: createMockQueryEngine(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
 
   ws.send(JSON.stringify({
     type: MessageType.QUERY,
@@ -376,12 +335,8 @@ test('AdminWebSocketAPI - error handling TABLE_NOT_FOUND', async (t) => {
     sqlQueryEngine: createMockQueryEngine(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
 
   ws.send(JSON.stringify({
     type: MessageType.QUERY,
@@ -407,12 +362,8 @@ test('AdminWebSocketAPI - error handling SYNTAX_ERROR', async (t) => {
     sqlQueryEngine: createMockQueryEngine(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
 
   ws.send(JSON.stringify({
     type: MessageType.QUERY,
@@ -434,12 +385,8 @@ test('AdminWebSocketAPI - malformed JSON handling', async (t) => {
     systemTableCache: createPopulatedCache(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
 
   ws.send('not valid json');
 
@@ -460,12 +407,8 @@ test('AdminWebSocketAPI - unknown message type ignored', async (t) => {
     sqlQueryEngine: createMockQueryEngine(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
 
   // Send unknown message type (should be ignored)
   ws.send(JSON.stringify({type: 'unknown_type', data: 'test'}));
@@ -492,12 +435,8 @@ test('AdminWebSocketAPI - refresh message', async (t) => {
     systemTableCache: createPopulatedCache(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws, message: firstDump} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws, message: firstDump} = await connectAndReceive(api);
 
   t.equal(firstDump.type, MessageType.CACHE_DUMP, 'should receive initial dump');
 
@@ -516,13 +455,11 @@ test('AdminWebSocketAPI - CDC event broadcasting', async (t) => {
     systemTableCache: createPopulatedCache(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-  const url = `ws://localhost:${port}/api/admin/stream`;
+  await api.initialize(0, {listen: false});
 
   const [conn1, conn2] = await Promise.all([
-    connectAndReceive(url),
-    connectAndReceive(url),
+    connectAndReceive(api),
+    connectAndReceive(api),
   ]);
 
   // Broadcast CDC event
@@ -550,23 +487,22 @@ test('AdminWebSocketAPI - CDC event broadcasting', async (t) => {
 });
 
 test('AdminWebSocketAPI - health endpoint', async (t) => {
-  const api = new AdminWebSocketAPI({nodeId: 'test-node'});
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+  });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
+  await api.initialize(0, {listen: false});
+  await connectAndReceive(api);
 
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  const response = await api.getFastify().inject({method: 'GET', url: '/health'});
+  const health = response.json();
 
-  const response = await fetch(`http://localhost:${port}/health`);
-  const health = await response.json();
-
+  t.equal(response.statusCode, 200, 'should return 200');
   t.equal(health.status, 'healthy', 'should be healthy');
   t.equal(health.nodeId, 'test-node', 'should have nodeId');
   t.equal(health.connectedClients, 1, 'should have 1 connected client');
 
-  ws.close();
   await api.shutdown();
 });
 
@@ -576,12 +512,8 @@ test('AdminWebSocketAPI - cleanup on disconnect', async (t) => {
     systemTableCache: createPopulatedCache(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
 
   t.equal(api.getClientCount(), 1, 'should have 1 client');
 
@@ -600,12 +532,8 @@ test('AdminWebSocketAPI - query without queryId', async (t) => {
     sqlQueryEngine: createMockQueryEngine(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
 
   ws.send(JSON.stringify({type: MessageType.QUERY, sql: 'SELECT 1'}));
 
@@ -625,12 +553,8 @@ test('AdminWebSocketAPI - query without sql', async (t) => {
     sqlQueryEngine: createMockQueryEngine(),
   });
 
-  await api.initialize(0);
-  const port = api.getFastify().server.address().port;
-
-  const {ws} = await connectAndReceive(
-    `ws://localhost:${port}/api/admin/stream`,
-  );
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
 
   ws.send(JSON.stringify({type: MessageType.QUERY, queryId: 'q8'}));
 

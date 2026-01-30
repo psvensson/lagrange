@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {RemoteCache} from '../../../src/cli/core/remote-cache.js';
 
 test('RemoteCache - constructor initializes empty tables', async (t) => {

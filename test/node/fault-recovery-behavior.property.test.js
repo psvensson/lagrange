@@ -10,7 +10,7 @@
  * - `removing` → `removed`
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaStateMachine,
@@ -45,6 +45,13 @@ function createMockCache(nodeId, services = []) {
       }
       return [];
     },
+  };
+}
+
+function createMockCDCService() {
+  return {
+    updateSystemTableRow: async () => ({success: true}),
+    insertSystemTableRow: async () => ({success: true}),
   };
 }
 
@@ -91,6 +98,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -140,6 +148,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -189,6 +198,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -263,6 +273,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -310,6 +321,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -356,6 +368,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -423,6 +436,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
+            cdcIntegrationService: createMockCDCService(),
           });
 
           let emittedEvent = null;
@@ -464,6 +478,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -486,30 +501,33 @@ test('Property 7: Recovery State Handling', async (t) => {
   });
 
   /**
-   * Property: Recovery handles missing cache gracefully.
+   * Property: Recovery requires system table cache.
    */
-  t.test('recovery handles missing cache gracefully', async (t) => {
+  t.test('recovery requires system table cache', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.uuid(), // nodeId
         async (nodeId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId,
+            cdcIntegrationService: createMockCDCService(),
           });
 
-          // Call without systemTableCache
-          const result = await stateMachine.handleNodeRecovery({
-            nodeId,
-          });
+          let threw = false;
+          try {
+            await stateMachine.handleNodeRecovery({nodeId});
+          } catch (error) {
+            threw = true;
+          }
 
           stateMachine.clear();
 
-          return result.total === 0;
+          return threw;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('recovery handles missing cache gracefully');
+    t.pass('recovery requires system table cache');
   });
 });

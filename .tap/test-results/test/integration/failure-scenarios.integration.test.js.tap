@@ -1,19 +1,19 @@
 TAP version 14
 # Subtest: Failure scenario integration tests
-{"level":50,"time":"2026-01-23T06:22:44.199Z","nodeId":"test-node","pid":418228,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-01-23T06:22:24.198Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-30T11:18:11.096Z","nodeId":"test-node","pid":1332411,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-01-30T11:17:51.095Z","threshold":15000,"msg":"Node failure detected"}
     # Subtest: Req 15.1 - node failure detection marks replicas unavailable
         ok 1 - should emit failure event
         ok 2 - should have partition replica in cache
         ok 3 - should mark replicas as failed via CDC
         ok 4 - should update node status to failed
         1..4
-    ok 1 - Req 15.1 - node failure detection marks replicas unavailable # time=6.757ms
+    ok 1 - Req 15.1 - node failure detection marks replicas unavailable # time=8.397ms
     
     # Subtest: Req 15.2 - rebalancer creates replacement replicas
         ok 1 - rebalance should succeed
         ok 2 - should add replacement replica
         1..2
-    ok 2 - Req 15.2 - rebalancer creates replacement replicas # time=2.052ms
+    ok 2 - Req 15.2 - rebalancer creates replacement replicas # time=4.324ms
     
     # Subtest: Req 15.3 - Raft maintains consistency during partition
         ok 1 - insert should succeed
@@ -21,14 +21,14 @@ TAP version 14
         ok 3 - data should be consistent
         ok 4 - leader maintains role with quorum
         1..4
-    ok 3 - Req 15.3 - Raft maintains consistency during partition # time=6.957ms
+    ok 3 - Req 15.3 - Raft maintains consistency during partition # time=5.95ms
     
     # Subtest: Req 15.4 - recovered node triggers rebalancing
         ok 1 - should detect node recovery
         ok 2 - should identify recovered node
         ok 3 - should update node status to recovering
         1..3
-    ok 4 - Req 15.4 - recovered node triggers rebalancing # time=1.176ms
+    ok 4 - Req 15.4 - recovered node triggers rebalancing # time=1.246ms
     
     # Subtest: Req 15.5 - data available with majority replicas
         ok 1 - write should succeed with majority
@@ -37,19 +37,19 @@ TAP version 14
         ok 4 - update should succeed with majority
         ok 5 - update should be visible
         1..5
-    ok 5 - Req 15.5 - data available with majority replicas # time=2.836ms
+    ok 5 - Req 15.5 - data available with majority replicas # time=3.05ms
     
     # Subtest: failure detector - suspicion before failure
         ok 1 - should emit suspected event
         ok 2 - should not emit failure yet
         1..2
-    ok 6 - failure detector - suspicion before failure # time=1.12ms
+    ok 6 - failure detector - suspicion before failure # time=1.18ms
     
-{"level":50,"time":"2026-01-23T06:22:44.352Z","nodeId":"test-node","pid":418228,"subsystem":"failure-detector","nodeId":"test-node","failureCount":3,"window":30000,"action":"Increasing failure threshold adaptively","msg":"Node flapping detected"}
+{"level":50,"time":"2026-01-30T11:18:11.277Z","nodeId":"test-node","pid":1332411,"subsystem":"failure-detector","nodeId":"test-node","failureCount":3,"window":30000,"action":"Increasing failure threshold adaptively","msg":"Node flapping detected"}
     # Subtest: failure detector - flapping detection increases threshold
         ok 1 - threshold should increase after flapping
         1..1
-    ok 7 - failure detector - flapping detection increases threshold # time=1.501ms
+    ok 7 - failure detector - flapping detection increases threshold # time=0.943ms
     
     # Subtest: failure detector - stats reporting
         ok 1 - should report node ID
@@ -58,38 +58,40 @@ TAP version 14
         ok 4 - should report initialized
         ok 5 - should report not running (not started)
         1..5
-    ok 8 - failure detector - stats reporting # time=1.283ms
+    ok 8 - failure detector - stats reporting # time=0.977ms
     
     # Subtest: Req 14.1-14.5 - complete failure and recovery cycle
         ok 1 - should suspect node-2
-{"level":50,"time":"2026-01-23T06:22:44.385Z","nodeId":"test-node","pid":418228,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-01-23T06:22:24.385Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-30T11:18:11.320Z","nodeId":"test-node","pid":1332411,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-01-30T11:17:51.319Z","threshold":15000,"msg":"Node failure detected"}
         ok 2 - should detect node-2 failure
         ok 3 - should mark replicas as failed via CDC
         ok 4 - should detect node-2 recovery
         ok 5 - should have multiple status updates
         1..5
-    ok 9 - Req 14.1-14.5 - complete failure and recovery cycle # time=1.532ms
+    ok 9 - Req 14.1-14.5 - complete failure and recovery cycle # time=2.267ms
     
     # Subtest: network partition - minority partition cannot write
         ok 1 - write should be rejected on follower
         1..1
-    ok 10 - network partition - minority partition cannot write # time=1.385ms
+    ok 10 - network partition - minority partition cannot write # time=2.179ms
     
     # Subtest: data availability - reads succeed on any replica
         ok 1 - read should succeed on follower
         ok 2 - data should be correct
         1..2
-    ok 11 - data availability - reads succeed on any replica # time=0.981ms
+    ok 11 - data availability - reads succeed on any replica # time=2.193ms
     
-{"level":50,"time":"2026-01-23T06:22:44.424Z","nodeId":"test-node","pid":418228,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-01-23T06:22:24.424Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-30T11:18:11.396Z","nodeId":"test-node","pid":1332411,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-01-30T11:17:51.395Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-01-30T11:18:11.396Z","nodeId":"test-node","pid":1332411,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-01-30T11:17:51.395Z","threshold":15000,"msg":"Node failure detected"}
     # Subtest: multiple node failures - system remains available
         ok 1 - should detect 2 node failures
         ok 2 - should have 3 healthy replicas (majority)
         1..2
-    ok 12 - multiple node failures - system remains available # time=1.596ms
+    ok 12 - multiple node failures - system remains available # time=1.328ms
     
     1..12
-ok 1 - Failure scenario integration tests # time=264.849ms
+ok 1 - Failure scenario integration tests # time=369.908ms
 
-{"level":50,"time":"2026-01-23T06:22:44.425Z","nodeId":"test-node","pid":418228,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-01-23T06:22:24.424Z","threshold":15000,"msg":"Node failure detected"}
 1..1
+# { total: 36, pass: 36 }
+# time=396.206ms

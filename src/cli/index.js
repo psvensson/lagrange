@@ -35,12 +35,22 @@ import {ConfigView} from './views/config-view.js';
 import {ContextsView} from './views/contexts-view.js';
 
 import {SQLQueryView} from './sql/sql-query-view.js';
+import {
+  CLI_APP,
+  CLI_ENV,
+  CLI_FLAG,
+  CLI_HELP_TEXT,
+  CLI_PATH,
+  CLI_VERSION_PREFIX,
+  CLI_VERSION,
+  CLI_VIEW,
+} from './cli-constants.js';
 
 // Debug logging to file (since blessed takes over terminal)
-const DEBUG_LOG = process.env.DDB_CLI_DEBUG === '1';
+const DEBUG_LOG = process.env[CLI_ENV.DEBUG] === CLI_ENV.DEBUG_ENABLED_VALUE;
 const debugLog = (msg) => {
   if (DEBUG_LOG) {
-    fs.appendFileSync('/tmp/ddb-cli-debug.log', `${new Date().toISOString()} ${msg}\n`);
+    fs.appendFileSync(CLI_PATH.DEBUG_LOG_FILE, `${new Date().toISOString()} ${msg}\n`);
   }
 };
 
@@ -57,15 +67,15 @@ export {ConnectionManager} from './core/connection-manager.js';
  * View name to number key mapping
  */
 const VIEW_NUMBERS = {
-  'nodes': '1',
-  'services': '2',
-  'tables': '3',
-  'partitions': '4',
-  'message_groups': '5',
-  'sql': '6',
-  'logs': '7',
-  'config': '8',
-  'contexts': '9',
+  [CLI_VIEW.NODES]: '1',
+  [CLI_VIEW.SERVICES]: '2',
+  [CLI_VIEW.TABLES]: '3',
+  [CLI_VIEW.PARTITIONS]: '4',
+  [CLI_VIEW.MESSAGE_GROUPS]: '5',
+  [CLI_VIEW.SQL]: '6',
+  [CLI_VIEW.LOGS]: '7',
+  [CLI_VIEW.CONFIG]: '8',
+  [CLI_VIEW.CONTEXTS]: '9',
 };
 
 /**
@@ -98,7 +108,7 @@ export class AdminCLI {
     this.helpBox = null;
 
     // State
-    this.currentView = 'nodes';
+    this.currentView = CLI_VIEW.NODES;
     this.cdcPaused = false;
     this.showingDetail = false;
     this.readOnlyMode = false;
@@ -111,19 +121,19 @@ export class AdminCLI {
    */
   async start(args) {
     // Handle --help flag
-    if (args.includes('--help') || args.includes('-h')) {
+    if (args.includes(CLI_FLAG.HELP) || args.includes(CLI_FLAG.HELP_SHORT)) {
       this.showHelp();
       return;
     }
 
     // Handle --version flag
-    if (args.includes('--version') || args.includes('-v')) {
+    if (args.includes(CLI_FLAG.VERSION) || args.includes(CLI_FLAG.VERSION_SHORT)) {
       this.showVersion();
       return;
     }
 
     // Check for read-only mode
-    this.readOnlyMode = args.includes('--read-only');
+    this.readOnlyMode = args.includes(CLI_FLAG.READ_ONLY);
 
     // Get node address from args or environment
     const nodeAddress = args.find((arg) => !arg.startsWith('-')) ||
@@ -181,7 +191,7 @@ export class AdminCLI {
   createScreen() {
     this.screen = blessed.screen({
       smartCSR: true,
-      title: 'DDB Admin CLI',
+      title: CLI_APP.NAME,
       fullUnicode: true,
       dockBorders: true,
       autoPadding: true,
@@ -618,6 +628,8 @@ export class AdminCLI {
     if (viewName === 'sql') {
       this.mainTable.hide();
       this.sqlContainer.show();
+      this.detailPanel.hide();
+      this.showingDetail = false;
       this.sqlInput.focus();
       // Show initial instructions in results panel
       if (!this.sqlResultsData || this.sqlResultsData.length === 0) {
@@ -649,6 +661,18 @@ export class AdminCLI {
     } else {
       this.sqlContainer.hide();
       this.mainTable.show();
+
+      // Services view always shows detail panel
+      if (viewName === 'services') {
+        this.showingDetail = true;
+        this.detailPanel.show();
+        this.mainTable.width = '60%';
+      } else {
+        // Other views hide detail panel by default (can toggle with 'd')
+        this.showingDetail = false;
+        this.detailPanel.hide();
+        this.mainTable.width = '100%';
+      }
     }
 
     this.refreshCurrentView();
@@ -712,11 +736,36 @@ export class AdminCLI {
 
     const {headers, rows, columns, selectedIndex} = renderData;
 
-    // Update column widths based on view columns
+    // Calculate available width for the table
+    // Account for borders (2 chars) and whether detail panel is shown
+    const screenWidth = this.screen.width || 80;
+    const tableWidthPercent = this.showingDetail ? 0.6 : 1.0;
+    const availableWidth = Math.floor(screenWidth * tableWidthPercent) - 4; // borders + padding
+
+    // Calculate column widths
+    let widths = [];
     if (columns && columns.length > 0) {
-      const widths = columns.map((col) => col.width || 15);
+      const totalDefinedWidth = columns.reduce((sum, col) => sum + (col.width || 15), 0);
+      const columnSpacing = (columns.length - 1) * 2; // 2 chars spacing between columns
+      const contentWidth = availableWidth - columnSpacing;
+
+      // Scale column widths proportionally to fit available space
+      widths = columns.map((col) => {
+        const baseWidth = col.width || 15;
+        const scaledWidth = Math.floor((baseWidth / totalDefinedWidth) * contentWidth);
+        return Math.max(8, scaledWidth); // minimum 8 chars per column
+      });
+
       this.mainTable.options.columnWidth = widths;
     }
+
+    // Helper to truncate value to fit column width
+    const truncate = (value, maxWidth) => {
+      const str = String(value || '');
+      if (str.length <= maxWidth) return str;
+      if (maxWidth <= 3) return str.substring(0, maxWidth);
+      return str.substring(0, maxWidth - 2) + '..';
+    };
 
     // ANSI escape codes for styling (blessed-contrib table doesn't support blessed tags)
     // We apply styling to ALL rows to ensure consistent column width calculations
@@ -743,8 +792,12 @@ export class AdminCLI {
         color = ANSI.YELLOW;
       }
 
-      // Apply styling to all rows for consistent width calculation
-      return values.map((v) => `${color}${v}${ANSI.RESET}`);
+      // Truncate values to fit column widths and apply styling
+      return values.map((v, colIndex) => {
+        const maxWidth = widths[colIndex] || 15;
+        const truncated = truncate(v, maxWidth);
+        return `${color}${truncated}${ANSI.RESET}`;
+      });
     });
 
     this.mainTable.setData({headers, data: tableData});
@@ -1167,7 +1220,7 @@ export class AdminCLI {
 
     const readOnly = this.readOnlyMode ? ' {red-fg}[READ-ONLY]{/red-fg}' : '';
 
-    const content = ` {bold}DDB Admin CLI{/bold}${readOnly}  |  ` +
+    const content = ` {bold}${CLI_APP.NAME}{/bold}${readOnly}  |  ` +
       `{cyan-fg}[${viewNum}]{/cyan-fg} ${viewName}  |  ` +
       `${breadcrumb}  |  ${cdcStatus}`;
 
@@ -1646,6 +1699,15 @@ export class AdminCLI {
       for (const [key, value] of Object.entries(details.relatedCounts)) {
         content += `  ${key}: ${value}\n`;
       }
+      content += '\n';
+    }
+
+    if (details.navigationLinks && details.navigationLinks.length > 0) {
+      content += '{cyan-fg}── Navigation ──{/cyan-fg}\n';
+      for (const link of details.navigationLinks) {
+        const keyHint = link.key ? `[${link.key}] ` : '';
+        content += `  ${keyHint}${link.label}\n`;
+      }
     }
 
     this.detailPanel.setContent(content);
@@ -1739,20 +1801,26 @@ export class AdminCLI {
    * Show help information
    */
   showHelp() {
-    console.log(this.helpOverlay?.getUsageText() || `
-DDB Admin CLI - Terminal-based administration tool
+    const optionsText = [
+      `  ${CLI_FLAG.HELP_SHORT}, ${CLI_FLAG.HELP}      Show this help message`,
+      `  ${CLI_FLAG.VERSION_SHORT}, ${CLI_FLAG.VERSION}   Show version information`,
+      `  ${CLI_FLAG.READ_ONLY}     Enable read-only mode (SELECT queries only)`,
+    ].join('\n');
 
-Usage: ddb-admin [options] [node-address]
+    const examplesText = CLI_HELP_TEXT.EXAMPLES
+      .map((example) => `  ${example}`)
+      .join('\n');
+
+    console.log(this.helpOverlay?.getUsageText() || `
+${CLI_HELP_TEXT.TITLE}
+
+${CLI_HELP_TEXT.USAGE}
 
 Options:
-  -h, --help      Show this help message
-  -v, --version   Show version information
-  --read-only     Enable read-only mode (SELECT queries only)
+${optionsText}
 
 Examples:
-  ddb-admin                     Connect to localhost:8081
-  ddb-admin localhost:8080      Connect to specific node
-  ddb-admin --read-only         Start in read-only mode
+${examplesText}
 `);
   }
 
@@ -1760,6 +1828,6 @@ Examples:
    * Show version information
    */
   showVersion() {
-    console.log('ddb-admin version 1.0.0');
+    console.log(`${CLI_VERSION_PREFIX}${CLI_VERSION}`);
   }
 }

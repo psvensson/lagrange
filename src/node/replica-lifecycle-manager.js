@@ -2,9 +2,7 @@
  * Replica Lifecycle Manager - Handles CREATE_REPLICA and REMOVE_REPLICA messages.
  * Manages the lifecycle of partition replicas on a node.
  *
- * NOTE: This class now delegates to ReplicaHandler when available.
- * The ReplicaHandler owns local replica state tracking in the new architecture.
- * Local state tracking in this class is deprecated when replicaHandler is used.
+ * NOTE: This class delegates to ReplicaHandler for execution and tracking.
  *
  * Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9,
  *               10.10, 10.11, 10.12, 10.13, 10.14, 10.15, 10.16,
@@ -15,74 +13,48 @@
 import {EventEmitter} from 'events';
 import fs from 'fs';
 import path from 'path';
-import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SERVICE_TYPE, TYPEOF} from '../constants/index.js';
+import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  REPLICA_LIFECYCLE_ACK_STATUS,
+  REPLICA_LIFECYCLE_DEFAULT,
+  REPLICA_LIFECYCLE_ERROR_MSG,
+  REPLICA_LIFECYCLE_EVENT,
+  REPLICA_LIFECYCLE_LOG_MSG,
+  REPLICA_LIFECYCLE_MESSAGE_TYPE,
+  REPLICA_LIFECYCLE_NUM,
+  REPLICA_LIFECYCLE_PENDING_STATUS,
+  REPLICA_LIFECYCLE_STATUS,
+  REPLICA_LIFECYCLE_SUBSYSTEM,
+  REPLICA_LIFECYCLE_VALID_TRANSITIONS,
+} from './replica-lifecycle-constants.js';
+import {ReplicaHandler} from './replica-handler.js';
 
 /**
  * Replica status values for lifecycle management.
- *
- * @deprecated This enum is deprecated in favor of ReplicaStatus from
- * '../rebalancer/replica-status.js'. The unified ReplicaStatus enum should
- * be used by all components for consistency.
- *
- * Migration guide:
- * - Import ReplicaStatus from '../rebalancer/replica-status.js'
- * - Replace STARTING with CREATING
- * - Replace STOPPING with REMOVING
- * - Replace STOPPED with REMOVED
- *
- * This enum is kept for backward compatibility during migration.
  */
-const ReplicaStatus = {
-  STARTING: 'starting',
-  SYNCING: 'syncing',
-  ACTIVE: 'active',
-  STOPPING: 'stopping',
-  STOPPED: 'stopped',
-  FAILED: 'failed',
-};
+const ReplicaStatus = REPLICA_LIFECYCLE_STATUS;
 
 /**
  * Valid status transitions for replica lifecycle.
  * Key: current status, Value: array of valid next statuses.
- *
- * @deprecated This transition map is deprecated. The RebalanceCoordinator
- * now owns workflow step transitions. Use the workflow step progression
- * defined in '../rebalancer/replica-status.js' instead.
- *
- * This map is kept for backward compatibility during migration.
  */
-const VALID_STATUS_TRANSITIONS = {
-  [ReplicaStatus.STARTING]: [ReplicaStatus.SYNCING, ReplicaStatus.FAILED],
-  [ReplicaStatus.SYNCING]: [ReplicaStatus.ACTIVE, ReplicaStatus.FAILED],
-  [ReplicaStatus.ACTIVE]: [ReplicaStatus.STOPPING, ReplicaStatus.FAILED],
-  [ReplicaStatus.STOPPING]: [ReplicaStatus.STOPPED, ReplicaStatus.FAILED],
-  [ReplicaStatus.STOPPED]: [], // Terminal state
-  [ReplicaStatus.FAILED]: [], // Terminal state (can transition from any state)
-};
+const VALID_STATUS_TRANSITIONS = REPLICA_LIFECYCLE_VALID_TRANSITIONS;
 
 /**
  * Message types for replica lifecycle operations.
  */
-const MessageType = {
-  CREATE_REPLICA: 'CREATE_REPLICA',
-  REMOVE_REPLICA: 'REMOVE_REPLICA',
-  CREATE_REPLICA_ACK: 'CREATE_REPLICA_ACK',
-  REMOVE_REPLICA_ACK: 'REMOVE_REPLICA_ACK',
-};
+const MessageType = REPLICA_LIFECYCLE_MESSAGE_TYPE;
 
 /**
  * ACK status values.
  */
-const AckStatus = {
-  INITIATED: 'initiated',
-  ALREADY_EXISTS: 'already_exists',
-  IN_PROGRESS: 'in_progress',
-  NOT_FOUND: 'not_found',
-  ERROR: 'error',
-};
+const AckStatus = REPLICA_LIFECYCLE_ACK_STATUS;
 
 
 /**
@@ -109,39 +81,45 @@ class ReplicaLifecycleManager extends EventEmitter {
   constructor(options = {}) {
     super();
 
-    this.nodeId = options.nodeId || 'unknown';
+    this.nodeId = options.nodeId || REPLICA_LIFECYCLE_DEFAULT.UNKNOWN_NODE_ID;
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.messageGroupService = options.messageGroupService || null;
     this.createPartitionService = options.createPartitionService || null;
-    this.dataDir = options.dataDir || './data';
+    this.dataDir = options.dataDir || REPLICA_LIFECYCLE_DEFAULT.DATA_DIR;
     this.replicaStateMachine = options.replicaStateMachine || null;
-
-    // ReplicaHandler for delegated execution (Requirements 1.1, 1.2)
-    // When set, operations are delegated to the handler
     this.replicaHandler = options.replicaHandler || null;
 
     // Track pending operations by request_id
     this.pendingOperations = new Map();
-
-    // Track local replicas by replica_id
-    /**
-     * @deprecated localReplicas tracking is deprecated when replicaHandler is used.
-     * The ReplicaHandler owns local replica state tracking in the new architecture.
-     * Use replicaHandler.getAllLocalReplicas() instead.
-     */
-    // NOTE: This is deprecated when replicaHandler is used
-    this.localReplicas = new Map();
+    this.ownsReplicaHandler = false;
+    assertCritical(
+      this.replicaHandler || this.createPartitionService,
+      REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_HANDLER_REQUIRED,
+    );
+    if (!this.replicaHandler) {
+      this.replicaHandler = new ReplicaHandler({
+        nodeId: this.nodeId,
+        systemTableCache: this.systemTableCache,
+        cdcIntegrationService: this.cdcIntegrationService,
+        createPartitionService: this.createPartitionService,
+        dataDir: this.dataDir,
+      });
+      this.ownsReplicaHandler = true;
+    }
+    this.localReplicas = this.replicaHandler.localReplicas;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.operationTimeoutMs = config.get('lifecycle.operationTimeoutMs') || 30000;
-    this.syncTimeoutMs = config.get('lifecycle.syncTimeoutMs') || 60000;
+    this.operationTimeoutMs = config.get(CONFIG_KEY.LIFECYCLE_OPERATION_TIMEOUT_MS) ||
+      REPLICA_LIFECYCLE_DEFAULT.OPERATION_TIMEOUT_MS;
+    this.syncTimeoutMs = config.get(CONFIG_KEY.LIFECYCLE_SYNC_TIMEOUT_MS) ||
+      REPLICA_LIFECYCLE_DEFAULT.SYNC_TIMEOUT_MS;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('replica-lifecycle') : console;
+      loggingService.forSubsystem(REPLICA_LIFECYCLE_SUBSYSTEM) : console;
 
     this.initialized = false;
   }
@@ -154,11 +132,15 @@ class ReplicaLifecycleManager extends EventEmitter {
       return;
     }
 
-    this.logger.info('Initializing replica lifecycle manager', {
+    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.INITIALIZING, {
       nodeId: this.nodeId,
       dataDir: this.dataDir,
       usingReplicaHandler: !!this.replicaHandler,
     });
+
+    if (this.replicaHandler && typeof this.replicaHandler.initialize === TYPEOF.FUNCTION) {
+      this.replicaHandler.initialize();
+    }
 
     // Register message handlers with message group service
     if (this.messageGroupService) {
@@ -167,7 +149,7 @@ class ReplicaLifecycleManager extends EventEmitter {
 
     this.initialized = true;
 
-    this.logger.info('Replica lifecycle manager initialized', {
+    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
     });
   }
@@ -179,40 +161,37 @@ class ReplicaLifecycleManager extends EventEmitter {
    * @param {Object} handler - ReplicaHandler instance.
    */
   setReplicaHandler(handler) {
+    assertCritical(handler, REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_HANDLER_REQUIRED);
     this.replicaHandler = handler;
+    this.localReplicas = handler.localReplicas;
+    this.ownsReplicaHandler = false;
 
-    this.logger.info('ReplicaHandler set for lifecycle manager', {
+    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.HANDLER_SET, {
       nodeId: this.nodeId,
-      hasHandler: !!handler,
+      hasHandler: true,
     });
-
-    // Clear local state tracking when switching to handler
-    if (handler && this.localReplicas.size > 0) {
-      this.logger.warn('Clearing local replica tracking after handler set', {
-        nodeId: this.nodeId,
-        localReplicasCount: this.localReplicas.size,
-      });
-      this.localReplicas.clear();
+    if (typeof handler.initialize === TYPEOF.FUNCTION) {
+      handler.initialize();
     }
   }
 
   /**
    * Register message handlers with the message group service.
    * Note: Message routing is now handled via transport registration
-   * at the ${nodeId}/lifecycle address. This method is kept for
-   * compatibility but does not register handlers directly.
+   * at the ${nodeId}/lifecycle address. This method does not register
+   * handlers directly.
    * @private
    */
   registerMessageHandlers() {
     if (!this.messageGroupService) {
-      this.logger.warn('No message group service available for handler registration');
+      this.logger.warn(REPLICA_LIFECYCLE_LOG_MSG.NO_MESSAGE_GROUP);
       return;
     }
 
     // Message handlers are now registered via transport at ${nodeId}/lifecycle/manager
     // The bootstrap/joining services register the transport handler that calls
     // handleCreateReplica and handleRemoveReplica directly.
-    this.logger.debug('Registered lifecycle message handlers', {
+    this.logger.debug(REPLICA_LIFECYCLE_LOG_MSG.HANDLERS_REGISTERED, {
       nodeId: this.nodeId,
     });
   }
@@ -246,18 +225,18 @@ class ReplicaLifecycleManager extends EventEmitter {
 
     // Validate transition
     if (!this.isValidTransition(currentStatus, newStatus)) {
-      this.logger.error('Invalid status transition attempted', {
+      this.logger.error(REPLICA_LIFECYCLE_LOG_MSG.INVALID_TRANSITION, {
         replicaId,
         currentStatus,
         newStatus,
         nodeId: this.nodeId,
       });
       throw new Error(
-        `Invalid status transition: ${currentStatus} -> ${newStatus}`,
+        REPLICA_LIFECYCLE_ERROR_MSG.INVALID_TRANSITION(currentStatus, newStatus),
       );
     }
 
-    this.logger.info('Updating replica status', {
+    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.STATUS_UPDATE, {
       replicaId,
       currentStatus,
       newStatus,
@@ -269,25 +248,32 @@ class ReplicaLifecycleManager extends EventEmitter {
       replica.status = newStatus;
     }
 
-    // Update via CDC
+    // Update via CDC using UPDATE (not upsert/INSERT OR REPLACE)
+    // The seed node already inserted the row with all fields before sending
+    // CREATE_REPLICA. Using INSERT OR REPLACE would overwrite the entire row
+    // and lose fields like partition_id, raft_role, created_at, etc.
     if (this.cdcIntegrationService) {
-      try {
-        await this.cdcIntegrationService.updateSystemTableRow(
-          SystemTableName.SERVICES,
-          {service_id: replicaId},
-          {status: newStatus, ...additionalData},
-        );
-      } catch (error) {
-        this.logger.error('Failed to update replica status via CDC', {
+      const result = await this.cdcIntegrationService.updateSystemTableRow(
+        SystemTableName.SERVICES,
+        {service_id: replicaId},
+        {
+          status: newStatus,
+          updated_at: Date.now(),
+          ...additionalData,
+        },
+      );
+
+      if (result && result.success === false) {
+        this.logger.error(REPLICA_LIFECYCLE_LOG_MSG.CDC_UPDATE_FAILED, {
           replicaId,
           newStatus,
-          error: error.message,
+          error: result.error,
         });
-        throw error;
+        throw new Error(REPLICA_LIFECYCLE_ERROR_MSG.STATUS_UPDATE_FAILED(result.error));
       }
     }
 
-    this.emit('statusChanged', {
+    this.emit(REPLICA_LIFECYCLE_EVENT.STATUS_CHANGED, {
       replicaId,
       previousStatus: currentStatus,
       newStatus,
@@ -316,7 +302,7 @@ class ReplicaLifecycleManager extends EventEmitter {
       schema,
     } = message;
 
-    this.logger.info('Received CREATE_REPLICA message', {
+    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.CREATE_REQUEST, {
       requestId: request_id,
       partitionId: partition_id,
       replicaId: replica_id,
@@ -325,13 +311,8 @@ class ReplicaLifecycleManager extends EventEmitter {
       usingReplicaHandler: !!this.replicaHandler,
     });
 
-    // Delegate to ReplicaHandler if available (Requirements 1.1, 1.2)
-    if (this.replicaHandler) {
-      return this.delegateCreateToHandler(message);
-    }
-
-    // Legacy behavior - direct handling
-    return this.handleCreateReplicaLegacy(message);
+    assertCritical(this.replicaHandler, REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_HANDLER_REQUIRED);
+    return this.delegateCreateToHandler(message);
   }
 
   /**
@@ -371,7 +352,7 @@ class ReplicaLifecycleManager extends EventEmitter {
 
     const response = await this.replicaHandler.handleCreateReplica(handlerRequest);
 
-    // Convert response format for legacy compatibility
+    // Convert response format for lifecycle acknowledgments
     return {
       type: MessageType.CREATE_REPLICA_ACK,
       request_id,
@@ -379,229 +360,6 @@ class ReplicaLifecycleManager extends EventEmitter {
       replica_id: response.replicaId,
       node_id: this.nodeId,
     };
-  }
-
-  /**
-   * Legacy CREATE_REPLICA handling (when no ReplicaHandler).
-   * @param {Object} message - CREATE_REPLICA message.
-   * @return {Promise<Object>} ACK response.
-   * @private
-   */
-  async handleCreateReplicaLegacy(message) {
-    const {
-      request_id,
-      partition_id,
-      table_name,
-      replica_id,
-      leader_address,
-      key_range,
-      schema,
-    } = message;
-
-    // Check for existing replica (idempotency)
-    const existingReplica = this.localReplicas.get(replica_id);
-    if (existingReplica) {
-      // Requirement 9.1: Return already_exists for active replicas
-      if (existingReplica.status === ReplicaStatus.ACTIVE) {
-        this.logger.info('Replica already exists in active state', {
-          replicaId: replica_id,
-          nodeId: this.nodeId,
-        });
-
-        return {
-          type: MessageType.CREATE_REPLICA_ACK,
-          request_id,
-          status: AckStatus.ALREADY_EXISTS,
-          replica_id,
-          node_id: this.nodeId,
-        };
-      }
-
-      // Requirement 9.2: Return in_progress for creating/syncing replicas
-      if (existingReplica.status === ReplicaStatus.STARTING ||
-          existingReplica.status === ReplicaStatus.SYNCING) {
-        this.logger.info('Replica creation already in progress', {
-          replicaId: replica_id,
-          status: existingReplica.status,
-          nodeId: this.nodeId,
-        });
-
-        return {
-          type: MessageType.CREATE_REPLICA_ACK,
-          request_id,
-          status: AckStatus.IN_PROGRESS,
-          replica_id,
-          node_id: this.nodeId,
-        };
-      }
-
-      // For other states (STOPPING, STOPPED, FAILED), return already_exists
-      this.logger.info('Replica exists in non-active state', {
-        replicaId: replica_id,
-        status: existingReplica.status,
-        nodeId: this.nodeId,
-      });
-
-      return {
-        type: MessageType.CREATE_REPLICA_ACK,
-        request_id,
-        status: AckStatus.ALREADY_EXISTS,
-        replica_id,
-        node_id: this.nodeId,
-      };
-    }
-
-    // Send immediate ACK with 'initiated' status
-    const ack = {
-      type: MessageType.CREATE_REPLICA_ACK,
-      request_id,
-      status: AckStatus.INITIATED,
-      replica_id,
-      node_id: this.nodeId,
-    };
-
-    // Track pending operation
-    this.pendingOperations.set(request_id, {
-      type: MessageType.CREATE_REPLICA,
-      partition_id,
-      replica_id,
-      startedAt: Date.now(),
-      status: 'pending',
-    });
-
-    // Start async replica creation
-    this.createReplicaAsync(message).catch((error) => {
-      this.logger.error('Async replica creation failed', {
-        requestId: request_id,
-        replicaId: replica_id,
-        error: error.message,
-        stack: error.stack,
-      });
-    });
-
-    return ack;
-  }
-
-  /**
-   * Asynchronously create a replica.
-   * @param {Object} message - CREATE_REPLICA message.
-   * @return {Promise<void>}
-   * @private
-   */
-  async createReplicaAsync(message) {
-    const {
-      request_id,
-      partition_id,
-      table_name,
-      replica_id,
-      schema,
-      table_id,
-      replica_ids,
-      peer_addresses,
-    } = message;
-
-    try {
-      // NOTE: The seed node already inserted the services row with status 'starting'
-      // before sending CREATE_REPLICA. We only need to track locally and update status.
-
-      // Track locally
-      this.localReplicas.set(replica_id, {
-        replicaId: replica_id,
-        partitionId: partition_id,
-        tableName: table_name,
-        status: ReplicaStatus.STARTING,
-        service: null,
-      });
-
-      // Generate database path
-      const dbPath = this.getPartitionDbPath(partition_id, replica_id);
-
-      // Create PartitionService instance
-      if (this.createPartitionService) {
-        const partitionService = await this.createPartitionService({
-          partitionId: partition_id,
-          tableId: table_id || partition_id,
-          tableName: table_name,
-          schema,
-          keyRange: message.key_range,
-          replicaId: replica_id,
-          replicaIds: replica_ids,
-          peerAddresses: peer_addresses || [], // Pass unified peer addresses for routing
-          nodeId: this.nodeId,
-          dbPath,
-          leaderAddress: message.leader_address,
-        });
-
-        this.localReplicas.get(replica_id).service = partitionService;
-
-        // Update status to 'syncing' after message group registration
-        await this.updateReplicaStatus(replica_id, ReplicaStatus.SYNCING);
-
-        // Sync Raft log from leader
-        await this.syncRaftLog(replica_id, message.leader_address);
-
-        // Update status to 'active' on sync completion
-        await this.updateReplicaStatus(replica_id, ReplicaStatus.ACTIVE);
-
-        this.logger.info('Replica creation completed successfully', {
-          requestId: request_id,
-          replicaId: replica_id,
-          partitionId: partition_id,
-          nodeId: this.nodeId,
-        });
-
-        // Update pending operation
-        const pending = this.pendingOperations.get(request_id);
-        if (pending) {
-          pending.status = 'completed';
-          pending.completedAt = Date.now();
-        }
-
-        this.emit('replicaCreated', {
-          requestId: request_id,
-          replicaId: replica_id,
-          partitionId: partition_id,
-          nodeId: this.nodeId,
-        });
-      }
-    } catch (error) {
-      this.logger.error('Replica creation failed', {
-        requestId: request_id,
-        replicaId: replica_id,
-        partitionId: partition_id,
-        error: error.message,
-        stack: error.stack,
-        nodeId: this.nodeId,
-      });
-
-      // Update status to 'failed'
-      try {
-        await this.updateReplicaStatus(replica_id, ReplicaStatus.FAILED, {
-          error_message: error.message,
-        });
-      } catch (updateError) {
-        this.logger.error('Failed to update replica status to failed', {
-          replicaId: replica_id,
-          error: updateError.message,
-        });
-      }
-
-      // Update pending operation
-      const pending = this.pendingOperations.get(request_id);
-      if (pending) {
-        pending.status = 'failed';
-        pending.error = error.message;
-        pending.completedAt = Date.now();
-      }
-
-      this.emit('replicaCreationFailed', {
-        requestId: request_id,
-        replicaId: replica_id,
-        partitionId: partition_id,
-        error: error.message,
-        nodeId: this.nodeId,
-      });
-    }
   }
 
 
@@ -615,7 +373,7 @@ class ReplicaLifecycleManager extends EventEmitter {
   async handleRemoveReplica(message) {
     const {request_id, partition_id, replica_id, reason} = message;
 
-    this.logger.info('Received REMOVE_REPLICA message', {
+    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.REMOVE_REQUEST, {
       requestId: request_id,
       partitionId: partition_id,
       replicaId: replica_id,
@@ -624,13 +382,8 @@ class ReplicaLifecycleManager extends EventEmitter {
       usingReplicaHandler: !!this.replicaHandler,
     });
 
-    // Delegate to ReplicaHandler if available (Requirements 1.1, 1.2)
-    if (this.replicaHandler) {
-      return this.delegateRemoveToHandler(message);
-    }
-
-    // Legacy behavior - direct handling
-    return this.handleRemoveReplicaLegacy(message);
+    assertCritical(this.replicaHandler, REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_HANDLER_REQUIRED);
+    return this.delegateRemoveToHandler(message);
   }
 
   /**
@@ -653,7 +406,7 @@ class ReplicaLifecycleManager extends EventEmitter {
 
     const response = await this.replicaHandler.handleRemoveReplica(handlerRequest);
 
-    // Convert response format for legacy compatibility
+    // Convert response format for lifecycle acknowledgments
     return {
       type: MessageType.REMOVE_REPLICA_ACK,
       request_id,
@@ -664,188 +417,6 @@ class ReplicaLifecycleManager extends EventEmitter {
   }
 
   /**
-   * Legacy REMOVE_REPLICA handling (when no ReplicaHandler).
-   * @param {Object} message - REMOVE_REPLICA message.
-   * @return {Promise<Object>} ACK response.
-   * @private
-   */
-  async handleRemoveReplicaLegacy(message) {
-    const {request_id, partition_id, replica_id, reason} = message;
-
-    // Check if replica exists
-    const replica = this.localReplicas.get(replica_id);
-
-    // Requirement 9.3: Return not_found for non-existent replicas
-    if (!replica) {
-      this.logger.warn('Replica not found for removal', {
-        replicaId: replica_id,
-        nodeId: this.nodeId,
-      });
-
-      return {
-        type: MessageType.REMOVE_REPLICA_ACK,
-        request_id,
-        status: AckStatus.NOT_FOUND,
-        replica_id,
-        node_id: this.nodeId,
-      };
-    }
-
-    // Requirement 9.4: Return in_progress for replicas already being removed
-    if (replica.status === ReplicaStatus.STOPPING) {
-      this.logger.info('Replica removal already in progress', {
-        replicaId: replica_id,
-        status: replica.status,
-        nodeId: this.nodeId,
-      });
-
-      return {
-        type: MessageType.REMOVE_REPLICA_ACK,
-        request_id,
-        status: AckStatus.IN_PROGRESS,
-        replica_id,
-        node_id: this.nodeId,
-      };
-    }
-
-    // Send immediate ACK with 'initiated' status
-    const ack = {
-      type: MessageType.REMOVE_REPLICA_ACK,
-      request_id,
-      status: AckStatus.INITIATED,
-      replica_id,
-      node_id: this.nodeId,
-    };
-
-    // Track pending operation
-    this.pendingOperations.set(request_id, {
-      type: MessageType.REMOVE_REPLICA,
-      partition_id,
-      replica_id,
-      reason,
-      startedAt: Date.now(),
-      status: 'pending',
-    });
-
-    // Start async replica removal
-    this.removeReplicaAsync(message).catch((error) => {
-      this.logger.error('Async replica removal failed', {
-        requestId: request_id,
-        replicaId: replica_id,
-        error: error.message,
-        stack: error.stack,
-      });
-    });
-
-    return ack;
-  }
-
-  /**
-   * Asynchronously remove a replica.
-   * @param {Object} message - REMOVE_REPLICA message.
-   * @return {Promise<void>}
-   * @private
-   */
-  async removeReplicaAsync(message) {
-    const {request_id, partition_id, replica_id, reason} = message;
-
-    try {
-      // Update status to 'stopping'
-      await this.updateReplicaStatus(replica_id, ReplicaStatus.STOPPING);
-
-      // Get the replica service
-      const replica = this.localReplicas.get(replica_id);
-      const service = replica?.service;
-
-      // Complete in-flight operations via graceful shutdown
-      if (service && typeof service.shutdown === 'function') {
-        this.logger.debug('Initiating graceful shutdown', {
-          replicaId: replica_id,
-          nodeId: this.nodeId,
-        });
-        await service.shutdown();
-      }
-
-      // Update status to 'stopped'
-      await this.updateReplicaStatus(replica_id, ReplicaStatus.STOPPED);
-
-      // Delete service row from services table
-      if (this.cdcIntegrationService) {
-        await this.cdcIntegrationService.deleteSystemTableRow(
-          SystemTableName.SERVICES,
-          {service_id: replica_id},
-        );
-      }
-
-      // Clean up local resources (SQLite files)
-      await this.cleanupReplicaResources(partition_id, replica_id);
-
-      // Remove from local tracking
-      this.localReplicas.delete(replica_id);
-
-      this.logger.info('Replica removal completed successfully', {
-        requestId: request_id,
-        replicaId: replica_id,
-        partitionId: partition_id,
-        reason,
-        nodeId: this.nodeId,
-      });
-
-      // Update pending operation
-      const pending = this.pendingOperations.get(request_id);
-      if (pending) {
-        pending.status = 'completed';
-        pending.completedAt = Date.now();
-      }
-
-      this.emit('replicaRemoved', {
-        requestId: request_id,
-        replicaId: replica_id,
-        partitionId: partition_id,
-        reason,
-        nodeId: this.nodeId,
-      });
-    } catch (error) {
-      this.logger.error('Replica removal failed', {
-        requestId: request_id,
-        replicaId: replica_id,
-        partitionId: partition_id,
-        error: error.message,
-        stack: error.stack,
-        nodeId: this.nodeId,
-      });
-
-      // Update status to 'failed'
-      try {
-        await this.updateReplicaStatus(replica_id, ReplicaStatus.FAILED, {
-          error_message: error.message,
-        });
-      } catch (updateError) {
-        this.logger.error('Failed to update replica status to failed', {
-          replicaId: replica_id,
-          error: updateError.message,
-        });
-      }
-
-      // Update pending operation
-      const pending = this.pendingOperations.get(request_id);
-      if (pending) {
-        pending.status = 'failed';
-        pending.error = error.message;
-        pending.completedAt = Date.now();
-      }
-
-      this.emit('replicaRemovalFailed', {
-        requestId: request_id,
-        replicaId: replica_id,
-        partitionId: partition_id,
-        error: error.message,
-        nodeId: this.nodeId,
-      });
-    }
-  }
-
-  /**
    * Sync Raft log from leader.
    * @param {string} replicaId - Replica ID.
    * @param {string} leaderAddress - Leader address.
@@ -853,7 +424,7 @@ class ReplicaLifecycleManager extends EventEmitter {
    * @private
    */
   async syncRaftLog(replicaId, leaderAddress) {
-    this.logger.debug('Starting Raft log sync', {
+    this.logger.debug(REPLICA_LIFECYCLE_LOG_MSG.RAFT_SYNC_START, {
       replicaId,
       leaderAddress,
       nodeId: this.nodeId,
@@ -861,16 +432,16 @@ class ReplicaLifecycleManager extends EventEmitter {
 
     const replica = this.localReplicas.get(replicaId);
     if (!replica || !replica.service) {
-      throw new Error(`Replica service not found: ${replicaId}`);
+      throw new Error(REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_SERVICE_MISSING(replicaId));
     }
 
     // The actual sync is handled by the Raft implementation
     // This is a placeholder for the sync coordination
-    if (typeof replica.service.syncFromLeader === 'function') {
+    if (typeof replica.service.syncFromLeader === TYPEOF.FUNCTION) {
       await replica.service.syncFromLeader(leaderAddress);
     }
 
-    this.logger.debug('Raft log sync completed', {
+    this.logger.debug(REPLICA_LIFECYCLE_LOG_MSG.RAFT_SYNC_COMPLETE, {
       replicaId,
       nodeId: this.nodeId,
     });
@@ -886,7 +457,7 @@ class ReplicaLifecycleManager extends EventEmitter {
   async cleanupReplicaResources(partitionId, replicaId) {
     const dbPath = this.getPartitionDbPath(partitionId, replicaId);
 
-    this.logger.debug('Cleaning up replica resources', {
+    this.logger.debug(REPLICA_LIFECYCLE_LOG_MSG.CLEANUP_RESOURCES, {
       replicaId,
       partitionId,
       dbPath,
@@ -897,7 +468,7 @@ class ReplicaLifecycleManager extends EventEmitter {
       // Remove SQLite database file
       if (fs.existsSync(dbPath)) {
         fs.unlinkSync(dbPath);
-        this.logger.debug('Removed database file', {dbPath});
+        this.logger.debug(REPLICA_LIFECYCLE_LOG_MSG.REMOVED_DB_FILE, {dbPath});
       }
 
       // Remove WAL and SHM files if they exist
@@ -915,20 +486,25 @@ class ReplicaLifecycleManager extends EventEmitter {
       const partitionDir = path.dirname(dbPath);
       try {
         const files = fs.readdirSync(partitionDir);
-        if (files.length === 0) {
+        if (files.length === REPLICA_LIFECYCLE_NUM.ZERO) {
           fs.rmdirSync(partitionDir);
-          this.logger.debug('Removed empty partition directory', {partitionDir});
+          this.logger.debug(REPLICA_LIFECYCLE_LOG_MSG.REMOVED_EMPTY_DIR, {partitionDir});
         }
-      } catch {
-        // Ignore errors when removing directory
+      } catch (dirError) {
+        this.logger.warn(REPLICA_LIFECYCLE_LOG_MSG.CLEANUP_FAILED, {
+          replicaId,
+          dbPath,
+          error: dirError.message,
+        });
+        throw dirError;
       }
     } catch (error) {
-      this.logger.warn('Error cleaning up replica resources', {
+      this.logger.warn(REPLICA_LIFECYCLE_LOG_MSG.CLEANUP_FAILED, {
         replicaId,
         dbPath,
         error: error.message,
       });
-      // Don't throw - cleanup errors shouldn't fail the removal
+      throw error;
     }
   }
 
@@ -942,9 +518,9 @@ class ReplicaLifecycleManager extends EventEmitter {
   getPartitionDbPath(partitionId, replicaId) {
     return path.join(
       this.dataDir,
-      'partitions',
+      STORAGE_DEFAULT.PARTITIONS_DIRNAME,
       partitionId,
-      `${replicaId}.db`,
+      `${replicaId}${STORAGE_DEFAULT.DB_EXT}`,
     );
   }
 
@@ -955,21 +531,21 @@ class ReplicaLifecycleManager extends EventEmitter {
    * @return {Promise<void>}
    */
   async handleNodeRecovery() {
-    this.logger.info('Handling node recovery - checking for orphaned replicas', {
+    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_START, {
       nodeId: this.nodeId,
     });
 
-    if (!this.systemTableCache) {
-      this.logger.warn('No system table cache available for recovery check');
-      return;
-    }
+    assertCritical(
+      this.systemTableCache,
+      REPLICA_LIFECYCLE_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    );
 
     // Query services table for replicas on this node in transitional states
     const services = this.systemTableCache.filter(
       SystemTableName.SERVICES,
       (service) =>
         service.node_id === this.nodeId &&
-        service.service_type === 'partition' &&
+        service.service_type === SERVICE_TYPE.PARTITION &&
         [
           ReplicaStatus.STARTING,
           ReplicaStatus.SYNCING,
@@ -977,7 +553,7 @@ class ReplicaLifecycleManager extends EventEmitter {
         ].includes(service.status),
     );
 
-    this.logger.info('Found orphaned replicas in transitional states', {
+    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_FOUND, {
       count: services.length,
       nodeId: this.nodeId,
     });
@@ -985,7 +561,7 @@ class ReplicaLifecycleManager extends EventEmitter {
     for (const service of services) {
       const {service_id, partition_id, status} = service;
 
-      this.logger.info('Processing orphaned replica', {
+      this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_PROCESSING, {
         replicaId: service_id,
         partitionId: partition_id,
         status,
@@ -998,13 +574,16 @@ class ReplicaLifecycleManager extends EventEmitter {
           await this.cdcIntegrationService.updateSystemTableRow(
             SystemTableName.SERVICES,
             {service_id},
-            {status: ReplicaStatus.FAILED, error_message: 'Node recovery cleanup'},
+            {
+              status: ReplicaStatus.FAILED,
+              error_message: REPLICA_LIFECYCLE_ERROR_MSG.RECOVERY_CLEANUP_ERROR,
+            },
           );
 
           // Clean up local resources
           await this.cleanupReplicaResources(partition_id, service_id);
 
-          this.logger.info('Marked orphaned replica as failed', {
+          this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_MARKED_FAILED, {
             replicaId: service_id,
             previousStatus: status,
             nodeId: this.nodeId,
@@ -1025,22 +604,23 @@ class ReplicaLifecycleManager extends EventEmitter {
           // Clean up local resources
           await this.cleanupReplicaResources(partition_id, service_id);
 
-          this.logger.info('Completed removal of stopping replica', {
+          this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_COMPLETED_REMOVAL, {
             replicaId: service_id,
             nodeId: this.nodeId,
           });
         }
       } catch (error) {
-        this.logger.error('Failed to clean up orphaned replica', {
+        this.logger.error(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_FAILED, {
           replicaId: service_id,
           status,
           error: error.message,
           nodeId: this.nodeId,
         });
+        throw error;
       }
     }
 
-    this.emit('recoveryComplete', {
+    this.emit(REPLICA_LIFECYCLE_EVENT.RECOVERY_COMPLETE, {
       nodeId: this.nodeId,
       orphanedCount: services.length,
     });
@@ -1070,13 +650,15 @@ class ReplicaLifecycleManager extends EventEmitter {
    * Clean up expired pending operations.
    * @param {number} maxAgeMs - Maximum age in milliseconds.
    */
-  cleanupExpiredOperations(maxAgeMs = 300000) {
+  cleanupExpiredOperations(maxAgeMs = REPLICA_LIFECYCLE_DEFAULT.EXPIRED_OPERATION_MAX_AGE_MS) {
     const now = Date.now();
     const expiredIds = [];
 
     for (const [requestId, op] of this.pendingOperations) {
       const age = now - op.startedAt;
-      if (age > maxAgeMs && (op.status === 'completed' || op.status === 'failed')) {
+      if (age > maxAgeMs &&
+        (op.status === REPLICA_LIFECYCLE_PENDING_STATUS.COMPLETED ||
+          op.status === REPLICA_LIFECYCLE_PENDING_STATUS.FAILED)) {
         expiredIds.push(requestId);
       }
     }
@@ -1085,8 +667,8 @@ class ReplicaLifecycleManager extends EventEmitter {
       this.pendingOperations.delete(id);
     }
 
-    if (expiredIds.length > 0) {
-      this.logger.debug('Cleaned up expired pending operations', {
+    if (expiredIds.length > REPLICA_LIFECYCLE_NUM.ZERO) {
+      this.logger.debug(REPLICA_LIFECYCLE_LOG_MSG.EXPIRED_OPERATIONS_CLEANED, {
         count: expiredIds.length,
         nodeId: this.nodeId,
       });
@@ -1105,38 +687,8 @@ class ReplicaLifecycleManager extends EventEmitter {
    * @param {Object} [replicaInfo.service] - Partition service instance.
    */
   registerExistingReplica(replicaInfo) {
-    const {replicaId, partitionId, tableName, status, service} = replicaInfo;
-
-    // Delegate to handler if available
-    if (this.replicaHandler) {
-      this.replicaHandler.registerExistingReplica(replicaInfo);
-      return;
-    }
-
-    // Legacy: use local tracking
-    // Idempotent: no error on duplicate registration
-    if (this.localReplicas.has(replicaId)) {
-      this.logger.debug('Replica already registered', {
-        replicaId,
-        nodeId: this.nodeId,
-      });
-      return;
-    }
-
-    this.localReplicas.set(replicaId, {
-      replicaId,
-      partitionId,
-      tableName,
-      status: status || ReplicaStatus.ACTIVE,
-      service: service || null,
-    });
-
-    this.logger.info('Registered existing replica', {
-      replicaId,
-      partitionId,
-      tableName,
-      nodeId: this.nodeId,
-    });
+    assertCritical(this.replicaHandler, REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_HANDLER_REQUIRED);
+    this.replicaHandler.registerExistingReplica(replicaInfo);
   }
 
   /**
@@ -1146,13 +698,8 @@ class ReplicaLifecycleManager extends EventEmitter {
    * @return {Object|null} Local replica info or null.
    */
   getLocalReplica(replicaId) {
-    // Delegate to handler if available
-    if (this.replicaHandler) {
-      return this.replicaHandler.getLocalReplica(replicaId);
-    }
-
-    // Legacy: use local tracking
-    return this.localReplicas.get(replicaId) || null;
+    assertCritical(this.replicaHandler, REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_HANDLER_REQUIRED);
+    return this.replicaHandler.getLocalReplica(replicaId);
   }
 
   /**
@@ -1161,13 +708,8 @@ class ReplicaLifecycleManager extends EventEmitter {
    * @return {Array<Object>} Array of local replica info.
    */
   getAllLocalReplicas() {
-    // Delegate to handler if available
-    if (this.replicaHandler) {
-      return this.replicaHandler.getAllLocalReplicas();
-    }
-
-    // Legacy: use local tracking
-    return Array.from(this.localReplicas.values());
+    assertCritical(this.replicaHandler, REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_HANDLER_REQUIRED);
+    return this.replicaHandler.getAllLocalReplicas();
   }
 
   /**
@@ -1208,7 +750,7 @@ class ReplicaLifecycleManager extends EventEmitter {
    * Shutdown the replica lifecycle manager.
    */
   shutdown() {
-    this.logger.info('Shutting down replica lifecycle manager', {
+    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.SHUTTING_DOWN, {
       nodeId: this.nodeId,
     });
 
@@ -1216,7 +758,7 @@ class ReplicaLifecycleManager extends EventEmitter {
     this.localReplicas.clear();
     this.initialized = false;
 
-    this.emit('shutdown', {nodeId: this.nodeId});
+    this.emit(REPLICA_LIFECYCLE_EVENT.SHUTDOWN, {nodeId: this.nodeId});
   }
 }
 

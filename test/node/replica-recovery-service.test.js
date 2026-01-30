@@ -3,14 +3,14 @@
  * Requirements: 14.2
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   ReplicaRecoveryService,
   NodeStatus,
   ReplicaStatus,
   ServiceType,
 } from '../../src/node/replica-recovery-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
+import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -101,8 +101,12 @@ test('ReplicaRecoveryService - constructor', async (t) => {
 });
 
 test('ReplicaRecoveryService - initialize', async (t) => {
+  const mockCDC = createMockCDCService();
+  const mockCache = createMockCache();
   const service = new ReplicaRecoveryService({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
 
   service.initialize();
@@ -124,8 +128,12 @@ test('ReplicaRecoveryService - initialize requires nodeId', async (t) => {
 });
 
 test('ReplicaRecoveryService - start and stop', async (t) => {
+  const mockCDC = createMockCDCService();
+  const mockCache = createMockCache();
   const service = new ReplicaRecoveryService({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
   service.initialize();
 
@@ -408,8 +416,13 @@ test('ReplicaRecoveryService - handles no healthy nodes', async (t) => {
 });
 
 test('ReplicaRecoveryService - getStats', async (t) => {
+  const mockCache = createMockCache();
+  const mockCDC = createMockCDCService();
+
   const service = new ReplicaRecoveryService({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
   service.initialize();
 
@@ -427,8 +440,13 @@ test('ReplicaRecoveryService - getStats', async (t) => {
 });
 
 test('ReplicaRecoveryService - shutdown', async (t) => {
+  const mockCache = createMockCache();
+  const mockCDC = createMockCDCService();
+
   const service = new ReplicaRecoveryService({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
   service.initialize();
   service.start();

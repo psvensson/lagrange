@@ -2,21 +2,23 @@ TAP version 14
 # Subtest: Property 1: Cache contains all rows after hydration
     ok 1 - Cache contains all rows after hydration
     1..1
-ok 1 - Property 1: Cache contains all rows after hydration # time=12.668ms
+ok 1 - Property 1: Cache contains all rows after hydration # time=19.845ms
 
 # Subtest: Property 1: All system tables are queried
     ok 1 - All system tables are queried
     1..1
-ok 2 - Property 1: All system tables are queried # time=10.619ms
+ok 2 - Property 1: All system tables are queried # time=18.213ms
 
 # Subtest: Property 1: Hydration result contains correct row counts
     ok 1 - Hydration result contains correct row counts
     1..1
-ok 3 - Property 1: Hydration result contains correct row counts # time=8.217ms
+ok 3 - Property 1: Hydration result contains correct row counts # time=9.373ms
 
 # Subtest: Property 1: Cache data matches source data
     ok 1 - Cache data matches source data
     1..1
-ok 4 - Property 1: Cache data matches source data # time=9.088ms
+ok 4 - Property 1: Cache data matches source data # time=5.48ms
 
 1..4
+# { total: 4, pass: 4 }
+# time=211.886ms

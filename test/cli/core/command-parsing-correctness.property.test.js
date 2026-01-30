@@ -6,7 +6,7 @@
  * **Validates: Requirements 15.2, 15.5**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {CommandParser} from '../../../src/cli/core/command-parser.js';
 

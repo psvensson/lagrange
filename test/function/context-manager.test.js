@@ -3,7 +3,7 @@
  * Requirements: 34.1, 34.3, 34.17
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {ContextManager, ContextType} from '../../src/function/context-manager.js';
 
 // Mock system table cache

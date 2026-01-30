@@ -6,7 +6,7 @@
  * Validates: Requirements 4.3, 7.6, 7.7, 8.6
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';

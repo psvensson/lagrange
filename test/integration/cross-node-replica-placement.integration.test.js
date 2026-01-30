@@ -9,7 +9,7 @@
  * goes through message groups as required by 4.13.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -22,6 +22,8 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
+import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 
 // Port counter for unique ports per test
 let integrationPortCounter = 25000;
@@ -40,6 +42,7 @@ function initializeTestEnvironment() {
   config.initialize({
     node: {id: 'test-node'},
     logging: {level: 'error'},
+    transport: {wsHost: '127.0.0.1'},
     raft: {
       electionTimeoutMinMs: 100,
       electionTimeoutMaxMs: 200,
@@ -80,6 +83,77 @@ function createTestSchema(tableName) {
       {name: 'id', type: 'TEXT', primaryKey: true},
       {name: 'data', type: 'TEXT'},
     ],
+  };
+}
+
+function createMockCDCService(systemTableCache) {
+  return {
+    async insertSystemTableRow(tableName, data) {
+      systemTableCache.applySystemTableChange(tableName, 'INSERT', data);
+      return {success: true};
+    },
+    async updateSystemTableRow(tableName, whereClause, data) {
+      systemTableCache.applySystemTableChange(
+        tableName,
+        'UPDATE',
+        {...whereClause, ...data},
+      );
+      return {success: true};
+    },
+    async upsertSystemTableRow(tableName, data) {
+      systemTableCache.applySystemTableChange(tableName, 'UPSERT', data);
+      return {success: true};
+    },
+  };
+}
+
+function createMockTablePolicyService() {
+  return {
+    getDefaultPolicy() {
+      return {...DEFAULT_TABLE_POLICY};
+    },
+    getTablePolicy() {
+      return {...DEFAULT_TABLE_POLICY};
+    },
+    getPolicyForPartition() {
+      return {...DEFAULT_TABLE_POLICY};
+    },
+  };
+}
+
+function createMockMessageRouter() {
+  return {
+    getConnectionState() {
+      return 'connected';
+    },
+    isOutboundQueueAvailable() {
+      return true;
+    },
+    async pingNode() {
+      return true;
+    },
+    async deliver() {
+      return {acknowledged: true, status: 'initiated'};
+    },
+  };
+}
+
+function createMockRebalanceCoordinator() {
+  let counter = 0;
+  return {
+    async createOperation({type, partitionId, nodeId, replicaId}) {
+      counter += 1;
+      return {
+        operationId: `op-${counter}`,
+        type,
+        partitionId,
+        replicaId,
+        targetNodeId: nodeId,
+      };
+    },
+    getStats() {
+      return {operationsCreated: counter};
+    },
   };
 }
 
@@ -127,6 +201,9 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
 
         // Create system table cache (shared view of cluster state)
         const systemTableCache = new SystemTableCache();
+        const cdcIntegrationService = createMockCDCService(systemTableCache);
+        const tablePolicyService = createMockTablePolicyService();
+        const readyLeaseExpiresAt = Date.now() + 10000;
 
         // Register seed node in the cache
         systemTableCache.applySystemTableChange('nodes', 'INSERT', {
@@ -135,6 +212,8 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           status: 'active',
           cpu_usage_percent: 20,
           memory_usage_percent: 30,
+          ws_connection_state: 'ready',
+          ready_lease_expires_at: readyLeaseExpiresAt,
         });
 
         // ========================================
@@ -152,7 +231,9 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           replicaId: 'mg-test-1-r1',
           nodeId: seedNodeId,
           replicaIds: ['mg-test-1-r1'],
+          peerAddresses: [`${seedNodeId}/message-group/mg-test-1-r1`],
           transport: resources.bootstrapRouter,
+          systemTableCache,
         });
 
         const mgAddress = `${seedNodeId}/message-group/mg-test-1-r1`;
@@ -185,6 +266,10 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           wsPort: secondPort,
         });
         await resources.secondNodeRouter.initialize({startServer: true});
+        await resources.seedRouter.connectToNode(
+          secondNodeId,
+          `ws://localhost:${secondPort}`,
+        );
 
         // ========================================
         // PHASE 4: Create partition on seed node with 3 replicas
@@ -200,12 +285,19 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           keyRange: {start: null, end: null},
           replicaId: `${partitionId}-r1`,
           replicaIds: [`${partitionId}-r1`, `${partitionId}-r2`, `${partitionId}-r3`],
+          peerAddresses: [
+            `${seedNodeId}/partition/${partitionId}-r1`,
+            `${seedNodeId}/partition/${partitionId}-r2`,
+            `${seedNodeId}/partition/${partitionId}-r3`,
+          ],
           nodeId: seedNodeId,
           transport: resources.seedRouter,
           dbPath: ':memory:',
           messageGroupService: resources.messageGroup,
           messageRouter: resources.seedRouter,
           systemTableCache,
+          cdcIntegrationService,
+          tablePolicyService,
         });
 
         const partitionAddress = `${seedNodeId}/partition/${partitionId}-r1`;
@@ -263,6 +355,8 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           status: 'active',
           cpu_usage_percent: 15,
           memory_usage_percent: 25,
+          ws_connection_state: 'ready',
+          ready_lease_expires_at: readyLeaseExpiresAt,
         });
 
         const createdReplicas = [];
@@ -270,6 +364,8 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         resources.secondNodeLifecycleManager = new ReplicaLifecycleManager({
           nodeId: secondNodeId,
           messageGroupService: resources.messageGroup,
+          systemTableCache,
+          cdcIntegrationService,
           createPartitionService: async (options) => {
             createdReplicas.push({
               partitionId: options.partitionId,
@@ -323,36 +419,23 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
 
         resources.seedPartition.setSystemTableCache(systemTableCache);
 
-        const rebalancerEvents = [];
-        resources.seedPartition.rebalancer.on('addReplica', (event) => {
-          rebalancerEvents.push({type: 'add', ...event});
-        });
-        resources.seedPartition.rebalancer.on('removeReplica', (event) => {
-          rebalancerEvents.push({type: 'remove', ...event});
-        });
-
         // Directly call rebalance() to bypass stabilization period for testing
         // In production, triggerRebalanceCheck() would be used which respects stabilization
-        await resources.seedPartition.rebalancer.rebalance('node_join');
-
-        const rebalanceCompleted = await waitFor(
-          () => rebalancerEvents.length > 0,
-          500,
-        );
+        const rebalanceResult = await resources.seedPartition.rebalancer.rebalance('node_join');
 
         // ========================================
         // PHASE 7: Verify results
         // ========================================
 
-        t.ok(rebalanceCompleted, 'rebalancing should trigger events');
-        t.ok(rebalancerEvents.length > 0, 'should have rebalancer events');
+        t.equal(rebalanceResult.success, true, 'rebalance should succeed');
+        t.ok(Array.isArray(rebalanceResult.moves), 'rebalance should return moves');
 
-        const addEvents = rebalancerEvents.filter((e) => e.type === 'add');
-        t.ok(addEvents.length > 0, 'should have add replica events');
+        const addMoves = rebalanceResult.moves.filter((move) => move.operation === 'add');
+        t.ok(addMoves.length > 0, 'should have add replica moves');
 
         t.ok(
-          addEvents.some((e) => e.nodeId === secondNodeId),
-          'add event should target second node',
+          addMoves.some((move) => move.nodeId === secondNodeId),
+          'add move should target second node',
         );
       } finally {
         // ========================================
@@ -401,6 +484,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         replicaId: 'mg-route-test-r1',
         nodeId,
         replicaIds: ['mg-route-test-r1'],
+        peerAddresses: [`${nodeId}/message-group/mg-route-test-r1`],
         transport: resources.router,
       });
 
@@ -478,12 +562,15 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
 
     try {
       const cache = new SystemTableCache();
+      const readyLeaseExpiresAt = Date.now() + 10000;
       cache.applySystemTableChange('nodes', 'INSERT', {
         id: nodeId,
         node_id: nodeId,
         status: 'active',
         cpu_usage_percent: 20,
         memory_usage_percent: 30,
+        ws_connection_state: 'ready',
+        ready_lease_expires_at: readyLeaseExpiresAt,
       });
 
       cache.applySystemTableChange('services', 'INSERT', {
@@ -515,7 +602,11 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
         systemTableCache: cache,
+        cdcIntegrationService: createMockCDCService(cache),
+        tablePolicyService: createMockTablePolicyService(),
         nodeId,
+        messageRouter: createMockMessageRouter(),
+        rebalanceCoordinator: createMockRebalanceCoordinator(),
       });
 
       rebalancer.initialize();
@@ -537,6 +628,8 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         status: 'active',
         cpu_usage_percent: 15,
         memory_usage_percent: 25,
+        ws_connection_state: 'ready',
+        ready_lease_expires_at: readyLeaseExpiresAt,
       });
 
       const result2 = await rebalancer.rebalance('node_join');
@@ -553,9 +646,36 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
   t.test('replica lifecycle manager handles CREATE_REPLICA idempotently', async (t) => {
     const nodeId = 'lifecycle-test-node';
     const createdReplicas = [];
+    const lifecycleCache = new SystemTableCache();
+    const now = Date.now();
+    lifecycleCache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+      table_id: 'test_table',
+      table_name: 'test_table',
+      schema_definition: JSON.stringify(createTestSchema('test_table')),
+    });
+    lifecycleCache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+      partition_id: 'test-partition',
+      table_id: 'test_table',
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: nodeId,
+    });
+    lifecycleCache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+      service_id: 'test-partition-r1',
+      service_type: 'partition',
+      partition_id: 'test-partition',
+      node_id: nodeId,
+      raft_role: 'leader',
+      status: 'active',
+      address: `${nodeId}/partition/test-partition-r1`,
+      created_at: now,
+      updated_at: now,
+    });
 
     const lifecycleManager = new ReplicaLifecycleManager({
       nodeId,
+      systemTableCache: lifecycleCache,
+      cdcIntegrationService: createMockCDCService(lifecycleCache),
       createPartitionService: async (options) => {
         createdReplicas.push(options.replicaId);
         const mock = new EventEmitter();
@@ -582,8 +702,8 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
     const ack1 = await lifecycleManager.handleCreateReplica(message);
     t.equal(ack1.status, 'initiated', 'first call should return initiated');
 
-    // Small delay for async creation
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    const created = await waitFor(() => createdReplicas.length === 1, 2000);
+    t.ok(created, 'replica should be created asynchronously');
 
     const ack2 = await lifecycleManager.handleCreateReplica(message);
     t.equal(ack2.status, 'already_exists', 'second call should return already_exists');

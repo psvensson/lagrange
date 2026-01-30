@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {ConnectionManager} from '../../../src/cli/core/connection-manager.js';
 
 test('ConnectionManager - initial state', async (t) => {

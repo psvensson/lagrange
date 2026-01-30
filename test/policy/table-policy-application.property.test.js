@@ -5,12 +5,10 @@
  * Validates: Requirements 13.1, 13.2, 13.3, 13.4, 13.5
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {
-  TablePolicyService,
-  DEFAULT_TABLE_POLICY,
-} from '../../src/policy/table-policy-service.js';
+import {TablePolicyService} from '../../src/policy/table-policy-service.js';
+import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 
 // Generate valid odd replica counts
 const oddReplicaCount = fc.integer({min: 1, max: 9}).filter((n) => n % 2 === 1);

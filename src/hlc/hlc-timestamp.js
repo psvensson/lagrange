@@ -4,6 +4,9 @@
  * Requirements: 23.7, 23.8
  */
 
+import {TYPEOF} from '../constants/index.js';
+import {HLC_ERROR_MSG, HLC_PART, HLC_SEPARATOR} from './hlc-constants.js';
+
 /**
  * HLCTimestamp represents a hybrid logical clock timestamp.
  * Combines physical time with a logical counter for global ordering.
@@ -26,7 +29,8 @@ class HLCTimestamp {
    * @return {string} String representation of the timestamp.
    */
   toString() {
-    return `${this.physical}-${this.logical}-${this.nodeId}`;
+    return `${this.physical}${HLC_SEPARATOR.FIELD}` +
+      `${this.logical}${HLC_SEPARATOR.FIELD}${this.nodeId}`;
   }
 
   /**
@@ -35,20 +39,20 @@ class HLCTimestamp {
    * @return {HLCTimestamp} Parsed timestamp.
    */
   static fromString(str) {
-    if (typeof str !== 'string') {
-      throw new Error(`HLC timestamp must be a string, got ${typeof str}`);
+    if (typeof str !== TYPEOF.STRING) {
+      throw new Error(`${HLC_ERROR_MSG.NOT_STRING_PREFIX}${typeof str}`);
     }
-    const parts = str.split('-');
-    if (parts.length < 3) {
-      throw new Error(`Invalid HLC timestamp string: ${str}`);
+    const parts = str.split(HLC_SEPARATOR.FIELD);
+    if (parts.length < HLC_PART.MIN_COUNT) {
+      throw new Error(`${HLC_ERROR_MSG.INVALID_STRING_PREFIX}${str}`);
     }
     // Node ID may contain dashes, so join remaining parts
-    const physical = parseInt(parts[0], 10);
-    const logical = parseInt(parts[1], 10);
-    const nodeId = parts.slice(2).join('-');
+    const physical = parseInt(parts[0], HLC_PART.PARSE_RADIX);
+    const logical = parseInt(parts[1], HLC_PART.PARSE_RADIX);
+    const nodeId = parts.slice(HLC_PART.NODE_ID_INDEX).join(HLC_SEPARATOR.FIELD);
 
     if (isNaN(physical) || isNaN(logical)) {
-      throw new Error(`Invalid HLC timestamp string: ${str}`);
+      throw new Error(`${HLC_ERROR_MSG.INVALID_STRING_PREFIX}${str}`);
     }
 
     return new HLCTimestamp(physical, logical, nodeId);

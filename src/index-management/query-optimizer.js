@@ -5,6 +5,15 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {
+  INDEX_COST,
+  INDEX_HINT,
+  INDEX_LOG_MSG,
+  INDEX_PRIORITY,
+  INDEX_SUBSYSTEM,
+  INDEX_USAGE,
+} from './index-constants.js';
+import {QUERY_AST_NODE, QUERY_AST_TYPE} from '../query/query-constants.js';
 
 /**
  * QueryOptimizer analyzes queries and determines optimal index usage.
@@ -25,7 +34,7 @@ class QueryOptimizer {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('query-optimizer') : console;
+      loggingService.forSubsystem(INDEX_SUBSYSTEM.QUERY_OPTIMIZER) : console;
   }
 
   /**
@@ -43,7 +52,7 @@ class QueryOptimizer {
     const result = {
       usableIndices: [],
       hints: [],
-      estimatedCost: 'full_scan',
+      estimatedCost: INDEX_COST.FULL_SCAN,
     };
 
     // Get available indices for the table
@@ -51,13 +60,13 @@ class QueryOptimizer {
 
     // Analyze based on query type
     switch (ast.type) {
-    case 'SELECT':
+    case QUERY_AST_TYPE.SELECT:
       this.analyzeSelectQuery(ast, indices, result);
       break;
-    case 'UPDATE':
+    case QUERY_AST_TYPE.UPDATE:
       this.analyzeUpdateQuery(ast, indices, result);
       break;
-    case 'DELETE':
+    case QUERY_AST_TYPE.DELETE:
       this.analyzeDeleteQuery(ast, indices, result);
       break;
     default:
@@ -94,11 +103,11 @@ class QueryOptimizer {
       if (whereMatch.usable) {
         result.usableIndices.push({
           indexName: index.indexName,
-          usage: 'where',
+          usage: INDEX_USAGE.WHERE,
           matchedColumns: whereMatch.matchedColumns,
           coveringIndex: whereMatch.covering,
         });
-        result.estimatedCost = 'index_scan';
+        result.estimatedCost = INDEX_COST.INDEX_SCAN;
       }
 
       // Check if index can be used for ORDER BY
@@ -106,7 +115,7 @@ class QueryOptimizer {
       if (orderMatch.usable) {
         result.usableIndices.push({
           indexName: index.indexName,
-          usage: 'order_by',
+          usage: INDEX_USAGE.ORDER_BY,
           matchedColumns: orderMatch.matchedColumns,
         });
       }
@@ -116,7 +125,7 @@ class QueryOptimizer {
       if (joinMatch.usable) {
         result.usableIndices.push({
           indexName: index.indexName,
-          usage: 'join',
+          usage: INDEX_USAGE.JOIN,
           matchedColumns: joinMatch.matchedColumns,
         });
       }
@@ -125,14 +134,14 @@ class QueryOptimizer {
     // Generate hints
     if (result.usableIndices.length === 0 && whereColumns.length > 0) {
       result.hints.push(
-        `Consider creating an index on columns: ${whereColumns.join(', ')}`,
+        `${INDEX_HINT.WHERE_GENERIC_PREFIX}${whereColumns.join(', ')}`,
       );
     }
 
     if (orderByColumns.length > 0 &&
         !result.usableIndices.some((i) => i.usage === 'order_by')) {
       result.hints.push(
-        `Consider creating an index on ORDER BY columns: ${orderByColumns.join(', ')}`,
+        `${INDEX_HINT.ORDER_BY_PREFIX}${orderByColumns.join(', ')}`,
       );
     }
   }
@@ -152,16 +161,16 @@ class QueryOptimizer {
       if (whereMatch.usable) {
         result.usableIndices.push({
           indexName: index.indexName,
-          usage: 'where',
+          usage: INDEX_USAGE.WHERE,
           matchedColumns: whereMatch.matchedColumns,
         });
-        result.estimatedCost = 'index_scan';
+        result.estimatedCost = INDEX_COST.INDEX_SCAN;
       }
     }
 
     if (result.usableIndices.length === 0 && whereColumns.length > 0) {
       result.hints.push(
-        `Consider creating an index on WHERE columns: ${whereColumns.join(', ')}`,
+        `${INDEX_HINT.WHERE_PREFIX}${whereColumns.join(', ')}`,
       );
     }
   }
@@ -181,16 +190,16 @@ class QueryOptimizer {
       if (whereMatch.usable) {
         result.usableIndices.push({
           indexName: index.indexName,
-          usage: 'where',
+          usage: INDEX_USAGE.WHERE,
           matchedColumns: whereMatch.matchedColumns,
         });
-        result.estimatedCost = 'index_scan';
+        result.estimatedCost = INDEX_COST.INDEX_SCAN;
       }
     }
 
     if (result.usableIndices.length === 0 && whereColumns.length > 0) {
       result.hints.push(
-        `Consider creating an index on WHERE columns: ${whereColumns.join(', ')}`,
+        `${INDEX_HINT.WHERE_PREFIX}${whereColumns.join(', ')}`,
       );
     }
   }
@@ -209,7 +218,7 @@ class QueryOptimizer {
     }
 
     this.traverseExpression(where, (node) => {
-      if (node.type === 'column_ref') {
+      if (node.type === QUERY_AST_NODE.COLUMN_REF) {
         columns.push(node.column);
       }
     });
@@ -229,7 +238,7 @@ class QueryOptimizer {
     }
 
     return orderBy.map((item) => {
-      if (item.expression?.type === 'column_ref') {
+      if (item.expression?.type === QUERY_AST_NODE.COLUMN_REF) {
         return item.expression.column;
       }
       return item.column;
@@ -252,7 +261,7 @@ class QueryOptimizer {
     for (const join of joins) {
       if (join.condition) {
         this.traverseExpression(join.condition, (node) => {
-          if (node.type === 'column_ref') {
+          if (node.type === QUERY_AST_NODE.COLUMN_REF) {
             columns.push(node.column);
           }
         });
@@ -369,8 +378,8 @@ class QueryOptimizer {
       if (!existingIndexColumns.has(whereKey)) {
         suggestions.push({
           columns: whereColumns,
-          reason: 'WHERE clause optimization',
-          priority: 'high',
+          reason: INDEX_HINT.WHERE_PREFIX.trim(),
+          priority: INDEX_PRIORITY.HIGH,
         });
       }
     }
@@ -381,8 +390,8 @@ class QueryOptimizer {
       if (!existingIndexColumns.has(orderKey)) {
         suggestions.push({
           columns: orderByColumns,
-          reason: 'ORDER BY optimization',
-          priority: 'medium',
+          reason: INDEX_HINT.ORDER_BY_PREFIX.trim(),
+          priority: INDEX_PRIORITY.MEDIUM,
         });
       }
     }
@@ -396,8 +405,8 @@ class QueryOptimizer {
         if (!hasIndex) {
           suggestions.push({
             columns: [col],
-            reason: 'JOIN optimization',
-            priority: 'high',
+            reason: INDEX_HINT.JOIN_PREFIX.trim(),
+            priority: INDEX_PRIORITY.HIGH,
           });
         }
       }
@@ -420,14 +429,14 @@ class QueryOptimizer {
       queryType: ast.type,
       tableId,
       estimatedCost: analysis.estimatedCost,
-      usedIndices: analysis.usableIndices.filter((i) => i.usage === 'where'),
-      orderByIndex: analysis.usableIndices.find((i) => i.usage === 'order_by'),
-      joinIndices: analysis.usableIndices.filter((i) => i.usage === 'join'),
+      usedIndices: analysis.usableIndices.filter((i) => i.usage === INDEX_USAGE.WHERE),
+      orderByIndex: analysis.usableIndices.find((i) => i.usage === INDEX_USAGE.ORDER_BY),
+      joinIndices: analysis.usableIndices.filter((i) => i.usage === INDEX_USAGE.JOIN),
       hints: analysis.hints,
       suggestions: this.suggestIndices(ast, tableId),
     };
 
-    this.logger.debug('Generated execution plan', {
+    this.logger.debug(INDEX_LOG_MSG.EXECUTION_PLAN_GENERATED, {
       tableId,
       queryType: ast.type,
       usedIndexCount: plan.usedIndices.length,

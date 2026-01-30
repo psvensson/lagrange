@@ -3,54 +3,56 @@ TAP version 14
     # Subtest: placement_policy appears in summary when set
         ok 1 - placement_policy appears in summary when set
         1..1
-    ok 1 - placement_policy appears in summary when set # time=8.472ms
+    ok 1 - placement_policy appears in summary when set # time=4.765ms
     
     # Subtest: replication_policy appears in summary when set
         ok 1 - replication_policy appears in summary when set
         1..1
-    ok 2 - replication_policy appears in summary when set # time=1.554ms
+    ok 2 - replication_policy appears in summary when set # time=1.374ms
     
     # Subtest: consistency_level appears in summary when set
         ok 1 - consistency_level appears in summary when set
         1..1
-    ok 3 - consistency_level appears in summary when set # time=1.158ms
+    ok 3 - consistency_level appears in summary when set # time=1.201ms
     
     # Subtest: durability appears in summary when set
         ok 1 - durability appears in summary when set
         1..1
-    ok 4 - durability appears in summary when set # time=1.015ms
+    ok 4 - durability appears in summary when set # time=0.844ms
     
     # Subtest: compression appears in summary when set
         ok 1 - compression appears in summary when set
         1..1
-    ok 5 - compression appears in summary when set # time=3.19ms
+    ok 5 - compression appears in summary when set # time=1.022ms
     
     # Subtest: multiple policies are combined
         ok 1 - multiple policies are combined
         1..1
-    ok 6 - multiple policies are combined # time=3.044ms
+    ok 6 - multiple policies are combined # time=2.8ms
     
     # Subtest: summary respects max length
         ok 1 - summary respects max length
         1..1
-    ok 7 - summary respects max length # time=2.91ms
+    ok 7 - summary respects max length # time=2.559ms
     
     # Subtest: truncated summaries end with ellipsis
         ok 1 - truncated summaries end with ellipsis
         1..1
-    ok 8 - truncated summaries end with ellipsis # time=2.46ms
+    ok 8 - truncated summaries end with ellipsis # time=2.194ms
     
     # Subtest: empty policies return Default
         ok 1 - empty policies return Default
         1..1
-    ok 9 - empty policies return Default # time=0.789ms
+    ok 9 - empty policies return Default # time=0.669ms
     
     # Subtest: malformed JSON returns Default
         ok 1 - malformed JSON returns Default
         1..1
-    ok 10 - malformed JSON returns Default # time=1.236ms
+    ok 10 - malformed JSON returns Default # time=0.993ms
     
     1..10
-ok 1 - Property 30: Policy Display Completeness # time=35.416ms
+ok 1 - Property 30: Policy Display Completeness # time=26.399ms
 
 1..1
+# { total: 10, pass: 10 }
+# time=30.643ms

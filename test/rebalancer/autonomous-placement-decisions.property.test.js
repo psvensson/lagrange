@@ -17,11 +17,26 @@
  * 3. No partition has duplicate replicas on the same node
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {PullBasedReplicaAssigner} from
   '../../src/rebalancer/pull-based-replica-assigner.js';
 import {AssignmentEpoch} from '../../src/rebalancer/assignment-epoch.js';
+import {createMockReplicaHandler, createMockRpcClient} from './test-helpers.js';
+
+/**
+ * Create a PullBasedReplicaAssigner with all required dependencies.
+ * @param {Object} options - Options for the assigner.
+ * @return {PullBasedReplicaAssigner} Assigner instance.
+ */
+function createAssigner(options = {}) {
+  return new PullBasedReplicaAssigner({
+    nodeId: options.nodeId || 'joining-node',
+    maxReplicasToPull: options.maxReplicasToPull || 10,
+    replicaHandler: options.replicaHandler || createMockReplicaHandler(),
+    rpcClient: options.rpcClient || createMockRpcClient(),
+  });
+}
 
 /**
  * Generator for valid node IDs.
@@ -146,14 +161,10 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
         (existingNodeIds, partitionIds, epochNum) => {
           if (existingNodeIds.length < 2 || partitionIds.length < 3) return true;
 
-          // Create a joining node ID that's not in existing nodes
           const joiningNodeId = 'joining-node-test';
 
-          // Create imbalanced assignments where some nodes are overloaded
-          // Assign all partitions to first node to create imbalance
           const assignments = {};
           for (const partitionId of partitionIds) {
-            // Assign to first node only - creates maximum imbalance
             assignments[partitionId] = [existingNodeIds[0]];
           }
 
@@ -162,10 +173,9 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             assignments, allNodes, joiningNodeId,
           );
 
-          // Skip if no overloaded nodes (shouldn't happen with our setup)
           if (overloadedBefore.length === 0) return true;
 
-          const assigner = new PullBasedReplicaAssigner({
+          const assigner = createAssigner({
             nodeId: joiningNodeId,
             maxReplicasToPull: 10,
           });
@@ -184,17 +194,14 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             new Map(),
           );
 
-          // If no rebalancing proposed, that's acceptable if already balanced
           if (!result.success || !result.proposedAssignments) {
             return true;
           }
 
-          // Calculate replica counts after proposed changes
           const countsAfter = calculateNodeReplicaCounts(
             result.proposedAssignments, allNodes,
           );
 
-          // Verify at least one overloaded node has reduced replica count
           const countsBefore = calculateNodeReplicaCounts(assignments, allNodes);
           let relievedAtLeastOne = false;
 
@@ -214,9 +221,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
     t.pass('proposed assignments relieve at least one overloaded node');
   });
 
-  /**
-   * Property: The joining node receives replicas when rebalancing is proposed.
-   */
   t.test('joining node receives replicas in proposed assignments', async (t) => {
     fc.assert(
       fc.property(
@@ -228,15 +232,13 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
 
           const joiningNodeId = 'joining-node-test';
 
-          // Create imbalanced assignments
           const assignments = {};
           for (let i = 0; i < partitionIds.length; i++) {
-            // Distribute among existing nodes only
             const nodeIdx = i % existingNodeIds.length;
             assignments[partitionIds[i]] = [existingNodeIds[nodeIdx]];
           }
 
-          const assigner = new PullBasedReplicaAssigner({
+          const assigner = createAssigner({
             nodeId: joiningNodeId,
             maxReplicasToPull: 10,
           });
@@ -255,14 +257,12 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             new Map(),
           );
 
-          // If rebalancing is proposed, joining node should receive replicas
           if (result.success && result.proposedAssignments) {
             const joiningNodeHasReplicas = Object.values(result.proposedAssignments)
               .some((nodeList) => nodeList.includes(joiningNodeId));
             return joiningNodeHasReplicas;
           }
 
-          // If no rebalancing needed, that's acceptable
           return true;
         },
       ),
@@ -272,9 +272,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
     t.pass('joining node receives replicas in proposed assignments');
   });
 
-  /**
-   * Property: No partition has duplicate replicas on the same node.
-   */
   t.test('proposed assignments have no duplicate replicas per partition', async (t) => {
     fc.assert(
       fc.property(
@@ -286,15 +283,13 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
 
           const joiningNodeId = 'joining-node-test';
 
-          // Create assignments with multiple replicas per partition
           const assignments = {};
           for (const partitionId of partitionIds) {
-            // Assign to multiple nodes (up to 3 replicas)
             const replicaCount = Math.min(3, existingNodeIds.length);
             assignments[partitionId] = existingNodeIds.slice(0, replicaCount);
           }
 
-          const assigner = new PullBasedReplicaAssigner({
+          const assigner = createAssigner({
             nodeId: joiningNodeId,
             maxReplicasToPull: 10,
           });
@@ -313,7 +308,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             new Map(),
           );
 
-          // If proposed assignments exist, verify no duplicates
           if (result.success && result.proposedAssignments) {
             const validation = validateNoDuplicateReplicas(result.proposedAssignments);
             return validation.valid;
@@ -328,9 +322,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
     t.pass('proposed assignments have no duplicate replicas per partition');
   });
 
-  /**
-   * Property: Table replication policies are respected in proposed assignments.
-   */
   t.test('proposed assignments respect table replication policies', async (t) => {
     fc.assert(
       fc.property(
@@ -346,20 +337,17 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             replicationFactor, existingNodeIds.length,
           );
 
-          // Create assignments with specific replication factor
           const assignments = {};
           for (let i = 0; i < partitionCount; i++) {
             const partitionId = `tables-p${i}`;
-            // Assign to first N nodes based on replication factor
             assignments[partitionId] = existingNodeIds.slice(0, actualReplicationFactor);
           }
 
-          // Create policy requiring specific replication factor
           const tablePolicies = new Map([
             ['tables', {replicationFactor: actualReplicationFactor}],
           ]);
 
-          const assigner = new PullBasedReplicaAssigner({
+          const assigner = createAssigner({
             nodeId: joiningNodeId,
             maxReplicasToPull: 10,
           });
@@ -378,7 +366,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             tablePolicies,
           );
 
-          // If proposed assignments exist, verify replication factor is maintained
           if (result.success && result.proposedAssignments) {
             for (const [partitionId, nodeList] of
               Object.entries(result.proposedAssignments)) {
@@ -390,7 +377,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             }
           }
 
-          // If proposal failed due to policy violations, that's expected behavior
           if (!result.success && result.violations) {
             return true;
           }
@@ -404,9 +390,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
     t.pass('proposed assignments respect table replication policies');
   });
 
-  /**
-   * Property: With varying imbalance levels, overloaded nodes are always relieved.
-   */
   t.test('varying imbalance levels still relieve overloaded nodes', async (t) => {
     fc.assert(
       fc.property(
@@ -419,11 +402,9 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
 
           const joiningNodeId = 'joining-node-test';
 
-          // Create imbalanced assignments - first node gets more partitions
           const assignments = {};
           for (let i = 0; i < partitionCount; i++) {
             const partitionId = `partition-${i}`;
-            // First node gets imbalanceFactor times more partitions
             if (i < partitionCount * imbalanceFactor / (imbalanceFactor + 1)) {
               assignments[partitionId] = [existingNodeIds[0]];
             } else if (existingNodeIds.length > 1) {
@@ -438,10 +419,9 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             assignments, allNodes, joiningNodeId,
           );
 
-          // Skip if no overloaded nodes
           if (overloadedBefore.length === 0) return true;
 
-          const assigner = new PullBasedReplicaAssigner({
+          const assigner = createAssigner({
             nodeId: joiningNodeId,
             maxReplicasToPull: 10,
           });
@@ -464,7 +444,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             return true;
           }
 
-          // Verify at least one overloaded node is relieved
           const countsBefore = calculateNodeReplicaCounts(assignments, allNodes);
           const countsAfter = calculateNodeReplicaCounts(
             result.proposedAssignments, allNodes,
@@ -485,9 +464,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
     t.pass('varying imbalance levels still relieve overloaded nodes');
   });
 
-  /**
-   * Property: Edge case - single partition cluster still respects policies.
-   */
   t.test('single partition cluster respects placement policy', async (t) => {
     fc.assert(
       fc.property(
@@ -498,12 +474,11 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
 
           const joiningNodeId = 'joining-node-test';
 
-          // Single partition on first node
           const assignments = {
             'partition-0': [existingNodeIds[0]],
           };
 
-          const assigner = new PullBasedReplicaAssigner({
+          const assigner = createAssigner({
             nodeId: joiningNodeId,
             maxReplicasToPull: 10,
           });
@@ -522,7 +497,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             new Map(),
           );
 
-          // If proposed, verify no duplicates
           if (result.success && result.proposedAssignments) {
             const validation = validateNoDuplicateReplicas(result.proposedAssignments);
             return validation.valid;
@@ -537,9 +511,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
     t.pass('single partition cluster respects placement policy');
   });
 
-  /**
-   * Property: Multiple replicas per partition are handled correctly.
-   */
   t.test('multiple replicas per partition handled correctly', async (t) => {
     fc.assert(
       fc.property(
@@ -551,15 +522,13 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
 
           const joiningNodeId = 'joining-node-test';
 
-          // Create assignments with 3 replicas per partition
           const assignments = {};
           for (const partitionId of partitionIds) {
-            // All partitions on first 3 nodes - creates imbalance when joining
             const replicaCount = Math.min(3, existingNodeIds.length);
             assignments[partitionId] = existingNodeIds.slice(0, replicaCount);
           }
 
-          const assigner = new PullBasedReplicaAssigner({
+          const assigner = createAssigner({
             nodeId: joiningNodeId,
             maxReplicasToPull: 10,
           });
@@ -578,18 +547,15 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             new Map(),
           );
 
-          // Verify no duplicates in proposed assignments
           if (result.success && result.proposedAssignments) {
             const validation = validateNoDuplicateReplicas(result.proposedAssignments);
             if (!validation.valid) {
               return false;
             }
 
-            // Verify joining node appears in at least one assignment
             const joiningNodeHasReplicas = Object.values(result.proposedAssignments)
               .some((nodeList) => nodeList.includes(joiningNodeId));
 
-            // If rebalancing was proposed, joining node should have replicas
             if (result.replicasToPull && result.replicasToPull.length > 0) {
               return joiningNodeHasReplicas;
             }
@@ -604,9 +570,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
     t.pass('multiple replicas per partition handled correctly');
   });
 
-  /**
-   * Property: Empty table policies don't cause violations.
-   */
   t.test('empty table policies allow valid rebalancing', async (t) => {
     fc.assert(
       fc.property(
@@ -618,13 +581,12 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
 
           const joiningNodeId = 'joining-node-test';
 
-          // Create imbalanced assignments
           const assignments = {};
           for (const partitionId of partitionIds) {
             assignments[partitionId] = [existingNodeIds[0]];
           }
 
-          const assigner = new PullBasedReplicaAssigner({
+          const assigner = createAssigner({
             nodeId: joiningNodeId,
             maxReplicasToPull: 10,
           });
@@ -636,7 +598,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             proposedBy: existingNodeIds[0],
           });
 
-          // Use empty Map for policies
           const result = assigner.analyzeAndPropose(
             epoch,
             joiningNodeId,
@@ -644,7 +605,6 @@ test('Property 14: Join Assignment Relieves Overloaded Nodes', async (t) => {
             new Map(),
           );
 
-          // Should succeed with empty policies
           if (result.success && result.proposedAssignments) {
             const validation = validateNoDuplicateReplicas(result.proposedAssignments);
             return validation.valid;

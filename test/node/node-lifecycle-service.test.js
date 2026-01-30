@@ -3,12 +3,12 @@
  * Requirements: 5.6, 5.7, 5.8
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   NodeLifecycleService,
   NodeLifecycleStatus,
 } from '../../src/node/node-lifecycle-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
+import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 

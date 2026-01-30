@@ -6,7 +6,7 @@
  * **Validates: Requirements 2.6**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {BaseView} from '../../../src/cli/core/base-view.js';
 

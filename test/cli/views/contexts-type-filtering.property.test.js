@@ -6,7 +6,7 @@
  * **Validates: Requirements 31.2**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {ContextsView, CONTEXT_TYPES} from '../../../src/cli/views/contexts-view.js';
 

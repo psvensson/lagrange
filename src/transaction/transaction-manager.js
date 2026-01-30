@@ -8,23 +8,28 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {NUM} from '../constants/index.js';
+import {
+  TRANSACTION_CONFIG_KEY,
+  TRANSACTION_DEFAULT,
+  TRANSACTION_ERROR_MSG,
+  TRANSACTION_EVENT,
+  TRANSACTION_ISOLATION_LEVEL,
+  TRANSACTION_LOG_MSG,
+  TRANSACTION_REASON,
+  TRANSACTION_STATE,
+  TRANSACTION_SUBSYSTEM,
+} from './transaction-constants.js';
 
 /**
  * Transaction state enumeration.
  */
-const TransactionState = {
-  ACTIVE: 'active',
-  COMMITTED: 'committed',
-  ROLLED_BACK: 'rolled_back',
-  ABORTED: 'aborted',
-};
+const TransactionState = TRANSACTION_STATE;
 
 /**
  * Transaction isolation levels.
  */
-const IsolationLevel = {
-  READ_COMMITTED: 'READ_COMMITTED',
-};
+const IsolationLevel = TRANSACTION_ISOLATION_LEVEL;
 
 /**
  * Represents a single transaction.
@@ -90,7 +95,7 @@ class TransactionManager extends EventEmitter {
   constructor(options = {}) {
     super();
 
-    this.nodeId = options.nodeId || 'transaction-manager';
+    this.nodeId = options.nodeId || TRANSACTION_SUBSYSTEM;
 
     // Active transactions by ID
     this.transactions = new Map();
@@ -100,8 +105,10 @@ class TransactionManager extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.transactionTimeoutMs = config.get('transaction.timeoutMs') || 30000;
-    this.maxConcurrentTransactions = config.get('transaction.maxConcurrent') || 100;
+    this.transactionTimeoutMs = config.get(TRANSACTION_CONFIG_KEY.TIMEOUT_MS) ||
+      TRANSACTION_DEFAULT.TIMEOUT_MS;
+    this.maxConcurrentTransactions = config.get(TRANSACTION_CONFIG_KEY.MAX_CONCURRENT) ||
+      TRANSACTION_DEFAULT.MAX_CONCURRENT;
 
     // Logging
     this.logger = this.initLogger();
@@ -120,7 +127,7 @@ class TransactionManager extends EventEmitter {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('transaction-manager');
+        return loggingService.forSubsystem(TRANSACTION_SUBSYSTEM);
       }
     } catch {
       // Logging not available
@@ -136,7 +143,7 @@ class TransactionManager extends EventEmitter {
    */
   beginTransaction(partitionId, options = {}) {
     if (this.transactions.size >= this.maxConcurrentTransactions) {
-      throw new Error('Maximum concurrent transactions exceeded');
+      throw new Error(TRANSACTION_ERROR_MSG.MAX_CONCURRENT_EXCEEDED);
     }
 
     const transactionId = uuidv4();
@@ -150,13 +157,13 @@ class TransactionManager extends EventEmitter {
     }
     this.partitionTransactions.get(partitionId).add(transactionId);
 
-    this.logger.debug('Transaction started', {
+    this.logger.debug(TRANSACTION_LOG_MSG.STARTED, {
       transactionId,
       partitionId,
       isolationLevel: transaction.isolationLevel,
     });
 
-    this.emit('transactionStarted', {
+    this.emit(TRANSACTION_EVENT.STARTED, {
       transactionId,
       partitionId,
     });
@@ -183,11 +190,11 @@ class TransactionManager extends EventEmitter {
     const transaction = this.transactions.get(transactionId);
 
     if (!transaction) {
-      throw new Error(`Transaction not found: ${transactionId}`);
+      throw new Error(TRANSACTION_ERROR_MSG.NOT_FOUND_WITH_ID(transactionId));
     }
 
     if (!transaction.isActive()) {
-      throw new Error(`Transaction is not active: ${transaction.state}`);
+      throw new Error(TRANSACTION_ERROR_MSG.NOT_ACTIVE(transaction.state));
     }
 
     // Store Raft log index for durability tracking
@@ -196,7 +203,7 @@ class TransactionManager extends EventEmitter {
 
     const duration = transaction.getDuration();
 
-    this.logger.debug('Transaction committed', {
+    this.logger.debug(TRANSACTION_LOG_MSG.COMMITTED, {
       transactionId,
       partitionId: transaction.partitionId,
       operationCount: transaction.operations.length,
@@ -204,7 +211,7 @@ class TransactionManager extends EventEmitter {
       raftLogIndex: transaction.raftLogIndex,
     });
 
-    this.emit('transactionCommitted', {
+    this.emit(TRANSACTION_EVENT.COMMITTED, {
       transactionId,
       partitionId: transaction.partitionId,
       raftLogIndex: transaction.raftLogIndex,
@@ -242,14 +249,14 @@ class TransactionManager extends EventEmitter {
 
     const duration = transaction.getDuration();
 
-    this.logger.debug('Transaction rolled back', {
+    this.logger.debug(TRANSACTION_LOG_MSG.ROLLED_BACK, {
       transactionId,
       partitionId: transaction.partitionId,
       operationCount: transaction.operations.length,
       durationMs: duration,
     });
 
-    this.emit('transactionRolledBack', {
+    this.emit(TRANSACTION_EVENT.ROLLED_BACK, {
       transactionId,
       partitionId: transaction.partitionId,
     });
@@ -271,22 +278,22 @@ class TransactionManager extends EventEmitter {
    * @param {string} reason - Abort reason.
    * @return {Object} Abort result.
    */
-  async abortTransaction(transactionId, reason = 'unknown') {
+  async abortTransaction(transactionId, reason = TRANSACTION_REASON.UNKNOWN) {
     const transaction = this.transactions.get(transactionId);
 
     if (!transaction) {
-      return {success: false, error: 'Transaction not found'};
+      return {success: false, error: TRANSACTION_ERROR_MSG.NOT_FOUND};
     }
 
     transaction.state = TransactionState.ABORTED;
 
-    this.logger.warn('Transaction aborted', {
+    this.logger.warn(TRANSACTION_LOG_MSG.ABORTED, {
       transactionId,
       partitionId: transaction.partitionId,
       reason,
     });
 
-    this.emit('transactionAborted', {
+    this.emit(TRANSACTION_EVENT.ABORTED, {
       transactionId,
       partitionId: transaction.partitionId,
       reason,
@@ -312,11 +319,11 @@ class TransactionManager extends EventEmitter {
     const transaction = this.transactions.get(transactionId);
 
     if (!transaction) {
-      throw new Error(`Transaction not found: ${transactionId}`);
+      throw new Error(TRANSACTION_ERROR_MSG.NOT_FOUND_WITH_ID(transactionId));
     }
 
     if (!transaction.isActive()) {
-      throw new Error(`Cannot record operation: transaction is ${transaction.state}`);
+      throw new Error(TRANSACTION_ERROR_MSG.RECORD_OPERATION_INACTIVE(transaction.state));
     }
 
     transaction.addOperation(operation);
@@ -347,13 +354,13 @@ class TransactionManager extends EventEmitter {
    */
   getActiveTransactionCount(partitionId) {
     const txIds = this.partitionTransactions.get(partitionId);
-    if (!txIds) return 0;
+    if (!txIds) return NUM.ZERO;
 
-    let count = 0;
+    let count = NUM.ZERO;
     for (const txId of txIds) {
       const tx = this.transactions.get(txId);
       if (tx && tx.isActive()) {
-        count++;
+        count += NUM.ONE;
       }
     }
     return count;
@@ -372,7 +379,7 @@ class TransactionManager extends EventEmitter {
     const partitionTxs = this.partitionTransactions.get(transaction.partitionId);
     if (partitionTxs) {
       partitionTxs.delete(transactionId);
-      if (partitionTxs.size === 0) {
+      if (partitionTxs.size === NUM.ZERO) {
         this.partitionTransactions.delete(transaction.partitionId);
       }
     }
@@ -388,7 +395,7 @@ class TransactionManager extends EventEmitter {
   startCleanupInterval() {
     this.cleanupInterval = setInterval(() => {
       this.cleanupTimedOutTransactions();
-    }, 5000);
+    }, TRANSACTION_DEFAULT.CLEANUP_INTERVAL_MS);
   }
 
   /**
@@ -400,7 +407,7 @@ class TransactionManager extends EventEmitter {
 
     for (const [txId, tx] of this.transactions) {
       if (tx.isActive() && (now - tx.startTime) > this.transactionTimeoutMs) {
-        this.abortTransaction(txId, 'timeout');
+        this.abortTransaction(txId, TRANSACTION_REASON.TIMEOUT);
       }
     }
   }
@@ -410,10 +417,10 @@ class TransactionManager extends EventEmitter {
    * @return {Object} Statistics.
    */
   getStats() {
-    let activeCount = 0;
+    let activeCount = NUM.ZERO;
     for (const tx of this.transactions.values()) {
       if (tx.isActive()) {
-        activeCount++;
+        activeCount += NUM.ONE;
       }
     }
 
@@ -436,7 +443,7 @@ class TransactionManager extends EventEmitter {
     // Abort all active transactions
     for (const [txId, tx] of this.transactions) {
       if (tx.isActive()) {
-        this.abortTransaction(txId, 'shutdown');
+        this.abortTransaction(txId, TRANSACTION_REASON.SHUTDOWN);
       }
     }
 

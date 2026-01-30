@@ -1,41 +1,28 @@
 TAP version 14
 # Subtest: Property 80: Pending Move Tracking
-    # Subtest: addReplica tracks move in pendingMoves
-        ok 1 - addReplica tracks move in pendingMoves
+    # Subtest: in-flight operations are returned for non-terminal statuses
+        ok 1 - in-flight operations are returned
         1..1
-    ok 1 - addReplica tracks move in pendingMoves # time=8.785ms
+    ok 1 - in-flight operations are returned for non-terminal statuses # time=7.052ms
     
-    # Subtest: removeReplica tracks move in pendingMoves
-        ok 1 - removeReplica tracks move in pendingMoves
+    # Subtest: terminal statuses are excluded from in-flight operations
+        ok 1 - terminal statuses are excluded
         1..1
-    ok 2 - removeReplica tracks move in pendingMoves # time=3.152ms
+    ok 2 - terminal statuses are excluded from in-flight operations # time=1.527ms
     
-    # Subtest: CDC active status completes ADD move
-        ok 1 - CDC active status completes ADD move
+    # Subtest: hasPendingMove identifies in-flight replica operations
+        ok 1 - hasPendingMove identifies in-flight operations
         1..1
-    ok 3 - CDC active status completes ADD move # time=2.901ms
+    ok 3 - hasPendingMove identifies in-flight replica operations # time=1.422ms
     
-    # Subtest: CDC DELETE completes REMOVE move
-        ok 1 - CDC DELETE completes REMOVE move
+    # Subtest: hasPendingAddForNode identifies pending ADD operations
+        ok 1 - hasPendingAddForNode identifies pending ADD operations
         1..1
-    ok 4 - CDC DELETE completes REMOVE move # time=2.697ms
+    ok 4 - hasPendingAddForNode identifies pending ADD operations # time=1.638ms
     
-    # Subtest: CDC failed status marks move as failed
-        ok 1 - CDC failed status marks move as failed
-        1..1
-    ok 5 - CDC failed status marks move as failed # time=5.069ms
-    
-    # Subtest: cleanupExpiredMoves removes old moves
-        ok 1 - cleanupExpiredMoves removes old moves
-        1..1
-    ok 6 - cleanupExpiredMoves removes old moves # time=1.709ms
-    
-    # Subtest: hasPendingMove identifies pending moves
-        ok 1 - hasPendingMove identifies pending moves
-        1..1
-    ok 7 - hasPendingMove identifies pending moves # time=2.129ms
-    
-    1..7
-ok 1 - Property 80: Pending Move Tracking # time=247.689ms
+    1..4
+ok 1 - Property 80: Pending Move Tracking # time=128.984ms
 
 1..1
+# { total: 4, pass: 4 }
+# time=135.071ms

@@ -3,39 +3,41 @@ TAP version 14
     # Subtest: serialize then deserialize preserves all entries
         ok 1 - serialize then deserialize preserves all entries
         1..1
-    ok 1 - serialize then deserialize preserves all entries # time=5.714ms
+    ok 1 - serialize then deserialize preserves all entries # time=9.908ms
     
     # Subtest: entry order is preserved after round-trip
         ok 1 - entry order is preserved after round-trip
         1..1
-    ok 2 - entry order is preserved after round-trip # time=1.69ms
+    ok 2 - entry order is preserved after round-trip # time=3.366ms
     
     # Subtest: deserialize filters invalid entries
         ok 1 - deserialize filters invalid entries
         1..1
-    ok 3 - deserialize filters invalid entries # time=0.988ms
+    ok 3 - deserialize filters invalid entries # time=2.241ms
     
     # Subtest: deserialize handles malformed JSON gracefully
         ok 1 - deserialize handles malformed JSON gracefully
         1..1
-    ok 4 - deserialize handles malformed JSON gracefully # time=0.576ms
+    ok 4 - deserialize handles malformed JSON gracefully # time=1.062ms
     
     # Subtest: serialize produces valid JSON
         ok 1 - serialize produces valid JSON
         1..1
-    ok 5 - serialize produces valid JSON # time=1.144ms
+    ok 5 - serialize produces valid JSON # time=1.841ms
     
     # Subtest: double round-trip is idempotent
         ok 1 - double round-trip is idempotent
         1..1
-    ok 6 - double round-trip is idempotent # time=2.002ms
+    ok 6 - double round-trip is idempotent # time=4.001ms
     
     # Subtest: deserialize respects maxEntries
         ok 1 - deserialize respects maxEntries
         1..1
-    ok 7 - deserialize respects maxEntries # time=3.171ms
+    ok 7 - deserialize respects maxEntries # time=3.968ms
     
     1..7
-ok 1 - Property 19: Query History Persistence Round-Trip # time=19.234ms
+ok 1 - Property 19: Query History Persistence Round-Trip # time=33.111ms
 
 1..1
+# { total: 7, pass: 7 }
+# time=48.655ms

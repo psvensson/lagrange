@@ -4,7 +4,7 @@
  * Requirements: 20.3, 20.5, 20.9
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {KeyRange, KeyRangeManager} from '../../src/partition/key-range-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';

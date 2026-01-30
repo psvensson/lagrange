@@ -12,7 +12,7 @@
  * Property: Transport Message Delivery (Simplified)
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   isRaftPacket,

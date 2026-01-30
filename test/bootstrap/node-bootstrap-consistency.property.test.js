@@ -8,7 +8,7 @@
  * Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {v4 as uuidv4, validate as uuidValidate} from 'uuid';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
@@ -16,10 +16,14 @@ import {
   NodeJoiningService,
   JoiningPhase,
 } from '../../src/bootstrap/node-joining-service.js';
-import {AssignmentStrategy} from '../../src/bootstrap/message-group-assignment.js';
+import {
+  MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
+} from '../../src/bootstrap/message-group-assignment.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {URL} from 'url';
 
 // Fast config for tests - reduces Raft election and leadership wait times
 const FAST_TEST_CONFIG = {
@@ -65,6 +69,21 @@ function initializeTestEnvironment() {
 const nodeAddressArb = fc.integer({min: 30000, max: 40000})
   .map((port) => `ws://localhost:${port}`);
 
+function createInProcHttpPost(seedApi) {
+  return async (url, body) => {
+    const {pathname} = new URL(url);
+    const res = await seedApi.getFastify().inject({
+      method: 'POST',
+      url: pathname,
+      payload: body,
+    });
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw new Error(`HTTP ${res.statusCode}: ${res.payload}`);
+    }
+    return res.json();
+  };
+}
+
 test('Property 11: Node Bootstrap Consistency', async (t) => {
   await t.test('new node with UUID receives bootstrap response from seed', async (t) => {
     initializeTestEnvironment();
@@ -90,21 +109,22 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
               seedNodeId: 'seed-node-1',
               seedNodeAddress: 'ws://localhost:8080',
               messageGroupServices: new Map(),
+              systemTableCache: new SystemTableCache(),
             });
 
-            await seedApi.initialize(0);
-            const port = seedApi.getFastify().server.address().port;
+            await seedApi.initialize(0, {listen: false});
 
             // Get wsPort from nodeAddress
-            const wsPort = parseInt(nodeAddress.split(':')[2], 10);
+            const wsPort = 0;
 
             // Requirement 7.2: Contact seed node's REST API with self-generated node ID
             service = new NodeJoiningService({
               nodeId,
               nodeAddress,
-              seedNodeAddress: `http://localhost:${port}`,
-              wsPort, // Enable WebSocket server for self-connection
+              seedNodeAddress: 'http://localhost:0',
+              wsPort,
               config: FAST_TEST_CONFIG,
+              httpPost: createInProcHttpPost(seedApi),
             });
 
             const result = await service.join();
@@ -165,24 +185,25 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
               seedNodeId: 'seed-node-1',
               seedNodeAddress: 'ws://localhost:8080',
               messageGroupServices: new Map(),
+              systemTableCache: new SystemTableCache(),
             });
 
-            await seedApi.initialize(0);
-            const port = seedApi.getFastify().server.address().port;
+            await seedApi.initialize(0, {listen: false});
 
             service = new NodeJoiningService({
               nodeId,
               nodeAddress,
-              seedNodeAddress: `http://localhost:${port}`,
-              wsPort, // Enable WebSocket server for self-connection
+              seedNodeAddress: 'http://localhost:0',
+              wsPort: 0,
               config: FAST_TEST_CONFIG,
+              httpPost: createInProcHttpPost(seedApi),
             });
 
             const result = await service.join();
 
-            // Verify bootstrap response contains partition leaders info
-            const hasPartitionLeaders = result.bootstrapResponse &&
-              result.bootstrapResponse.partitionLeaders !== undefined;
+            // Verify bootstrap response contains system table snapshots
+            const hasSystemTableSnapshots = result.bootstrapResponse &&
+              result.bootstrapResponse.systemTableSnapshots !== undefined;
 
             // Cleanup
             await service.cleanup();
@@ -190,13 +211,13 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
             await seedApi.shutdown();
             seedApi = null;
 
-            return result.success && hasPartitionLeaders;
+            return result.success && hasSystemTableSnapshots;
           },
         ),
         {numRuns: 10},
       );
 
-      t.pass('Bootstrap response contains partition leaders');
+      t.pass('Bootstrap response contains system table snapshots');
     } finally {
       if (service) {
         await service.cleanup();
@@ -226,17 +247,18 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
               seedNodeId: 'seed-node-1',
               seedNodeAddress: 'ws://localhost:8080',
               messageGroupServices: new Map(),
+              systemTableCache: new SystemTableCache(),
             });
 
-            await seedApi.initialize(0);
-            const port = seedApi.getFastify().server.address().port;
+            await seedApi.initialize(0, {listen: false});
 
             service = new NodeJoiningService({
               nodeId,
               nodeAddress,
-              seedNodeAddress: `http://localhost:${port}`,
-              wsPort, // Enable WebSocket server for self-connection
+              seedNodeAddress: 'http://localhost:0',
+              wsPort: 0,
               config: FAST_TEST_CONFIG,
+              httpPost: createInProcHttpPost(seedApi),
             });
 
             const result = await service.join();
@@ -285,36 +307,66 @@ test('Property 11: Node Bootstrap Consistency', async (t) => {
           async () => {
             const nodeId = uuidv4();
 
+            // Create a fresh mock system table cache for each iteration
+            // In production, nodes are registered via CDC to the nodes system table
+            const registeredNodes = new Map();
+            const mockSystemTableCache = {
+              get(tableName, key) {
+                if (tableName === 'nodes') {
+                  return registeredNodes.get(key) || null;
+                }
+                return null;
+              },
+              getAll(tableName) {
+                if (tableName === 'nodes') {
+                  return Array.from(registeredNodes.values());
+                }
+                return [];
+              },
+            };
+
             seedApi = new BootstrapAPI({
               seedNodeId: 'seed-node-1',
               seedNodeAddress: 'ws://localhost:8080',
               messageGroupServices: new Map(),
+              systemTableCache: new SystemTableCache(),
+              systemTableCache: mockSystemTableCache,
             });
 
-            await seedApi.initialize(0);
-            const port = seedApi.getFastify().server.address().port;
+            await seedApi.initialize(0, {listen: false});
 
             // First node joins successfully
             const wsPort1 = getRandomWsPort();
             service1 = new NodeJoiningService({
               nodeId,
               nodeAddress: `ws://localhost:${wsPort1}`,
-              seedNodeAddress: `http://localhost:${port}`,
-              wsPort: wsPort1, // Enable WebSocket server for self-connection
+              seedNodeAddress: 'http://localhost:0',
+              wsPort: 0,
               config: FAST_TEST_CONFIG,
+              httpPost: createInProcHttpPost(seedApi),
             });
 
             const result1 = await service1.join();
             const firstJoinSuccess = result1.success;
+
+            // Simulate the node being registered via CDC (in production this happens
+            // when the node registers itself in the nodes system table)
+            if (firstJoinSuccess) {
+              registeredNodes.set(nodeId, {
+                node_id: nodeId,
+                node_address: `ws://localhost:${wsPort1}`,
+              });
+            }
 
             // Second node with same ID should fail
             const wsPort2 = getRandomWsPort();
             service2 = new NodeJoiningService({
               nodeId, // Same node ID
               nodeAddress: `ws://localhost:${wsPort2}`,
-              seedNodeAddress: `http://localhost:${port}`,
-              wsPort: wsPort2, // Enable WebSocket server for self-connection
+              seedNodeAddress: 'http://localhost:0',
+              wsPort: 0,
               config: FAST_TEST_CONFIG,
+              httpPost: createInProcHttpPost(seedApi),
             });
 
             const result2 = await service2.join();

@@ -3,39 +3,41 @@ TAP version 14
     # Subtest: calculateMoves returns single batched result for multiple moves
         ok 1 - calculateMoves returns single batched result for multiple moves
         1..1
-    ok 1 - calculateMoves returns single batched result for multiple moves # time=9.832ms
+    ok 1 - calculateMoves returns single batched result for multiple moves # time=7.152ms
     
     # Subtest: proposedAssignments contains all changes in single structure
         ok 1 - proposedAssignments contains all changes in single structure
         1..1
-    ok 2 - proposedAssignments contains all changes in single structure # time=3.058ms
+    ok 2 - proposedAssignments contains all changes in single structure # time=2.369ms
     
     # Subtest: moves array and proposedAssignments are consistent
         ok 1 - moves array and proposedAssignments are consistent
         1..1
-    ok 3 - moves array and proposedAssignments are consistent # time=2.544ms
+    ok 3 - moves array and proposedAssignments are consistent # time=1.572ms
     
     # Subtest: single calculateMoves call handles all partitions
         ok 1 - single calculateMoves call handles all partitions
         1..1
-    ok 4 - single calculateMoves call handles all partitions # time=2.411ms
+    ok 4 - single calculateMoves call handles all partitions # time=1.916ms
     
     # Subtest: batched result has single reason field
         ok 1 - batched result has single reason field
         1..1
-    ok 5 - batched result has single reason field # time=2.227ms
+    ok 5 - batched result has single reason field # time=1.623ms
     
     # Subtest: mixed node states produce single batched proposal
         ok 1 - mixed node states produce single batched proposal
         1..1
-    ok 6 - mixed node states produce single batched proposal # time=5.338ms
+    ok 6 - mixed node states produce single batched proposal # time=2.766ms
     
     # Subtest: no moves needed returns single result object
         ok 1 - no moves needed returns single result object
         1..1
-    ok 7 - no moves needed returns single result object # time=1.025ms
+    ok 7 - no moves needed returns single result object # time=1.296ms
     
     1..7
-ok 1 - Property 15: Rebalancer Batches Moves # time=29.98ms
+ok 1 - Property 15: Rebalancer Batches Moves # time=21.575ms
 
 1..1
+# { total: 7, pass: 7 }
+# time=32.781ms

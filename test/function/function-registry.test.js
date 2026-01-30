@@ -3,7 +3,7 @@
  * Requirements: 34.10, 34.11, 34.12, 34.13
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {FunctionRegistry} from '../../src/function/function-registry.js';
 
 // Mock system table cache with code table
@@ -243,12 +243,14 @@ test('FunctionRegistry - getFunction returns function from cache', async (t) => 
   t.equal(func.function_id, 'func-1', 'Should have correct ID');
 });
 
-test('FunctionRegistry - getFunction returns null without cache', async (t) => {
+test('FunctionRegistry - getFunction throws without cache', async (t) => {
   const registry = new FunctionRegistry();
 
-  const func = await registry.getFunction('func-1');
-
-  t.equal(func, null, 'Should return null');
+  await t.rejects(
+    registry.getFunction('func-1'),
+    /System table cache not available/,
+    'Should throw when cache is missing',
+  );
 });
 
 test('FunctionRegistry - multiple executors', async (t) => {

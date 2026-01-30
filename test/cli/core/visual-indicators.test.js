@@ -4,7 +4,7 @@
  * Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {
   VisualIndicators,
   STATUS,

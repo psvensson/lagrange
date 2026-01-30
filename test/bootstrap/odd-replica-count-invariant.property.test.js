@@ -8,13 +8,13 @@
  * quorum requirements.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_REPLICA_IDS,
   INITIAL_MESSAGE_GROUP_REPLICA_IDS,
-} from '../../src/bootstrap/system-table-schemas.js';
+} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 

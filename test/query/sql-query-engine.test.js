@@ -4,7 +4,7 @@
  * Requirements: 6.1, 6.2, 6.3, 6.4, 15.1, 15.2, 15.3, 15.4, 20.6, 20.7
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 
 // Initialize configuration for tests
@@ -12,26 +12,45 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
-// Mock partition service
-function createMockPartition(tableName, keyStart, keyEnd, data = []) {
+// Mock partition data for routing
+const mockPartitionData = new Map();
+
+// Mock message router that routes queries to mock partition data
+function createMockMessageRouter() {
   return {
-    tableName,
-    keyRange: {start: keyStart, end: keyEnd},
-    data,
-    executeQuery: async function(sql, _params) {
-      if (sql.toUpperCase().startsWith('SELECT')) {
-        return {rows: this.data, changes: 0};
+    deliver: async function(address, message) {
+      // Extract partition ID from address (format: nodeId/partition/replicaId)
+      const parts = address.split('/');
+      const replicaId = parts[2];
+
+      if (message.type === 'QUERY') {
+        const data = mockPartitionData.get(replicaId) || [];
+        return {
+          acknowledged: true,
+          success: true,
+          rows: data,
+          changes: 0,
+        };
       }
-      return {rows: [], changes: this.data.length || 1};
+      return {acknowledged: true, success: true};
     },
   };
 }
 
-// Mock system cache
-function createMockSystemCache(tables, partitions) {
+// Mock system cache with services for routing
+function createMockSystemCache(tables, partitions, services) {
   return {
     tables,
     partitions,
+    services: services || partitions.map((p) => ({
+      service_id: p.partition_id,
+      service_type: 'partition',
+      partition_id: p.partition_id,
+      node_id: 'test-node',
+      raft_role: 'leader',
+      address: `test-node/partition/${p.partition_id}`,
+      status: 'active',
+    })),
     get: function(type, key) {
       if (type === 'tables') {
         return this.tables.find((t) => t.table_name === key);
@@ -42,23 +61,24 @@ function createMockSystemCache(tables, partitions) {
       if (type === 'partitions') {
         return this.partitions.filter(predicate);
       }
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
       return [];
     },
     getAll: function(type) {
       if (type === 'partitions') return this.partitions;
       if (type === 'tables') return this.tables;
+      if (type === 'services') return this.services;
       return [];
     },
   };
 }
 
 test('SQLQueryEngine - executes SELECT query', async (t) => {
-  const engine = new SQLQueryEngine();
-
-  const p1 = createMockPartition('users', null, 'm', [{id: 1, name: 'Alice'}]);
-  const p2 = createMockPartition('users', 'm', null, [{id: 2, name: 'Bob'}]);
-
-  engine.setPartitionRegistry(new Map([['p1', p1], ['p2', p2]]));
+  // Set up mock partition data
+  mockPartitionData.set('p1', [{id: 1, name: 'Alice'}]);
+  mockPartitionData.set('p2', [{id: 2, name: 'Bob'}]);
 
   const cache = createMockSystemCache(
     [{table_name: 'users', primaryKey: 'id'}],
@@ -67,21 +87,25 @@ test('SQLQueryEngine - executes SELECT query', async (t) => {
       {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
     ],
   );
-  engine.setSystemCache(cache);
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
 
   const result = await engine.executeQuery('SELECT * FROM users');
 
   t.equal(result.success, true);
   t.equal(result.rows.length, 2);
+
+  // Clean up
+  mockPartitionData.clear();
 });
 
 test('SQLQueryEngine - routes SELECT with key filter to single partition', async (t) => {
-  const engine = new SQLQueryEngine();
-
-  const p1 = createMockPartition('users', null, 'm', [{id: 'alice', name: 'Alice'}]);
-  const p2 = createMockPartition('users', 'm', null, [{id: 'bob', name: 'Bob'}]);
-
-  engine.setPartitionRegistry(new Map([['p1', p1], ['p2', p2]]));
+  // Set up mock partition data
+  mockPartitionData.set('p1', [{id: 'alice', name: 'Alice'}]);
+  mockPartitionData.set('p2', [{id: 'bob', name: 'Bob'}]);
 
   const cache = createMockSystemCache(
     [{table_name: 'users', primaryKey: 'id'}],
@@ -90,22 +114,26 @@ test('SQLQueryEngine - routes SELECT with key filter to single partition', async
       {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
     ],
   );
-  engine.setSystemCache(cache);
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
 
   const result = await engine.executeQuery('SELECT * FROM users WHERE id = \'alice\'');
 
   t.equal(result.success, true);
   t.equal(result.partitions.length, 1);
   t.equal(result.partitions[0], 'p1');
+
+  // Clean up
+  mockPartitionData.clear();
 });
 
 test('SQLQueryEngine - executes INSERT and routes to correct partition', async (t) => {
-  const engine = new SQLQueryEngine();
-
-  const p1 = createMockPartition('users', null, 'm', []);
-  const p2 = createMockPartition('users', 'm', null, []);
-
-  engine.setPartitionRegistry(new Map([['p1', p1], ['p2', p2]]));
+  // Set up mock partition data
+  mockPartitionData.set('p1', []);
+  mockPartitionData.set('p2', []);
 
   const cache = createMockSystemCache(
     [{table_name: 'users', primaryKey: 'id'}],
@@ -114,7 +142,11 @@ test('SQLQueryEngine - executes INSERT and routes to correct partition', async (
       {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
     ],
   );
-  engine.setSystemCache(cache);
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
 
   const result = await engine.executeQuery(
     'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\')',
@@ -124,15 +156,15 @@ test('SQLQueryEngine - executes INSERT and routes to correct partition', async (
   t.equal(result.operation, 'INSERT');
   t.equal(result.partitions.length, 1);
   t.equal(result.partitions[0], 'p1'); // 'alice' < 'm'
+
+  // Clean up
+  mockPartitionData.clear();
 });
 
 test('SQLQueryEngine - routes INSERT to multiple partitions', async (t) => {
-  const engine = new SQLQueryEngine();
-
-  const p1 = createMockPartition('users', null, 'm', []);
-  const p2 = createMockPartition('users', 'm', null, []);
-
-  engine.setPartitionRegistry(new Map([['p1', p1], ['p2', p2]]));
+  // Set up mock partition data
+  mockPartitionData.set('p1', []);
+  mockPartitionData.set('p2', []);
 
   const cache = createMockSystemCache(
     [{table_name: 'users', primaryKey: 'id'}],
@@ -141,7 +173,11 @@ test('SQLQueryEngine - routes INSERT to multiple partitions', async (t) => {
       {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
     ],
   );
-  engine.setSystemCache(cache);
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
 
   const result = await engine.executeQuery(
     'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\'), (\'zack\', \'Zack\')',
@@ -149,15 +185,15 @@ test('SQLQueryEngine - routes INSERT to multiple partitions', async (t) => {
 
   t.equal(result.success, true);
   t.equal(result.partitions.length, 2);
+
+  // Clean up
+  mockPartitionData.clear();
 });
 
 test('SQLQueryEngine - executes UPDATE with key filter', async (t) => {
-  const engine = new SQLQueryEngine();
-
-  const p1 = createMockPartition('users', null, 'm', [{id: 'alice'}]);
-  const p2 = createMockPartition('users', 'm', null, [{id: 'bob'}]);
-
-  engine.setPartitionRegistry(new Map([['p1', p1], ['p2', p2]]));
+  // Set up mock partition data
+  mockPartitionData.set('p1', [{id: 'alice'}]);
+  mockPartitionData.set('p2', [{id: 'bob'}]);
 
   const cache = createMockSystemCache(
     [{table_name: 'users', primaryKey: 'id'}],
@@ -166,7 +202,11 @@ test('SQLQueryEngine - executes UPDATE with key filter', async (t) => {
       {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
     ],
   );
-  engine.setSystemCache(cache);
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
 
   const result = await engine.executeQuery(
     'UPDATE users SET status = \'active\' WHERE id = \'alice\'',
@@ -176,15 +216,15 @@ test('SQLQueryEngine - executes UPDATE with key filter', async (t) => {
   t.equal(result.operation, 'UPDATE');
   t.equal(result.partitions.length, 1);
   t.equal(result.partitions[0], 'p1');
+
+  // Clean up
+  mockPartitionData.clear();
 });
 
 test('SQLQueryEngine - executes UPDATE on all partitions without key filter', async (t) => {
-  const engine = new SQLQueryEngine();
-
-  const p1 = createMockPartition('users', null, 'm', [{id: 'alice'}]);
-  const p2 = createMockPartition('users', 'm', null, [{id: 'bob'}]);
-
-  engine.setPartitionRegistry(new Map([['p1', p1], ['p2', p2]]));
+  // Set up mock partition data
+  mockPartitionData.set('p1', [{id: 'alice'}]);
+  mockPartitionData.set('p2', [{id: 'bob'}]);
 
   const cache = createMockSystemCache(
     [{table_name: 'users', primaryKey: 'id'}],
@@ -193,7 +233,11 @@ test('SQLQueryEngine - executes UPDATE on all partitions without key filter', as
       {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
     ],
   );
-  engine.setSystemCache(cache);
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
 
   const result = await engine.executeQuery(
     'UPDATE users SET status = \'active\' WHERE age > 18',
@@ -201,15 +245,15 @@ test('SQLQueryEngine - executes UPDATE on all partitions without key filter', as
 
   t.equal(result.success, true);
   t.equal(result.partitions.length, 2);
+
+  // Clean up
+  mockPartitionData.clear();
 });
 
 test('SQLQueryEngine - executes DELETE with key filter', async (t) => {
-  const engine = new SQLQueryEngine();
-
-  const p1 = createMockPartition('users', null, 'm', [{id: 'alice'}]);
-  const p2 = createMockPartition('users', 'm', null, [{id: 'bob'}]);
-
-  engine.setPartitionRegistry(new Map([['p1', p1], ['p2', p2]]));
+  // Set up mock partition data
+  mockPartitionData.set('p1', [{id: 'alice'}]);
+  mockPartitionData.set('p2', [{id: 'bob'}]);
 
   const cache = createMockSystemCache(
     [{table_name: 'users', primaryKey: 'id'}],
@@ -218,21 +262,29 @@ test('SQLQueryEngine - executes DELETE with key filter', async (t) => {
       {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
     ],
   );
-  engine.setSystemCache(cache);
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
 
   const result = await engine.executeQuery('DELETE FROM users WHERE id = \'alice\'');
 
   t.equal(result.success, true);
   t.equal(result.operation, 'DELETE');
   t.equal(result.partitions.length, 1);
+
+  // Clean up
+  mockPartitionData.clear();
 });
 
 test('SQLQueryEngine - returns error for non-existent table', async (t) => {
-  const engine = new SQLQueryEngine();
-  engine.setPartitionRegistry(new Map());
-
   const cache = createMockSystemCache([], []);
-  engine.setSystemCache(cache);
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
 
   const result = await engine.executeQuery('SELECT * FROM nonexistent');
 
@@ -241,7 +293,12 @@ test('SQLQueryEngine - returns error for non-existent table', async (t) => {
 });
 
 test('SQLQueryEngine - handles transaction statements', async (t) => {
-  const engine = new SQLQueryEngine();
+  const cache = createMockSystemCache([], []);
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
 
   const beginResult = await engine.executeQuery('BEGIN TRANSACTION');
   t.equal(beginResult.success, true);
@@ -262,7 +319,10 @@ test('SQLQueryEngine - handles transaction statements', async (t) => {
 });
 
 test('SQLQueryEngine - returns syntax error for invalid SQL', async (t) => {
-  const engine = new SQLQueryEngine();
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], []),
+    messageRouter: createMockMessageRouter(),
+  });
 
   const result = await engine.executeQuery('INVALID SQL STATEMENT');
 
@@ -271,7 +331,10 @@ test('SQLQueryEngine - returns syntax error for invalid SQL', async (t) => {
 });
 
 test('SQLQueryEngine - parse method returns AST', async (t) => {
-  const engine = new SQLQueryEngine();
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], []),
+    messageRouter: createMockMessageRouter(),
+  });
 
   const ast = engine.parse('SELECT id, name FROM users WHERE age > 18');
 
@@ -282,8 +345,6 @@ test('SQLQueryEngine - parse method returns AST', async (t) => {
 });
 
 test('SQLQueryEngine - resolvePartitions method works', async (t) => {
-  const engine = new SQLQueryEngine();
-
   const cache = createMockSystemCache(
     [{table_name: 'users', primaryKey: 'id'}],
     [
@@ -291,10 +352,39 @@ test('SQLQueryEngine - resolvePartitions method works', async (t) => {
       {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
     ],
   );
-  engine.setSystemCache(cache);
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
 
   const partitions = engine.resolvePartitions('users', null);
 
   t.equal(partitions.length, 2);
 });
 
+test('SQLQueryEngine - throws error when system cache not available', async (t) => {
+  const engine = new SQLQueryEngine({
+    systemCache: null,
+    messageRouter: createMockMessageRouter(),
+  });
+
+  const result = await engine.executeQuery('SELECT * FROM users');
+
+  t.equal(result.success, false);
+  t.ok(result.error.includes('System cache not available'));
+});
+
+test('SQLQueryEngine - returns empty array when no partitions found in cache', async (t) => {
+  const cache = createMockSystemCache([], []);
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
+
+  const result = await engine.executeQuery('SELECT * FROM users');
+
+  t.equal(result.success, false);
+  t.ok(result.error.includes('not found'));
+});

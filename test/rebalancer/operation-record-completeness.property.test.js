@@ -13,51 +13,13 @@
  * Completeness
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
-
-/**
- * Create a mock RPC client for testing.
- * @param {Object} options - Options for the mock.
- * @return {Object} Mock RPC client.
- */
-function createMockRpcClient(options = {}) {
-  const responseStatus = options.responseStatus || 'initiated';
-  const responseError = options.responseError || null;
-
-  return {
-    call: async (_target, _request, _options) => {
-      if (responseError) {
-        throw new Error(responseError);
-      }
-      return {status: responseStatus, error: null};
-    },
-  };
-}
-
-/**
- * Create a RebalanceCoordinator for testing.
- * @param {Object} options - Options for the coordinator.
- * @return {RebalanceCoordinator} Coordinator instance.
- */
-function createTestCoordinator(options = {}) {
-  const coordinator = new RebalanceCoordinator({
-    nodeId: options.nodeId || 'test-node-1',
-    rpcClient: options.rpcClient || createMockRpcClient(),
-    systemTableCache: options.systemTableCache || null,
-    cdcIntegrationService: options.cdcIntegrationService || null,
-  });
-
-  // Don't start timeout checking in tests
-  coordinator.timeoutCheckIntervalMs = 1000000;
-
-  return coordinator;
-}
+import {createTestCoordinator} from './test-helpers.js';
 
 test('Property 2: Operation Record Completeness', async (t) => {
   await t.test('createOperation creates records with all required fields', async (t) => {
@@ -132,7 +94,7 @@ test('Property 2: Operation Record Completeness', async (t) => {
     t.pass('Operations start in PENDING status');
   });
 
-  await t.test('operation is stored in coordinator memory', async (t) => {
+  await t.test('operation is stored and retrievable via SQL engine', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.record({
@@ -145,7 +107,7 @@ test('Property 2: Operation Record Completeness', async (t) => {
 
           try {
             const operation = await coordinator.createOperation(move);
-            const retrieved = coordinator.getOperation(operation.operationId);
+            const retrieved = await coordinator.getOperation(operation.operationId);
 
             return retrieved !== null &&
               retrieved.operationId === operation.operationId;
@@ -157,7 +119,7 @@ test('Property 2: Operation Record Completeness', async (t) => {
       {numRuns: 10},
     );
 
-    t.pass('Operations are stored in coordinator memory');
+    t.pass('Operations are stored and retrievable via SQL engine');
   });
 
   await t.test('completed operation has completed_at timestamp', async (t) => {
@@ -313,7 +275,7 @@ test('Property 2: Operation Record Completeness', async (t) => {
     const coordinator = createTestCoordinator();
 
     try {
-      const initialStats = coordinator.getStats();
+      const initialStats = await coordinator.getStats();
       t.equal(initialStats.operationsCreated, 0, 'Initial created count is 0');
 
       // Create an operation
@@ -323,13 +285,13 @@ test('Property 2: Operation Record Completeness', async (t) => {
         nodeId: 'test-node',
       });
 
-      const afterCreate = coordinator.getStats();
+      const afterCreate = await coordinator.getStats();
       t.equal(afterCreate.operationsCreated, 1, 'Created count is 1 after create');
 
       // Complete the operation
       await coordinator.completeOperation(operation);
 
-      const afterComplete = coordinator.getStats();
+      const afterComplete = await coordinator.getStats();
       t.equal(afterComplete.operationsCompleted, 1,
         'Completed count is 1 after complete');
 
@@ -342,7 +304,7 @@ test('Property 2: Operation Record Completeness', async (t) => {
 
       await coordinator.failOperation(operation2, 'Test error');
 
-      const afterFail = coordinator.getStats();
+      const afterFail = await coordinator.getStats();
       t.equal(afterFail.operationsFailed, 1, 'Failed count is 1 after fail');
     } finally {
       await coordinator.shutdown();

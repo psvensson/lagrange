@@ -15,7 +15,7 @@
  * 3. Round-trip consistency holds for all valid inputs
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {AddressManager} from '../../src/address/address-manager.js';
 

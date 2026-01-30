@@ -6,17 +6,30 @@
 
 import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  LOG_RETENTION_DEFAULT,
+  LOG_RETENTION_ERROR_MSG,
+  LOG_RETENTION_LOG_MSG,
+} from './logging-constants.js';
 
-/**
- * Default configuration for log retention service.
- */
-const DEFAULT_CONFIG = {
-  retentionPeriodMs: 7 * 24 * 60 * 60 * 1000, // 7 days
-  cleanupIntervalMs: 60 * 60 * 1000, // 1 hour
-  batchSize: 1000,
-  maxDeletesPerRun: 10000,
-};
+const DEFAULT_CONFIG = Object.freeze({
+  retentionPeriodMs: LOG_RETENTION_DEFAULT.RETENTION_PERIOD_MS,
+  cleanupIntervalMs: LOG_RETENTION_DEFAULT.CLEANUP_INTERVAL_MS,
+  batchSize: LOG_RETENTION_DEFAULT.BATCH_SIZE,
+  maxDeletesPerRun: LOG_RETENTION_DEFAULT.MAX_DELETES_PER_RUN,
+});
+
+const retentionLogMessages = Object.freeze({
+  initialized: LOG_RETENTION_LOG_MSG.INITIALIZED,
+  shutdown: LOG_RETENTION_LOG_MSG.SHUTDOWN,
+  schedulerStart: LOG_RETENTION_LOG_MSG.SCHEDULER_START,
+  schedulerStopped: LOG_RETENTION_LOG_MSG.SCHEDULER_STOPPED,
+  runningCleanup: LOG_RETENTION_LOG_MSG.RUNNING_CLEANUP,
+  cleanupCompleted: LOG_RETENTION_LOG_MSG.CLEANUP_COMPLETED,
+  retentionSet: LOG_RETENTION_LOG_MSG.RETENTION_SET,
+});
 
 /**
  * LogRetentionService manages automatic cleanup of old log entries.
@@ -39,13 +52,16 @@ class LogRetentionService extends EventEmitter {
     // Configuration
     const config = ConfigurationManager.getInstance();
     this.retentionPeriodMs = options.retentionPeriodMs ||
-      config.get('logging.retentionPeriodMs') || DEFAULT_CONFIG.retentionPeriodMs;
+      config.get(CONFIG_KEY.LOGGING_RETENTION_PERIOD_MS) ||
+      LOG_RETENTION_DEFAULT.RETENTION_PERIOD_MS;
     this.cleanupIntervalMs = options.cleanupIntervalMs ||
-      config.get('logging.cleanupIntervalMs') || DEFAULT_CONFIG.cleanupIntervalMs;
+      config.get(CONFIG_KEY.LOGGING_CLEANUP_INTERVAL_MS) ||
+      LOG_RETENTION_DEFAULT.CLEANUP_INTERVAL_MS;
     this.batchSize = options.batchSize ||
-      config.get('logging.cleanupBatchSize') || DEFAULT_CONFIG.batchSize;
+      config.get(CONFIG_KEY.LOGGING_CLEANUP_BATCH_SIZE) || LOG_RETENTION_DEFAULT.BATCH_SIZE;
     this.maxDeletesPerRun = options.maxDeletesPerRun ||
-      config.get('logging.maxDeletesPerRun') || DEFAULT_CONFIG.maxDeletesPerRun;
+      config.get(CONFIG_KEY.LOGGING_MAX_DELETES_PER_RUN) ||
+      LOG_RETENTION_DEFAULT.MAX_DELETES_PER_RUN;
 
     // State
     this.initialized = false;
@@ -100,7 +116,7 @@ class LogRetentionService extends EventEmitter {
     }
 
     this.initialized = true;
-    this.logger.log('LogRetentionService initialized');
+    this.logger.log(retentionLogMessages.initialized);
   }
 
   /**
@@ -111,19 +127,19 @@ class LogRetentionService extends EventEmitter {
       return;
     }
 
-    this.logger.log(`Starting log retention scheduler (interval: ${this.cleanupIntervalMs}ms)`);
+    this.logger.log(retentionLogMessages.schedulerStart(this.cleanupIntervalMs));
 
     // Run initial cleanup after a short delay
     setTimeout(() => {
       this.runCleanup().catch((error) => {
-        this.logger.error('Initial cleanup failed:', error.message);
+        this.logger.error(LOG_RETENTION_ERROR_MSG.INITIAL_CLEANUP_FAILED, error.message);
       });
     }, 5000);
 
     // Schedule periodic cleanup
     this.cleanupTimer = setInterval(() => {
       this.runCleanup().catch((error) => {
-        this.logger.error('Scheduled cleanup failed:', error.message);
+        this.logger.error(LOG_RETENTION_ERROR_MSG.SCHEDULED_CLEANUP_FAILED, error.message);
       });
     }, this.cleanupIntervalMs);
 
@@ -140,7 +156,7 @@ class LogRetentionService extends EventEmitter {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
-      this.logger.log('Log retention scheduler stopped');
+      this.logger.log(retentionLogMessages.schedulerStopped);
     }
   }
 
@@ -152,7 +168,7 @@ class LogRetentionService extends EventEmitter {
     if (this.isRunning) {
       return {
         success: false,
-        error: 'Cleanup already in progress',
+        error: LOG_RETENTION_ERROR_MSG.CLEANUP_IN_PROGRESS,
         deleted: 0,
       };
     }
@@ -166,7 +182,9 @@ class LogRetentionService extends EventEmitter {
       const retentionPeriodMs = this.getRetentionPeriod();
       const cutoffTime = Date.now() - retentionPeriodMs;
 
-      this.logger.log(`Running log cleanup (cutoff: ${new Date(cutoffTime).toISOString()})`);
+      this.logger.log(
+        retentionLogMessages.runningCleanup(new Date(cutoffTime).toISOString()),
+      );
 
       // Delete in batches to avoid overwhelming the system
       let deletedInBatch = 0;
@@ -184,7 +202,9 @@ class LogRetentionService extends EventEmitter {
       this.totalDeleted += totalDeleted;
       this.cleanupCount++;
 
-      this.logger.log(`Log cleanup completed: ${totalDeleted} entries deleted in ${duration}ms`);
+      this.logger.log(
+        retentionLogMessages.cleanupCompleted(totalDeleted, duration),
+      );
 
       this.emit('cleanup', {
         deleted: totalDeleted,
@@ -199,13 +219,8 @@ class LogRetentionService extends EventEmitter {
         cutoffTime,
       };
     } catch (error) {
-      this.logger.error('Log cleanup failed:', error.message);
-
-      return {
-        success: false,
-        error: error.message,
-        deleted: totalDeleted,
-      };
+      this.logger.error(LOG_RETENTION_ERROR_MSG.CLEANUP_FAILED, error.message);
+      throw error;
     } finally {
       this.isRunning = false;
     }
@@ -220,7 +235,7 @@ class LogRetentionService extends EventEmitter {
    */
   async deleteOldLogs(cutoffTime, limit) {
     if (!this.sqlQueryEngine) {
-      throw new Error('SQL query engine not available');
+      throw new Error(LOG_RETENTION_ERROR_MSG.ENGINE_NOT_AVAILABLE);
     }
 
     // First, get the IDs of logs to delete
@@ -275,10 +290,10 @@ class LogRetentionService extends EventEmitter {
    */
   setRetentionPeriod(periodMs) {
     if (periodMs < 0) {
-      throw new Error('Retention period must be non-negative');
+      throw new Error(LOG_RETENTION_ERROR_MSG.RETENTION_PERIOD_NEGATIVE);
     }
     this.retentionPeriodMs = periodMs;
-    this.logger.log(`Retention period set to ${periodMs}ms`);
+    this.logger.log(retentionLogMessages.retentionSet(periodMs));
   }
 
   /**
@@ -312,8 +327,11 @@ class LogRetentionService extends EventEmitter {
     this.stopScheduler();
     this.initialized = false;
     this.removeAllListeners();
-    this.logger.log('LogRetentionService shutdown');
+    this.logger.log(retentionLogMessages.shutdown);
   }
 }
 
-export {LogRetentionService, DEFAULT_CONFIG};
+export {
+  LogRetentionService,
+  DEFAULT_CONFIG,
+};

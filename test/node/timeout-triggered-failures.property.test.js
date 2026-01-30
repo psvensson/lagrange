@@ -8,7 +8,7 @@
  * automatically transition it to `failed` state with a timeout error message.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaStateMachine,
@@ -17,6 +17,13 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+function createMockCDCService() {
+  return {
+    updateSystemTableRow: async () => ({success: true}),
+    insertSystemTableRow: async () => ({success: true}),
+  };
+}
 
 // Transitional states that have timeouts
 const TRANSITIONAL_STATES = [
@@ -57,6 +64,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
           // Use very short timeouts for testing
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: 1,
             creatingTimeoutMs: 1,
             syncingTimeoutMs: 1,
@@ -112,6 +120,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
           const timeoutMs = 50;
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: timeoutMs,
             creatingTimeoutMs: timeoutMs,
             syncingTimeoutMs: timeoutMs,
@@ -164,6 +173,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
         (targetState, replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: 1,
             creatingTimeoutMs: 1,
             syncingTimeoutMs: 1,
@@ -217,6 +227,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
           // Use very long timeouts
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: 999999,
             creatingTimeoutMs: 999999,
             syncingTimeoutMs: 999999,
@@ -264,6 +275,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
         (targetState, replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: 1,
             creatingTimeoutMs: 1,
             syncingTimeoutMs: 1,
@@ -321,6 +333,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
         (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: 1,
             creatingTimeoutMs: 1,
             syncingTimeoutMs: 1,
@@ -386,6 +399,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
   t.test('timeout checker can be started and stopped', async (t) => {
     const stateMachine = new ReplicaStateMachine({
       nodeId: 'test-node',
+      cdcIntegrationService: createMockCDCService(),
       timeoutCheckIntervalMs: 10000, // Long interval to avoid actual checks
     });
 
@@ -423,6 +437,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
   t.test('clear stops timeout checker', async (t) => {
     const stateMachine = new ReplicaStateMachine({
       nodeId: 'test-node',
+      cdcIntegrationService: createMockCDCService(),
       timeoutCheckIntervalMs: 10000,
     });
 
@@ -448,6 +463,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
     const stateMachine = new ReplicaStateMachine({
       nodeId: 'test-node',
+      cdcIntegrationService: createMockCDCService(),
       ...customTimeouts,
     });
 

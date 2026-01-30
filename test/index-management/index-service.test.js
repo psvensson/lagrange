@@ -4,7 +4,7 @@
  * Requirements: 12.1, 12.2
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {IndexService, IndexType} from '../../src/index-management/index-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -47,13 +47,34 @@ function createMockCDCService() {
 
 /**
  * Create a mock system table cache.
+ * @param {Array} indices - Index records.
+ * @param {Array} partitions - Partition records or actual partition services.
+ * @return {Object} Mock system table cache.
  */
 function createMockSystemTableCache(indices = [], partitions = []) {
   return {
     getAll(tableName) {
       if (tableName === 'indices') return indices;
-      if (tableName === 'partitions') return partitions;
+      if (tableName === 'partitions') {
+        // Return metadata-like objects for filter operations
+        return partitions.map((p) => ({
+          partition_id: p.partition_id || p.partitionId,
+          table_id: p.table_id || p.tableId,
+        }));
+      }
       return [];
+    },
+    get(tableName, id) {
+      if (tableName === 'partitions') {
+        // Return the actual partition service for executeQuery calls
+        return partitions.find((p) =>
+          (p.partition_id || p.partitionId) === id,
+        ) || null;
+      }
+      if (tableName === 'indices') {
+        return indices.find((i) => i.index_id === id) || null;
+      }
+      return null;
     },
     filter(tableName, predicate) {
       const data = this.getAll(tableName);
@@ -63,7 +84,9 @@ function createMockSystemTableCache(indices = [], partitions = []) {
 }
 
 test('IndexService - initialization', async (t) => {
-  const indexService = new IndexService({});
+  const indexService = new IndexService({
+    systemTableCache: createMockSystemTableCache(),
+  });
 
   await indexService.initialize();
 
@@ -109,6 +132,7 @@ test('IndexService - createIndex stores metadata in indices table', async (t) =>
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
+    systemTableCache: createMockSystemTableCache(),
   });
 
   await indexService.initialize();
@@ -143,6 +167,7 @@ test('IndexService - createIndex with multiple columns', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
+    systemTableCache: createMockSystemTableCache(),
   });
 
   await indexService.initialize();
@@ -171,6 +196,7 @@ test('IndexService - createIndex prevents duplicate index names', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
+    systemTableCache: createMockSystemTableCache(),
   });
 
   await indexService.initialize();
@@ -198,7 +224,9 @@ test('IndexService - createIndex prevents duplicate index names', async (t) => {
 });
 
 test('IndexService - createIndex validates required parameters', async (t) => {
-  const indexService = new IndexService({});
+  const indexService = new IndexService({
+    systemTableCache: createMockSystemTableCache(),
+  });
   await indexService.initialize();
 
   try {
@@ -229,6 +257,7 @@ test('IndexService - dropIndex removes index metadata', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
+    systemTableCache: createMockSystemTableCache(),
   });
 
   await indexService.initialize();
@@ -257,7 +286,9 @@ test('IndexService - dropIndex removes index metadata', async (t) => {
 });
 
 test('IndexService - dropIndex throws for non-existent index', async (t) => {
-  const indexService = new IndexService({});
+  const indexService = new IndexService({
+    systemTableCache: createMockSystemTableCache(),
+  });
   await indexService.initialize();
 
   try {
@@ -274,6 +305,7 @@ test('IndexService - getIndicesForTable returns all indices for a table', async 
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
+    systemTableCache: createMockSystemTableCache(),
   });
 
   await indexService.initialize();
@@ -312,6 +344,7 @@ test('IndexService - getAllIndices returns all indices', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
+    systemTableCache: createMockSystemTableCache(),
   });
 
   await indexService.initialize();
@@ -337,7 +370,9 @@ test('IndexService - getAllIndices returns all indices', async (t) => {
 });
 
 test('IndexService - handleCDCEvent updates cache on INSERT', async (t) => {
-  const indexService = new IndexService({});
+  const indexService = new IndexService({
+    systemTableCache: createMockSystemTableCache(),
+  });
   await indexService.initialize();
 
   await indexService.handleCDCEvent({
@@ -362,6 +397,7 @@ test('IndexService - handleCDCEvent updates cache on DELETE', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
+    systemTableCache: createMockSystemTableCache(),
   });
 
   await indexService.initialize();
@@ -413,18 +449,15 @@ test('IndexService - creates SQLite index on partitions', async (t) => {
   partition.role = 'leader';
   partition.isLeader = true;
 
-  const partitionRegistry = new Map();
-  partitionRegistry.set('test-partition', partition);
-
+  // Cache returns the actual partition service for getPartition() calls
   const cache = createMockSystemTableCache([], [
-    {partition_id: 'test-partition', table_id: 'users-table'},
+    partition, // Pass the actual partition service
   ]);
 
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
     systemTableCache: cache,
-    partitionRegistry,
   });
 
   await indexService.initialize();
@@ -474,17 +507,17 @@ test('IndexService - creates indices on new partition via CDC event', async (t) 
   newPartition.role = 'leader';
   newPartition.isLeader = true;
 
-  const partitionRegistry = new Map();
-  partitionRegistry.set('new-partition', newPartition);
+  // Pass the actual partition service so getPartition() returns it
+  const cache = createMockSystemTableCache([], [newPartition]);
 
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    partitionRegistry,
+    systemTableCache: cache,
   });
 
   await indexService.initialize();
 
-  // Create an index first (without partitions)
+  // Create an index first (without partitions - cache is empty initially for filter)
   await indexService.createIndex({
     tableId: 'users-table',
     tableName: 'users',
@@ -538,12 +571,12 @@ test('IndexService - ensureIndicesOnPartition creates all indices', async (t) =>
   partition.role = 'leader';
   partition.isLeader = true;
 
-  const partitionRegistry = new Map();
-  partitionRegistry.set('test-partition', partition);
+  // Pass the actual partition service so getPartition() returns it
+  const cache = createMockSystemTableCache([], [partition]);
 
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    partitionRegistry,
+    systemTableCache: cache,
   });
 
   await indexService.initialize();
@@ -609,17 +642,12 @@ test('IndexService - rebuildIndex recreates index on all partitions', async (t) 
   partition.role = 'leader';
   partition.isLeader = true;
 
-  const partitionRegistry = new Map();
-  partitionRegistry.set('test-partition', partition);
-
-  const cache = createMockSystemTableCache([], [
-    {partition_id: 'test-partition', table_id: 'users-table'},
-  ]);
+  // Pass the actual partition service so getPartition() returns it
+  const cache = createMockSystemTableCache([], [partition]);
 
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
     systemTableCache: cache,
-    partitionRegistry,
   });
 
   await indexService.initialize();
@@ -651,7 +679,9 @@ test('IndexService - rebuildIndex recreates index on all partitions', async (t) 
 });
 
 test('IndexService - ignores non-INSERT partition CDC events', async (t) => {
-  const indexService = new IndexService({});
+  const indexService = new IndexService({
+    systemTableCache: createMockSystemTableCache(),
+  });
   await indexService.initialize();
 
   // Add an index to the cache

@@ -3,10 +3,10 @@
  * Requirements: 7.5, 7.6, 7.9
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {
   MessageGroupAssignment,
-  AssignmentStrategy,
+  MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../../src/bootstrap/message-group-assignment.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';

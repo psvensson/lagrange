@@ -3,7 +3,7 @@
  * Requirements: 14.6, 14.7, 14.8
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {EventEmitter} from 'events';
 import {RaftRoleTracker, RaftRole} from '../../src/policy/raft-role-tracker.js';
 

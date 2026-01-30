@@ -5,19 +5,19 @@ TAP version 14
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - constructor initializes with defaults # time=18.541ms
+    ok 1 - constructor initializes with defaults # time=17.47ms
     
     # Subtest: constructor accepts monochrome option
         ok 1 - should be equal
         1..1
-    ok 2 - constructor accepts monochrome option # time=0.485ms
+    ok 2 - constructor accepts monochrome option # time=0.452ms
     
     # Subtest: setMonochrome changes mode
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 3 - setMonochrome changes mode # time=0.633ms
+    ok 3 - setMonochrome changes mode # time=0.574ms
     
     # Subtest: getStatusColor returns correct colors
         ok 1 - should be equal
@@ -27,40 +27,40 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 4 - getStatusColor returns correct colors # time=0.88ms
+    ok 4 - getStatusColor returns correct colors # time=0.801ms
     
     # Subtest: getStatusColor returns white in monochrome mode
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 5 - getStatusColor returns white in monochrome mode # time=0.58ms
+    ok 5 - getStatusColor returns white in monochrome mode # time=0.497ms
     
     # Subtest: getStatusColor handles case insensitivity
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 6 - getStatusColor handles case insensitivity # time=0.559ms
+    ok 6 - getStatusColor handles case insensitivity # time=0.52ms
     
     # Subtest: getStatusColor handles null/undefined
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 7 - getStatusColor handles null/undefined # time=0.438ms
+    ok 7 - getStatusColor handles null/undefined # time=0.409ms
     
     # Subtest: getStatusIndicator returns indicators in monochrome mode
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 8 - getStatusIndicator returns indicators in monochrome mode # time=0.609ms
+    ok 8 - getStatusIndicator returns indicators in monochrome mode # time=0.517ms
     
     # Subtest: getStatusIndicator returns empty in color mode
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 9 - getStatusIndicator returns empty in color mode # time=0.45ms
+    ok 9 - getStatusIndicator returns empty in color mode # time=0.429ms
     
     # Subtest: getEntityIcon returns correct icons
         ok 1 - should be equal
@@ -69,7 +69,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 10 - getEntityIcon returns correct icons # time=0.873ms
+    ok 10 - getEntityIcon returns correct icons # time=0.696ms
     
     # Subtest: getEntityIcon returns ASCII icons in monochrome mode
         ok 1 - should be equal
@@ -77,28 +77,28 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 11 - getEntityIcon returns ASCII icons in monochrome mode # time=0.676ms
+    ok 11 - getEntityIcon returns ASCII icons in monochrome mode # time=0.581ms
     
     # Subtest: getEntityIcon handles unknown types
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 12 - getEntityIcon handles unknown types # time=0.608ms
+    ok 12 - getEntityIcon handles unknown types # time=0.573ms
     
     # Subtest: getBoxChars returns Unicode chars by default
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 13 - getBoxChars returns Unicode chars by default # time=0.509ms
+    ok 13 - getBoxChars returns Unicode chars by default # time=0.507ms
     
     # Subtest: getBoxChars returns ASCII chars in monochrome mode
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 14 - getBoxChars returns ASCII chars in monochrome mode # time=0.483ms
+    ok 14 - getBoxChars returns ASCII chars in monochrome mode # time=0.485ms
     
     # Subtest: drawBox creates correct border strings
         ok 1 - should be equal
@@ -110,7 +110,7 @@ TAP version 14
         ok 7 - should be equal
         ok 8 - should be equal
         1..8
-    ok 15 - drawBox creates correct border strings # time=1.264ms
+    ok 15 - drawBox creates correct border strings # time=1.172ms
     
     # Subtest: drawBox with double lines
         ok 1 - should be equal
@@ -118,7 +118,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 16 - drawBox with double lines # time=0.649ms
+    ok 16 - drawBox with double lines # time=0.624ms
     
     # Subtest: drawBox with rounded corners
         ok 1 - should be equal
@@ -126,47 +126,47 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 17 - drawBox with rounded corners # time=0.616ms
+    ok 17 - drawBox with rounded corners # time=0.581ms
     
     # Subtest: drawBox in monochrome mode uses ASCII
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 18 - drawBox in monochrome mode uses ASCII # time=0.498ms
+    ok 18 - drawBox in monochrome mode uses ASCII # time=0.477ms
     
     # Subtest: getLoadingFrame returns current frame
         ok 1 - should be equal
         1..1
-    ok 19 - getLoadingFrame returns current frame # time=0.331ms
+    ok 19 - getLoadingFrame returns current frame # time=0.322ms
     
     # Subtest: getLoadingFrame returns ASCII frame in monochrome mode
         ok 1 - should be equal
         1..1
-    ok 20 - getLoadingFrame returns ASCII frame in monochrome mode # time=0.307ms
+    ok 20 - getLoadingFrame returns ASCII frame in monochrome mode # time=0.298ms
     
     # Subtest: advanceLoadingFrame cycles through frames
         ok 1 - should be equal
         1..1
-    ok 21 - advanceLoadingFrame cycles through frames # time=0.416ms
+    ok 21 - advanceLoadingFrame cycles through frames # time=0.351ms
     
     # Subtest: formatStatus returns formatted status object
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 22 - formatStatus returns formatted status object # time=0.622ms
+    ok 22 - formatStatus returns formatted status object # time=0.537ms
     
     # Subtest: formatStatus with icon option
         ok 1 - should be equal
         1..1
-    ok 23 - formatStatus with icon option # time=0.324ms
+    ok 23 - formatStatus with icon option # time=0.314ms
     
     # Subtest: formatStatus in monochrome mode includes indicator
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 24 - formatStatus in monochrome mode includes indicator # time=0.405ms
+    ok 24 - formatStatus in monochrome mode includes indicator # time=0.54ms
     
     # Subtest: formatEntity returns formatted entity object
         ok 1 - should be equal
@@ -175,7 +175,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 25 - formatEntity returns formatted entity object # time=0.759ms
+    ok 25 - formatEntity returns formatted entity object # time=0.781ms
     
     # Subtest: createLoadingIndicator returns loading info
         ok 1 - should be equal
@@ -183,7 +183,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 26 - createLoadingIndicator returns loading info # time=0.693ms
+    ok 26 - createLoadingIndicator returns loading info # time=0.695ms
     
     # Subtest: createProgressBar creates correct bar
         ok 1 - should be equal
@@ -191,19 +191,19 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 27 - createProgressBar creates correct bar # time=0.643ms
+    ok 27 - createProgressBar creates correct bar # time=0.66ms
     
     # Subtest: createProgressBar clamps progress to 0-100
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 28 - createProgressBar clamps progress to 0-100 # time=0.497ms
+    ok 28 - createProgressBar clamps progress to 0-100 # time=0.49ms
     
     # Subtest: createProgressBar in monochrome mode
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 29 - createProgressBar in monochrome mode # time=0.436ms
+    ok 29 - createProgressBar in monochrome mode # time=0.446ms
     
     # Subtest: highlightSelected returns correct style
         ok 1 - should be equal
@@ -211,51 +211,51 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 30 - highlightSelected returns correct style # time=0.619ms
+    ok 30 - highlightSelected returns correct style # time=0.603ms
     
     # Subtest: colorize returns color info
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 31 - colorize returns color info # time=0.453ms
+    ok 31 - colorize returns color info # time=0.452ms
     
     # Subtest: colorize returns white in monochrome mode
         ok 1 - should be equal
         1..1
-    ok 32 - colorize returns white in monochrome mode # time=0.291ms
+    ok 32 - colorize returns white in monochrome mode # time=0.303ms
     
     # Subtest: createSeparator creates horizontal line
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 33 - createSeparator creates horizontal line # time=1.954ms
+    ok 33 - createSeparator creates horizontal line # time=0.47ms
     
     # Subtest: createSeparator with double line
         ok 1 - should be equal
         1..1
-    ok 34 - createSeparator with double line # time=0.447ms
+    ok 34 - createSeparator with double line # time=0.32ms
     
     # Subtest: createVerticalSeparator creates vertical lines
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 35 - createVerticalSeparator creates vertical lines # time=0.531ms
+    ok 35 - createVerticalSeparator creates vertical lines # time=0.458ms
     
     # Subtest: startLoadingAnimation and stopLoadingAnimation
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 36 - startLoadingAnimation and stopLoadingAnimation # time=50.946ms
+    ok 36 - startLoadingAnimation and stopLoadingAnimation # time=50.81ms
     
     # Subtest: destroy stops animation
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 37 - destroy stops animation # time=0.262ms
+    ok 37 - destroy stops animation # time=0.5ms
     
     1..37
-ok 1 - VisualIndicators # time=102.005ms
+ok 1 - VisualIndicators # time=97.837ms
 
 # Subtest: STATUS constants
     # Subtest: STATUS has expected values
@@ -266,10 +266,10 @@ ok 1 - VisualIndicators # time=102.005ms
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 1 - STATUS has expected values # time=0.414ms
+    ok 1 - STATUS has expected values # time=0.869ms
     
     1..1
-ok 2 - STATUS constants # time=1.304ms
+ok 2 - STATUS constants # time=2.428ms
 
 # Subtest: STATUS_COLORS constants
     # Subtest: STATUS_COLORS has expected mappings
@@ -278,10 +278,10 @@ ok 2 - STATUS constants # time=1.304ms
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 1 - STATUS_COLORS has expected mappings # time=0.346ms
+    ok 1 - STATUS_COLORS has expected mappings # time=0.297ms
     
     1..1
-ok 3 - STATUS_COLORS constants # time=0.877ms
+ok 3 - STATUS_COLORS constants # time=0.766ms
 
 # Subtest: ENTITY_ICONS constants
     # Subtest: ENTITY_ICONS has expected icons
@@ -290,10 +290,10 @@ ok 3 - STATUS_COLORS constants # time=0.877ms
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 1 - ENTITY_ICONS has expected icons # time=0.507ms
+    ok 1 - ENTITY_ICONS has expected icons # time=0.391ms
     
     1..1
-ok 4 - ENTITY_ICONS constants # time=1.497ms
+ok 4 - ENTITY_ICONS constants # time=0.922ms
 
 # Subtest: BOX_CHARS constants
     # Subtest: BOX_CHARS has expected characters
@@ -304,10 +304,10 @@ ok 4 - ENTITY_ICONS constants # time=1.497ms
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 1 - BOX_CHARS has expected characters # time=0.603ms
+    ok 1 - BOX_CHARS has expected characters # time=0.643ms
     
     1..1
-ok 5 - BOX_CHARS constants # time=1.34ms
+ok 5 - BOX_CHARS constants # time=1.243ms
 
 # Subtest: ASCII_BOX_CHARS constants
     # Subtest: ASCII_BOX_CHARS has expected characters
@@ -316,10 +316,10 @@ ok 5 - BOX_CHARS constants # time=1.34ms
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 1 - ASCII_BOX_CHARS has expected characters # time=0.378ms
+    ok 1 - ASCII_BOX_CHARS has expected characters # time=0.458ms
     
     1..1
-ok 6 - ASCII_BOX_CHARS constants # time=0.932ms
+ok 6 - ASCII_BOX_CHARS constants # time=1.213ms
 
 # Subtest: MONOCHROME_INDICATORS constants
     # Subtest: MONOCHROME_INDICATORS has expected values
@@ -327,10 +327,10 @@ ok 6 - ASCII_BOX_CHARS constants # time=0.932ms
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - MONOCHROME_INDICATORS has expected values # time=0.326ms
+    ok 1 - MONOCHROME_INDICATORS has expected values # time=0.261ms
     
     1..1
-ok 7 - MONOCHROME_INDICATORS constants # time=0.859ms
+ok 7 - MONOCHROME_INDICATORS constants # time=0.772ms
 
 # Subtest: MONOCHROME_ENTITY_ICONS constants
     # Subtest: MONOCHROME_ENTITY_ICONS has expected values
@@ -338,9 +338,11 @@ ok 7 - MONOCHROME_INDICATORS constants # time=0.859ms
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - MONOCHROME_ENTITY_ICONS has expected values # time=0.35ms
+    ok 1 - MONOCHROME_ENTITY_ICONS has expected values # time=0.318ms
     
     1..1
-ok 8 - MONOCHROME_ENTITY_ICONS constants # time=0.878ms
+ok 8 - MONOCHROME_ENTITY_ICONS constants # time=0.917ms
 
 1..8
+# { total: 136, pass: 136 }
+# time=116.313ms

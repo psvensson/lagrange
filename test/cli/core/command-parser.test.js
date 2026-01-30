@@ -4,7 +4,7 @@
  * Requirements: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {CommandParser} from '../../../src/cli/core/command-parser.js';
 
 test('CommandParser', async (t) => {

@@ -1,26 +1,279 @@
 TAP version 14
 # Subtest: Single Executable Behavioral Equivalence - Property Test
-    # Subtest: Property: CLI version output matches npm cli version
-        ok 1 - CLI version output is equivalent
-        1..1
-    ok 1 - Property: CLI version output matches npm cli version # time=5443.548ms
+    ok 1 - cli entry exitCode is 0 for --version
+    ok 2 - cli direct exitCode is 0 for --version
+    ok 3 - cli entry prints a semver for --version
+    ok 4 - cli direct prints a semver for --version
+    ok 5 - cli versions match for --version
+    ok 6 - cli entry exitCode is 0 for -v
+    ok 7 - cli direct exitCode is 0 for -v
+    ok 8 - cli entry prints a semver for -v
+    ok 9 - cli direct prints a semver for -v
+    ok 10 - cli versions match for -v
+    ok 11 - CLI version output is equivalent
+    ok 12 - cli entry exitCode is 0 for --help
+    ok 13 - cli direct exitCode is 0 for --help
+    ok 14 - cli entry help includes Usage
+    ok 15 - cli direct help includes Usage
+    ok 16 - cli entry help includes Options
+    ok 17 - cli direct help includes Options
+    ok 18 - cli entry exitCode is 0 for -h
+    ok 19 - cli direct exitCode is 0 for -h
+    ok 20 - cli entry help includes Usage
+    ok 21 - cli direct help includes Usage
+    ok 22 - cli entry help includes Options
+    ok 23 - cli direct help includes Options
+    ok 24 - CLI help output structure is equivalent
+    ok 25 - cli entry output non-empty for --help
+    ok 26 - cli direct output non-empty for --help
+    ok 27 - cli entry output is text for --help
+    ok 28 - cli direct output is text for --help
+    ok 29 - cli entry output non-empty for --version
+    ok 30 - cli direct output non-empty for --version
+    ok 31 - cli entry output is text for --version
+    ok 32 - cli direct output is text for --version
+    ok 33 - Output format is consistent
+    ok 34 - main entry exitCode is 0 for --help
+    not ok 35 - main entry output non-empty for --help
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 132
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:132:7)
+      source: >2
+            t.equal(res.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
+            const out = normalizeOutput(res.stdout);
+            t.ok(out.length > 0, `main entry output non-empty for ${flag}`);
+        ------^
+            if (flag === '--version' || flag === '-v') {
+              t.ok(out.includes('distributed-database-system'), `main version output includes name for ${flag}`);
+      ...
     
-    # Subtest: Property: CLI help output structure matches npm cli help
-        ok 1 - CLI help output structure is equivalent
-        1..1
-    ok 2 - Property: CLI help output structure matches npm cli help # time=5068.037ms
+    not ok 36 - main help output includes Usage for --help
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 137
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:137:9)
+      source: >2
+              t.ok(/\d+\.\d+\.\d+/.test(out), `main version output includes semver for ${flag}`);
+            } else {
+              t.ok(out.includes('Usage: distributed-db'), `main help output includes Usage for ${flag}`);
+        --------^
+              t.ok(out.includes('Options'), `main help output includes Options for ${flag}`);
+            }
+      ...
     
-    # Subtest: Property: Exit codes are consistent between SEA and npm versions
-        ok 1 - Exit codes are consistent
-        1..1
-    ok 3 - Property: Exit codes are consistent between SEA and npm versions # time=4057.813ms
+    not ok 37 - main help output includes Options for --help
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 138
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:138:9)
+      source: >2
+            } else {
+              t.ok(out.includes('Usage: distributed-db'), `main help output includes Usage for ${flag}`);
+              t.ok(out.includes('Options'), `main help output includes Options for ${flag}`);
+        --------^
+            }
+          }
+      ...
     
-    # Subtest: Property: Output format is consistent
-        ok 1 - Output format is consistent
-        1..1
-    ok 4 - Property: Output format is consistent # time=3135.67ms
+    ok 38 - main entry exitCode is 0 for -h
+    not ok 39 - main entry output non-empty for -h
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 132
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:132:7)
+      source: >2
+            t.equal(res.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
+            const out = normalizeOutput(res.stdout);
+            t.ok(out.length > 0, `main entry output non-empty for ${flag}`);
+        ------^
+            if (flag === '--version' || flag === '-v') {
+              t.ok(out.includes('distributed-database-system'), `main version output includes name for ${flag}`);
+      ...
     
-    1..4
-ok 1 - Single Executable Behavioral Equivalence - Property Test # time=17709.134ms
+    not ok 40 - main help output includes Usage for -h
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 137
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:137:9)
+      source: >2
+              t.ok(/\d+\.\d+\.\d+/.test(out), `main version output includes semver for ${flag}`);
+            } else {
+              t.ok(out.includes('Usage: distributed-db'), `main help output includes Usage for ${flag}`);
+        --------^
+              t.ok(out.includes('Options'), `main help output includes Options for ${flag}`);
+            }
+      ...
+    
+    not ok 41 - main help output includes Options for -h
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 138
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:138:9)
+      source: >2
+            } else {
+              t.ok(out.includes('Usage: distributed-db'), `main help output includes Usage for ${flag}`);
+              t.ok(out.includes('Options'), `main help output includes Options for ${flag}`);
+        --------^
+            }
+          }
+      ...
+    
+    ok 42 - main entry exitCode is 0 for --version
+    not ok 43 - main entry output non-empty for --version
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 132
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:132:7)
+      source: >2
+            t.equal(res.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
+            const out = normalizeOutput(res.stdout);
+            t.ok(out.length > 0, `main entry output non-empty for ${flag}`);
+        ------^
+            if (flag === '--version' || flag === '-v') {
+              t.ok(out.includes('distributed-database-system'), `main version output includes name for ${flag}`);
+      ...
+    
+    not ok 44 - main version output includes name for --version
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 134
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:134:9)
+      source: >2
+            t.ok(out.length > 0, `main entry output non-empty for ${flag}`);
+            if (flag === '--version' || flag === '-v') {
+              t.ok(out.includes('distributed-database-system'), `main version output includes name for ${flag}`);
+        --------^
+              t.ok(/\d+\.\d+\.\d+/.test(out), `main version output includes semver for ${flag}`);
+            } else {
+      ...
+    
+    not ok 45 - main version output includes semver for --version
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 135
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:135:9)
+      source: >2
+            if (flag === '--version' || flag === '-v') {
+              t.ok(out.includes('distributed-database-system'), `main version output includes name for ${flag}`);
+              t.ok(/\d+\.\d+\.\d+/.test(out), `main version output includes semver for ${flag}`);
+        --------^
+            } else {
+              t.ok(out.includes('Usage: distributed-db'), `main help output includes Usage for ${flag}`);
+      ...
+    
+    ok 46 - main entry exitCode is 0 for -v
+    not ok 47 - main entry output non-empty for -v
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 132
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:132:7)
+      source: >2
+            t.equal(res.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
+            const out = normalizeOutput(res.stdout);
+            t.ok(out.length > 0, `main entry output non-empty for ${flag}`);
+        ------^
+            if (flag === '--version' || flag === '-v') {
+              t.ok(out.includes('distributed-database-system'), `main version output includes name for ${flag}`);
+      ...
+    
+    not ok 48 - main version output includes name for -v
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 134
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:134:9)
+      source: >2
+            t.ok(out.length > 0, `main entry output non-empty for ${flag}`);
+            if (flag === '--version' || flag === '-v') {
+              t.ok(out.includes('distributed-database-system'), `main version output includes name for ${flag}`);
+        --------^
+              t.ok(/\d+\.\d+\.\d+/.test(out), `main version output includes semver for ${flag}`);
+            } else {
+      ...
+    
+    not ok 49 - main version output includes semver for -v
+      ---
+      at:
+        fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+        lineNumber: 135
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/packaging/single-executable-behavioral-equivalence.property.test.js:135:9)
+      source: >2
+            if (flag === '--version' || flag === '-v') {
+              t.ok(out.includes('distributed-database-system'), `main version output includes name for ${flag}`);
+              t.ok(/\d+\.\d+\.\d+/.test(out), `main version output includes semver for ${flag}`);
+        --------^
+            } else {
+              t.ok(out.includes('Usage: distributed-db'), `main help output includes Usage for ${flag}`);
+      ...
+    
+    ok 50 - Main help/version output is stable
+    1..50
+not ok 1 - Single Executable Behavioral Equivalence - Property Test # time=9732.766ms
+  ---
+  at:
+    fileName: test/packaging/single-executable-behavioral-equivalence.property.test.js
+    lineNumber: 73
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('Single Executable Behavioral Equivalence - Property Test', async (t) =>
+    {
+  
+    ^
+      // This test previously spawned SEA executables and `npm run cli`. In some CI
+      // environments, child process spawning is blocked which caused SKIPs and a
+  ...
 
 1..1
+# { total: 50, pass: 38, fail: 12 }
+# time=9738.076ms

@@ -64,11 +64,136 @@ npm run lint
 
 ## Architecture
 
+### Core Principles
+
+1. **All Information in Tables**: System metadata and user data are stored in tables
+2. **Tables as Partitions**: Each table is implemented as one or more partitions
+3. **Partitions as Raft Groups**: Each partition is a Raft consensus group using liferaft
+4. **System Cache**: In-memory cache of system tables, updated by CDC events
+5. **Message Router**: All communication (even local) goes through message groups
+
+### System Cache Seeding Architecture
+
+The system cache is the single source of truth for cluster metadata. All nodes maintain an in-memory cache of system tables that is kept up-to-date through Change Data Capture (CDC) events.
+
+#### System Tables
+
+The following system tables store cluster metadata:
+
+- **nodes**: All registered nodes with addresses and status
+- **partitions**: All partitions with key ranges and replica counts
+- **services**: All partition and message group replicas with addresses and Raft roles
+- **tables**: All user tables with schemas and policies
+- **message_groups**: All message groups with replica counts
+- **replica_operations**: Pending replica operations (splits, merges, rebalancing)
+
+#### Bootstrap Process
+
+**Seed Node Bootstrap:**
+
+1. **Infrastructure Phase**: Create node service and message router
+2. **Message Groups Phase**: Create message group replicas
+3. **Partitions Phase**: Create partition services for system tables
+4. **Registration Phase** (Bootstrap Mode):
+   - Enable bootstrap mode with direct write capability
+   - Write initial data DIRECTLY to local partition services
+   - Register message groups, services, tables, and partitions
+   - Disable bootstrap mode
+5. **Cache Hydration Phase**:
+   - Read all system table data from local partitions
+   - Populate system cache with complete cluster state
+6. **Post-Bootstrap**: All writes route through SQL engine and system cache
+
+**Joining Node Bootstrap:**
+
+1. **HTTP Bootstrap Request**: Contact seed node via `/bootstrap` endpoint
+2. **Receive Complete Snapshots**: Bootstrap response includes complete snapshots of all system tables
+3. **Cache Hydration**: Populate local system cache from snapshots
+4. **CDC Subscription**: Subscribe to CDC events for all system tables
+5. **Node Registration**: Register self in nodes table (routes through system cache)
+6. **Ready**: Node is ready to serve queries
+
+#### Query Routing
+
+All SQL queries route through the system cache:
+
+1. **Parse SQL**: Determine target table and operation
+2. **Find Partitions**: Query system cache for table partitions
+3. **Resolve Partition**: Determine which partition(s) to query based on key
+4. **Find Leader**: Query services table in cache for partition leader address
+5. **Route Query**: Send query through message router to leader address
+6. **Return Results**: Aggregate results from all queried partitions
+
+**Example Query Flow:**
+
+```
+SELECT * FROM users WHERE user_id = 123
+  ↓
+System Cache: Find partitions for 'users' table
+  ↓
+Partition Resolver: Determine partition for key 123
+  ↓
+System Cache: Find leader address for partition
+  ↓
+Message Router: Deliver query to leader
+  ↓
+Return results
+```
+
+#### CDC Subscription
+
+Change Data Capture keeps the system cache synchronized across all nodes:
+
+1. **Subscription**: Each node subscribes to CDC events for all system tables
+2. **Event Generation**: When system tables change, CDC events are generated
+3. **Event Propagation**: CDC events are streamed to all nodes via message groups
+4. **Cache Update**: Each node updates its local system cache from CDC events
+5. **Eventual Consistency**: All nodes eventually have the same view of system tables
+
+**CDC Event Flow:**
+
+```
+Node A: INSERT INTO nodes (...)
+  ↓
+Partition Leader: Write to SQLite
+  ↓
+CDC Service: Generate change event
+  ↓
+Message Group: Broadcast to all nodes
+  ↓
+All Nodes: Update system cache
+  ↓
+All Nodes: Can now route queries to new node
+```
+
+#### Bootstrap Mode (Seed Node Only)
+
+The seed node faces a chicken-and-egg problem during bootstrap:
+- System cache is empty (no data exists yet)
+- Need to write to system tables (to register partitions, services, etc.)
+- SQL routing requires cache to find partition leaders
+- **Solution**: Temporary bootstrap mode with direct write path
+
+**Bootstrap Mode Characteristics:**
+
+- **Temporary**: Only active during seed node registration phase
+- **Direct Writes**: Bypass SQL routing, write directly to local partitions
+- **Single Use**: Disabled immediately after registration completes
+- **Seed Node Only**: Joining nodes never use bootstrap mode
+
+After bootstrap mode is disabled, the seed node populates its system cache by reading from local partitions, then all subsequent writes route through the SQL engine like any other node.
+
 ### Core Components
 
 1. **Configuration Manager**: Centralized configuration with validation
 2. **Logger Factory**: Structured logging with pino
 3. **Worker Thread Pool Manager**: Service execution in worker threads
+4. **System Table Cache**: In-memory cache of cluster metadata
+5. **CDC Integration Service**: Change data capture for cache synchronization
+6. **Message Router**: Reliable message delivery through message groups
+7. **SQL Query Engine**: Query parsing, routing, and execution
+8. **Bootstrap Service**: Seed node initialization
+9. **Node Joining Service**: Joining node bootstrap
 
 ### Key Features
 
@@ -76,6 +201,10 @@ npm run lint
 - **Structured Logging**: Consistent metadata (node_id, service_id, timestamp)
 - **Worker Thread Pool**: Efficient service execution with piscina
 - **Validation**: JSON schema validation for all configuration
+- **System Cache**: Single source of truth for cluster metadata
+- **CDC Synchronization**: Automatic cache updates across all nodes
+- **Cache-Based Routing**: All queries route through system cache
+- **Bootstrap Mode**: Seed node can bootstrap without existing cache
 
 ## Testing
 

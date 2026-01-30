@@ -7,7 +7,7 @@
  * Requirements: 31.1, 31.2, 31.3, 31.4, 31.5, 31.6
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {
   ContextsView,
   CONTEXT_TYPES,

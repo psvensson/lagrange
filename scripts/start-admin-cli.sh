@@ -11,11 +11,17 @@
 
 set -e
 
-NODE_ADDRESS="${1:-localhost:8081}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+DEFAULTS=$(node "$SCRIPT_DIR/entrypoint-defaults.js")
+DEFAULT_ADMIN_PORT=$(node -e "console.log(JSON.parse('$DEFAULTS').adminPort)")
+DEFAULT_HOST=$(node -e "console.log(JSON.parse('$DEFAULTS').localhost)")
+
+NODE_ADDRESS="${1:-$DEFAULT_HOST:$DEFAULT_ADMIN_PORT}"
 
 echo "Starting Admin CLI..."
 echo "  Connecting to: $NODE_ADDRESS"
 echo ""
 
 # Run the admin CLI tool
-node src/cli/bin/ddb-admin.js "$NODE_ADDRESS"
+node "$PROJECT_ROOT/src/cli/bin/ddb-admin.js" "$NODE_ADDRESS"

@@ -6,7 +6,7 @@
  * **Validates: Requirements 30.7**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {ConfigView, CONFIG_TYPES} from '../../../src/cli/views/config-view.js';
 import {ROW_STATUS} from '../../../src/cli/core/base-view.js';

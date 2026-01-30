@@ -308,7 +308,7 @@ Default node address to connect to.
 
 ### refresh_interval
 
-Polling interval in milliseconds (fallback when CDC unavailable).
+Polling interval in milliseconds.
 
 | Property | Value |
 |----------|-------|

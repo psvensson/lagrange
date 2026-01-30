@@ -4,13 +4,13 @@
  * Requirements: 30.1, 30.2, 30.3, 30.4, 30.5, 30.6, 30.7, 30.8, 30.9, 30.10
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {
   DynamicConfigService,
   ConfigValueType,
   CONFIG_DEFINITIONS,
 } from '../../src/config/dynamic-config-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
+import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 
 /**
  * Create a mock CDC integration service.
@@ -206,7 +206,18 @@ test('DynamicConfigService watchers', async (t) => {
     receivedNewValue = newValue;
   });
 
+  // Set the value (writes to system table via CDC)
   await service.set('logging.level', 'debug', 'test');
+
+  // Simulate CDC event arriving (this is how watchers get notified in production)
+  await service.handleCDCEvent({
+    operation: 'INSERT',
+    data: {
+      config_key: 'logging.level',
+      config_value: 'debug',
+      value_type: 'string',
+    },
+  });
 
   t.ok(watcherCalled, 'watcher should be called');
   t.equal(receivedNewValue, 'debug', 'should receive new value');
@@ -216,6 +227,15 @@ test('DynamicConfigService watchers', async (t) => {
   watcherCalled = false;
 
   await service.set('logging.level', 'info', 'test');
+  // Simulate CDC event
+  await service.handleCDCEvent({
+    operation: 'UPDATE',
+    data: {
+      config_key: 'logging.level',
+      config_value: 'info',
+      value_type: 'string',
+    },
+  });
   t.notOk(watcherCalled, 'watcher should not be called after unsubscribe');
 });
 
@@ -502,6 +522,16 @@ test('DynamicConfigService hot reload notification', async (t) => {
     'admin',
   );
 
+  // Simulate CDC event arriving
+  await service.handleCDCEvent({
+    operation: 'INSERT',
+    data: {
+      config_key: 'partition.splitThresholdBytes',
+      config_value: '20000000000',
+      value_type: 'number',
+    },
+  });
+
   t.notOk(result.requiresRestart, 'should not require restart');
   t.equal(changes.length, 1, 'watcher should be called');
   t.equal(changes[0].newValue, 20000000000, 'should receive new value');
@@ -524,6 +554,16 @@ test('DynamicConfigService restart-required notification', async (t) => {
 
   // Set a restart-required config
   const result = await service.set('node.restApiPort', 9090, 'admin');
+
+  // Simulate CDC event arriving
+  await service.handleCDCEvent({
+    operation: 'INSERT',
+    data: {
+      config_key: 'node.restApiPort',
+      config_value: '9090',
+      value_type: 'number',
+    },
+  });
 
   t.ok(result.requiresRestart, 'should require restart');
   t.equal(changes.length, 1, 'watcher should still be called');
@@ -552,6 +592,16 @@ test('DynamicConfigService multiple watchers', async (t) => {
 
   await service.set('logging.level', 'debug', 'test');
 
+  // Simulate CDC event arriving
+  await service.handleCDCEvent({
+    operation: 'INSERT',
+    data: {
+      config_key: 'logging.level',
+      config_value: 'debug',
+      value_type: 'string',
+    },
+  });
+
   t.ok(watcher1Called, 'first watcher should be called');
   t.ok(watcher2Called, 'second watcher should be called');
 });
@@ -577,6 +627,16 @@ test('DynamicConfigService event emission', async (t) => {
   service.watch('logging.level', () => {});
 
   await service.set('logging.level', 'warn', 'test');
+
+  // Simulate CDC event arriving
+  await service.handleCDCEvent({
+    operation: 'INSERT',
+    data: {
+      config_key: 'logging.level',
+      config_value: 'warn',
+      value_type: 'string',
+    },
+  });
 
   t.ok(eventReceived, 'change event should be emitted');
 });

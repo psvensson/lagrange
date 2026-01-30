@@ -14,7 +14,7 @@
  * 3. State machine remains in current state after rejected transition
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   NodeLifecycleStateMachine,

@@ -10,34 +10,41 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import {
+  CLI_DEFAULT,
+  CLI_ERROR_LEVEL,
+  CLI_NOTIFICATION_TYPE,
+  CLI_PATH,
+  CLI_TERMINAL_SIZE,
+} from '../cli-constants.js';
 
 /**
  * Error severity levels
  */
 export const ERROR_LEVEL = {
-  DEBUG: 'debug',
-  INFO: 'info',
-  WARNING: 'warning',
-  ERROR: 'error',
-  CRITICAL: 'critical',
+  DEBUG: CLI_ERROR_LEVEL.DEBUG,
+  INFO: CLI_ERROR_LEVEL.INFO,
+  WARNING: CLI_ERROR_LEVEL.WARNING,
+  ERROR: CLI_ERROR_LEVEL.ERROR,
+  CRITICAL: CLI_ERROR_LEVEL.CRITICAL,
 };
 
 /**
  * Notification types
  */
 export const NOTIFICATION_TYPE = {
-  INFO: 'info',
-  SUCCESS: 'success',
-  WARNING: 'warning',
-  ERROR: 'error',
+  INFO: CLI_NOTIFICATION_TYPE.INFO,
+  SUCCESS: CLI_NOTIFICATION_TYPE.SUCCESS,
+  WARNING: CLI_NOTIFICATION_TYPE.WARNING,
+  ERROR: CLI_NOTIFICATION_TYPE.ERROR,
 };
 
 /**
  * Minimum terminal dimensions
  */
 export const MIN_TERMINAL_SIZE = {
-  width: 80,
-  height: 24,
+  width: CLI_TERMINAL_SIZE.width,
+  height: CLI_TERMINAL_SIZE.height,
 };
 
 /**
@@ -72,9 +79,9 @@ export class ErrorHandler {
   constructor(options = {}) {
     this.eventBus = options.eventBus || null;
     this.logPath = options.logPath ||
-      path.join(os.homedir(), '.ddb-admin', 'error.log');
-    this.maxNotifications = options.maxNotifications || 50;
-    this.defaultDuration = options.defaultDuration || 5000;
+      path.join(os.homedir(), CLI_PATH.CONFIG_DIR_NAME, CLI_PATH.ERROR_LOG_FILE);
+    this.maxNotifications = options.maxNotifications || CLI_DEFAULT.MAX_NOTIFICATIONS;
+    this.defaultDuration = options.defaultDuration || CLI_DEFAULT.DEFAULT_NOTIFICATION_DURATION_MS;
     this.logToConsole = options.logToConsole || false;
 
     /** @type {Notification[]} */
@@ -87,7 +94,10 @@ export class ErrorHandler {
     this.dismissTimers = new Map();
 
     /** @type {{width: number, height: number}} */
-    this.terminalSize = {width: 80, height: 24};
+    this.terminalSize = {
+      width: CLI_TERMINAL_SIZE.width,
+      height: CLI_TERMINAL_SIZE.height,
+    };
 
     /** @type {boolean} */
     this.terminalTooSmall = false;

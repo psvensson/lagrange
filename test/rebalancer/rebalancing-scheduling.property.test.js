@@ -8,16 +8,16 @@
  * Validates: Requirements 8.10
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
-  UnifiedRebalancer,
   EntityType,
   TriggerType,
   NodeStatus,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createTestRebalancer} from './test-helpers.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -36,31 +36,6 @@ function initializeTestEnvironment() {
   }
 }
 
-// Create a mock system table cache
-function createMockCache(nodes) {
-  const cache = {
-    nodes: new Map(nodes.map((n) => [n.node_id, n])),
-    services: new Map(),
-    partitions: new Map(),
-    tables: new Map(),
-    message_groups: new Map(),
-  };
-
-  return {
-    get: (tableName, key) => cache[tableName]?.get(key),
-    filter: (tableName, predicate) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values()).filter(predicate);
-    },
-    getAll: (tableName) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values());
-    },
-  };
-}
-
 test('Property 23: Rebalancing Scheduling', async (t) => {
   initializeTestEnvironment();
 
@@ -75,13 +50,11 @@ test('Property 23: Rebalancing Scheduling', async (t) => {
             {node_id: 'node-2', status: NodeStatus.ACTIVE},
           ];
 
-          const mockCache = createMockCache(nodes);
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
-            systemTableCache: mockCache,
+            cacheData: {nodes},
           });
 
           // Critical triggers should be recognized
@@ -90,6 +63,9 @@ test('Property 23: Rebalancing Scheduling', async (t) => {
 
           // Trigger immediate check for critical events
           rebalancer.triggerImmediateCheck(triggerType);
+
+          // Clean up
+          rebalancer.shutdown();
 
           // Critical triggers should cause immediate action
           return isCritical === true;
@@ -157,13 +133,11 @@ test('Property 23: Rebalancing Scheduling', async (t) => {
             {node_id: 'node-2', status: NodeStatus.ACTIVE},
           ];
 
-          const mockCache = createMockCache(nodes);
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
-            systemTableCache: mockCache,
+            cacheData: {nodes},
           });
 
           const policy = {replicaCount: 3, minReplicaCount: 3, maxReplicaCount: 7};
@@ -180,6 +154,9 @@ test('Property 23: Rebalancing Scheduling', async (t) => {
 
           const targetState = rebalancer.calculateTargetState(replicas, policy);
           const moves = rebalancer.calculateMoves(replicas, targetState);
+
+          // Clean up
+          rebalancer.shutdown();
 
           // Should need to add replicas when below minimum
           const needsMoreReplicas = moves.some((m) => m.type === 'add');

@@ -6,6 +6,13 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {TYPEOF} from '../constants/index.js';
+import {
+  CACHE_ERROR_MSG,
+  CACHE_LOG_MSG,
+  CACHE_READ_ONLY,
+  CACHE_SUBSYSTEM,
+} from './cache-constants.js';
 
 /**
  * ReadOnlySystemTableCache provides a read-only view of the SystemTableCache.
@@ -19,10 +26,10 @@ class ReadOnlySystemTableCache {
    */
   constructor(underlyingCache) {
     if (!underlyingCache) {
-      throw new Error('ReadOnlySystemTableCache requires an underlying cache');
+      throw new Error(CACHE_ERROR_MSG.READ_ONLY_CACHE_REQUIRED);
     }
     this._cache = underlyingCache;
-    this._logger = LoggingService.getInstance().forSubsystem('cache');
+    this._logger = LoggingService.getInstance().forSubsystem(CACHE_SUBSYSTEM.CACHE);
   }
 
   /**
@@ -117,10 +124,10 @@ class ReadOnlySystemTableCache {
    * @private
    */
   logViolation(operation, context = {}) {
-    this._logger.error('Attempted to write to read-only cache', {
+    this._logger.error(CACHE_LOG_MSG.READ_ONLY_WRITE_ATTEMPT, {
       operation,
       ...context,
-      hint: 'Use CDCIntegrationService for writes',
+      hint: CACHE_ERROR_MSG.READ_ONLY_HINT,
     });
   }
 }
@@ -135,37 +142,25 @@ function createReadOnlyCache(underlyingCache) {
   const wrapper = new ReadOnlySystemTableCache(underlyingCache);
 
   // List of write methods that should be blocked
-  const blockedMethods = [
-    'applySystemTableChange',
-    'clear',
-    'insert',
-    'update',
-    'delete',
-  ];
+  const blockedMethods = CACHE_READ_ONLY.BLOCKED_METHODS;
 
   return new Proxy(wrapper, {
     get(target, prop) {
       // Check if attempting to access a blocked method
       if (blockedMethods.includes(prop)) {
         target.logViolation(prop, {attemptedMethod: prop});
-        throw new Error(
-          `Cache write violation: "${prop}" is not available on read-only cache. ` +
-          'Use CDCIntegrationService for writes.',
-        );
+        throw new Error(CACHE_ERROR_MSG.READ_ONLY_METHOD_BLOCKED(prop));
       }
 
       // Check if attempting to access the underlying cache directly
-      if (prop === '_cache' || prop === 'tables') {
-        target.logViolation('direct_access', {attemptedProperty: prop});
-        throw new Error(
-          'Cache write violation: Direct cache access is not allowed. ' +
-          'Use CDCIntegrationService for writes.',
-        );
+      if (CACHE_READ_ONLY.BLOCKED_PROPERTIES.includes(prop)) {
+        target.logViolation(CACHE_READ_ONLY.DIRECT_ACCESS, {attemptedProperty: prop});
+        throw new Error(CACHE_ERROR_MSG.READ_ONLY_DIRECT_ACCESS);
       }
 
       // Allow access to allowed methods and standard properties
       const value = target[prop];
-      if (typeof value === 'function') {
+      if (typeof value === TYPEOF.FUNCTION) {
         return value.bind(target);
       }
       return value;

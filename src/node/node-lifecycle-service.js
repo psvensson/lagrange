@@ -7,18 +7,20 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {NUM} from '../constants/index.js';
+import {
+  NODE_CONFIG_KEY,
+  NODE_LIFECYCLE_DEFAULT,
+  NODE_LIFECYCLE_REASON,
+  NODE_LIFECYCLE_SERVICE_ERROR_MSG,
+  NODE_LIFECYCLE_SERVICE_EVENT,
+  NODE_LIFECYCLE_SERVICE_LOG_MSG,
+  NODE_LIFECYCLE_SERVICE_SUBSYSTEM,
+  NODE_STATUS,
+} from './node-constants.js';
 
-/**
- * Node status enumeration.
- */
-const NodeLifecycleStatus = {
-  ACTIVE: 'active',
-  SUSPECTED: 'suspected',
-  FAILED: 'failed',
-  SHUTTING_DOWN: 'shutting_down',
-  STOPPED: 'stopped',
-};
+const NodeLifecycleStatus = NODE_STATUS;
 
 /**
  * NodeLifecycleService manages node lifecycle events via CDC.
@@ -40,15 +42,20 @@ class NodeLifecycleService extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.heartbeatIntervalMs = config.get('node.heartbeatIntervalMs') || 5000;
-    this.heartbeatTimeoutMs = config.get('node.heartbeatTimeoutMs') || 15000;
+    this.heartbeatIntervalMs =
+      config.get(NODE_CONFIG_KEY.HEARTBEAT_INTERVAL_MS) ||
+      NODE_LIFECYCLE_DEFAULT.HEARTBEAT_INTERVAL_MS;
+    this.heartbeatTimeoutMs =
+      config.get(NODE_CONFIG_KEY.HEARTBEAT_TIMEOUT_MS) ||
+      NODE_LIFECYCLE_DEFAULT.HEARTBEAT_TIMEOUT_MS;
     this.failureDetectionIntervalMs =
-      config.get('node.failureDetectionIntervalMs') || 10000;
+      config.get(NODE_CONFIG_KEY.FAILURE_DETECTION_INTERVAL_MS) ||
+      NODE_LIFECYCLE_DEFAULT.FAILURE_DETECTION_INTERVAL_MS;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('node-lifecycle') : console;
+      loggingService.forSubsystem(NODE_LIFECYCLE_SERVICE_SUBSYSTEM) : console;
 
     // Heartbeat timer
     this.heartbeatTimer = null;
@@ -76,18 +83,16 @@ class NodeLifecycleService extends EventEmitter {
     }
 
     if (!this.cdcIntegrationService) {
-      throw new Error(
-        'NodeLifecycleService requires cdcIntegrationService',
-      );
+      throw new Error(NODE_LIFECYCLE_SERVICE_ERROR_MSG.MISSING_CDC);
     }
 
     if (!this.nodeId) {
-      throw new Error('NodeLifecycleService requires nodeId');
+      throw new Error(NODE_LIFECYCLE_SERVICE_ERROR_MSG.MISSING_NODE_ID);
     }
 
     this.initialized = true;
 
-    this.logger.info('Node lifecycle service initialized', {
+    this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
       heartbeatIntervalMs: this.heartbeatIntervalMs,
     });
@@ -112,20 +117,20 @@ class NodeLifecycleService extends EventEmitter {
     const data = {
       node_id: nodeData.node_id,
       node_address: nodeData.node_address,
-      cpu_cores: nodeData.cpu_cores || 0,
-      memory_mb: nodeData.memory_mb || 0,
-      disk_gb: nodeData.disk_gb || 0,
-      cpu_usage_percent: nodeData.cpu_usage_percent || 0,
-      memory_usage_percent: nodeData.memory_usage_percent || 0,
-      disk_usage_percent: nodeData.disk_usage_percent || 0,
-      status: NodeLifecycleStatus.ACTIVE,
+      cpu_cores: nodeData.cpu_cores || NUM.ZERO,
+      memory_mb: nodeData.memory_mb || NUM.ZERO,
+      disk_gb: nodeData.disk_gb || NUM.ZERO,
+      cpu_usage_percent: nodeData.cpu_usage_percent || NUM.ZERO,
+      memory_usage_percent: nodeData.memory_usage_percent || NUM.ZERO,
+      disk_usage_percent: nodeData.disk_usage_percent || NUM.ZERO,
+      status: NODE_STATUS.ACTIVE,
       last_heartbeat: now,
       created_at: now,
       // Set id for cache compatibility
       id: nodeData.node_id,
     };
 
-    this.logger.info('Registering node via CDC', {
+    this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.REGISTERING_NODE, {
       nodeId: data.node_id,
       nodeAddress: data.node_address,
     });
@@ -142,14 +147,14 @@ class NodeLifecycleService extends EventEmitter {
         lastHeartbeat: now,
       });
 
-      this.emit('nodeRegistered', {
+      this.emit(NODE_LIFECYCLE_SERVICE_EVENT.NODE_REGISTERED, {
         nodeId: data.node_id,
         nodeAddress: data.node_address,
       });
 
       return result;
     } catch (error) {
-      this.logger.error('Failed to register node via CDC', {
+      this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.REGISTER_NODE_FAILED, {
         nodeId: data.node_id,
         error: error.message,
       });
@@ -184,7 +189,7 @@ class NodeLifecycleService extends EventEmitter {
       updateData.disk_usage_percent = stats.disk_usage_percent;
     }
 
-    this.logger.debug('Updating node heartbeat via CDC', {
+    this.logger.debug(NODE_LIFECYCLE_SERVICE_LOG_MSG.UPDATING_HEARTBEAT, {
       nodeId,
       timestamp: now,
     });
@@ -203,14 +208,14 @@ class NodeLifecycleService extends EventEmitter {
         Object.assign(knownNode, updateData);
       }
 
-      this.emit('heartbeatUpdated', {
+      this.emit(NODE_LIFECYCLE_SERVICE_EVENT.HEARTBEAT_UPDATED, {
         nodeId,
         timestamp: now,
       });
 
       return result;
     } catch (error) {
-      this.logger.error('Failed to update heartbeat via CDC', {
+      this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.UPDATE_HEARTBEAT_FAILED, {
         nodeId,
         error: error.message,
       });
@@ -226,10 +231,10 @@ class NodeLifecycleService extends EventEmitter {
    * @param {string} reason - Reason for failure.
    * @return {Promise<Object>} Update result.
    */
-  async markNodeFailed(nodeId, reason = 'heartbeat_timeout') {
+  async markNodeFailed(nodeId, reason = NODE_LIFECYCLE_REASON.HEARTBEAT_TIMEOUT) {
     this.validateInitialized();
 
-    this.logger.warn('Marking node as failed via CDC', {
+    this.logger.warn(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARKING_NODE_FAILED, {
       nodeId,
       reason,
     });
@@ -247,14 +252,14 @@ class NodeLifecycleService extends EventEmitter {
         knownNode.status = NodeLifecycleStatus.FAILED;
       }
 
-      this.emit('nodeFailed', {
+      this.emit(NODE_LIFECYCLE_SERVICE_EVENT.NODE_FAILED, {
         nodeId,
         reason,
       });
 
       return result;
     } catch (error) {
-      this.logger.error('Failed to mark node as failed via CDC', {
+      this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARK_NODE_FAILED_FAILED, {
         nodeId,
         error: error.message,
       });
@@ -272,7 +277,7 @@ class NodeLifecycleService extends EventEmitter {
   async markNodeSuspected(nodeId) {
     this.validateInitialized();
 
-    this.logger.warn('Marking node as suspected via CDC', {
+    this.logger.warn(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARKING_NODE_SUSPECTED, {
       nodeId,
     });
 
@@ -289,13 +294,13 @@ class NodeLifecycleService extends EventEmitter {
         knownNode.status = NodeLifecycleStatus.SUSPECTED;
       }
 
-      this.emit('nodeSuspected', {
+      this.emit(NODE_LIFECYCLE_SERVICE_EVENT.NODE_SUSPECTED, {
         nodeId,
       });
 
       return result;
     } catch (error) {
-      this.logger.error('Failed to mark node as suspected via CDC', {
+      this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARK_NODE_SUSPECTED_FAILED, {
         nodeId,
         error: error.message,
       });
@@ -313,7 +318,7 @@ class NodeLifecycleService extends EventEmitter {
   async markNodeActive(nodeId) {
     this.validateInitialized();
 
-    this.logger.info('Marking node as active via CDC', {
+    this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARKING_NODE_ACTIVE, {
       nodeId,
     });
 
@@ -334,13 +339,13 @@ class NodeLifecycleService extends EventEmitter {
         knownNode.lastHeartbeat = Date.now();
       }
 
-      this.emit('nodeActive', {
+      this.emit(NODE_LIFECYCLE_SERVICE_EVENT.NODE_ACTIVE, {
         nodeId,
       });
 
       return result;
     } catch (error) {
-      this.logger.error('Failed to mark node as active via CDC', {
+      this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARK_NODE_ACTIVE_FAILED, {
         nodeId,
         error: error.message,
       });
@@ -357,7 +362,7 @@ class NodeLifecycleService extends EventEmitter {
   async removeNode(nodeId) {
     this.validateInitialized();
 
-    this.logger.info('Removing node via CDC', {
+    this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.REMOVING_NODE, {
       nodeId,
     });
 
@@ -370,13 +375,13 @@ class NodeLifecycleService extends EventEmitter {
       // Remove from local tracking
       this.knownNodes.delete(nodeId);
 
-      this.emit('nodeRemoved', {
+      this.emit(NODE_LIFECYCLE_SERVICE_EVENT.NODE_REMOVED, {
         nodeId,
       });
 
       return result;
     } catch (error) {
-      this.logger.error('Failed to remove node via CDC', {
+      this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.REMOVE_NODE_FAILED, {
         nodeId,
         error: error.message,
       });
@@ -394,7 +399,7 @@ class NodeLifecycleService extends EventEmitter {
       return;
     }
 
-    this.logger.info('Starting heartbeat timer', {
+    this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.STARTING_HEARTBEAT, {
       nodeId: this.nodeId,
       intervalMs: this.heartbeatIntervalMs,
     });
@@ -403,10 +408,11 @@ class NodeLifecycleService extends EventEmitter {
       try {
         await this.updateHeartbeat(this.nodeId);
       } catch (error) {
-        this.logger.error('Heartbeat update failed', {
+        this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.HEARTBEAT_FAILED, {
           nodeId: this.nodeId,
           error: error.message,
         });
+        throw error;
       }
     }, this.heartbeatIntervalMs);
   }
@@ -419,7 +425,7 @@ class NodeLifecycleService extends EventEmitter {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
 
-      this.logger.info('Stopped heartbeat timer', {
+      this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.STOPPED_HEARTBEAT, {
         nodeId: this.nodeId,
       });
     }
@@ -436,21 +442,14 @@ class NodeLifecycleService extends EventEmitter {
       return;
     }
 
-    this.logger.info('Starting failure detection', {
+    this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.STARTING_FAILURE_DETECTION, {
       nodeId: this.nodeId,
       intervalMs: this.failureDetectionIntervalMs,
       timeoutMs: this.heartbeatTimeoutMs,
     });
 
     this.failureDetectionTimer = setInterval(async () => {
-      try {
-        await this.detectFailedNodes(getNodesFromCache);
-      } catch (error) {
-        this.logger.error('Failure detection error', {
-          nodeId: this.nodeId,
-          error: error.message,
-        });
-      }
+      await this.detectFailedNodes(getNodesFromCache);
     }, this.failureDetectionIntervalMs);
   }
 
@@ -462,7 +461,7 @@ class NodeLifecycleService extends EventEmitter {
       clearInterval(this.failureDetectionTimer);
       this.failureDetectionTimer = null;
 
-      this.logger.info('Stopped failure detection', {
+      this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.STOPPED_FAILURE_DETECTION, {
         nodeId: this.nodeId,
       });
     }
@@ -480,14 +479,12 @@ class NodeLifecycleService extends EventEmitter {
 
     // Get nodes from cache if function provided
     if (getNodesFromCache) {
-      try {
-        nodes = getNodesFromCache() || [];
-      } catch {
-        // Use local tracking if cache unavailable
-        nodes = Array.from(this.knownNodes.values());
-      }
+      nodes = getNodesFromCache();
     } else {
       nodes = Array.from(this.knownNodes.values());
+    }
+    if (!Array.isArray(nodes)) {
+      throw new Error(NODE_LIFECYCLE_SERVICE_ERROR_MSG.INVALID_NODES_CACHE);
     }
 
     for (const node of nodes) {
@@ -501,29 +498,30 @@ class NodeLifecycleService extends EventEmitter {
         continue;
       }
 
-      const lastHeartbeat = node.last_heartbeat || node.lastHeartbeat || 0;
+      const lastHeartbeat = node.last_heartbeat || node.lastHeartbeat || NUM.ZERO;
       const timeSinceHeartbeat = now - lastHeartbeat;
 
       if (timeSinceHeartbeat > this.heartbeatTimeoutMs) {
         if (node.status === NodeLifecycleStatus.SUSPECTED) {
           // Already suspected, now mark as failed
-          this.logger.warn('Node heartbeat timeout, marking as failed', {
+          this.logger.warn(NODE_LIFECYCLE_SERVICE_LOG_MSG.HEARTBEAT_TIMEOUT_FAILED, {
             nodeId: node.node_id,
             timeSinceHeartbeat,
             timeoutMs: this.heartbeatTimeoutMs,
           });
 
           try {
-            await this.markNodeFailed(node.node_id, 'heartbeat_timeout');
+            await this.markNodeFailed(node.node_id, NODE_LIFECYCLE_REASON.HEARTBEAT_TIMEOUT);
           } catch (error) {
-            this.logger.error('Failed to mark node as failed', {
+            this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARK_NODE_FAILED_FAILED, {
               nodeId: node.node_id,
               error: error.message,
             });
+            throw error;
           }
         } else if (node.status === NodeLifecycleStatus.ACTIVE) {
           // First timeout, mark as suspected
-          this.logger.warn('Node heartbeat delayed, marking as suspected', {
+          this.logger.warn(NODE_LIFECYCLE_SERVICE_LOG_MSG.HEARTBEAT_DELAYED_SUSPECTED, {
             nodeId: node.node_id,
             timeSinceHeartbeat,
             timeoutMs: this.heartbeatTimeoutMs,
@@ -532,10 +530,11 @@ class NodeLifecycleService extends EventEmitter {
           try {
             await this.markNodeSuspected(node.node_id);
           } catch (error) {
-            this.logger.error('Failed to mark node as suspected', {
+            this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARK_NODE_SUSPECTED_FAILED, {
               nodeId: node.node_id,
               error: error.message,
             });
+            throw error;
           }
         }
       }
@@ -549,7 +548,7 @@ class NodeLifecycleService extends EventEmitter {
    */
   validateInitialized() {
     if (!this.initialized) {
-      throw new Error('NodeLifecycleService not initialized');
+      throw new Error(NODE_LIFECYCLE_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
   }
 
@@ -578,7 +577,7 @@ class NodeLifecycleService extends EventEmitter {
     this.knownNodes.clear();
     this.initialized = false;
 
-    this.logger.info('Node lifecycle service shutdown', {
+    this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.SHUTDOWN, {
       nodeId: this.nodeId,
     });
   }

@@ -4,7 +4,7 @@
  * Requirements: 3.2, 3.3, 3.4, 3.5, 4.4
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   PartitionService,
   PartitionState,
@@ -13,6 +13,17 @@ import {
 } from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  SystemTableName,
+  INITIAL_PARTITION_IDS,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {
+  COLUMN,
+  SERVICE_TYPE,
+  STATE,
+  TABLES,
+} from '../../src/constants/index.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -423,6 +434,11 @@ test('PartitionService - full key range (null, null)', async (t) => {
 });
 
 test('PartitionService - getStatus returns complete status', async (t) => {
+  const peerAddresses = [
+    'node-1/partition/replica-1',
+    'node-2/partition/replica-2',
+    'node-3/partition/replica-3',
+  ];
   const partition = new PartitionService({
     partitionId: 'test-partition-12',
     tableId: 'status_test',
@@ -430,6 +446,7 @@ test('PartitionService - getStatus returns complete status', async (t) => {
     replicaId: 'replica-1',
     nodeId: 'node-1',
     replicaIds: ['replica-1', 'replica-2', 'replica-3'],
+    peerAddresses: peerAddresses,
     dbPath: ':memory:',
   });
 
@@ -663,20 +680,26 @@ test('PartitionService - liferaft instance is created with correct configuration
 });
 
 test('PartitionService - buildPeerAddress returns correct format', async (t) => {
+  const peerAddresses = [
+    'node-1/partition/replica-1',
+    'node-2/partition/replica-2',
+    'node-3/partition/replica-3',
+  ];
   const partition = new PartitionService({
     partitionId: 'test-partition-19',
     tableId: 'peer_addr_test',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
+    peerAddresses: peerAddresses,
     dbPath: ':memory:',
   });
 
   await partition.initialize();
 
-  // Test with simple peer ID (should add nodeId prefix)
+  // Test with simple peer ID (should resolve from provided peer addresses)
   const addr1 = partition.buildPeerAddress('replica-2');
-  t.equal(addr1, 'node-1/partition/replica-2', 'Should build correct address');
+  t.equal(addr1, 'node-2/partition/replica-2', 'Should resolve correct address');
 
   // Test with already-formatted address (should return as-is)
   const addr2 = partition.buildPeerAddress('node-2/partition/replica-3');
@@ -710,26 +733,28 @@ test('PartitionService - emits leaderElected event for single replica', async (t
   await partition.shutdown();
 });
 
-test('PartitionService - handleRebalancerRemoveReplica deletes service row after ACK', async (t) => {
-  // Track CDC delete calls
-  let deleteCalledWith = null;
+test('PartitionService - persists raft role updates to services table', async (t) => {
+  const updates = [];
   const mockCdcIntegrationService = {
-    deleteSystemTableRow: async (tableName, whereClause) => {
-      deleteCalledWith = {tableName, whereClause};
+    updateSystemTableRow: async (tableName, whereClause, data) => {
+      updates.push({tableName, whereClause, data});
       return {success: true};
     },
   };
-
-  // Mock messageRouter that returns initiated ACK
-  const mockMessageRouter = {
-    register: () => {},
-    unregister: () => {},
-    deliver: async () => ({
-      acknowledged: true,
-      status: 'initiated',
-      request_id: 'test-request-123',
-    }),
-  };
+  const systemTableCache = new SystemTableCache();
+  const servicesPartitionId = INITIAL_PARTITION_IDS[SystemTableName.SERVICES];
+  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.TABLE_ID]: SystemTableName.SERVICES,
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    [COLUMN.SERVICE_ID]: 'services-leader',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
+  });
 
   const partition = new PartitionService({
     partitionId: 'test-partition-21',
@@ -739,29 +764,76 @@ test('PartitionService - handleRebalancerRemoveReplica deletes service row after
     replicaIds: ['replica-1'],
     nodeId: 'seed-node',
     dbPath: ':memory:',
-    transport: mockMessageRouter,
-    messageRouter: mockMessageRouter,
     cdcIntegrationService: mockCdcIntegrationService,
   });
 
   await partition.initialize();
+  partition.setSystemTableCache(systemTableCache);
+  partition.setCdcIntegrationService(mockCdcIntegrationService);
 
-  // Trigger the rebalancer remove replica handler
-  await partition.handleRebalancerRemoveReplica({
-    replicaId: 'replica-to-remove',
-    nodeId: 'joining-node',
-    requestId: 'test-request-123',
-    entityId: 'test-partition-21',
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const roleUpdate = updates.find(
+    (update) =>
+      update.tableName === SystemTableName.SERVICES &&
+      update.whereClause?.service_id === 'replica-1' &&
+      update.data?.raft_role === RaftRole.LEADER,
+  );
+
+  t.ok(roleUpdate, 'raft role update should be persisted via CDC');
+
+  await partition.shutdown();
+});
+
+test('PartitionService - persists leader node updates to partitions table', async (t) => {
+  const updates = [];
+  const mockCdcIntegrationService = {
+    updateSystemTableRow: async (tableName, whereClause, data) => {
+      updates.push({tableName, whereClause, data});
+      return {success: true};
+    },
+  };
+
+  const systemTableCache = new SystemTableCache();
+  const partitionsPartitionId = INITIAL_PARTITION_IDS[SystemTableName.PARTITIONS];
+  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+    [COLUMN.PARTITION_ID]: partitionsPartitionId,
+    [COLUMN.TABLE_ID]: SystemTableName.PARTITIONS,
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    [COLUMN.SERVICE_ID]: 'partitions-leader',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: partitionsPartitionId,
+    [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
   });
 
-  // Verify the service row was deleted
-  t.ok(deleteCalledWith, 'deleteSystemTableRow should be called');
-  t.equal(deleteCalledWith.tableName, 'services', 'Should delete from services table');
-  t.same(
-    deleteCalledWith.whereClause,
-    {service_id: 'replica-to-remove'},
-    'Should delete by service_id',
+  const partition = new PartitionService({
+    partitionId: 'test-partition-23',
+    tableId: 'services',
+    tableName: 'services',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'seed-node',
+    dbPath: ':memory:',
+    cdcIntegrationService: mockCdcIntegrationService,
+  });
+
+  await partition.initialize();
+  partition.setSystemTableCache(systemTableCache);
+  partition.setCdcIntegrationService(mockCdcIntegrationService);
+
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const leaderUpdate = updates.find(
+    (update) =>
+      update.tableName === SystemTableName.PARTITIONS &&
+      update.whereClause?.[COLUMN.PARTITION_ID] === 'test-partition-23' &&
+      update.data?.[COLUMN.LEADER_NODE_ID] === 'seed-node',
   );
+
+  t.ok(leaderUpdate, 'leader node update should be persisted via CDC');
 
   await partition.shutdown();
 });
@@ -788,6 +860,10 @@ test('PartitionService - setCdcIntegrationService sets service on partition and 
     // Initially no cdcIntegrationService
     t.equal(partition.cdcIntegrationService, null, 'Initially null');
 
+    // Provide stubbed rebalancer/coordinator to verify propagation.
+    partition.rebalancer = {cdcIntegrationService: null, shutdown: () => {}};
+    partition.rebalanceCoordinator = {cdcIntegrationService: null};
+
     // Set the CDC integration service
     partition.setCdcIntegrationService(mockCdcIntegrationService);
 
@@ -803,6 +879,13 @@ test('PartitionService - setCdcIntegrationService sets service on partition and 
       partition.rebalancer.cdcIntegrationService,
       mockCdcIntegrationService,
       'Should be set on rebalancer',
+    );
+
+    // Verify it was set on the coordinator
+    t.equal(
+      partition.rebalanceCoordinator.cdcIntegrationService,
+      mockCdcIntegrationService,
+      'Should be set on coordinator',
     );
 
     await partition.shutdown();

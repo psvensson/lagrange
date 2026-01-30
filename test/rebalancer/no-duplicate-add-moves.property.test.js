@@ -8,58 +8,18 @@
  * that partition on that node.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
-  UnifiedRebalancer,
   EntityType,
   MoveType,
 } from '../../src/rebalancer/unified-rebalancer.js';
-import {
-  ReplicaStateMachine,
-  ReplicaState,
-} from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createTestRebalancer} from './test-helpers.js';
 
-/**
- * Create a mock system table cache.
- * @param {Object} data - Initial cache data.
- * @return {Object} Mock cache.
- */
-function createMockCache(data = {}) {
-  const cache = {
-    nodes: data.nodes || [],
-    services: data.services || [],
-    partitions: data.partitions || [],
-    tables: data.tables || [],
-  };
-
-  return {
-    getAll(tableName) {
-      return cache[tableName] || [];
-    },
-    filter(tableName, predicate) {
-      const items = cache[tableName] || [];
-      return items.filter(predicate);
-    },
-    get(tableName, id) {
-      const items = cache[tableName] || [];
-      return items.find((item) =>
-        item.id === id ||
-        item.node_id === id ||
-        item.partition_id === id ||
-        item.service_id === id);
-    },
-  };
-}
-
-// Transitional states for ADD operations
-const ADD_TRANSITIONAL_STATES = [
-  ReplicaState.PENDING,
-  ReplicaState.CREATING,
-  ReplicaState.SYNCING,
-];
+// Transitional workflow steps for ADD operations (used in replica_operations table)
+const ADD_TRANSITIONAL_STEPS = ['pending', 'sending', 'creating', 'syncing'];
 
 test('Property 3: No Duplicate ADD Moves for Transitional Replicas', async (t) => {
   t.beforeEach(async () => {
@@ -88,68 +48,37 @@ test('Property 3: No Duplicate ADD Moves for Transitional Replicas', async (t) =
         fc.uuid(), // partition_id
         fc.uuid(), // node_id with transitional replica
         fc.uuid(), // replica_id
-        fc.constantFrom(...ADD_TRANSITIONAL_STATES),
-        async (partitionId, nodeId, replicaId, transitionalState) => {
-          const stateMachine = new ReplicaStateMachine({
-            nodeId: 'coordinator-node',
-          });
+        fc.uuid(), // operation_id
+        fc.constantFrom(...ADD_TRANSITIONAL_STEPS),
+        async (partitionId, nodeId, replicaId, operationId, workflowStep) => {
+          // Create an in-flight operation in the cache
+          const replicaOperations = [{
+            operation_id: operationId,
+            type: 'ADD',
+            partition_id: partitionId,
+            replica_id: replicaId,
+            target_node_id: nodeId,
+            status: workflowStep,
+            workflow_step: workflowStep,
+          }];
 
-          // Set up replica in transitional state
-          // First transition to pending
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
-            partitionId,
-            nodeId,
-            reason: 'rebalancer ADD decision',
-          });
-
-          // If target state is not pending, continue transitions
-          if (transitionalState === ReplicaState.CREATING) {
-            stateMachine.transition(replicaId, ReplicaState.CREATING, {
-              partitionId,
-              nodeId,
-              reason: 'CREATE_REPLICA sent',
-            });
-          } else if (transitionalState === ReplicaState.SYNCING) {
-            stateMachine.transition(replicaId, ReplicaState.CREATING, {
-              partitionId,
-              nodeId,
-              reason: 'CREATE_REPLICA sent',
-            });
-            stateMachine.transition(replicaId, ReplicaState.SYNCING, {
-              partitionId,
-              nodeId,
-              reason: 'ACK received',
-            });
-          }
-
-          const mockCache = createMockCache({
-            nodes: [
-              {node_id: nodeId, status: 'active'},
-              {node_id: 'other-node', status: 'active'},
-            ],
-            services: [],
-            partitions: [{partition_id: partitionId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: partitionId,
             entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
             nodeId: 'coordinator-node',
-            replicaStateMachine: stateMachine,
+            cacheData: {
+              nodes: [
+                {node_id: nodeId, status: 'active'},
+                {node_id: 'other-node', status: 'active'},
+              ],
+              services: [],
+              partitions: [{partition_id: partitionId, table_id: 'table-1'}],
+              replicaOperations,
+            },
           });
 
           rebalancer.initialize();
           rebalancer.setLeader(true);
-
-          // Get transitional replicas from state machine
-          const transitionalReplicas = stateMachine.getTransitionalReplicas();
-
-          // Filter for replicas in ADD transitional states on target node
-          const addTransitionalOnNode = transitionalReplicas.filter((r) =>
-            ADD_TRANSITIONAL_STATES.includes(r.state) &&
-            r.nodeId === nodeId &&
-            r.partitionId === partitionId);
 
           // Calculate moves
           const currentReplicas = [];
@@ -162,17 +91,11 @@ test('Property 3: No Duplicate ADD Moves for Transitional Replicas', async (t) =
 
           // Clean up
           rebalancer.shutdown();
-          stateMachine.clear();
 
-          // If there are transitional replicas on the node, no ADD moves
-          // should be generated for that node
-          if (addTransitionalOnNode.length > 0) {
-            const addMovesForNode = moves.filter((m) =>
-              m.type === MoveType.ADD && m.nodeId === nodeId);
-            return addMovesForNode.length === 0;
-          }
-
-          return true;
+          // With in-flight operations, calculateMoves should return empty
+          // (it waits for pending operations to complete)
+          // This is the correct behavior per the implementation
+          return moves.length === 0;
         },
       ),
       {numRuns: 10},
@@ -182,110 +105,82 @@ test('Property 3: No Duplicate ADD Moves for Transitional Replicas', async (t) =
   });
 
   /**
-   * Property: For any partition, querying state machine for transitional
-   * replicas correctly identifies replicas in ADD transitional states.
+   * Property: The system correctly tracks in-flight operations via cache.
    */
-  t.test('state machine correctly identifies ADD transitional replicas', async (t) => {
+  t.test('cache correctly tracks in-flight operations', async (t) => {
     await fc.assert(
       fc.property(
         fc.uuid(), // partition_id
         fc.uuid(), // node_id
-        fc.array(fc.uuid(), {minLength: 1, maxLength: 3}), // replica_ids
-        fc.constantFrom(...ADD_TRANSITIONAL_STATES),
-        (partitionId, nodeId, replicaIds, targetState) => {
-          const stateMachine = new ReplicaStateMachine({
+        fc.array(fc.uuid(), {minLength: 1, maxLength: 3}), // operation_ids
+        fc.constantFrom(...ADD_TRANSITIONAL_STEPS),
+        (partitionId, nodeId, operationIds, workflowStep) => {
+          // Create in-flight operations in the cache
+          const replicaOperations = operationIds.map((opId) => ({
+            operation_id: opId,
+            type: 'ADD',
+            partition_id: partitionId,
+            replica_id: `replica-${opId}`,
+            target_node_id: nodeId,
+            status: workflowStep,
+            workflow_step: workflowStep,
+          }));
+
+          const rebalancer = createTestRebalancer({
+            entityId: partitionId,
+            entityType: EntityType.PARTITION,
             nodeId: 'test-node',
+            cacheData: {
+              nodes: [{node_id: nodeId, status: 'active'}],
+              replicaOperations,
+            },
           });
 
-          // Set up replicas in transitional states
-          for (const replicaId of replicaIds) {
-            stateMachine.transition(replicaId, ReplicaState.PENDING, {
-              partitionId,
-              nodeId,
-              reason: 'test setup',
-            });
+          // Query in-flight operations
+          const inFlight = rebalancer.getInFlightOperations();
 
-            if (targetState === ReplicaState.CREATING ||
-                targetState === ReplicaState.SYNCING) {
-              stateMachine.transition(replicaId, ReplicaState.CREATING, {
-                partitionId,
-                nodeId,
-                reason: 'test setup',
-              });
-            }
+          // All operations should be in-flight (non-terminal status)
+          const allInFlight = operationIds.every((opId) =>
+            inFlight.some((op) => op.operation_id === opId));
 
-            if (targetState === ReplicaState.SYNCING) {
-              stateMachine.transition(replicaId, ReplicaState.SYNCING, {
-                partitionId,
-                nodeId,
-                reason: 'test setup',
-              });
-            }
-          }
-
-          // Query transitional replicas
-          const transitional = stateMachine.getTransitionalReplicas();
-
-          // All replicas should be in transitional states
-          const allInTransitional = replicaIds.every((id) =>
-            transitional.some((r) => r.replicaId === id));
-
-          // Filter for ADD transitional states
-          const addTransitional = transitional.filter((r) =>
-            ADD_TRANSITIONAL_STATES.includes(r.state));
-
-          stateMachine.clear();
-
-          return allInTransitional && addTransitional.length === replicaIds.length;
+          return allInFlight && inFlight.length === operationIds.length;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('state machine correctly identifies ADD transitional replicas');
+    t.pass('cache correctly tracks in-flight operations');
   });
 
   /**
-   * Property: ADD moves are allowed for nodes without transitional replicas.
+   * Property: ADD moves are allowed for nodes without in-flight operations.
    */
-  t.test('ADD moves allowed for nodes without transitional replicas', async (t) => {
+  t.test('ADD moves allowed for nodes without in-flight operations', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.uuid(), // partition_id
-        fc.uuid(), // node_id with transitional replica
-        fc.uuid(), // clean_node_id without transitional replica
-        async (partitionId, transitionalNodeId, cleanNodeId) => {
+        fc.uuid(), // node_id with in-flight operation
+        fc.uuid(), // clean_node_id without in-flight operation
+        async (partitionId, busyNodeId, cleanNodeId) => {
           // Ensure nodes are different
-          if (transitionalNodeId === cleanNodeId) {
+          if (busyNodeId === cleanNodeId) {
             return true; // Skip this case
           }
 
-          const stateMachine = new ReplicaStateMachine({
-            nodeId: 'coordinator-node',
-          });
-
-          // Set up replica in transitional state on one node
-          stateMachine.transition('transitional-replica', ReplicaState.PENDING, {
-            partitionId,
-            nodeId: transitionalNodeId,
-            reason: 'test setup',
-          });
-
-          const mockCache = createMockCache({
-            nodes: [
-              {node_id: transitionalNodeId, status: 'active'},
-              {node_id: cleanNodeId, status: 'active'},
-            ],
-            services: [],
-            partitions: [{partition_id: partitionId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
+          // No in-flight operations - rebalancer should generate moves
+          const rebalancer = createTestRebalancer({
             entityId: partitionId,
             entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
             nodeId: 'coordinator-node',
-            replicaStateMachine: stateMachine,
+            cacheData: {
+              nodes: [
+                {node_id: busyNodeId, status: 'active'},
+                {node_id: cleanNodeId, status: 'active'},
+              ],
+              services: [],
+              partitions: [{partition_id: partitionId, table_id: 'table-1'}],
+              replicaOperations: [], // No in-flight operations
+            },
           });
 
           rebalancer.initialize();
@@ -302,7 +197,6 @@ test('Property 3: No Duplicate ADD Moves for Transitional Replicas', async (t) =
 
           // Clean up
           rebalancer.shutdown();
-          stateMachine.clear();
 
           // ADD moves should be generated for the clean node
           const addMovesForCleanNode = moves.filter((m) =>
@@ -314,6 +208,6 @@ test('Property 3: No Duplicate ADD Moves for Transitional Replicas', async (t) =
       {numRuns: 10},
     );
 
-    t.pass('ADD moves allowed for nodes without transitional replicas');
+    t.pass('ADD moves allowed for nodes without in-flight operations');
   });
 });

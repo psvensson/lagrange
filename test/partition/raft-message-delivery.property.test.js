@@ -8,12 +8,13 @@
  * replicas are co-located or distributed.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {AddressManager} from '../../src/address/address-manager.js';
 import {isRaftPacket, RAFT_PACKET_TYPES} from '../../src/raft/raft-packet-utils.js';
 
 // Port counter for unique ports per test
@@ -22,6 +23,7 @@ let testPortCounter = 32000;
 beforeEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
+  AddressManager.resetInstance();
   const config = ConfigurationManager.getInstance();
   config.initialize({node: {id: 'test-node'}});
   const logger = LoggingService.getInstance();
@@ -31,6 +33,7 @@ beforeEach(() => {
 afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
+  AddressManager.resetInstance();
 });
 
 /**
@@ -194,6 +197,12 @@ test('Property 3: Co-located replicas receive messages via router', async (t) =>
         const replicaId2 = `${partitionId}-r2`;
         const replicaIds = [replicaId1, replicaId2];
 
+        // Generate peer addresses
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((rid) =>
+          addressManager.format(nodeId, 'partition', rid),
+        );
+
         const replica2ReceivedMessages = [];
 
         try {
@@ -205,6 +214,7 @@ test('Property 3: Co-located replicas receive messages via router', async (t) =>
             tableId,
             replicaId: replicaId1,
             replicaIds,
+            peerAddresses,
             nodeId,
             transport: router,
             dbPath: ':memory:',
@@ -215,6 +225,7 @@ test('Property 3: Co-located replicas receive messages via router', async (t) =>
             tableId,
             replicaId: replicaId2,
             replicaIds,
+            peerAddresses,
             nodeId,
             transport: router,
             dbPath: ':memory:',

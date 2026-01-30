@@ -8,7 +8,7 @@
  * in context.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {FunctionQueryExecutor} from '../../src/function/function-query-executor.js';
 import {LoggingService} from '../../src/logging/logging-service.js';

@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {PartitionsView} from '../../../src/cli/views/partitions-view.js';
 import {ROW_STATUS} from '../../../src/cli/core/base-view.js';
 

@@ -3,7 +3,7 @@
  * Requirements: 3.2, 3.3, 6.1, 6.2, 6.3, 6.4
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -13,6 +13,7 @@ import {ServiceThreadManager} from '../../src/threading/service-thread-manager.j
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 
@@ -27,6 +28,7 @@ function initEnv() {
   ConfigurationManager.getInstance().initialize({
     node: {id: 'test-node'},
     logging: {level: 'error'},
+    transport: {wsHost: '127.0.0.1'},
     raft: {electionTimeoutMinMs: 100, electionTimeoutMaxMs: 200, heartbeatIntervalMs: 50},
     rebalancer: {periodicCheckIntervalMs: 60000, periodicCheckJitterMs: 100},
   });
@@ -45,6 +47,24 @@ async function cleanEnv() {
 
 function schema(name) {
   return {tableName: name, columns: [{name: 'id', type: 'TEXT', primaryKey: true}]};
+}
+
+function createMockCDCService(cache) {
+  return {
+    async insertSystemTableRow(tableName, data) {
+      cache.applySystemTableChange(tableName, 'INSERT', data);
+      return {success: true, operation: 'INSERT', tableName, data};
+    },
+    async updateSystemTableRow(tableName, whereClause, data) {
+      const merged = {...whereClause, ...data};
+      cache.applySystemTableChange(tableName, 'UPDATE', merged);
+      return {success: true, operation: 'UPDATE', tableName, whereClause, data: merged};
+    },
+    async upsertSystemTableRow(tableName, data) {
+      cache.applySystemTableChange(tableName, 'INSERT', data);
+      return {success: true, operation: 'UPSERT', tableName, data};
+    },
+  };
 }
 
 async function wait(cond, ms = 1500) {
@@ -70,6 +90,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
       replicaId: 'mg-ack-r1',
       nodeId,
       replicaIds: ['mg-ack-r1'],
+      peerAddresses: [`${nodeId}/message-group/mg-ack-r1`],
       transport: res.router,
     });
     res.router.register(`${nodeId}/message-group/mg-ack-r1`, (e) => res.mg.receiveMessage(e));
@@ -94,9 +115,38 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
     await res.part.initialize();
     await wait(() => res.part.isLeader);
 
+    const systemTableCache = new SystemTableCache();
+    const cdcIntegrationService = createMockCDCService(systemTableCache);
+    const now = Date.now();
+    systemTableCache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+      table_id: 't1',
+      table_name: 't1',
+      schema_definition: JSON.stringify(schema('t1')),
+    });
+    systemTableCache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+      partition_id: 'p1',
+      table_id: 't1',
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: nodeId,
+    });
+    systemTableCache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+      service_id: 'p1-r1',
+      service_type: 'partition',
+      partition_id: 'p1',
+      node_id: nodeId,
+      raft_role: 'leader',
+      status: 'active',
+      address: `${nodeId}/partition/p1-r1`,
+      created_at: now,
+      updated_at: now,
+    });
+
     const created = [];
     res.lc = new ReplicaLifecycleManager({
       nodeId,
+      systemTableCache,
+      cdcIntegrationService,
       createPartitionService: async (o) => {
         created.push(o.replicaId);
         const m = new EventEmitter();
@@ -138,6 +188,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
     t.ok(ack, 'received ACK');
     t.equal(ack.request_id, 'req-1', 'correct request_id');
     t.equal(ack.status, 'initiated', 'status initiated');
+    await wait(() => created.length === 1, 2000);
     t.equal(created.length, 1, 'replica created');
   } finally {
     if (res.lc) res.lc.shutdown();

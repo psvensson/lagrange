@@ -6,7 +6,7 @@
  * for large result sets, including external merge sort for ordered results.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {StreamingAggregator} from '../../src/query/streaming-aggregator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

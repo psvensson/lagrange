@@ -6,7 +6,7 @@
  * **Validates: Requirements 1.5**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {ConnectionManager} from '../../../src/cli/core/connection-manager.js';
 

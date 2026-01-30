@@ -13,7 +13,7 @@
  * 4. Conflict detection correctly identifies duplicates
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {AddressManager} from '../../src/address/address-manager.js';
 

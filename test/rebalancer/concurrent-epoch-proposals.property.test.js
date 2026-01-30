@@ -8,7 +8,7 @@
  * **Validates: Requirements 6.3**
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {AssignmentEpochManager} from '../../src/rebalancer/assignment-epoch-manager.js';
 import {AssignmentEpoch} from '../../src/rebalancer/assignment-epoch.js';

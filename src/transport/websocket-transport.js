@@ -9,28 +9,23 @@ import {v4 as uuidv4} from 'uuid';
 import WebSocket, {WebSocketServer} from 'ws';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {
+  CONNECTION_STATE,
+  TRANSPORT_CONFIG_KEY,
+  TRANSPORT_DEFAULT,
+  TRANSPORT_ERROR_MSG,
+  TRANSPORT_EVENT,
+  TRANSPORT_FORMAT,
+  TRANSPORT_NUM,
+  TRANSPORT_SUBSYSTEM,
+  TRANSPORT_TYPEOF,
+  WS_ERROR_MSG,
+  WS_LOG_MSG,
+  WS_MESSAGE_TYPE,
+} from '../constants/transport.js';
 
-/**
- * Connection state enumeration.
- */
-const ConnectionState = {
-  DISCONNECTED: 'disconnected',
-  CONNECTING: 'connecting',
-  CONNECTED: 'connected',
-  RECONNECTING: 'reconnecting',
-  CLOSED: 'closed',
-};
-
-/**
- * WebSocket message types.
- */
-const WSMessageType = {
-  RAFT_MESSAGE: 'raft_message',
-  SERVICE_MESSAGE: 'service_message',
-  PING: 'ping',
-  PONG: 'pong',
-  ACK: 'ack',
-};
+const ConnectionState = CONNECTION_STATE;
+const WSMessageType = WS_MESSAGE_TYPE;
 
 /**
  * WebSocketTransport provides inter-node communication.
@@ -48,7 +43,8 @@ class WebSocketTransport extends EventEmitter {
     super();
 
     this.localNodeId = options.localNodeId || uuidv4();
-    this.localAddress = options.localAddress || `ws-${this.localNodeId}`;
+    this.localAddress = options.localAddress ||
+      TRANSPORT_FORMAT.buildLocalAddress(this.localNodeId);
     this.transportId = uuidv4();
 
     // Peer connections (nodeId -> connection info)
@@ -62,21 +58,33 @@ class WebSocketTransport extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.reconnectIntervalMs = config.get('transport.reconnectIntervalMs') || 1000;
-    this.reconnectMaxAttempts = config.get('transport.reconnectMaxAttempts') || 10;
+    this.reconnectIntervalMs =
+      config.get(TRANSPORT_CONFIG_KEY.RECONNECT_INTERVAL_MS) ||
+      TRANSPORT_DEFAULT.RECONNECT_INTERVAL_MS;
+    this.reconnectMaxAttempts =
+      config.get(TRANSPORT_CONFIG_KEY.RECONNECT_MAX_ATTEMPTS) ||
+      TRANSPORT_DEFAULT.RECONNECT_MAX_ATTEMPTS;
     this.reconnectBackoffMultiplier =
-      config.get('transport.reconnectBackoffMultiplier') || 1.5;
-    this.pingIntervalMs = config.get('transport.pingIntervalMs') || 30000;
-    this.messageTimeoutMs = config.get('transport.messageTimeoutMs') || 5000;
+      config.get(TRANSPORT_CONFIG_KEY.RECONNECT_BACKOFF_MULTIPLIER) ||
+      TRANSPORT_DEFAULT.RECONNECT_BACKOFF_MULTIPLIER;
+    this.pingIntervalMs =
+      config.get(TRANSPORT_CONFIG_KEY.PING_INTERVAL_MS) ||
+      TRANSPORT_DEFAULT.PING_INTERVAL_MS;
+    this.messageTimeoutMs =
+      config.get(TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS) ||
+      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;
+    this.wsHost =
+      config.get(TRANSPORT_CONFIG_KEY.WS_HOST) ||
+      TRANSPORT_DEFAULT.WS_HOST;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('websocket-transport') : console;
+      loggingService.forSubsystem(TRANSPORT_SUBSYSTEM.WEBSOCKET) : console;
 
     // State
     this.initialized = false;
-    this.messageCount = 0;
+    this.messageCount = TRANSPORT_NUM.ZERO;
 
     // WebSocket server (if acting as server)
     this.server = null;
@@ -94,13 +102,14 @@ class WebSocketTransport extends EventEmitter {
       return;
     }
 
-    this.logger.debug('Initializing WebSocketTransport', {
+    this.logger.debug(WS_LOG_MSG.INITIALIZING, {
       transportId: this.transportId,
       localNodeId: this.localNodeId,
     });
 
     // Connect to peer nodes if provided
-    if (options.peerNodes && options.peerNodes.length > 0) {
+    if (options.peerNodes &&
+        options.peerNodes.length > TRANSPORT_NUM.ZERO) {
       for (const peer of options.peerNodes) {
         await this.connectToPeer(peer);
       }
@@ -108,7 +117,7 @@ class WebSocketTransport extends EventEmitter {
 
     this.initialized = true;
 
-    this.emit('initialized', {
+    this.emit(TRANSPORT_EVENT.INITIALIZED, {
       transportId: this.transportId,
       localNodeId: this.localNodeId,
     });
@@ -117,27 +126,32 @@ class WebSocketTransport extends EventEmitter {
   /**
    * Start WebSocket server.
    * @param {number} port - Port to listen on.
+   * @param {string} [host] - Host/interface to bind to.
    * @return {Promise<void>}
    */
-  async startServer(port) {
+  async startServer(port, host = null) {
     return new Promise((resolve, reject) => {
       try {
-        this.server = new WebSocketServer({port});
+        // Prefer binding to a specific host (usually 127.0.0.1) to avoid sandbox
+        // restrictions that may disallow binding to 0.0.0.0.
+        const bindHost = host || this.wsHost || TRANSPORT_DEFAULT.WS_HOST;
+        this.server = new WebSocketServer({port, host: bindHost});
 
-        this.server.on('connection', (ws, req) => {
+        this.server.on(TRANSPORT_EVENT.CONNECTION, (ws, req) => {
           this.handleIncomingConnection(ws, req);
         });
 
-        this.server.on('listening', () => {
-          this.logger.info('WebSocket server listening', {
+        this.server.on(TRANSPORT_EVENT.LISTENING, () => {
+          this.logger.info(WS_LOG_MSG.SERVER_LISTENING, {
             port,
+            host: this.server?.options?.host || bindHost,
             transportId: this.transportId,
           });
           resolve();
         });
 
-        this.server.on('error', (error) => {
-          this.logger.error('WebSocket server error', {
+        this.server.on(TRANSPORT_EVENT.ERROR, (error) => {
+          this.logger.error(WS_LOG_MSG.SERVER_ERROR, {
             error: error.message,
             transportId: this.transportId,
           });
@@ -158,22 +172,22 @@ class WebSocketTransport extends EventEmitter {
   handleIncomingConnection(ws, _req) {
     const connectionId = uuidv4();
 
-    this.logger.debug('Incoming WebSocket connection', {
+    this.logger.debug(WS_LOG_MSG.INCOMING_CONNECTION, {
       connectionId,
       transportId: this.transportId,
     });
 
     // Set up message handler
-    ws.on('message', (data) => {
+    ws.on(TRANSPORT_EVENT.MESSAGE, (data) => {
       this.handleMessage(connectionId, ws, data);
     });
 
-    ws.on('close', () => {
+    ws.on(TRANSPORT_EVENT.CLOSE, () => {
       this.handleConnectionClose(connectionId);
     });
 
-    ws.on('error', (error) => {
-      this.logger.error('WebSocket connection error', {
+    ws.on(TRANSPORT_EVENT.ERROR, (error) => {
+      this.logger.error(WS_LOG_MSG.CONNECTION_ERROR, {
         connectionId,
         error: error.message,
       });
@@ -189,7 +203,10 @@ class WebSocketTransport extends EventEmitter {
       createdAt: Date.now(),
     });
 
-    this.emit('connectionEstablished', {connectionId, incoming: true});
+    this.emit(TRANSPORT_EVENT.CONNECTION_ESTABLISHED, {
+      connectionId,
+      incoming: true,
+    });
   }
 
   /**
@@ -206,12 +223,12 @@ class WebSocketTransport extends EventEmitter {
     if (this.connections.has(nodeId)) {
       const existing = this.connections.get(nodeId);
       if (existing.state === ConnectionState.CONNECTED) {
-        this.logger.debug('Already connected to peer', {nodeId});
+        this.logger.debug(WS_LOG_MSG.ALREADY_CONNECTED, {nodeId});
         return;
       }
     }
 
-    this.logger.debug('Connecting to peer', {
+    this.logger.debug(WS_LOG_MSG.CONNECTING, {
       nodeId,
       address,
       transportId: this.transportId,
@@ -223,7 +240,7 @@ class WebSocketTransport extends EventEmitter {
       address,
       ws: null,
       state: ConnectionState.CONNECTING,
-      reconnectAttempts: 0,
+      reconnectAttempts: TRANSPORT_NUM.ZERO,
       isIncoming: false,
       createdAt: Date.now(),
     };
@@ -244,12 +261,12 @@ class WebSocketTransport extends EventEmitter {
       try {
         const ws = new WebSocket(connectionInfo.address);
 
-        ws.on('open', () => {
+        ws.on(TRANSPORT_EVENT.OPEN, () => {
           connectionInfo.ws = ws;
           connectionInfo.state = ConnectionState.CONNECTED;
-          connectionInfo.reconnectAttempts = 0;
+          connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
 
-          this.logger.info('Connected to peer', {
+          this.logger.info(WS_LOG_MSG.CONNECTED, {
             nodeId: connectionInfo.nodeId,
             address: connectionInfo.address,
           });
@@ -260,7 +277,7 @@ class WebSocketTransport extends EventEmitter {
           // Start ping interval
           this.startPingInterval(connectionInfo);
 
-          this.emit('connectionEstablished', {
+          this.emit(TRANSPORT_EVENT.CONNECTION_ESTABLISHED, {
             nodeId: connectionInfo.nodeId,
             connectionId: connectionInfo.connectionId,
           });
@@ -268,16 +285,16 @@ class WebSocketTransport extends EventEmitter {
           resolve();
         });
 
-        ws.on('message', (data) => {
+        ws.on(TRANSPORT_EVENT.MESSAGE, (data) => {
           this.handleMessage(connectionInfo.nodeId, ws, data);
         });
 
-        ws.on('close', () => {
+        ws.on(TRANSPORT_EVENT.CLOSE, () => {
           this.handleConnectionClose(connectionInfo.nodeId);
         });
 
-        ws.on('error', (error) => {
-          this.logger.error('WebSocket error', {
+        ws.on(TRANSPORT_EVENT.ERROR, (error) => {
+          this.logger.error(WS_LOG_MSG.WS_ERROR, {
             nodeId: connectionInfo.nodeId,
             error: error.message,
           });
@@ -300,7 +317,7 @@ class WebSocketTransport extends EventEmitter {
    */
   sendIdentification(connectionInfo) {
     const message = {
-      type: 'identify',
+      type: WSMessageType.IDENTIFY,
       nodeId: this.localNodeId,
       address: this.localAddress,
       timestamp: Date.now(),
@@ -320,14 +337,14 @@ class WebSocketTransport extends EventEmitter {
     try {
       const message = JSON.parse(data.toString());
 
-      this.logger.debug('Received message', {
+      this.logger.debug(WS_LOG_MSG.MESSAGE_RECEIVED, {
         connectionId,
         type: message.type,
         messageId: message.messageId,
       });
 
       // Handle identification
-      if (message.type === 'identify') {
+      if (message.type === WSMessageType.IDENTIFY) {
         this.handleIdentification(connectionId, ws, message);
         return;
       }
@@ -357,15 +374,16 @@ class WebSocketTransport extends EventEmitter {
       }
 
       // Unknown message type
-      this.logger.warn('Unknown message type', {
+      this.logger.warn(WS_LOG_MSG.MESSAGE_UNKNOWN, {
         type: message.type,
         connectionId,
       });
     } catch (error) {
-      this.logger.error('Failed to parse message', {
+      this.logger.error(WS_LOG_MSG.MESSAGE_PARSE_FAILED, {
         connectionId,
         error: error.message,
       });
+      throw error;
     }
   }
 
@@ -379,7 +397,7 @@ class WebSocketTransport extends EventEmitter {
   handleIdentification(connectionId, ws, message) {
     const {nodeId} = message;
 
-    this.logger.debug('Received identification', {
+    this.logger.debug(WS_LOG_MSG.IDENTIFICATION_RECEIVED, {
       connectionId,
       nodeId,
     });
@@ -394,7 +412,7 @@ class WebSocketTransport extends EventEmitter {
       this.connections.set(nodeId, connection);
     }
 
-    this.emit('peerIdentified', {nodeId, connectionId});
+    this.emit(TRANSPORT_EVENT.PEER_IDENTIFIED, {nodeId, connectionId});
   }
 
   /**
@@ -425,7 +443,7 @@ class WebSocketTransport extends EventEmitter {
           messageId,
           acknowledged: true,
         };
-        if (result && typeof result === 'object') {
+        if (result && typeof result === TRANSPORT_TYPEOF.OBJECT) {
           const {acknowledged: _ack, type: handlerType, ...rest} = result;
           Object.assign(ack, rest);
           if (handlerType) {
@@ -443,7 +461,7 @@ class WebSocketTransport extends EventEmitter {
       }
     } else {
       // No handler - emit event for external handling
-      this.emit('message', {
+      this.emit(TRANSPORT_EVENT.MESSAGE, {
         messageId,
         targetAddress,
         payload,
@@ -477,7 +495,7 @@ class WebSocketTransport extends EventEmitter {
         // Flat structure - spread all fields from ACK
         pending.resolve({messageId, acknowledged: true, ...rest});
       } else {
-        pending.reject(new Error(error || 'Message not acknowledged'));
+        pending.reject(new Error(error || TRANSPORT_ERROR_MSG.MESSAGE_NOT_ACKNOWLEDGED));
       }
     }
   }
@@ -491,7 +509,7 @@ class WebSocketTransport extends EventEmitter {
     const connection = this.connections.get(nodeId);
 
     if (connection) {
-      this.logger.info('Connection closed', {
+      this.logger.info(WS_LOG_MSG.CONNECTION_CLOSED, {
         nodeId,
         connectionId: connection.connectionId,
       });
@@ -505,7 +523,7 @@ class WebSocketTransport extends EventEmitter {
         connection.pingInterval = null;
       }
 
-      this.emit('connectionClosed', {nodeId});
+      this.emit(TRANSPORT_EVENT.CONNECTION_CLOSED, {nodeId});
 
       // Attempt reconnection for outgoing connections
       if (!connection.isIncoming) {
@@ -521,7 +539,7 @@ class WebSocketTransport extends EventEmitter {
    */
   scheduleReconnect(connectionInfo) {
     if (connectionInfo.reconnectAttempts >= this.reconnectMaxAttempts) {
-      this.logger.error('Max reconnection attempts reached', {
+      this.logger.error(WS_LOG_MSG.MAX_RECONNECTS_REACHED, {
         nodeId: connectionInfo.nodeId,
         attempts: connectionInfo.reconnectAttempts,
       });
@@ -530,12 +548,15 @@ class WebSocketTransport extends EventEmitter {
     }
 
     connectionInfo.state = ConnectionState.RECONNECTING;
-    connectionInfo.reconnectAttempts++;
+    connectionInfo.reconnectAttempts += TRANSPORT_NUM.ONE;
 
     const delay = this.reconnectIntervalMs *
-      Math.pow(this.reconnectBackoffMultiplier, connectionInfo.reconnectAttempts - 1);
+      Math.pow(
+        this.reconnectBackoffMultiplier,
+        connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE,
+      );
 
-    this.logger.debug('Scheduling reconnection', {
+    this.logger.debug(WS_LOG_MSG.SCHEDULING_RECONNECT, {
       nodeId: connectionInfo.nodeId,
       attempt: connectionInfo.reconnectAttempts,
       delayMs: delay,
@@ -545,11 +566,11 @@ class WebSocketTransport extends EventEmitter {
       try {
         await this.establishConnection(connectionInfo);
       } catch (error) {
-        this.logger.error('Reconnection failed', {
+        this.logger.error(WS_LOG_MSG.RECONNECT_FAILED, {
           nodeId: connectionInfo.nodeId,
           error: error.message,
         });
-        this.scheduleReconnect(connectionInfo);
+        throw error;
       }
     }, delay);
   }
@@ -577,13 +598,13 @@ class WebSocketTransport extends EventEmitter {
    * @param {Function} handler - Message handler.
    */
   register(address, handler) {
-    if (typeof handler !== 'function') {
-      throw new Error('Handler must be a function');
+    if (typeof handler !== TRANSPORT_TYPEOF.FUNCTION) {
+      throw new Error(TRANSPORT_ERROR_MSG.HANDLER_MUST_BE_FUNCTION);
     }
 
     this.messageHandlers.set(address, handler);
 
-    this.logger.debug('Registered message handler', {
+    this.logger.debug(WS_LOG_MSG.HANDLER_REGISTERED, {
       address,
       transportId: this.transportId,
     });
@@ -608,7 +629,7 @@ class WebSocketTransport extends EventEmitter {
   async deliver(targetAddress, message, options = {}) {
     const {targetNodeId} = options;
     const messageId = message.messageId || uuidv4();
-    this.messageCount++;
+    this.messageCount += TRANSPORT_NUM.ONE;
 
     // Find connection to target node
     let connection = null;
@@ -628,7 +649,7 @@ class WebSocketTransport extends EventEmitter {
       return {
         messageId,
         acknowledged: false,
-        error: 'No connection to target node',
+        error: WS_ERROR_MSG.NO_CONNECTION,
       };
     }
 
@@ -662,7 +683,7 @@ class WebSocketTransport extends EventEmitter {
         resolve({
           messageId,
           acknowledged: false,
-          error: 'Message timeout',
+          error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT,
         });
       }, this.messageTimeoutMs);
 
@@ -747,7 +768,7 @@ class WebSocketTransport extends EventEmitter {
    * @return {Promise<void>}
    */
   async shutdown() {
-    this.logger.debug('Shutting down WebSocketTransport', {
+    this.logger.debug(WS_LOG_MSG.SHUTTING_DOWN, {
       transportId: this.transportId,
     });
 
@@ -771,7 +792,7 @@ class WebSocketTransport extends EventEmitter {
     // Clear pending messages
     for (const [, pending] of this.pendingMessages) {
       clearTimeout(pending.timeout);
-      pending.reject(new Error('Transport shutdown'));
+      pending.reject(new Error(WS_ERROR_MSG.SHUTDOWN));
     }
 
     this.connections.clear();
@@ -779,7 +800,7 @@ class WebSocketTransport extends EventEmitter {
     this.messageHandlers.clear();
     this.initialized = false;
 
-    this.emit('shutdown', {transportId: this.transportId});
+    this.emit(TRANSPORT_EVENT.SHUTDOWN, {transportId: this.transportId});
   }
 }
 

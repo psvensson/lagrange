@@ -3,7 +3,7 @@
  * Requirements: 33.4, 33.5, 33.6, 33.7, 33.8, 33.9, 33.10, 33.11, 33.12
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {LiveQueryManager, QueryGroup} from '../../src/live-query/live-query-manager.js';
 
 // Mock system cache

@@ -15,18 +15,25 @@ import {
   NodeLifecycleStateMachine,
   NodeState,
 } from './node-lifecycle-state-machine.js';
+import {SystemTableCache} from '../cache/system-table-cache.js';
+import {createReadOnlyCache} from '../cache/read-only-system-table-cache.js';
+import {
+  NODE_CONFIG_KEY,
+  NODE_LIFECYCLE_EVENT,
+  NODE_SERVICE_DEFAULT,
+  NODE_SERVICE_ERROR_MSG,
+  NODE_SERVICE_EVENT,
+  NODE_SERVICE_HEALTH_STATUS,
+  NODE_SERVICE_LOG_MSG,
+  NODE_SERVICE_SUBSYSTEM,
+  NODE_STATUS,
+} from './node-constants.js';
+import {NUM, STRING} from '../constants/index.js';
 
 /**
  * Node status enumeration.
  */
-const NodeStatus = {
-  INITIALIZING: 'initializing',
-  ACTIVE: 'active',
-  SUSPECTED: 'suspected',
-  FAILED: 'failed',
-  SHUTTING_DOWN: 'shutting_down',
-  STOPPED: 'stopped',
-};
+const NodeStatus = NODE_STATUS;
 
 /**
  * NodeService is the administrative component present on every node.
@@ -44,13 +51,13 @@ class NodeService extends EventEmitter {
     super();
     this.nodeId = null;
     this.nodeAddress = null;
-    this.status = NodeStatus.INITIALIZING;
+    this.status = NODE_STATUS.INITIALIZING;
     this.lifecycleStateMachine = null;
     this.services = new Map();
     this.messageGroupServices = new Map();
     this.heartbeatInterval = null;
-    this.heartbeatIntervalMs = 5000;
-    this.statsCollectionIntervalMs = 10000;
+    this.heartbeatIntervalMs = NODE_SERVICE_DEFAULT.HEARTBEAT_INTERVAL_MS;
+    this.statsCollectionIntervalMs = NODE_SERVICE_DEFAULT.STATS_COLLECTION_INTERVAL_MS;
     this.statsInterval = null;
     this.lastStats = null;
     this.startTime = null;
@@ -59,6 +66,11 @@ class NodeService extends EventEmitter {
     this.threadManager = null;
     this.addressManager = null;
     this.initialized = false;
+
+    // System table cache - singleton per node, created once
+    this._systemTableCache = null;
+    this._readOnlyCache = null;
+    this._partitionLeaderDirectory = new Map();
   }
 
   /**
@@ -95,18 +107,21 @@ class NodeService extends EventEmitter {
 
     this.config = ConfigurationManager.getInstance();
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.forSubsystem('node-service');
+    this.logger = loggingService.forSubsystem(NODE_SERVICE_SUBSYSTEM);
 
     // Set node identity
-    this.nodeId = options.nodeId || this.config.get('node.id') || uuidv4();
+    this.nodeId = options.nodeId || this.config.get(NODE_CONFIG_KEY.ID) || uuidv4();
     this.addressManager = AddressManager.getInstance();
     this.nodeAddress = options.nodeAddress ||
       this.addressManager.generateNodeAddress();
 
     // Get configuration values
-    this.heartbeatIntervalMs = this.config.get('node.heartbeatIntervalMs') || 5000;
+    this.heartbeatIntervalMs =
+      this.config.get(NODE_CONFIG_KEY.HEARTBEAT_INTERVAL_MS) ||
+      NODE_SERVICE_DEFAULT.HEARTBEAT_INTERVAL_MS;
     this.statsCollectionIntervalMs =
-      this.config.get('node.statsCollectionIntervalMs') || 10000;
+      this.config.get(NODE_CONFIG_KEY.STATS_COLLECTION_INTERVAL_MS) ||
+      NODE_SERVICE_DEFAULT.STATS_COLLECTION_INTERVAL_MS;
 
     // Initialize thread manager
     this.threadManager = ServiceThreadManager.getInstance();
@@ -121,7 +136,7 @@ class NodeService extends EventEmitter {
     });
 
     // Forward state change events from the state machine
-    this.lifecycleStateMachine.on('stateChange', (event) => {
+    this.lifecycleStateMachine.on(NODE_LIFECYCLE_EVENT.STATE_CHANGE, (event) => {
       this._onLifecycleStateChange(event);
     });
 
@@ -136,11 +151,10 @@ class NodeService extends EventEmitter {
     this.lifecycleStateMachine.transition(NodeState.SYNCING);
     this.lifecycleStateMachine.transition(NodeState.READY);
 
-    // Update legacy status for backward compatibility
-    this.status = NodeStatus.ACTIVE;
+    this.status = NODE_STATUS.ACTIVE;
     this.initialized = true;
 
-    this.logger.info('Node service initialized', {
+    this.logger.info(NODE_SERVICE_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
       lifecycleState: this.lifecycleStateMachine.getState(),
@@ -157,7 +171,7 @@ class NodeService extends EventEmitter {
    * @private
    */
   _onLifecycleStateChange(event) {
-    this.logger.info('Node lifecycle state changed', {
+    this.logger.info(NODE_SERVICE_LOG_MSG.LIFECYCLE_STATE_CHANGED, {
       nodeId: this.nodeId,
       from: event.from,
       to: event.to,
@@ -165,7 +179,7 @@ class NodeService extends EventEmitter {
     });
 
     // Forward the state change event for external listeners
-    this.emit('lifecycleStateChange', {
+    this.emit(NODE_SERVICE_EVENT.LIFECYCLE_STATE_CHANGE, {
       nodeId: this.nodeId,
       from: event.from,
       to: event.to,
@@ -174,7 +188,7 @@ class NodeService extends EventEmitter {
 
     // Emit CDC event for nodes table update
     // This allows other components to react to state changes
-    this.emit('cdcNodeStateChange', {
+    this.emit(NODE_SERVICE_EVENT.CDC_NODE_STATE_CHANGE, {
       nodeId: this.nodeId,
       state: event.to,
       previousState: event.from,
@@ -192,18 +206,18 @@ class NodeService extends EventEmitter {
    */
   async startService(serviceConfig) {
     if (!this.initialized) {
-      throw new Error('NodeService not initialized');
+      throw new Error(NODE_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
     const serviceId = serviceConfig.id ||
       this.addressManager.generateServiceAddress(this.nodeAddress);
-    const serviceType = serviceConfig.type || 'custom';
+    const serviceType = serviceConfig.type || NODE_SERVICE_DEFAULT.SERVICE_TYPE_CUSTOM;
 
     if (this.services.has(serviceId)) {
-      throw new Error(`Service already exists: ${serviceId}`);
+      throw new Error(`${NODE_SERVICE_ERROR_MSG.SERVICE_EXISTS}: ${serviceId}`);
     }
 
-    this.logger.info('Starting service', {
+    this.logger.info(NODE_SERVICE_LOG_MSG.STARTING_SERVICE, {
       serviceId,
       serviceType,
       nodeId: this.nodeId,
@@ -231,17 +245,17 @@ class NodeService extends EventEmitter {
       serviceInfo.status = ServiceStatus.RUNNING;
 
       // Track message group services separately
-      if (serviceType === 'messageGroup') {
+      if (serviceType === NODE_SERVICE_DEFAULT.MESSAGE_GROUP_TYPE) {
         this.messageGroupServices.set(serviceId, serviceInfo);
       }
 
-      this.logger.info('Service started', {
+      this.logger.info(NODE_SERVICE_LOG_MSG.SERVICE_STARTED, {
         serviceId,
         serviceType,
         nodeId: this.nodeId,
       });
 
-      this.emit('serviceStarted', serviceId, serviceInfo);
+      this.emit(NODE_SERVICE_EVENT.SERVICE_STARTED, serviceId, serviceInfo);
 
       return {
         id: serviceId,
@@ -251,7 +265,7 @@ class NodeService extends EventEmitter {
       };
     } catch (error) {
       serviceInfo.status = ServiceStatus.FAILED;
-      this.logger.error('Failed to start service', {
+      this.logger.error(NODE_SERVICE_LOG_MSG.SERVICE_START_FAILED, {
         serviceId,
         serviceType,
         error: error.message,
@@ -267,15 +281,15 @@ class NodeService extends EventEmitter {
    */
   async stopService(serviceId) {
     if (!this.initialized) {
-      throw new Error('NodeService not initialized');
+      throw new Error(NODE_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
     const serviceInfo = this.services.get(serviceId);
     if (!serviceInfo) {
-      throw new Error(`Service not found: ${serviceId}`);
+      throw new Error(`${NODE_SERVICE_ERROR_MSG.SERVICE_NOT_FOUND}: ${serviceId}`);
     }
 
-    this.logger.info('Stopping service', {
+    this.logger.info(NODE_SERVICE_LOG_MSG.STOPPING_SERVICE, {
       serviceId,
       serviceType: serviceInfo.type,
       nodeId: this.nodeId,
@@ -294,12 +308,12 @@ class NodeService extends EventEmitter {
       // Unregister address
       this.addressManager.unregisterServiceAddress(serviceId);
 
-      this.logger.info('Service stopped', {
+      this.logger.info(NODE_SERVICE_LOG_MSG.SERVICE_STOPPED, {
         serviceId,
         nodeId: this.nodeId,
       });
 
-      this.emit('serviceStopped', serviceId);
+      this.emit(NODE_SERVICE_EVENT.SERVICE_STOPPED, serviceId);
 
       return {
         id: serviceId,
@@ -308,7 +322,7 @@ class NodeService extends EventEmitter {
       };
     } catch (error) {
       serviceInfo.status = ServiceStatus.FAILED;
-      this.logger.error('Failed to stop service', {
+      this.logger.error(NODE_SERVICE_LOG_MSG.SERVICE_STOP_FAILED, {
         serviceId,
         error: error.message,
       });
@@ -327,18 +341,18 @@ class NodeService extends EventEmitter {
     const usedMemory = totalMemory - freeMemory;
 
     // Calculate CPU usage
-    let totalIdle = 0;
-    let totalTick = 0;
+    let totalIdle = NUM.ZERO;
+    let totalTick = NUM.ZERO;
     for (const cpu of cpus) {
       for (const type of Object.keys(cpu.times)) {
         totalTick += cpu.times[type];
       }
       totalIdle += cpu.times.idle;
     }
-    const cpuUsagePercent = ((totalTick - totalIdle) / totalTick) * 100;
+    const cpuUsagePercent = ((totalTick - totalIdle) / totalTick) * NUM.HUNDRED;
 
     // Memory usage
-    const memoryUsagePercent = (usedMemory / totalMemory) * 100;
+    const memoryUsagePercent = (usedMemory / totalMemory) * NUM.HUNDRED;
 
     // Get pool stats from thread manager
     const poolStats = this.threadManager?.getPoolStats() || {};
@@ -351,14 +365,14 @@ class NodeService extends EventEmitter {
       timestamp: Date.now(),
       cpu: {
         count: cpus.length,
-        model: cpus[0]?.model || 'unknown',
-        usagePercent: Math.round(cpuUsagePercent * 100) / 100,
+        model: cpus[NUM.ZERO]?.model || STRING.UNKNOWN,
+        usagePercent: Math.round(cpuUsagePercent * NUM.HUNDRED) / NUM.HUNDRED,
       },
       memory: {
         totalBytes: totalMemory,
         usedBytes: usedMemory,
         freeBytes: freeMemory,
-        usagePercent: Math.round(memoryUsagePercent * 100) / 100,
+        usagePercent: Math.round(memoryUsagePercent * NUM.HUNDRED) / NUM.HUNDRED,
       },
       services: {
         total: this.services.size,
@@ -385,18 +399,20 @@ class NodeService extends EventEmitter {
    */
   async getServiceHealth(serviceId) {
     if (!this.initialized) {
-      throw new Error('NodeService not initialized');
+      throw new Error(NODE_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
     const serviceInfo = this.services.get(serviceId);
     if (!serviceInfo) {
-      throw new Error(`Service not found: ${serviceId}`);
+      throw new Error(`${NODE_SERVICE_ERROR_MSG.SERVICE_NOT_FOUND}: ${serviceId}`);
     }
 
     const health = await this.threadManager.checkServiceHealth(serviceId);
 
     serviceInfo.lastHealthCheck = Date.now();
-    serviceInfo.healthStatus = health.healthy ? 'healthy' : 'unhealthy';
+    serviceInfo.healthStatus = health.healthy ?
+      NODE_SERVICE_HEALTH_STATUS.HEALTHY :
+      NODE_SERVICE_HEALTH_STATUS.UNHEALTHY;
 
     return {
       serviceId,
@@ -416,21 +432,24 @@ class NodeService extends EventEmitter {
    */
   async routeServiceMessage(serviceId, message) {
     if (!this.initialized) {
-      throw new Error('NodeService not initialized');
+      throw new Error(NODE_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
     const serviceInfo = this.services.get(serviceId);
     if (!serviceInfo) {
-      throw new Error(`Service not found: ${serviceId}`);
+      throw new Error(`${NODE_SERVICE_ERROR_MSG.SERVICE_NOT_FOUND}: ${serviceId}`);
     }
 
     if (serviceInfo.status !== ServiceStatus.RUNNING) {
-      throw new Error(`Service not running: ${serviceId} (status: ${serviceInfo.status})`);
+      throw new Error(
+        `${NODE_SERVICE_ERROR_MSG.SERVICE_NOT_RUNNING}: ${serviceId} ` +
+        `(status: ${serviceInfo.status})`,
+      );
     }
 
     return await this.threadManager.executeServiceOperation(
       serviceId,
-      message.operation || 'handleMessage',
+      message.operation || NODE_SERVICE_DEFAULT.OPERATION_HANDLER,
       message.data || message,
     );
   }
@@ -482,10 +501,10 @@ class NodeService extends EventEmitter {
    * @return {number} Number of running services.
    */
   getRunningServiceCount() {
-    let count = 0;
+    let count = NUM.ZERO;
     for (const serviceInfo of this.services.values()) {
       if (serviceInfo.status === ServiceStatus.RUNNING) {
-        count++;
+        count += NUM.ONE;
       }
     }
     return count;
@@ -513,6 +532,80 @@ class NodeService extends EventEmitter {
    */
   getStatus() {
     return this.status;
+  }
+
+  /**
+   * Get the system table cache for this node.
+   * Creates the cache on first access (lazy initialization).
+   * The cache is a singleton per node - only created once.
+   * @return {SystemTableCache} The writable system table cache.
+   */
+  getSystemTableCache() {
+    if (!this._systemTableCache) {
+      this._systemTableCache = new SystemTableCache();
+      this._readOnlyCache = createReadOnlyCache(this._systemTableCache);
+      if (this.logger) {
+        this.logger.debug(NODE_SERVICE_LOG_MSG.SYSTEM_TABLE_CACHE_CREATED, {
+          nodeId: this.nodeId,
+        });
+      }
+    }
+    return this._systemTableCache;
+  }
+
+  /**
+   * Get the read-only view of the system table cache.
+   * Creates the cache on first access if not already created.
+   * @return {Object} Read-only proxy to the system table cache.
+   */
+  getReadOnlySystemTableCache() {
+    if (!this._readOnlyCache) {
+      // Ensure cache is created
+      this.getSystemTableCache();
+    }
+    return this._readOnlyCache;
+  }
+
+  /**
+   * Record the current leader for a partition.
+   * @param {Object} options
+   * @param {string} options.partitionId
+   * @param {string} options.replicaId
+   * @param {string} options.nodeId
+   * @param {string} [options.address]
+   */
+  setPartitionLeader(options = {}) {
+    const {partitionId, replicaId, nodeId, address} = options;
+    if (!partitionId || !replicaId) {
+      return;
+    }
+    this._partitionLeaderDirectory.set(partitionId, {
+      partitionId,
+      replicaId,
+      nodeId: nodeId || this.nodeId,
+      address: address || null,
+      updatedAt: Date.now(),
+    });
+  }
+
+  /**
+   * Clear the cached leader for a partition.
+   * @param {string} partitionId
+   */
+  clearPartitionLeader(partitionId) {
+    if (!partitionId) {
+      return;
+    }
+    this._partitionLeaderDirectory.delete(partitionId);
+  }
+
+  /**
+   * Get cached leader info for a partition.
+   * @param {string} partitionId
+   * @return {Object|null}
+   */
+  getPartitionLeader(partitionId) {
+    return this._partitionLeaderDirectory.get(partitionId) || null;
   }
 
   /**
@@ -563,7 +656,7 @@ class NodeService extends EventEmitter {
    * @return {boolean} True if node has message group replicas.
    */
   hasLocalMessageGroupReplica() {
-    return this.messageGroupServices.size > 0;
+    return this.messageGroupServices.size > NUM.ZERO;
   }
 
   /**
@@ -588,8 +681,8 @@ class NodeService extends EventEmitter {
       return;
     }
 
-    this.logger.info('Shutting down node service', {nodeId: this.nodeId});
-    this.status = NodeStatus.SHUTTING_DOWN;
+    this.logger.info(NODE_SERVICE_LOG_MSG.SHUTTING_DOWN, {nodeId: this.nodeId});
+    this.status = NODE_STATUS.SHUTTING_DOWN;
 
     // Transition to DRAINING state if we're in READY state
     if (this.lifecycleStateMachine &&
@@ -613,10 +706,11 @@ class NodeService extends EventEmitter {
       try {
         await this.stopService(serviceId);
       } catch (error) {
-        this.logger.warn('Error stopping service during shutdown', {
+        this.logger.warn(NODE_SERVICE_LOG_MSG.SHUTDOWN_SERVICE_STOP_FAILED, {
           serviceId,
           error: error.message,
         });
+        throw error;
       }
     }
 
@@ -636,11 +730,16 @@ class NodeService extends EventEmitter {
       this.lifecycleStateMachine.removeAllListeners();
     }
 
-    this.status = NodeStatus.STOPPED;
+    // Clear system table cache references
+    this._systemTableCache = null;
+    this._readOnlyCache = null;
+    this._partitionLeaderDirectory = new Map();
+
+    this.status = NODE_STATUS.STOPPED;
     this.initialized = false;
 
-    this.logger.info('Node service shutdown complete', {nodeId: this.nodeId});
-    this.emit('shutdown', this.nodeId);
+    this.logger.info(NODE_SERVICE_LOG_MSG.SHUTDOWN_COMPLETE, {nodeId: this.nodeId});
+    this.emit(NODE_SERVICE_EVENT.SHUTDOWN, this.nodeId);
   }
 }
 

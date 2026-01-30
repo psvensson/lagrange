@@ -8,33 +8,37 @@
  */
 
 import {EventEmitter} from 'events';
-import {v4 as uuidv4} from 'uuid';
 import fs from 'fs';
 import path from 'path';
+import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
-import {ReplicaStatus} from '../rebalancer/replica-status.js';
-
-/**
- * Message types for replica operations.
- */
-const MessageType = {
-  CREATE_REPLICA: 'CREATE_REPLICA',
-  REMOVE_REPLICA: 'REMOVE_REPLICA',
-};
-
-/**
- * Response status values.
- */
-const ResponseStatus = {
-  INITIATED: 'initiated',
-  ALREADY_EXISTS: 'already_exists',
-  IN_PROGRESS: 'in_progress',
-  NOT_FOUND: 'not_found',
-  COMPLETED: 'completed',
-  ERROR: 'error',
-};
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
+import {STATE, WORKFLOW_STEP} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  ReplicaStatus,
+  WORKFLOW_STEP_TO_STATUS,
+} from '../rebalancer/replica-status.js';
+import {
+  ReplicaOperationMessageType,
+  ReplicaOperationField,
+  ReplicaOperationResponseStatus,
+} from '../rebalancer/replica-operation-constants.js';
+import {
+  REPLICA_HANDLER_ADDRESS,
+  REPLICA_HANDLER_DEFAULT,
+  REPLICA_HANDLER_ERROR_MSG,
+  REPLICA_HANDLER_EVENT,
+  REPLICA_HANDLER_LOG_MSG,
+  REPLICA_HANDLER_NUM,
+  REPLICA_HANDLER_SERVICE,
+  REPLICA_HANDLER_SUBSYSTEM,
+  REPLICA_HANDLER_TYPEOF,
+  REPLICA_HANDLER_WORKFLOW,
+} from './replica-handler-constants.js';
 
 /**
  * ReplicaHandler handles replica creation and removal requests on target nodes.
@@ -54,12 +58,23 @@ class ReplicaHandler extends EventEmitter {
   constructor(options = {}) {
     super();
 
-    this.nodeId = options.nodeId || 'unknown';
+    this.nodeId = options.nodeId || REPLICA_HANDLER_DEFAULT.NODE_ID;
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.rpcClient = options.rpcClient || null;
     this.createPartitionService = options.createPartitionService || null;
-    this.dataDir = options.dataDir || './data';
+    this.dataDir = options.dataDir || REPLICA_HANDLER_DEFAULT.DATA_DIR;
+
+    assertCritical(this.systemTableCache, REPLICA_HANDLER_ERROR_MSG.CACHE_NOT_AVAILABLE);
+    assertCritical(
+      typeof this.systemTableCache.filter === REPLICA_HANDLER_TYPEOF.FUNCTION,
+      REPLICA_HANDLER_ERROR_MSG.CACHE_MISSING_FILTER,
+    );
+    assertCritical(this.cdcIntegrationService, REPLICA_HANDLER_ERROR_MSG.CDC_REQUIRED);
+    assertCritical(
+      this.createPartitionService,
+      REPLICA_HANDLER_ERROR_MSG.CREATE_PARTITION_SERVICE_REQUIRED,
+    );
 
     // Track local replicas by replica_id for idempotency checks
     this.localReplicas = new Map();
@@ -69,12 +84,13 @@ class ReplicaHandler extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.syncTimeoutMs = config.get('replicaHandler.syncTimeoutMs') || 60000;
+    this.syncTimeoutMs = config.get(CONFIG_KEY.REPLICA_HANDLER_SYNC_TIMEOUT_MS) ||
+      REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('replica-handler') : console;
+      loggingService.forSubsystem(REPLICA_HANDLER_SUBSYSTEM) : console;
 
     this.initialized = false;
   }
@@ -87,7 +103,7 @@ class ReplicaHandler extends EventEmitter {
       return;
     }
 
-    this.logger.info('Initializing ReplicaHandler', {
+    this.logger.info(REPLICA_HANDLER_LOG_MSG.INITIALIZING, {
       nodeId: this.nodeId,
       dataDir: this.dataDir,
     });
@@ -102,23 +118,24 @@ class ReplicaHandler extends EventEmitter {
    */
   async handleMessage(envelope) {
     const {payload, correlationId} = envelope;
-    const type = payload?.type;
+    const type = payload?.[ReplicaOperationField.TYPE];
 
-    this.logger.debug('ReplicaHandler received message', {
+    this.logger.debug(REPLICA_HANDLER_LOG_MSG.MESSAGE_RECEIVED, {
       type,
       correlationId,
       operationId: payload?.operationId,
     });
 
     let response;
-    if (type === MessageType.CREATE_REPLICA) {
+    if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
       response = await this.handleCreateReplica(payload);
-    } else if (type === MessageType.REMOVE_REPLICA) {
+    } else if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
       response = await this.handleRemoveReplica(payload);
     } else {
+      const unknownMessageType = REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE;
       response = {
-        status: ResponseStatus.ERROR,
-        error: `Unknown message type: ${type}`,
+        status: ReplicaOperationResponseStatus.ERROR,
+        error: unknownMessageType(type),
       };
     }
 
@@ -137,36 +154,41 @@ class ReplicaHandler extends EventEmitter {
    * @return {Promise<Object>} Response.
    */
   async handleCreateReplica(request) {
-    const {
-      operationId,
-      partitionId,
-      replicaId,
-      tableName,
-      tableId,
-      schema,
-      keyRange,
-      leaderAddress,
-      replicaIds,
-      peerAddresses,
-    } = request;
+    const operationId = request?.[ReplicaOperationField.OPERATION_ID];
+    const partitionId = request?.[ReplicaOperationField.PARTITION_ID];
+    const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
 
-    this.logger.info('Handling CREATE_REPLICA request', {
+    this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_REQUEST, {
       operationId,
       partitionId,
       replicaId,
       nodeId: this.nodeId,
     });
 
+    if (!operationId || !partitionId || !replicaId) {
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.CREATE_MISSING_FIELDS, {
+        operationId,
+        partitionId,
+        replicaId,
+        nodeId: this.nodeId,
+      });
+      return {
+        status: ReplicaOperationResponseStatus.ERROR,
+        error: REPLICA_HANDLER_ERROR_MSG.CREATE_REQUIRED_FIELDS,
+        nodeId: this.nodeId,
+      };
+    }
+
     // Check idempotency - existing replica
-    const existingReplica = this.getLocalReplica(replicaId || partitionId);
+    const existingReplica = this.getLocalReplica(replicaId);
     if (existingReplica) {
       if (existingReplica.status === ReplicaStatus.ACTIVE) {
-        this.logger.info('Replica already exists in active state', {
+        this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_ALREADY_ACTIVE, {
           replicaId: existingReplica.replicaId,
           nodeId: this.nodeId,
         });
         return {
-          status: ResponseStatus.ALREADY_EXISTS,
+          status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
           replicaId: existingReplica.replicaId,
           nodeId: this.nodeId,
         };
@@ -174,13 +196,13 @@ class ReplicaHandler extends EventEmitter {
 
       if (existingReplica.status === ReplicaStatus.CREATING ||
           existingReplica.status === ReplicaStatus.SYNCING) {
-        this.logger.info('Replica creation already in progress', {
+        this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_IN_PROGRESS, {
           replicaId: existingReplica.replicaId,
           status: existingReplica.status,
           nodeId: this.nodeId,
         });
         return {
-          status: ResponseStatus.IN_PROGRESS,
+          status: ReplicaOperationResponseStatus.IN_PROGRESS,
           replicaId: existingReplica.replicaId,
           nodeId: this.nodeId,
         };
@@ -188,65 +210,55 @@ class ReplicaHandler extends EventEmitter {
     }
 
     // Check idempotency - in-progress operation
-    if (operationId && this.inProgressOperations.has(operationId)) {
-      this.logger.info('Operation already in progress', {
+    if (this.inProgressOperations.has(operationId)) {
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.OPERATION_IN_PROGRESS, {
         operationId,
         nodeId: this.nodeId,
       });
       return {
-        status: ResponseStatus.IN_PROGRESS,
+        status: ReplicaOperationResponseStatus.IN_PROGRESS,
         operationId,
         nodeId: this.nodeId,
       };
     }
 
-    // Generate replica ID if not provided
-    const newReplicaId = replicaId || uuidv4();
-
     // Track in-progress operation
-    if (operationId) {
-      this.inProgressOperations.set(operationId, {
-        type: MessageType.CREATE_REPLICA,
-        replicaId: newReplicaId,
-        partitionId,
-        startedAt: Date.now(),
-      });
-    }
+    this.inProgressOperations.set(operationId, {
+      type: ReplicaOperationMessageType.CREATE_REPLICA,
+      replicaId,
+      partitionId,
+      startedAt: Date.now(),
+    });
 
     // Track local replica
-    this.localReplicas.set(newReplicaId, {
-      replicaId: newReplicaId,
+    this.localReplicas.set(replicaId, {
+      replicaId,
       partitionId,
-      tableName,
+      tableName: null,
       status: ReplicaStatus.CREATING,
       service: null,
     });
 
-    // Start async creation
-    this.createReplicaAsync({
-      operationId,
-      partitionId,
-      replicaId: newReplicaId,
-      tableName,
-      tableId,
-      schema,
-      keyRange,
-      leaderAddress,
-      replicaIds,
-      peerAddresses: peerAddresses || [],
-    }).catch((error) => {
-      this.logger.error('Async replica creation failed', {
+    // Start async creation after ACK has returned.
+    setImmediate(() => {
+      this.createReplicaAsync({
         operationId,
-        replicaId: newReplicaId,
-        error: error.message,
-        stack: error.stack,
+        partitionId,
+        replicaId,
+      }).catch((error) => {
+        this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED, {
+          operationId,
+          replicaId,
+          error: error.message,
+          stack: error.stack,
+        });
       });
     });
 
     return {
-      status: ResponseStatus.INITIATED,
+      status: ReplicaOperationResponseStatus.INITIATED,
       operationId,
-      replicaId: newReplicaId,
+      replicaId,
       nodeId: this.nodeId,
     };
   }
@@ -262,65 +274,84 @@ class ReplicaHandler extends EventEmitter {
       operationId,
       partitionId,
       replicaId,
-      tableName,
-      tableId,
-      schema,
-      keyRange,
-      leaderAddress,
-      replicaIds,
-      peerAddresses,
     } = request;
 
     try {
+      const context = this.resolveReplicaContext(partitionId, replicaId);
+      const {
+        tableName,
+        tableId,
+        schema,
+        keyRange,
+        leaderAddress,
+        replicaIds,
+        peerAddresses,
+      } = context;
+
+      const replica = this.localReplicas.get(replicaId);
+      if (replica) {
+        replica.tableName = tableName;
+      }
+
       // Generate database path
       const dbPath = this.getPartitionDbPath(partitionId, replicaId);
 
-      // Create PartitionService instance if factory available
-      if (this.createPartitionService) {
-        const partitionService = await this.createPartitionService({
-          partitionId,
-          tableId: tableId || partitionId,
-          tableName,
-          schema,
-          keyRange,
-          replicaId,
-          replicaIds,
-          peerAddresses: peerAddresses || [], // Pass unified peer addresses for routing
-          nodeId: this.nodeId,
-          dbPath,
-          leaderAddress,
-        });
+      // Determine if this replica is joining an existing Raft group
+      // If peerAddresses are provided, this is a new replica joining existing peers
+      // It should start as a learner to avoid disrupting existing leadership
+      const isJoiningExistingGroup = peerAddresses && peerAddresses.length > 0;
 
-        // Update local tracking
-        const replica = this.localReplicas.get(replicaId);
-        if (replica) {
-          replica.service = partitionService;
-        }
+      const partitionService = await this.createPartitionService({
+        partitionId,
+        tableId,
+        tableName,
+        schema,
+        keyRange,
+        replicaId,
+        replicaIds,
+        peerAddresses: peerAddresses || [], // Pass unified peer addresses for routing
+        nodeId: this.nodeId,
+        dbPath,
+        leaderAddress,
+        isJoiningExistingGroup, // Start as learner if joining existing group
+      });
+
+      // Update local tracking
+      const createdReplica = this.localReplicas.get(replicaId);
+      if (createdReplica) {
+        createdReplica.service = partitionService;
       }
 
       // Update status to syncing (via CDC - coordinator will see this)
+      await this.updateOperationStep(operationId, WORKFLOW_STEP.SYNCING, {
+        replicaId,
+      });
       await this.updateReplicaStatus(replicaId, ReplicaStatus.SYNCING, {
         partitionId,
-        tableName,
       });
 
       // Sync from leader if address provided
-      const replica = this.localReplicas.get(replicaId);
-      if (replica?.service && leaderAddress) {
-        if (typeof replica.service.syncFromLeader === 'function') {
-          await replica.service.syncFromLeader(leaderAddress);
+      const replicaForSync = this.localReplicas.get(replicaId);
+      if (replicaForSync) {
+        replicaForSync.status = ReplicaStatus.SYNCING;
+      }
+      if (replicaForSync?.service && leaderAddress) {
+        if (typeof replicaForSync.service.syncFromLeader === REPLICA_HANDLER_TYPEOF.FUNCTION) {
+          await replicaForSync.service.syncFromLeader(leaderAddress);
         }
       }
 
       // Update status to active
+      await this.updateOperationStep(operationId, WORKFLOW_STEP.ACTIVE, {
+        replicaId,
+      });
       await this.updateReplicaStatus(replicaId, ReplicaStatus.ACTIVE, {
         partitionId,
-        tableName,
       });
 
       // Update local tracking
-      if (replica) {
-        replica.status = ReplicaStatus.ACTIVE;
+      if (replicaForSync) {
+        replicaForSync.status = ReplicaStatus.ACTIVE;
       }
 
       // Clean up in-progress tracking
@@ -328,21 +359,21 @@ class ReplicaHandler extends EventEmitter {
         this.inProgressOperations.delete(operationId);
       }
 
-      this.logger.info('Replica creation completed', {
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_COMPLETED, {
         operationId,
         replicaId,
         partitionId,
         nodeId: this.nodeId,
       });
 
-      this.emit('replicaCreated', {
+      this.emit(REPLICA_HANDLER_EVENT.CREATED, {
         operationId,
         replicaId,
         partitionId,
         nodeId: this.nodeId,
       });
     } catch (error) {
-      this.logger.error('Replica creation failed', {
+      this.logger.error(REPLICA_HANDLER_LOG_MSG.CREATE_FAILED, {
         operationId,
         replicaId,
         partitionId,
@@ -351,6 +382,10 @@ class ReplicaHandler extends EventEmitter {
       });
 
       // Update status to failed
+      await this.updateOperationStep(operationId, WORKFLOW_STEP.FAILED, {
+        replicaId,
+        errorMessage: error.message,
+      });
       await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
         partitionId,
         errorMessage: error.message,
@@ -367,13 +402,14 @@ class ReplicaHandler extends EventEmitter {
         this.inProgressOperations.delete(operationId);
       }
 
-      this.emit('replicaCreationFailed', {
+      this.emit(REPLICA_HANDLER_EVENT.CREATION_FAILED, {
         operationId,
         replicaId,
         partitionId,
         error: error.message,
         nodeId: this.nodeId,
       });
+      throw error;
     }
   }
 
@@ -385,9 +421,12 @@ class ReplicaHandler extends EventEmitter {
    * @return {Promise<Object>} Response.
    */
   async handleRemoveReplica(request) {
-    const {operationId, partitionId, replicaId, reason} = request;
+    const operationId = request?.[ReplicaOperationField.OPERATION_ID];
+    const partitionId = request?.[ReplicaOperationField.PARTITION_ID];
+    const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
+    const reason = request?.[ReplicaOperationField.REASON];
 
-    this.logger.info('Handling REMOVE_REPLICA request', {
+    this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_REQUEST, {
       operationId,
       partitionId,
       replicaId,
@@ -395,16 +434,30 @@ class ReplicaHandler extends EventEmitter {
       nodeId: this.nodeId,
     });
 
-    // Check if replica exists
-    const replica = this.getLocalReplica(replicaId);
-
-    if (!replica) {
-      this.logger.warn('Replica not found for removal', {
+    if (!operationId || !partitionId || !replicaId) {
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_MISSING_FIELDS, {
+        operationId,
+        partitionId,
         replicaId,
         nodeId: this.nodeId,
       });
       return {
-        status: ResponseStatus.NOT_FOUND,
+        status: ReplicaOperationResponseStatus.ERROR,
+        error: REPLICA_HANDLER_ERROR_MSG.REMOVE_REQUIRED_FIELDS,
+        nodeId: this.nodeId,
+      };
+    }
+
+    // Check if replica exists
+    const replica = this.getLocalReplica(replicaId);
+
+    if (!replica) {
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_NOT_FOUND, {
+        replicaId,
+        nodeId: this.nodeId,
+      });
+      return {
+        status: ReplicaOperationResponseStatus.NOT_FOUND,
         replicaId,
         nodeId: this.nodeId,
       };
@@ -412,12 +465,12 @@ class ReplicaHandler extends EventEmitter {
 
     // Check idempotency - already removing
     if (replica.status === ReplicaStatus.REMOVING) {
-      this.logger.info('Replica removal already in progress', {
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_IN_PROGRESS, {
         replicaId,
         nodeId: this.nodeId,
       });
       return {
-        status: ResponseStatus.IN_PROGRESS,
+        status: ReplicaOperationResponseStatus.IN_PROGRESS,
         replicaId,
         nodeId: this.nodeId,
       };
@@ -425,60 +478,60 @@ class ReplicaHandler extends EventEmitter {
 
     // Check idempotency - already removed
     if (replica.status === ReplicaStatus.REMOVED) {
-      this.logger.info('Replica already removed', {
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED, {
         replicaId,
         nodeId: this.nodeId,
       });
       return {
-        status: ResponseStatus.COMPLETED,
+        status: ReplicaOperationResponseStatus.COMPLETED,
         replicaId,
         nodeId: this.nodeId,
       };
     }
 
     // Check idempotency - in-progress operation
-    if (operationId && this.inProgressOperations.has(operationId)) {
-      this.logger.info('Operation already in progress', {
+    if (this.inProgressOperations.has(operationId)) {
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.OPERATION_IN_PROGRESS, {
         operationId,
         nodeId: this.nodeId,
       });
       return {
-        status: ResponseStatus.IN_PROGRESS,
+        status: ReplicaOperationResponseStatus.IN_PROGRESS,
         operationId,
         nodeId: this.nodeId,
       };
     }
 
     // Track in-progress operation
-    if (operationId) {
-      this.inProgressOperations.set(operationId, {
-        type: MessageType.REMOVE_REPLICA,
-        replicaId,
-        partitionId,
-        startedAt: Date.now(),
-      });
-    }
+    this.inProgressOperations.set(operationId, {
+      type: ReplicaOperationMessageType.REMOVE_REPLICA,
+      replicaId,
+      partitionId,
+      startedAt: Date.now(),
+    });
 
     // Update local status
     replica.status = ReplicaStatus.REMOVING;
 
-    // Start async removal
-    this.removeReplicaAsync({
-      operationId,
-      partitionId,
-      replicaId,
-      reason,
-    }).catch((error) => {
-      this.logger.error('Async replica removal failed', {
+    // Start async removal after ACK has returned.
+    setImmediate(() => {
+      this.removeReplicaAsync({
         operationId,
+        partitionId,
         replicaId,
-        error: error.message,
-        stack: error.stack,
+        reason,
+      }).catch((error) => {
+        this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_REMOVE_FAILED, {
+          operationId,
+          replicaId,
+          error: error.message,
+          stack: error.stack,
+        });
       });
     });
 
     return {
-      status: ResponseStatus.INITIATED,
+      status: ReplicaOperationResponseStatus.INITIATED,
       operationId,
       replicaId,
       nodeId: this.nodeId,
@@ -505,8 +558,8 @@ class ReplicaHandler extends EventEmitter {
       const service = replica?.service;
 
       // Graceful shutdown of service
-      if (service && typeof service.shutdown === 'function') {
-        this.logger.debug('Initiating graceful shutdown', {
+      if (service && typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
+        this.logger.debug(REPLICA_HANDLER_LOG_MSG.GRACEFUL_SHUTDOWN, {
           replicaId,
           nodeId: this.nodeId,
         });
@@ -517,23 +570,25 @@ class ReplicaHandler extends EventEmitter {
       await this.cleanupReplicaResources(partitionId, replicaId);
 
       // Update status to removed (via CDC)
+      await this.updateOperationStep(operationId, WORKFLOW_STEP.REMOVED, {
+        replicaId,
+      });
       await this.updateReplicaStatus(replicaId, ReplicaStatus.REMOVED, {
         partitionId,
       });
 
       // Delete service row from services table
-      if (this.cdcIntegrationService) {
-        try {
-          await this.cdcIntegrationService.deleteSystemTableRow(
-            SystemTableName.SERVICES,
-            {service_id: replicaId},
-          );
-        } catch (deleteError) {
-          this.logger.warn('Failed to delete service row', {
-            replicaId,
-            error: deleteError.message,
-          });
-        }
+      try {
+        await this.cdcIntegrationService.deleteSystemTableRow(
+          SystemTableName.SERVICES,
+          {service_id: replicaId},
+        );
+      } catch (deleteError) {
+        this.logger.warn(REPLICA_HANDLER_LOG_MSG.DELETE_SERVICE_ROW_FAILED, {
+          replicaId,
+          error: deleteError.message,
+        });
+        throw deleteError;
       }
 
       // Update local tracking
@@ -549,7 +604,7 @@ class ReplicaHandler extends EventEmitter {
         this.inProgressOperations.delete(operationId);
       }
 
-      this.logger.info('Replica removal completed', {
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_COMPLETED, {
         operationId,
         replicaId,
         partitionId,
@@ -557,7 +612,7 @@ class ReplicaHandler extends EventEmitter {
         nodeId: this.nodeId,
       });
 
-      this.emit('replicaRemoved', {
+      this.emit(REPLICA_HANDLER_EVENT.REMOVED, {
         operationId,
         replicaId,
         partitionId,
@@ -565,7 +620,7 @@ class ReplicaHandler extends EventEmitter {
         nodeId: this.nodeId,
       });
     } catch (error) {
-      this.logger.error('Replica removal failed', {
+      this.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
         operationId,
         replicaId,
         partitionId,
@@ -574,6 +629,10 @@ class ReplicaHandler extends EventEmitter {
       });
 
       // Update status to failed
+      await this.updateOperationStep(operationId, WORKFLOW_STEP.FAILED, {
+        replicaId,
+        errorMessage: error.message,
+      });
       await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
         partitionId,
         errorMessage: error.message,
@@ -590,18 +649,21 @@ class ReplicaHandler extends EventEmitter {
         this.inProgressOperations.delete(operationId);
       }
 
-      this.emit('replicaRemovalFailed', {
+      this.emit(REPLICA_HANDLER_EVENT.REMOVAL_FAILED, {
         operationId,
         replicaId,
         partitionId,
         error: error.message,
         nodeId: this.nodeId,
       });
+      throw error;
     }
   }
 
   /**
    * Update replica status via CDC.
+   * Uses upsert to ensure the status is persisted even if the row doesn't exist yet
+   * (handles race conditions during replica creation).
    * @param {string} replicaId - Replica ID.
    * @param {string} newStatus - New status.
    * @param {Object} additionalData - Additional data to update.
@@ -609,31 +671,267 @@ class ReplicaHandler extends EventEmitter {
    * @private
    */
   async updateReplicaStatus(replicaId, newStatus, additionalData = {}) {
-    this.logger.debug('Updating replica status', {
+    this.logger.debug(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS, {
       replicaId,
       newStatus,
       nodeId: this.nodeId,
     });
 
-    if (!this.cdcIntegrationService) {
-      this.logger.debug('CDC integration service not available');
-      return;
-    }
-
     try {
-      await this.cdcIntegrationService.updateSystemTableRow(
+      const now = Date.now();
+      const existing = this.systemTableCache.get(SystemTableName.SERVICES, replicaId);
+      const partitionId = additionalData.partitionId !== undefined ?
+        additionalData.partitionId :
+        (existing?.partition_id || null);
+      const addressManager = AddressManager.getInstance();
+      const address = existing?.address ||
+        addressManager.format(this.nodeId, REPLICA_HANDLER_SERVICE.TYPE, replicaId);
+
+      // Upsert with full column set to avoid dropping existing fields.
+      await this.cdcIntegrationService.upsertSystemTableRow(
         SystemTableName.SERVICES,
-        {service_id: replicaId},
-        {status: newStatus, ...additionalData},
+        {
+          service_id: replicaId,
+          service_type: existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
+          node_id: existing?.node_id || this.nodeId,
+          partition_id: partitionId,
+          group_id: existing?.group_id || null,
+          replica_id: existing?.replica_id || replicaId,
+          raft_role: existing?.raft_role || null,
+          status: newStatus,
+          state_entered_at: existing?.state_entered_at || null,
+          previous_state: existing?.previous_state || null,
+          trigger_reason: existing?.trigger_reason || null,
+          error_message: additionalData.errorMessage || existing?.error_message || null,
+          address,
+          created_at: existing?.created_at || now,
+          updated_at: now,
+        },
       );
     } catch (error) {
-      this.logger.error('Failed to update replica status via CDC', {
+      this.logger.error(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
         replicaId,
         newStatus,
         error: error.message,
       });
-      // Don't throw - status update failure shouldn't block operation
+      throw error;
     }
+  }
+
+  /**
+   * Update replica operation workflow step via CDC.
+   * @param {string} operationId - Operation ID.
+   * @param {string} workflowStep - Workflow step name.
+   * @param {Object} [options={}] - Optional data for updates.
+   * @param {string} [options.replicaId] - Replica ID to set if missing.
+   * @param {string} [options.errorMessage] - Error message for failures.
+   * @return {Promise<void>}
+   * @private
+   */
+  async updateOperationStep(operationId, workflowStep, options = {}) {
+    if (!operationId) {
+      return;
+    }
+
+    const existing = this.systemTableCache.get(
+      SystemTableName.REPLICA_OPERATIONS,
+      operationId,
+    );
+
+    if (!existing && !options.replicaId) {
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.OPERATION_NOT_FOUND, {
+        operationId,
+        workflowStep,
+        nodeId: this.nodeId,
+      });
+      return;
+    }
+
+    const now = Date.now();
+    let stepsHistory = [];
+    if (Array.isArray(existing?.steps_history)) {
+      stepsHistory = [...existing.steps_history];
+    } else if (existing?.steps_history) {
+      try {
+        stepsHistory = JSON.parse(existing.steps_history);
+      } catch (error) {
+        this.logger.warn(REPLICA_HANDLER_LOG_MSG.PARSE_STEPS_HISTORY_FAILED, {
+          operationId,
+          error: error.message,
+        });
+        throw error;
+      }
+    }
+
+    stepsHistory.push({step: workflowStep, timestamp: now});
+
+    const status = workflowStep === WORKFLOW_STEP.FAILED ?
+      ReplicaStatus.FAILED :
+      (WORKFLOW_STEP_TO_STATUS[workflowStep] ||
+        existing?.status ||
+        ReplicaStatus.PENDING);
+
+    const updateData = {
+      workflow_step: workflowStep,
+      status,
+      updated_at: now,
+      steps_history: JSON.stringify(stepsHistory),
+    };
+
+    if (options.replicaId) {
+      updateData.replica_id = options.replicaId;
+    }
+    if (options.errorMessage) {
+      updateData.error_message = options.errorMessage;
+    }
+    if (REPLICA_HANDLER_WORKFLOW.COMPLETION_STEPS.includes(workflowStep)) {
+      updateData.completed_at = now;
+    }
+
+    try {
+      if (!existing) {
+        await this.cdcIntegrationService.upsertSystemTableRow(
+          SystemTableName.REPLICA_OPERATIONS,
+          {
+            operation_id: operationId,
+            replica_id: options.replicaId,
+            partition_id: options.partitionId || null,
+            workflow_step: updateData.workflow_step,
+            status: updateData.status,
+            steps_history: updateData.steps_history,
+            error_message: updateData.error_message || null,
+            created_at: now,
+            updated_at: now,
+            completed_at: updateData.completed_at || null,
+          },
+        );
+        return;
+      }
+
+      await this.cdcIntegrationService.updateSystemTableRow(
+        SystemTableName.REPLICA_OPERATIONS,
+        {operation_id: operationId},
+        updateData,
+      );
+    } catch (error) {
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
+        operationId,
+        workflowStep,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Resolve replica metadata from the system table cache.
+   * @param {string} partitionId - Partition ID.
+   * @param {string} replicaId - Replica ID.
+   * @return {Object} Resolved metadata.
+   * @private
+   */
+  resolveReplicaContext(partitionId, replicaId) {
+    if (!this.systemTableCache) {
+      throw new Error(REPLICA_HANDLER_ERROR_MSG.CACHE_NOT_AVAILABLE);
+    }
+    if (typeof this.systemTableCache.filter !== REPLICA_HANDLER_TYPEOF.FUNCTION) {
+      throw new Error(REPLICA_HANDLER_ERROR_MSG.CACHE_MISSING_FILTER);
+    }
+
+    const partition = this.systemTableCache.get(
+      SystemTableName.PARTITIONS,
+      partitionId,
+    );
+    if (!partition) {
+      const partitionMetadataMissing = REPLICA_HANDLER_ERROR_MSG.PARTITION_METADATA_MISSING;
+      throw new Error(partitionMetadataMissing(partitionId));
+    }
+
+    const table = this.systemTableCache.get(SystemTableName.TABLES, partition.table_id);
+    if (!table) {
+      const tableMetadataMissing = REPLICA_HANDLER_ERROR_MSG.TABLE_METADATA_MISSING;
+      throw new Error(tableMetadataMissing(partition.table_id));
+    }
+
+    let schema = null;
+    try {
+      schema = typeof table.schema_definition === REPLICA_HANDLER_TYPEOF.STRING ?
+        JSON.parse(table.schema_definition) :
+        table.schema_definition;
+    } catch (error) {
+      const schemaParseFailed = REPLICA_HANDLER_ERROR_MSG.SCHEMA_PARSE_FAILED;
+      throw new Error(schemaParseFailed(error.message));
+    }
+
+    const keyRange = {
+      start: partition.partition_key_start || null,
+      end: partition.partition_key_end || null,
+    };
+
+    const services = this.systemTableCache.filter(
+      SystemTableName.SERVICES,
+      (service) =>
+        service.partition_id === partitionId &&
+        service.service_type === REPLICA_HANDLER_SERVICE.TYPE,
+    );
+
+    const addressManager = AddressManager.getInstance();
+    const replicaIds = [];
+    const peerAddresses = [];
+    const seenReplicaIds = new Set();
+
+    for (const service of services) {
+      const serviceReplicaId = service.service_id || service.replica_id;
+      if (!serviceReplicaId) {
+        continue;
+      }
+      if (!seenReplicaIds.has(serviceReplicaId)) {
+        seenReplicaIds.add(serviceReplicaId);
+        replicaIds.push(serviceReplicaId);
+      }
+
+      const peerAddress = service.address ||
+        addressManager.format(service.node_id, REPLICA_HANDLER_SERVICE.TYPE, serviceReplicaId);
+      if (!peerAddresses.includes(peerAddress)) {
+        peerAddresses.push(peerAddress);
+      }
+    }
+
+    if (replicaId && !seenReplicaIds.has(replicaId)) {
+      replicaIds.push(replicaId);
+      seenReplicaIds.add(replicaId);
+
+      const selfAddress = addressManager.format(
+        this.nodeId,
+        REPLICA_HANDLER_SERVICE.TYPE,
+        replicaId,
+      );
+      if (!peerAddresses.includes(selfAddress)) {
+        peerAddresses.push(selfAddress);
+      }
+    }
+
+    let leaderAddress = null;
+    const leaderService = services.find((service) => service.raft_role === STATE.LEADER);
+
+    if (leaderService) {
+      leaderAddress = leaderService.address ||
+        addressManager.format(
+          leaderService.node_id,
+          REPLICA_HANDLER_SERVICE.TYPE,
+          leaderService.service_id,
+        );
+    }
+
+    return {
+      tableId: partition.table_id,
+      tableName: table.table_name,
+      schema,
+      keyRange,
+      leaderAddress,
+      replicaIds,
+      peerAddresses,
+    };
   }
 
   /**
@@ -646,7 +944,7 @@ class ReplicaHandler extends EventEmitter {
   async cleanupReplicaResources(partitionId, replicaId) {
     const dbPath = this.getPartitionDbPath(partitionId, replicaId);
 
-    this.logger.debug('Cleaning up replica resources', {
+    this.logger.debug(REPLICA_HANDLER_LOG_MSG.CLEANUP_RESOURCES, {
       replicaId,
       partitionId,
       dbPath,
@@ -657,7 +955,7 @@ class ReplicaHandler extends EventEmitter {
       // Remove SQLite database file
       if (fs.existsSync(dbPath)) {
         fs.unlinkSync(dbPath);
-        this.logger.debug('Removed database file', {dbPath});
+        this.logger.debug(REPLICA_HANDLER_LOG_MSG.REMOVED_DB_FILE, {dbPath});
       }
 
       // Remove WAL and SHM files if they exist
@@ -675,20 +973,25 @@ class ReplicaHandler extends EventEmitter {
       const partitionDir = path.dirname(dbPath);
       try {
         const files = fs.readdirSync(partitionDir);
-        if (files.length === 0) {
+        if (files.length === REPLICA_HANDLER_NUM.ZERO) {
           fs.rmdirSync(partitionDir);
-          this.logger.debug('Removed empty partition directory', {partitionDir});
+          this.logger.debug(REPLICA_HANDLER_LOG_MSG.REMOVED_EMPTY_DIR, {partitionDir});
         }
-      } catch {
-        // Ignore errors when removing directory
+      } catch (dirError) {
+        this.logger.warn(REPLICA_HANDLER_LOG_MSG.CLEANUP_FAILED, {
+          replicaId,
+          dbPath,
+          error: dirError.message,
+        });
+        throw dirError;
       }
     } catch (error) {
-      this.logger.warn('Error cleaning up replica resources', {
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.CLEANUP_FAILED, {
         replicaId,
         dbPath,
         error: error.message,
       });
-      // Don't throw - cleanup errors shouldn't fail the removal
+      throw error;
     }
   }
 
@@ -702,9 +1005,9 @@ class ReplicaHandler extends EventEmitter {
   getPartitionDbPath(partitionId, replicaId) {
     return path.join(
       this.dataDir,
-      'partitions',
+      STORAGE_DEFAULT.PARTITIONS_DIRNAME,
       partitionId,
-      `${replicaId}.db`,
+      `${replicaId}${STORAGE_DEFAULT.DB_EXT}`,
     );
   }
 
@@ -740,7 +1043,7 @@ class ReplicaHandler extends EventEmitter {
 
     // Idempotent: no error on duplicate registration
     if (this.localReplicas.has(replicaId)) {
-      this.logger.debug('Replica already registered', {
+      this.logger.debug(REPLICA_HANDLER_LOG_MSG.ALREADY_REGISTERED, {
         replicaId,
         nodeId: this.nodeId,
       });
@@ -755,7 +1058,7 @@ class ReplicaHandler extends EventEmitter {
       service: service || null,
     });
 
-    this.logger.info('Registered existing replica', {
+    this.logger.info(REPLICA_HANDLER_LOG_MSG.REGISTERED_REPLICA, {
       replicaId,
       partitionId,
       tableName,
@@ -778,7 +1081,7 @@ class ReplicaHandler extends EventEmitter {
 
   /**
    * Register this handler with a message router.
-   * Registers at ${nodeId}/replica-handler address.
+   * Registers at ${nodeId}/service/replica-handler address.
    * Requirements: 3.1
    * @param {Object} messageRouter - Message router instance.
    * @param {Object} [options={}] - Registration options.
@@ -786,11 +1089,12 @@ class ReplicaHandler extends EventEmitter {
    */
   registerWithRouter(messageRouter, options = {}) {
     if (!messageRouter) {
-      this.logger.warn('No message router provided for registration');
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.NO_MESSAGE_ROUTER);
       return;
     }
 
-    const handlerAddress = `${this.nodeId}/replica-handler`;
+    const handlerAddress = `${this.nodeId}/${REPLICA_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
+      `${REPLICA_HANDLER_ADDRESS.HANDLER_ID}`;
 
     // Store RPC client if provided
     if (options.rpcClient) {
@@ -812,7 +1116,7 @@ class ReplicaHandler extends EventEmitter {
 
     messageRouter.register(handlerAddress, routerHandler);
 
-    this.logger.info('Registered ReplicaHandler with message router', {
+    this.logger.info(REPLICA_HANDLER_LOG_MSG.REGISTERED_ROUTER, {
       address: handlerAddress,
       nodeId: this.nodeId,
     });
@@ -827,10 +1131,11 @@ class ReplicaHandler extends EventEmitter {
       return;
     }
 
-    const handlerAddress = `${this.nodeId}/replica-handler`;
+    const handlerAddress = `${this.nodeId}/${REPLICA_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
+      `${REPLICA_HANDLER_ADDRESS.HANDLER_ID}`;
     messageRouter.unregister(handlerAddress);
 
-    this.logger.info('Unregistered ReplicaHandler from message router', {
+    this.logger.info(REPLICA_HANDLER_LOG_MSG.UNREGISTERED_ROUTER, {
       address: handlerAddress,
       nodeId: this.nodeId,
     });
@@ -840,7 +1145,7 @@ class ReplicaHandler extends EventEmitter {
    * Shutdown the replica handler.
    */
   shutdown() {
-    this.logger.info('Shutting down ReplicaHandler', {
+    this.logger.info(REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN, {
       nodeId: this.nodeId,
     });
 
@@ -848,12 +1153,10 @@ class ReplicaHandler extends EventEmitter {
     this.localReplicas.clear();
     this.initialized = false;
 
-    this.emit('shutdown', {nodeId: this.nodeId});
+    this.emit(REPLICA_HANDLER_EVENT.SHUTDOWN, {nodeId: this.nodeId});
   }
 }
 
 export {
   ReplicaHandler,
-  MessageType,
-  ResponseStatus,
 };

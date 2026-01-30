@@ -10,7 +10,7 @@
  * 4. Handle timeout if ACK is not received
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaLifecycleManager,
@@ -42,9 +42,25 @@ function createMockCDCService() {
       operations.push({type: 'delete', tableName, whereClause});
       return {success: true};
     },
+    async upsertSystemTableRow(tableName, data) {
+      operations.push({type: 'upsert', tableName, data});
+      return {success: true};
+    },
     reset() {
       operations.length = 0;
     },
+  };
+}
+
+/**
+ * Create a mock system table cache.
+ * @return {Object} Mock system table cache.
+ */
+function createMockSystemTableCache() {
+  return {
+    filter: (_tableName, _predicate) => [],
+    get: (_tableName, _key) => null,
+    set: (_tableName, _key, _value) => {},
   };
 }
 
@@ -95,6 +111,7 @@ test('Property 77: Replica Lifecycle Message Delivery', async (t) => {
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
+            systemTableCache: createMockSystemTableCache(),
             cdcIntegrationService: mockCDC,
             createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
@@ -142,7 +159,9 @@ test('Property 77: Replica Lifecycle Message Delivery', async (t) => {
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
+            systemTableCache: createMockSystemTableCache(),
             cdcIntegrationService: mockCDC,
+            createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
           });
 
@@ -190,8 +209,13 @@ test('Property 77: Replica Lifecycle Message Delivery', async (t) => {
         fc.uuid(), // partition_id
         fc.uuid(), // replica_id
         async (requestId, partitionId, replicaId) => {
+          const mockCDC = createMockCDCService();
+
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
+            systemTableCache: createMockSystemTableCache(),
+            cdcIntegrationService: mockCDC,
+            createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
           });
 
@@ -221,10 +245,9 @@ test('Property 77: Replica Lifecycle Message Delivery', async (t) => {
   });
 
   /**
-   * Property: For any lifecycle message, the pending operation is tracked
-   * with the correct request_id.
+   * Property: For any lifecycle message, the ACK contains the correct node_id.
    */
-  t.test('pending operations are tracked with request_id', async (t) => {
+  t.test('ACK contains correct node_id', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.uuid(), // request_id
@@ -232,9 +255,11 @@ test('Property 77: Replica Lifecycle Message Delivery', async (t) => {
         fc.uuid(), // replica_id
         async (requestId, partitionId, replicaId) => {
           const mockCDC = createMockCDCService();
+          const nodeId = 'test-node-' + requestId.slice(0, 8);
 
           const manager = new ReplicaLifecycleManager({
-            nodeId: 'test-node',
+            nodeId,
+            systemTableCache: createMockSystemTableCache(),
             cdcIntegrationService: mockCDC,
             createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
@@ -250,21 +275,17 @@ test('Property 77: Replica Lifecycle Message Delivery', async (t) => {
             table_id: partitionId,
           };
 
-          await manager.handleCreateReplica(message);
-
-          const pending = manager.getPendingOperation(requestId);
+          const ack = await manager.handleCreateReplica(message);
 
           manager.shutdown();
 
-          // Pending operation should be tracked
-          return pending !== null &&
-            pending.partition_id === partitionId &&
-            pending.replica_id === replicaId;
+          // ACK should contain the correct node_id
+          return ack.node_id === nodeId;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('pending operations are tracked with request_id');
+    t.pass('ACK contains correct node_id');
   });
 });

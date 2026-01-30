@@ -7,11 +7,13 @@
 import pino from 'pino';
 import {v4 as uuidv4} from 'uuid';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-
-/**
- * Log levels in order of severity.
- */
-const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {
+  LOG_LEVELS,
+  LOGGING_DEFAULT,
+  LOGGING_LOG_MSG,
+  LOGGING_PRETTY,
+} from './logging-constants.js';
 
 /**
  * LoggingService provides structured logging with bootstrap buffering.
@@ -26,7 +28,7 @@ class LoggingService {
   constructor() {
     this.buffer = [];
     this.logsTableReady = false;
-    this.maxBufferSize = 1000;
+    this.maxBufferSize = LOGGING_DEFAULT.MAX_BUFFER_SIZE;
     this.flushCallback = null;
     this.nodeId = null;
     this.logger = null;
@@ -58,11 +60,15 @@ class LoggingService {
   initialize(options = {}) {
     const config = ConfigurationManager.getInstance();
 
-    this.nodeId = options.nodeId || config.get('node.id') || 'unknown';
-    this.maxBufferSize = options.bufferSize || config.get('logging.bufferSize') || 1000;
+    this.nodeId = options.nodeId || config.get(CONFIG_KEY.NODE_ID) || LOGGING_DEFAULT.NODE_ID;
+    this.maxBufferSize =
+      options.bufferSize || config.get(CONFIG_KEY.LOGGING_BUFFER_SIZE) ||
+      LOGGING_DEFAULT.MAX_BUFFER_SIZE;
 
-    const level = options.level || config.get('logging.level') || 'info';
-    const prettyPrint = options.prettyPrint ?? config.get('logging.prettyPrint') ?? false;
+    const level = options.level || config.get(CONFIG_KEY.LOGGING_LEVEL) || LOGGING_DEFAULT.LEVEL;
+    const prettyPrint =
+      options.prettyPrint ?? config.get(CONFIG_KEY.LOGGING_PRETTY_PRINT) ??
+      LOGGING_DEFAULT.PRETTY_PRINT;
 
     // Configure pino logger
     const pinoOptions = {
@@ -76,11 +82,11 @@ class LoggingService {
 
     if (prettyPrint) {
       this.logger = pino(pinoOptions, pino.transport({
-        target: 'pino-pretty',
+        target: LOGGING_PRETTY.TARGET,
         options: {
-          colorize: true,
-          translateTime: 'SYS:standard',
-          singleLine: true,
+          colorize: LOGGING_PRETTY.COLORIZE,
+          translateTime: LOGGING_PRETTY.TRANSLATE_TIME,
+          singleLine: LOGGING_PRETTY.SINGLE_LINE,
         },
       }));
     } else {
@@ -239,7 +245,7 @@ class LoggingService {
     this.logsTableReady = true;
     this.flushCallback = writeCallback;
 
-    this.info('Logs table ready, flushing buffer', {
+    this.info(LOGGING_LOG_MSG.LOGS_TABLE_READY, {
       bufferedEntries: this.buffer.length,
     });
 

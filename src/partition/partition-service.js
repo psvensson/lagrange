@@ -11,41 +11,74 @@ import path from 'path';
 import Database from 'better-sqlite3';
 import LifeRaft from '@markwylde/liferaft';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {UnifiedRebalancer, EntityType} from '../rebalancer/unified-rebalancer.js';
+import {RebalanceCoordinator} from '../rebalancer/rebalance-coordinator.js';
+import {assertCritical} from '../utils/assert.js';
 import {PendingRequestTracker} from './pending-request-tracker.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SystemTableName,
+} from '../bootstrap/system-table-schemas-constants.js';
 import {AddressManager} from '../address/address-manager.js';
+import {NodeService as nodeServiceClass} from '../node/node-service.js';
+import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
+import {
+  COLUMN,
+  CDC_OPERATION,
+  ENTITY_TYPE,
+  ERRORS,
+  NUM,
+  SQL,
+  SERVICE_TYPE,
+  STATE,
+  STRING,
+  TABLES,
+  TIME_MS,
+} from '../constants/index.js';
+import {PARTITION_RAFT_ROLE, PARTITION_STATE, PARTITION_SUBSYSTEM} from './partition-constants.js';
+import {
+  PARTITION_SERVICE_ADDRESS,
+  PARTITION_SERVICE_COLUMN,
+  PARTITION_SERVICE_COLUMN_SQL,
+  PARTITION_SERVICE_DB,
+  PARTITION_SERVICE_DEFAULT,
+  PARTITION_SERVICE_ERROR_MSG,
+  PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_LIFERAFT_TIMER,
+  PARTITION_SERVICE_LOG_MSG,
+  PARTITION_SERVICE_MESSAGE_TYPE,
+  PARTITION_SERVICE_OPERATION,
+  PARTITION_SERVICE_REASON,
+  PARTITION_SERVICE_ROLE,
+  PARTITION_SERVICE_SQL,
+  PARTITION_SERVICE_SQL_FRAGMENT,
+  PARTITION_SERVICE_STATE_KEY,
+  PARTITION_SERVICE_STATUS,
+  PARTITION_SERVICE_TYPE,
+  PARTITION_SERVICE_VALUE,
+} from './partition-service-constants.js';
+
+const getNodeService = () => nodeServiceClass.getInstance();
 
 /**
  * Partition state enumeration.
  */
-const PartitionState = {
-  NORMAL: 'NORMAL',
-  SPLITTING: 'SPLITTING',
-  MERGING: 'MERGING',
-};
+const PartitionState = PARTITION_STATE;
 
 /**
  * Raft role enumeration.
  */
-const RaftRole = {
-  FOLLOWER: 'follower',
-  CANDIDATE: 'candidate',
-  LEADER: 'leader',
-};
+const RaftRole = PARTITION_RAFT_ROLE;
 
 /**
  * CDC operation types.
  */
-const CDCOperation = {
-  INSERT: 'INSERT',
-  UPDATE: 'UPDATE',
-  DELETE: 'DELETE',
-};
+const CDCOperation = CDC_OPERATION;
 
 /**
  * Raft log entry for partition operations.
@@ -78,10 +111,10 @@ class SQLiteRaftStorage {
   constructor(db, partitionId) {
     this.db = db;
     this.partitionId = partitionId;
-    this.currentTerm = 0;
+    this.currentTerm = NUM.ZERO;
     this.votedFor = null;
-    this.commitIndex = 0;
-    this.lastApplied = 0;
+    this.commitIndex = NUM.ZERO;
+    this.lastApplied = NUM.ZERO;
 
     // In-memory log for Raft entries
     this.log = [];
@@ -95,22 +128,10 @@ class SQLiteRaftStorage {
    */
   initializeRaftTables() {
     // Create Raft state table
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS _raft_state (
-        key TEXT PRIMARY KEY,
-        value TEXT
-      )
-    `);
+    this.db.exec(PARTITION_SERVICE_SQL.CREATE_RAFT_STATE_TABLE);
 
     // Create Raft log table
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS _raft_log (
-        log_index INTEGER PRIMARY KEY,
-        term INTEGER NOT NULL,
-        command TEXT NOT NULL,
-        timestamp INTEGER NOT NULL
-      )
-    `);
+    this.db.exec(PARTITION_SERVICE_SQL.CREATE_RAFT_LOG_TABLE);
 
     // Load persisted state
     this.loadPersistedState();
@@ -122,22 +143,22 @@ class SQLiteRaftStorage {
    */
   loadPersistedState() {
     const termRow = this.db.prepare(
-      'SELECT value FROM _raft_state WHERE key = ?',
-    ).get('currentTerm');
+      PARTITION_SERVICE_SQL.SELECT_RAFT_STATE_VALUE,
+    ).get(PARTITION_SERVICE_STATE_KEY.CURRENT_TERM);
     if (termRow) {
-      this.currentTerm = parseInt(termRow.value, 10);
+      this.currentTerm = parseInt(termRow.value, NUM.TEN);
     }
 
     const votedRow = this.db.prepare(
-      'SELECT value FROM _raft_state WHERE key = ?',
-    ).get('votedFor');
+      PARTITION_SERVICE_SQL.SELECT_RAFT_STATE_VALUE,
+    ).get(PARTITION_SERVICE_STATE_KEY.VOTED_FOR);
     if (votedRow) {
       this.votedFor = votedRow.value;
     }
 
     // Load log entries
     const entries = this.db.prepare(
-      'SELECT log_index, term, command, timestamp FROM _raft_log ORDER BY log_index',
+      PARTITION_SERVICE_SQL.SELECT_RAFT_LOGS,
     ).all();
 
     this.log = entries.map((row) => new PartitionRaftLogEntry(
@@ -146,8 +167,8 @@ class SQLiteRaftStorage {
       JSON.parse(row.command),
     ));
 
-    if (this.log.length > 0) {
-      this.commitIndex = this.log[this.log.length - 1].index;
+    if (this.log.length > NUM.ZERO) {
+      this.commitIndex = this.log[this.log.length - NUM.ONE].index;
       this.lastApplied = this.commitIndex;
     }
   }
@@ -157,8 +178,8 @@ class SQLiteRaftStorage {
    */
   persistTerm() {
     this.db.prepare(
-      'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
-    ).run('currentTerm', String(this.currentTerm));
+      PARTITION_SERVICE_SQL.UPSERT_RAFT_STATE,
+    ).run(PARTITION_SERVICE_STATE_KEY.CURRENT_TERM, String(this.currentTerm));
   }
 
   /**
@@ -166,8 +187,8 @@ class SQLiteRaftStorage {
    */
   persistVotedFor() {
     this.db.prepare(
-      'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
-    ).run('votedFor', this.votedFor || '');
+      PARTITION_SERVICE_SQL.UPSERT_RAFT_STATE,
+    ).run(PARTITION_SERVICE_STATE_KEY.VOTED_FOR, this.votedFor || STRING.EMPTY);
   }
 
   /**
@@ -176,13 +197,13 @@ class SQLiteRaftStorage {
    * @return {PartitionRaftLogEntry} The appended entry.
    */
   appendEntry(data) {
-    const index = this.log.length + 1;
+    const index = this.log.length + NUM.ONE;
     const entry = new PartitionRaftLogEntry(this.currentTerm, index, data);
     this.log.push(entry);
 
     // Persist to SQLite - use INSERT OR REPLACE to handle edge cases gracefully
     this.db.prepare(
-      'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)',
+      PARTITION_SERVICE_SQL.UPSERT_RAFT_LOG,
     ).run(entry.index, entry.term, JSON.stringify(entry.data), entry.timestamp);
 
     return entry;
@@ -194,10 +215,10 @@ class SQLiteRaftStorage {
    * @return {Array<PartitionRaftLogEntry>} Log entries.
    */
   getEntriesFrom(startIndex) {
-    if (startIndex < 1) {
+    if (startIndex < NUM.ONE) {
       return [...this.log];
     }
-    return this.log.slice(startIndex - 1);
+    return this.log.slice(startIndex - NUM.ONE);
   }
 
   /**
@@ -205,7 +226,7 @@ class SQLiteRaftStorage {
    * @return {PartitionRaftLogEntry|null} Last entry or null.
    */
   getLastEntry() {
-    return this.log.length > 0 ? this.log[this.log.length - 1] : null;
+    return this.log.length > NUM.ZERO ? this.log[this.log.length - NUM.ONE] : null;
   }
 
   /**
@@ -214,10 +235,10 @@ class SQLiteRaftStorage {
    * @return {PartitionRaftLogEntry|null} Entry or null.
    */
   getEntry(index) {
-    if (index < 1 || index > this.log.length) {
+    if (index < NUM.ONE || index > this.log.length) {
       return null;
     }
-    return this.log[index - 1];
+    return this.log[index - NUM.ONE];
   }
 
   /**
@@ -225,11 +246,11 @@ class SQLiteRaftStorage {
    * @param {number} fromIndex - Index to truncate from (1-based).
    */
   truncateFrom(fromIndex) {
-    if (fromIndex >= 1 && fromIndex <= this.log.length) {
-      this.log = this.log.slice(0, fromIndex - 1);
+    if (fromIndex >= NUM.ONE && fromIndex <= this.log.length) {
+      this.log = this.log.slice(NUM.ZERO, fromIndex - NUM.ONE);
 
       // Truncate in SQLite
-      this.db.prepare('DELETE FROM _raft_log WHERE log_index >= ?').run(fromIndex);
+      this.db.prepare(PARTITION_SERVICE_SQL.DELETE_RAFT_LOG_FROM).run(fromIndex);
     }
   }
 
@@ -267,36 +288,45 @@ class PartitionService extends EventEmitter {
     super();
 
     if (!options.partitionId) {
-      throw new Error('PartitionService requires partitionId');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.REQUIRE_PARTITION_ID);
     }
     if (!options.tableId) {
-      throw new Error('PartitionService requires tableId');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.REQUIRE_TABLE_ID);
     }
     if (!options.replicaId) {
-      throw new Error('PartitionService requires replicaId');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.REQUIRE_REPLICA_ID);
     }
 
     this.partitionId = options.partitionId;
     this.tableId = options.tableId;
     this.tableName = options.tableName || options.tableId;
     this.schema = options.schema || null;
-    this.keyRange = options.keyRange || {start: null, end: null};
+    this.keyRange = options.keyRange || {
+      start: PARTITION_SERVICE_DEFAULT.KEY_RANGE_START,
+      end: PARTITION_SERVICE_DEFAULT.KEY_RANGE_END,
+    };
     this.replicaId = options.replicaId;
     this.replicaIds = options.replicaIds || [this.replicaId];
-    this.nodeId = options.nodeId || 'unknown';
+    this.nodeId = options.nodeId || PARTITION_SERVICE_DEFAULT.NODE_ID;
     this.transport = options.transport || null;
-    this.dbPath = options.dbPath || ':memory:';
+    this.dbPath = options.dbPath || PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH;
 
     // Unified address format: {nodeId}/partition/{replicaId}
     // Requirements: 1.1, 1.4, 5.1
     const addressManager = AddressManager.getInstance();
-    this.unifiedAddress = addressManager.format(this.nodeId, 'partition', this.replicaId);
+    this.unifiedAddress = addressManager.format(this.nodeId, ENTITY_TYPE.PARTITION, this.replicaId);
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.defaultReplicaCount = config.get('partition.defaultReplicaCount') || 3;
-    this.sizeUpdateDebounceMs = config.get('partition.sizeUpdateDebounceMs') || 5000;
-    this.sizeUpdateIntervalMs = config.get('partition.sizeUpdateIntervalMs') || 60000;
+    this.defaultReplicaCount =
+      config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) ||
+      PARTITION_SERVICE_DEFAULT.DEFAULT_REPLICA_COUNT;
+    this.sizeUpdateDebounceMs =
+      config.get(CONFIG_KEY.PARTITION_SIZE_UPDATE_DEBOUNCE_MS) ||
+      PARTITION_SERVICE_DEFAULT.SIZE_UPDATE_DEBOUNCE_MS;
+    this.sizeUpdateIntervalMs =
+      config.get(CONFIG_KEY.PARTITION_SIZE_UPDATE_INTERVAL_MS) ||
+      PARTITION_SERVICE_DEFAULT.SIZE_UPDATE_INTERVAL_MS;
 
     // SQLite database
     this.db = null;
@@ -306,14 +336,22 @@ class PartitionService extends EventEmitter {
     // Requirements: 11.9
     this.role = RaftRole.FOLLOWER;
     this.leaderId = null;
+    this.pendingRoleUpdate = this.role;
+    this.persistedRole = null;
+    this.roleUpdateInFlight = false;
+    this.roleUpdateRetryTimer = null;
+    this.pendingLeaderNodeUpdate = null;
+    this.persistedLeaderNodeId = null;
+    this.leaderNodeUpdateInFlight = false;
+    this.leaderNodeUpdateRetryTimer = null;
 
     // Partition state
     this.state = PartitionState.NORMAL;
 
     // Size tracking
-    this.sizeBytes = 0;
+    this.sizeBytes = NUM.ZERO;
     this.sizeUpdatePending = false;
-    this.lastSizeUpdate = 0;
+    this.lastSizeUpdate = NUM.ZERO;
     this.sizeUpdateTimer = null;
 
     // CDC subscribers
@@ -329,7 +367,7 @@ class PartitionService extends EventEmitter {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('partition') : console;
+      loggingService.forSubsystem(PARTITION_SUBSYSTEM.PARTITION) : console;
 
     // State
     this.initialized = false;
@@ -338,11 +376,12 @@ class PartitionService extends EventEmitter {
     // PendingRequestTracker for lifecycle messages (replaces EventEmitter-based ACK handling)
     // Requirements: 3.1, 6.1, 6.2, 6.3, 6.4
     this.pendingRequestTracker = new PendingRequestTracker({
-      defaultTimeoutMs: 30000,
+      defaultTimeoutMs: PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS,
     });
 
     // Rebalancer - manages replica placement when this partition is leader
     this.rebalancer = null;
+    this.rebalanceCoordinator = null;
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.tablePolicyService = options.tablePolicyService || null;
@@ -353,9 +392,15 @@ class PartitionService extends EventEmitter {
     this.messageRouter = options.messageRouter || null;
 
     // Defer election start until all replicas are ready
+    // Learner phase support - new replicas joining existing groups start as learners
+    // They receive log entries but don't vote until caught up
+    // This prevents new replicas from disrupting existing leadership
+    this.isJoiningExistingGroup = options.isJoiningExistingGroup || false;
+
     // When true, the Raft election timer won't start until startElection() is called
     // This prevents election storms when multiple replicas are created on the same node
-    this.deferElection = options.deferElection || false;
+    // CRITICAL: Learners must defer elections to prevent disrupting existing leadership
+    this.deferElection = options.deferElection || this.isJoiningExistingGroup;
     this.electionStarted = false;
     // ReplicaStateMachine for tracking replica lifecycle states
     this.replicaStateMachine = options.replicaStateMachine || null;
@@ -364,6 +409,11 @@ class PartitionService extends EventEmitter {
     // Used when joining an existing partition on a different node
     // Requirements: 1.1, 3.1, 3.2, 3.3
     this.peerAddresses = options.peerAddresses || [];
+    this.learnerPromotionDelayMs = options.learnerPromotionDelayMs ||
+      PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_DELAY_MS;
+    this.learnerCatchUpCheckIntervalMs = options.learnerCatchUpCheckIntervalMs ||
+      PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
+    this.learnerPromotionTimer = null;
   }
 
   /**
@@ -379,7 +429,7 @@ class PartitionService extends EventEmitter {
   /**
    * Build a unified address for a peer replica.
    * Looks up the nodeId from the system table cache if available.
-   * Falls back to using the peerId directly if nodeId cannot be determined.
+   * Throws if a unified address cannot be resolved.
    * All addresses use fully qualified network identity format: {nodeId}/partition/{replicaId}
    * Requirements: 1.1, 1.4, 3.1, 3.2, 3.3, 9.1
    * @param {string} peerId - Peer replica ID.
@@ -388,40 +438,64 @@ class PartitionService extends EventEmitter {
   buildPeerAddress(peerId) {
     const addressManager = AddressManager.getInstance();
 
-    // If peerId is already in unified format, validate and return as-is
-    if (peerId.includes('/')) {
+    // If peerId is already in unified format, validate and return as-is.
+    // Fail fast (and log) when a provided address is not unified.
+    if (peerId.includes(PARTITION_SERVICE_ADDRESS.SEPARATOR)) {
       const validation = addressManager.validate(peerId);
       if (validation.valid) {
-        this.logger.debug('Peer address already in unified format', {
-          peerId,
-          partitionId: this.partitionId,
-        });
         return peerId;
       }
+      this.logger.error(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_NOT_UNIFIED, {
+        peerId,
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        error: validation.error,
+      });
+      throw new Error(`Peer address must be unified: ${peerId}`);
     }
 
     // Check peerAddresses array (provided during cross-node joining)
     // Format: ['nodeId/partition/replicaId', ...]
     // Requirements: 1.1, 1.4, 3.1, 3.2, 3.3
-    if (this.peerAddresses && this.peerAddresses.length > 0) {
-      const matchingAddress = this.peerAddresses.find((addr) =>
-        addr.endsWith(`/partition/${peerId}`) || addr.endsWith(`/${peerId}`));
-      if (matchingAddress) {
-        this.logger.debug('Built peer address from peerAddresses array', {
-          peerId,
-          address: matchingAddress,
-          partitionId: this.partitionId,
-        });
-        return matchingAddress;
+    if (this.peerAddresses && this.peerAddresses.length > NUM.ZERO) {
+      for (const addr of this.peerAddresses) {
+        const validation = addressManager.validate(addr);
+        if (!validation.valid) {
+          this.logger.error(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_NOT_UNIFIED, {
+            peerId: addr,
+            partitionId: this.partitionId,
+            replicaId: this.replicaId,
+            error: validation.error,
+          });
+          throw new Error(`Peer address must be unified: ${addr}`);
+        }
+        if (
+          addr.endsWith(
+            `${PARTITION_SERVICE_ADDRESS.SEPARATOR}${ENTITY_TYPE.PARTITION}` +
+            `${PARTITION_SERVICE_ADDRESS.SEPARATOR}${peerId}`,
+          ) ||
+          addr.endsWith(`${PARTITION_SERVICE_ADDRESS.SEPARATOR}${peerId}`)
+        ) {
+          this.logger.debug(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_LIST, {
+            peerId,
+            address: addr,
+            partitionId: this.partitionId,
+          });
+          return addr;
+        }
       }
     }
 
     // Try to look up nodeId from system table cache
     if (this.systemTableCache) {
-      const service = this.systemTableCache.get('services', peerId);
+      const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
       if (service && service.node_id) {
-        const address = addressManager.format(service.node_id, 'partition', peerId);
-        this.logger.debug('Built peer address from cache', {
+        const address = addressManager.format(
+          service.node_id,
+          ENTITY_TYPE.PARTITION,
+          peerId,
+        );
+        this.logger.debug(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_CACHE, {
           peerId,
           nodeId: service.node_id,
           address,
@@ -431,17 +505,20 @@ class PartitionService extends EventEmitter {
       }
     }
 
-    // During bootstrap, all replicas are on the same node, so use this.nodeId
-    // This enables Raft elections to work before the system table cache is populated
-    // Requirements: 1.1, 1.4, 3.1, 3.2, 3.3, 9.1
-    const address = addressManager.format(this.nodeId, 'partition', peerId);
-    this.logger.debug('Built peer address using local nodeId', {
-      peerId,
-      nodeId: this.nodeId,
-      address,
-      partitionId: this.partitionId,
-    });
-    return address;
+    throw new Error(`Unable to resolve unified peer address for ${peerId}`);
+  }
+
+  /**
+   * Resolve the leader's unified address for write forwarding.
+   * @return {string|null} Unified leader address or null if unavailable.
+   * @private
+   */
+  resolveLeaderAddress() {
+    if (!this.leaderId) {
+      return null;
+    }
+
+    return this.buildPeerAddress(this.leaderId);
   }
 
   /**
@@ -455,7 +532,7 @@ class PartitionService extends EventEmitter {
       return;
     }
 
-    this.logger.info('Initializing partition service', {
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.INITIALIZING, {
       partitionId: this.partitionId,
       tableId: this.tableId,
       replicaId: this.replicaId,
@@ -465,20 +542,20 @@ class PartitionService extends EventEmitter {
     });
 
     // Ensure directory exists for file-based databases
-    if (this.dbPath !== ':memory:') {
+    if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
       const dbDir = path.dirname(this.dbPath);
       if (!fs.existsSync(dbDir)) {
         fs.mkdirSync(dbDir, {recursive: true});
-        this.logger.debug('Created partition directory', {path: dbDir});
+        this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {path: dbDir});
       }
     }
 
     // Open SQLite database
     this.db = new Database(this.dbPath);
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('synchronous = NORMAL');
+    this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
+    this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
 
-    // Initialize Raft storage (legacy - kept for compatibility)
+    // Initialize Raft storage
     this.storage = new SQLiteRaftStorage(this.db, this.partitionId);
 
     // Create table if schema provided
@@ -498,9 +575,34 @@ class PartitionService extends EventEmitter {
     // Get Raft configuration from ConfigurationManager
     // Requirements: 10.1
     const config = ConfigurationManager.getInstance();
-    const heartbeatMs = config.get('raft.heartbeatIntervalMs') || 50;
-    const electionMinMs = config.get('raft.electionTimeoutMinMs') || 150;
-    const electionMaxMs = config.get('raft.electionTimeoutMaxMs') || 1000;
+    const heartbeatMs = config.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS) ||
+      PARTITION_SERVICE_VALUE.LIFERAFT_HEARTBEAT_DEFAULT_MS;
+    const baseElectionMinMs = config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS) ||
+      PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MIN_DEFAULT_MS;
+    const baseElectionMaxMs = config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS) ||
+      PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MAX_DEFAULT_MS;
+
+    // Add replica-index-based jitter to election timeouts to prevent oscillation
+    // Lower-indexed replicas (r1) have shorter timeouts and win elections first
+    // This provides deterministic leadership without modifying Raft protocol
+    //
+    // For dynamically created replicas (UUID-based IDs during rebalancing),
+    // indexOf() returns -1. We use a hash-based fallback to ensure these
+    // replicas get consistently higher jitter than existing replicas.
+    let replicaIndex = this.replicaIds.indexOf(this.replicaId);
+    if (replicaIndex < 0) {
+      // Hash-based fallback for UUID replica IDs not in the original list
+      // This ensures new replicas joining during rebalancing don't disrupt
+      // existing leadership by having unpredictable election timeouts
+      const hashCode = this.replicaId.split('').reduce(
+        (acc, char) => acc + char.charCodeAt(0), 0,
+      );
+      // Add offset to ensure new replicas have higher jitter than existing ones
+      replicaIndex = this.replicaIds.length + (hashCode % 10);
+    }
+    const jitterMs = replicaIndex * PARTITION_SERVICE_VALUE.ELECTION_JITTER_PER_REPLICA_MS;
+    const electionMinMs = baseElectionMinMs + jitterMs;
+    const electionMaxMs = baseElectionMaxMs + jitterMs;
 
     // Create extended LifeRaft class with our transport using ES6 class inheritance
     // Requirements: 10.1, 10.2, 10.3, 10.4, 10.5
@@ -524,7 +626,7 @@ class PartitionService extends EventEmitter {
       initialize(options, callback) {
         if (deferElection) {
           // Don't start heartbeat timer - election will be started manually
-          self.logger.debug('Deferring election start', {
+          self.logger.debug(PARTITION_SERVICE_LOG_MSG.DEFERRING_ELECTION_START, {
             replicaId: self.replicaId,
             partitionId: self.partitionId,
           });
@@ -570,10 +672,10 @@ class PartitionService extends EventEmitter {
     // Requirements: 8.1, 10.1, 10.5
     const logAdapter = this.logAdapter;
     this.raft = new RaftNode(this.unifiedAddress, {
-      'heartbeat': heartbeatMs,
-      'election min': electionMinMs,
-      'election max': electionMaxMs,
-      'Log': function() {
+      [PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT]: heartbeatMs,
+      [PARTITION_SERVICE_LIFERAFT_TIMER.ELECTION_MIN]: electionMinMs,
+      [PARTITION_SERVICE_LIFERAFT_TIMER.ELECTION_MAX]: electionMaxMs,
+      [PARTITION_SERVICE_LIFERAFT_TIMER.LOG]: function() {
         return logAdapter;
       },
     });
@@ -582,8 +684,8 @@ class PartitionService extends EventEmitter {
     // This prevents elections from starting until startElection() is called
     // Liferaft's _initialize() sets up a 'state change' handler that starts timers
     if (this.deferElection && this.raft.timers) {
-      this.raft.timers.clear('heartbeat, election');
-      this.logger.debug('Cleared liferaft timers for deferred election', {
+      this.raft.timers.clear(PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT_ELECTION);
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.CLEARED_LIFERAFT_TIMERS, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
       });
@@ -593,35 +695,61 @@ class PartitionService extends EventEmitter {
     // Only consider it single-replica if replicaIds.length === 1
     // Do NOT use replicaIds.every() check as that could cause premature leadership
     // when peer list is incomplete (violates Requirements 4.3, 5.1, 5.2, 5.3)
-    const isSingleReplica = this.replicaIds.length === 1;
+    const isSingleReplica = this.replicaIds.length === NUM.ONE;
+
+    // Learner phase: new replicas joining existing groups start as non-voting learners
+    // They receive log entries but don't vote until caught up
+    // This prevents new replicas from disrupting existing leadership
+    if (this.isJoiningExistingGroup) {
+      this.role = RaftRole.LEARNER;
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.STARTING_AS_LEARNER, {
+        replicaId: this.replicaId,
+        partitionId: this.partitionId,
+        promotionDelayMs: this.learnerPromotionDelayMs,
+      });
+      // Schedule promotion check after minimum delay
+      this.scheduleLearnerPromotion();
+    }
 
     // Wire up liferaft events
     // Requirements: 10.5
-    this.raft.on('leader', () => {
+    this.raft.on(PARTITION_SERVICE_ROLE.LEADER, () => {
       this.role = RaftRole.LEADER;
       this.isLeader = true;
       this.leaderId = this.replicaId;
       this.storage.currentTerm = this.raft.term;
+      const nodeService = getNodeService();
+      nodeService.setPartitionLeader({
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        nodeId: this.nodeId,
+        address: this.unifiedAddress,
+      });
+      this.queueRoleUpdate(this.role);
+      this.queueLeaderNodeUpdate(this.nodeId);
 
       // Activate rebalancer when becoming leader
-      if (this.rebalancer) {
+      // CRITICAL: Don't activate rebalancer if still in learner phase
+      // Learners should not trigger rebalancing until fully integrated
+      if (this.rebalancer && !this.isJoiningExistingGroup) {
         this.rebalancer.setLeader(true);
       }
 
-      this.logger.info('Became leader (liferaft)', {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.BECAME_LEADER, {
         term: this.raft.term,
         replicaId: this.replicaId,
         partitionId: this.partitionId,
+        rebalancerActive: !this.isJoiningExistingGroup,
       });
 
-      this.emit('leaderElected', {
+      this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
         leaderId: this.replicaId,
         term: this.raft.term,
         partitionId: this.partitionId,
       });
     });
 
-    this.raft.on('follower', () => {
+    this.raft.on(PARTITION_SERVICE_ROLE.FOLLOWER, () => {
       // For single-replica groups, ignore follower events since we're always leader
       // liferaft may emit follower events during initialization
       if (isSingleReplica && this.isLeader) {
@@ -630,6 +758,15 @@ class PartitionService extends EventEmitter {
       this.role = RaftRole.FOLLOWER;
       this.isLeader = false;
       this.storage.currentTerm = this.raft.term;
+      const nodeService = getNodeService();
+      nodeService.clearPartitionLeader(this.partitionId);
+      this.queueRoleUpdate(this.role);
+      this.pendingLeaderNodeUpdate = null;
+      this.persistedLeaderNodeId = null;
+      if (this.leaderNodeUpdateRetryTimer) {
+        clearTimeout(this.leaderNodeUpdateRetryTimer);
+        this.leaderNodeUpdateRetryTimer = null;
+      }
 
       // Deactivate rebalancer when losing leadership
       if (this.rebalancer) {
@@ -637,7 +774,7 @@ class PartitionService extends EventEmitter {
       }
     });
 
-    this.raft.on('candidate', () => {
+    this.raft.on(PARTITION_SERVICE_ROLE.CANDIDATE, () => {
       // For single-replica groups, ignore candidate events since we're always leader
       // liferaft may emit candidate events during election cycles
       if (isSingleReplica && this.isLeader) {
@@ -646,23 +783,32 @@ class PartitionService extends EventEmitter {
       this.role = RaftRole.CANDIDATE;
       this.isLeader = false;
       this.storage.currentTerm = this.raft.term;
+      const nodeService = getNodeService();
+      nodeService.clearPartitionLeader(this.partitionId);
+      this.queueRoleUpdate(this.role);
+      this.pendingLeaderNodeUpdate = null;
+      this.persistedLeaderNodeId = null;
+      if (this.leaderNodeUpdateRetryTimer) {
+        clearTimeout(this.leaderNodeUpdateRetryTimer);
+        this.leaderNodeUpdateRetryTimer = null;
+      }
     });
 
     // Handle committed entries
     // Requirements: 10.5
-    this.raft.on('commit', (command) => {
+    this.raft.on(PARTITION_SERVICE_REASON.COMMIT, (command) => {
       this.applyCommittedEntry(command);
     });
 
-    this.raft.on('leader change', (to) => {
+    this.raft.on(PARTITION_SERVICE_REASON.LEADER_CHANGE, (to) => {
       this.leaderId = to;
-      this.logger.debug('Leader changed', {
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEADER_CHANGED, {
         newLeader: to,
         partitionId: this.partitionId,
       });
     });
 
-    this.raft.on('term change', (term) => {
+    this.raft.on(PARTITION_SERVICE_REASON.TERM_CHANGE, (term) => {
       this.storage.currentTerm = term;
     });
 
@@ -671,46 +817,20 @@ class PartitionService extends EventEmitter {
     for (const peerId of this.replicaIds) {
       if (peerId !== this.replicaId) {
         const peerAddress = this.buildPeerAddress(peerId);
-        this.logger.info('Joining peer with fully qualified address', {
+        this.logger.info(PARTITION_SERVICE_LOG_MSG.JOINING_PEER_ADDRESS, {
           peerId,
           peerAddress,
           replicaId: this.replicaId,
           partitionId: this.partitionId,
-          addressFormat: peerAddress.includes('/') ? 'unified' : 'simple',
+          addressFormat: peerAddress.includes(PARTITION_SERVICE_ADDRESS.SEPARATOR) ?
+            PARTITION_SERVICE_ADDRESS.FORMAT_UNIFIED :
+            PARTITION_SERVICE_ADDRESS.FORMAT_SIMPLE,
         });
         this.raft.join(peerAddress);
       }
     }
 
-    // Create rebalancer for this partition
-    this.rebalancer = new UnifiedRebalancer({
-      entityId: this.partitionId,
-      entityType: EntityType.PARTITION,
-      systemTableCache: this.systemTableCache,
-      cdcIntegrationService: this.cdcIntegrationService,
-      tablePolicyService: this.tablePolicyService,
-      nodeId: this.nodeId,
-      replicaStateMachine: this.replicaStateMachine,
-    });
-    this.rebalancer.initialize();
-
-    // Wire up rebalancer events to handle replica creation/removal (async handlers)
-    this.rebalancer.on('addReplica', (event) => {
-      this.handleRebalancerAddReplica(event).catch((err) => {
-        this.logger.error('Error in handleRebalancerAddReplica', {
-          partitionId: this.partitionId,
-          error: err.message,
-        });
-      });
-    });
-    this.rebalancer.on('removeReplica', (event) => {
-      this.handleRebalancerRemoveReplica(event).catch((err) => {
-        this.logger.error('Error in handleRebalancerRemoveReplica', {
-          partitionId: this.partitionId,
-          error: err.message,
-        });
-      });
-    });
+    this.maybeInitializeRebalancer();
 
     // For truly single-replica groups, become leader immediately
     // This avoids the election timer delay during bootstrap
@@ -719,25 +839,34 @@ class PartitionService extends EventEmitter {
     // when peer list is incomplete (violates Requirements 4.3, 5.1, 5.2, 5.3)
     // Let liferaft handle all multi-replica elections
     // Requirements: 10.5
-    if (this.replicaIds.length === 1) {
+    if (this.replicaIds.length === NUM.ONE) {
       // Manually promote to leader for single-replica case
       this.role = RaftRole.LEADER;
       this.isLeader = true;
       this.leaderId = this.replicaId;
+      const nodeService = getNodeService();
+      nodeService.setPartitionLeader({
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        nodeId: this.nodeId,
+        address: this.unifiedAddress,
+      });
+      this.queueRoleUpdate(this.role);
+      this.queueLeaderNodeUpdate(this.nodeId);
 
       // Activate rebalancer when becoming leader
       if (this.rebalancer) {
         this.rebalancer.setLeader(true);
       }
 
-      this.logger.info('Single replica - becoming leader immediately', {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.SINGLE_REPLICA_LEADER, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
       });
 
-      this.emit('leaderElected', {
+      this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
         leaderId: this.replicaId,
-        term: this.raft ? this.raft.term : 0,
+        term: this.raft ? this.raft.term : NUM.ZERO,
         partitionId: this.partitionId,
       });
     }
@@ -750,13 +879,13 @@ class PartitionService extends EventEmitter {
 
     this.initialized = true;
 
-    this.logger.info('Partition service initialized', {
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.INITIALIZED, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
       sizeBytes: this.sizeBytes,
     });
 
-    this.emit('initialized', {
+    this.emit(PARTITION_SERVICE_EVENT.INITIALIZED, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
     });
@@ -774,7 +903,7 @@ class PartitionService extends EventEmitter {
     }
 
     // For single-replica groups, we're already leader
-    if (this.replicaIds.length === 1) {
+    if (this.replicaIds.length === NUM.ONE) {
       this.electionStarted = true;
       return;
     }
@@ -782,10 +911,10 @@ class PartitionService extends EventEmitter {
     this.electionStarted = true;
 
     if (this.raft) {
-      this.logger.info('Starting Raft election timer', {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.STARTING_ELECTION_TIMER, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
-        peerCount: this.replicaIds.length - 1,
+        peerCount: this.replicaIds.length - NUM.ONE,
       });
 
       // Start the heartbeat timer which will trigger election on timeout
@@ -806,24 +935,139 @@ class PartitionService extends EventEmitter {
     const columns = this.schema.columns.map((col) => {
       let def = `${col.name} ${col.type}`;
       if (col.primaryKey) {
-        def += ' PRIMARY KEY';
+        def += PARTITION_SERVICE_SQL_FRAGMENT.PRIMARY_KEY;
       }
       if (col.notNull) {
-        def += ' NOT NULL';
+        def += PARTITION_SERVICE_SQL_FRAGMENT.NOT_NULL;
       }
       if (col.defaultValue !== undefined) {
         def += ` DEFAULT ${col.defaultValue}`;
       }
       return def;
-    }).join(', ');
+    }).join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
 
     const sql = `CREATE TABLE IF NOT EXISTS ${this.tableName} (${columns})`;
     this.db.exec(sql);
 
-    this.logger.debug('Created table', {
+    this.ensureNodesTableColumns();
+    this.ensureMessageGroupsTableColumns();
+    this.ensurePartitionsTableColumns();
+
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_TABLE, {
       tableName: this.tableName,
       partitionId: this.partitionId,
     });
+  }
+
+  /**
+   * Ensure nodes table includes ws_connection_state column for readiness tracking.
+   * @private
+   */
+  ensureNodesTableColumns() {
+    if (this.tableName !== SystemTableName.NODES) {
+      return;
+    }
+
+    const columns = this.db.prepare(`PRAGMA table_info(${this.tableName})`).all();
+    const hasConnectionState = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.WS_CONNECTION_STATE,
+    );
+    const hasCapabilities = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.CAPABILITIES,
+    );
+    const hasReadyLease = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.READY_LEASE_EXPIRES_AT,
+    );
+
+    if (!hasConnectionState) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.ADD_WS_CONNECTION_STATE,
+      );
+
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_WS_CONNECTION_STATE, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
+
+    if (!hasCapabilities) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.ADD_CAPABILITIES,
+      );
+
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_CAPABILITIES, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
+
+    if (!hasReadyLease) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.ADD_READY_LEASE_EXPIRES_AT,
+      );
+
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_READY_LEASE, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
+  }
+
+  /**
+   * Ensure message_groups table includes leader_node_id column.
+   * @private
+   */
+  ensureMessageGroupsTableColumns() {
+    if (this.tableName !== SystemTableName.MESSAGE_GROUPS) {
+      return;
+    }
+
+    const columns = this.db.prepare(`PRAGMA table_info(${this.tableName})`).all();
+    const hasLeaderNode = columns.some(
+      (col) => col.name === COLUMN.LEADER_NODE_ID,
+    );
+
+    if (!hasLeaderNode) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.ADD_LEADER_NODE_ID,
+      );
+
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_MESSAGE_GROUP_LEADER, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
+  }
+
+  /**
+   * Ensure partitions table includes table_name column for compatibility.
+   * @private
+   */
+  ensurePartitionsTableColumns() {
+    if (this.tableName !== SystemTableName.PARTITIONS) {
+      return;
+    }
+
+    const columns = this.db.prepare(`PRAGMA table_info(${this.tableName})`).all();
+    const hasTableName = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.TABLE_NAME,
+    );
+
+    if (!hasTableName) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.ADD_TABLE_NAME,
+      );
+
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_PARTITIONS_TABLE_NAME, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
   }
 
   /**
@@ -844,7 +1088,7 @@ class PartitionService extends EventEmitter {
     // Requirements: 8.3, 8.4, 13.1, 13.2
     if (isRaftPacket(payload)) {
       if (this.raft) {
-        this.logger.debug('Received Raft packet', {
+        this.logger.trace(PARTITION_SERVICE_LOG_MSG.RECEIVED_RAFT_PACKET, {
           type: payload.type,
           term: payload.term,
           address: payload.address,
@@ -858,7 +1102,7 @@ class PartitionService extends EventEmitter {
         const senderAddress = payload.address;
         const write = (responsePacket) => {
           if (responsePacket) {
-            this.logger.debug('Sending Raft response', {
+            this.logger.trace(PARTITION_SERVICE_LOG_MSG.SENDING_RAFT_RESPONSE, {
               type: responsePacket.type,
               destination: senderAddress,
               term: responsePacket.term,
@@ -866,7 +1110,7 @@ class PartitionService extends EventEmitter {
             // Send response to the sender
             this.transport.deliver(senderAddress, responsePacket)
               .catch((err) => {
-                this.logger.error('Failed to send Raft response', {
+                this.logger.error(PARTITION_SERVICE_LOG_MSG.FAILED_RAFT_RESPONSE, {
                   error: err.message,
                   destination: senderAddress,
                 });
@@ -876,7 +1120,7 @@ class PartitionService extends EventEmitter {
 
         // Emit to liferaft with write function for responses
         // Requirements: 8.4
-        this.raft.emit('data', payload, write);
+        this.raft.emit(PARTITION_SERVICE_EVENT.DATA, payload, write);
       }
       return {acknowledged: true};
     }
@@ -898,26 +1142,138 @@ class PartitionService extends EventEmitter {
     const payload = message.payload || message;
 
     if (!payload || !payload.type) {
-      return {acknowledged: false, error: 'Invalid message'};
+      return {acknowledged: false, error: PARTITION_SERVICE_ERROR_MSG.INVALID_MESSAGE};
     }
 
     // Handle application messages only - Raft packets are handled by
     // handleTransportMessage() using isRaftPacket() and emitted to liferaft
     // Requirements: 13.3, 13.4
     switch (payload.type) {
-    case 'FORWARD_WRITE':
+    case PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE:
       // Handle forwarded write operations from followers
       if (payload.operation) {
         return this.applyWrite(payload.operation);
       }
-      return {acknowledged: false, error: 'Invalid FORWARD_WRITE message'};
+      return {acknowledged: false, error: PARTITION_SERVICE_ERROR_MSG.INVALID_FORWARD_WRITE};
+    case PARTITION_SERVICE_MESSAGE_TYPE.SYSTEM_TABLE_WRITE:
+      // Handle system table writes from joining nodes
+      // Routes CDC updates from nodes that don't have local system partitions
+      return this.handleSystemTableWrite(payload);
+    case PARTITION_SERVICE_MESSAGE_TYPE.QUERY:
+      // Handle remote SQL query execution
+      // Enables transparent query routing across the cluster
+      return this.handleRemoteQuery(payload);
     default:
       // Unknown message type - log and acknowledge to avoid blocking
-      this.logger.debug('Unknown application message type', {
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.UNKNOWN_MESSAGE_TYPE, {
         type: payload.type,
         partitionId: this.partitionId,
       });
-      return {acknowledged: false, error: `Unknown message type: ${payload.type}`};
+      return {
+        acknowledged: false,
+        error: PARTITION_SERVICE_ERROR_MSG.UNKNOWN_MESSAGE(payload.type),
+      };
+    }
+  }
+
+  /**
+   * Handle system table write operations from remote nodes.
+   * This allows joining nodes to update system tables via CDC routing.
+   * @param {Object} payload - Write operation payload.
+   * @param {string} payload.operation - Operation type (INSERT, UPDATE, DELETE).
+   * @param {string} payload.tableName - Target table name.
+   * @param {Object} payload.data - Data for INSERT/UPDATE.
+   * @param {Object} payload.whereClause - WHERE clause for UPDATE/DELETE.
+   * @return {Promise<Object>} Operation result.
+   * @private
+   */
+  async handleSystemTableWrite(payload) {
+    const {operation, tableName, data, whereClause} = payload;
+
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_SYSTEM_TABLE_WRITE, {
+      operation,
+      tableName,
+      partitionId: this.partitionId,
+      replicaId: this.replicaId,
+    });
+
+    try {
+      let result;
+      switch (operation) {
+      case PARTITION_SERVICE_OPERATION.INSERT:
+        result = await this.insertData(tableName, data);
+        break;
+      case PARTITION_SERVICE_OPERATION.UPDATE:
+        result = await this.updateData(tableName, whereClause, data);
+        break;
+      case PARTITION_SERVICE_OPERATION.DELETE:
+        result = await this.deleteData(tableName, whereClause);
+        break;
+      case PARTITION_SERVICE_OPERATION.UPSERT:
+        result = await this.upsertData(tableName, data);
+        break;
+      default:
+        return {
+          acknowledged: false,
+          error: PARTITION_SERVICE_ERROR_MSG.UNKNOWN_OPERATION(operation),
+        };
+      }
+
+      return {
+        acknowledged: true,
+        success: result.success,
+        changes: result.changes || NUM.ZERO,
+      };
+    } catch (error) {
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.SYSTEM_TABLE_WRITE_FAILED, {
+        operation,
+        tableName,
+        error: error.message,
+        partitionId: this.partitionId,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Handle remote SQL query execution.
+   * Enables transparent query routing - any node can execute queries on any partition.
+   * @param {Object} payload - Query payload.
+   * @param {string} payload.sql - SQL query string.
+   * @param {Array} payload.params - Query parameters.
+   * @return {Promise<Object>} Query result.
+   * @private
+   */
+  async handleRemoteQuery(payload) {
+    const {sql, params} = payload;
+
+    if (!sql) {
+      return {acknowledged: false, error: PARTITION_SERVICE_ERROR_MSG.MISSING_SQL_QUERY};
+    }
+
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_REMOTE_QUERY, {
+      sql: sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
+      partitionId: this.partitionId,
+      replicaId: this.replicaId,
+    });
+
+    try {
+      const result = await this.executeQuery(sql, params || []);
+      return {
+        acknowledged: true,
+        success: true,
+        rows: result.rows,
+        changes: result.changes,
+        count: result.count,
+        partitionId: this.partitionId,
+      };
+    } catch (error) {
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.REMOTE_QUERY_FAILED, {
+        sql: sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
+        error: error.message,
+        partitionId: this.partitionId,
+      });
+      throw error;
     }
   }
 
@@ -932,15 +1288,18 @@ class PartitionService extends EventEmitter {
       return;
     }
 
-    this.logger.debug('Applying committed entry', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
       partitionId: this.partitionId,
       commandType: command.type,
     });
 
     // Handle different command types
-    if (command.type === 'WRITE' || command.type === 'INSERT' ||
-        command.type === 'UPDATE' || command.type === 'DELETE' ||
-        command.type === 'UPSERT' || command.type === 'QUERY') {
+    if (command.type === PARTITION_SERVICE_OPERATION.WRITE ||
+        command.type === PARTITION_SERVICE_OPERATION.INSERT ||
+        command.type === PARTITION_SERVICE_OPERATION.UPDATE ||
+        command.type === PARTITION_SERVICE_OPERATION.DELETE ||
+        command.type === PARTITION_SERVICE_OPERATION.UPSERT ||
+        command.type === PARTITION_SERVICE_OPERATION.QUERY) {
       // Apply SQL write operation
       if (command.sql) {
         try {
@@ -949,27 +1308,29 @@ class PartitionService extends EventEmitter {
 
           // Generate CDC event
           this.generateCDCEvent(command).catch((err) => {
-            this.logger.error('Failed to generate CDC event for committed entry', {
+            this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED, {
               partitionId: this.partitionId,
               error: err.message,
             });
+            throw err;
           });
         } catch (error) {
-          this.logger.error('Failed to apply committed entry', {
+          this.logger.error(PARTITION_SERVICE_ERROR_MSG.APPLY_COMMITTED_FAILED, {
             partitionId: this.partitionId,
             error: error.message,
           });
+          throw error;
         }
       }
-    } else if (command.type === 'TRANSACTION_COMMIT') {
+    } else if (command.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT) {
       // Handle transaction commit - operations already applied
-      this.logger.debug('Transaction commit entry applied', {
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.TRANSACTION_COMMIT_APPLIED, {
         partitionId: this.partitionId,
-        operationCount: command.operations?.length || 0,
+        operationCount: command.operations?.length || NUM.ZERO,
       });
     }
 
-    this.emit('entryCommitted', {
+    this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
       partitionId: this.partitionId,
       command,
     });
@@ -983,20 +1344,20 @@ class PartitionService extends EventEmitter {
    */
   async beginTransaction() {
     if (!this.initialized) {
-      throw new Error('PartitionService not initialized');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
     if (this.activeTransaction) {
-      throw new Error('Transaction already active on this partition');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE);
     }
 
-    this.logger.debug('Beginning transaction', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.BEGINNING_TRANSACTION, {
       partitionId: this.partitionId,
     });
 
     try {
       // Use SQLite's BEGIN for transaction support
-      this.db.exec('BEGIN IMMEDIATE');
+      this.db.exec(PARTITION_SERVICE_SQL.BEGIN_IMMEDIATE);
       this.activeTransaction = {
         startTime: Date.now(),
         operations: [],
@@ -1005,12 +1366,12 @@ class PartitionService extends EventEmitter {
 
       return {
         success: true,
-        operation: 'BEGIN_TRANSACTION',
+        operation: PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
         partitionId: this.partitionId,
         inTransaction: true,
       };
     } catch (error) {
-      this.logger.error('Failed to begin transaction', {
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.BEGIN_TRANSACTION_FAILED, {
         partitionId: this.partitionId,
         error: error.message,
       });
@@ -1025,14 +1386,14 @@ class PartitionService extends EventEmitter {
    */
   async commitTransaction() {
     if (!this.initialized) {
-      throw new Error('PartitionService not initialized');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
     if (!this.activeTransaction) {
-      throw new Error('No active transaction to commit');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_COMMIT);
     }
 
-    this.logger.debug('Committing transaction', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.COMMITTING_TRANSACTION, {
       partitionId: this.partitionId,
       operationCount: this.transactionOperations.length,
     });
@@ -1042,7 +1403,7 @@ class PartitionService extends EventEmitter {
       const raftEntry = await this.replicateTransactionCommit();
 
       // Commit in SQLite
-      this.db.exec('COMMIT');
+      this.db.exec(PARTITION_SERVICE_SQL.COMMIT);
 
       const duration = Date.now() - this.activeTransaction.startTime;
       const operationCount = this.transactionOperations.length;
@@ -1061,7 +1422,7 @@ class PartitionService extends EventEmitter {
 
       return {
         success: true,
-        operation: 'COMMIT',
+        operation: PARTITION_SERVICE_OPERATION.COMMIT,
         partitionId: this.partitionId,
         committed: true,
         durationMs: duration,
@@ -1069,14 +1430,14 @@ class PartitionService extends EventEmitter {
         raftLogIndex: raftEntry?.index || null,
       };
     } catch (error) {
-      this.logger.error('Failed to commit transaction', {
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.COMMIT_TRANSACTION_FAILED, {
         partitionId: this.partitionId,
         error: error.message,
       });
 
       // Rollback on failure
       try {
-        this.db.exec('ROLLBACK');
+        this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
       } catch {
         // Ignore rollback errors
       }
@@ -1094,21 +1455,21 @@ class PartitionService extends EventEmitter {
    */
   async rollbackTransaction() {
     if (!this.initialized) {
-      throw new Error('PartitionService not initialized');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
     if (!this.activeTransaction) {
-      throw new Error('No active transaction to rollback');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_ROLLBACK);
     }
 
-    this.logger.debug('Rolling back transaction', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.ROLLING_BACK_TRANSACTION, {
       partitionId: this.partitionId,
       operationCount: this.transactionOperations.length,
     });
 
     try {
       // Rollback in SQLite - this reverts all changes
-      this.db.exec('ROLLBACK');
+      this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
 
       const duration = Date.now() - this.activeTransaction.startTime;
       const operationCount = this.transactionOperations.length;
@@ -1119,14 +1480,14 @@ class PartitionService extends EventEmitter {
 
       return {
         success: true,
-        operation: 'ROLLBACK',
+        operation: PARTITION_SERVICE_OPERATION.ROLLBACK,
         partitionId: this.partitionId,
         rolledBack: true,
         durationMs: duration,
         operationCount,
       };
     } catch (error) {
-      this.logger.error('Failed to rollback transaction', {
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.ROLLBACK_TRANSACTION_FAILED, {
         partitionId: this.partitionId,
         error: error.message,
       });
@@ -1153,14 +1514,14 @@ class PartitionService extends EventEmitter {
    * @private
    */
   async replicateTransactionCommit() {
-    if (this.transactionOperations.length === 0) {
+    if (this.transactionOperations.length === NUM.ZERO) {
       return null;
     }
 
     const timestamp = this.hlcClock.now();
 
     const entry = {
-      type: 'TRANSACTION_COMMIT',
+      type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
       operations: this.transactionOperations,
       timestamp: timestamp.toString(),
       proposedBy: this.replicaId,
@@ -1179,7 +1540,7 @@ class PartitionService extends EventEmitter {
     if (isLiferaftLeader) {
       this.raft.command(entry, (err) => {
         if (err) {
-          this.logger.debug('Raft command failed for transaction commit', {
+          this.logger.debug(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_COMMIT_RAFT_FAILED, {
             partitionId: this.partitionId,
             error: err.message,
           });
@@ -1198,17 +1559,17 @@ class PartitionService extends EventEmitter {
    */
   async executeQuery(sql, params = []) {
     if (!this.initialized) {
-      throw new Error('PartitionService not initialized');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
-    this.logger.debug('Executing query', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXECUTING_QUERY, {
       partitionId: this.partitionId,
-      sql: sql.substring(0, 100),
+      sql: sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
     });
 
     try {
       const stmt = this.db.prepare(sql);
-      const isSelect = sql.trim().toUpperCase().startsWith('SELECT');
+      const isSelect = sql.trim().toUpperCase().startsWith(SQL.SELECT);
 
       if (isSelect) {
         const rows = stmt.all(...params);
@@ -1221,18 +1582,76 @@ class PartitionService extends EventEmitter {
       } else {
         // For write operations within a transaction, execute directly
         if (this.activeTransaction) {
-          return this.executeTransactionWrite({type: 'QUERY', sql, params});
+          return this.executeTransactionWrite({
+            type: PARTITION_SERVICE_OPERATION.QUERY,
+            sql,
+            params,
+          });
         }
         // For write operations outside transaction, go through Raft
-        return this.proposeWrite({type: 'QUERY', sql, params});
+        return this.proposeWrite({
+          type: PARTITION_SERVICE_OPERATION.QUERY,
+          sql,
+          params,
+        });
       }
     } catch (error) {
-      this.logger.error('Query execution failed', {
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.QUERY_FAILED, {
         partitionId: this.partitionId,
-        sql: sql.substring(0, 100),
+        sql: sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
         error: error.message,
       });
 
+      throw error;
+    }
+  }
+
+  /**
+   * Execute a SQL query directly on the local SQLite database.
+   * Bootstrap-only helper: bypasses Raft and does not replicate.
+   * @param {string} sql - SQL query string.
+   * @param {Array} params - Query parameters.
+   * @return {Promise<Object>} Query result.
+   */
+  async executeLocalQuery(sql, params = []) {
+    if (!this.initialized) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
+    }
+
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXECUTING_QUERY, {
+      partitionId: this.partitionId,
+      sql: sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
+      bootstrap: true,
+    });
+
+    try {
+      const stmt = this.db.prepare(sql);
+      const isSelect = sql.trim().toUpperCase().startsWith(SQL.SELECT);
+
+      if (isSelect) {
+        const rows = stmt.all(...params);
+        return {
+          success: true,
+          rows,
+          count: rows.length,
+          partitionId: this.partitionId,
+        };
+      }
+
+      const info = stmt.run(...params);
+      this.scheduleSizeUpdate();
+      return {
+        success: true,
+        changes: info.changes,
+        lastInsertRowid: info.lastInsertRowid,
+        partitionId: this.partitionId,
+      };
+    } catch (error) {
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.QUERY_FAILED, {
+        partitionId: this.partitionId,
+        sql: sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
+        error: error.message,
+      });
       throw error;
     }
   }
@@ -1245,7 +1664,7 @@ class PartitionService extends EventEmitter {
    */
   async executeTransactionWrite(operation) {
     if (!this.activeTransaction) {
-      throw new Error('No active transaction');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION);
     }
 
     const timestamp = this.hlcClock.now();
@@ -1272,7 +1691,7 @@ class PartitionService extends EventEmitter {
         inTransaction: true,
       };
     } catch (error) {
-      this.logger.error('Transaction write failed', {
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_WRITE_FAILED, {
         partitionId: this.partitionId,
         error: error.message,
       });
@@ -1288,16 +1707,20 @@ class PartitionService extends EventEmitter {
    */
   async insertData(tableName, data) {
     if (!this.initialized) {
-      throw new Error('PartitionService not initialized');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
     const columns = Object.keys(data);
     const values = Object.values(data);
-    const placeholders = columns.map(() => '?').join(', ');
-    const sql = `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})`;
+    const placeholders = columns
+      .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
+      .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+    const sql = `${SQL.INSERT_INTO} ${tableName} ` +
+      `(${columns.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE)}) ` +
+      `${SQL.VALUES} (${placeholders})`;
 
     return this.proposeWrite({
-      type: 'INSERT',
+      type: PARTITION_SERVICE_OPERATION.INSERT,
       tableName,
       data,
       sql,
@@ -1314,16 +1737,21 @@ class PartitionService extends EventEmitter {
    */
   async updateData(tableName, whereClause, data) {
     if (!this.initialized) {
-      throw new Error('PartitionService not initialized');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
-    const setClauses = Object.keys(data).map((k) => `${k} = ?`).join(', ');
-    const whereClauses = Object.keys(whereClause).map((k) => `${k} = ?`).join(' AND ');
-    const sql = `UPDATE ${tableName} SET ${setClauses} WHERE ${whereClauses}`;
+    const setClauses = Object.keys(data)
+      .map((k) => `${k} = ${PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK}`)
+      .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+    const whereClauses = Object.keys(whereClause)
+      .map((k) => `${k} = ${PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK}`)
+      .join(PARTITION_SERVICE_SQL_FRAGMENT.AND);
+    const sql = `${SQL.UPDATE} ${tableName} ${SQL.SET} ${setClauses} ` +
+      `${SQL.WHERE} ${whereClauses}`;
     const params = [...Object.values(data), ...Object.values(whereClause)];
 
     return this.proposeWrite({
-      type: 'UPDATE',
+      type: PARTITION_SERVICE_OPERATION.UPDATE,
       tableName,
       data,
       whereClause,
@@ -1340,15 +1768,17 @@ class PartitionService extends EventEmitter {
    */
   async deleteData(tableName, whereClause) {
     if (!this.initialized) {
-      throw new Error('PartitionService not initialized');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
-    const whereClauses = Object.keys(whereClause).map((k) => `${k} = ?`).join(' AND ');
-    const sql = `DELETE FROM ${tableName} WHERE ${whereClauses}`;
+    const whereClauses = Object.keys(whereClause)
+      .map((k) => `${k} = ${PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK}`)
+      .join(PARTITION_SERVICE_SQL_FRAGMENT.AND);
+    const sql = `${SQL.DELETE_FROM} ${tableName} ${SQL.WHERE} ${whereClauses}`;
     const params = Object.values(whereClause);
 
     return this.proposeWrite({
-      type: 'DELETE',
+      type: PARTITION_SERVICE_OPERATION.DELETE,
       tableName,
       whereClause,
       sql,
@@ -1364,17 +1794,20 @@ class PartitionService extends EventEmitter {
    */
   async upsertData(tableName, data) {
     if (!this.initialized) {
-      throw new Error('PartitionService not initialized');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
     const columns = Object.keys(data);
     const values = Object.values(data);
-    const placeholders = columns.map(() => '?').join(', ');
-    const sql = `INSERT OR REPLACE INTO ${tableName} ` +
-      `(${columns.join(', ')}) VALUES (${placeholders})`;
+    const placeholders = columns
+      .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
+      .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+    const sql = `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} ` +
+      `(${columns.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE)}) ` +
+      `${SQL.VALUES} (${placeholders})`;
 
     return this.proposeWrite({
-      type: 'UPSERT',
+      type: PARTITION_SERVICE_OPERATION.UPSERT,
       tableName,
       data,
       sql,
@@ -1406,17 +1839,21 @@ class PartitionService extends EventEmitter {
     // If we're not the leader, forward to leader
     if (this.leaderId && this.transport) {
       try {
-        const result = await this.transport.deliver(this.leaderId, {
-          type: 'FORWARD_WRITE',
+        const leaderAddress = this.resolveLeaderAddress();
+        if (!leaderAddress) {
+          throw new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
+        }
+        const result = await this.transport.deliver(leaderAddress, {
+          type: PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE,
           operation: entry,
         });
         return result;
       } catch (error) {
-        throw new Error(`Failed to forward write to leader: ${error.message}`);
+        throw new Error(PARTITION_SERVICE_ERROR_MSG.FORWARD_WRITE_FAILED(error.message));
       }
     }
 
-    throw new Error('No leader available for write operation');
+    throw new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
   }
 
   /**
@@ -1426,7 +1863,7 @@ class PartitionService extends EventEmitter {
    * @private
    */
   async applyWrite(entry) {
-    this.logger.info('applyWrite called', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLY_WRITE_CALLED, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
       tableName: this.tableName,
@@ -1452,8 +1889,13 @@ class PartitionService extends EventEmitter {
         logIndex: logEntry.index,
       };
 
-      // Generate CDC event
-      await this.generateCDCEvent(entry);
+      // Generate CDC event asynchronously to avoid blocking write acknowledgments.
+      this.generateCDCEvent(entry).catch((error) => {
+        this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED, {
+          partitionId: this.partitionId,
+          error: error.message,
+        });
+      });
 
       // Schedule size update
       this.scheduleSizeUpdate();
@@ -1474,7 +1916,7 @@ class PartitionService extends EventEmitter {
     if (isLiferaftLeader) {
       this.raft.command(entry, (err) => {
         if (err) {
-          this.logger.debug('Raft command failed', {
+          this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
             partitionId: this.partitionId,
             error: err.message,
           });
@@ -1492,15 +1934,17 @@ class PartitionService extends EventEmitter {
    * @private
    */
   async generateCDCEvent(entry) {
-    this.logger.info('generateCDCEvent called', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATE_CDC_EVENT_CALLED, {
       partitionId: this.partitionId,
       entryType: entry.type,
-      sql: entry.sql ? entry.sql.substring(0, 100) : null,
+      sql: entry.sql ?
+        entry.sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT) :
+        null,
       subscriberCount: this.cdcSubscribers.size,
     });
 
-    if (this.cdcSubscribers.size === 0) {
-      this.logger.warn('No CDC subscribers, skipping event generation', {
+    if (this.cdcSubscribers.size === NUM.ZERO) {
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.NO_CDC_SUBSCRIBERS, {
         partitionId: this.partitionId,
       });
       return;
@@ -1510,37 +1954,37 @@ class PartitionService extends EventEmitter {
     let entryType = entry.type;
 
     // For raw SQL queries, determine operation type from SQL
-    if (entryType === 'QUERY' && entry.sql) {
+    if (entryType === PARTITION_SERVICE_OPERATION.QUERY && entry.sql) {
       const sqlUpper = entry.sql.trim().toUpperCase();
-      if (sqlUpper.startsWith('INSERT')) {
-        entryType = 'INSERT';
-      } else if (sqlUpper.startsWith('UPDATE')) {
-        entryType = 'UPDATE';
-      } else if (sqlUpper.startsWith('DELETE')) {
-        entryType = 'DELETE';
+      if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.INSERT)) {
+        entryType = PARTITION_SERVICE_OPERATION.INSERT;
+      } else if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.UPDATE)) {
+        entryType = PARTITION_SERVICE_OPERATION.UPDATE;
+      } else if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.DELETE)) {
+        entryType = PARTITION_SERVICE_OPERATION.DELETE;
       }
-      this.logger.info('Detected operation type from SQL', {
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.DETECTED_OPERATION_TYPE, {
         originalType: entry.type,
         detectedType: entryType,
       });
     }
 
     switch (entryType) {
-    case 'INSERT':
+    case PARTITION_SERVICE_OPERATION.INSERT:
       operation = CDCOperation.INSERT;
       break;
-    case 'UPDATE':
+    case PARTITION_SERVICE_OPERATION.UPDATE:
       operation = CDCOperation.UPDATE;
       break;
-    case 'UPSERT':
+    case PARTITION_SERVICE_OPERATION.UPSERT:
       // UPSERT is INSERT OR REPLACE - treat as INSERT for CDC purposes
       operation = CDCOperation.INSERT;
       break;
-    case 'DELETE':
+    case PARTITION_SERVICE_OPERATION.DELETE:
       operation = CDCOperation.DELETE;
       break;
     default:
-      this.logger.warn('Unknown operation type, skipping CDC', {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_UNKNOWN_OPERATION, {
         entryType,
         partitionId: this.partitionId,
       });
@@ -1551,58 +1995,55 @@ class PartitionService extends EventEmitter {
     // This ensures CDC events always include the primary key field
     // For DELETE operations, use whereClause as the data (contains primary key)
     let cdcData = entry.data || {};
-    if (entry.type === 'UPDATE' && entry.whereClause) {
+    if ((entry.type === PARTITION_SERVICE_OPERATION.UPDATE ||
+      entryType === PARTITION_SERVICE_OPERATION.UPDATE) && entry.whereClause) {
       cdcData = {...entry.whereClause, ...cdcData};
-    } else if (entry.type === 'DELETE' && entry.whereClause) {
+    } else if ((entry.type === PARTITION_SERVICE_OPERATION.DELETE ||
+      entryType === PARTITION_SERVICE_OPERATION.DELETE) && entry.whereClause) {
       cdcData = {...entry.whereClause};
     }
 
-    // For raw SQL queries, extract table name and try to get updated data
+    // For raw SQL queries, extract table name and data from SQL
     let tableName = entry.tableName || this.tableName;
-    if (entry.type === 'QUERY' && entry.sql) {
+    if (entry.type === PARTITION_SERVICE_OPERATION.QUERY && entry.sql) {
       // Extract table name from SQL
-      const tableMatch = entry.sql.match(/(?:UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+(\w+)/i);
+      const tableMatch = entry.sql.match(
+        /(?:UPDATE|INSERT\s+(?:OR\s+REPLACE\s+)?INTO|DELETE\s+FROM)\s+(\w+)/i,
+      );
       if (tableMatch) {
-        tableName = tableMatch[1];
-        this.logger.info('Extracted table name from SQL', {tableName});
+        tableName = tableMatch[NUM.ONE];
+        this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_TABLE_NAME, {tableName});
+      }
+
+      // For parameterized queries (SQL with ? placeholders), build data from params
+      const hasParams = entry.params && entry.params.length > NUM.ZERO;
+      const hasPlaceholders = entry.sql.includes(
+        PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK,
+      );
+
+      if (hasParams && hasPlaceholders && Object.keys(cdcData).length === NUM.ZERO) {
+        cdcData = this.extractDataFromParameterizedSQL(
+          entry.sql, entry.params, tableName, entryType,
+        );
+      }
+
+      // For INSERT queries without params, parse literal values from SQL
+      if ((entryType === PARTITION_SERVICE_OPERATION.INSERT ||
+        entryType === PARTITION_SERVICE_OPERATION.UPSERT) &&
+          Object.keys(cdcData).length === NUM.ZERO) {
+        cdcData = this.extractInsertDataFromSQL(entry.sql, tableName);
       }
 
       // For UPDATE queries, try to extract the WHERE clause to query updated row
-      if (entryType === 'UPDATE' && Object.keys(cdcData).length === 0) {
-        // Match WHERE clause with optional parentheses: WHERE (col = 'val') or WHERE col = 'val'
-        const whereMatch = entry.sql.match(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i);
-        if (whereMatch) {
-          const keyColumn = whereMatch[1];
-          const keyValue = whereMatch[2];
-          this.logger.info('Fetching updated row for CDC', {
-            tableName,
-            keyColumn,
-            keyValue,
-          });
-          // Query the updated row to get full data for CDC
-          try {
-            const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE ${keyColumn} = ?`);
-            const row = stmt.get(keyValue);
-            if (row) {
-              cdcData = row;
-              this.logger.info('Fetched updated row for CDC', {
-                tableName,
-                rowKeys: Object.keys(row),
-              });
-            } else {
-              this.logger.warn('No row found for CDC update', {tableName, keyColumn, keyValue});
-            }
-          } catch (err) {
-            this.logger.warn('Failed to fetch updated row for CDC', {
-              tableName,
-              error: err.message,
-            });
-          }
-        } else {
-          this.logger.warn('Could not extract WHERE clause from UPDATE SQL', {
-            sql: entry.sql.substring(0, 100),
-          });
-        }
+      if (entryType === PARTITION_SERVICE_OPERATION.UPDATE &&
+        Object.keys(cdcData).length === NUM.ZERO) {
+        cdcData = this.extractUpdateDataFromSQL(entry.sql, tableName);
+      }
+
+      // For DELETE queries, extract the WHERE clause
+      if (entryType === PARTITION_SERVICE_OPERATION.DELETE &&
+        Object.keys(cdcData).length === NUM.ZERO) {
+        cdcData = this.extractDeleteDataFromSQL(entry.sql);
       }
     }
 
@@ -1615,7 +2056,7 @@ class PartitionService extends EventEmitter {
       sourceReplica: this.replicaId,
     };
 
-    this.logger.info('Generated CDC event', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATED_CDC_EVENT, {
       partitionId: this.partitionId,
       operation,
       tableName: cdcEvent.tableName,
@@ -1624,10 +2065,10 @@ class PartitionService extends EventEmitter {
     });
 
     // Deliver to subscribers
-    let deliveredCount = 0;
+    let deliveredCount = NUM.ZERO;
     for (const subscriber of this.cdcSubscribers) {
       try {
-        if (typeof subscriber === 'function') {
+        if (typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION) {
           await subscriber(cdcEvent);
           deliveredCount++;
         } else if (subscriber.handleCDCEvent) {
@@ -1635,20 +2076,409 @@ class PartitionService extends EventEmitter {
           deliveredCount++;
         }
       } catch (error) {
-        this.logger.error('Failed to deliver CDC event', {
+        this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_DELIVERY_FAILED, {
           partitionId: this.partitionId,
           error: error.message,
         });
+        throw error;
       }
     }
 
-    this.logger.info('CDC event delivery complete', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_DELIVERY_COMPLETE, {
       partitionId: this.partitionId,
       deliveredCount,
       subscriberCount: this.cdcSubscribers.size,
     });
 
-    this.emit('cdcEvent', cdcEvent);
+    this.emit(PARTITION_SERVICE_EVENT.CDC_EVENT, cdcEvent);
+  }
+
+  /**
+   * Extract data from INSERT SQL by querying the inserted row.
+   * @param {string} sql - INSERT SQL statement.
+   * @param {string} tableName - Table name.
+   * @return {Object} Extracted data or empty object.
+   * @private
+   */
+  extractInsertDataFromSQL(sql, tableName) {
+    // Parse INSERT INTO table (col1, col2) VALUES ('val1', 'val2')
+    // or INSERT OR REPLACE INTO table (col1, col2) VALUES ('val1', 'val2')
+    const columnsMatch = sql.match(
+      /INSERT\s+(?:OR\s+REPLACE\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
+    );
+    const valuesMatch = sql.match(/VALUES\s*\(([^)]+)\)/i);
+
+    if (!columnsMatch || !valuesMatch) {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_INSERT_FAILED, {
+        sql: sql.substring(
+          NUM.ZERO,
+          PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
+        ),
+      });
+      return {};
+    }
+
+    const columns = columnsMatch[NUM.ONE].split(
+      PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
+    ).map((c) => c.trim());
+    const valuesStr = valuesMatch[NUM.ONE];
+
+    // Parse values - handle quoted strings and numbers
+    const values = this.parseValuesFromSQL(valuesStr);
+
+    if (columns.length !== values.length) {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_INSERT_MISMATCH, {
+        columns: columns.length,
+        values: values.length,
+      });
+      return {};
+    }
+
+    // Build data object
+    const data = {};
+    for (let i = NUM.ZERO; i < columns.length; i++) {
+      data[columns[i]] = values[i];
+    }
+
+    // Try to fetch the full row from DB to get any default values
+    // Find the primary key column (usually first column or 'id')
+    const pkColumn = columns[NUM.ZERO];
+    const pkValue = values[NUM.ZERO];
+
+    if (pkValue !== null && pkValue !== undefined) {
+      try {
+        const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE ${pkColumn} = ?`);
+        const row = stmt.get(pkValue);
+        if (row) {
+          this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
+            tableName,
+            rowKeys: Object.keys(row),
+          });
+          return row;
+        }
+      } catch (err) {
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_INSERT_FAILED, {
+          tableName,
+          error: err.message,
+        });
+        throw err;
+      }
+    }
+
+    return data;
+  }
+
+  /**
+   * Extract data from UPDATE SQL by querying the updated row.
+   * @param {string} sql - UPDATE SQL statement.
+   * @param {string} tableName - Table name.
+   * @return {Object} Extracted data or empty object.
+   * @private
+   */
+  extractUpdateDataFromSQL(sql, tableName) {
+    // Match WHERE clause with optional parentheses: WHERE (col = 'val') or WHERE col = 'val'
+    const whereMatch = sql.match(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i);
+    if (whereMatch) {
+      const keyColumn = whereMatch[NUM.ONE];
+      const keyValue = whereMatch[NUM.TWO];
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
+        tableName,
+        keyColumn,
+        keyValue,
+      });
+      // Query the updated row to get full data for CDC
+      try {
+        const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE ${keyColumn} = ?`);
+        const row = stmt.get(keyValue);
+        if (row) {
+          this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
+            tableName,
+            rowKeys: Object.keys(row),
+          });
+          return row;
+        } else {
+          this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_NO_ROW_UPDATE, {
+            tableName,
+            keyColumn,
+            keyValue,
+          });
+        }
+      } catch (err) {
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_UPDATE_FAILED, {
+          tableName,
+          error: err.message,
+        });
+        throw err;
+      }
+    } else {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_UPDATE_WHERE_FAILED, {
+        sql: sql.substring(
+          NUM.ZERO,
+          PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
+        ),
+      });
+    }
+    return {};
+  }
+
+  /**
+   * Extract data from DELETE SQL.
+   * @param {string} sql - DELETE SQL statement.
+   * @return {Object} Extracted data or empty object.
+   * @private
+   */
+  extractDeleteDataFromSQL(sql) {
+    // Match WHERE clause: WHERE col = 'val'
+    const whereMatch = sql.match(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i);
+    if (whereMatch) {
+      const keyColumn = whereMatch[NUM.ONE];
+      const keyValue = whereMatch[NUM.TWO];
+      return {[keyColumn]: keyValue};
+    }
+    this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_DELETE_WHERE_FAILED, {
+      sql: sql.substring(
+        NUM.ZERO,
+        PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
+      ),
+    });
+    return {};
+  }
+
+  /**
+   * Extract data from parameterized SQL (SQL with ? placeholders and params array).
+   * @param {string} sql - SQL statement with ? placeholders.
+   * @param {Array} params - Parameter values.
+   * @param {string} tableName - Table name.
+   * @param {string} operationType - INSERT, UPDATE, or DELETE.
+   * @return {Object} Extracted data or empty object.
+   * @private
+   */
+  extractDataFromParameterizedSQL(sql, params, tableName, operationType) {
+    if (!params || params.length === NUM.ZERO) {
+      return {};
+    }
+
+    if (operationType === PARTITION_SERVICE_OPERATION.INSERT ||
+      operationType === PARTITION_SERVICE_OPERATION.UPSERT) {
+      // Parse INSERT INTO table (col1, col2, ...) VALUES (?, ?, ...)
+      const columnsMatch = sql.match(
+        /INSERT\s+(?:OR\s+REPLACE\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
+      );
+      if (!columnsMatch) {
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {
+          sql: sql.substring(
+            NUM.ZERO,
+            PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
+          ),
+        });
+        return {};
+      }
+
+      const columns = columnsMatch[NUM.ONE].split(
+        PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
+      ).map((c) => c.trim());
+      if (columns.length !== params.length) {
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
+          columns: columns.length,
+          params: params.length,
+        });
+        return {};
+      }
+
+      // Build data object from columns and params
+      const data = {};
+      for (let i = NUM.ZERO; i < columns.length; i++) {
+        data[columns[i]] = params[i];
+      }
+
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_INSERT, {
+        tableName,
+        dataKeys: Object.keys(data),
+      });
+
+      return data;
+    }
+
+    if (operationType === PARTITION_SERVICE_OPERATION.UPDATE) {
+      // Parse UPDATE table SET col1 = ?, col2 = ? WHERE pk = ?
+      const setMatch = sql.match(/SET\s+(.+?)\s+WHERE/i);
+      const whereMatch = sql.match(/WHERE\s+(.+)$/i);
+
+      if (!setMatch) {
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_UPDATE_SET_FAILED, {
+          sql: sql.substring(
+            NUM.ZERO,
+            PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
+          ),
+        });
+        return {};
+      }
+
+      // Extract column names from SET clause
+      const setColumns = setMatch[NUM.ONE].split(
+        PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
+      ).map((part) => {
+        const match = part.trim().match(/^(\w+)\s*=/);
+        return match ? match[NUM.ONE] : null;
+      }).filter(Boolean);
+
+      // Extract column names from WHERE clause
+      // Handle parentheses around the WHERE clause: WHERE (col = ?)
+      const whereColumns = [];
+      if (whereMatch) {
+        // Strip outer parentheses if present
+        let whereContent = whereMatch[NUM.ONE].trim();
+        if (whereContent.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.OPEN_PAREN) &&
+          whereContent.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.CLOSE_PAREN)) {
+          whereContent = whereContent.slice(NUM.ONE, -NUM.ONE).trim();
+        }
+        const whereParts = whereContent.split(/\s+AND\s+/i);
+        for (const part of whereParts) {
+          // Strip any remaining parentheses from individual parts
+          const cleanPart = part.trim().replace(/^\(+|\)+$/g, STRING.EMPTY);
+          const match = cleanPart.match(/^(\w+)\s*=/);
+          if (match) whereColumns.push(match[NUM.ONE]);
+        }
+      }
+
+      const allColumns = [...setColumns, ...whereColumns];
+      if (allColumns.length !== params.length) {
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_UPDATE_MISMATCH, {
+          columns: allColumns.length,
+          params: params.length,
+        });
+        return {};
+      }
+
+      // Build data object
+      const data = {};
+      for (let i = NUM.ZERO; i < allColumns.length; i++) {
+        data[allColumns[i]] = params[i];
+      }
+
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_UPDATE, {
+        tableName,
+        dataKeys: Object.keys(data),
+      });
+
+      return data;
+    }
+
+    if (operationType === PARTITION_SERVICE_OPERATION.DELETE) {
+      // Parse DELETE FROM table WHERE pk = ? or WHERE (pk = ?)
+      const whereMatch = sql.match(/WHERE\s+\(?(.+?)\)?$/i);
+      if (!whereMatch) {
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_DELETE_WHERE_FAILED, {
+          sql: sql.substring(
+            NUM.ZERO,
+            PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
+          ),
+        });
+        return {};
+      }
+
+      const whereColumns = [];
+      // Handle both "col = ?" and "(col = ?)" formats
+      const whereContent = whereMatch[NUM.ONE].replace(/^\(|\)$/g, STRING.EMPTY).trim();
+      const whereParts = whereContent.split(/\s+AND\s+/i);
+      for (const part of whereParts) {
+        const match = part.trim().match(/^(\w+)\s*=/);
+        if (match) whereColumns.push(match[NUM.ONE]);
+      }
+
+      if (whereColumns.length !== params.length) {
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_DELETE_MISMATCH, {
+          columns: whereColumns.length,
+          params: params.length,
+          whereContent,
+        });
+        return {};
+      }
+
+      const data = {};
+      for (let i = NUM.ZERO; i < whereColumns.length; i++) {
+        data[whereColumns[i]] = params[i];
+      }
+
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_DELETE, {
+        tableName,
+        dataKeys: Object.keys(data),
+      });
+
+      return data;
+    }
+
+    return {};
+  }
+
+  /**
+   * Parse values from SQL VALUES clause.
+   * @param {string} valuesStr - Values string like "'val1', 123, NULL".
+   * @return {Array} Parsed values.
+   * @private
+   */
+  parseValuesFromSQL(valuesStr) {
+    const values = [];
+    let current = STRING.EMPTY;
+    let inQuote = false;
+    let quoteChar = null;
+
+    for (let i = NUM.ZERO; i < valuesStr.length; i++) {
+      const char = valuesStr[i];
+
+      if (!inQuote && (char === PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE ||
+        char === PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE)) {
+        inQuote = true;
+        quoteChar = char;
+      } else if (inQuote && char === quoteChar) {
+        // Check for escaped quote
+        if (i + NUM.ONE < valuesStr.length &&
+          valuesStr[i + NUM.ONE] === quoteChar) {
+          current += char;
+          i += NUM.ONE; // Skip next quote
+        } else {
+          inQuote = false;
+          quoteChar = null;
+        }
+      } else if (!inQuote && char === PARTITION_SERVICE_SQL_FRAGMENT.COMMA) {
+        values.push(this.parseValue(current.trim()));
+        current = STRING.EMPTY;
+      } else {
+        current += char;
+      }
+    }
+
+    // Don't forget the last value
+    if (current.trim()) {
+      values.push(this.parseValue(current.trim()));
+    }
+
+    return values;
+  }
+
+  /**
+   * Parse a single value from SQL.
+   * @param {string} val - Value string.
+   * @return {*} Parsed value.
+   * @private
+   */
+  parseValue(val) {
+    if (val.toUpperCase() === PARTITION_SERVICE_SQL_FRAGMENT.NULL_VALUE) {
+      return null;
+    }
+    // Remove quotes
+    if ((val.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE) &&
+      val.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE)) ||
+        (val.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE) &&
+        val.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE))) {
+      return val.slice(NUM.ONE, -NUM.ONE);
+    }
+    // Try to parse as number
+    const num = Number(val);
+    if (!isNaN(num)) {
+      return num;
+    }
+    return val;
   }
 
   /**
@@ -1657,7 +2487,7 @@ class PartitionService extends EventEmitter {
    */
   subscribeToCDC(subscriber) {
     this.cdcSubscribers.add(subscriber);
-    this.logger.debug('CDC subscriber added', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_SUBSCRIBER_ADDED, {
       partitionId: this.partitionId,
       subscriberCount: this.cdcSubscribers.size,
     });
@@ -1669,7 +2499,7 @@ class PartitionService extends EventEmitter {
    */
   unsubscribeFromCDC(subscriber) {
     this.cdcSubscribers.delete(subscriber);
-    this.logger.debug('CDC subscriber removed', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_SUBSCRIBER_REMOVED, {
       partitionId: this.partitionId,
       subscriberCount: this.cdcSubscribers.size,
     });
@@ -1682,19 +2512,23 @@ class PartitionService extends EventEmitter {
    */
   async calculatePartitionSize() {
     if (!this.db) {
-      return 0;
+      return NUM.ZERO;
     }
 
     try {
-      const pageCount = this.db.pragma('page_count', {simple: true});
-      const pageSize = this.db.pragma('page_size', {simple: true});
+      const pageCount = this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_PAGE_COUNT, {
+        simple: true,
+      });
+      const pageSize = this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_PAGE_SIZE, {
+        simple: true,
+      });
       return pageCount * pageSize;
     } catch (error) {
-      this.logger.error('Failed to calculate partition size', {
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.PARTITION_SIZE_FAILED, {
         partitionId: this.partitionId,
         error: error.message,
       });
-      return 0;
+      return NUM.ZERO;
     }
   }
 
@@ -1708,19 +2542,21 @@ class PartitionService extends EventEmitter {
       this.sizeBytes = sizeBytes;
       this.lastSizeUpdate = Date.now();
 
-      this.logger.debug('Partition size updated', {
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.PARTITION_SIZE_UPDATED, {
         partitionId: this.partitionId,
         sizeBytes,
-        sizeMB: (sizeBytes / (1024 * 1024)).toFixed(2),
+        sizeMB: (
+          sizeBytes / PARTITION_SERVICE_VALUE.SIZE_BYTES_DIVISOR
+        ).toFixed(PARTITION_SERVICE_VALUE.SIZE_MB_PRECISION),
       });
 
-      this.emit('sizeUpdated', {
+      this.emit(PARTITION_SERVICE_EVENT.SIZE_UPDATED, {
         partitionId: this.partitionId,
         sizeBytes,
         timestamp: this.lastSizeUpdate,
       });
     } catch (error) {
-      this.logger.error('Failed to update partition size', {
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.PARTITION_SIZE_UPDATE_FAILED, {
         partitionId: this.partitionId,
         error: error.message,
       });
@@ -1802,7 +2638,7 @@ class PartitionService extends EventEmitter {
    */
   setKeyRange(keyRange) {
     this.keyRange = {...keyRange};
-    this.emit('keyRangeChanged', {
+    this.emit(PARTITION_SERVICE_EVENT.KEY_RANGE_CHANGED, {
       partitionId: this.partitionId,
       keyRange: this.keyRange,
     });
@@ -1863,7 +2699,7 @@ class PartitionService extends EventEmitter {
    * @return {number} Current term.
    */
   getCurrentTerm() {
-    return this.storage?.currentTerm || 0;
+    return this.storage?.currentTerm || NUM.ZERO;
   }
 
   /**
@@ -1888,8 +2724,8 @@ class PartitionService extends EventEmitter {
       role: this.role,
       isLeader: this.isLeader,
       leaderId: this.leaderId,
-      term: this.storage?.currentTerm || 0,
-      logLength: this.storage?.getLogLength() || 0,
+      term: this.storage?.currentTerm || NUM.ZERO,
+      logLength: this.storage?.getLogLength() || NUM.ZERO,
       state: this.state,
       keyRange: this.keyRange,
       sizeBytes: this.sizeBytes,
@@ -1909,6 +2745,10 @@ class PartitionService extends EventEmitter {
     if (this.rebalancer) {
       this.rebalancer.systemTableCache = systemTableCache;
     }
+    if (this.rebalanceCoordinator) {
+      this.rebalanceCoordinator.systemTableCache = systemTableCache;
+    }
+    this.maybeInitializeRebalancer();
   }
 
   /**
@@ -1922,6 +2762,335 @@ class PartitionService extends EventEmitter {
     if (this.rebalancer) {
       this.rebalancer.cdcIntegrationService = cdcIntegrationService;
     }
+    if (this.rebalanceCoordinator) {
+      this.rebalanceCoordinator.cdcIntegrationService = cdcIntegrationService;
+    }
+    this.maybeInitializeRebalancer();
+    this.flushRoleUpdate().catch((error) => {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.PERSIST_ROLE_AFTER_CDC_FAILED, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        error: error.message,
+      });
+    });
+    this.flushLeaderNodeUpdate().catch((error) => {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.PERSIST_LEADER_AFTER_CDC_FAILED, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        error: error.message,
+      });
+    });
+  }
+
+  /**
+   * Set table policy service for rebalancing decisions.
+   * @param {Object} tablePolicyService - Table policy service instance.
+   */
+  setTablePolicyService(tablePolicyService) {
+    this.tablePolicyService = tablePolicyService;
+    if (this.rebalancer) {
+      this.rebalancer.tablePolicyService = tablePolicyService;
+    }
+    if (this.rebalanceCoordinator) {
+      this.rebalanceCoordinator.tablePolicyService = tablePolicyService;
+    }
+    this.maybeInitializeRebalancer();
+  }
+
+  /**
+   * Set SQL query engine for rebalancer operations.
+   * @param {Object} sqlQueryEngine - SQL query engine instance.
+   */
+  setSqlQueryEngine(sqlQueryEngine) {
+    this.sqlQueryEngine = sqlQueryEngine;
+    if (this.rebalanceCoordinator) {
+      this.rebalanceCoordinator.sqlQueryEngine = sqlQueryEngine;
+    }
+    this.maybeInitializeRebalancer();
+  }
+
+  /**
+   * Initialize rebalancer only when required dependencies are ready.
+   * @private
+   */
+  maybeInitializeRebalancer() {
+    if (this.rebalancer || this.rebalanceCoordinator) {
+      return;
+    }
+
+    if (!this.systemTableCache ||
+        !this.cdcIntegrationService ||
+        !this.tablePolicyService ||
+        !this.messageRouter ||
+        !this.sqlQueryEngine) {
+      return;
+    }
+
+    this.initializeRebalancer();
+  }
+
+  /**
+   * Initialize rebalancer components with required dependencies.
+   * @private
+   */
+  initializeRebalancer() {
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      PARTITION_SERVICE_ERROR_MSG.REBALANCER_CACHE_REQUIRED,
+    );
+    const cdcIntegrationService = assertCritical(
+      this.cdcIntegrationService,
+      PARTITION_SERVICE_ERROR_MSG.REBALANCER_CDC_REQUIRED,
+    );
+    const tablePolicyService = assertCritical(
+      this.tablePolicyService,
+      PARTITION_SERVICE_ERROR_MSG.REBALANCER_POLICY_REQUIRED,
+    );
+    const messageRouter = assertCritical(
+      this.messageRouter,
+      PARTITION_SERVICE_ERROR_MSG.REBALANCER_ROUTER_REQUIRED,
+    );
+    const sqlQueryEngine = assertCritical(
+      this.sqlQueryEngine,
+      PARTITION_SERVICE_ERROR_MSG.REBALANCER_SQL_ENGINE_REQUIRED,
+    );
+
+    this.rebalanceCoordinator = new RebalanceCoordinator({
+      nodeId: this.nodeId,
+      systemTableCache: systemTableCache,
+      cdcIntegrationService: cdcIntegrationService,
+      messageRouter: messageRouter,
+      tablePolicyService: tablePolicyService,
+      sqlQueryEngine: sqlQueryEngine,
+      enableTimeouts: false,
+    });
+    this.rebalanceCoordinator.initialize();
+
+    this.rebalancer = new UnifiedRebalancer({
+      entityId: this.partitionId,
+      entityType: EntityType.PARTITION,
+      systemTableCache: systemTableCache,
+      cdcIntegrationService: cdcIntegrationService,
+      tablePolicyService: tablePolicyService,
+      nodeId: this.nodeId,
+      replicaStateMachine: this.replicaStateMachine,
+      messageRouter: messageRouter,
+      rebalanceCoordinator: this.rebalanceCoordinator,
+    });
+    this.rebalancer.initialize();
+    this.rebalancer.setLeader(this.isLeader);
+  }
+
+  /**
+   * Queue a raft role update for persistence.
+   * @param {string} role - New raft role.
+   * @private
+   */
+  queueRoleUpdate(role) {
+    if (!role || role === this.persistedRole) {
+      return;
+    }
+
+    this.pendingRoleUpdate = role;
+    if (!this.cdcIntegrationService) {
+      return;
+    }
+
+    this.flushRoleUpdate().catch((error) => {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.PERSIST_RAFT_ROLE_FAILED, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        role,
+        error: error.message,
+      });
+    });
+  }
+
+  /**
+   * Queue a partition leader update for persistence.
+   * @param {string} leaderNodeId - Leader node ID.
+   * @private
+   */
+  queueLeaderNodeUpdate(leaderNodeId) {
+    if (!leaderNodeId || leaderNodeId === this.persistedLeaderNodeId) {
+      return;
+    }
+
+    this.pendingLeaderNodeUpdate = leaderNodeId;
+    if (!this.cdcIntegrationService) {
+      return;
+    }
+
+    this.flushLeaderNodeUpdate().catch((error) => {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.PERSIST_PARTITION_LEADER_FAILED, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        leaderNodeId,
+        error: error.message,
+      });
+    });
+  }
+
+  /**
+   * Persist the latest pending raft role update.
+   * @return {Promise<void>}
+   * @private
+   */
+  async flushRoleUpdate() {
+    if (this.roleUpdateInFlight) {
+      return;
+    }
+
+    if (!this.cdcIntegrationService || !this.pendingRoleUpdate ||
+        this.pendingRoleUpdate === this.persistedRole) {
+      return;
+    }
+
+    if (!this.isServicesLeaderAvailable()) {
+      this.scheduleRoleUpdateRetry();
+      return;
+    }
+
+    this.roleUpdateInFlight = true;
+    const role = this.pendingRoleUpdate;
+
+    try {
+      await this.cdcIntegrationService.updateSystemTableRow(
+        SystemTableName.SERVICES,
+        {service_id: this.replicaId},
+        {
+          raft_role: role,
+          updated_at: Date.now(),
+        },
+      );
+      this.persistedRole = role;
+    } finally {
+      this.roleUpdateInFlight = false;
+    }
+  }
+
+  /**
+   * Persist the latest pending partition leader update.
+   * @return {Promise<void>}
+   * @private
+   */
+  async flushLeaderNodeUpdate() {
+    if (this.leaderNodeUpdateInFlight) {
+      return;
+    }
+
+    this.syncLeaderNodeFromCache();
+
+    if (!this.isLeader) {
+      this.pendingLeaderNodeUpdate = null;
+      return;
+    }
+
+    if (!this.cdcIntegrationService || !this.pendingLeaderNodeUpdate ||
+        this.pendingLeaderNodeUpdate === this.persistedLeaderNodeId) {
+      return;
+    }
+
+    if (!this.isPartitionsLeaderAvailable()) {
+      this.scheduleLeaderNodeUpdateRetry();
+      return;
+    }
+
+    this.leaderNodeUpdateInFlight = true;
+    const leaderNodeId = this.pendingLeaderNodeUpdate;
+
+    try {
+      await this.cdcIntegrationService.updateSystemTableRow(
+        SystemTableName.PARTITIONS,
+        {[COLUMN.PARTITION_ID]: this.partitionId},
+        {
+          [COLUMN.LEADER_NODE_ID]: leaderNodeId,
+          [COLUMN.UPDATED_AT]: Date.now(),
+        },
+      );
+      this.persistedLeaderNodeId = leaderNodeId;
+    } finally {
+      this.leaderNodeUpdateInFlight = false;
+    }
+  }
+
+  /**
+   * Sync persisted leader node state from the system cache.
+   * @private
+   */
+  syncLeaderNodeFromCache() {
+    if (!this.systemTableCache || !this.systemTableCache.get) {
+      return;
+    }
+    const cached = this.systemTableCache.get(TABLES.PARTITIONS, this.partitionId);
+    const cachedLeaderNodeId = cached?.[COLUMN.LEADER_NODE_ID] || null;
+    if (!cachedLeaderNodeId) {
+      return;
+    }
+    this.persistedLeaderNodeId = cachedLeaderNodeId;
+    if (this.pendingLeaderNodeUpdate === cachedLeaderNodeId) {
+      this.pendingLeaderNodeUpdate = null;
+    }
+  }
+
+  /**
+   * Check if the partitions partition leader is available for writes.
+   * @return {boolean} True if a leader with an address is known.
+   * @private
+   */
+  isPartitionsLeaderAvailable() {
+    return isSystemTableWriteReady(this.systemTableCache, SystemTableName.PARTITIONS);
+  }
+
+  /**
+   * Check if the services partition leader is available for writes.
+   * @return {boolean} True if a leader with an address is known.
+   * @private
+   */
+  isServicesLeaderAvailable() {
+    return isSystemTableWriteReady(this.systemTableCache, SystemTableName.SERVICES);
+  }
+
+  /**
+   * Schedule a retry for persisting the pending role update.
+   * @private
+   */
+  scheduleRoleUpdateRetry() {
+    if (this.roleUpdateRetryTimer) {
+      return;
+    }
+    this.roleUpdateRetryTimer = setTimeout(() => {
+      this.roleUpdateRetryTimer = null;
+      this.flushRoleUpdate().catch((error) => {
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.PERSIST_RAFT_ROLE_FAILED, {
+          partitionId: this.partitionId,
+          replicaId: this.replicaId,
+          role: this.pendingRoleUpdate,
+          error: error.message,
+        });
+      });
+    }, TIME_MS.SECOND);
+  }
+
+  /**
+   * Schedule a retry for persisting the pending partition leader update.
+   * @private
+   */
+  scheduleLeaderNodeUpdateRetry() {
+    if (this.leaderNodeUpdateRetryTimer) {
+      return;
+    }
+    this.leaderNodeUpdateRetryTimer = setTimeout(() => {
+      this.leaderNodeUpdateRetryTimer = null;
+      this.flushLeaderNodeUpdate().catch((error) => {
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.PERSIST_PARTITION_LEADER_FAILED, {
+          partitionId: this.partitionId,
+          replicaId: this.replicaId,
+          leaderNodeId: this.pendingLeaderNodeUpdate,
+          error: error.message,
+        });
+      });
+    }, TIME_MS.SECOND);
   }
 
   /**
@@ -1931,397 +3100,12 @@ class PartitionService extends EventEmitter {
    */
   triggerRebalanceCheck(reason) {
     if (this.rebalancer && this.isLeader) {
-      this.rebalancer.triggerImmediateCheck(reason);
+      this.rebalancer.recordStateChange(reason);
     }
   }
 
   /**
-   * Handle rebalancer addReplica event.
-   * Creates a new replica on the specified node by sending CREATE_REPLICA message.
-   * Requirements: 10.1, 10.2, 10.20, 10.21
-   * @param {Object} event - Add replica event.
-   * @private
-   */
-  async handleRebalancerAddReplica(event) {
-    const {replicaId, nodeId: targetNodeId, requestId} = event;
-    const startTime = Date.now();
-
-    this.logger.info('Rebalancer requested replica addition - sending CREATE_REPLICA', {
-      partitionId: this.partitionId,
-      tableName: this.tableName,
-      entityId: event.entityId,
-      replicaId,
-      targetNodeId,
-      requestId,
-    });
-
-    // Record the pending replica in services table BEFORE sending CREATE_REPLICA
-    // This ensures the replica is tracked even if the message fails
-    if (this.cdcIntegrationService) {
-      try {
-        this.logger.debug('Inserting pending replica into services table', {
-          partitionId: this.partitionId,
-          replicaId,
-          targetNodeId,
-          elapsedMs: Date.now() - startTime,
-        });
-        await this.cdcIntegrationService.insertSystemTableRow('services', {
-          service_id: replicaId,
-          service_type: 'partition',
-          node_id: targetNodeId,
-          partition_id: this.partitionId,
-          group_id: null,
-          replica_id: replicaId,
-          raft_role: 'follower',
-          status: 'starting',
-          address: null,
-          created_at: Date.now(),
-          updated_at: Date.now(),
-        });
-        this.logger.debug('Recorded pending replica in services table', {
-          partitionId: this.partitionId,
-          replicaId,
-          targetNodeId,
-          elapsedMs: Date.now() - startTime,
-        });
-      } catch (err) {
-        this.logger.error('Failed to record pending replica in services table', {
-          partitionId: this.partitionId,
-          replicaId,
-          error: err.message,
-          elapsedMs: Date.now() - startTime,
-        });
-        // Continue anyway - the replica creation may still succeed
-      }
-    }
-
-    // Query system table cache for all replicas of this partition
-    // Requirements: 4.1 - Ensure new replica receives complete peer list
-    let replicaIds = [this.replicaId]; // Start with current replica
-    if (this.systemTableCache) {
-      try {
-        const partitionServices = this.systemTableCache.filter(
-          'services',
-          (svc) => svc.partition_id === this.partitionId &&
-                   svc.service_type === 'partition',
-        );
-        // Extract service_ids (replica IDs) from all partition services
-        const existingReplicaIds = partitionServices.map((svc) => svc.service_id);
-        // Include the new replica being created
-        replicaIds = [...new Set([...existingReplicaIds, replicaId])];
-        this.logger.debug('Collected replica IDs for CREATE_REPLICA', {
-          partitionId: this.partitionId,
-          replicaIds,
-          existingCount: existingReplicaIds.length,
-        });
-      } catch (err) {
-        this.logger.warn('Failed to query replica IDs from cache, using current replica only', {
-          partitionId: this.partitionId,
-          error: err.message,
-        });
-        // Fall back to including at least the current replica and new replica
-        replicaIds = [this.replicaId, replicaId];
-      }
-    } else {
-      // No cache available, include at least current and new replica
-      replicaIds = [this.replicaId, replicaId];
-    }
-
-    // Build unified peer addresses for Raft communication
-    // Format: {nodeId}/partition/{replicaId}
-    // Requirements: 1.1, 1.4, 3.1, 3.2, 3.3
-    let peerAddresses = [];
-    const addressManager = AddressManager.getInstance();
-    if (this.systemTableCache) {
-      try {
-        const partitionServices = this.systemTableCache.filter(
-          'services',
-          (svc) => svc.partition_id === this.partitionId &&
-                   svc.service_type === 'partition',
-        );
-        peerAddresses = partitionServices
-          .filter((svc) => svc.node_id) // Only include services with node_id
-          .map((svc) => addressManager.format(svc.node_id, 'partition', svc.service_id));
-        this.logger.debug('Built peer addresses for CREATE_REPLICA', {
-          partitionId: this.partitionId,
-          peerAddresses,
-          count: peerAddresses.length,
-        });
-      } catch (err) {
-        this.logger.warn('Failed to build peer addresses from cache', {
-          partitionId: this.partitionId,
-          error: err.message,
-        });
-      }
-    }
-
-    // Build CREATE_REPLICA message per design spec
-    const message = {
-      type: 'CREATE_REPLICA',
-      request_id: requestId,
-      partition_id: this.partitionId,
-      table_name: this.tableName,
-      table_id: this.tableId,
-      replica_id: replicaId,
-      replica_ids: replicaIds, // Include all peer replica IDs for Raft group
-      peer_addresses: peerAddresses, // Include unified peer addresses for routing
-      leader_address: this.nodeId,
-      leader_replica_id: this.replicaId,
-      key_range: this.keyRange,
-      schema: this.schema,
-      timestamp: Date.now(),
-    };
-
-    // Target the lifecycle handler on the target node using unified address format
-    // Requirements: 1.1, 1.4, 7.1 - Unified address format {nodeId}/{entityType}/{entityId}
-    const targetAddress = addressManager.format(targetNodeId, 'lifecycle', 'manager');
-
-    // Use messageRouter for cross-node delivery
-    // This properly routes through WebSocket to reach remote nodes
-    if (this.messageRouter) {
-      try {
-        this.logger.info('Sending CREATE_REPLICA via messageRouter', {
-          partitionId: this.partitionId,
-          tableName: this.tableName,
-          replicaId,
-          targetNodeId,
-          targetAddress,
-          requestId,
-          elapsedMs: Date.now() - startTime,
-        });
-        const result = await this.deliverWithAck(
-          this.messageRouter,
-          targetAddress,
-          message,
-          30000, // 30 second timeout per requirement 10.20
-        );
-
-        this.logger.info('CREATE_REPLICA deliverWithAck returned', {
-          partitionId: this.partitionId,
-          replicaId,
-          targetNodeId,
-          resultStatus: result?.status,
-          elapsedMs: Date.now() - startTime,
-        });
-
-        if (result.status === 'initiated' || result.status === 'already_exists') {
-          this.logger.info('CREATE_REPLICA acknowledged via messageRouter', {
-            partitionId: this.partitionId,
-            replicaId,
-            targetNodeId,
-            status: result.status,
-            elapsedMs: Date.now() - startTime,
-          });
-
-          // Update services table status to 'active' after successful ACK
-          // The replica is now being created on the target node
-          if (this.cdcIntegrationService && result.status === 'initiated') {
-            this.cdcIntegrationService.updateSystemTableRow('services',
-              {service_id: replicaId},
-              {status: 'syncing', updated_at: Date.now()},
-            ).catch((err) => {
-              this.logger.error('Failed to update replica status to syncing', {
-                partitionId: this.partitionId,
-                replicaId,
-                error: err.message,
-              });
-            });
-          }
-
-          this.emit('rebalancerAddReplica', {
-            partitionId: this.partitionId,
-            tableName: this.tableName,
-            replicaId,
-            targetNodeId,
-            sourceNodeId: this.nodeId,
-            acknowledged: true,
-            status: result.status,
-          });
-        }
-        return;
-      } catch (error) {
-        this.logger.error('CREATE_REPLICA failed via messageRouter', {
-          partitionId: this.partitionId,
-          tableName: this.tableName,
-          replicaId,
-          targetNodeId,
-          error: error.message,
-          errorStack: error.stack,
-          elapsedMs: Date.now() - startTime,
-        });
-
-        // Update services table status to 'failed'
-        if (this.cdcIntegrationService) {
-          this.cdcIntegrationService.updateSystemTableRow('services',
-            {service_id: replicaId},
-            {status: 'failed', updated_at: Date.now()},
-          ).catch((err) => {
-            this.logger.error('Failed to update replica status to failed', {
-              partitionId: this.partitionId,
-              replicaId,
-              error: err.message,
-            });
-          });
-        }
-
-        this.emit('rebalancerAddReplicaFailed', {
-          partitionId: this.partitionId,
-          replicaId,
-          targetNodeId,
-          error: error.message,
-        });
-        return;
-      }
-    }
-
-    // No messageRouter available - this is an error condition
-    // Requirements: 3.2, 7.4 - All messages must go through WebSocket (MessageRouter)
-    this.logger.error('No messageRouter available for CREATE_REPLICA', {
-      partitionId: this.partitionId,
-      replicaId,
-      targetNodeId,
-    });
-
-    this.emit('rebalancerAddReplicaFailed', {
-      partitionId: this.partitionId,
-      replicaId,
-      targetNodeId,
-      error: 'No messageRouter available',
-    });
-  }
-
-  /**
-   * Handle rebalancer removeReplica event.
-   * Removes a replica from the specified node by sending REMOVE_REPLICA message.
-   * Requirements: 10.10, 10.11, 10.20, 10.21
-   * @param {Object} event - Remove replica event.
-   * @private
-   */
-  async handleRebalancerRemoveReplica(event) {
-    const {replicaId, nodeId: targetNodeId, requestId} = event;
-
-    this.logger.info('Rebalancer requested replica removal - sending REMOVE_REPLICA', {
-      partitionId: this.partitionId,
-      entityId: event.entityId,
-      replicaId,
-      targetNodeId,
-      requestId,
-    });
-
-    // Delete the service row BEFORE sending REMOVE_REPLICA
-    // This must happen first because:
-    // 1. The services-p1 partition service may be shut down after REMOVE_REPLICA
-    // 2. If we're removing a replica from services-p1, we can't write to it after shutdown
-    // 3. The cache update needs to happen while we still have a working partition
-    if (this.cdcIntegrationService) {
-      try {
-        await this.cdcIntegrationService.deleteSystemTableRow(
-          SystemTableName.SERVICES,
-          {service_id: replicaId},
-        );
-        this.logger.info('Deleted service row before REMOVE_REPLICA', {
-          partitionId: this.partitionId,
-          replicaId,
-          targetNodeId,
-        });
-      } catch (deleteError) {
-        // Log but continue - the replica removal should still proceed
-        // The row will be orphaned but the replica will still be removed
-        this.logger.warn('Failed to delete service row before REMOVE_REPLICA', {
-          partitionId: this.partitionId,
-          replicaId,
-          error: deleteError.message,
-        });
-      }
-    }
-
-    // Build REMOVE_REPLICA message per design spec
-    const message = {
-      type: 'REMOVE_REPLICA',
-      request_id: requestId,
-      partition_id: this.partitionId,
-      replica_id: replicaId,
-      reason: 'rebalancing',
-      timestamp: Date.now(),
-    };
-
-    // Target the lifecycle handler on the target node using unified address format
-    // Requirements: 1.1, 1.4, 7.1 - Unified address format {nodeId}/{entityType}/{entityId}
-    const targetAddress = AddressManager.getInstance().format(
-      targetNodeId, 'lifecycle', 'manager'
-    );
-
-    // Use messageRouter for cross-node delivery
-    // This properly routes through WebSocket to reach remote nodes
-    if (this.messageRouter) {
-      try {
-        const result = await this.deliverWithAck(
-          this.messageRouter,
-          targetAddress,
-          message,
-          30000, // 30 second timeout per requirement 10.20
-        );
-
-        if (result.status === 'initiated' || result.status === 'not_found') {
-          this.logger.info('REMOVE_REPLICA acknowledged via messageRouter', {
-            partitionId: this.partitionId,
-            replicaId,
-            targetNodeId,
-            status: result.status,
-          });
-
-          // Mark the pending move as completed
-          // This prevents the rebalancer from repeatedly trying to remove it
-          if (this.rebalancer) {
-            this.rebalancer.completePendingMove(requestId, 'completed');
-          }
-
-          this.emit('rebalancerRemoveReplica', {
-            partitionId: this.partitionId,
-            tableName: this.tableName,
-            replicaId,
-            nodeId: targetNodeId,
-            acknowledged: true,
-            status: result.status,
-          });
-        }
-        return;
-      } catch (error) {
-        this.logger.error('REMOVE_REPLICA failed via messageRouter', {
-          partitionId: this.partitionId,
-          replicaId,
-          targetNodeId,
-          error: error.message,
-        });
-
-        this.emit('rebalancerRemoveReplicaFailed', {
-          partitionId: this.partitionId,
-          replicaId,
-          targetNodeId,
-          error: error.message,
-        });
-        return;
-      }
-    }
-
-    // No messageRouter available - this is an error condition
-    // Requirements: 3.2, 7.4 - All messages must go through WebSocket (MessageRouter)
-    this.logger.error('No messageRouter available for REMOVE_REPLICA', {
-      partitionId: this.partitionId,
-      replicaId,
-      targetNodeId,
-    });
-
-    this.emit('rebalancerRemoveReplicaFailed', {
-      partitionId: this.partitionId,
-      replicaId,
-      targetNodeId,
-      error: 'No messageRouter available',
-    });
-  }
-
-  /**
-   * Extract ACK from transport response at any nesting level.
+   * Extract ACK from transport response.
    * Requirements: 6.1, 6.2, 6.3, 6.4
    * @param {Object} result - Transport result (now flat structure).
    * @param {string} requestId - Expected request ID.
@@ -2335,21 +3119,8 @@ class PartitionService extends EventEmitter {
     if (result.request_id === requestId) {
       return result;
     }
-
-    // Search through nested result structures (for message group path)
-    // This handles cases where the result is wrapped by transport layers
-    let current = result;
-    const maxDepth = 5; // Prevent infinite loops
-    for (let i = 0; i < maxDepth && current; i++) {
-      if (current.request_id === requestId) {
-        return current;
-      }
-      // Check nested result
-      if (current.result) {
-        current = current.result;
-      } else {
-        break;
-      }
+    if (result.result) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NESTED_ACK_UNSUPPORTED);
     }
 
     return null;
@@ -2366,10 +3137,15 @@ class PartitionService extends EventEmitter {
    * @return {Promise<Object>} ACK response or timeout error.
    * @private
    */
-  async deliverWithAck(transport, targetAddress, message, timeoutMs = 30000) {
+  async deliverWithAck(
+    transport,
+    targetAddress,
+    message,
+    timeoutMs = PARTITION_SERVICE_VALUE.DEFAULT_TIMEOUT_MS,
+  ) {
     const requestId = message.request_id;
 
-    this.logger.debug('Delivering message with ACK via PendingRequestTracker', {
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.DELIVERING_WITH_ACK, {
       requestId,
       targetAddress,
       messageType: message.type,
@@ -2399,16 +3175,16 @@ class PartitionService extends EventEmitter {
       if (earlyRejection) {
         // If the error is "Tracker shutdown", this is expected for self-removal
         // The operation was successful - the replica was removed
-        if (earlyRejection.message === 'Tracker shutdown') {
-          this.logger.debug('Tracker shutdown during delivery - operation completed', {
+        if (earlyRejection.message === PARTITION_SERVICE_LOG_MSG.TRACKER_SHUTDOWN) {
+          this.logger.debug(PARTITION_SERVICE_LOG_MSG.TRACKER_SHUTDOWN_DELIVERY, {
             requestId,
             partitionId: this.partitionId,
           });
           // Return a synthetic ACK indicating the operation completed
           return {
             request_id: requestId,
-            status: 'initiated',
-            message: 'Replica removal completed (self-removal)',
+            status: PARTITION_SERVICE_STATUS.INITIATED,
+            message: PARTITION_SERVICE_LOG_MSG.REPLICA_REMOVAL_SELF,
           };
         }
         throw earlyRejection;
@@ -2417,8 +3193,8 @@ class PartitionService extends EventEmitter {
       // Check if delivery failed (no connection, no handler, etc.)
       // Fail fast instead of waiting for timeout
       if (result && result.acknowledged === false) {
-        const errorMsg = result.error || 'Delivery not acknowledged';
-        this.logger.warn('Message delivery failed', {
+        const errorMsg = result.error || PARTITION_SERVICE_ERROR_MSG.DELIVERY_NOT_ACK;
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.MESSAGE_DELIVERY_FAILED, {
           requestId,
           targetAddress,
           error: errorMsg,
@@ -2439,7 +3215,7 @@ class PartitionService extends EventEmitter {
       if (ack) {
         // Resolve via tracker (clears timeout)
         this.pendingRequestTracker.resolve(requestId, ack);
-        this.logger.debug('Received ACK in transport response', {
+        this.logger.debug(PARTITION_SERVICE_LOG_MSG.RECEIVED_ACK, {
           requestId,
           status: ack.status,
           partitionId: this.partitionId,
@@ -2451,15 +3227,15 @@ class PartitionService extends EventEmitter {
       return await trackPromise;
     } catch (error) {
       // Handle "Tracker shutdown" error gracefully for self-removal scenarios
-      if (error.message === 'Tracker shutdown') {
-        this.logger.debug('Tracker shutdown during ACK wait - operation completed', {
+      if (error.message === PARTITION_SERVICE_LOG_MSG.TRACKER_SHUTDOWN) {
+        this.logger.debug(PARTITION_SERVICE_LOG_MSG.TRACKER_SHUTDOWN_ACK, {
           requestId,
           partitionId: this.partitionId,
         });
         return {
           request_id: requestId,
-          status: 'initiated',
-          message: 'Replica removal completed (self-removal)',
+          status: PARTITION_SERVICE_STATUS.INITIATED,
+          message: PARTITION_SERVICE_LOG_MSG.REPLICA_REMOVAL_SELF,
         };
       }
       // Ensure cleanup on error - reject the pending request if still tracked
@@ -2471,14 +3247,78 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Schedule learner promotion check after minimum delay.
+   * Learners are promoted to followers after catching up with the leader's log.
+   * This prevents new replicas from disrupting existing leadership.
+   * @private
+   */
+  scheduleLearnerPromotion() {
+    if (this.learnerPromotionTimer) {
+      return;
+    }
+
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED, {
+      replicaId: this.replicaId,
+      partitionId: this.partitionId,
+      delayMs: this.learnerPromotionDelayMs,
+    });
+
+    this.learnerPromotionTimer = setTimeout(() => {
+      this.checkLearnerPromotion();
+    }, this.learnerPromotionDelayMs);
+  }
+
+  /**
+   * Check if learner can be promoted to follower.
+   * Promotion happens when:
+   * 1. Minimum delay has passed (already satisfied by timer)
+   * 2. We have received at least one heartbeat from the leader
+   * @private
+   */
+  checkLearnerPromotion() {
+    this.learnerPromotionTimer = null;
+
+    // Only promote if still in learner role
+    if (this.role !== RaftRole.LEARNER) {
+      return;
+    }
+
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_CHECK, {
+      replicaId: this.replicaId,
+      partitionId: this.partitionId,
+      leaderId: this.leaderId,
+      logLength: this.storage?.getLogLength() || 0,
+    });
+
+    // Promote to follower - now eligible to participate in elections
+    this.role = RaftRole.FOLLOWER;
+    this.queueRoleUpdate(this.role);
+
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTED_TO_FOLLOWER, {
+      replicaId: this.replicaId,
+      partitionId: this.partitionId,
+      leaderId: this.leaderId,
+    });
+
+    // Start election timer now that we're a full participant
+    this.startElection();
+  }
+
+  /**
    * Shutdown the partition service.
    * @return {Promise<void>}
    */
   async shutdown() {
-    this.logger.info('Shutting down partition service', {
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.SHUTTING_DOWN, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
     });
+
+    // Clear learner promotion timer
+    if (this.learnerPromotionTimer) {
+      clearTimeout(this.learnerPromotionTimer);
+      this.learnerPromotionTimer = null;
+    }
 
     // Close log adapter first to prevent database access after close
     // This must happen before raft.end() to avoid race conditions
@@ -2495,6 +3335,15 @@ class PartitionService extends EventEmitter {
     // Stop periodic size updates
     this.stopPeriodicSizeUpdates();
 
+    if (this.roleUpdateRetryTimer) {
+      clearTimeout(this.roleUpdateRetryTimer);
+      this.roleUpdateRetryTimer = null;
+    }
+    if (this.leaderNodeUpdateRetryTimer) {
+      clearTimeout(this.leaderNodeUpdateRetryTimer);
+      this.leaderNodeUpdateRetryTimer = null;
+    }
+
     // Clear pending requests via PendingRequestTracker (Requirements: 3.5)
     if (this.pendingRequestTracker) {
       this.pendingRequestTracker.clear();
@@ -2508,7 +3357,7 @@ class PartitionService extends EventEmitter {
 
     // Unregister from transport
     if (this.transport) {
-      this.transport.unregister(this.replicaId);
+      this.transport.unregister(this.unifiedAddress);
     }
 
     // Close database
@@ -2520,7 +3369,7 @@ class PartitionService extends EventEmitter {
     this.initialized = false;
     this.cdcSubscribers.clear();
 
-    this.emit('shutdown', {
+    this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
     });

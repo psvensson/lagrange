@@ -9,8 +9,23 @@ import {v4 as uuidv4} from 'uuid';
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {TABLES} from '../constants/index.js';
 import {
-  LiveQueryEventType,
+  LIVE_QUERY_AST_TYPE,
+  LIVE_QUERY_CONFIG_KEY,
+  LIVE_QUERY_CURSOR,
+  LIVE_QUERY_DEFAULTS,
+  LIVE_QUERY_DEFAULT_VALUE,
+  LIVE_QUERY_EMIT,
+  LIVE_QUERY_ERROR_MSG,
+  LIVE_QUERY_EVENT,
+  LIVE_QUERY_LOG_MSG,
+  LIVE_QUERY_OPERATION,
+  LIVE_QUERY_SQL,
+  LIVE_QUERY_SUBSYSTEM,
+  TYPEOF,
+} from './live-query-constants.js';
+import {
   compilePredicate,
   canonicalizePredicate,
   extractPartitionKeyValue,
@@ -33,7 +48,7 @@ class QueryGroup extends EventEmitter {
     this.queryId = uuidv4();
     this.parsedQuery = options.parsedQuery || null;
     this.systemCache = options.systemCache || null;
-    this.nodeId = options.nodeId || 'unknown';
+    this.nodeId = options.nodeId || LIVE_QUERY_DEFAULT_VALUE.UNKNOWN;
 
     // Extract table name
     this.table = this.parsedQuery?.from?.name || null;
@@ -53,7 +68,8 @@ class QueryGroup extends EventEmitter {
 
     // Configuration
     this.config = ConfigurationManager.getInstance();
-    this.ttlMs = this.config.get('liveQuery.defaultTtlMs') || 30000;
+    this.ttlMs = this.config.get(LIVE_QUERY_CONFIG_KEY.DEFAULT_TTL_MS) ||
+      LIVE_QUERY_DEFAULTS.DEFAULT_TTL_MS;
 
     // Partition key info
     this.partitionKeyColumn = null;
@@ -77,7 +93,7 @@ class QueryGroup extends EventEmitter {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('query-group');
+        return loggingService.forSubsystem(LIVE_QUERY_SUBSYSTEM.QUERY_GROUP);
       }
     } catch {
       // Logging not available
@@ -103,7 +119,7 @@ class QueryGroup extends EventEmitter {
     this.clients.set(clientId, subscription);
     this.lastActivityAt = Date.now();
 
-    this.logger.info('Client joined query group', {
+    this.logger.info(LIVE_QUERY_LOG_MSG.CLIENT_JOINED, {
       queryId: this.queryId,
       clientId,
       clientCount: this.clients.size,
@@ -121,7 +137,7 @@ class QueryGroup extends EventEmitter {
     this.clients.delete(clientId);
     this.lastActivityAt = Date.now();
 
-    this.logger.info('Client left query group', {
+    this.logger.info(LIVE_QUERY_LOG_MSG.CLIENT_LEFT, {
       queryId: this.queryId,
       clientId,
       clientCount: this.clients.size,
@@ -191,21 +207,21 @@ class QueryGroup extends EventEmitter {
     }
 
     try {
-      const tableInfo = this.systemCache.get('tables', this.table) ||
-        this.systemCache.find('tables', (t) =>
+      const tableInfo = this.systemCache.get(TABLES.TABLES, this.table) ||
+        this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === this.table || t.tableName === this.table,
         );
 
       if (tableInfo) {
         this.partitionKeyColumn = tableInfo.primary_key ||
-          tableInfo.primaryKey || 'id';
+          tableInfo.primaryKey || LIVE_QUERY_DEFAULT_VALUE.PRIMARY_KEY_FALLBACK;
         return this.partitionKeyColumn;
       }
     } catch {
       // Cache not available
     }
 
-    return 'id';
+    return LIVE_QUERY_DEFAULT_VALUE.PRIMARY_KEY_FALLBACK;
   }
 
   /**
@@ -234,13 +250,13 @@ class QueryGroup extends EventEmitter {
     }
 
     try {
-      const partitions = this.systemCache.filter('partitions', (p) =>
+      const partitions = this.systemCache.filter(TABLES.PARTITIONS, (p) =>
         p.table_name === this.table || p.tableName === this.table,
       ) || [];
 
       if (keyValue === null) {
         // No partition key filter - subscribe to all partitions
-        this.logger.warn('Live query without partition key filter', {
+        this.logger.warn(LIVE_QUERY_LOG_MSG.NO_PARTITION_KEY_FILTER, {
           queryId: this.queryId,
           table: this.table,
         });
@@ -261,11 +277,11 @@ class QueryGroup extends EventEmitter {
 
       return matching;
     } catch (error) {
-      this.logger.error('Failed to find partitions for query', {
+      this.logger.error(LIVE_QUERY_LOG_MSG.PARTITIONS_LOOKUP_FAILED, {
         queryId: this.queryId,
         error: error.message,
       });
-      return new Set();
+      throw error;
     }
   }
 
@@ -308,11 +324,11 @@ class QueryGroup extends EventEmitter {
     if (a === null) return -1;
     if (b === null) return 1;
 
-    if (typeof a === 'string' && typeof b === 'string') {
+    if (typeof a === TYPEOF.STRING && typeof b === TYPEOF.STRING) {
       return a.localeCompare(b);
     }
 
-    if (typeof a === 'number' && typeof b === 'number') {
+    if (typeof a === TYPEOF.NUMBER && typeof b === TYPEOF.NUMBER) {
       return a - b;
     }
 
@@ -333,20 +349,21 @@ class QueryGroup extends EventEmitter {
       // Fan-out to all clients
       for (const [clientId, subscription] of this.clients) {
         try {
-          if (subscription.client && typeof subscription.client.send === 'function') {
+          if (subscription.client && typeof subscription.client.send === TYPEOF.FUNCTION) {
             subscription.client.send(JSON.stringify(result));
           }
           subscription.lastSeenHLC = change.hlc_timestamp || change.hlcTimestamp;
         } catch (error) {
-          this.logger.warn('Failed to send to client', {
+          this.logger.warn(LIVE_QUERY_LOG_MSG.FAILED_SEND_CLIENT, {
             queryId: this.queryId,
             clientId,
             error: error.message,
           });
+          throw error;
         }
       }
 
-      this.emit('change', result);
+      this.emit(LIVE_QUERY_EMIT.CHANGE, result);
     }
   }
 
@@ -360,10 +377,10 @@ class QueryGroup extends EventEmitter {
     const hlc = change.hlc_timestamp || change.hlcTimestamp;
 
     switch (operation?.toUpperCase()) {
-    case 'INSERT':
+    case LIVE_QUERY_OPERATION.INSERT:
       if (newRow && this.predicate(newRow)) {
         return {
-          type: LiveQueryEventType.INSERT,
+          type: LIVE_QUERY_EVENT.INSERT,
           queryId: this.queryId,
           row: newRow,
           hlc,
@@ -371,14 +388,14 @@ class QueryGroup extends EventEmitter {
       }
       break;
 
-    case 'UPDATE': {
+    case LIVE_QUERY_OPERATION.UPDATE: {
       const oldMatched = oldRow && this.predicate(oldRow);
       const newMatched = newRow && this.predicate(newRow);
 
       if (!oldMatched && newMatched) {
         // Row now matches predicate - treat as insert
         return {
-          type: LiveQueryEventType.INSERT,
+          type: LIVE_QUERY_EVENT.INSERT,
           queryId: this.queryId,
           row: newRow,
           hlc,
@@ -386,7 +403,7 @@ class QueryGroup extends EventEmitter {
       } else if (oldMatched && !newMatched) {
         // Row no longer matches - treat as delete
         return {
-          type: LiveQueryEventType.DELETE,
+          type: LIVE_QUERY_EVENT.DELETE,
           queryId: this.queryId,
           row: oldRow,
           hlc,
@@ -394,7 +411,7 @@ class QueryGroup extends EventEmitter {
       } else if (oldMatched && newMatched) {
         // Row still matches - send update
         return {
-          type: LiveQueryEventType.UPDATE,
+          type: LIVE_QUERY_EVENT.UPDATE,
           queryId: this.queryId,
           old: oldRow,
           new: newRow,
@@ -404,10 +421,10 @@ class QueryGroup extends EventEmitter {
       break;
     }
 
-    case 'DELETE':
+    case LIVE_QUERY_OPERATION.DELETE:
       if (oldRow && this.predicate(oldRow)) {
         return {
-          type: LiveQueryEventType.DELETE,
+          type: LIVE_QUERY_EVENT.DELETE,
           queryId: this.queryId,
           row: oldRow,
           hlc,
@@ -436,7 +453,7 @@ class QueryGroup extends EventEmitter {
         }
         this.subscribedPartitions.delete(partitionId);
 
-        this.logger.debug('Unsubscribed from partition', {
+        this.logger.debug(LIVE_QUERY_LOG_MSG.UNSUBSCRIBED_PARTITION, {
           queryId: this.queryId,
           partitionId,
         });
@@ -453,7 +470,7 @@ class QueryGroup extends EventEmitter {
         }
         this.subscribedPartitions.add(partitionId);
 
-        this.logger.debug('Subscribed to partition', {
+        this.logger.debug(LIVE_QUERY_LOG_MSG.SUBSCRIBED_PARTITION, {
           queryId: this.queryId,
           partitionId,
         });
@@ -466,7 +483,8 @@ class QueryGroup extends EventEmitter {
    * @return {string} Query signature.
    */
   getQuerySignature() {
-    return `${this.table}:${canonicalizePredicate(this.whereClause)}`;
+    return `${this.table}${LIVE_QUERY_CURSOR.SEPARATOR}` +
+      `${canonicalizePredicate(this.whereClause)}`;
   }
 
   /**
@@ -497,7 +515,7 @@ class QueryGroup extends EventEmitter {
     this.cdcHandlers.clear();
     this.removeAllListeners();
 
-    this.logger.info('Query group cleaned up', {
+    this.logger.info(LIVE_QUERY_LOG_MSG.GROUP_CLEANED_UP, {
       queryId: this.queryId,
       table: this.table,
     });
@@ -521,7 +539,7 @@ class LiveQueryManager extends EventEmitter {
 
     this.systemCache = options.systemCache || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
-    this.nodeId = options.nodeId || 'unknown';
+    this.nodeId = options.nodeId || LIVE_QUERY_DEFAULT_VALUE.UNKNOWN;
 
     // Query groups: groupKey -> QueryGroup
     this.queryGroups = new Map();
@@ -534,9 +552,12 @@ class LiveQueryManager extends EventEmitter {
 
     // Configuration
     this.config = ConfigurationManager.getInstance();
-    this.maxQueriesPerClient = this.config.get('liveQuery.maxPerClient') || 100;
-    this.cleanupIntervalMs = this.config.get('liveQuery.cleanupIntervalMs') || 5000;
-    this.cursorRetentionMs = this.config.get('liveQuery.cursorRetentionMs') || 300000;
+    this.maxQueriesPerClient = this.config.get(LIVE_QUERY_CONFIG_KEY.MAX_PER_CLIENT) ||
+      LIVE_QUERY_DEFAULTS.MAX_PER_CLIENT;
+    this.cleanupIntervalMs = this.config.get(LIVE_QUERY_CONFIG_KEY.CLEANUP_INTERVAL_MS) ||
+      LIVE_QUERY_DEFAULTS.CLEANUP_INTERVAL_MS;
+    this.cursorRetentionMs = this.config.get(LIVE_QUERY_CONFIG_KEY.CURSOR_RETENTION_MS) ||
+      LIVE_QUERY_DEFAULTS.CURSOR_RETENTION_MS;
 
     // Cleanup interval
     this.cleanupInterval = null;
@@ -564,7 +585,7 @@ class LiveQueryManager extends EventEmitter {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('live-query-manager');
+        return loggingService.forSubsystem(LIVE_QUERY_SUBSYSTEM.LIVE_QUERY_MANAGER);
       }
     } catch {
       // Logging not available
@@ -595,7 +616,7 @@ class LiveQueryManager extends EventEmitter {
 
     this.initialized = true;
 
-    this.logger.info('Live query manager initialized', {
+    this.logger.info(LIVE_QUERY_LOG_MSG.MANAGER_INITIALIZED, {
       nodeId: this.nodeId,
       maxQueriesPerClient: this.maxQueriesPerClient,
     });
@@ -614,13 +635,16 @@ class LiveQueryManager extends EventEmitter {
     const currentCount = this.clientQueryCounts.get(clientId) || 0;
     if (currentCount >= this.maxQueriesPerClient) {
       throw new Error(
-        `Maximum concurrent live queries exceeded (${this.maxQueriesPerClient})`,
+        `${LIVE_QUERY_ERROR_MSG.MAX_QUERIES_EXCEEDED_PREFIX}` +
+          `${this.maxQueriesPerClient}` +
+          `${LIVE_QUERY_ERROR_MSG.MAX_QUERIES_EXCEEDED_SUFFIX}`,
       );
     }
 
     // Compute group key
     const table = parsedQuery?.from?.name;
-    const groupKey = `${table}:${canonicalizePredicate(parsedQuery?.where)}`;
+    const groupKey = `${table}${LIVE_QUERY_CURSOR.SEPARATOR}` +
+      `${canonicalizePredicate(parsedQuery?.where)}`;
 
     let group = this.queryGroups.get(groupKey);
     let isNewGroup = false;
@@ -629,7 +653,7 @@ class LiveQueryManager extends EventEmitter {
       // Join existing group
       group.addClient(client);
 
-      this.logger.info('Client joined existing query group', {
+      this.logger.info(LIVE_QUERY_LOG_MSG.CLIENT_JOINED_EXISTING, {
         groupKey,
         queryId: group.queryId,
         clientId,
@@ -653,7 +677,7 @@ class LiveQueryManager extends EventEmitter {
       );
       group.active = true;
 
-      this.logger.info('Created new query group', {
+      this.logger.info(LIVE_QUERY_LOG_MSG.GROUP_CREATED, {
         groupKey,
         queryId: group.queryId,
         partitionCount: group.subscribedPartitions.size,
@@ -670,14 +694,14 @@ class LiveQueryManager extends EventEmitter {
     this.clientQueryCounts.set(clientId, currentCount + 1);
 
     // Log creation event
-    this.logger.info('Live query subscription created', {
+    this.logger.info(LIVE_QUERY_LOG_MSG.SUBSCRIPTION_CREATED, {
       queryId: group.queryId,
       clientId,
       table,
       isNewGroup,
     });
 
-    this.emit('subscription-created', {
+    this.emit(LIVE_QUERY_EMIT.SUBSCRIPTION_CREATED, {
       queryId: group.queryId,
       clientId,
       table,
@@ -701,7 +725,7 @@ class LiveQueryManager extends EventEmitter {
    */
   async sendSnapshotToClient(group, client) {
     if (!this.sqlQueryEngine) {
-      this.logger.warn('SQL query engine not available for snapshot', {
+      this.logger.warn(LIVE_QUERY_LOG_MSG.SNAPSHOT_ENGINE_UNAVAILABLE, {
         queryId: group.queryId,
       });
       return;
@@ -713,35 +737,36 @@ class LiveQueryManager extends EventEmitter {
       const result = await this.sqlQueryEngine.executeQuery(sql);
 
       const snapshot = {
-        type: LiveQueryEventType.SNAPSHOT,
+        type: LIVE_QUERY_EVENT.SNAPSHOT,
         queryId: group.queryId,
         rows: result.results || [],
         count: result.count || 0,
       };
 
-      if (client && typeof client.send === 'function') {
+      if (client && typeof client.send === TYPEOF.FUNCTION) {
         client.send(JSON.stringify(snapshot));
       }
 
-      this.logger.debug('Snapshot sent to client', {
+      this.logger.debug(LIVE_QUERY_LOG_MSG.SNAPSHOT_SENT, {
         queryId: group.queryId,
         clientId: client.id,
         rowCount: snapshot.count,
       });
     } catch (error) {
-      this.logger.error('Failed to send snapshot', {
+      this.logger.error(LIVE_QUERY_LOG_MSG.SNAPSHOT_FAILED, {
         queryId: group.queryId,
         error: error.message,
       });
 
       // Send error to client
-      if (client && typeof client.send === 'function') {
+      if (client && typeof client.send === TYPEOF.FUNCTION) {
         client.send(JSON.stringify({
-          type: LiveQueryEventType.ERROR,
+          type: LIVE_QUERY_EVENT.ERROR,
           queryId: group.queryId,
           error: error.message,
         }));
       }
+      throw error;
     }
   }
 
@@ -753,25 +778,25 @@ class LiveQueryManager extends EventEmitter {
    */
   buildSelectSQL(parsedQuery) {
     // Simple reconstruction - in production would use proper SQL builder
-    const parts = ['SELECT'];
+    const parts = [LIVE_QUERY_SQL.SELECT];
 
     // Columns
     if (parsedQuery.columns) {
       const cols = parsedQuery.columns.map((c) => {
-        if (c.type === 'star') return '*';
-        if (c.expression?.type === 'column_ref') {
+        if (c.type === LIVE_QUERY_AST_TYPE.STAR) return LIVE_QUERY_SQL.STAR;
+        if (c.expression?.type === LIVE_QUERY_AST_TYPE.COLUMN_REF) {
           const col = c.expression.column || c.expression.name;
           return c.alias ? `${col} AS ${c.alias}` : col;
         }
-        return '*';
+        return LIVE_QUERY_SQL.STAR;
       });
       parts.push(cols.join(', '));
     } else {
-      parts.push('*');
+      parts.push(LIVE_QUERY_SQL.STAR);
     }
 
     // FROM
-    parts.push('FROM', parsedQuery.from?.name || 'unknown');
+    parts.push(LIVE_QUERY_SQL.FROM, parsedQuery.from?.name || LIVE_QUERY_DEFAULT_VALUE.UNKNOWN);
 
     // WHERE (simplified - would need full AST to SQL conversion)
     // For now, we rely on the original SQL being available
@@ -795,13 +820,13 @@ class LiveQueryManager extends EventEmitter {
     const result = group.renewClient(clientId, cursor);
 
     if (result) {
-      this.logger.debug('Live query renewed', {
+      this.logger.debug(LIVE_QUERY_LOG_MSG.QUERY_RENEWED, {
         queryId,
         clientId,
         cursor,
       });
 
-      this.emit('subscription-renewed', {
+      this.emit(LIVE_QUERY_EMIT.SUBSCRIPTION_RENEWED, {
         queryId,
         clientId,
         cursor,
@@ -821,7 +846,7 @@ class LiveQueryManager extends EventEmitter {
   async resumeLiveQuery(queryId, clientId, cursor) {
     const group = this.findGroupByQueryId(queryId);
     if (!group) {
-      throw new Error(`Query group not found: ${queryId}`);
+      throw new Error(`${LIVE_QUERY_ERROR_MSG.QUERY_GROUP_NOT_FOUND_PREFIX}${queryId}`);
     }
 
     // Validate cursor is within retention window
@@ -829,7 +854,7 @@ class LiveQueryManager extends EventEmitter {
     const oldestAllowed = Date.now() - this.cursorRetentionMs;
 
     if (cursorTime < oldestAllowed) {
-      throw new Error('Cursor too old - full resync required');
+      throw new Error(LIVE_QUERY_ERROR_MSG.CURSOR_TOO_OLD);
     }
 
     // Re-add client to group
@@ -846,7 +871,7 @@ class LiveQueryManager extends EventEmitter {
     const currentCount = this.clientQueryCounts.get(clientId) || 0;
     this.clientQueryCounts.set(clientId, currentCount + 1);
 
-    this.logger.info('Live query resumed', {
+    this.logger.info(LIVE_QUERY_LOG_MSG.QUERY_RESUMED, {
       queryId,
       clientId,
       cursor,
@@ -870,7 +895,7 @@ class LiveQueryManager extends EventEmitter {
     if (!cursor) return 0;
 
     // HLC format: "physical:logical:nodeId" or just timestamp
-    const parts = cursor.split(':');
+    const parts = cursor.split(LIVE_QUERY_CURSOR.SEPARATOR);
     const physical = parseInt(parts[0], 10);
     return isNaN(physical) ? 0 : physical;
   }
@@ -906,13 +931,13 @@ class LiveQueryManager extends EventEmitter {
       this.removeGroup(group);
     }
 
-    this.logger.info('Live query unregistered', {
+    this.logger.info(LIVE_QUERY_LOG_MSG.QUERY_UNREGISTERED, {
       queryId,
       clientId,
       groupRemoved: shouldRemove,
     });
 
-    this.emit('subscription-removed', {
+    this.emit(LIVE_QUERY_EMIT.SUBSCRIPTION_REMOVED, {
       queryId,
       clientId,
     });
@@ -942,7 +967,7 @@ class LiveQueryManager extends EventEmitter {
     group.cleanup();
     this.queryGroups.delete(groupKey);
 
-    this.logger.info('Query group removed', {
+    this.logger.info(LIVE_QUERY_LOG_MSG.GROUP_REMOVED, {
       queryId: group.queryId,
       groupKey,
     });
@@ -956,7 +981,7 @@ class LiveQueryManager extends EventEmitter {
   handleClientDisconnection(clientId) {
     this.removeAllClientSubscriptions(clientId);
 
-    this.logger.info('Client disconnected - cleaned up subscriptions', {
+    this.logger.info(LIVE_QUERY_LOG_MSG.CLIENT_DISCONNECTED_CLEANUP, {
       clientId,
     });
   }
@@ -995,7 +1020,7 @@ class LiveQueryManager extends EventEmitter {
     // Find all groups for this table
     for (const group of this.queryGroups.values()) {
       if (group.table === tableName) {
-        this.logger.info('Updating subscriptions for partition change', {
+        this.logger.info(LIVE_QUERY_LOG_MSG.SUBSCRIPTIONS_PARTITION_CHANGE, {
           queryId: group.queryId,
           table: tableName,
           operation: change.operation,
@@ -1048,12 +1073,12 @@ class LiveQueryManager extends EventEmitter {
           this.clientQueryCounts.set(clientId, currentCount - 1);
         }
 
-        this.logger.info('Live query subscription expired', {
+        this.logger.info(LIVE_QUERY_LOG_MSG.SUBSCRIPTION_EXPIRED, {
           queryId: group.queryId,
           clientId,
         });
 
-        this.emit('subscription-expired', {
+        this.emit(LIVE_QUERY_EMIT.SUBSCRIPTION_EXPIRED, {
           queryId: group.queryId,
           clientId,
         });
@@ -1124,7 +1149,7 @@ class LiveQueryManager extends EventEmitter {
     this.initialized = false;
     this.removeAllListeners();
 
-    this.logger.info('Live query manager shutdown', {
+    this.logger.info(LIVE_QUERY_LOG_MSG.MANAGER_SHUTDOWN, {
       nodeId: this.nodeId,
     });
   }

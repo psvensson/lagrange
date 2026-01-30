@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {SQLQueryView, QUERY_TYPE} from '../../../src/cli/sql/sql-query-view.js';
 
 test('SQLQueryView', async (t) => {

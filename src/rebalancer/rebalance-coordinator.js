@@ -1,8 +1,11 @@
 /**
  * RebalanceCoordinator - Owns the complete rebalancing workflow.
  *
- * Consolidates functionality from UnifiedRebalancer, ReplicaStateMachine,
- * and the coordination parts of ReplicaLifecycleManager.
+ * Architecture (per system guidelines):
+ * - NO in-memory operations cache - system cache is single source of truth
+ * - All reads go through SQL engine (which uses system cache first, then partition)
+ * - All writes go through SQL engine to partition leader
+ * - CDC events update system cache automatically
  *
  * Requirements: 2.1, 2.2, 2.3, 2.4, 6.1, 6.2
  */
@@ -11,7 +14,8 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
+import {WORKFLOW_STEP, NUM} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
 import {
   ReplicaStatus,
   WORKFLOW_STEP_TO_STATUS,
@@ -19,10 +23,50 @@ import {
   isTerminalStep,
   createOperation as createOperationRecord,
 } from './replica-status.js';
+import {
+  ReplicaOperationMessageType,
+  ReplicaOperationField,
+  ReplicaOperationResponseStatus,
+} from './replica-operation-constants.js';
+import {
+  REBALANCE_COORDINATOR_ERROR_MSG,
+  REBALANCE_COORDINATOR_EVENT,
+  REBALANCE_COORDINATOR_LOG_MSG,
+  REBALANCER_CONFIG_KEY,
+  REBALANCER_DEFAULT,
+  REBALANCER_SUBSYSTEM,
+} from './rebalancer-constants.js';
+
+/**
+ * SQL queries for replica_operations table access.
+ * All system information access must go through SQL engine.
+ */
+const SQL = Object.freeze({
+  SELECT_OPERATION_BY_ID: 'SELECT * FROM replica_operations WHERE operation_id = ?',
+  SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations 
+    WHERE status NOT IN ('active', 'removed', 'failed')`,
+  SELECT_OPERATIONS_BY_PARTITION: 'SELECT * FROM replica_operations WHERE partition_id = ?',
+  SELECT_IN_FLIGHT_FOR_PARTITION_NODE: `SELECT * FROM replica_operations 
+    WHERE partition_id = ? AND target_node_id = ? 
+    AND status NOT IN ('active', 'removed', 'failed')`,
+  SELECT_IN_FLIGHT_BY_TYPE: `SELECT * FROM replica_operations 
+    WHERE type = ? AND status NOT IN ('active', 'removed', 'failed')`,
+  INSERT_OPERATION: `INSERT INTO replica_operations (
+    operation_id, type, partition_id, replica_id, source_node_id, target_node_id,
+    status, workflow_step, created_at, updated_at, completed_at, error_message, steps_history
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  UPDATE_OPERATION: `UPDATE replica_operations SET 
+    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?, 
+    error_message = ?, steps_history = ?, replica_id = ?
+    WHERE operation_id = ?`,
+  SELECT_REPLICA_STATUS: 'SELECT status FROM services WHERE service_id = ?',
+  SELECT_REPLICA_BY_PARTITION_NODE: `SELECT status FROM services 
+    WHERE partition_id = ? AND node_id = ?`,
+});
 
 /**
  * RebalanceCoordinator manages the complete rebalancing workflow.
- * Single source of truth for operation state.
+ * Uses SQL engine for all system information access (no in-memory cache).
  */
 class RebalanceCoordinator extends EventEmitter {
   /**
@@ -31,48 +75,80 @@ class RebalanceCoordinator extends EventEmitter {
    * @param {string} options.nodeId - Current node ID.
    * @param {Object} options.systemTableCache - Read-only system table cache.
    * @param {Object} options.cdcIntegrationService - CDC integration service for writes.
-   * @param {Object} options.rpcClient - RPC client for remote calls.
-   * @param {Object} options.tablePolicyService - Optional TablePolicyService for policy lookup.
+   * @param {Object} options.messageRouter - MessageRouter instance for delivery.
+   * @param {Object} options.tablePolicyService - TablePolicyService for policy lookup.
+   * @param {Object} options.sqlQueryEngine - SQL query engine for system table access.
    */
   constructor(options = {}) {
     super();
 
-    this.nodeId = options.nodeId;
-    this.systemTableCache = options.systemTableCache || null;
-    this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.rpcClient = options.rpcClient || null;
-    this.tablePolicyService = options.tablePolicyService || null;
-
-    // Single source of truth for operations (in-memory cache)
-    this.operations = new Map(); // operation_id -> Operation
+    this.nodeId = assertCritical(
+      options.nodeId,
+      REBALANCE_COORDINATOR_ERROR_MSG.NODE_ID_REQUIRED,
+    );
+    this.systemTableCache = assertCritical(
+      options.systemTableCache,
+      REBALANCE_COORDINATOR_ERROR_MSG.CACHE_REQUIRED,
+    );
+    this.cdcIntegrationService = assertCritical(
+      options.cdcIntegrationService,
+      REBALANCE_COORDINATOR_ERROR_MSG.CDC_REQUIRED,
+    );
+    this.messageRouter = assertCritical(
+      options.messageRouter,
+      REBALANCE_COORDINATOR_ERROR_MSG.ROUTER_MISSING,
+    );
+    this.tablePolicyService = assertCritical(
+      options.tablePolicyService,
+      REBALANCE_COORDINATOR_ERROR_MSG.POLICY_REQUIRED,
+    );
+    this.sqlQueryEngine = assertCritical(
+      options.sqlQueryEngine,
+      REBALANCE_COORDINATOR_ERROR_MSG.SQL_ENGINE_REQUIRED,
+    );
+    this.enableTimeouts = options.enableTimeouts !== false;
 
     // Configuration (centralized) - Requirements 6.1, 6.4
     const configManager = ConfigurationManager.getInstance();
     this.config = {
-      pendingTimeoutMs: configManager.get('rebalancer.pendingTimeoutMs') || 30000,
-      creatingTimeoutMs: configManager.get('rebalancer.creatingTimeoutMs') || 60000,
-      syncingTimeoutMs: configManager.get('rebalancer.syncingTimeoutMs') || 300000,
-      removingTimeoutMs: configManager.get('rebalancer.removingTimeoutMs') || 60000,
-      maxConcurrentAdds: configManager.get('rebalancer.maxConcurrentAdds') || 5,
-      maxConcurrentRemoves: configManager.get('rebalancer.maxConcurrentRemoves') || 5,
-      periodicCheckIntervalMs: configManager.get('rebalancer.periodicCheckIntervalMs') || 60000,
+      pendingTimeoutMs:
+        configManager.get(REBALANCER_CONFIG_KEY.PENDING_TIMEOUT_MS) ||
+        REBALANCER_DEFAULT.COORDINATOR.PENDING_TIMEOUT_MS,
+      creatingTimeoutMs:
+        configManager.get(REBALANCER_CONFIG_KEY.CREATING_TIMEOUT_MS) ||
+        REBALANCER_DEFAULT.COORDINATOR.CREATING_TIMEOUT_MS,
+      syncingTimeoutMs:
+        configManager.get(REBALANCER_CONFIG_KEY.SYNCING_TIMEOUT_MS) ||
+        REBALANCER_DEFAULT.COORDINATOR.SYNCING_TIMEOUT_MS,
+      removingTimeoutMs:
+        configManager.get(REBALANCER_CONFIG_KEY.REMOVING_TIMEOUT_MS) ||
+        REBALANCER_DEFAULT.COORDINATOR.REMOVING_TIMEOUT_MS,
+      maxConcurrentAdds:
+        configManager.get(REBALANCER_CONFIG_KEY.MAX_CONCURRENT_ADDS) ||
+        REBALANCER_DEFAULT.COORDINATOR.MAX_CONCURRENT_ADDS,
+      maxConcurrentRemoves:
+        configManager.get(REBALANCER_CONFIG_KEY.MAX_CONCURRENT_REMOVES) ||
+        REBALANCER_DEFAULT.COORDINATOR.MAX_CONCURRENT_REMOVES,
+      periodicCheckIntervalMs:
+        configManager.get(REBALANCER_CONFIG_KEY.PERIODIC_CHECK_INTERVAL_MS) ||
+        REBALANCER_DEFAULT.COORDINATOR.PERIODIC_CHECK_INTERVAL_MS,
     };
 
     // Timeout checking interval
     this.timeoutCheckInterval = null;
-    this.timeoutCheckIntervalMs = 5000; // Check every 5 seconds
+    this.timeoutCheckIntervalMs = REBALANCER_DEFAULT.COORDINATOR.TIMEOUT_CHECK_INTERVAL_MS;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('rebalance-coordinator') : console;
+      loggingService.forSubsystem(REBALANCER_SUBSYSTEM.COORDINATOR) : console;
 
-    // Statistics
+    // Statistics (local counters only, not cached state)
     this.stats = {
-      operationsCreated: 0,
-      operationsCompleted: 0,
-      operationsFailed: 0,
-      operationsTimedOut: 0,
+      operationsCreated: NUM.ZERO,
+      operationsCompleted: NUM.ZERO,
+      operationsFailed: NUM.ZERO,
+      operationsTimedOut: NUM.ZERO,
     };
 
     this.initialized = false;
@@ -86,13 +162,15 @@ class RebalanceCoordinator extends EventEmitter {
       return;
     }
 
-    this.logger.info('RebalanceCoordinator initialized', {
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
       config: this.config,
     });
 
     // Start timeout checking
-    this.startTimeoutChecking();
+    if (this.enableTimeouts) {
+      this.startTimeoutChecking();
+    }
 
     this.initialized = true;
   }
@@ -107,7 +185,12 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     this.timeoutCheckInterval = setInterval(() => {
-      this.checkTimeouts();
+      this.checkTimeouts().catch((error) => {
+        this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED, {
+          error: error.message,
+          nodeId: this.nodeId,
+        });
+      });
     }, this.timeoutCheckIntervalMs);
   }
 
@@ -123,7 +206,109 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
-   * Create an operation record (persisted to operation log).
+   * Query an operation by ID using SQL engine.
+   * Per system guidelines: all system information access via SQL engine.
+   * @param {string} operationId - Operation ID.
+   * @return {Promise<Object|null>} Operation or null if not found.
+   * @private
+   */
+  async queryOperationById(operationId) {
+    const result = await this.sqlQueryEngine.executeQuery(
+      SQL.SELECT_OPERATION_BY_ID,
+      [operationId],
+    );
+
+    if (!result.success || !result.rows || result.rows.length === NUM.ZERO) {
+      return null;
+    }
+
+    return this.rowToOperation(result.rows[NUM.ZERO]);
+  }
+
+  /**
+   * Query incomplete operations using SQL engine.
+   * @return {Promise<Array<Object>>} Array of incomplete operations.
+   * @private
+   */
+  async queryIncompleteOperations() {
+    const result = await this.sqlQueryEngine.executeQuery(
+      SQL.SELECT_INCOMPLETE_OPERATIONS,
+      [],
+    );
+
+    if (!result.success || !result.rows) {
+      this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED, {
+        error: result.error,
+        nodeId: this.nodeId,
+      });
+      return [];
+    }
+
+    return result.rows.map((row) => this.rowToOperation(row));
+  }
+
+  /**
+   * Check for existing in-flight operation for partition/node combination.
+   * Prevents duplicate operations (deduplication).
+   * @param {string} partitionId - Partition ID.
+   * @param {string} targetNodeId - Target node ID.
+   * @return {Promise<Object|null>} Existing operation or null.
+   * @private
+   */
+  async queryExistingInFlightOperation(partitionId, targetNodeId) {
+    const result = await this.sqlQueryEngine.executeQuery(
+      SQL.SELECT_IN_FLIGHT_FOR_PARTITION_NODE,
+      [partitionId, targetNodeId],
+    );
+
+    if (!result.success || !result.rows || result.rows.length === NUM.ZERO) {
+      return null;
+    }
+
+    return this.rowToOperation(result.rows[NUM.ZERO]);
+  }
+
+  /**
+   * Convert database row to Operation object.
+   * @param {Object} row - Database row.
+   * @return {Object} Operation object.
+   * @private
+   */
+  rowToOperation(row) {
+    let stepsHistory = [];
+    if (row.steps_history) {
+      try {
+        stepsHistory = JSON.parse(row.steps_history);
+      } catch (error) {
+        this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.STEPS_HISTORY_PARSE_ERROR, {
+          operationId: row.operation_id,
+          error: error.message,
+        });
+        stepsHistory = [];
+      }
+    }
+
+    return {
+      operationId: row.operation_id,
+      type: row.type,
+      partitionId: row.partition_id,
+      replicaId: row.replica_id,
+      sourceNodeId: row.source_node_id,
+      targetNodeId: row.target_node_id,
+      status: row.status,
+      workflowStep: row.workflow_step,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      completedAt: row.completed_at,
+      errorMessage: row.error_message,
+      stepsHistory,
+    };
+  }
+
+
+  /**
+   * Create an operation record (persisted via SQL engine).
+   * Includes deduplication check to prevent duplicate operations.
    * Requirements: 2.2, 2.3
    *
    * @param {Object} move - Move specification.
@@ -131,9 +316,25 @@ class RebalanceCoordinator extends EventEmitter {
    * @param {string} move.partitionId - Target partition ID.
    * @param {string} move.nodeId - Target node ID.
    * @param {string} [move.replicaId] - Replica ID (for REMOVE operations).
-   * @return {Promise<Object>} Created operation record.
+   * @return {Promise<Object>} Created or existing operation record.
    */
   async createOperation(move) {
+    // Deduplication: check for existing in-flight operation
+    const existing = await this.queryExistingInFlightOperation(
+      move.partitionId,
+      move.nodeId,
+    );
+
+    if (existing) {
+      this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.DUPLICATE_OPERATION, {
+        existingOperationId: existing.operationId,
+        partitionId: move.partitionId,
+        targetNodeId: move.nodeId,
+        type: move.type,
+      });
+      return existing;
+    }
+
     const operationId = uuidv4();
 
     // Create operation using the helper from replica-status.js
@@ -146,107 +347,175 @@ class RebalanceCoordinator extends EventEmitter {
       replicaId: move.replicaId,
     });
 
-    this.logger.info('Creating operation', {
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.CREATE_OPERATION, {
       operationId,
       type: move.type,
       partitionId: move.partitionId,
       targetNodeId: move.nodeId,
     });
 
-    // Persist to operation log
-    await this.persistOperation(operation);
-
-    // Store in memory
-    this.operations.set(operationId, operation);
+    // Persist via SQL engine (writes to partition leader)
+    await this.persistNewOperation(operation);
 
     this.stats.operationsCreated++;
 
-    this.emit('operationCreated', {operation});
+    this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
 
     return operation;
   }
 
   /**
+   * Persist a new operation via SQL engine.
+   * @param {Object} operation - Operation to persist.
+   * @return {Promise<void>}
+   * @private
+   */
+  async persistNewOperation(operation) {
+    const result = await this.sqlQueryEngine.executeQuery(
+      SQL.INSERT_OPERATION,
+      [
+        operation.operationId,
+        operation.type,
+        operation.partitionId,
+        operation.replicaId,
+        operation.sourceNodeId,
+        operation.targetNodeId,
+        operation.status,
+        operation.workflowStep,
+        operation.createdAt,
+        operation.updatedAt,
+        operation.completedAt,
+        operation.errorMessage,
+        JSON.stringify(operation.stepsHistory),
+      ],
+    );
+
+    if (!result.success) {
+      this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
+        operationId: operation.operationId,
+        error: result.error,
+      });
+      throw new Error(result.error);
+    }
+  }
+
+  /**
+   * Update an existing operation via SQL engine.
+   * @param {Object} operation - Operation to update.
+   * @return {Promise<void>}
+   * @private
+   */
+  async persistOperationUpdate(operation) {
+    const result = await this.sqlQueryEngine.executeQuery(
+      SQL.UPDATE_OPERATION,
+      [
+        operation.status,
+        operation.workflowStep,
+        operation.updatedAt,
+        operation.completedAt,
+        operation.errorMessage,
+        JSON.stringify(operation.stepsHistory),
+        operation.replicaId,
+        operation.operationId,
+      ],
+    );
+
+    if (!result.success) {
+      this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
+        operationId: operation.operationId,
+        error: result.error,
+      });
+      throw new Error(result.error);
+    }
+  }
+
+  /**
    * Execute an operation (ADD or REMOVE).
-   * Uses RPC for request-response over message groups.
+   * Uses MessageRouter delivery to the target node.
    * Requirements: 2.1
    *
    * @param {Object} operation - Operation to execute.
    * @return {Promise<Object>} Execution result.
    */
   async executeOperation(operation) {
-    if (!this.rpcClient) {
-      throw new Error('RPC client not configured');
+    if (!this.messageRouter) {
+      throw new Error(REBALANCE_COORDINATOR_ERROR_MSG.ROUTER_MISSING);
     }
 
-    try {
-      // Update to SENDING step
-      await this.updateStep(operation, 'SENDING');
+    // Update to SENDING step
+    await this.updateStep(operation, WORKFLOW_STEP.SENDING);
 
-      const target = `${operation.targetNodeId}/replica-handler`;
-      const request = {
-        type: operation.type === OperationType.ADD ? 'CREATE_REPLICA' : 'REMOVE_REPLICA',
-        operationId: operation.operationId,
-        partitionId: operation.partitionId,
-        replicaId: operation.replicaId,
-        sourceNodeId: operation.sourceNodeId,
-      };
+    const target = `${operation.targetNodeId}/service/replica-handler`;
+    const messageType = operation.type === OperationType.ADD ?
+      ReplicaOperationMessageType.CREATE_REPLICA :
+      ReplicaOperationMessageType.REMOVE_REPLICA;
+    const request = {
+      [ReplicaOperationField.TYPE]: messageType,
+      [ReplicaOperationField.OPERATION_ID]: operation.operationId,
+      [ReplicaOperationField.PARTITION_ID]: operation.partitionId,
+      [ReplicaOperationField.REPLICA_ID]: operation.replicaId,
+      [ReplicaOperationField.SOURCE_NODE_ID]: operation.sourceNodeId,
+    };
 
-      const timeoutMs = operation.type === OperationType.ADD ?
-        this.config.creatingTimeoutMs :
-        this.config.removingTimeoutMs;
+    this.logger.debug(REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {
+      operationId: operation.operationId,
+      target,
+      type: messageType,
+    });
 
-      this.logger.debug('Sending RPC request', {
-        operationId: operation.operationId,
-        target,
-        type: request.type,
-      });
+    const response = await this.messageRouter.deliver(
+      target,
+      request,
+      {targetNodeId: operation.targetNodeId},
+    );
 
-      const response = await this.rpcClient.call(target, request, {timeout: timeoutMs});
-
-      if (response.status === 'initiated' || response.status === 'in_progress') {
-        // Update to CREATING or STOPPING step based on operation type
-        const nextStep = operation.type === OperationType.ADD ? 'CREATING' : 'STOPPING';
-        await this.updateStep(operation, nextStep);
-
-        // For ADD operations, we'll wait for sync completion via CDC or polling
-        // For REMOVE operations, we'll wait for removal confirmation
-        return {
-          success: true,
-          operationId: operation.operationId,
-          status: 'in_progress',
-        };
-      } else if (response.status === 'already_exists') {
-        // Replica already exists - mark as complete
-        await this.completeOperation(operation);
-        return {
-          success: true,
-          operationId: operation.operationId,
-          status: 'already_exists',
-        };
-      } else if (response.status === 'completed') {
-        // Operation completed immediately
-        await this.completeOperation(operation);
-        return {
-          success: true,
-          operationId: operation.operationId,
-          status: 'completed',
-        };
-      } else {
-        // Error response
-        await this.failOperation(operation, response.error || 'Unknown error');
-        return {
-          success: false,
-          operationId: operation.operationId,
-          error: response.error,
-        };
-      }
-    } catch (error) {
-      await this.failOperation(operation, error.message);
+    if (!response.acknowledged) {
+      const errorMsg = response.error || REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED;
+      await this.failOperation(operation, errorMsg);
       return {
         success: false,
         operationId: operation.operationId,
-        error: error.message,
+        error: errorMsg,
+      };
+    }
+
+    if (response.status === ReplicaOperationResponseStatus.INITIATED ||
+        response.status === ReplicaOperationResponseStatus.IN_PROGRESS) {
+      // Update to CREATING or STOPPING step based on operation type
+      const nextStep = operation.type === OperationType.ADD ?
+        WORKFLOW_STEP.CREATING :
+        WORKFLOW_STEP.STOPPING;
+      await this.updateStep(operation, nextStep);
+
+      return {
+        success: true,
+        operationId: operation.operationId,
+        status: 'in_progress',
+      };
+    } else if (response.status === ReplicaOperationResponseStatus.ALREADY_EXISTS) {
+      // Replica already exists - mark as complete
+      await this.completeOperation(operation);
+      return {
+        success: true,
+        operationId: operation.operationId,
+        status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
+      };
+    } else if (response.status === ReplicaOperationResponseStatus.COMPLETED) {
+      // Operation completed immediately
+      await this.completeOperation(operation);
+      return {
+        success: true,
+        operationId: operation.operationId,
+        status: ReplicaOperationResponseStatus.COMPLETED,
+      };
+    } else {
+      // Error response
+      const errorMsg = response.error || 'Unknown error';
+      await this.failOperation(operation, errorMsg);
+      return {
+        success: false,
+        operationId: operation.operationId,
+        error: errorMsg,
       };
     }
   }
@@ -270,10 +539,10 @@ class RebalanceCoordinator extends EventEmitter {
     // Map workflow step to replica status
     operation.status = WORKFLOW_STEP_TO_STATUS[step] || operation.status;
 
-    // Persist the update
-    await this.persistOperation(operation);
+    // Persist the update via SQL engine
+    await this.persistOperationUpdate(operation);
 
-    this.logger.info('Operation step changed', {
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.STEP_CHANGED, {
       operationId: operation.operationId,
       previousStep,
       newStep: step,
@@ -281,7 +550,7 @@ class RebalanceCoordinator extends EventEmitter {
       partitionId: operation.partitionId,
     });
 
-    this.emit('stepChanged', {
+    this.emit(REBALANCE_COORDINATOR_EVENT.STEP_CHANGED, {
       operation,
       previousStep,
       newStep: step,
@@ -296,7 +565,9 @@ class RebalanceCoordinator extends EventEmitter {
    */
   async completeOperation(operation) {
     const now = Date.now();
-    const finalStep = operation.type === OperationType.ADD ? 'ACTIVE' : 'REMOVED';
+    const finalStep = operation.type === OperationType.ADD ?
+      WORKFLOW_STEP.ACTIVE :
+      WORKFLOW_STEP.REMOVED;
 
     operation.workflowStep = finalStep;
     operation.status = WORKFLOW_STEP_TO_STATUS[finalStep];
@@ -304,18 +575,18 @@ class RebalanceCoordinator extends EventEmitter {
     operation.completedAt = now;
     operation.stepsHistory.push({step: finalStep, timestamp: now});
 
-    await this.persistOperation(operation);
+    await this.persistOperationUpdate(operation);
 
     this.stats.operationsCompleted++;
 
-    this.logger.info('Operation completed', {
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_COMPLETED, {
       operationId: operation.operationId,
       type: operation.type,
       partitionId: operation.partitionId,
       targetNodeId: operation.targetNodeId,
     });
 
-    this.emit('operationCompleted', {operation});
+    this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {operation});
   }
 
   /**
@@ -329,18 +600,18 @@ class RebalanceCoordinator extends EventEmitter {
   async failOperation(operation, errorMessage) {
     const now = Date.now();
 
-    operation.workflowStep = 'FAILED';
+    operation.workflowStep = WORKFLOW_STEP.FAILED;
     operation.status = ReplicaStatus.FAILED;
     operation.updatedAt = now;
     operation.completedAt = now;
     operation.errorMessage = errorMessage;
-    operation.stepsHistory.push({step: 'FAILED', timestamp: now});
+    operation.stepsHistory.push({step: WORKFLOW_STEP.FAILED, timestamp: now});
 
-    await this.persistOperation(operation);
+    await this.persistOperationUpdate(operation);
 
     this.stats.operationsFailed++;
 
-    this.logger.error('Operation failed', {
+    this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILED, {
       operationId: operation.operationId,
       type: operation.type,
       partitionId: operation.partitionId,
@@ -348,18 +619,23 @@ class RebalanceCoordinator extends EventEmitter {
       errorMessage,
     });
 
-    this.emit('operationFailed', {operation, errorMessage});
+    this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED, {operation, errorMessage});
   }
+
 
   /**
    * Check for timed out operations.
+   * Queries operations via SQL engine (no in-memory cache).
    * Requirements: 6.2
    * @private
    */
   async checkTimeouts() {
     const now = Date.now();
 
-    for (const [_operationId, operation] of this.operations) {
+    // Query incomplete operations via SQL engine
+    const incompleteOps = await this.queryIncompleteOperations();
+
+    for (const operation of incompleteOps) {
       // Skip completed or failed operations
       if (isTerminalStep(operation.type, operation.workflowStep)) {
         continue;
@@ -369,7 +645,7 @@ class RebalanceCoordinator extends EventEmitter {
       const timeout = this.getTimeoutForStep(operation.workflowStep);
 
       if (elapsed > timeout) {
-        this.logger.warn('Operation timed out', {
+        this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TIMED_OUT, {
           operationId: operation.operationId,
           workflowStep: operation.workflowStep,
           elapsed,
@@ -395,114 +671,18 @@ class RebalanceCoordinator extends EventEmitter {
    */
   getTimeoutForStep(step) {
     switch (step) {
-    case 'PENDING':
-    case 'SENDING':
+    case WORKFLOW_STEP.PENDING:
+    case WORKFLOW_STEP.SENDING:
       return this.config.pendingTimeoutMs;
-    case 'CREATING':
+    case WORKFLOW_STEP.CREATING:
       return this.config.creatingTimeoutMs;
-    case 'SYNCING':
+    case WORKFLOW_STEP.SYNCING:
       return this.config.syncingTimeoutMs;
-    case 'STOPPING':
+    case WORKFLOW_STEP.STOPPING:
       return this.config.removingTimeoutMs;
     default:
       return this.config.pendingTimeoutMs;
     }
-  }
-
-  /**
-   * Persist operation to the replica_operations system table.
-   * Requirements: 9.1, 9.2
-   *
-   * @param {Object} operation - Operation to persist.
-   * @return {Promise<void>}
-   */
-  async persistOperation(operation) {
-    if (!this.cdcIntegrationService) {
-      this.logger.debug('CDC integration service not available, skipping persistence');
-      return;
-    }
-
-    const row = {
-      operation_id: operation.operationId,
-      type: operation.type,
-      partition_id: operation.partitionId,
-      replica_id: operation.replicaId,
-      source_node_id: operation.sourceNodeId,
-      target_node_id: operation.targetNodeId,
-      status: operation.status,
-      workflow_step: operation.workflowStep,
-      created_at: operation.createdAt,
-      updated_at: operation.updatedAt,
-      completed_at: operation.completedAt,
-      error_message: operation.errorMessage,
-      steps_history: JSON.stringify(operation.stepsHistory),
-    };
-
-    try {
-      // Check if operation exists
-      const existing = this.systemTableCache?.get(
-        SystemTableName.REPLICA_OPERATIONS,
-        operation.operationId,
-      );
-
-      if (existing) {
-        // Update existing operation
-        await this.cdcIntegrationService.updateSystemTableRow(
-          SystemTableName.REPLICA_OPERATIONS,
-          {operation_id: operation.operationId},
-          row,
-        );
-      } else {
-        // Insert new operation
-        await this.cdcIntegrationService.insertSystemTableRow(
-          SystemTableName.REPLICA_OPERATIONS,
-          row,
-        );
-      }
-    } catch (error) {
-      this.logger.error('Failed to persist operation', {
-        operationId: operation.operationId,
-        error: error.message,
-      });
-      // Don't throw - persistence failure shouldn't block operation
-    }
-  }
-
-  /**
-   * Load incomplete operations from the operation log.
-   * Used for recovery.
-   * Requirements: 7.1
-   *
-   * @return {Promise<Array<Object>>} Array of incomplete operations.
-   */
-  async loadIncompleteOperations() {
-    if (!this.systemTableCache) {
-      return [];
-    }
-
-    const terminalStatuses = [ReplicaStatus.ACTIVE, ReplicaStatus.REMOVED, ReplicaStatus.FAILED];
-
-    const incompleteOps = this.systemTableCache.filter(
-      SystemTableName.REPLICA_OPERATIONS,
-      (op) => !terminalStatuses.includes(op.status),
-    );
-
-    // Convert to Operation objects
-    return incompleteOps.map((row) => ({
-      operationId: row.operation_id,
-      type: row.type,
-      partitionId: row.partition_id,
-      replicaId: row.replica_id,
-      sourceNodeId: row.source_node_id,
-      targetNodeId: row.target_node_id,
-      status: row.status,
-      workflowStep: row.workflow_step,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      completedAt: row.completed_at,
-      errorMessage: row.error_message,
-      stepsHistory: JSON.parse(row.steps_history || '[]'),
-    }));
   }
 
   /**
@@ -515,82 +695,61 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<Object>} Recovery result with counts.
    */
   async handleRecovery() {
-    this.logger.info('Starting recovery process', {nodeId: this.nodeId});
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_START, {
+      nodeId: this.nodeId,
+    });
 
     const result = {
-      totalIncomplete: 0,
-      markedFailed: 0,
-      reconciled: 0,
+      totalIncomplete: NUM.ZERO,
+      markedFailed: NUM.ZERO,
+      reconciled: NUM.ZERO,
       errors: [],
     };
 
-    try {
-      // Query replica_operations for incomplete operations (Requirement 7.1)
-      const incompleteOps = await this.loadIncompleteOperations();
-      result.totalIncomplete = incompleteOps.length;
+    // Query replica_operations for incomplete operations via SQL engine
+    const incompleteOps = await this.queryIncompleteOperations();
+    result.totalIncomplete = incompleteOps.length;
 
-      this.logger.info('Found incomplete operations during recovery', {
-        count: incompleteOps.length,
-        nodeId: this.nodeId,
-      });
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_FOUND, {
+      count: incompleteOps.length,
+      nodeId: this.nodeId,
+    });
 
-      for (const op of incompleteOps) {
-        try {
-          // Load operation into memory for tracking
-          this.operations.set(op.operationId, op);
+    for (const op of incompleteOps) {
+      // Handle based on workflow step
+      if (this.isPreSyncStep(op.workflowStep)) {
+        // Mark PENDING, SENDING, CREATING as FAILED (Requirement 7.2)
+        await this.failOperation(op, 'Node recovery - incomplete operation');
+        result.markedFailed++;
 
-          // Handle based on workflow step
-          if (this.isPreSyncStep(op.workflowStep)) {
-            // Mark PENDING, SENDING, CREATING as FAILED (Requirement 7.2)
-            await this.failOperation(op, 'Node recovery - incomplete operation');
-            result.markedFailed++;
+        this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_FAILED, {
+          operationId: op.operationId,
+          workflowStep: op.workflowStep,
+          partitionId: op.partitionId,
+        });
+      } else if (op.workflowStep === WORKFLOW_STEP.SYNCING) {
+        // Reconcile SYNCING operations (Requirement 7.3)
+        await this.reconcileSyncingOperation(op);
+        result.reconciled++;
+      } else if (op.workflowStep === WORKFLOW_STEP.STOPPING) {
+        // STOPPING operations should also be marked as failed
+        await this.failOperation(op, 'Node recovery - incomplete removal operation');
+        result.markedFailed++;
 
-            this.logger.info('Marked incomplete operation as failed during recovery', {
-              operationId: op.operationId,
-              workflowStep: op.workflowStep,
-              partitionId: op.partitionId,
-            });
-          } else if (op.workflowStep === 'SYNCING') {
-            // Reconcile SYNCING operations (Requirement 7.3)
-            await this.reconcileSyncingOperation(op);
-            result.reconciled++;
-          } else if (op.workflowStep === 'STOPPING') {
-            // STOPPING operations should also be marked as failed
-            await this.failOperation(op, 'Node recovery - incomplete removal operation');
-            result.markedFailed++;
-
-            this.logger.info('Marked incomplete removal operation as failed during recovery', {
-              operationId: op.operationId,
-              workflowStep: op.workflowStep,
-              partitionId: op.partitionId,
-            });
-          }
-        } catch (error) {
-          this.logger.error('Error processing operation during recovery', {
-            operationId: op.operationId,
-            error: error.message,
-          });
-          result.errors.push({
-            operationId: op.operationId,
-            error: error.message,
-          });
-        }
+        this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_REMOVE_FAILED, {
+          operationId: op.operationId,
+          workflowStep: op.workflowStep,
+          partitionId: op.partitionId,
+        });
       }
-
-      this.logger.info('Recovery process completed', {
-        nodeId: this.nodeId,
-        ...result,
-      });
-
-      this.emit('recoveryCompleted', result);
-    } catch (error) {
-      this.logger.error('Recovery process failed', {
-        nodeId: this.nodeId,
-        error: error.message,
-      });
-      result.errors.push({error: error.message});
-      this.emit('recoveryFailed', {error: error.message});
     }
+
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_COMPLETED, {
+      nodeId: this.nodeId,
+      ...result,
+    });
+
+    this.emit(REBALANCE_COORDINATOR_EVENT.RECOVERY_COMPLETED, result);
 
     return result;
   }
@@ -604,11 +763,16 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   isPreSyncStep(step) {
-    return ['PENDING', 'SENDING', 'CREATING'].includes(step);
+    return [
+      WORKFLOW_STEP.PENDING,
+      WORKFLOW_STEP.SENDING,
+      WORKFLOW_STEP.CREATING,
+    ].includes(step);
   }
 
   /**
    * Reconcile a SYNCING operation by checking actual replica status.
+   * Uses SQL engine to query services table.
    * Requirements: 7.3
    *
    * @param {Object} operation - Operation in SYNCING state.
@@ -616,13 +780,13 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async reconcileSyncingOperation(operation) {
-    this.logger.info('Reconciling SYNCING operation', {
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_SYNCING, {
       operationId: operation.operationId,
       partitionId: operation.partitionId,
       targetNodeId: operation.targetNodeId,
     });
 
-    // Check actual replica status from system table cache
+    // Check actual replica status via SQL engine
     const actualStatus = await this.getActualReplicaStatus(
       operation.replicaId,
       operation.partitionId,
@@ -632,28 +796,28 @@ class RebalanceCoordinator extends EventEmitter {
     if (actualStatus === ReplicaStatus.ACTIVE) {
       // Replica is actually active - complete the operation
       await this.completeOperation(operation);
-      this.logger.info('Reconciled SYNCING operation to ACTIVE', {
+      this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_ACTIVE, {
         operationId: operation.operationId,
         partitionId: operation.partitionId,
       });
     } else if (actualStatus === ReplicaStatus.FAILED) {
       // Replica failed - fail the operation
       await this.failOperation(operation, 'Replica failed during sync');
-      this.logger.info('Reconciled SYNCING operation to FAILED', {
+      this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_FAILED, {
         operationId: operation.operationId,
         partitionId: operation.partitionId,
       });
     } else if (actualStatus === null) {
       // Replica doesn't exist - fail the operation (orphaned operation)
       await this.failOperation(operation, 'Replica not found during recovery reconciliation');
-      this.logger.warn('Reconciled SYNCING operation to FAILED - replica not found', {
+      this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_FAILED_NOT_FOUND, {
         operationId: operation.operationId,
         partitionId: operation.partitionId,
       });
     } else {
       // Replica is still syncing or in another transitional state
       // Keep the operation in SYNCING state, timeout will handle it
-      this.logger.info('SYNCING operation still in progress', {
+      this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_IN_PROGRESS, {
         operationId: operation.operationId,
         partitionId: operation.partitionId,
         actualStatus,
@@ -662,7 +826,8 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
-   * Get actual replica status from system table cache.
+   * Get actual replica status via SQL engine.
+   * Per system guidelines: all system information access via SQL engine.
    * Requirements: 7.3
    *
    * @param {string} replicaId - Replica ID.
@@ -672,126 +837,157 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async getActualReplicaStatus(replicaId, partitionId, targetNodeId) {
-    if (!this.systemTableCache) {
-      return null;
-    }
-
     // Try to find replica by replicaId first
     if (replicaId) {
-      const replica = this.systemTableCache.get(
-        SystemTableName.SERVICES,
-        replicaId,
+      const result = await this.sqlQueryEngine.executeQuery(
+        SQL.SELECT_REPLICA_STATUS,
+        [replicaId],
       );
-      if (replica) {
-        return replica.status;
+
+      if (result.success && result.rows && result.rows.length > NUM.ZERO) {
+        return result.rows[NUM.ZERO].status;
       }
     }
 
     // Fall back to searching by partition and node
-    const replicas = this.systemTableCache.filter(
-      SystemTableName.SERVICES,
-      (service) =>
-        service.partition_id === partitionId &&
-        service.node_id === targetNodeId,
+    const result = await this.sqlQueryEngine.executeQuery(
+      SQL.SELECT_REPLICA_BY_PARTITION_NODE,
+      [partitionId, targetNodeId],
     );
 
-    if (replicas && replicas.length > 0) {
-      return replicas[0].status;
+    if (result.success && result.rows && result.rows.length > NUM.ZERO) {
+      return result.rows[NUM.ZERO].status;
     }
 
     return null;
   }
 
   /**
-   * Get an operation by ID.
+   * Get an operation by ID via SQL engine.
    *
    * @param {string} operationId - Operation ID.
-   * @return {Object|null} Operation or null if not found.
+   * @return {Promise<Object|null>} Operation or null if not found.
    */
-  getOperation(operationId) {
-    return this.operations.get(operationId) || null;
+  async getOperation(operationId) {
+    return this.queryOperationById(operationId);
   }
 
   /**
-   * Get all operations.
+   * Get all operations via SQL engine.
+   * Note: This queries the database, not an in-memory cache.
    *
-   * @return {Array<Object>} Array of all operations.
+   * @return {Promise<Array<Object>>} Array of all operations.
    */
-  getAllOperations() {
-    return Array.from(this.operations.values());
+  async getAllOperations() {
+    const result = await this.sqlQueryEngine.executeQuery(
+      'SELECT * FROM replica_operations ORDER BY created_at DESC',
+      [],
+    );
+
+    if (!result.success || !result.rows) {
+      return [];
+    }
+
+    return result.rows.map((row) => this.rowToOperation(row));
   }
 
   /**
-   * Get operations by partition ID.
+   * Get operations by partition ID via SQL engine.
    *
    * @param {string} partitionId - Partition ID.
-   * @return {Array<Object>} Array of operations for the partition.
+   * @return {Promise<Array<Object>>} Array of operations for the partition.
    */
-  getOperationsByPartition(partitionId) {
-    return Array.from(this.operations.values())
-      .filter((op) => op.partitionId === partitionId);
+  async getOperationsByPartition(partitionId) {
+    const result = await this.sqlQueryEngine.executeQuery(
+      SQL.SELECT_OPERATIONS_BY_PARTITION,
+      [partitionId],
+    );
+
+    if (!result.success || !result.rows) {
+      return [];
+    }
+
+    return result.rows.map((row) => this.rowToOperation(row));
   }
 
   /**
-   * Get in-flight operations (not completed or failed).
+   * Get in-flight operations (not completed or failed) via SQL engine.
    *
-   * @return {Array<Object>} Array of in-flight operations.
+   * @return {Promise<Array<Object>>} Array of in-flight operations.
    */
-  getInFlightOperations() {
-    return Array.from(this.operations.values())
-      .filter((op) => !isTerminalStep(op.type, op.workflowStep));
+  async getInFlightOperations() {
+    return this.queryIncompleteOperations();
   }
 
   /**
-   * Get count of concurrent ADD operations.
+   * Get count of concurrent ADD operations via SQL engine.
    *
-   * @return {number} Count of concurrent ADD operations.
+   * @return {Promise<number>} Count of concurrent ADD operations.
    */
-  getConcurrentAddCount() {
-    return this.getInFlightOperations()
-      .filter((op) => op.type === OperationType.ADD)
-      .length;
+  async getConcurrentAddCount() {
+    const result = await this.sqlQueryEngine.executeQuery(
+      SQL.SELECT_IN_FLIGHT_BY_TYPE,
+      [OperationType.ADD],
+    );
+
+    if (!result.success || !result.rows) {
+      return NUM.ZERO;
+    }
+
+    return result.rows.length;
   }
 
   /**
-   * Get count of concurrent REMOVE operations.
+   * Get count of concurrent REMOVE operations via SQL engine.
    *
-   * @return {number} Count of concurrent REMOVE operations.
+   * @return {Promise<number>} Count of concurrent REMOVE operations.
    */
-  getConcurrentRemoveCount() {
-    return this.getInFlightOperations()
-      .filter((op) => op.type === OperationType.REMOVE)
-      .length;
+  async getConcurrentRemoveCount() {
+    const result = await this.sqlQueryEngine.executeQuery(
+      SQL.SELECT_IN_FLIGHT_BY_TYPE,
+      [OperationType.REMOVE],
+    );
+
+    if (!result.success || !result.rows) {
+      return NUM.ZERO;
+    }
+
+    return result.rows.length;
   }
 
   /**
    * Check if we can start a new ADD operation.
    *
-   * @return {boolean} True if we can start a new ADD operation.
+   * @return {Promise<boolean>} True if we can start a new ADD operation.
    */
-  canStartAddOperation() {
-    return this.getConcurrentAddCount() < this.config.maxConcurrentAdds;
+  async canStartAddOperation() {
+    const count = await this.getConcurrentAddCount();
+    return count < this.config.maxConcurrentAdds;
   }
 
   /**
    * Check if we can start a new REMOVE operation.
    *
-   * @return {boolean} True if we can start a new REMOVE operation.
+   * @return {Promise<boolean>} True if we can start a new REMOVE operation.
    */
-  canStartRemoveOperation() {
-    return this.getConcurrentRemoveCount() < this.config.maxConcurrentRemoves;
+  async canStartRemoveOperation() {
+    const count = await this.getConcurrentRemoveCount();
+    return count < this.config.maxConcurrentRemoves;
   }
 
   /**
    * Get coordinator statistics.
    *
-   * @return {Object} Statistics object.
+   * @return {Promise<Object>} Statistics object.
    */
-  getStats() {
+  async getStats() {
+    const inFlightOps = await this.getInFlightOperations();
+    const allOps = await this.getAllOperations();
+
     return {
       ...this.stats,
-      inFlightOperations: this.getInFlightOperations().length,
-      totalOperations: this.operations.size,
+      inFlightOperations: inFlightOps.length,
+      totalOperations: allOps.length,
     };
   }
 
@@ -801,14 +997,16 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<void>}
    */
   async shutdown() {
-    this.logger.info('Shutting down RebalanceCoordinator', {
+    const inFlightOps = await this.getInFlightOperations();
+
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.SHUTDOWN, {
       nodeId: this.nodeId,
-      inFlightOperations: this.getInFlightOperations().length,
+      inFlightOperations: inFlightOps.length,
     });
 
     this.stopTimeoutChecking();
 
-    this.emit('shutdown');
+    this.emit(REBALANCE_COORDINATOR_EVENT.SHUTDOWN);
   }
 }
 

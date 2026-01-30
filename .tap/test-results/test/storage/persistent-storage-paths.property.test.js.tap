@@ -2,26 +2,28 @@ TAP version 14
 # Subtest: Property 76: Persistent Storage Path Generation
     ok 1 - Property 76: All generated paths follow the expected pattern
     1..1
-ok 1 - Property 76: Persistent Storage Path Generation # time=8.469ms
+ok 1 - Property 76: Persistent Storage Path Generation # time=6.782ms
 
 # Subtest: Property 76: Path contains partitions directory
     ok 1 - All paths contain partitions directory
     1..1
-ok 2 - Property 76: Path contains partitions directory # time=1.543ms
+ok 2 - Property 76: Path contains partitions directory # time=0.958ms
 
 # Subtest: Property 76: Path ends with .db extension
     ok 1 - All paths end with .db extension
     1..1
-ok 3 - Property 76: Path ends with .db extension # time=1.413ms
+ok 3 - Property 76: Path ends with .db extension # time=0.886ms
 
 # Subtest: Property 76: Path contains partition ID
     ok 1 - All paths contain partition ID
     1..1
-ok 4 - Property 76: Path contains partition ID # time=1.146ms
+ok 4 - Property 76: Path contains partition ID # time=0.687ms
 
 # Subtest: Property 76: Path contains replica ID
     ok 1 - All paths contain replica ID
     1..1
-ok 5 - Property 76: Path contains replica ID # time=1.093ms
+ok 5 - Property 76: Path contains replica ID # time=0.919ms
 
 1..5
+# { total: 5, pass: 5 }
+# time=20.486ms

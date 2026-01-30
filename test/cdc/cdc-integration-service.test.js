@@ -3,13 +3,13 @@
  * Requirements: 5.6, 5.7, 5.8, 5.9, 5.10
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   CDCIntegrationService,
   CDCOperationType,
   VALID_SYSTEM_TABLES,
 } from '../../src/cdc/cdc-integration-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
+import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -32,38 +32,19 @@ afterEach(() => {
 });
 
 /**
- * Create a mock partition service for testing.
- * @return {Object} Mock partition service.
+ * Create a mock SQL query engine for testing.
+ * @return {Object} Mock SQL query engine.
  */
-function createMockPartition() {
-  const insertedRows = [];
-  const updatedRows = [];
-  const deletedRows = [];
+function createMockSqlQueryEngine() {
+  const executedQueries = [];
 
   return {
-    insertedRows,
-    updatedRows,
-    deletedRows,
-    async insertData(tableName, data) {
-      insertedRows.push({tableName, data});
+    executedQueries,
+    async executeQuery(sql, params = []) {
+      executedQueries.push({sql, params});
       return {
         success: true,
-        changes: 1,
-        lastInsertRowid: insertedRows.length,
-      };
-    },
-    async updateData(tableName, whereClause, data) {
-      updatedRows.push({tableName, whereClause, data});
-      return {
-        success: true,
-        changes: 1,
-      };
-    },
-    async deleteData(tableName, whereClause) {
-      deletedRows.push({tableName, whereClause});
-      return {
-        success: true,
-        changes: 1,
+        affectedRows: 1,
       };
     },
   };
@@ -80,13 +61,13 @@ test('CDCIntegrationService - constructor', async (t) => {
 });
 
 test('CDCIntegrationService - initialize', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
   });
 
   service.initialize({
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
 
   t.equal(service.isInitialized(), true, 'should be initialized');
@@ -94,10 +75,10 @@ test('CDCIntegrationService - initialize', async (t) => {
 });
 
 test('CDCIntegrationService - insertSystemTableRow', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
 
@@ -117,20 +98,19 @@ test('CDCIntegrationService - insertSystemTableRow', async (t) => {
   t.equal(result.success, true, 'should succeed');
   t.equal(result.operation, CDCOperationType.INSERT, 'should be INSERT operation');
   t.equal(result.tableName, SystemTableName.NODES, 'should have correct table name');
-  t.equal(mockPartition.insertedRows.length, 1, 'should insert one row');
-  t.equal(
-    mockPartition.insertedRows[0].tableName,
-    SystemTableName.NODES,
-    'should insert to correct table',
+  t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
+  t.ok(
+    mockSqlEngine.executedQueries[0].sql.includes('INSERT INTO'),
+    'should be INSERT query',
   );
   t.end();
 });
 
 test('CDCIntegrationService - insertSystemTableRow generates id', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
 
@@ -152,10 +132,10 @@ test('CDCIntegrationService - insertSystemTableRow generates id', async (t) => {
 });
 
 test('CDCIntegrationService - updateSystemTableRow', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
 
@@ -174,20 +154,19 @@ test('CDCIntegrationService - updateSystemTableRow', async (t) => {
   t.equal(result.success, true, 'should succeed');
   t.equal(result.operation, CDCOperationType.UPDATE, 'should be UPDATE operation');
   t.equal(result.tableName, SystemTableName.NODES, 'should have correct table name');
-  t.equal(mockPartition.updatedRows.length, 1, 'should update one row');
-  t.same(
-    mockPartition.updatedRows[0].whereClause,
-    whereClause,
-    'should have correct whereClause',
+  t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
+  t.ok(
+    mockSqlEngine.executedQueries[0].sql.includes('UPDATE'),
+    'should be UPDATE query',
   );
   t.end();
 });
 
 test('CDCIntegrationService - deleteSystemTableRow', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
 
@@ -201,20 +180,19 @@ test('CDCIntegrationService - deleteSystemTableRow', async (t) => {
   t.equal(result.success, true, 'should succeed');
   t.equal(result.operation, CDCOperationType.DELETE, 'should be DELETE operation');
   t.equal(result.tableName, SystemTableName.NODES, 'should have correct table name');
-  t.equal(mockPartition.deletedRows.length, 1, 'should delete one row');
-  t.same(
-    mockPartition.deletedRows[0].whereClause,
-    whereClause,
-    'should have correct whereClause',
+  t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
+  t.ok(
+    mockSqlEngine.executedQueries[0].sql.includes('DELETE'),
+    'should be DELETE query',
   );
   t.end();
 });
 
 test('CDCIntegrationService - validates table name', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
 
@@ -228,10 +206,10 @@ test('CDCIntegrationService - validates table name', async (t) => {
 });
 
 test('CDCIntegrationService - validates data object', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
 
@@ -245,10 +223,10 @@ test('CDCIntegrationService - validates data object', async (t) => {
 });
 
 test('CDCIntegrationService - requires primary key for update', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
 
@@ -266,10 +244,10 @@ test('CDCIntegrationService - requires primary key for update', async (t) => {
 });
 
 test('CDCIntegrationService - requires primary key for delete', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
 
@@ -285,18 +263,18 @@ test('CDCIntegrationService - requires primary key for delete', async (t) => {
   t.end();
 });
 
-test('CDCIntegrationService - throws when partition not available', async (t) => {
+test('CDCIntegrationService - throws when sqlQueryEngine not available', async (t) => {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => null,
   });
   service.initialize();
 
   try {
     await service.insertSystemTableRow(SystemTableName.NODES, {node_id: '1'});
-    t.fail('should throw error when partition not available');
+    t.fail('should throw error when sqlQueryEngine not available');
   } catch (error) {
-    t.ok(error.message.includes('No partition available'), 'should have error message');
+    t.ok(error.message.includes('sqlQueryEngine not provided'),
+      'should have error message');
   }
   t.end();
 });
@@ -316,10 +294,10 @@ test('CDCIntegrationService - throws when not initialized', async (t) => {
 });
 
 test('CDCIntegrationService - tracks statistics', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
 
@@ -341,10 +319,10 @@ test('CDCIntegrationService - tracks statistics', async (t) => {
 });
 
 test('CDCIntegrationService - emits events', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
 
@@ -384,10 +362,10 @@ test('CDCIntegrationService - VALID_SYSTEM_TABLES contains all system tables', a
 });
 
 test('CDCIntegrationService - resetStats', async (t) => {
-  const mockPartition = createMockPartition();
+  const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
-    getPartitionForTable: () => mockPartition,
+    sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
 
@@ -1070,3 +1048,485 @@ test('CDCIntegrationService - handleNodeStateCDC handles DRAINING state', async 
   );
   t.end();
 });
+
+test('CDCIntegrationService - setBootstrapMode enables bootstrap mode', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  const mockPartitionServices = new Map();
+  mockPartitionServices.set('partition-1', {id: 'partition-1'});
+  mockPartitionServices.set('partition-2', {id: 'partition-2'});
+
+  service.setBootstrapMode(true, mockPartitionServices);
+
+  t.equal(service.bootstrapMode, true, 'should enable bootstrap mode');
+  t.equal(service.localPartitionServices, mockPartitionServices, 'should store partition services');
+  t.end();
+});
+
+test('CDCIntegrationService - setBootstrapMode disables bootstrap mode', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  const mockPartitionServices = new Map();
+  mockPartitionServices.set('partition-1', {id: 'partition-1'});
+
+  service.setBootstrapMode(true, mockPartitionServices);
+  t.equal(service.bootstrapMode, true, 'should enable bootstrap mode');
+
+  service.setBootstrapMode(false, null);
+
+  t.equal(service.bootstrapMode, false, 'should disable bootstrap mode');
+  t.equal(service.localPartitionServices, null, 'should clear partition services');
+  t.end();
+});
+
+test('CDCIntegrationService - clearBootstrapMode disables bootstrap mode', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  const mockPartitionServices = new Map();
+  mockPartitionServices.set('partition-1', {id: 'partition-1'});
+
+  service.setBootstrapMode(true, mockPartitionServices);
+  t.equal(service.bootstrapMode, true, 'should enable bootstrap mode');
+
+  service.clearBootstrapMode();
+
+  t.equal(service.bootstrapMode, false, 'should disable bootstrap mode');
+  t.equal(service.localPartitionServices, null, 'should clear partition services');
+  t.end();
+});
+
+test('CDCIntegrationService - setBootstrapMode requires Map when enabling', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  try {
+    service.setBootstrapMode(true, null);
+    t.fail('should throw error when enabling without partition services');
+  } catch (error) {
+    t.ok(error.message.includes('requires a Map'), 'should throw error about Map requirement');
+  }
+
+  try {
+    service.setBootstrapMode(true, {});
+    t.fail('should throw error when enabling with non-Map object');
+  } catch (error) {
+    t.ok(error.message.includes('requires a Map'), 'should throw error about Map requirement');
+  }
+
+  t.end();
+});
+
+test('CDCIntegrationService - bootstrap mode starts disabled', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+
+  t.equal(service.bootstrapMode, false, 'should start with bootstrap mode disabled');
+  t.equal(service.localPartitionServices, null, 'should start with null partition services');
+  t.end();
+});
+
+test('CDCIntegrationService - extractTableNameFromSQL extracts from INSERT', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  const tableName = service.extractTableNameFromSQL(
+    'INSERT INTO services (service_id, address) VALUES (?, ?)',
+  );
+
+  t.equal(tableName, 'services', 'should extract table name from INSERT');
+  t.end();
+});
+
+test('CDCIntegrationService - extractTableNameFromSQL extracts from INSERT OR REPLACE', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  const tableName = service.extractTableNameFromSQL(
+    'INSERT OR REPLACE INTO partitions (partition_id, table_name) VALUES (?, ?)',
+  );
+
+  t.equal(tableName, 'partitions', 'should extract table name from INSERT OR REPLACE');
+  t.end();
+});
+
+test('CDCIntegrationService - extractTableNameFromSQL extracts from UPDATE', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  const tableName = service.extractTableNameFromSQL(
+    'UPDATE nodes SET status = ? WHERE node_id = ?',
+  );
+
+  t.equal(tableName, 'nodes', 'should extract table name from UPDATE');
+  t.end();
+});
+
+test('CDCIntegrationService - extractTableNameFromSQL extracts from DELETE', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  const tableName = service.extractTableNameFromSQL(
+    'DELETE FROM replica_operations WHERE operation_id = ?',
+  );
+
+  t.equal(tableName, 'replica_operations', 'should extract table name from DELETE');
+  t.end();
+});
+
+test('CDCIntegrationService - extractTableNameFromSQL returns null for invalid SQL', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  t.equal(service.extractTableNameFromSQL(''), null, 'should return null for empty string');
+  t.equal(service.extractTableNameFromSQL(null), null, 'should return null for null');
+  t.equal(service.extractTableNameFromSQL('INVALID SQL'), null, 'should return null for invalid SQL');
+  t.end();
+});
+
+test('CDCIntegrationService - executeSQLDirectToLocalPartition executes on local partition', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  // Mock partition service
+  const mockPartitionService = {
+    partitionId: 'services-partition-1',
+    executeQuery: async (sql, params) => {
+      t.ok(sql.includes('INSERT INTO services'), 'should receive INSERT SQL');
+      t.equal(params.length, 2, 'should receive params');
+      return {success: true, affectedRows: 1};
+    },
+  };
+
+  const mockPartitionServices = new Map();
+  mockPartitionServices.set('services-partition-1', mockPartitionService);
+
+  service.setBootstrapMode(true, mockPartitionServices);
+
+  const result = await service.executeSQLDirectToLocalPartition(
+    'INSERT INTO services (service_id, address) VALUES (?, ?)',
+    ['service-1', 'node1/service/1'],
+  );
+
+  t.ok(result.success, 'should return success');
+  t.equal(result.affectedRows, 1, 'should return affected rows');
+  t.end();
+});
+
+test('CDCIntegrationService - executeSQLDirectToLocalPartition throws when not in bootstrap mode', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  try {
+    await service.executeSQLDirectToLocalPartition(
+      'INSERT INTO services (service_id) VALUES (?)',
+      ['service-1'],
+    );
+    t.fail('should throw error when not in bootstrap mode');
+  } catch (error) {
+    t.ok(error.message.includes('bootstrap mode'), 'should throw error about bootstrap mode');
+  }
+
+  t.end();
+});
+
+test('CDCIntegrationService - executeSQLDirectToLocalPartition throws when partition not found', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  const mockPartitionServices = new Map();
+  mockPartitionServices.set('nodes-partition-1', {partitionId: 'nodes-partition-1'});
+
+  service.setBootstrapMode(true, mockPartitionServices);
+
+  try {
+    await service.executeSQLDirectToLocalPartition(
+      'INSERT INTO services (service_id) VALUES (?)',
+      ['service-1'],
+    );
+    t.fail('should throw error when partition not found');
+  } catch (error) {
+    t.ok(error.message.includes('No local partition service found'), 'should throw error about missing partition');
+    t.ok(error.message.includes('services'), 'should mention the table name');
+  }
+
+  t.end();
+});
+
+test('CDCIntegrationService - executeSQLDirectToLocalPartition throws when SQL parsing fails', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  const mockPartitionServices = new Map();
+  mockPartitionServices.set('services-partition-1', {partitionId: 'services-partition-1'});
+
+  service.setBootstrapMode(true, mockPartitionServices);
+
+  try {
+    await service.executeSQLDirectToLocalPartition('INVALID SQL', []);
+    t.fail('should throw error when SQL parsing fails');
+  } catch (error) {
+    t.ok(error.message.includes('Could not extract table name'), 'should throw error about table name extraction');
+  }
+
+  t.end();
+});
+
+test('CDCIntegrationService - executeSQLDirectToLocalPartition handles partition errors', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  const mockPartitionService = {
+    partitionId: 'services-partition-1',
+    executeQuery: async () => {
+      return {success: false, error: 'Partition error'};
+    },
+  };
+
+  const mockPartitionServices = new Map();
+  mockPartitionServices.set('services-partition-1', mockPartitionService);
+
+  service.setBootstrapMode(true, mockPartitionServices);
+
+  try {
+    await service.executeSQLDirectToLocalPartition(
+      'INSERT INTO services (service_id) VALUES (?)',
+      ['service-1'],
+    );
+    t.fail('should throw error when partition returns error');
+  } catch (error) {
+    t.ok(error.message.includes('Partition error'), 'should throw partition error');
+  }
+
+  t.end();
+});
+
+test('CDCIntegrationService - executeSQL routes to direct partition in bootstrap mode',
+  async (t) => {
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+    });
+    service.initialize();
+
+    let directCallMade = false;
+    const mockPartitionService = {
+      partitionId: 'services-partition-1',
+      executeQuery: async (_sql, _params) => {
+        directCallMade = true;
+        return {success: true, affectedRows: 1};
+      },
+    };
+
+    const mockPartitionServices = new Map();
+    mockPartitionServices.set('services-partition-1', mockPartitionService);
+
+    service.setBootstrapMode(true, mockPartitionServices);
+
+    const result = await service.insertSystemTableRow(
+      SystemTableName.SERVICES,
+      {
+        service_id: 'service-1',
+        address: 'node1/service/1',
+      },
+    );
+
+    t.ok(result.success, 'should succeed');
+    t.ok(directCallMade, 'should call direct partition method in bootstrap mode');
+    t.end();
+  });
+
+test('CDCIntegrationService - executeSQL routes to SQL engine in normal mode',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    // Ensure bootstrap mode is disabled (default state)
+    t.equal(service.bootstrapMode, false, 'bootstrap mode should be disabled');
+
+    const result = await service.insertSystemTableRow(
+      SystemTableName.SERVICES,
+      {
+        service_id: 'service-1',
+        address: 'node1/service/1',
+      },
+    );
+
+    t.ok(result.success, 'should succeed');
+    t.equal(
+      mockSqlEngine.executedQueries.length,
+      1,
+      'should execute query through SQL engine',
+    );
+    t.ok(
+      mockSqlEngine.executedQueries[0].sql.includes('INSERT INTO'),
+      'should execute INSERT query',
+    );
+    t.end();
+  });
+
+test('CDCIntegrationService - executeSQL switches from bootstrap to normal mode',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    let directCallCount = 0;
+    const mockPartitionService = {
+      partitionId: 'services-partition-1',
+      executeQuery: async (_sql, _params) => {
+        directCallCount++;
+        return {success: true, affectedRows: 1};
+      },
+    };
+
+    const mockPartitionServices = new Map();
+    mockPartitionServices.set('services-partition-1', mockPartitionService);
+
+    // Enable bootstrap mode
+    service.setBootstrapMode(true, mockPartitionServices);
+
+    // First insert should go direct to partition
+    await service.insertSystemTableRow(SystemTableName.SERVICES, {
+      service_id: 'service-1',
+      address: 'node1/service/1',
+    });
+
+    t.equal(directCallCount, 1, 'should call direct partition in bootstrap mode');
+    t.equal(
+      mockSqlEngine.executedQueries.length,
+      0,
+      'should not call SQL engine in bootstrap mode',
+    );
+
+    // Disable bootstrap mode
+    service.clearBootstrapMode();
+
+    // Second insert should go through SQL engine
+    await service.insertSystemTableRow(SystemTableName.SERVICES, {
+      service_id: 'service-2',
+      address: 'node1/service/2',
+    });
+
+    t.equal(
+      directCallCount,
+      1,
+      'should not call direct partition after bootstrap mode disabled',
+    );
+    t.equal(
+      mockSqlEngine.executedQueries.length,
+      1,
+      'should call SQL engine after bootstrap mode disabled',
+    );
+    t.end();
+  });
+
+test('CDCIntegrationService - executeSQL throws when SQL engine missing in normal mode',
+  async (t) => {
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+    });
+    service.initialize();
+
+    // No SQL engine set and bootstrap mode disabled
+    t.equal(service.bootstrapMode, false, 'bootstrap mode should be disabled');
+    t.equal(service.sqlQueryEngine, null, 'SQL engine should be null');
+
+    try {
+      await service.insertSystemTableRow(SystemTableName.SERVICES, {
+        service_id: 'service-1',
+        address: 'node1/service/1',
+      });
+      t.fail('should throw error when SQL engine missing in normal mode');
+    } catch (error) {
+      t.ok(
+        error.message.includes('sqlQueryEngine not provided'),
+        'should throw error about missing SQL engine',
+      );
+    }
+
+    t.end();
+  });
+
+test('CDCIntegrationService - executeSQL single code path based on mode flag',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    const mockPartitionService = {
+      partitionId: 'nodes-partition-1',
+      executeQuery: async (_sql, _params) => {
+        return {success: true, affectedRows: 1};
+      },
+    };
+
+    const mockPartitionServices = new Map();
+    mockPartitionServices.set('nodes-partition-1', mockPartitionService);
+
+    // Test 1: Bootstrap mode enabled - should use direct path
+    service.setBootstrapMode(true, mockPartitionServices);
+    await service.insertSystemTableRow(SystemTableName.NODES, {
+      node_id: 'node-1',
+      node_address: 'localhost:8080',
+    });
+    t.equal(
+      mockSqlEngine.executedQueries.length,
+      0,
+      'should not use SQL engine in bootstrap mode',
+    );
+
+    // Test 2: Bootstrap mode disabled - should use SQL engine path
+    service.clearBootstrapMode();
+    await service.insertSystemTableRow(SystemTableName.NODES, {
+      node_id: 'node-2',
+      node_address: 'localhost:8081',
+    });
+    t.equal(
+      mockSqlEngine.executedQueries.length,
+      1,
+      'should use SQL engine in normal mode',
+    );
+
+    t.end();
+  });

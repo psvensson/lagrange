@@ -9,94 +9,34 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {ReplicaStatus} from './replica-status.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  REBALANCER_CONFIG_KEY,
+  REBALANCER_DEFAULT,
+  REBALANCER_DEFAULT_POLICY,
+  REBALANCER_ENTITY_TYPE,
+  REBALANCER_ERROR_MSG,
+  REBALANCER_EVENT,
+  REBALANCER_LOG_MSG,
+  REBALANCER_MOVE_TYPE,
+  REBALANCER_NODE_STATUS,
+  REBALANCER_SUBSYSTEM,
+  REBALANCER_TRIGGER,
+} from './rebalancer-constants.js';
 
-/**
- * Entity types that can be rebalanced.
- */
-const EntityType = {
-  PARTITION: 'partition',
-  MESSAGE_GROUP: 'message_group',
-};
+const EntityType = REBALANCER_ENTITY_TYPE;
 
-/**
- * Rebalancing trigger types.
- */
-const TriggerType = {
-  NODE_JOIN: 'node_join',
-  NODE_LEAVE: 'node_leave',
-  NODE_FAILURE: 'node_failure',
-  POLICY_CHANGE: 'policy_change',
-  PERIODIC: 'periodic',
-  CRITICAL: 'critical',
-};
+const TriggerType = REBALANCER_TRIGGER;
 
-/**
- * Move operation types.
- */
-const MoveType = {
-  ADD: 'add',
-  REMOVE: 'remove',
-};
+const MoveType = REBALANCER_MOVE_TYPE;
 
-/**
- * Replica status values.
- *
- * @deprecated This enum is deprecated in favor of ReplicaStatus from
- * './replica-status.js'. The unified ReplicaStatus enum should be used
- * by all components for consistency.
- *
- * Migration guide:
- * - Import ReplicaStatus from './replica-status.js'
- * - Replace INACTIVE with appropriate status based on context
- * - Replace STARTING with CREATING
- * - Replace STOPPING with REMOVING
- *
- * This enum is kept for backward compatibility during migration.
- */
-const ReplicaStatus = {
-  ACTIVE: 'active',
-  INACTIVE: 'inactive',
-  FAILED: 'failed',
-  STARTING: 'starting',
-  STOPPING: 'stopping',
-};
+const NodeStatus = REBALANCER_NODE_STATUS;
 
-/**
- * Node status values.
- */
-const NodeStatus = {
-  ACTIVE: 'active',
-  SUSPECTED: 'suspected',
-  FAILED: 'failed',
-};
+const DEFAULT_TABLE_POLICY = REBALANCER_DEFAULT_POLICY.TABLE;
 
-/**
- * Default policy for partitions.
- */
-const DEFAULT_TABLE_POLICY = {
-  replicaCount: 3,
-  minReplicaCount: 3,
-  maxReplicaCount: 7,
-  placementConstraints: {
-    spreadAcrossNodes: true,
-    considerDiskSpace: true,
-    considerCpuLoad: true,
-    considerMemoryLoad: true,
-  },
-};
-
-/**
- * Default policy for message groups.
- */
-const DEFAULT_MESSAGE_GROUP_POLICY = {
-  targetReplicaCount: 3,
-  maxReplicaCount: 5,
-  ensureLocalAccess: true,
-  placementConstraints: {
-    spreadAcrossNodes: true,
-    preferNearbyNodes: true,
-  },
-};
+const DEFAULT_MESSAGE_GROUP_POLICY = REBALANCER_DEFAULT_POLICY.MESSAGE_GROUP;
 
 /**
  * Validate that a replica count is odd (required for Raft quorum).
@@ -148,9 +88,7 @@ function getPreviousOddCount(current, min) {
  * Each partition/message group leader runs its own rebalancer instance.
  * Leaders make independent decisions that converge to optimal state.
  *
- * NOTE: This class now delegates operation execution to RebalanceCoordinator
- * when available. The coordinator owns operation state tracking (pendingMoves
- * tracking is deprecated when coordinator is used).
+ * NOTE: This class delegates operation execution to RebalanceCoordinator.
  */
 class UnifiedRebalancer extends EventEmitter {
   /**
@@ -160,50 +98,97 @@ class UnifiedRebalancer extends EventEmitter {
    * @param {string} options.entityType - 'partition' or 'message_group'.
    * @param {Object} options.systemTableCache - Read-only system table cache.
    * @param {Object} options.cdcIntegrationService - CDC integration service for writes.
-   * @param {Object} options.tablePolicyService - Optional TablePolicyService for policy lookup.
+   * @param {Object} options.tablePolicyService - TablePolicyService for policy lookup.
    * @param {string} options.nodeId - Current node ID.
-   * @param {Object} options.replicaStateMachine - Optional ReplicaStateMachine for state tracking.
-   * @param {Object} options.rebalanceCoordinator - Optional RebalanceCoordinator for operation
-   *   execution (new simplified architecture).
+   * @param {Object} options.rebalanceCoordinator - RebalanceCoordinator for operation execution.
    */
   constructor(options = {}) {
     super();
 
-    this.entityId = options.entityId;
-    this.entityType = options.entityType || EntityType.PARTITION;
-    this.systemTableCache = options.systemTableCache;
-    this.cdcIntegrationService = options.cdcIntegrationService;
-    this.tablePolicyService = options.tablePolicyService || null;
-    this.nodeId = options.nodeId;
-    this.replicaStateMachine = options.replicaStateMachine || null;
+    this.entityId = assertCritical(
+      options.entityId,
+      REBALANCER_ERROR_MSG.ENTITY_ID_REQUIRED,
+    );
+    this.entityType = assertCritical(
+      options.entityType,
+      REBALANCER_ERROR_MSG.ENTITY_TYPE_REQUIRED,
+    );
+    this.systemTableCache = assertCritical(
+      options.systemTableCache,
+      REBALANCER_ERROR_MSG.CACHE_REQUIRED,
+    );
+    this.cdcIntegrationService = assertCritical(
+      options.cdcIntegrationService,
+      REBALANCER_ERROR_MSG.CDC_REQUIRED,
+    );
+    this.tablePolicyService = assertCritical(
+      options.tablePolicyService,
+      REBALANCER_ERROR_MSG.POLICY_REQUIRED,
+    );
+    this.nodeId = assertCritical(
+      options.nodeId,
+      REBALANCER_ERROR_MSG.NODE_ID_REQUIRED,
+    );
+    this.messageRouter = assertCritical(
+      options.messageRouter,
+      REBALANCER_ERROR_MSG.ROUTER_REQUIRED,
+    );
 
     // RebalanceCoordinator for delegated operation execution (Requirements 2.5)
-    // When set, operation execution is delegated to the coordinator
-    this.rebalanceCoordinator = options.rebalanceCoordinator || null;
+    this.rebalanceCoordinator = assertCritical(
+      options.rebalanceCoordinator,
+      REBALANCER_ERROR_MSG.COORDINATOR_REQUIRED,
+    );
 
     // Leadership state
     this.isLeader = false;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.periodicCheckIntervalMs = config.get('rebalancer.periodicCheckIntervalMs') ||
-      60000;
-    this.periodicCheckJitterMs = config.get('rebalancer.periodicCheckJitterMs') ||
-      10000;
-    this.criticalCheckDelayMs = config.get('rebalancer.criticalCheckDelayMs') ||
-      5000;
-    this.maxConcurrentMoves = config.get('rebalancer.maxConcurrentMoves') || 5;
-    this.moveTimeoutMs = config.get('rebalancer.moveTimeoutMs') || 300000;
-    this.nodeCpuThreshold = config.get('rebalancer.nodeCpuThreshold') || 0.8;
-    this.nodeMemoryThreshold = config.get('rebalancer.nodeMemoryThreshold') || 0.8;
-    this.nodeDiskThreshold = config.get('rebalancer.nodeDiskThreshold') || 0.9;
+    this.periodicCheckIntervalMs =
+      config.get(REBALANCER_CONFIG_KEY.PERIODIC_CHECK_INTERVAL_MS) ||
+      REBALANCER_DEFAULT.UNIFIED.PERIODIC_CHECK_INTERVAL_MS;
+    this.periodicCheckJitterMs =
+      config.get(REBALANCER_CONFIG_KEY.PERIODIC_CHECK_JITTER_MS) ||
+      REBALANCER_DEFAULT.UNIFIED.PERIODIC_CHECK_JITTER_MS;
+    this.criticalCheckDelayMs =
+      config.get(REBALANCER_CONFIG_KEY.CRITICAL_CHECK_DELAY_MS) ||
+      REBALANCER_DEFAULT.UNIFIED.CRITICAL_CHECK_DELAY_MS;
+    this.maxConcurrentMoves =
+      config.get(REBALANCER_CONFIG_KEY.MAX_CONCURRENT_MOVES) ||
+      REBALANCER_DEFAULT.UNIFIED.MAX_CONCURRENT_MOVES;
+    this.moveTimeoutMs =
+      config.get(REBALANCER_CONFIG_KEY.MOVE_TIMEOUT_MS) ||
+      REBALANCER_DEFAULT.UNIFIED.MOVE_TIMEOUT_MS;
+    this.moveBatchSize =
+      config.get(REBALANCER_CONFIG_KEY.MOVE_BATCH_SIZE) ||
+      REBALANCER_DEFAULT.UNIFIED.MOVE_BATCH_SIZE;
+    this.interBatchDelayMs =
+      config.get(REBALANCER_CONFIG_KEY.INTER_BATCH_DELAY_MS) ||
+      REBALANCER_DEFAULT.UNIFIED.INTER_BATCH_DELAY_MS;
+    this.nodeCpuThreshold =
+      config.get(REBALANCER_CONFIG_KEY.NODE_CPU_THRESHOLD) ||
+      REBALANCER_DEFAULT.UNIFIED.NODE_CPU_THRESHOLD;
+    this.nodeMemoryThreshold =
+      config.get(REBALANCER_CONFIG_KEY.NODE_MEMORY_THRESHOLD) ||
+      REBALANCER_DEFAULT.UNIFIED.NODE_MEMORY_THRESHOLD;
+    this.nodeDiskThreshold =
+      config.get(REBALANCER_CONFIG_KEY.NODE_DISK_THRESHOLD) ||
+      REBALANCER_DEFAULT.UNIFIED.NODE_DISK_THRESHOLD;
+    this.enableReadinessPing =
+      config.get(REBALANCER_CONFIG_KEY.READINESS_PING_ENABLED) ||
+      REBALANCER_DEFAULT.UNIFIED.READINESS_PING_ENABLED;
+    this.readinessPingTimeoutMs =
+      config.get(REBALANCER_CONFIG_KEY.READINESS_PING_TIMEOUT_MS) ||
+      REBALANCER_DEFAULT.UNIFIED.READINESS_PING_TIMEOUT_MS;
 
     // Stabilization period configuration (Requirements 2.1)
-    const configuredStabilization = config.get('rebalancer.stabilizationPeriodMs');
-    this.minStabilizationMs = 1000;
-    this.maxStabilizationMs = 10000;
-    this.defaultStabilizationMs = 5000;
-    // Clamp to valid range [1000ms, 10000ms] with default 5000ms
+    const configuredStabilization =
+      config.get(REBALANCER_CONFIG_KEY.STABILIZATION_PERIOD_MS);
+    this.minStabilizationMs = REBALANCER_DEFAULT.UNIFIED.MIN_STABILIZATION_MS;
+    this.maxStabilizationMs = REBALANCER_DEFAULT.UNIFIED.MAX_STABILIZATION_MS;
+    this.defaultStabilizationMs = REBALANCER_DEFAULT.UNIFIED.DEFAULT_STABILIZATION_MS;
+    // Clamp to valid range [1000ms, 10000ms] with default 1000ms
     this.stabilizationPeriodMs = this.clampStabilizationPeriod(
       configuredStabilization ?? this.defaultStabilizationMs,
     );
@@ -217,15 +202,9 @@ class UnifiedRebalancer extends EventEmitter {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('rebalancer') : console;
+      loggingService.forSubsystem(REBALANCER_SUBSYSTEM.UNIFIED) : console;
 
-    // State - pendingMoves is deprecated when rebalanceCoordinator is used
-    // Kept for backward compatibility with legacy code paths
-    /**
-     * @deprecated pendingMoves is deprecated. Use RebalanceCoordinator.getInFlightOperations()
-     * instead. The coordinator owns operation state tracking in the new architecture.
-     */
-    this.pendingMoves = new Map();
+    // State
     this.lastRebalanceTime = null;
     this.rebalanceCount = 0;
 
@@ -245,7 +224,7 @@ class UnifiedRebalancer extends EventEmitter {
       return;
     }
 
-    this.logger.info('Rebalancer initialized', {
+    this.logger.info(REBALANCER_LOG_MSG.INITIALIZED, {
       entityId: this.entityId,
       entityType: this.entityType,
       nodeId: this.nodeId,
@@ -257,28 +236,18 @@ class UnifiedRebalancer extends EventEmitter {
 
   /**
    * Set the RebalanceCoordinator for delegated operation execution.
-   * When set, operation execution is delegated to the coordinator,
-   * and pendingMoves tracking is no longer used.
    * Requirements: 2.5
    * @param {Object} coordinator - RebalanceCoordinator instance.
    */
   setRebalanceCoordinator(coordinator) {
     this.rebalanceCoordinator = coordinator;
 
-    this.logger.info('RebalanceCoordinator set for rebalancer', {
+    this.logger.info(REBALANCER_LOG_MSG.COORDINATOR_SET, {
       entityId: this.entityId,
       entityType: this.entityType,
       hasCoordinator: !!coordinator,
     });
 
-    // Clear legacy pendingMoves when switching to coordinator
-    if (coordinator && this.pendingMoves.size > 0) {
-      this.logger.warn('Clearing legacy pendingMoves after coordinator set', {
-        entityId: this.entityId,
-        pendingMovesCount: this.pendingMoves.size,
-      });
-      this.pendingMoves.clear();
-    }
   }
 
   /**
@@ -290,13 +259,13 @@ class UnifiedRebalancer extends EventEmitter {
     this.isLeader = isLeader;
 
     if (isLeader && !wasLeader) {
-      this.logger.info('Became leader, starting rebalancing scheduler', {
+      this.logger.info(REBALANCER_LOG_MSG.LEADER_START, {
         entityId: this.entityId,
         entityType: this.entityType,
       });
       this.scheduleNextCheck();
     } else if (!isLeader && wasLeader) {
-      this.logger.info('Lost leadership, stopping rebalancing scheduler', {
+      this.logger.info(REBALANCER_LOG_MSG.LEADER_STOP, {
         entityId: this.entityId,
         entityType: this.entityType,
       });
@@ -317,39 +286,11 @@ class UnifiedRebalancer extends EventEmitter {
 
   /**
    * Get table policy for a partition.
-   * Uses TablePolicyService if available, otherwise falls back to direct cache lookup.
+   * Uses TablePolicyService for policy lookup.
    * @return {Object} Table policy.
    */
   getTablePolicy() {
-    // Use TablePolicyService if available (preferred)
-    if (this.tablePolicyService) {
-      return this.tablePolicyService.getPolicyForPartition(this.entityId);
-    }
-
-    // Fallback to direct cache lookup
-    if (!this.systemTableCache) {
-      return {...DEFAULT_TABLE_POLICY};
-    }
-
-    // Get partition info to find table
-    const partition = this.systemTableCache.get('partitions', this.entityId);
-    if (!partition) {
-      return {...DEFAULT_TABLE_POLICY};
-    }
-
-    // Get table policy
-    const table = this.systemTableCache.get('tables', partition.table_id);
-    if (!table || !table.table_policies) {
-      return {...DEFAULT_TABLE_POLICY};
-    }
-
-    try {
-      const policies = typeof table.table_policies === 'string' ?
-        JSON.parse(table.table_policies) : table.table_policies;
-      return {...DEFAULT_TABLE_POLICY, ...policies};
-    } catch (_e) {
-      return {...DEFAULT_TABLE_POLICY};
-    }
+    return this.tablePolicyService.getPolicyForPartition(this.entityId);
   }
 
   /**
@@ -394,7 +335,7 @@ class UnifiedRebalancer extends EventEmitter {
   recordStateChange(reason) {
     this.lastStateChangeTime = Date.now();
 
-    this.logger.debug('State change recorded, resetting stabilization timer', {
+    this.logger.debug(REBALANCER_LOG_MSG.STABILIZATION_RESET, {
       entityId: this.entityId,
       reason,
       stabilizationPeriodMs: this.stabilizationPeriodMs,
@@ -568,13 +509,55 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {Array<Object>} Array of active nodes.
    */
   getAvailableNodes() {
-    if (!this.systemTableCache) {
-      return [];
+    const now = Date.now();
+    return this.systemTableCache.filter('nodes', (node) => {
+      const leaseValid = node.ready_lease_expires_at &&
+        node.ready_lease_expires_at > now;
+      return node.status === NodeStatus.ACTIVE &&
+        node.ws_connection_state === 'ready' &&
+        leaseValid;
+    });
+  }
+
+  /**
+   * Check if a node is ready to receive replica operations.
+   * @param {string} nodeId - Node ID.
+   * @return {Promise<boolean>} True if ready.
+   */
+  async isNodeReady(nodeId) {
+    const node = this.systemTableCache.get('nodes', nodeId);
+    if (!node || node.ws_connection_state !== 'ready') {
+      return false;
     }
 
-    return this.systemTableCache.filter('nodes', (node) => {
-      return node.status === NodeStatus.ACTIVE;
-    });
+    const leaseValid = node.ready_lease_expires_at &&
+      node.ready_lease_expires_at > Date.now();
+    if (!leaseValid) {
+      return false;
+    }
+
+    if (!this.messageRouter || !this.messageRouter.getConnectionState) {
+      return false;
+    }
+
+    const connectionState = this.messageRouter.getConnectionState(nodeId);
+    if (connectionState !== 'connected') {
+      return false;
+    }
+
+    if (this.messageRouter.isOutboundQueueAvailable &&
+        !this.messageRouter.isOutboundQueueAvailable(nodeId)) {
+      return false;
+    }
+
+    if (this.enableReadinessPing && this.messageRouter.pingNode) {
+      const ok = await this.messageRouter.pingNode(nodeId, this.readinessPingTimeoutMs);
+      if (!ok) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -582,10 +565,6 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {Array<Object>} Array of replica objects.
    */
   getCurrentReplicas() {
-    if (!this.systemTableCache) {
-      return [];
-    }
-
     const _tableName = this.entityType === EntityType.MESSAGE_GROUP ?
       'message_groups' : 'services';
 
@@ -610,7 +589,30 @@ class UnifiedRebalancer extends EventEmitter {
   }
 
   /**
-   * Get healthy replicas (excluding failed/inactive).
+   * Get in-flight replica operations for this partition.
+   * @return {Array<Object>} Array of replica_operations rows in-flight.
+   */
+  getInFlightOperations() {
+    if (this.entityType !== EntityType.PARTITION) {
+      return [];
+    }
+
+    const terminalStatuses = [
+      ReplicaStatus.ACTIVE,
+      ReplicaStatus.REMOVED,
+      ReplicaStatus.FAILED,
+    ];
+
+    return this.systemTableCache.filter(
+      SystemTableName.REPLICA_OPERATIONS,
+      (operation) =>
+        operation.partition_id === this.entityId &&
+        !terminalStatuses.includes(operation.status),
+    );
+  }
+
+  /**
+   * Get healthy replicas (excluding failed or removed).
    * @param {Array<Object>} replicas - All replicas.
    * @return {Array<Object>} Healthy replicas only.
    */
@@ -651,10 +653,27 @@ class UnifiedRebalancer extends EventEmitter {
   calculateMessageGroupPlacement(nodes, targetCount, policy) {
     const targetNodes = [];
 
+    // No available nodes: we cannot place any replicas.
+    if (!nodes || nodes.length === 0) {
+      return {
+        targetReplicaCount: 0,
+        targetNodes: [],
+        maxReplicaCount: policy.maxReplicaCount || 5,
+      };
+    }
+
     // First, ensure we have replicas spread across nodes
     if (policy.placementConstraints?.spreadAcrossNodes) {
       // Sort nodes by current replica load (prefer less loaded nodes)
       const sortedNodes = this.sortNodesByLoad(nodes);
+
+      if (sortedNodes.length === 0) {
+        return {
+          targetReplicaCount: 0,
+          targetNodes: [],
+          maxReplicaCount: policy.maxReplicaCount || 5,
+        };
+      }
 
       // Select target nodes
       for (let i = 0; i < Math.min(targetCount, sortedNodes.length); i++) {
@@ -687,6 +706,16 @@ class UnifiedRebalancer extends EventEmitter {
 
     // Sort nodes by suitability based on policy constraints
     const sortedNodes = this.sortNodesBySuitability(nodes, policy);
+
+    // No available nodes: we cannot place any replicas.
+    if (sortedNodes.length === 0) {
+      return {
+        targetReplicaCount: 0,
+        targetNodes: [],
+        minReplicaCount: policy.minReplicaCount || 3,
+        maxReplicaCount: policy.maxReplicaCount || 7,
+      };
+    }
 
     // Select target nodes
     for (let i = 0; i < Math.min(targetCount, sortedNodes.length); i++) {
@@ -786,30 +815,23 @@ class UnifiedRebalancer extends EventEmitter {
     const healthyReplicas = this.getHealthyReplicas(currentReplicas);
     const targetNodeIds = targetState.targetNodes;
 
-    // Get transitional replicas from coordinator or state machine
-    // Coordinator is preferred (Requirements 1.1, 1.3)
-    let transitionalReplicas = [];
-    if (this.rebalanceCoordinator) {
-      // Use coordinator's in-flight operations
-      const inFlightOps = this.rebalanceCoordinator.getInFlightOperations();
-      transitionalReplicas = inFlightOps.map((op) => ({
-        replicaId: op.replicaId,
-        partitionId: op.partitionId,
-        nodeId: op.targetNodeId,
-        state: op.workflowStep?.toLowerCase() || op.status,
-      }));
-    } else if (this.replicaStateMachine) {
-      // Legacy: use state machine (deprecated)
-      transitionalReplicas = this.replicaStateMachine.getTransitionalReplicas();
-    }
+    const inFlightOperations = this.getInFlightOperations();
+    const transitionalReplicas = [
+      ...inFlightOperations.map((op) => ({
+        replicaId: op.replica_id,
+        partitionId: op.partition_id,
+        nodeId: op.target_node_id,
+        state: op.workflow_step ? op.workflow_step.toLowerCase() : op.status,
+      })),
+    ];
 
     // Build sets for quick lookup of transitional replicas by node and replica ID
     const nodesWithAddTransitional = new Set();
     const replicasInRemoving = new Set();
 
     for (const replica of transitionalReplicas) {
-      // ADD transitional states: pending, creating, syncing
-      if (['pending', 'creating', 'syncing'].includes(replica.state)) {
+      // ADD transitional states: pending, sending, creating, syncing
+      if (['pending', 'sending', 'creating', 'syncing'].includes(replica.state)) {
         // Only consider replicas for this partition
         if (replica.partitionId === this.entityId) {
           nodesWithAddTransitional.add(replica.nodeId);
@@ -821,34 +843,26 @@ class UnifiedRebalancer extends EventEmitter {
       }
     }
 
-    // Count replicas in transition (starting/stopping/syncing)
+    // Count replicas in transition (creating/syncing/removing)
     const transitioningReplicas = currentReplicas.filter((r) =>
-      r.status === ReplicaStatus.STARTING ||
-      r.status === ReplicaStatus.STOPPING ||
-      r.status === 'syncing');
+      r.status === ReplicaStatus.CREATING ||
+      r.status === ReplicaStatus.SYNCING ||
+      r.status === ReplicaStatus.REMOVING);
 
     // If there are replicas in transition, wait for them to complete
     if (transitioningReplicas.length > 0) {
-      this.logger.debug('Replicas in transition, skipping move calculation', {
+      this.logger.debug(REBALANCER_LOG_MSG.SKIP_TRANSITIONAL, {
         entityId: this.entityId,
         transitioningCount: transitioningReplicas.length,
       });
       return [];
     }
 
-    // Check for pending moves - don't generate new moves if we have pending ones
-    // When using coordinator, check coordinator's in-flight operations
-    let pendingCount = 0;
-    if (this.rebalanceCoordinator) {
-      const inFlightOps = this.rebalanceCoordinator.getOperationsByPartition(this.entityId);
-      pendingCount = inFlightOps.length;
-    } else {
-      pendingCount = Array.from(this.pendingMoves.values())
-        .filter((m) => m.status === 'pending').length;
-    }
+    // Check for pending operations - don't generate new moves if we have any
+    const pendingCount = inFlightOperations.length;
 
     if (pendingCount > 0) {
-      this.logger.debug('Pending moves exist, skipping move calculation', {
+      this.logger.debug(REBALANCER_LOG_MSG.SKIP_PENDING, {
         entityId: this.entityId,
         pendingCount,
       });
@@ -881,14 +895,14 @@ class UnifiedRebalancer extends EventEmitter {
 
       // Skip if replica is already in removing state (Requirements 3.3)
       if (replicasInRemoving.has(replicaId)) {
-        this.logger.debug('Skipping REMOVE for replica already in removing state', {
+        this.logger.debug(REBALANCER_LOG_MSG.SKIP_REMOVE_REMOVING, {
           entityId: this.entityId,
           replicaId,
         });
         continue;
       }
 
-      if (status === ReplicaStatus.FAILED || status === ReplicaStatus.INACTIVE) {
+      if (status === ReplicaStatus.FAILED) {
         moves.push({
           type: MoveType.REMOVE,
           replicaId,
@@ -910,7 +924,45 @@ class UnifiedRebalancer extends EventEmitter {
       }
     }
 
+    // Generate ADD moves for under-represented nodes FIRST
+    // This ensures we know how many ADDs are needed before deciding on REMOVEs
+    const addMoves = [];
+    for (const [nodeId, targetCount] of targetCounts) {
+      // Skip if this node already has a pending ADD move
+      if (this.hasPendingAddForNode(nodeId)) {
+        continue;
+      }
+
+      // Skip if this node already has a transitional replica for this partition
+      // (Requirements 3.2)
+      if (nodesWithAddTransitional.has(nodeId)) {
+        this.logger.debug(REBALANCER_LOG_MSG.SKIP_ADD_TRANSITIONAL, {
+          entityId: this.entityId,
+          nodeId,
+        });
+        continue;
+      }
+
+      const currentCount = currentCounts.get(nodeId) || 0;
+      const needed = targetCount - currentCount;
+
+      for (let i = 0; i < needed; i++) {
+        addMoves.push({
+          type: MoveType.ADD,
+          nodeId,
+          reason: 'increase_replica_count',
+        });
+      }
+    }
+
+    // Calculate total healthy replicas after pending ADDs complete
+    const totalHealthyAfterAdds = healthyReplicas.length + addMoves.length;
+    const targetReplicaCount = targetState.targetReplicaCount;
+
     // Generate REMOVE moves for over-represented nodes
+    // IMPORTANT: Only generate REMOVE moves for "spread_replicas" if we have
+    // MORE healthy replicas than the target AFTER ADDs complete.
+    // This implements the "ADD first, REMOVE after stable" strategy.
     for (const [nodeId, replicas] of replicasByNode) {
       const targetCount = targetCounts.get(nodeId) || 0;
       const currentCount = replicas.length;
@@ -928,63 +980,106 @@ class UnifiedRebalancer extends EventEmitter {
 
         // Skip if replica is already in removing state (Requirements 3.3)
         if (replicasInRemoving.has(replicaId)) {
-          this.logger.debug('Skipping REMOVE for replica already in removing state', {
+          this.logger.debug(REBALANCER_LOG_MSG.SKIP_REMOVE_REMOVING, {
             entityId: this.entityId,
             replicaId,
           });
           continue;
         }
 
+        const reason = targetCount === 0 ? 'node_not_in_target' : 'spread_replicas';
+
+        // For "spread_replicas" removals, only proceed if we'll have excess
+        // replicas after the ADDs complete. This ensures we don't remove
+        // replicas until new ones are stable.
+        if (reason === 'spread_replicas') {
+          // Count how many REMOVE moves we've already added
+          const existingRemoves = moves.filter(
+            (m) => m.type === MoveType.REMOVE && m.reason === 'spread_replicas',
+          ).length;
+
+          // Only add REMOVE if total after ADDs minus existing removes
+          // is still above target
+          if (totalHealthyAfterAdds - existingRemoves <= targetReplicaCount) {
+            this.logger.debug(REBALANCER_LOG_MSG.DEFER_REMOVE_DETAIL, {
+              entityId: this.entityId,
+              replicaId,
+              nodeId,
+              totalHealthyAfterAdds,
+              existingRemoves,
+              targetReplicaCount,
+            });
+            continue;
+          }
+        }
+
         moves.push({
           type: MoveType.REMOVE,
           replicaId,
           nodeId: nodeId,
-          reason: targetCount === 0 ? 'node_not_in_target' : 'spread_replicas',
+          reason,
         });
       }
     }
 
-    // Generate ADD moves for under-represented nodes
-    for (const [nodeId, targetCount] of targetCounts) {
-      // Skip if this node already has a pending ADD move
-      if (this.hasPendingAddForNode(nodeId)) {
-        continue;
-      }
+    // Add the ADD moves to the moves array
+    moves.push(...addMoves);
 
-      // Skip if this node already has a transitional replica for this partition
-      // (Requirements 3.2)
-      if (nodesWithAddTransitional.has(nodeId)) {
-        this.logger.debug('Skipping ADD for node with transitional replica', {
-          entityId: this.entityId,
-          nodeId,
-        });
-        continue;
-      }
+    // CRITICAL: If there are any ADD moves, do NOT include REMOVE moves
+    // (except for failed replica cleanup). This ensures ADD operations
+    // complete and replicas become active BEFORE any REMOVE operations start.
+    // The rebalancer will generate REMOVE moves in a subsequent cycle after
+    // the ADDs have stabilized.
+    //
+    // This prevents the race condition where:
+    // 1. ADD move is initiated (async, returns immediately)
+    // 2. REMOVE move executes before ADD completes
+    // 3. System loses replicas and queries fail
+    if (addMoves.length > 0) {
+      // Filter out non-critical REMOVE moves when we have ADDs pending
+      const criticalRemoves = moves.filter(
+        (m) => m.type === MoveType.REMOVE && m.reason === 'replica_failed',
+      );
+      // Return only ADD moves and critical removes (failed replicas)
+      const filteredMoves = [...addMoves, ...criticalRemoves];
 
-      const currentCount = currentCounts.get(nodeId) || 0;
-      const needed = targetCount - currentCount;
+      this.logger.info(REBALANCER_LOG_MSG.DEFER_REMOVE, {
+        entityId: this.entityId,
+        addMoveCount: addMoves.length,
+        deferredRemoveCount: moves.filter(
+          (m) => m.type === MoveType.REMOVE && m.reason !== 'replica_failed',
+        ).length,
+        criticalRemoveCount: criticalRemoves.length,
+      });
 
-      for (let i = 0; i < needed; i++) {
-        moves.push({
-          type: MoveType.ADD,
-          nodeId,
-          reason: 'increase_replica_count',
-        });
-      }
+      return filteredMoves;
     }
+
+    // Sort moves: ADD operations first, then REMOVE operations
+    // This ensures we add new replicas before removing old ones, maintaining
+    // replica count and data availability during rebalancing.
+    // The only exception is failed replicas which should be removed immediately.
+    moves.sort((a, b) => {
+      // Failed replica removals have highest priority
+      if (a.reason === 'replica_failed' && b.reason !== 'replica_failed') return -1;
+      if (b.reason === 'replica_failed' && a.reason !== 'replica_failed') return 1;
+      // ADD before REMOVE for all other cases
+      if (a.type === MoveType.ADD && b.type === MoveType.REMOVE) return -1;
+      if (a.type === MoveType.REMOVE && b.type === MoveType.ADD) return 1;
+      return 0;
+    });
 
     return moves;
   }
 
   /**
-   * Execute a single move operation.
-   * When rebalanceCoordinator is available, delegates to it (Requirements 2.5).
-   * Otherwise falls back to legacy behavior.
+   * Execute a single move operation via the coordinator.
+   * Requirements: 2.5
    * @param {Object} move - Move operation to execute.
    * @return {Promise<Object>} Result of the move.
    */
   async executeMove(move) {
-    this.logger.info('Executing rebalancing move', {
+    this.logger.info(REBALANCER_LOG_MSG.EXECUTE_MOVE, {
       entityId: this.entityId,
       entityType: this.entityType,
       moveType: move.type,
@@ -994,21 +1089,32 @@ class UnifiedRebalancer extends EventEmitter {
     });
 
     try {
-      // Delegate to RebalanceCoordinator if available (Requirements 2.5)
-      if (this.rebalanceCoordinator) {
-        return await this.executeMoveViaCoordinator(move);
+      if (move?.nodeId) {
+        const ready = await this.isNodeReady(move.nodeId);
+        if (!ready) {
+          this.logger.warn(REBALANCER_LOG_MSG.SKIP_UNREADY_NODE, {
+            entityId: this.entityId,
+            nodeId: move.nodeId,
+            moveType: move.type,
+          });
+          return {
+            success: false,
+            skipped: true,
+            reason: 'node_not_ready',
+            operation: move.type,
+            nodeId: move.nodeId,
+            replicaId: move.replicaId,
+          };
+        }
       }
 
-      // Legacy behavior - direct execution
-      if (move.type === MoveType.ADD) {
-        return await this.addReplica(move.nodeId);
-      } else if (move.type === MoveType.REMOVE) {
-        return await this.removeReplica(move.replicaId, move.nodeId);
+      if (!this.rebalanceCoordinator) {
+        throw new Error(REBALANCER_ERROR_MSG.COORDINATOR_REQUIRED);
       }
 
-      throw new Error(`Unknown move type: ${move.type}`);
+      return await this.executeMoveViaCoordinator(move);
     } catch (error) {
-      this.logger.error('Failed to execute move', {
+      this.logger.error(REBALANCER_LOG_MSG.MOVE_FAILED, {
         entityId: this.entityId,
         moveType: move.type,
         nodeId: move.nodeId,
@@ -1028,367 +1134,154 @@ class UnifiedRebalancer extends EventEmitter {
    */
   async executeMoveViaCoordinator(move) {
     // Create operation record via coordinator
+    const replicaId = move.type === MoveType.ADD && !move.replicaId ?
+      uuidv4() :
+      move.replicaId;
+
     const operation = await this.rebalanceCoordinator.createOperation({
       type: move.type === MoveType.ADD ? 'ADD' : 'REMOVE',
       partitionId: this.entityId,
       nodeId: move.nodeId,
-      replicaId: move.replicaId,
+      replicaId: replicaId,
     });
 
-    // Execute operation via coordinator
-    const result = await this.rebalanceCoordinator.executeOperation(operation);
-
-    // Emit event for compatibility with existing listeners
-    if (result.success) {
-      this.emit(move.type === MoveType.ADD ? 'addReplica' : 'removeReplica', {
-        entityId: this.entityId,
-        entityType: this.entityType,
-        replicaId: move.replicaId || operation.replicaId,
-        nodeId: move.nodeId,
-        operationId: operation.operationId,
-      });
-    }
-
     return {
-      success: result.success,
-      replicaId: move.replicaId || operation.replicaId,
+      success: true,
+      replicaId: replicaId || operation.replicaId,
       nodeId: move.nodeId,
       operationId: operation.operationId,
       operation: move.type,
-      error: result.error,
+      status: 'scheduled',
     };
-  }
-
-  /**
-   * Add a replica on a node.
-   * @param {string} nodeId - Target node ID.
-   * @return {Promise<Object>} Result of the add operation.
-   */
-  async addReplica(nodeId) {
-    const replicaId = uuidv4();
-    const requestId = uuidv4();
-
-    this.logger.info('Adding replica', {
-      entityId: this.entityId,
-      entityType: this.entityType,
-      replicaId,
-      nodeId,
-      requestId,
-    });
-
-    // Track pending move
-    this.pendingMoves.set(requestId, {
-      type: MoveType.ADD,
-      replicaId,
-      nodeId,
-      entityId: this.entityId,
-      startedAt: Date.now(),
-      status: 'pending',
-    });
-
-    // Emit event for external handling (legacy support)
-    this.emit('addReplica', {
-      entityId: this.entityId,
-      entityType: this.entityType,
-      replicaId,
-      nodeId,
-      requestId,
-    });
-
-    return {
-      success: true,
-      replicaId,
-      nodeId,
-      requestId,
-      operation: MoveType.ADD,
-    };
-  }
-
-  /**
-   * Remove a replica from a node.
-   * @param {string} replicaId - Replica ID to remove.
-   * @param {string} nodeId - Node ID where replica is located.
-   * @return {Promise<Object>} Result of the remove operation.
-   */
-  async removeReplica(replicaId, nodeId) {
-    const requestId = uuidv4();
-
-    this.logger.info('Removing replica', {
-      entityId: this.entityId,
-      entityType: this.entityType,
-      replicaId,
-      nodeId,
-      requestId,
-    });
-
-    // Track pending move
-    this.pendingMoves.set(requestId, {
-      type: MoveType.REMOVE,
-      replicaId,
-      nodeId,
-      entityId: this.entityId,
-      startedAt: Date.now(),
-      status: 'pending',
-    });
-
-    // Emit event for external handling (legacy support)
-    this.emit('removeReplica', {
-      entityId: this.entityId,
-      entityType: this.entityType,
-      replicaId,
-      nodeId,
-      requestId,
-    });
-
-    return {
-      success: true,
-      replicaId,
-      nodeId,
-      requestId,
-      operation: MoveType.REMOVE,
-    };
-  }
-
-  /**
-   * Send a message with acknowledgment and timeout.
-   * @param {Object} messageGroupService - Message group service for sending.
-   * @param {string} targetNodeId - Target node ID.
-   * @param {Object} message - Message to send.
-   * @param {number} timeoutMs - Timeout in milliseconds.
-   * @return {Promise<Object>} ACK response or timeout error.
-   */
-  async sendWithAck(messageGroupService, targetNodeId, message, timeoutMs = 30000) {
-    const requestId = message.request_id || uuidv4();
-    const messageWithId = {...message, request_id: requestId};
-
-    // Target the lifecycle handler on the target node using unified address format
-    // Requirements: 1.1, 7.1 - Unified address format ${nodeId}/${entityType}/${entityId}
-    const targetAddress = `${targetNodeId}/lifecycle/manager`;
-
-    this.logger.debug('Sending message with ACK', {
-      requestId,
-      targetNodeId,
-      targetAddress,
-      messageType: message.type,
-      entityId: this.entityId,
-    });
-
-    return new Promise((resolve, reject) => {
-      let timeoutId;
-      let resolved = false;
-
-      // Create one-time ACK handler
-      const ackHandler = (ack) => {
-        if (ack.request_id === requestId && !resolved) {
-          resolved = true;
-          clearTimeout(timeoutId);
-          this.logger.debug('Received ACK', {
-            requestId,
-            status: ack.status,
-            entityId: this.entityId,
-          });
-          resolve(ack);
-        }
-      };
-
-      // Register handler for ACK
-      const ackType = message.type === 'CREATE_REPLICA' ?
-        'CREATE_REPLICA_ACK' : 'REMOVE_REPLICA_ACK';
-
-      if (messageGroupService && messageGroupService.once) {
-        messageGroupService.once(ackType, ackHandler);
-      }
-
-      // Set timeout
-      timeoutId = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          if (messageGroupService && messageGroupService.removeListener) {
-            messageGroupService.removeListener(ackType, ackHandler);
-          }
-          this.logger.warn('Message ACK timeout', {
-            requestId,
-            targetNodeId,
-            targetAddress,
-            messageType: message.type,
-            timeoutMs,
-            entityId: this.entityId,
-          });
-          reject(new Error(`ACK timeout after ${timeoutMs}ms for request ${requestId}`));
-        }
-      }, timeoutMs);
-
-      // Send the message to the lifecycle handler address
-      if (messageGroupService && messageGroupService.sendMessage) {
-        messageGroupService.sendMessage(targetAddress, messageWithId)
-          .catch((error) => {
-            if (!resolved) {
-              resolved = true;
-              clearTimeout(timeoutId);
-              if (messageGroupService.removeListener) {
-                messageGroupService.removeListener(ackType, ackHandler);
-              }
-              reject(error);
-            }
-          });
-      } else {
-        // No message group service - resolve immediately for testing
-        clearTimeout(timeoutId);
-        resolve({
-          request_id: requestId,
-          status: 'initiated',
-          simulated: true,
-        });
-      }
-    });
   }
 
   /**
    * Check if a replica has a pending move operation.
-   * When rebalanceCoordinator is available, checks coordinator's in-flight operations.
    * @param {string} replicaId - Replica ID to check.
    * @return {boolean} True if replica has pending move.
    */
   hasPendingMove(replicaId) {
-    // Check coordinator's in-flight operations if available
-    if (this.rebalanceCoordinator) {
-      const inFlightOps = this.rebalanceCoordinator.getInFlightOperations();
-      return inFlightOps.some((op) => op.replicaId === replicaId);
-    }
-
-    // Legacy: check local pendingMoves
-    for (const move of this.pendingMoves.values()) {
-      if (move.replicaId === replicaId && move.status === 'pending') {
-        return true;
-      }
+    const inFlightOps = this.getInFlightOperations();
+    if (inFlightOps.some((op) => op.replica_id === replicaId)) {
+      return true;
     }
     return false;
   }
 
   /**
    * Check if a node has a pending ADD move for this entity.
-   * When rebalanceCoordinator is available, checks coordinator's in-flight operations.
    * @param {string} nodeId - Node ID to check.
    * @return {boolean} True if node has pending ADD move.
    */
   hasPendingAddForNode(nodeId) {
-    // Check coordinator's in-flight operations if available
-    if (this.rebalanceCoordinator) {
-      const inFlightOps = this.rebalanceCoordinator.getInFlightOperations();
-      return inFlightOps.some((op) =>
-        op.targetNodeId === nodeId &&
-        op.type === 'ADD' &&
-        op.partitionId === this.entityId,
-      );
-    }
-
-    // Legacy: check local pendingMoves
-    for (const move of this.pendingMoves.values()) {
-      if (move.nodeId === nodeId &&
-          move.type === MoveType.ADD &&
-          move.status === 'pending') {
-        return true;
-      }
+    const inFlightOps = this.getInFlightOperations();
+    if (inFlightOps.some((op) =>
+      op.target_node_id === nodeId &&
+      op.type === 'ADD' &&
+      op.partition_id === this.entityId,
+    )) {
+      return true;
     }
     return false;
   }
 
   /**
-   * Mark a pending move as completed.
-   * @param {string} requestId - Request ID of the move.
-   * @param {string} status - Final status ('completed' or 'failed').
-   * @param {string} error - Error message if failed.
+   * Group moves by target node ID.
+   * @param {Array<Object>} moves - Move operations.
+   * @return {Map<string|null, Array<Object>>} Grouped moves by node ID.
+   * @private
    */
-  completePendingMove(requestId, status = 'completed', error = null) {
-    const move = this.pendingMoves.get(requestId);
-    if (move) {
-      move.status = status;
-      move.completedAt = Date.now();
-      if (error) {
-        move.error = error;
+  groupMovesByTargetNode(moves) {
+    const grouped = new Map();
+    for (const move of moves) {
+      const nodeId = move?.nodeId || null;
+      if (!grouped.has(nodeId)) {
+        grouped.set(nodeId, []);
       }
-      this.logger.debug('Pending move completed', {
-        requestId,
-        status,
-        entityId: this.entityId,
-      });
+      grouped.get(nodeId).push(move);
     }
+    return grouped;
   }
 
   /**
-   * Clean up expired pending moves.
-   * @param {number} maxAgeMs - Maximum age for pending moves.
+   * Execute move operations with per-node batching and backpressure.
+   * @param {Array<Object>} moves - Move operations.
+   * @return {Promise<Array<Object>>} Execution results.
+   * @private
    */
-  cleanupExpiredMoves(maxAgeMs = 300000) {
-    const now = Date.now();
-    const expiredIds = [];
+  async executeRebalancingMoves(moves) {
+    const results = [];
+    const batchSize = Number.isFinite(this.moveBatchSize) && this.moveBatchSize > 0 ?
+      Math.floor(this.moveBatchSize) : 1;
+    const interBatchDelayMs = Number.isFinite(this.interBatchDelayMs) &&
+      this.interBatchDelayMs > 0 ? this.interBatchDelayMs : 0;
+    const groupedMoves = this.groupMovesByTargetNode(moves);
 
-    for (const [requestId, move] of this.pendingMoves) {
-      const age = now - move.startedAt;
-      if (age > maxAgeMs) {
-        if (move.status === 'pending') {
-          // Mark as failed due to timeout
-          move.status = 'failed';
-          move.error = 'Operation timed out';
-          move.completedAt = now;
+    for (const [nodeId, nodeMoves] of groupedMoves.entries()) {
+      if (nodeId) {
+        const ready = await this.isNodeReady(nodeId);
+        if (!ready) {
+          this.logger.warn(REBALANCER_LOG_MSG.SKIP_BATCH_UNREADY, {
+            entityId: this.entityId,
+            nodeId,
+            moveCount: nodeMoves.length,
+          });
+          for (const move of nodeMoves) {
+            results.push({
+              success: false,
+              skipped: true,
+              reason: 'node_not_ready',
+              operation: move.type,
+              nodeId: move.nodeId,
+              replicaId: move.replicaId,
+            });
+          }
+          continue;
         }
-        // Remove completed/failed moves older than maxAge
-        if (move.status !== 'pending') {
-          expiredIds.push(requestId);
+      }
+
+      for (let i = 0; i < nodeMoves.length; i += batchSize) {
+        const batch = nodeMoves.slice(i, i + batchSize);
+        const batchResults = await Promise.all(batch.map(async (move) => {
+          try {
+            return await this.executeMove(move);
+          } catch (error) {
+            throw error;
+          }
+        }));
+
+        results.push(...batchResults);
+
+        if (nodeId) {
+          const stillReady = await this.isNodeReady(nodeId);
+          if (!stillReady) {
+            this.logger.warn(REBALANCER_LOG_MSG.NODE_DISCONNECTED_BATCH, {
+              entityId: this.entityId,
+              nodeId,
+              remainingMoves: nodeMoves.length - (i + batch.length),
+            });
+            const remainingMoves = nodeMoves.slice(i + batch.length);
+            for (const move of remainingMoves) {
+              results.push({
+                success: false,
+                skipped: true,
+                reason: 'node_not_ready',
+                operation: move.type,
+                nodeId: move.nodeId,
+                replicaId: move.replicaId,
+              });
+            }
+            break;
+          }
+        }
+
+        if (interBatchDelayMs > 0 && i + batchSize < nodeMoves.length) {
+          await new Promise((resolve) => setTimeout(resolve, interBatchDelayMs));
         }
       }
     }
 
-    for (const id of expiredIds) {
-      this.pendingMoves.delete(id);
-    }
-
-    if (expiredIds.length > 0) {
-      this.logger.debug('Cleaned up expired pending moves', {
-        count: expiredIds.length,
-        entityId: this.entityId,
-      });
-    }
-  }
-
-  /**
-   * Handle CDC event for services table to detect move completion.
-   * @param {Object} event - CDC event.
-   */
-  handleServicesCDCEvent(event) {
-    if (!event || !event.data) {
-      return;
-    }
-
-    const {operation, data} = event;
-    const serviceId = data.service_id;
-    const status = data.status;
-
-    // Find pending move for this service
-    for (const [requestId, move] of this.pendingMoves) {
-      if (move.replicaId === serviceId && move.status === 'pending') {
-        if (move.type === MoveType.ADD) {
-          // ADD completion: status becomes 'active'
-          if (status === 'active') {
-            this.completePendingMove(requestId, 'completed');
-            this.emit('moveCompleted', {requestId, move, status: 'completed'});
-          } else if (status === 'failed') {
-            this.completePendingMove(requestId, 'failed', data.error_message);
-            this.emit('moveFailed', {requestId, move, error: data.error_message});
-          }
-        } else if (move.type === MoveType.REMOVE) {
-          // REMOVE completion: row is deleted or status is 'stopped'
-          if (operation === 'DELETE' || status === 'stopped') {
-            this.completePendingMove(requestId, 'completed');
-            this.emit('moveCompleted', {requestId, move, status: 'completed'});
-          } else if (status === 'failed') {
-            this.completePendingMove(requestId, 'failed', data.error_message);
-            this.emit('moveFailed', {requestId, move, error: data.error_message});
-          }
-        }
-        break;
-      }
-    }
+    return results;
   }
 
   /**
@@ -1399,7 +1292,7 @@ class UnifiedRebalancer extends EventEmitter {
    */
   async rebalance(trigger = TriggerType.PERIODIC, policy = null) {
     if (!this.isLeader) {
-      this.logger.debug('Not leader, skipping rebalance', {
+      this.logger.debug(REBALANCER_LOG_MSG.NOT_LEADER_SKIP, {
         entityId: this.entityId,
       });
       return {success: false, reason: 'not_leader'};
@@ -1407,11 +1300,20 @@ class UnifiedRebalancer extends EventEmitter {
 
     const effectivePolicy = policy || this.getPolicy();
     const currentReplicas = this.getCurrentReplicas();
+    const availableNodes = this.getAvailableNodes();
+    if (availableNodes.length === 0) {
+      this.logger.debug(REBALANCER_LOG_MSG.NO_AVAILABLE_NODES, {
+        entityId: this.entityId,
+        entityType: this.entityType,
+      });
+      return {success: false, reason: 'no_available_nodes'};
+    }
+
     const targetState = this.calculateTargetState(currentReplicas, effectivePolicy);
     const moves = this.calculateMoves(currentReplicas, targetState);
 
     if (moves.length === 0) {
-      this.logger.debug('No rebalancing needed', {
+      this.logger.debug(REBALANCER_LOG_MSG.NO_REBALANCE_NEEDED, {
         entityId: this.entityId,
         currentCount: currentReplicas.length,
         targetCount: targetState.targetReplicaCount,
@@ -1419,7 +1321,7 @@ class UnifiedRebalancer extends EventEmitter {
       return {success: true, moves: [], reason: 'no_changes_needed'};
     }
 
-    this.logger.info('Starting rebalancing', {
+    this.logger.info(REBALANCER_LOG_MSG.START_REBALANCE, {
       entityId: this.entityId,
       entityType: this.entityType,
       trigger,
@@ -1428,26 +1330,13 @@ class UnifiedRebalancer extends EventEmitter {
       targetCount: targetState.targetReplicaCount,
     });
 
-    const results = [];
     const limitedMoves = moves.slice(0, this.maxConcurrentMoves);
-
-    for (const move of limitedMoves) {
-      try {
-        const result = await this.executeMove(move);
-        results.push(result);
-      } catch (error) {
-        results.push({
-          success: false,
-          move,
-          error: error.message,
-        });
-      }
-    }
+    const results = await this.executeRebalancingMoves(limitedMoves);
 
     this.lastRebalanceTime = Date.now();
     this.rebalanceCount++;
 
-    this.emit('rebalanceComplete', {
+    this.emit(REBALANCER_EVENT.REBALANCE_COMPLETE, {
       entityId: this.entityId,
       entityType: this.entityType,
       trigger,
@@ -1477,7 +1366,7 @@ class UnifiedRebalancer extends EventEmitter {
 
     this.scheduledCheck = setTimeout(() => this.checkRebalance(), delay);
 
-    this.logger.debug('Scheduled next rebalance check', {
+    this.logger.debug(REBALANCER_LOG_MSG.SCHEDULE_NEXT, {
       entityId: this.entityId,
       delayMs: Math.round(delay),
     });
@@ -1503,20 +1392,10 @@ class UnifiedRebalancer extends EventEmitter {
       return;
     }
 
-    // Skip rebalancing if system table cache isn't available yet
-    // This happens during bootstrap before cache hydration completes
-    if (!this.systemTableCache) {
-      this.logger.debug('System table cache not available, skipping rebalance check', {
-        entityId: this.entityId,
-      });
-      this.scheduleNextCheck();
-      return;
-    }
-
     try {
       // Check if we're still in stabilization period (Requirements 2.2, 2.3)
       if (!this.isStabilized()) {
-        this.logger.debug('Waiting for stabilization period to complete', {
+        this.logger.debug(REBALANCER_LOG_MSG.WAIT_STABILIZATION, {
           entityId: this.entityId,
           timeUntilStabilized: this.getTimeUntilStabilized(),
         });
@@ -1540,10 +1419,11 @@ class UnifiedRebalancer extends EventEmitter {
         );
       }
     } catch (error) {
-      this.logger.error('Error during rebalance check', {
+      this.logger.error(REBALANCER_LOG_MSG.REBALANCE_ERROR, {
         entityId: this.entityId,
         error: error.message,
       });
+      throw error;
     }
 
     // Schedule next check
@@ -1559,7 +1439,7 @@ class UnifiedRebalancer extends EventEmitter {
     const policy = this.getPolicy();
     const availableNodes = this.getAvailableNodes();
 
-    this.logger.debug('Evaluating rebalancing state', {
+    this.logger.debug(REBALANCER_LOG_MSG.EVALUATING_STATE, {
       entityId: this.entityId,
       entityType: this.entityType,
       currentReplicaCount: currentReplicas.length,
@@ -1572,7 +1452,7 @@ class UnifiedRebalancer extends EventEmitter {
     // This prevents newly joined nodes from making incorrect decisions
     // before their cache is synchronized with the cluster state
     if (availableNodes.length === 0) {
-      this.logger.debug('Skipping rebalance - no available nodes in cache', {
+      this.logger.debug(REBALANCER_LOG_MSG.NO_AVAILABLE_NODES, {
         entityId: this.entityId,
         entityType: this.entityType,
       });
@@ -1581,7 +1461,7 @@ class UnifiedRebalancer extends EventEmitter {
 
     // Critical checks - trigger immediate rebalancing
     if (this.isCriticalState(currentReplicas, policy)) {
-      this.logger.warn('Critical rebalancing state detected', {
+      this.logger.warn(REBALANCER_LOG_MSG.CRITICAL_STATE, {
         entityId: this.entityId,
         entityType: this.entityType,
         reason: this.getCriticalReason(currentReplicas, policy),
@@ -1591,7 +1471,7 @@ class UnifiedRebalancer extends EventEmitter {
 
     // Opportunistic checks - can wait for periodic schedule
     if (this.isSuboptimalState(currentReplicas, policy)) {
-      this.logger.info('Suboptimal rebalancing state detected', {
+      this.logger.info(REBALANCER_LOG_MSG.SUBOPTIMAL_STATE, {
         entityId: this.entityId,
         entityType: this.entityType,
       });
@@ -1733,7 +1613,7 @@ class UnifiedRebalancer extends EventEmitter {
       return;
     }
 
-    this.logger.info('Immediate rebalancing check triggered', {
+    this.logger.info(REBALANCER_LOG_MSG.IMMEDIATE_TRIGGER, {
       entityId: this.entityId,
       entityType: this.entityType,
       reason,
@@ -1817,15 +1697,27 @@ class UnifiedRebalancer extends EventEmitter {
       isLeader: this.isLeader,
       lastRebalanceTime: this.lastRebalanceTime,
       rebalanceCount: this.rebalanceCount,
-      pendingMoves: this.pendingMoves.size,
       currentInterval: this.currentInterval,
       initialized: this.initialized,
       usingCoordinator: !!this.rebalanceCoordinator,
     };
 
+    // Coordinator stats are fetched asynchronously via getStatsAsync()
+    // This method returns basic stats synchronously for backward compatibility
+
+    return stats;
+  }
+
+  /**
+   * Get rebalancer statistics including coordinator stats (async).
+   * @return {Promise<Object>} Statistics object with coordinator stats.
+   */
+  async getStatsAsync() {
+    const stats = this.getStats();
+
     // Include coordinator stats if available
-    if (this.rebalanceCoordinator) {
-      const coordStats = this.rebalanceCoordinator.getStats();
+    if (this.rebalanceCoordinator && this.rebalanceCoordinator.getStats) {
+      const coordStats = await this.rebalanceCoordinator.getStats();
       stats.coordinatorStats = {
         inFlightOperations: coordStats.inFlightOperations,
         operationsCreated: coordStats.operationsCreated,
@@ -1847,11 +1739,10 @@ class UnifiedRebalancer extends EventEmitter {
       clearTimeout(this.stabilizationTimer);
       this.stabilizationTimer = null;
     }
-    this.pendingMoves.clear();
     this.lastStateChangeTime = null;
     this.initialized = false;
 
-    this.logger.info('Rebalancer shutdown', {
+    this.logger.info(REBALANCER_LOG_MSG.SHUTDOWN, {
       entityId: this.entityId,
       entityType: this.entityType,
     });

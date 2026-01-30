@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {NavigationController} from '../../../src/cli/core/navigation-controller.js';
 import {RemoteCache} from '../../../src/cli/core/remote-cache.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';

@@ -8,7 +8,7 @@
  * `in_progress`, `not_found`) without changing the replica's state.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaLifecycleManager,
@@ -70,6 +70,18 @@ function createMockPartitionServiceFactory() {
   };
 }
 
+/**
+ * Create a mock system table cache.
+ * @return {Object} Mock system table cache.
+ */
+function createMockSystemTableCache() {
+  return {
+    filter: (_tableName, _predicate) => [],
+    get: (_tableName, _key) => null,
+    set: (_tableName, _key, _value) => {},
+  };
+}
+
 test('Property 13: Idempotent Operations', async (t) => {
   t.beforeEach(async () => {
     ConfigurationManager.resetInstance();
@@ -104,13 +116,20 @@ test('Property 13: Idempotent Operations', async (t) => {
         fc.string({minLength: 1, maxLength: 20}), // table_name
         async (requestId, partitionId, replicaId, tableName) => {
           const mockCDC = createMockCDCService();
-          const stateMachine = new ReplicaStateMachine({nodeId: 'test-node'});
+          const mockCache = createMockSystemTableCache();
+          const {factory} = createMockPartitionServiceFactory();
+          const stateMachine = new ReplicaStateMachine({
+            nodeId: 'test-node',
+            cdcIntegrationService: mockCDC,
+          });
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
             cdcIntegrationService: mockCDC,
+            systemTableCache: mockCache,
             dataDir: '/tmp/test-lifecycle',
             replicaStateMachine: stateMachine,
+            createPartitionService: factory,
           });
 
           manager.initialize();
@@ -177,9 +196,10 @@ test('Property 13: Idempotent Operations', async (t) => {
    * without changing state.
    */
   t.test('CREATE_REPLICA for creating/syncing replica returns in_progress', async (t) => {
+    // Use the status values that ReplicaHandler checks for
     const transitionalStates = [
-      {localStatus: ReplicaStatus.STARTING, smState: ReplicaState.CREATING},
-      {localStatus: ReplicaStatus.SYNCING, smState: ReplicaState.SYNCING},
+      {localStatus: 'creating', smState: ReplicaState.CREATING},
+      {localStatus: 'syncing', smState: ReplicaState.SYNCING},
     ];
 
     await fc.assert(
@@ -190,13 +210,20 @@ test('Property 13: Idempotent Operations', async (t) => {
         fc.constantFrom(...transitionalStates), // state config
         async (requestId, partitionId, replicaId, stateConfig) => {
           const mockCDC = createMockCDCService();
-          const stateMachine = new ReplicaStateMachine({nodeId: 'test-node'});
+          const mockCache = createMockSystemTableCache();
+          const {factory} = createMockPartitionServiceFactory();
+          const stateMachine = new ReplicaStateMachine({
+            nodeId: 'test-node',
+            cdcIntegrationService: mockCDC,
+          });
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
             cdcIntegrationService: mockCDC,
+            systemTableCache: mockCache,
             dataDir: '/tmp/test-lifecycle',
             replicaStateMachine: stateMachine,
+            createPartitionService: factory,
           });
 
           manager.initialize();
@@ -269,13 +296,20 @@ test('Property 13: Idempotent Operations', async (t) => {
         fc.uuid(), // replica_id
         async (requestId, partitionId, replicaId) => {
           const mockCDC = createMockCDCService();
-          const stateMachine = new ReplicaStateMachine({nodeId: 'test-node'});
+          const mockCache = createMockSystemTableCache();
+          const {factory} = createMockPartitionServiceFactory();
+          const stateMachine = new ReplicaStateMachine({
+            nodeId: 'test-node',
+            cdcIntegrationService: mockCDC,
+          });
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
             cdcIntegrationService: mockCDC,
+            systemTableCache: mockCache,
             dataDir: '/tmp/test-lifecycle',
             replicaStateMachine: stateMachine,
+            createPartitionService: factory,
           });
 
           manager.initialize();
@@ -321,22 +355,29 @@ test('Property 13: Idempotent Operations', async (t) => {
         fc.uuid(), // replica_id
         async (requestId, partitionId, replicaId) => {
           const mockCDC = createMockCDCService();
-          const stateMachine = new ReplicaStateMachine({nodeId: 'test-node'});
+          const mockCache = createMockSystemTableCache();
+          const {factory} = createMockPartitionServiceFactory();
+          const stateMachine = new ReplicaStateMachine({
+            nodeId: 'test-node',
+            cdcIntegrationService: mockCDC,
+          });
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
             cdcIntegrationService: mockCDC,
+            systemTableCache: mockCache,
             dataDir: '/tmp/test-lifecycle',
             replicaStateMachine: stateMachine,
+            createPartitionService: factory,
           });
 
           manager.initialize();
 
-          // Pre-populate local replica in STOPPING (removing) state
+          // Pre-populate local replica in REMOVING state
           manager.localReplicas.set(replicaId, {
             replicaId,
             partitionId,
-            status: ReplicaStatus.STOPPING,
+            status: 'removing',
             service: {async shutdown() {}, async syncFromLeader() {}},
           });
 

@@ -8,14 +8,24 @@ import {v4 as uuidv4} from 'uuid';
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {compilePredicate} from '../live-query/live-query-service.js';
+import {
+  FUNCTION_CDC_MATCH_TYPE,
+  FUNCTION_CDC_OPERATION,
+  FUNCTION_CDC_PREDICATE,
+  FUNCTION_ERROR_MSG,
+  FUNCTION_EVENT,
+  FUNCTION_LOG_MSG,
+  FUNCTION_PREDICATE,
+  FUNCTION_SEPARATOR,
+  FUNCTION_SUBSCRIPTION_TYPE,
+  FUNCTION_SUBSYSTEM,
+  TYPEOF,
+} from './function-constants.js';
 
 /**
  * Subscription types.
  */
-const SubscriptionType = {
-  CALLBACK: 'callback',
-  INVOKE: 'invoke',
-};
+const SubscriptionType = FUNCTION_SUBSCRIPTION_TYPE;
 
 /**
  * CDCSubscriptionManager manages programmatic CDC subscriptions
@@ -48,7 +58,7 @@ class CDCSubscriptionManager extends EventEmitter {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('cdc-subscription-manager');
+        return loggingService.forSubsystem(FUNCTION_SUBSYSTEM.CDC_SUBSCRIPTION_MANAGER);
       }
     } catch {
       // Logging not available
@@ -72,7 +82,7 @@ class CDCSubscriptionManager extends EventEmitter {
 
     this.initialized = true;
 
-    this.logger.info('CDC subscription manager initialized');
+    this.logger.info(FUNCTION_LOG_MSG.SUBSCRIPTION_MANAGER_INITIALIZED);
   }
 
   /**
@@ -84,11 +94,12 @@ class CDCSubscriptionManager extends EventEmitter {
    * @return {Promise<Object>} Subscription result with subscriptionId.
    */
   async subscribe(subscriberId, tableName, predicate, callback) {
-    if (typeof callback !== 'function') {
-      throw new Error('Callback must be a function');
+    if (typeof callback !== TYPEOF.FUNCTION) {
+      throw new Error(FUNCTION_ERROR_MSG.CALLBACK_MUST_BE_FUNCTION);
     }
 
-    const subscriptionId = `${subscriberId}:${tableName}:${uuidv4()}`;
+    const subscriptionId = `${subscriberId}${FUNCTION_SEPARATOR.SUBSCRIPTION_ID}` +
+      `${tableName}${FUNCTION_SEPARATOR.SUBSCRIPTION_ID}${uuidv4()}`;
 
     const subscription = {
       subscriptionId,
@@ -105,14 +116,14 @@ class CDCSubscriptionManager extends EventEmitter {
     this.subscriptions.set(subscriptionId, subscription);
     this.trackSubscriberSubscription(subscriberId, subscriptionId);
 
-    this.logger.info('CDC subscription created', {
+    this.logger.info(FUNCTION_LOG_MSG.SUBSCRIPTION_CREATED, {
       subscriptionId,
       subscriberId,
       tableName,
       type: SubscriptionType.CALLBACK,
     });
 
-    this.emit('subscription-created', {
+    this.emit(FUNCTION_EVENT.SUBSCRIPTION_CREATED, {
       subscriptionId,
       subscriberId,
       tableName,
@@ -133,10 +144,11 @@ class CDCSubscriptionManager extends EventEmitter {
    */
   async subscribeWithInvoke(subscriberId, tableName, predicate, functionId, baseContext = {}) {
     if (!functionId) {
-      throw new Error('Function ID is required');
+      throw new Error(FUNCTION_ERROR_MSG.FUNCTION_ID_REQUIRED);
     }
 
-    const subscriptionId = `${subscriberId}:${tableName}:${uuidv4()}`;
+    const subscriptionId = `${subscriberId}${FUNCTION_SEPARATOR.SUBSCRIPTION_ID}` +
+      `${tableName}${FUNCTION_SEPARATOR.SUBSCRIPTION_ID}${uuidv4()}`;
 
     const subscription = {
       subscriptionId,
@@ -154,7 +166,7 @@ class CDCSubscriptionManager extends EventEmitter {
     this.subscriptions.set(subscriptionId, subscription);
     this.trackSubscriberSubscription(subscriberId, subscriptionId);
 
-    this.logger.info('CDC subscription with invoke created', {
+    this.logger.info(FUNCTION_LOG_MSG.SUBSCRIPTION_INVOKE_CREATED, {
       subscriptionId,
       subscriberId,
       tableName,
@@ -162,7 +174,7 @@ class CDCSubscriptionManager extends EventEmitter {
       type: SubscriptionType.INVOKE,
     });
 
-    this.emit('subscription-created', {
+    this.emit(FUNCTION_EVENT.SUBSCRIPTION_CREATED, {
       subscriptionId,
       subscriberId,
       tableName,
@@ -182,20 +194,20 @@ class CDCSubscriptionManager extends EventEmitter {
     const subscription = this.subscriptions.get(subscriptionId);
 
     if (!subscription) {
-      this.logger.debug('Subscription not found for unsubscribe', {subscriptionId});
+      this.logger.debug(FUNCTION_LOG_MSG.SUBSCRIPTION_NOT_FOUND, {subscriptionId});
       return false;
     }
 
     this.subscriptions.delete(subscriptionId);
     this.untrackSubscriberSubscription(subscription.subscriberId, subscriptionId);
 
-    this.logger.info('CDC subscription removed', {
+    this.logger.info(FUNCTION_LOG_MSG.SUBSCRIPTION_REMOVED, {
       subscriptionId,
       subscriberId: subscription.subscriberId,
       tableName: subscription.tableName,
     });
 
-    this.emit('subscription-removed', {
+    this.emit(FUNCTION_EVENT.SUBSCRIPTION_REMOVED, {
       subscriptionId,
       subscriberId: subscription.subscriberId,
     });
@@ -224,7 +236,7 @@ class CDCSubscriptionManager extends EventEmitter {
 
     this.subscriberSubscriptions.delete(subscriberId);
 
-    this.logger.info('All subscriptions removed for subscriber', {
+    this.logger.info(FUNCTION_LOG_MSG.SUBSCRIPTIONS_REMOVED_FOR_SUBSCRIBER, {
       subscriberId,
       count,
     });
@@ -250,11 +262,12 @@ class CDCSubscriptionManager extends EventEmitter {
           await this.dispatchToSubscription(subscription, change, matchResult);
         }
       } catch (error) {
-        this.logger.error('Error handling CDC event for subscription', {
+        this.logger.error(FUNCTION_LOG_MSG.CDC_EVENT_HANDLING_FAILED, {
           subscriptionId: subscription.subscriptionId,
           tableName,
           error: error.message,
         });
+        throw error;
       }
     }
   }
@@ -271,19 +284,20 @@ class CDCSubscriptionManager extends EventEmitter {
       try {
         await subscription.callback(change, matchResult);
 
-        this.logger.debug('CDC callback executed', {
+        this.logger.debug(FUNCTION_LOG_MSG.CDC_CALLBACK_EXECUTED, {
           subscriptionId: subscription.subscriptionId,
           matchType: matchResult.type,
         });
       } catch (error) {
-        this.logger.error('CDC callback failed', {
+        this.logger.error(FUNCTION_LOG_MSG.CDC_CALLBACK_FAILED, {
           subscriptionId: subscription.subscriptionId,
           error: error.message,
         });
+        throw error;
       }
     } else if (subscription.type === SubscriptionType.INVOKE) {
       if (!this.functionRegistry) {
-        this.logger.error('Function registry not available for invoke', {
+        this.logger.error(FUNCTION_LOG_MSG.CDC_INVOKE_MISSING_REGISTRY, {
           subscriptionId: subscription.subscriptionId,
         });
         return;
@@ -297,17 +311,18 @@ class CDCSubscriptionManager extends EventEmitter {
           subscriptionId: subscription.subscriptionId,
         });
 
-        this.logger.debug('CDC function invoked', {
+        this.logger.debug(FUNCTION_LOG_MSG.CDC_INVOKE_EXECUTED, {
           subscriptionId: subscription.subscriptionId,
           functionId: subscription.functionId,
           matchType: matchResult.type,
         });
       } catch (error) {
-        this.logger.error('CDC function invocation failed', {
+        this.logger.error(FUNCTION_LOG_MSG.CDC_INVOKE_FAILED, {
           subscriptionId: subscription.subscriptionId,
           functionId: subscription.functionId,
           error: error.message,
         });
+        throw error;
       }
     }
   }
@@ -319,13 +334,15 @@ class CDCSubscriptionManager extends EventEmitter {
    * @private
    */
   compilePredicate(predicate) {
-    if (!predicate || predicate === '*' || predicate === 'true') {
+    if (!predicate ||
+        predicate === FUNCTION_PREDICATE.MATCH_ALL ||
+        predicate === FUNCTION_PREDICATE.TRUE) {
       return () => true;
     }
 
     // The live-query compilePredicate expects an AST object, not a string.
     // For string predicates, use our simple predicate parser.
-    if (typeof predicate === 'string') {
+    if (typeof predicate === TYPEOF.STRING) {
       return this.createSimplePredicate(predicate);
     }
 
@@ -334,7 +351,7 @@ class CDCSubscriptionManager extends EventEmitter {
       return compilePredicate(predicate);
     } catch {
       // Fallback: match all
-      this.logger.warn('Could not compile predicate, matching all', {predicate});
+      this.logger.warn(FUNCTION_LOG_MSG.PREDICATE_COMPILE_FAILED, {predicate});
       return () => true;
     }
   }
@@ -347,14 +364,14 @@ class CDCSubscriptionManager extends EventEmitter {
    */
   createSimplePredicate(predicate) {
     // Handle simple equality: "column = 'value'" or "column = value"
-    const eqMatch = predicate.match(/^(\w+)\s*=\s*['"]?([^'"]+)['"]?$/);
+    const eqMatch = predicate.match(FUNCTION_CDC_PREDICATE.SIMPLE_EQUALS);
     if (eqMatch) {
       const [, column, value] = eqMatch;
       return (row) => String(row[column]) === value;
     }
 
     // Default: match all
-    this.logger.warn('Could not parse predicate, matching all', {predicate});
+    this.logger.warn(FUNCTION_LOG_MSG.PREDICATE_PARSE_FAILED, {predicate});
     return () => true;
   }
 
@@ -369,31 +386,31 @@ class CDCSubscriptionManager extends EventEmitter {
     const {operation, data: newRow, old_data: oldRow} = change;
 
     switch (operation?.toUpperCase()) {
-    case 'INSERT':
+    case FUNCTION_CDC_OPERATION.INSERT:
       if (newRow && predicate(newRow)) {
-        return {type: 'insert', row: newRow};
+        return {type: FUNCTION_CDC_MATCH_TYPE.INSERT, row: newRow};
       }
       break;
 
-    case 'UPDATE': {
+    case FUNCTION_CDC_OPERATION.UPDATE: {
       const oldMatched = oldRow && predicate(oldRow);
       const newMatched = newRow && predicate(newRow);
 
       if (!oldMatched && newMatched) {
-        return {type: 'enter', row: newRow};
+        return {type: FUNCTION_CDC_MATCH_TYPE.ENTER, row: newRow};
       }
       if (oldMatched && !newMatched) {
-        return {type: 'exit', row: oldRow};
+        return {type: FUNCTION_CDC_MATCH_TYPE.EXIT, row: oldRow};
       }
       if (oldMatched && newMatched) {
-        return {type: 'update', old: oldRow, new: newRow};
+        return {type: FUNCTION_CDC_MATCH_TYPE.UPDATE, old: oldRow, new: newRow};
       }
       break;
     }
 
-    case 'DELETE':
+    case FUNCTION_CDC_OPERATION.DELETE:
       if (oldRow && predicate(oldRow)) {
-        return {type: 'delete', row: oldRow};
+        return {type: FUNCTION_CDC_MATCH_TYPE.DELETE, row: oldRow};
       }
       break;
     }
@@ -510,7 +527,7 @@ class CDCSubscriptionManager extends EventEmitter {
     this.initialized = false;
     this.removeAllListeners();
 
-    this.logger.info('CDC subscription manager shutdown');
+    this.logger.info(FUNCTION_LOG_MSG.SUBSCRIPTION_MANAGER_SHUTDOWN);
   }
 }
 

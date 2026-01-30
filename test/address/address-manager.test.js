@@ -5,7 +5,7 @@
  * Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 2.1, 7.1
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {
   AddressManager,
   AddressType,

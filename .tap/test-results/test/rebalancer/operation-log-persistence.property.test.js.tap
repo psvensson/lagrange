@@ -1,763 +1,763 @@
 TAP version 14
 # Subtest: Property 10: Operation Log Persistence
 Creating operation {
-  operationId: 'a9625c80-bd44-449f-9627-b3dec338a9ba',
+  operationId: 'eca82f66-59c8-45ff-b19d-0b1add8611e9',
   type: 'ADD',
-  partitionId: '00000012-0011-1000-99b4-cc04fffffff3',
-  targetNodeId: '00000003-73bb-174b-a9d0-8e5ff24052b4'
+  partitionId: '9f3592e2-0018-1000-8000-001700000004',
+  targetNodeId: 'fffffffd-b8bd-1081-8000-0017ffffffe5'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: 'faaff766-d2b2-46d8-8f09-bf6a6b257d36',
+  operationId: '219c785a-3cf2-4e64-885a-74dba720f9b6',
   type: 'ADD',
-  partitionId: '0000001a-fff2-5fff-af73-f68600000015',
-  targetNodeId: '97f8e009-cffc-5555-8000-000a277dba9c'
+  partitionId: 'ece73328-980b-392f-8000-000100000005',
+  targetNodeId: 'fffffff3-001e-1000-85d8-5f1413324c53'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: 'a0d45d2e-3eb6-4c2a-8f97-b71144a91ba2',
+  operationId: 'b5f66b80-d671-45b3-a132-395419e4c289',
   type: 'REMOVE',
-  partitionId: '1b3d51f2-001e-1000-ba00-812c00000011',
-  targetNodeId: 'ffffffe4-001d-1000-bfff-ffe26a882b85'
+  partitionId: '2ac2f063-2197-3624-8034-0ba0c5702d3f',
+  targetNodeId: '23ae14d0-0da6-29d3-8000-0018c1fedbf3'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: 'cb2dc87e-d6cf-4f4b-b82d-ad8f9c9f89bf',
+  operationId: '25e9e789-88de-4017-abb8-cea41066b99d',
   type: 'ADD',
-  partitionId: 'ffffffe0-0009-1000-8000-000c48773305',
-  targetNodeId: '00000019-0e52-14a6-ae43-5016ffffffec'
+  partitionId: '2b6f3998-001b-1000-a1dd-5edce5d3be1d',
+  targetNodeId: 'ffffffe6-000f-1000-852f-e9a14b1bae39'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: 'b2da2b74-00a5-4c8f-823a-55cae1e2e0b7',
+  operationId: '003d7435-2b3b-48ba-a4d6-bf868295eda1',
   type: 'ADD',
-  partitionId: '12f2486e-0005-1000-8000-0012c26cb14d',
-  targetNodeId: '189662fa-000e-1000-8000-0019fffffffd'
+  partitionId: 'efce0de9-fe40-4933-b090-66b8fffffff9',
+  targetNodeId: 'dec9cbbe-4316-2af5-8511-cfc9507aba5e'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: 'd2a84dc1-7396-4733-87ce-2ed7b363f6b1',
-  type: 'ADD',
-  partitionId: 'e93c9a39-d29b-53b4-8000-000ad4f8e6c4',
-  targetNodeId: '04891e03-0002-1000-8000-000a00000016'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: '7d3bf1b2-83c0-44f2-a684-4f900564295d',
+  operationId: 'c9435db6-7b3c-4672-a4a2-0358b25b3eb7',
   type: 'REMOVE',
-  partitionId: '00000014-dc3e-16e1-8000-0004cc393178',
-  targetNodeId: '00000001-000c-1000-9a5d-3a23fffffff3'
+  partitionId: '1907535c-fff8-5fff-bfe8-90c6543d461e',
+  targetNodeId: '00000008-0562-56fe-ab3d-301100000015'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: '7c7784e9-6721-4482-8d24-2a04dcccb091',
-  type: 'REMOVE',
-  partitionId: 'ffffffe1-1fc2-14e7-976d-c6270000001c',
-  targetNodeId: '90d772d7-f939-4ff4-94f2-f062930895e6'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: '47a59a71-7de6-47fe-b6f3-887ddce45069',
+  operationId: '3094e962-914e-42d3-829f-4d96d365abbd',
   type: 'ADD',
-  partitionId: '64fa4ad0-6ed8-4a75-acfd-cbb6f64d8ee0',
-  targetNodeId: '00000003-c011-1566-b963-00d1ffffffef'
+  partitionId: '0f38429b-1737-267d-8000-000c203f5df9',
+  targetNodeId: 'eb8386bd-fff0-5fff-8000-000397544e14'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: '56547eeb-933d-409b-b598-c780ad1212b5',
+  operationId: 'cc5124f4-cd23-4deb-a8df-36eb06787301',
+  type: 'ADD',
+  partitionId: '0000000e-000f-1000-bfff-ffe337466756',
+  targetNodeId: '0000000c-1ca5-423d-b5ed-a7d515071dc0'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'c32cf989-c616-41b8-b598-a7710c7bcb20',
+  type: 'ADD',
+  partitionId: 'ff7eb899-1e48-4af3-8000-00067da4acfe',
+  targetNodeId: '00000004-7908-3451-8000-00198dbe98a0'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '34fdd248-ee7d-4f6b-84d4-9f984dd31927',
   type: 'REMOVE',
-  partitionId: '78c6f51a-367b-5c55-a6d6-919a00000011',
-  targetNodeId: 'ee7056a7-7983-5351-9df0-003100000010'
+  partitionId: 'fffffff4-000e-1000-bf8c-f13d4efc7be5',
+  targetNodeId: 'fffffff9-aa38-2979-8db5-d7a600000018'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
     # Subtest: operations are persisted to replica_operations table
         ok 1 - Operations are persisted to replica_operations table
         1..1
-    ok 1 - operations are persisted to replica_operations table # time=50.437ms
+    ok 1 - operations are persisted to replica_operations table # time=74.58ms
     
 Creating operation {
-  operationId: '669d963d-c09a-4933-9f05-2aa68083512c',
-  type: 'ADD',
-  partitionId: '6e250c76-0003-1000-8000-00000000000b',
-  targetNodeId: '1267f0d8-000c-1000-af2f-1a6500000004'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: 'c459d7ff-42c0-4ed9-891c-8141070fe2e4',
-  type: 'ADD',
-  partitionId: '00000018-396d-501d-b6a0-fb2b0b527759',
-  targetNodeId: '0000001c-2a70-49b6-8000-00068b6950ed'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: 'e134a059-4190-4df7-9324-a2991e72f030',
-  type: 'ADD',
-  partitionId: '00000003-8fc7-1589-bfff-ffeacd1bc53e',
-  targetNodeId: '00000010-b400-2724-97c7-18120000001a'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: '7e3e2153-8ef6-493e-85ac-a9c5847cfd16',
-  type: 'ADD',
-  partitionId: 'ffffffe3-3070-3a43-bc93-b1b6d736de6b',
-  targetNodeId: 'dbdc1d1f-57d2-2be8-b740-7845ad5a36b7'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: 'e00f0393-7144-4674-9899-ad0faace9553',
+  operationId: '7b67b05a-9e78-4a8b-b2d3-1b2b86034402',
   type: 'REMOVE',
-  partitionId: 'a7b818d9-0d25-1f64-990f-9169fffffffe',
-  targetNodeId: '18325246-a7dc-4bec-8000-000a0077fb0f'
+  partitionId: '00000003-0006-1000-9bac-ea020000000b',
+  targetNodeId: 'ceb4c17f-ab1b-320a-8000-0001bcecbc92'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: '8ae9869e-919f-4014-ba7a-a21b53224b9d',
-  type: 'ADD',
-  partitionId: '00000012-000a-1000-84dc-364fbb28dff1',
-  targetNodeId: '011e72ac-0018-1000-b4c8-8bfdfffffff9'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: 'eb131a45-367c-4baa-bec1-1175a27135ea',
-  type: 'ADD',
-  partitionId: 'ffffffff-f918-1187-8c16-723dfaf1afbc',
-  targetNodeId: 'd5fc1a17-fff7-5fff-8000-000ffffffff7'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: '37220623-58b9-47b7-b9af-78e4822b976c',
+  operationId: 'f40818c7-0ac9-4a4a-86c2-95a00807c54a',
   type: 'REMOVE',
-  partitionId: '81d9f710-001a-1000-bfff-fffc00000013',
-  targetNodeId: '00000016-0017-1000-8000-000a00000017'
+  partitionId: '0b03f880-6c3b-353a-aef8-9c5cd7cf2654',
+  targetNodeId: '0000001b-0015-1000-af6b-3ebdfffffff6'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: '6e3046c1-3103-4c91-af6b-9258eedebb0f',
+  operationId: '7bb61ef7-b0a4-4ab9-832d-500c13a9019b',
   type: 'ADD',
-  partitionId: 'fffffffd-fff9-5fff-bfff-fffafffffffa',
-  targetNodeId: 'e33018a2-45c6-1c4e-9009-88a8b4eaa43d'
+  partitionId: '00000018-e197-24f4-ba18-7cc7e255eb67',
+  targetNodeId: 'fffffff7-23f4-22d2-8000-00198a43cf18'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: 'f40e896e-1077-45e6-a6ba-3fb4a1f1ed64',
+  operationId: '4809a7ed-8ba0-4db5-be11-9caf964e77f2',
   type: 'ADD',
-  partitionId: 'f78f91e6-0008-1000-8570-4bd56846e290',
-  targetNodeId: '728ff9b1-a742-3d3a-879b-e47900000003'
+  partitionId: '50df6e74-ca0b-558f-a97e-9d1500000000',
+  targetNodeId: '54b6701b-0008-1000-b07c-81fc2f49183a'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'a91a592e-f5ff-4ce5-b434-6743f537a888',
+  type: 'ADD',
+  partitionId: '0000000e-0007-1000-967a-fcb60c07eb51',
+  targetNodeId: '0000000c-00c8-553a-b4e7-19f80000001b'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '5d5bf3ff-23a3-4395-ac9b-a1f2c3fa64d3',
+  type: 'REMOVE',
+  partitionId: '388a0824-7117-4951-9a88-5a7333d7a3d0',
+  targetNodeId: '00000015-731c-19e0-8000-00030000000c'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'd9ac94a3-f717-4725-892b-6165e48009fe',
+  type: 'REMOVE',
+  partitionId: '1df8baec-8bfb-2013-b7de-ecafffffffec',
+  targetNodeId: 'ffffffe7-0007-1000-8000-0003fffffffd'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '5d29eada-1518-4557-983a-5a3aaf1e72b3',
+  type: 'REMOVE',
+  partitionId: '00000000-cee3-34e1-b330-d44dfffffffe',
+  targetNodeId: '0000001c-50ec-4e35-8000-001c582abc69'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'bc2b0555-776e-4413-ae6b-067396913c55',
+  type: 'ADD',
+  partitionId: '0a81006e-b488-2398-9b26-da4800000011',
+  targetNodeId: '2a9aee4e-000c-1000-a804-25ecffffffed'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'b60a0bf8-bfe8-4b40-8b1d-14687b19b8b6',
+  type: 'ADD',
+  partitionId: '3072ff52-75ce-22d6-8827-7d501c22760b',
+  targetNodeId: '9d54be25-000d-1000-bbdc-80454b22b761'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
     # Subtest: persisted record contains all required fields
         ok 1 - Persisted records contain all required fields
         1..1
-    ok 2 - persisted record contains all required fields # time=3.213ms
+    ok 2 - persisted record contains all required fields # time=5.851ms
     
 Creating operation {
-  operationId: '53f669c8-12e7-4be7-8f24-5f584660a29b',
+  operationId: 'e6a95f6d-3bd0-4fee-bd5f-d3673e26c59b',
   type: 'ADD',
-  partitionId: 'ffa038ae-0010-1000-ae31-50a800000013',
-  targetNodeId: 'ffffffe6-03ff-1026-bf35-9af1f5189fde'
+  partitionId: '9e99faa8-d3ff-3e27-8000-00100000000a',
+  targetNodeId: 'fffffff7-cd9c-5d07-8000-001c0000001f'
 }
 Operation step changed {
-  operationId: '53f669c8-12e7-4be7-8f24-5f584660a29b',
+  operationId: 'e6a95f6d-3bd0-4fee-bd5f-d3673e26c59b',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: 'ffa038ae-0010-1000-ae31-50a800000013'
+  partitionId: '9e99faa8-d3ff-3e27-8000-00100000000a'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: 'e0a96f33-ae0e-45df-b85e-95de02bcfc1d',
-  type: 'REMOVE',
-  partitionId: '0000000e-8fa7-3db5-bcef-8542fffffff0',
-  targetNodeId: 'f7a51f2a-75e5-2ac5-bfff-ffe4ffffffe9'
-}
-Operation step changed {
-  operationId: 'e0a96f33-ae0e-45df-b85e-95de02bcfc1d',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '0000000e-8fa7-3db5-bcef-8542fffffff0'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: '421720e2-e095-4ac6-84a9-9eef1bf380eb',
+  operationId: 'e98515b6-f6fe-4eb5-ae54-9c06ff713a28',
   type: 'ADD',
-  partitionId: '75f6cc36-ffed-5fff-bfff-ffe68f255f87',
-  targetNodeId: 'c5fe3b6a-ffe2-5fff-ac41-9c290000000a'
+  partitionId: 'e638fce8-a044-1464-8000-0010ffffffe8',
+  targetNodeId: '00000009-bd66-17e0-9844-9ac8f8b3c96f'
 }
 Operation step changed {
-  operationId: '421720e2-e095-4ac6-84a9-9eef1bf380eb',
+  operationId: 'e98515b6-f6fe-4eb5-ae54-9c06ff713a28',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: '75f6cc36-ffed-5fff-bfff-ffe68f255f87'
+  partitionId: 'e638fce8-a044-1464-8000-0010ffffffe8'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: '77828cef-3fb4-493f-bf35-e04ca3375570',
+  operationId: '3480a6d5-6fee-4050-823d-b6edb6246ceb',
+  type: 'REMOVE',
+  partitionId: '119c23fc-2166-4726-bfff-ffec99c0762c',
+  targetNodeId: '0000001c-0000-1000-bfff-fff600000012'
+}
+Operation step changed {
+  operationId: '3480a6d5-6fee-4050-823d-b6edb6246ceb',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '119c23fc-2166-4726-bfff-ffec99c0762c'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '524de374-2b2c-442c-b051-dd57eb5a6dc3',
   type: 'ADD',
-  partitionId: '83fe67f6-001c-1000-8000-000000000007',
-  targetNodeId: 'd445673c-fff8-5fff-8000-00108cd6dfeb'
+  partitionId: '0000000c-c3e3-33c4-b028-6a7500000013',
+  targetNodeId: 'fffffff1-0b58-5b11-b7ea-5ca4fffffff8'
 }
 Operation step changed {
-  operationId: '77828cef-3fb4-493f-bf35-e04ca3375570',
+  operationId: '524de374-2b2c-442c-b051-dd57eb5a6dc3',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: '83fe67f6-001c-1000-8000-000000000007'
+  partitionId: '0000000c-c3e3-33c4-b028-6a7500000013'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: 'c4d2ba0a-3bdf-43ee-b618-dbafb8541c79',
+  operationId: 'ae109453-d5cc-4c7d-b007-34f3f7089749',
+  type: 'REMOVE',
+  partitionId: 'ffffffe7-001d-1000-8000-00174b10c57d',
+  targetNodeId: 'a18d2a08-19c3-33d4-8e35-e99d055e7815'
+}
+Operation step changed {
+  operationId: 'ae109453-d5cc-4c7d-b007-34f3f7089749',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'ffffffe7-001d-1000-8000-00174b10c57d'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '349e5b8a-22e2-4178-9fd4-a6d25b21a376',
   type: 'ADD',
-  partitionId: 'ceefc558-000f-1000-8bd0-864bffffffea',
-  targetNodeId: '26d0e21e-b79f-304a-8000-000631a75de6'
+  partitionId: '38a1592a-3222-3982-8000-000ffffffff6',
+  targetNodeId: 'f82b1190-0015-1000-b2f8-adcb00000014'
 }
 Operation step changed {
-  operationId: 'c4d2ba0a-3bdf-43ee-b618-dbafb8541c79',
+  operationId: '349e5b8a-22e2-4178-9fd4-a6d25b21a376',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: 'ceefc558-000f-1000-8bd0-864bffffffea'
+  partitionId: '38a1592a-3222-3982-8000-000ffffffff6'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: '57c732b7-9d03-445b-bd64-b8ea267df86f',
-  type: 'REMOVE',
-  partitionId: 'ffffffe2-000c-1000-a0f0-da4300000013',
-  targetNodeId: '7bf092e7-a9ff-5f0a-8000-000978c377b2'
-}
-Operation step changed {
-  operationId: '57c732b7-9d03-445b-bd64-b8ea267df86f',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: 'ffffffe2-000c-1000-a0f0-da4300000013'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: 'f83f1425-8884-408c-a925-5551d08aaef1',
-  type: 'REMOVE',
-  partitionId: '6d9d4c4c-b51f-4b4a-8000-001c22fac763',
-  targetNodeId: '0000000f-0007-1000-a073-8b7000000005'
-}
-Operation step changed {
-  operationId: 'f83f1425-8884-408c-a925-5551d08aaef1',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '6d9d4c4c-b51f-4b4a-8000-001c22fac763'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: '50223410-3032-4827-ab67-d8c9baf372b2',
-  type: 'REMOVE',
-  partitionId: '0000001c-d6d0-3e45-bfff-fff05afc202e',
-  targetNodeId: 'fffffff5-a68c-5510-8f27-b1be888dd3bb'
-}
-Operation step changed {
-  operationId: '50223410-3032-4827-ab67-d8c9baf372b2',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '0000001c-d6d0-3e45-bfff-fff05afc202e'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: '92fdf5db-b7e0-419d-abfb-822d6e1ee42c',
-  type: 'REMOVE',
-  partitionId: 'f3638ed0-ffe3-5fff-8000-00080000001f',
-  targetNodeId: '00000000-0004-1000-bfff-fff39a10b2df'
-}
-Operation step changed {
-  operationId: '92fdf5db-b7e0-419d-abfb-822d6e1ee42c',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: 'f3638ed0-ffe3-5fff-8000-00080000001f'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: 'e7db9064-c21b-4bef-8aef-52bc9dcd8ba0',
+  operationId: 'f6ac09e7-1ff1-4dd0-b558-1c5a367c715f',
   type: 'ADD',
-  partitionId: '0c729cb6-f2e2-1715-9859-2457a3a34996',
-  targetNodeId: '76f5d2a3-001c-1000-8000-0003a68e976e'
+  partitionId: '0000001d-0018-1000-8000-000bb69ccd22',
+  targetNodeId: '72a1664e-0008-1000-8000-00010d98a814'
 }
 Operation step changed {
-  operationId: 'e7db9064-c21b-4bef-8aef-52bc9dcd8ba0',
+  operationId: 'f6ac09e7-1ff1-4dd0-b558-1c5a367c715f',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: '0c729cb6-f2e2-1715-9859-2457a3a34996'
+  partitionId: '0000001d-0018-1000-8000-000bb69ccd22'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '26d3b60f-3943-46e3-95f5-6142269cc664',
+  type: 'ADD',
+  partitionId: '37646e78-2323-1220-8000-001a00000016',
+  targetNodeId: '00000008-7ea5-5431-bfff-ffe9b8355c57'
+}
+Operation step changed {
+  operationId: '26d3b60f-3943-46e3-95f5-6142269cc664',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '37646e78-2323-1220-8000-001a00000016'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '9efa500e-99b2-4a87-b92f-5684a6f76271',
+  type: 'ADD',
+  partitionId: '0000000d-a697-1a1c-bd2c-317700000007',
+  targetNodeId: '0000000c-c2e2-27d7-8000-001041c8ab59'
+}
+Operation step changed {
+  operationId: '9efa500e-99b2-4a87-b92f-5684a6f76271',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '0000000d-a697-1a1c-bd2c-317700000007'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '7c07c43d-7403-4fad-97cf-8b129e49306f',
+  type: 'REMOVE',
+  partitionId: '00000002-08ca-3da0-a764-ab644ea5d0b6',
+  targetNodeId: 'f71c9129-bc84-2618-b078-f18100000000'
+}
+Operation step changed {
+  operationId: '7c07c43d-7403-4fad-97cf-8b129e49306f',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '00000002-08ca-3da0-a764-ab644ea5d0b6'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
     # Subtest: step updates are persisted
         ok 1 - Step updates are persisted
         1..1
-    ok 3 - step updates are persisted # time=3.701ms
+    ok 3 - step updates are persisted # time=6.827ms
     
 Creating operation {
-  operationId: 'e3dac9c3-3f44-4e32-9dcf-d34715c6369c',
+  operationId: 'a02c3ffa-d10b-4186-bf60-cbaaa0dc2098',
   type: 'REMOVE',
-  partitionId: '0000001c-1977-21b3-be3f-4d39ffffffe8',
-  targetNodeId: '00000006-f3da-2dcb-8000-001b74d9259c'
+  partitionId: '00000000-704d-2abb-8000-00073e2ed9b9',
+  targetNodeId: '71012c57-fffa-5fff-83f2-96ac528bde48'
 }
 Operation completed {
-  operationId: 'e3dac9c3-3f44-4e32-9dcf-d34715c6369c',
+  operationId: 'a02c3ffa-d10b-4186-bf60-cbaaa0dc2098',
   type: 'REMOVE',
-  partitionId: '0000001c-1977-21b3-be3f-4d39ffffffe8',
-  targetNodeId: '00000006-f3da-2dcb-8000-001b74d9259c'
+  partitionId: '00000000-704d-2abb-8000-00073e2ed9b9',
+  targetNodeId: '71012c57-fffa-5fff-83f2-96ac528bde48'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Creating operation {
-  operationId: '55058ed4-9543-47f0-9ce1-1aaaea87ea31',
+  operationId: '2a78678a-91cb-4185-8d24-3b5064a6ff7f',
   type: 'ADD',
-  partitionId: 'b296602c-62bc-4de5-8270-ce7a943a8b53',
-  targetNodeId: '5a83af01-000d-1000-a29c-379b7a857820'
+  partitionId: 'f9c5af14-70e2-228c-bfff-ffea00000002',
+  targetNodeId: 'be26bae8-d577-3102-bfff-fffcee4fc30f'
 }
 Operation completed {
-  operationId: '55058ed4-9543-47f0-9ce1-1aaaea87ea31',
+  operationId: '2a78678a-91cb-4185-8d24-3b5064a6ff7f',
   type: 'ADD',
-  partitionId: 'b296602c-62bc-4de5-8270-ce7a943a8b53',
-  targetNodeId: '5a83af01-000d-1000-a29c-379b7a857820'
+  partitionId: 'f9c5af14-70e2-228c-bfff-ffea00000002',
+  targetNodeId: 'be26bae8-d577-3102-bfff-fffcee4fc30f'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Creating operation {
-  operationId: '940eb269-0259-4569-9574-a80dd2801c40',
-  type: 'ADD',
-  partitionId: '00000001-e07a-1a2e-9b08-acf863cc1fc7',
-  targetNodeId: '0000000d-94aa-279a-bfff-ffeb00000006'
+  operationId: 'a1a6b77d-3d12-4f30-aad1-01fa07cdbf9f',
+  type: 'REMOVE',
+  partitionId: '0000000b-0019-1000-a303-e3ae00000016',
+  targetNodeId: 'fffffffb-5d65-48ee-9455-d43935a618a1'
 }
 Operation completed {
-  operationId: '940eb269-0259-4569-9574-a80dd2801c40',
-  type: 'ADD',
-  partitionId: '00000001-e07a-1a2e-9b08-acf863cc1fc7',
-  targetNodeId: '0000000d-94aa-279a-bfff-ffeb00000006'
+  operationId: 'a1a6b77d-3d12-4f30-aad1-01fa07cdbf9f',
+  type: 'REMOVE',
+  partitionId: '0000000b-0019-1000-a303-e3ae00000016',
+  targetNodeId: 'fffffffb-5d65-48ee-9455-d43935a618a1'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Creating operation {
-  operationId: '72707d46-1dd7-4b3d-b344-70df0efc577a',
-  type: 'ADD',
-  partitionId: '9a392b55-000c-1000-bfff-ffe6d8c19b6f',
-  targetNodeId: 'fffffff3-ffe6-5fff-a653-2e990000001b'
+  operationId: '0169e3c4-2d03-475f-bc65-9312588595c0',
+  type: 'REMOVE',
+  partitionId: '21ec4ff1-0004-1000-bfff-ffefb06eeaaf',
+  targetNodeId: '2a7444b6-0005-1000-9756-a68d00000019'
 }
 Operation completed {
-  operationId: '72707d46-1dd7-4b3d-b344-70df0efc577a',
-  type: 'ADD',
-  partitionId: '9a392b55-000c-1000-bfff-ffe6d8c19b6f',
-  targetNodeId: 'fffffff3-ffe6-5fff-a653-2e990000001b'
+  operationId: '0169e3c4-2d03-475f-bc65-9312588595c0',
+  type: 'REMOVE',
+  partitionId: '21ec4ff1-0004-1000-bfff-ffefb06eeaaf',
+  targetNodeId: '2a7444b6-0005-1000-9756-a68d00000019'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Creating operation {
-  operationId: '0314fe06-bba1-4036-8dd0-0c3ffc83c0cf',
+  operationId: 'bda79e2e-ab2d-4900-b960-8259d338f549',
+  type: 'REMOVE',
+  partitionId: 'd089ecf6-fe79-37ea-8000-00080000000f',
+  targetNodeId: 'ffffffe8-f526-3390-8000-0014f8592b35'
+}
+Operation completed {
+  operationId: 'bda79e2e-ab2d-4900-b960-8259d338f549',
+  type: 'REMOVE',
+  partitionId: 'd089ecf6-fe79-37ea-8000-00080000000f',
+  targetNodeId: 'ffffffe8-f526-3390-8000-0014f8592b35'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '8e0fa1f1-d3c2-43d0-b05b-f75c2b357e98',
+  type: 'REMOVE',
+  partitionId: 'ffffffff-6503-1d40-8000-0005fffffffb',
+  targetNodeId: '00000011-3ec9-4b81-8000-000375bd800a'
+}
+Operation completed {
+  operationId: '8e0fa1f1-d3c2-43d0-b05b-f75c2b357e98',
+  type: 'REMOVE',
+  partitionId: 'ffffffff-6503-1d40-8000-0005fffffffb',
+  targetNodeId: '00000011-3ec9-4b81-8000-000375bd800a'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '34e24a6f-0eaa-4193-b7e9-447acc976fe2',
   type: 'ADD',
-  partitionId: 'fa76ae6d-001a-1000-bc27-d0ebd33c022c',
-  targetNodeId: 'ffffffe8-c657-16c6-8000-001986919f72'
+  partitionId: '5bb44a5d-0009-1000-8000-001900000008',
+  targetNodeId: 'ffffffec-0005-1000-8000-0008575b2899'
 }
 Operation completed {
-  operationId: '0314fe06-bba1-4036-8dd0-0c3ffc83c0cf',
+  operationId: '34e24a6f-0eaa-4193-b7e9-447acc976fe2',
   type: 'ADD',
-  partitionId: 'fa76ae6d-001a-1000-bc27-d0ebd33c022c',
-  targetNodeId: 'ffffffe8-c657-16c6-8000-001986919f72'
+  partitionId: '5bb44a5d-0009-1000-8000-001900000008',
+  targetNodeId: 'ffffffec-0005-1000-8000-0008575b2899'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Creating operation {
-  operationId: '06640643-e41c-4b0e-90f5-bebb33d33d4c',
+  operationId: '8e5bbd4c-5b8e-43dd-b8f2-7d366dcd538d',
+  type: 'REMOVE',
+  partitionId: '37ae4dc5-0017-1000-b35f-7bf251ee49c4',
+  targetNodeId: '42575c6a-ffff-5fff-9e39-77e00000001b'
+}
+Operation completed {
+  operationId: '8e5bbd4c-5b8e-43dd-b8f2-7d366dcd538d',
+  type: 'REMOVE',
+  partitionId: '37ae4dc5-0017-1000-b35f-7bf251ee49c4',
+  targetNodeId: '42575c6a-ffff-5fff-9e39-77e00000001b'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '65066b20-5f54-4984-9f63-ad66569c00d4',
+  type: 'REMOVE',
+  partitionId: 'b6f9cf0c-0001-1000-bfff-ffffcf027aa7',
+  targetNodeId: '8589d8fb-0016-1000-a7c9-b5380000001d'
+}
+Operation completed {
+  operationId: '65066b20-5f54-4984-9f63-ad66569c00d4',
+  type: 'REMOVE',
+  partitionId: 'b6f9cf0c-0001-1000-bfff-ffffcf027aa7',
+  targetNodeId: '8589d8fb-0016-1000-a7c9-b5380000001d'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '94e0c346-13d5-4a26-a549-f8efd39ebeeb',
   type: 'ADD',
-  partitionId: '35063648-8ac1-2ecd-8000-00130000001b',
-  targetNodeId: 'fffffff0-b405-3937-84e4-64f74c73df91'
+  partitionId: '0f547185-cc7c-5a20-8994-2ae0f6bdb036',
+  targetNodeId: 'c01bd202-0006-1000-aab5-79fda7289e45'
 }
 Operation completed {
-  operationId: '06640643-e41c-4b0e-90f5-bebb33d33d4c',
+  operationId: '94e0c346-13d5-4a26-a549-f8efd39ebeeb',
   type: 'ADD',
-  partitionId: '35063648-8ac1-2ecd-8000-00130000001b',
-  targetNodeId: 'fffffff0-b405-3937-84e4-64f74c73df91'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Creating operation {
-  operationId: '6d293849-afe3-4b88-a85f-bd54dec87ad5',
-  type: 'REMOVE',
-  partitionId: 'c23edf19-0009-1000-a526-9a152d851089',
-  targetNodeId: '0000001f-fff0-5fff-8955-c5fa7d542baa'
-}
-Operation completed {
-  operationId: '6d293849-afe3-4b88-a85f-bd54dec87ad5',
-  type: 'REMOVE',
-  partitionId: 'c23edf19-0009-1000-a526-9a152d851089',
-  targetNodeId: '0000001f-fff0-5fff-8955-c5fa7d542baa'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Creating operation {
-  operationId: 'fd39d0b5-f06a-4575-ac81-27181ab72527',
-  type: 'REMOVE',
-  partitionId: '00000014-9223-56b3-a9b1-c25ca1709f43',
-  targetNodeId: '68483592-b27b-1b84-bfff-ffe742c3287d'
-}
-Operation completed {
-  operationId: 'fd39d0b5-f06a-4575-ac81-27181ab72527',
-  type: 'REMOVE',
-  partitionId: '00000014-9223-56b3-a9b1-c25ca1709f43',
-  targetNodeId: '68483592-b27b-1b84-bfff-ffe742c3287d'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Creating operation {
-  operationId: '7313ab81-e429-458a-b02b-8fe68ef2649e',
-  type: 'REMOVE',
-  partitionId: 'ffffffef-000b-1000-bfff-ffe91c98c568',
-  targetNodeId: '0000001f-0005-1000-8000-000e0000000a'
-}
-Operation completed {
-  operationId: '7313ab81-e429-458a-b02b-8fe68ef2649e',
-  type: 'REMOVE',
-  partitionId: 'ffffffef-000b-1000-bfff-ffe91c98c568',
-  targetNodeId: '0000001f-0005-1000-8000-000e0000000a'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Creating operation {
-  operationId: 'b2203c81-0fd1-43f8-922a-90df7d699091',
-  type: 'REMOVE',
-  partitionId: '00000006-fff5-5fff-9038-2d5300000003',
-  targetNodeId: '0c445b2f-4ec7-47e3-bfb1-1a7728c1b6d9'
-}
-Operation completed {
-  operationId: 'b2203c81-0fd1-43f8-922a-90df7d699091',
-  type: 'REMOVE',
-  partitionId: '00000006-fff5-5fff-9038-2d5300000003',
-  targetNodeId: '0c445b2f-4ec7-47e3-bfb1-1a7728c1b6d9'
+  partitionId: '0f547185-cc7c-5a20-8994-2ae0f6bdb036',
+  targetNodeId: 'c01bd202-0006-1000-aab5-79fda7289e45'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
     # Subtest: completion is persisted with completed_at
         ok 1 - Completion is persisted with completed_at
         1..1
-    ok 4 - completion is persisted with completed_at # time=4.664ms
+    ok 4 - completion is persisted with completed_at # time=9.073ms
     
 Creating operation {
-  operationId: 'c496e485-6ac2-4e0d-bd07-4694b9b2ddb4',
+  operationId: 'f095443a-9175-4a37-ae9c-fba3c49f27f2',
   type: 'REMOVE',
-  partitionId: 'dae1c677-0010-1000-9fac-11a6b82beeb9',
-  targetNodeId: '7e4bf39f-9cec-19ff-b85a-72bde196c7cd'
+  partitionId: 'f6025c96-0012-1000-a460-1d59ae7f8bbf',
+  targetNodeId: '0000000d-3853-1c57-8000-001100000016'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Creating operation {
-  operationId: '315457b3-8c6d-4c5c-9aea-e3f0dc9ee92c',
+  operationId: '66e8b7bb-ba88-45ea-9bd6-d4ae15f390a1',
   type: 'ADD',
-  partitionId: 'a62eb5a8-5a77-2326-9c84-872b2e140893',
-  targetNodeId: '0000001c-87a7-2fda-8000-000fb9942ef8'
+  partitionId: '1288803e-0012-1000-b390-907100000002',
+  targetNodeId: '68671f8a-0019-1000-8000-000017e76ea6'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Creating operation {
-  operationId: '59d2da4d-acc6-40ae-9a90-9a19a24a6784',
+  operationId: '30e7f3e7-1991-4cf7-a544-6545264c683a',
+  type: 'ADD',
+  partitionId: 'ffffffe6-0014-1000-b0ae-1a59fffffff8',
+  targetNodeId: '815ffa60-0011-1000-8000-000e00000005'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: 'b45fb97b-973a-4dc7-8604-e782ec9ec903',
+  type: 'ADD',
+  partitionId: '2a2dffb8-000f-1000-b882-4277ffffffed',
+  targetNodeId: 'f460ff1b-f52f-2d24-bfff-fff20000001c'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '4f58accd-16f4-4b78-8198-f857cc2c90eb',
+  type: 'ADD',
+  partitionId: '0721dc94-0016-1000-bfff-ffe576a5d5a5',
+  targetNodeId: '00000003-fff6-5fff-8000-000300000004'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: 'eceddf71-4135-4df5-944e-0b14d9150672',
+  type: 'ADD',
+  partitionId: 'a393f72a-fffc-5fff-8000-0005c6808eba',
+  targetNodeId: 'fffffff4-000c-1000-bfff-fffb00000013'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: 'b1dbd8d3-ce23-43c9-80f2-6b966c64bc43',
+  type: 'ADD',
+  partitionId: '0000001b-d19c-5f1f-8000-000db82245ed',
+  targetNodeId: '72361dbb-0016-1000-a559-0505f1f2aa62'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '8d86c081-0e51-40b6-8c90-c9b87fd90e4d',
+  type: 'ADD',
+  partitionId: 'ffffffe9-001a-1000-bfff-ffef0000001b',
+  targetNodeId: 'ddc60ad7-0015-1000-82bc-8b35bedb1a84'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Creating operation {
+  operationId: '4fbcfcf2-d78c-428c-81d3-8ae09bec8b97',
   type: 'REMOVE',
-  partitionId: 'cf8029f1-569e-2702-b041-665300000011',
-  targetNodeId: '47eee2f0-0007-1000-ab3f-def700000013'
+  partitionId: '00000001-175e-3b8b-b7ae-c97216a1ceeb',
+  targetNodeId: 'c2d8f83b-0014-1000-bfff-fff3955dcb5d'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Creating operation {
-  operationId: 'abe4a7a3-09dd-4f4c-b391-8106232e8efe',
-  type: 'ADD',
-  partitionId: '00000006-6362-116c-a1ff-3be14efd0413',
-  targetNodeId: '0000001c-752e-2c00-a4e8-d0b7baee20a6'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Creating operation {
-  operationId: '27ea9fde-5b33-4c0d-b239-f3898e7cf60c',
+  operationId: 'd0d667f4-8280-4f26-8c4a-9b0b7b192385',
   type: 'REMOVE',
-  partitionId: '00000009-1629-2a86-b01f-732100000014',
-  targetNodeId: '0000000c-0008-1000-bd49-1a4168451fc1'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Creating operation {
-  operationId: '30ce8a25-7bb3-4bbf-b394-b595b8776ee1',
-  type: 'ADD',
-  partitionId: '00000013-ffe4-5fff-8000-0015ffffffee',
-  targetNodeId: 'ffffffeb-cf35-4776-8000-001ba2ebb98b'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Creating operation {
-  operationId: 'ad6244c7-0ec9-4fa8-bc46-2ad8cce7182e',
-  type: 'ADD',
-  partitionId: '00000000-bc75-3026-958e-36da0000001f',
-  targetNodeId: '0750c2d5-a79e-158d-8000-00060000001b'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Creating operation {
-  operationId: 'a7036e21-df74-4ba4-a427-6bd54486392f',
-  type: 'ADD',
-  partitionId: '00000015-2b12-3505-8895-2bc100000006',
-  targetNodeId: '00000005-dd48-3a3a-8000-0017fffffff2'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Creating operation {
-  operationId: '73f90b1e-d6fb-4c3e-b81e-44df9fa8394b',
-  type: 'ADD',
-  partitionId: 'fffffff0-0001-1000-8951-8a04dab97c89',
-  targetNodeId: '3b50766b-b669-4363-8000-00022c478a14'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Creating operation {
-  operationId: '0f0187cc-083d-4a1c-a559-2f40ab19ca58',
-  type: 'ADD',
-  partitionId: 'faf3b919-0005-1000-8000-000bc19ad33c',
-  targetNodeId: '00000003-6f84-2d89-8f8b-45c9832606f2'
+  partitionId: '0000000c-c8df-38f2-803c-fb49541bbf88',
+  targetNodeId: 'e5c0a3c1-1c6f-4295-879c-42ce4c72385f'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
     # Subtest: failure is persisted with error_message
         ok 1 - Failure is persisted with error_message
         1..1
-    ok 5 - failure is persisted with error_message # time=16.856ms
+    ok 5 - failure is persisted with error_message # time=8.544ms
     
 Creating operation {
-  operationId: '250486fe-6cd4-4e82-a9ba-d60d25356c45',
-  type: 'ADD',
-  partitionId: '2b0bd176-61af-39e9-bfff-ffe800000014',
-  targetNodeId: 'ffffffe2-6772-1d1b-9ef5-c0240000000d'
-}
-Operation step changed {
-  operationId: '250486fe-6cd4-4e82-a9ba-d60d25356c45',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '2b0bd176-61af-39e9-bfff-ffe800000014'
-}
-Operation step changed {
-  operationId: '250486fe-6cd4-4e82-a9ba-d60d25356c45',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: '2b0bd176-61af-39e9-bfff-ffe800000014'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: 'd7ad85d4-a748-420d-8ff1-28c145a33b3f',
-  type: 'ADD',
-  partitionId: 'f8335836-0019-1000-a44a-4526d822aeed',
-  targetNodeId: '00000000-1c86-5266-8000-000a7d9b4abe'
-}
-Operation step changed {
-  operationId: 'd7ad85d4-a748-420d-8ff1-28c145a33b3f',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: 'f8335836-0019-1000-a44a-4526d822aeed'
-}
-Operation step changed {
-  operationId: 'd7ad85d4-a748-420d-8ff1-28c145a33b3f',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: 'f8335836-0019-1000-a44a-4526d822aeed'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: '3260759a-b7c9-4491-ab5c-e02fd545647c',
-  type: 'ADD',
-  partitionId: '0000000e-d340-2b06-8000-0015336151ab',
-  targetNodeId: '7cc3ae24-000c-1000-8780-9db0bb90a65c'
-}
-Operation step changed {
-  operationId: '3260759a-b7c9-4491-ab5c-e02fd545647c',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '0000000e-d340-2b06-8000-0015336151ab'
-}
-Operation step changed {
-  operationId: '3260759a-b7c9-4491-ab5c-e02fd545647c',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: '0000000e-d340-2b06-8000-0015336151ab'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: '067f18ca-b5f7-4d45-a656-34f0e82b488c',
-  type: 'ADD',
-  partitionId: '4b126e24-8b11-21bb-8e49-6a7d3b8acae4',
-  targetNodeId: 'ffffffe3-fff6-5fff-b806-aa5f0000000f'
-}
-Operation step changed {
-  operationId: '067f18ca-b5f7-4d45-a656-34f0e82b488c',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '4b126e24-8b11-21bb-8e49-6a7d3b8acae4'
-}
-Operation step changed {
-  operationId: '067f18ca-b5f7-4d45-a656-34f0e82b488c',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: '4b126e24-8b11-21bb-8e49-6a7d3b8acae4'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: '9ba9cd1b-6538-48c6-ae05-c77140e028be',
+  operationId: '206777a9-92ab-4d6f-8519-7a9c2a7e6873',
   type: 'REMOVE',
-  partitionId: '0000001d-0000-1000-acc5-86a6fcd10fba',
-  targetNodeId: '4ec17054-6672-5ff7-a253-7be3ea687833'
+  partitionId: '00000007-53ae-52c1-a222-ddfb00000006',
+  targetNodeId: '02ca15b8-001b-1000-8000-00140000001f'
 }
 Operation step changed {
-  operationId: '9ba9cd1b-6538-48c6-ae05-c77140e028be',
+  operationId: '206777a9-92ab-4d6f-8519-7a9c2a7e6873',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: '0000001d-0000-1000-acc5-86a6fcd10fba'
+  partitionId: '00000007-53ae-52c1-a222-ddfb00000006'
 }
 Operation step changed {
-  operationId: '9ba9cd1b-6538-48c6-ae05-c77140e028be',
+  operationId: '206777a9-92ab-4d6f-8519-7a9c2a7e6873',
   previousStep: 'SENDING',
   newStep: 'CREATING',
   status: 'creating',
-  partitionId: '0000001d-0000-1000-acc5-86a6fcd10fba'
+  partitionId: '00000007-53ae-52c1-a222-ddfb00000006'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: '2b1fc714-b8b4-4ceb-ac05-5d1e98196f22',
+  operationId: '226fe682-185f-45d7-af54-d46ffe67becf',
   type: 'REMOVE',
-  partitionId: 'ffffffed-000a-1000-86de-68fffffffffa',
-  targetNodeId: '00000004-a05f-50d1-8000-001406ce7b5c'
+  partitionId: 'ffffffff-fffe-5fff-8000-0006fffffff5',
+  targetNodeId: '2576d842-2840-40b0-8000-0002c1ae7666'
 }
 Operation step changed {
-  operationId: '2b1fc714-b8b4-4ceb-ac05-5d1e98196f22',
+  operationId: '226fe682-185f-45d7-af54-d46ffe67becf',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: 'ffffffed-000a-1000-86de-68fffffffffa'
+  partitionId: 'ffffffff-fffe-5fff-8000-0006fffffff5'
 }
 Operation step changed {
-  operationId: '2b1fc714-b8b4-4ceb-ac05-5d1e98196f22',
+  operationId: '226fe682-185f-45d7-af54-d46ffe67becf',
   previousStep: 'SENDING',
   newStep: 'CREATING',
   status: 'creating',
-  partitionId: 'ffffffed-000a-1000-86de-68fffffffffa'
+  partitionId: 'ffffffff-fffe-5fff-8000-0006fffffff5'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: 'e942d6f5-c0cb-483d-bca7-b3e04752ecb5',
-  type: 'REMOVE',
-  partitionId: '210ef8c3-5840-518a-9496-f1edfffffff9',
-  targetNodeId: 'eb107c4c-c993-21a3-8857-db3ab259c52c'
-}
-Operation step changed {
-  operationId: 'e942d6f5-c0cb-483d-bca7-b3e04752ecb5',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '210ef8c3-5840-518a-9496-f1edfffffff9'
-}
-Operation step changed {
-  operationId: 'e942d6f5-c0cb-483d-bca7-b3e04752ecb5',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: '210ef8c3-5840-518a-9496-f1edfffffff9'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-Creating operation {
-  operationId: '69ce181b-8120-4d8b-af9a-abea49e1a53e',
+  operationId: 'a974688e-9e15-4a9e-beff-df262a3d4c52',
   type: 'ADD',
-  partitionId: '00000007-ac3e-2728-ac95-9f185b9e13e5',
-  targetNodeId: 'e6846b20-ffe6-5fff-8000-0015fffffff6'
+  partitionId: 'cb9e9b2b-0014-1000-b15a-ff05174fd4a3',
+  targetNodeId: 'b2d41426-0002-1000-bfff-fff8d0448316'
 }
 Operation step changed {
-  operationId: '69ce181b-8120-4d8b-af9a-abea49e1a53e',
+  operationId: 'a974688e-9e15-4a9e-beff-df262a3d4c52',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: '00000007-ac3e-2728-ac95-9f185b9e13e5'
+  partitionId: 'cb9e9b2b-0014-1000-b15a-ff05174fd4a3'
 }
 Operation step changed {
-  operationId: '69ce181b-8120-4d8b-af9a-abea49e1a53e',
+  operationId: 'a974688e-9e15-4a9e-beff-df262a3d4c52',
   previousStep: 'SENDING',
   newStep: 'CREATING',
   status: 'creating',
-  partitionId: '00000007-ac3e-2728-ac95-9f185b9e13e5'
+  partitionId: 'cb9e9b2b-0014-1000-b15a-ff05174fd4a3'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: '0ddaf974-87b4-4b33-ba85-2c860692d409',
+  operationId: 'f2cabefb-70c4-472f-92cc-e20536f60171',
   type: 'REMOVE',
-  partitionId: '604e2941-948b-5ffd-8ce0-224e664a70d3',
-  targetNodeId: 'ffffffe1-fffc-5fff-9818-fbec00000008'
+  partitionId: '723bccd1-f3f8-599d-8ebc-d46258bd5afa',
+  targetNodeId: '00000011-0005-1000-9130-b4b100000003'
 }
 Operation step changed {
-  operationId: '0ddaf974-87b4-4b33-ba85-2c860692d409',
+  operationId: 'f2cabefb-70c4-472f-92cc-e20536f60171',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: '604e2941-948b-5ffd-8ce0-224e664a70d3'
+  partitionId: '723bccd1-f3f8-599d-8ebc-d46258bd5afa'
 }
 Operation step changed {
-  operationId: '0ddaf974-87b4-4b33-ba85-2c860692d409',
+  operationId: 'f2cabefb-70c4-472f-92cc-e20536f60171',
   previousStep: 'SENDING',
   newStep: 'CREATING',
   status: 'creating',
-  partitionId: '604e2941-948b-5ffd-8ce0-224e664a70d3'
+  partitionId: '723bccd1-f3f8-599d-8ebc-d46258bd5afa'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 Creating operation {
-  operationId: '3e1651c9-e584-4b24-9eea-4228ad72efc8',
+  operationId: 'c5dde1a3-554e-456d-a904-845355cb6480',
   type: 'REMOVE',
-  partitionId: '0000000a-d259-1c7a-85f5-c60a117889e8',
-  targetNodeId: '36ed57b2-000f-1000-bfff-fffeefe8d5d1'
+  partitionId: '00000007-7821-1365-bfff-ffe800000016',
+  targetNodeId: 'df12d603-000f-1000-8000-0013ffffffe1'
 }
 Operation step changed {
-  operationId: '3e1651c9-e584-4b24-9eea-4228ad72efc8',
+  operationId: 'c5dde1a3-554e-456d-a904-845355cb6480',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: '0000000a-d259-1c7a-85f5-c60a117889e8'
+  partitionId: '00000007-7821-1365-bfff-ffe800000016'
 }
 Operation step changed {
-  operationId: '3e1651c9-e584-4b24-9eea-4228ad72efc8',
+  operationId: 'c5dde1a3-554e-456d-a904-845355cb6480',
   previousStep: 'SENDING',
   newStep: 'CREATING',
   status: 'creating',
-  partitionId: '0000000a-d259-1c7a-85f5-c60a117889e8'
+  partitionId: '00000007-7821-1365-bfff-ffe800000016'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '9c936ded-814e-431a-a4f9-8291218e9466',
+  type: 'REMOVE',
+  partitionId: '00000004-a7bd-3260-8000-000dffffffeb',
+  targetNodeId: '0000001d-67c2-5017-858a-f07000000005'
+}
+Operation step changed {
+  operationId: '9c936ded-814e-431a-a4f9-8291218e9466',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '00000004-a7bd-3260-8000-000dffffffeb'
+}
+Operation step changed {
+  operationId: '9c936ded-814e-431a-a4f9-8291218e9466',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: '00000004-a7bd-3260-8000-000dffffffeb'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '66a78942-649e-47e2-aa5e-46594eec4a3a',
+  type: 'ADD',
+  partitionId: '0000000e-fcf4-2c71-9b1e-577900000016',
+  targetNodeId: '401bad1d-71c4-1205-b37c-bb403cc2704c'
+}
+Operation step changed {
+  operationId: '66a78942-649e-47e2-aa5e-46594eec4a3a',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '0000000e-fcf4-2c71-9b1e-577900000016'
+}
+Operation step changed {
+  operationId: '66a78942-649e-47e2-aa5e-46594eec4a3a',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: '0000000e-fcf4-2c71-9b1e-577900000016'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'cc75fc7e-8a3d-4451-92a8-81c5aa261059',
+  type: 'REMOVE',
+  partitionId: 'c02730f4-fffe-5fff-8000-000a9736ea6a',
+  targetNodeId: 'a557f59e-0ed2-23b7-ad55-8fb00000000e'
+}
+Operation step changed {
+  operationId: 'cc75fc7e-8a3d-4451-92a8-81c5aa261059',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'c02730f4-fffe-5fff-8000-000a9736ea6a'
+}
+Operation step changed {
+  operationId: 'cc75fc7e-8a3d-4451-92a8-81c5aa261059',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: 'c02730f4-fffe-5fff-8000-000a9736ea6a'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: 'afcb1181-9ab0-49bf-977e-6764d2097985',
+  type: 'ADD',
+  partitionId: '0d7e03a4-000e-1000-bbfc-31530000000b',
+  targetNodeId: '51d2aeb9-ffe2-5fff-8000-001be426d520'
+}
+Operation step changed {
+  operationId: 'afcb1181-9ab0-49bf-977e-6764d2097985',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '0d7e03a4-000e-1000-bbfc-31530000000b'
+}
+Operation step changed {
+  operationId: 'afcb1181-9ab0-49bf-977e-6764d2097985',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: '0d7e03a4-000e-1000-bbfc-31530000000b'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Creating operation {
+  operationId: '569b7a0b-cbf0-4e74-9986-fe8cbc9c8348',
+  type: 'ADD',
+  partitionId: '27b2e52e-0001-1000-994b-66678739a2f6',
+  targetNodeId: '219c0c97-0003-1000-b799-6bc20000001b'
+}
+Operation step changed {
+  operationId: '569b7a0b-cbf0-4e74-9986-fe8cbc9c8348',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '27b2e52e-0001-1000-994b-66678739a2f6'
+}
+Operation step changed {
+  operationId: '569b7a0b-cbf0-4e74-9986-fe8cbc9c8348',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  status: 'creating',
+  partitionId: '27b2e52e-0001-1000-994b-66678739a2f6'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
     # Subtest: steps_history is persisted as JSON
         ok 1 - steps_history is persisted as valid JSON
         1..1
-    ok 6 - steps_history is persisted as JSON # time=6.669ms
+    ok 6 - steps_history is persisted as JSON # time=6.461ms
     
 Creating operation {
-  operationId: 'b49018a5-354e-4234-b274-5ca44a64294a',
+  operationId: '03548f37-32ea-4940-addd-3258d2779cbd',
   type: 'ADD',
   partitionId: 'partition-1',
   targetNodeId: 'node-1'
 }
 Creating operation {
-  operationId: '8145a6c5-a967-40e2-ad49-b9a4d3b0b469',
+  operationId: '61b77115-0e3a-44da-9786-16722e814324',
   type: 'ADD',
   partitionId: 'partition-2',
   targetNodeId: 'node-2'
 }
 Operation completed {
-  operationId: '8145a6c5-a967-40e2-ad49-b9a4d3b0b469',
+  operationId: '61b77115-0e3a-44da-9786-16722e814324',
   type: 'ADD',
   partitionId: 'partition-2',
   targetNodeId: 'node-2'
 }
 Creating operation {
-  operationId: 'fbc39246-9001-4b5b-a476-674faf27f493',
+  operationId: 'c25b89c0-ed01-4419-bab1-fbe4afbdf62a',
   type: 'REMOVE',
   partitionId: 'partition-3',
   targetNodeId: 'node-3'
 }
-    # Subtest: loadIncompleteOperations returns non-terminal operations
-        ok 1 - Should return 1 incomplete operation
+    # Subtest: getInFlightOperations returns non-terminal operations
+        ok 1 - Should return 1 in-flight operation
         ok 2 - Should return the pending operation
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
         1..2
-    ok 7 - loadIncompleteOperations returns non-terminal operations # time=2.521ms
+    ok 7 - getInFlightOperations returns non-terminal operations # time=1.528ms
     
 Creating operation {
-  operationId: '3f107664-e0f7-4108-b47c-80b1bea9b497',
+  operationId: '345b5c43-8672-4b0c-833d-0e58ae38809f',
   type: 'ADD',
   partitionId: 'partition-1',
   targetNodeId: 'node-1'
 }
-    # Subtest: loadIncompleteOperations converts row to operation object
+    # Subtest: getInFlightOperations converts row to operation object
         ok 1 - Has operationId
         ok 2 - Has type
         ok 3 - Has partitionId
@@ -770,9 +770,11 @@ Creating operation {
         ok 10 - Has stepsHistory as array
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
         1..10
-    ok 8 - loadIncompleteOperations converts row to operation object # time=2.131ms
+    ok 8 - getInFlightOperations converts row to operation object # time=1.595ms
     
     1..8
-ok 1 - Property 10: Operation Log Persistence # time=97.647ms
+ok 1 - Property 10: Operation Log Persistence # time=122.759ms
 
 1..1
+# { total: 18, pass: 18 }
+# time=142.079ms

@@ -4,7 +4,7 @@
  * Requirements: 8.1, 8.2, 8.3
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {
   UnifiedRebalancer,
   EntityType,
@@ -36,13 +36,28 @@ function initializeTestEnvironment() {
 }
 
 // Create a mock system table cache
-function createMockCache(nodes = [], services = [], partitions = [], tables = []) {
+function createMockCache(
+  nodes = [],
+  services = [],
+  partitions = [],
+  tables = [],
+  replicaOperations = [],
+) {
+  const now = Date.now();
+  const normalizedNodes = nodes.map((node) => ({
+    ws_connection_state: Object.hasOwn(node, 'ws_connection_state') ?
+      node.ws_connection_state : 'ready',
+    ready_lease_expires_at: Object.hasOwn(node, 'ready_lease_expires_at') ?
+      node.ready_lease_expires_at : now + 10000,
+    ...node,
+  }));
   const cache = {
-    nodes: new Map(nodes.map((n) => [n.node_id, n])),
+    nodes: new Map(normalizedNodes.map((node) => [node.node_id, node])),
     services: new Map(services.map((s) => [s.service_id, s])),
     partitions: new Map(partitions.map((p) => [p.partition_id, p])),
     tables: new Map(tables.map((t) => [t.table_id, t])),
     message_groups: new Map(),
+    replica_operations: new Map(replicaOperations.map((op) => [op.operation_id, op])),
   };
 
   return {
@@ -60,11 +75,104 @@ function createMockCache(nodes = [], services = [], partitions = [], tables = []
   };
 }
 
+// Create mock CDC integration service
+function createMockCdcService() {
+  return {
+    insertSystemTableRow: async () => ({success: true}),
+    updateSystemTableRow: async () => ({success: true}),
+  };
+}
+
+// Create mock table policy service
+function createMockPolicyService(partitions = [], tables = []) {
+  return {
+    getPolicyForPartition: (partitionId) => {
+      const partition = partitions.find((p) => p.partition_id === partitionId);
+      if (!partition) return {...DEFAULT_TABLE_POLICY};
+      const table = tables.find((t) => t.table_id === partition.table_id);
+      if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY};
+      try {
+        return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies)};
+      } catch (_e) {
+        return {...DEFAULT_TABLE_POLICY};
+      }
+    },
+  };
+}
+
+// Create mock message router
+function createMockMessageRouter(connectionState = 'connected') {
+  return {
+    getConnectionState: () => connectionState,
+    deliver: async () => ({acknowledged: true, status: 'completed'}),
+    pingNode: async () => true,
+    isOutboundQueueAvailable: () => true,
+  };
+}
+
+// Create mock rebalance coordinator
+function createMockCoordinator() {
+  return {
+    createOperation: async (move) => ({
+      operationId: 'op-' + Date.now(),
+      type: move.type,
+      partitionId: move.partitionId,
+      targetNodeId: move.nodeId,
+      status: 'pending',
+      workflowStep: 'pending',
+    }),
+    executeOperation: async () => ({success: true}),
+    canStartAddOperation: async () => true,
+    canStartRemoveOperation: async () => true,
+    // getStats is called synchronously by UnifiedRebalancer.getStats()
+    getStats: () => ({
+      operationsCreated: 0,
+      operationsCompleted: 0,
+      operationsFailed: 0,
+      operationsTimedOut: 0,
+      inFlightOperations: 0,
+      totalOperations: 0,
+    }),
+  };
+}
+
+// Create a fully configured rebalancer for testing
+function createTestRebalancer(options = {}) {
+  const {
+    entityId = 'partition-1',
+    entityType = EntityType.PARTITION,
+    nodeId = 'node-1',
+    nodes = [],
+    services = [],
+    partitions = [],
+    tables = [],
+    replicaOperations = [],
+    connectionState = 'connected',
+  } = options;
+
+  const mockCache = createMockCache(nodes, services, partitions, tables, replicaOperations);
+  const mockCdcService = createMockCdcService();
+  const mockPolicyService = createMockPolicyService(partitions, tables);
+  const mockMessageRouter = createMockMessageRouter(connectionState);
+  const mockCoordinator = createMockCoordinator();
+
+  return new UnifiedRebalancer({
+    entityId,
+    entityType,
+    nodeId,
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCdcService,
+    tablePolicyService: mockPolicyService,
+    messageRouter: mockMessageRouter,
+    rebalanceCoordinator: mockCoordinator,
+  });
+}
+
 test('UnifiedRebalancer - Basic Initialization', async (t) => {
   initializeTestEnvironment();
 
   await t.test('creates rebalancer with default options', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -77,7 +185,7 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
   });
 
   await t.test('initializes rebalancer', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -89,7 +197,7 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
   });
 
   await t.test('sets leader status', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -112,8 +220,8 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
 test('UnifiedRebalancer - Policy Management', async (t) => {
   initializeTestEnvironment();
 
-  await t.test('returns default table policy when no cache', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+  await t.test('returns default table policy when no cache data', async (t) => {
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -127,7 +235,7 @@ test('UnifiedRebalancer - Policy Management', async (t) => {
   });
 
   await t.test('returns default message group policy', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'mg-1',
       entityType: EntityType.MESSAGE_GROUP,
       nodeId: 'node-1',
@@ -140,21 +248,15 @@ test('UnifiedRebalancer - Policy Management', async (t) => {
   });
 
   await t.test('returns table policy from cache', async (t) => {
-    const mockCache = createMockCache(
-      [],
-      [],
-      [{partition_id: 'partition-1', table_id: 'table-1'}],
-      [{
-        table_id: 'table-1',
-        table_policies: JSON.stringify({replicaCount: 5, minReplicaCount: 3}),
-      }],
-    );
-
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      partitions: [{partition_id: 'partition-1', table_id: 'table-1'}],
+      tables: [{
+        table_id: 'table-1',
+        table_policies: JSON.stringify({replicaCount: 5, minReplicaCount: 3}),
+      }],
     });
 
     const policy = rebalancer.getPolicy();
@@ -168,17 +270,15 @@ test('UnifiedRebalancer - Node Management', async (t) => {
   initializeTestEnvironment();
 
   await t.test('gets available nodes from cache', async (t) => {
-    const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE},
-      {node_id: 'node-2', status: NodeStatus.ACTIVE},
-      {node_id: 'node-3', status: NodeStatus.FAILED},
-    ]);
-
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.FAILED},
+      ],
     });
 
     const nodes = rebalancer.getAvailableNodes();
@@ -190,17 +290,15 @@ test('UnifiedRebalancer - Node Management', async (t) => {
   });
 
   await t.test('sorts nodes by load', async (t) => {
-    const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE, cpu_usage_percent: 80},
-      {node_id: 'node-2', status: NodeStatus.ACTIVE, cpu_usage_percent: 20},
-      {node_id: 'node-3', status: NodeStatus.ACTIVE, cpu_usage_percent: 50},
-    ]);
-
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE, cpu_usage_percent: 80},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE, cpu_usage_percent: 20},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE, cpu_usage_percent: 50},
+      ],
     });
 
     const nodes = rebalancer.getAvailableNodes();
@@ -209,6 +307,75 @@ test('UnifiedRebalancer - Node Management', async (t) => {
     t.equal(sorted[0].node_id, 'node-2'); // Lowest load
     t.equal(sorted[1].node_id, 'node-3');
     t.equal(sorted[2].node_id, 'node-1'); // Highest load
+  });
+});
+
+test('UnifiedRebalancer - Readiness Checks', async (t) => {
+  initializeTestEnvironment();
+
+  await t.test('returns true when node is ready and connected', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-0',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE, ws_connection_state: 'ready'},
+      ],
+      connectionState: 'connected',
+    });
+
+    const ready = await rebalancer.isNodeReady('node-1');
+    t.equal(ready, true);
+
+    rebalancer.shutdown();
+  });
+
+  await t.test('returns false when node is disconnected', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-0',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE, ws_connection_state: 'ready'},
+      ],
+      connectionState: 'disconnected',
+    });
+
+    const ready = await rebalancer.isNodeReady('node-1');
+    t.equal(ready, false);
+
+    rebalancer.shutdown();
+  });
+
+  await t.test('returns false when readiness ping fails', async (t) => {
+    const mockCache = createMockCache([
+      {node_id: 'node-1', status: NodeStatus.ACTIVE, ws_connection_state: 'ready'},
+    ]);
+    const mockCdcService = createMockCdcService();
+    const mockPolicyService = createMockPolicyService();
+    const mockCoordinator = createMockCoordinator();
+    const messageRouter = {
+      getConnectionState: () => 'connected',
+      pingNode: async () => false,
+      isOutboundQueueAvailable: () => true,
+    };
+
+    const rebalancer = new UnifiedRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-0',
+      systemTableCache: mockCache,
+      cdcIntegrationService: mockCdcService,
+      tablePolicyService: mockPolicyService,
+      messageRouter,
+      rebalanceCoordinator: mockCoordinator,
+    });
+    rebalancer.enableReadinessPing = true;
+
+    const ready = await rebalancer.isNodeReady('node-1');
+    t.equal(ready, false);
+
+    rebalancer.shutdown();
   });
 });
 
@@ -222,7 +389,7 @@ test('UnifiedRebalancer - Replica State', async (t) => {
       {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
     ];
 
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -236,7 +403,7 @@ test('UnifiedRebalancer - Replica State', async (t) => {
   });
 
   await t.test('detects multiple replicas on same node', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -264,7 +431,7 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
   initializeTestEnvironment();
 
   await t.test('calculates add moves when below target', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -288,7 +455,7 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
   });
 
   await t.test('calculates remove moves for failed replicas', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -313,8 +480,11 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
     t.equal(removeMoves[0].reason, 'replica_failed');
   });
 
-  await t.test('calculates remove moves for nodes not in target', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+  await t.test('defers remove moves when add moves are pending', async (t) => {
+    // When there's a node not in target (node-4) AND a node missing (node-3),
+    // the rebalancer should ADD first and defer REMOVE until ADDs complete.
+    // This prevents losing replicas during rebalancing.
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -333,8 +503,46 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
 
     const moves = rebalancer.calculateMoves(currentReplicas, targetState);
 
+    // Should have ADD move for node-3
+    const addMoves = moves.filter((m) => m.type === MoveType.ADD);
+    t.equal(addMoves.length, 1, 'should have one ADD move');
+    t.equal(addMoves[0].nodeId, 'node-3', 'ADD should be for node-3');
+
+    // REMOVE moves should be deferred when there are ADD moves
     const removeMoves = moves.filter((m) => m.type === MoveType.REMOVE);
-    t.ok(removeMoves.some((m) => m.nodeId === 'node-4'));
+    t.equal(removeMoves.length, 0, 'REMOVE moves should be deferred');
+  });
+
+  await t.test('calculates remove moves when no add moves needed', async (t) => {
+    // When all target nodes have replicas but there's an extra replica on
+    // a non-target node, REMOVE should be generated (no ADDs to defer for)
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    const currentReplicas = [
+      {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+      {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+      {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
+      {replica_id: 'r4', node_id: 'node-4', status: ReplicaStatus.ACTIVE},
+    ];
+
+    const targetState = {
+      targetReplicaCount: 3,
+      targetNodes: ['node-1', 'node-2', 'node-3'],
+    };
+
+    const moves = rebalancer.calculateMoves(currentReplicas, targetState);
+
+    // No ADD moves needed - all target nodes have replicas
+    const addMoves = moves.filter((m) => m.type === MoveType.ADD);
+    t.equal(addMoves.length, 0, 'should have no ADD moves');
+
+    // REMOVE move should be generated for node-4
+    const removeMoves = moves.filter((m) => m.type === MoveType.REMOVE);
+    t.ok(removeMoves.some((m) => m.nodeId === 'node-4'), 'should remove from node-4');
   });
 });
 
@@ -342,7 +550,7 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
   initializeTestEnvironment();
 
   await t.test('detects critical state when below minimum replicas', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -359,7 +567,7 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
   });
 
   await t.test('detects suboptimal state when not at target count', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -378,18 +586,16 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
   });
 
   await t.test('detects suboptimal state when replicas not spread', async (t) => {
-    // Create mock cache with 3 nodes - one unused node available for spreading
-    const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE},
-      {node_id: 'node-2', status: NodeStatus.ACTIVE},
-      {node_id: 'node-3', status: NodeStatus.ACTIVE}, // Unused node
-    ]);
-
-    const rebalancer = new UnifiedRebalancer({
+    // Create rebalancer with 3 nodes - one unused node available for spreading
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE}, // Unused node
+      ],
     });
 
     const replicas = [
@@ -407,17 +613,15 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
   });
 
   await t.test('not suboptimal when no unused nodes for spreading', async (t) => {
-    // Create mock cache with only 2 nodes - no unused nodes available
-    const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE},
-      {node_id: 'node-2', status: NodeStatus.ACTIVE},
-    ]);
-
-    const rebalancer = new UnifiedRebalancer({
+    // Create rebalancer with only 2 nodes - no unused nodes available
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+      ],
     });
 
     const replicas = [
@@ -440,7 +644,7 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
   initializeTestEnvironment();
 
   await t.test('skips rebalance when not leader', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -456,39 +660,38 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
   });
 
   await t.test('returns no changes when already optimal', async (t) => {
-    const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE},
-      {node_id: 'node-2', status: NodeStatus.ACTIVE},
-      {node_id: 'node-3', status: NodeStatus.ACTIVE},
-    ], [
-      {
-        service_id: 's1',
-        partition_id: 'partition-1',
-        node_id: 'node-1',
-        service_type: 'partition',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 's2',
-        partition_id: 'partition-1',
-        node_id: 'node-2',
-        service_type: 'partition',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 's3',
-        partition_id: 'partition-1',
-        node_id: 'node-3',
-        service_type: 'partition',
-        status: ReplicaStatus.ACTIVE,
-      },
-    ]);
-
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ],
+      services: [
+        {
+          service_id: 's1',
+          partition_id: 'partition-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          service_id: 's2',
+          partition_id: 'partition-1',
+          node_id: 'node-2',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          service_id: 's3',
+          partition_id: 'partition-1',
+          node_id: 'node-3',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+      ],
     });
 
     rebalancer.initialize();
@@ -502,30 +705,31 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
     rebalancer.shutdown();
   });
 
-  await t.test('emits events for add/remove operations', async (t) => {
-    const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE},
-      {node_id: 'node-2', status: NodeStatus.ACTIVE},
-      {node_id: 'node-3', status: NodeStatus.ACTIVE},
-    ], [
-      {
-        service_id: 's1',
-        partition_id: 'partition-1',
-        node_id: 'node-1',
-        service_type: 'partition',
-        status: ReplicaStatus.ACTIVE,
-      },
-    ]);
-
-    const rebalancer = new UnifiedRebalancer({
+  await t.test('emits rebalanceComplete event', async (t) => {
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ],
+      services: [
+        {
+          service_id: 's1',
+          partition_id: 'partition-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+      ],
     });
 
-    const addEvents = [];
-    rebalancer.on('addReplica', (event) => addEvents.push(event));
+    t.teardown(() => rebalancer.shutdown());
+
+    const completeEvents = [];
+    rebalancer.on('rebalanceComplete', (event) => completeEvents.push(event));
 
     rebalancer.initialize();
     rebalancer.setLeader(true);
@@ -533,10 +737,9 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
     const result = await rebalancer.rebalance(TriggerType.PERIODIC);
 
     t.equal(result.success, true);
-    t.ok(addEvents.length > 0);
-    t.equal(addEvents[0].entityId, 'partition-1');
-
-    rebalancer.shutdown();
+    t.ok(completeEvents.length > 0);
+    t.equal(completeEvents[0].entityId, 'partition-1');
+    t.ok(result.moves.some((move) => move.operation === MoveType.ADD));
   });
 });
 
@@ -544,7 +747,7 @@ test('UnifiedRebalancer - Statistics', async (t) => {
   initializeTestEnvironment();
 
   await t.test('returns statistics', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -619,7 +822,7 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
   initializeTestEnvironment();
 
   await t.test('validates replica count to be odd', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -637,7 +840,7 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
   });
 
   await t.test('calculates target replica count for growth', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -661,7 +864,7 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
   });
 
   await t.test('calculates target replica count for shrink', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -687,25 +890,24 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
   });
 
   await t.test('applyPolicy detects need for rebalancing', async (t) => {
-    const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE},
-      {node_id: 'node-2', status: NodeStatus.ACTIVE},
-      {node_id: 'node-3', status: NodeStatus.ACTIVE},
-    ], [
-      {
-        service_id: 's1',
-        partition_id: 'partition-1',
-        node_id: 'node-1',
-        service_type: 'partition',
-        status: ReplicaStatus.ACTIVE,
-      },
-    ]);
-
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ],
+      services: [
+        {
+          service_id: 's1',
+          partition_id: 'partition-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+      ],
     });
 
     const policy = {
@@ -723,39 +925,38 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
   });
 
   await t.test('applyPolicy detects replicas not spread', async (t) => {
-    const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE},
-      {node_id: 'node-2', status: NodeStatus.ACTIVE},
-      {node_id: 'node-3', status: NodeStatus.ACTIVE},
-    ], [
-      {
-        service_id: 's1',
-        partition_id: 'partition-1',
-        node_id: 'node-1',
-        service_type: 'partition',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 's2',
-        partition_id: 'partition-1',
-        node_id: 'node-1', // Same node as s1
-        service_type: 'partition',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 's3',
-        partition_id: 'partition-1',
-        node_id: 'node-2',
-        service_type: 'partition',
-        status: ReplicaStatus.ACTIVE,
-      },
-    ]);
-
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ],
+      services: [
+        {
+          service_id: 's1',
+          partition_id: 'partition-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          service_id: 's2',
+          partition_id: 'partition-1',
+          node_id: 'node-1', // Same node as s1
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          service_id: 's3',
+          partition_id: 'partition-1',
+          node_id: 'node-2',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+      ],
     });
 
     const policy = {
@@ -777,7 +978,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   initializeTestEnvironment();
 
   await t.test('schedules periodic checks when becoming leader', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -800,7 +1001,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   });
 
   await t.test('cancels scheduled checks when losing leadership', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -815,10 +1016,11 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     rebalancer.setLeader(false);
 
     t.equal(rebalancer.scheduledCheck, null);
+    rebalancer.shutdown();
   });
 
   await t.test('triggers immediate check for critical events', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -846,24 +1048,23 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   });
 
   await t.test('detects critical CDC events', async (t) => {
-    const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE},
-      {node_id: 'node-2', status: NodeStatus.ACTIVE},
-    ], [
-      {
-        service_id: 's1',
-        partition_id: 'partition-1',
-        node_id: 'node-1',
-        service_type: 'partition',
-        status: ReplicaStatus.ACTIVE,
-      },
-    ]);
-
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+      ],
+      services: [
+        {
+          service_id: 's1',
+          partition_id: 'partition-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+      ],
     });
 
     // Node failure event affecting our replicas
@@ -886,7 +1087,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   });
 
   await t.test('detects service failure CDC events', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -920,7 +1121,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   });
 
   await t.test('uses exponential backoff when stable', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -942,7 +1143,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   });
 
   await t.test('resets interval after rebalancing action', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -968,7 +1169,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   initializeTestEnvironment();
 
   await t.test('excludes failed replicas from healthy count', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -977,7 +1178,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
     const replicas = [
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.FAILED},
-      {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.INACTIVE},
+      {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.REMOVED},
       {replica_id: 'r4', node_id: 'node-4', status: ReplicaStatus.ACTIVE},
     ];
 
@@ -988,7 +1189,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   });
 
   await t.test('generates remove moves for failed replicas', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -997,32 +1198,6 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
     const currentReplicas = [
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.FAILED},
-      {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
-    ];
-
-    const targetState = {
-      targetReplicaCount: 3,
-      targetNodes: ['node-1', 'node-2', 'node-3'],
-    };
-
-    const moves = rebalancer.calculateMoves(currentReplicas, targetState);
-
-    const removeMoves = moves.filter((m) => m.type === MoveType.REMOVE);
-    t.equal(removeMoves.length, 1);
-    t.equal(removeMoves[0].replicaId, 'r2');
-    t.equal(removeMoves[0].reason, 'replica_failed');
-  });
-
-  await t.test('generates remove moves for inactive replicas', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
-      entityId: 'partition-1',
-      entityType: EntityType.PARTITION,
-      nodeId: 'node-1',
-    });
-
-    const currentReplicas = [
-      {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-      {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.INACTIVE},
       {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
     ];
 
@@ -1040,33 +1215,32 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   });
 
   await t.test('generates add moves to create replacement replicas', async (t) => {
-    const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE},
-      {node_id: 'node-2', status: NodeStatus.ACTIVE},
-      {node_id: 'node-3', status: NodeStatus.ACTIVE},
-      {node_id: 'node-4', status: NodeStatus.ACTIVE},
-    ], [
-      {
-        service_id: 's1',
-        partition_id: 'partition-1',
-        node_id: 'node-1',
-        service_type: 'partition',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 's2',
-        partition_id: 'partition-1',
-        node_id: 'node-2',
-        service_type: 'partition',
-        status: ReplicaStatus.FAILED, // Failed replica
-      },
-    ]);
-
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        {node_id: 'node-4', status: NodeStatus.ACTIVE},
+      ],
+      services: [
+        {
+          service_id: 's1',
+          partition_id: 'partition-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          service_id: 's2',
+          partition_id: 'partition-1',
+          node_id: 'node-2',
+          service_type: 'partition',
+          status: ReplicaStatus.FAILED, // Failed replica
+        },
+      ],
     });
 
     const currentReplicas = rebalancer.getCurrentReplicas();
@@ -1084,18 +1258,16 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   });
 
   await t.test('places new replicas on healthy nodes only', async (t) => {
-    const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE},
-      {node_id: 'node-2', status: NodeStatus.FAILED}, // Failed node
-      {node_id: 'node-3', status: NodeStatus.ACTIVE},
-      {node_id: 'node-4', status: NodeStatus.ACTIVE},
-    ]);
-
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      systemTableCache: mockCache,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.FAILED}, // Failed node
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        {node_id: 'node-4', status: NodeStatus.ACTIVE},
+      ],
     });
 
     const availableNodes = rebalancer.getAvailableNodes();
@@ -1107,7 +1279,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   });
 
   await t.test('uses policy replica count regardless of current count', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -1133,7 +1305,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   });
 
   await t.test('respects minimum replica count', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -1157,7 +1329,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   });
 
   await t.test('respects maximum replica count', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',

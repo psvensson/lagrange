@@ -6,6 +6,8 @@
  */
 
 import WebSocket from 'ws';
+import {CLI_STREAM} from '../cli-constants.js';
+import {ADMIN_MESSAGE_TYPE} from '../../admin/admin-constants.js';
 
 /**
  * @typedef {'disconnected'|'connecting'|'connected'|'reconnecting'|'failed'} ConnectionStatus
@@ -121,8 +123,8 @@ export class ConnectionManager {
     url = url.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
 
     // Add API path if not present
-    if (!url.includes('/api/admin/stream')) {
-      url = url.replace(/\/$/, '') + '/api/admin/stream';
+    if (!url.includes(CLI_STREAM.ADMIN_PATH)) {
+      url = url.replace(/\/$/, '') + CLI_STREAM.ADMIN_PATH;
     }
 
     return url;
@@ -211,12 +213,12 @@ export class ConnectionManager {
       const message = JSON.parse(data.toString());
 
       switch (message.type) {
-      case 'cache_dump':
+      case ADMIN_MESSAGE_TYPE.CACHE_DUMP:
         if (this.onCacheDump) {
           this.onCacheDump(message.data);
         }
         break;
-      case 'cdc_event':
+      case ADMIN_MESSAGE_TYPE.CDC_EVENT:
         // Server sends CDC event fields directly in message
         // Transform to format expected by RemoteCache.applyCDCEvent()
         if (this.onCDCEvent) {
@@ -229,17 +231,17 @@ export class ConnectionManager {
           });
         }
         break;
-      case 'query_result':
+      case ADMIN_MESSAGE_TYPE.QUERY_RESULT:
         if (this.onQueryResult) {
           this.onQueryResult(message);
         }
         break;
-      case 'live_query_event':
+      case ADMIN_MESSAGE_TYPE.LIVE_QUERY_EVENT:
         if (this.onLiveQueryEvent) {
           this.onLiveQueryEvent(message);
         }
         break;
-      case 'error':
+      case ADMIN_MESSAGE_TYPE.ERROR:
         if (this.onError) {
           this.onError(new Error(message.message || 'Unknown error'));
         }
@@ -334,7 +336,7 @@ export class ConnectionManager {
     }
 
     this.ws.send(JSON.stringify({
-      type: 'query',
+      type: ADMIN_MESSAGE_TYPE.QUERY,
       queryId,
       sql,
       params,
@@ -355,7 +357,7 @@ export class ConnectionManager {
     }
 
     this.ws.send(JSON.stringify({
-      type: 'live_query_subscribe',
+      type: ADMIN_MESSAGE_TYPE.LIVE_QUERY_SUBSCRIBE,
       subscriptionId,
       sql,
     }));
@@ -374,7 +376,7 @@ export class ConnectionManager {
     }
 
     this.ws.send(JSON.stringify({
-      type: 'live_query_unsubscribe',
+      type: ADMIN_MESSAGE_TYPE.LIVE_QUERY_UNSUBSCRIBE,
       subscriptionId,
     }));
 
@@ -391,7 +393,7 @@ export class ConnectionManager {
     }
 
     this.ws.send(JSON.stringify({
-      type: 'refresh',
+      type: ADMIN_MESSAGE_TYPE.REFRESH,
     }));
 
     return true;

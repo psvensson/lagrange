@@ -9,7 +9,7 @@
  * also include error_message.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaStateMachine,
@@ -17,6 +17,13 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+function createMockCDCService() {
+  return {
+    updateSystemTableRow: async () => ({success: true}),
+    insertSystemTableRow: async () => ({success: true}),
+  };
+}
 
 // All possible states
 const ALL_STATES = [
@@ -60,6 +67,7 @@ test('Property 8: Event Emission Completeness', async (t) => {
         (replicaId, partitionId, reason) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           let emittedEvent = null;
@@ -107,6 +115,7 @@ test('Property 8: Event Emission Completeness', async (t) => {
         (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           let eventEmittedBeforeReturn = false;
@@ -146,6 +155,7 @@ test('Property 8: Event Emission Completeness', async (t) => {
         (replicaId, partitionId, errorMessage) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           let emittedEvent = null;
@@ -194,6 +204,7 @@ test('Property 8: Event Emission Completeness', async (t) => {
         (replicaId, partitionId, observerCount) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const receivedEvents = [];
@@ -237,6 +248,7 @@ test('Property 8: Event Emission Completeness', async (t) => {
         (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const events = [];
@@ -282,6 +294,7 @@ test('Property 8: Event Emission Completeness', async (t) => {
         (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const events = [];

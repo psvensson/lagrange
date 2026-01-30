@@ -7,39 +7,20 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-
-/**
- * Default table policy values.
- */
-const DEFAULT_TABLE_POLICY = {
-  replicaCount: 3,
-  minReplicaCount: 3,
-  maxReplicaCount: 7,
-  splitStorageThreshold: 10 * 1024 * 1024 * 1024, // 10GB
-  splitTrafficThreshold: 1000, // queries per minute
-  mergeStorageThreshold: 2 * 1024 * 1024 * 1024, // 2GB (20% of split)
-  mergeTrafficThreshold: 200, // queries per minute (20% of split)
-  placementConstraints: {
-    spreadAcrossNodes: true,
-    considerDiskSpace: true,
-    considerCpuLoad: true,
-    considerMemoryLoad: true,
-  },
-};
-
-/**
- * Policy field types for validation.
- */
-const PolicyFieldTypes = {
-  replicaCount: 'number',
-  minReplicaCount: 'number',
-  maxReplicaCount: 'number',
-  splitStorageThreshold: 'number',
-  splitTrafficThreshold: 'number',
-  mergeStorageThreshold: 'number',
-  mergeTrafficThreshold: 'number',
-  placementConstraints: 'object',
-};
+import {TABLES} from '../constants/index.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  DEFAULT_TABLE_POLICY,
+  POLICY_DEFAULT,
+  POLICY_ERROR_MSG,
+  POLICY_EVENT,
+  POLICY_FIELD_TYPES,
+  POLICY_LOG_MSG,
+  POLICY_SUBSYSTEM,
+  POLICY_VALUE,
+  TYPEOF,
+} from './policy-constants.js';
 
 /**
  * TablePolicyService manages table policies for partition behavior.
@@ -60,16 +41,17 @@ class TablePolicyService extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.defaultReplicaCount = config.get('partition.defaultReplicaCount') || 3;
+    this.defaultReplicaCount =
+      config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) || POLICY_DEFAULT.REPLICA_COUNT;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('table-policy') : console;
+      loggingService.forSubsystem(POLICY_SUBSYSTEM.TABLE_POLICY) : console;
 
     // Local policy cache for performance
     this.policyCache = new Map();
-    this.cacheTTLMs = config.get('policy.cacheTTLMs') || 30000;
+    this.cacheTTLMs = config.get(CONFIG_KEY.POLICY_CACHE_TTL_MS) || POLICY_DEFAULT.CACHE_TTL_MS;
 
     this.initialized = false;
   }
@@ -82,7 +64,7 @@ class TablePolicyService extends EventEmitter {
       return;
     }
 
-    this.logger.info('TablePolicyService initialized');
+    this.logger.info(POLICY_LOG_MSG.TABLE_POLICY_INITIALIZED);
     this.initialized = true;
   }
 
@@ -112,27 +94,28 @@ class TablePolicyService extends EventEmitter {
     }
 
     // Get from system table cache
-    if (!this.systemTableCache) {
-      return this.getDefaultPolicy();
-    }
-
-    const table = this.systemTableCache.get('tables', tableId);
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      POLICY_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    const table = systemTableCache.get(TABLES.TABLES, tableId);
     if (!table) {
-      this.logger.debug('Table not found, using default policy', {tableId});
+      this.logger.debug(POLICY_LOG_MSG.TABLE_NOT_FOUND_DEFAULT, {tableId});
       return this.getDefaultPolicy();
     }
 
     // Parse stored policy
-    let storedPolicy = {};
+    let storedPolicy = POLICY_VALUE.EMPTY_POLICY;
     if (table.table_policies) {
       try {
-        storedPolicy = typeof table.table_policies === 'string' ?
+        storedPolicy = typeof table.table_policies === TYPEOF.STRING ?
           JSON.parse(table.table_policies) : table.table_policies;
       } catch (error) {
-        this.logger.warn('Failed to parse table policy, using defaults', {
+        this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
           tableId,
           error: error.message,
         });
+        throw error;
       }
     }
 
@@ -154,13 +137,13 @@ class TablePolicyService extends EventEmitter {
    * @return {Object} Table policy for the partition's table.
    */
   getPolicyForPartition(partitionId) {
-    if (!this.systemTableCache) {
-      return this.getDefaultPolicy();
-    }
-
-    const partition = this.systemTableCache.get('partitions', partitionId);
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      POLICY_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    const partition = systemTableCache.get(TABLES.PARTITIONS, partitionId);
     if (!partition) {
-      this.logger.debug('Partition not found, using default policy', {partitionId});
+      this.logger.debug(POLICY_LOG_MSG.PARTITION_NOT_FOUND_DEFAULT, {partitionId});
       return this.getDefaultPolicy();
     }
 
@@ -198,11 +181,11 @@ class TablePolicyService extends EventEmitter {
     const errors = [];
 
     // Validate field types
-    for (const [field, expectedType] of Object.entries(PolicyFieldTypes)) {
+    for (const [field, expectedType] of Object.entries(POLICY_FIELD_TYPES)) {
       if (policy[field] !== undefined) {
         const actualType = typeof policy[field];
         if (actualType !== expectedType) {
-          errors.push(`${field} must be ${expectedType}, got ${actualType}`);
+          errors.push(POLICY_ERROR_MSG.FIELD_TYPE_MISMATCH(field, expectedType, actualType));
         }
       }
     }
@@ -210,28 +193,28 @@ class TablePolicyService extends EventEmitter {
     // Validate replica counts
     if (policy.replicaCount !== undefined) {
       if (policy.replicaCount < 1) {
-        errors.push('replicaCount must be at least 1');
+        errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_MIN);
       }
       if (policy.replicaCount % 2 === 0) {
-        errors.push('replicaCount must be odd for Raft quorum');
+        errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_ODD);
       }
     }
 
     if (policy.minReplicaCount !== undefined) {
       if (policy.minReplicaCount < 1) {
-        errors.push('minReplicaCount must be at least 1');
+        errors.push(POLICY_ERROR_MSG.MIN_REPLICA_COUNT_MIN);
       }
       if (policy.minReplicaCount % 2 === 0) {
-        errors.push('minReplicaCount must be odd for Raft quorum');
+        errors.push(POLICY_ERROR_MSG.MIN_REPLICA_COUNT_ODD);
       }
     }
 
     if (policy.maxReplicaCount !== undefined) {
       if (policy.maxReplicaCount < 1) {
-        errors.push('maxReplicaCount must be at least 1');
+        errors.push(POLICY_ERROR_MSG.MAX_REPLICA_COUNT_MIN);
       }
       if (policy.maxReplicaCount % 2 === 0) {
-        errors.push('maxReplicaCount must be odd for Raft quorum');
+        errors.push(POLICY_ERROR_MSG.MAX_REPLICA_COUNT_ODD);
       }
     }
 
@@ -241,24 +224,24 @@ class TablePolicyService extends EventEmitter {
     const replica = policy.replicaCount || DEFAULT_TABLE_POLICY.replicaCount;
 
     if (min > max) {
-      errors.push('minReplicaCount cannot be greater than maxReplicaCount');
+      errors.push(POLICY_ERROR_MSG.MIN_GT_MAX);
     }
     if (replica < min || replica > max) {
-      errors.push('replicaCount must be between minReplicaCount and maxReplicaCount');
+      errors.push(POLICY_ERROR_MSG.REPLICA_BETWEEN);
     }
 
     // Validate thresholds
     if (policy.splitStorageThreshold !== undefined && policy.splitStorageThreshold < 0) {
-      errors.push('splitStorageThreshold must be non-negative');
+      errors.push(POLICY_ERROR_MSG.SPLIT_STORAGE_NONNEGATIVE);
     }
     if (policy.splitTrafficThreshold !== undefined && policy.splitTrafficThreshold < 0) {
-      errors.push('splitTrafficThreshold must be non-negative');
+      errors.push(POLICY_ERROR_MSG.SPLIT_TRAFFIC_NONNEGATIVE);
     }
     if (policy.mergeStorageThreshold !== undefined && policy.mergeStorageThreshold < 0) {
-      errors.push('mergeStorageThreshold must be non-negative');
+      errors.push(POLICY_ERROR_MSG.MERGE_STORAGE_NONNEGATIVE);
     }
     if (policy.mergeTrafficThreshold !== undefined && policy.mergeTrafficThreshold < 0) {
-      errors.push('mergeTrafficThreshold must be non-negative');
+      errors.push(POLICY_ERROR_MSG.MERGE_TRAFFIC_NONNEGATIVE);
     }
 
     return {
@@ -277,17 +260,17 @@ class TablePolicyService extends EventEmitter {
    */
   async updateTablePolicy(tableId, policyUpdates) {
     if (!tableId) {
-      throw new Error('tableId is required');
+      throw new Error(POLICY_ERROR_MSG.TABLE_ID_REQUIRED);
     }
 
     if (!this.cdcIntegrationService) {
-      throw new Error('CDCIntegrationService is required for policy updates');
+      throw new Error(POLICY_ERROR_MSG.CDC_REQUIRED_FOR_UPDATE);
     }
 
     // Validate the policy updates
     const validation = this.validatePolicy(policyUpdates);
     if (!validation.valid) {
-      throw new Error(`Invalid policy: ${validation.errors.join(', ')}`);
+      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(', ')}`);
     }
 
     // Get current policy
@@ -302,17 +285,19 @@ class TablePolicyService extends EventEmitter {
     // Validate the merged policy
     const mergedValidation = this.validatePolicy(newPolicy);
     if (!mergedValidation.valid) {
-      throw new Error(`Invalid merged policy: ${mergedValidation.errors.join(', ')}`);
+      throw new Error(
+        `${POLICY_ERROR_MSG.INVALID_MERGED_POLICY_PREFIX}${mergedValidation.errors.join(', ')}`
+      );
     }
 
-    this.logger.info('Updating table policy', {
+    this.logger.info(POLICY_LOG_MSG.UPDATE_TABLE_POLICY, {
       tableId,
       updates: policyUpdates,
     });
 
     try {
       // Update via CDC integration service
-      await this.cdcIntegrationService.updateSystemTableRow('tables', tableId, {
+      await this.cdcIntegrationService.updateSystemTableRow(TABLES.TABLES, tableId, {
         table_policies: JSON.stringify(newPolicy),
         updated_at: Date.now(),
       });
@@ -320,7 +305,7 @@ class TablePolicyService extends EventEmitter {
       // Invalidate cache
       this.policyCache.delete(tableId);
 
-      this.emit('policyUpdated', {
+      this.emit(POLICY_EVENT.POLICY_UPDATED, {
         tableId,
         oldPolicy: currentPolicy,
         newPolicy,
@@ -332,7 +317,7 @@ class TablePolicyService extends EventEmitter {
         policy: newPolicy,
       };
     } catch (error) {
-      this.logger.error('Failed to update table policy', {
+      this.logger.error(POLICY_LOG_MSG.UPDATE_TABLE_POLICY_FAILED, {
         tableId,
         error: error.message,
       });
@@ -348,7 +333,7 @@ class TablePolicyService extends EventEmitter {
    */
   async setTablePolicy(tableId, policy) {
     if (!tableId) {
-      throw new Error('tableId is required');
+      throw new Error(POLICY_ERROR_MSG.TABLE_ID_REQUIRED);
     }
 
     // Merge with defaults to ensure all fields are present
@@ -357,7 +342,7 @@ class TablePolicyService extends EventEmitter {
     // Validate
     const validation = this.validatePolicy(completePolicy);
     if (!validation.valid) {
-      throw new Error(`Invalid policy: ${validation.errors.join(', ')}`);
+      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(', ')}`);
     }
 
     return this.updateTablePolicy(tableId, completePolicy);
@@ -453,7 +438,7 @@ class TablePolicyService extends EventEmitter {
    */
   clearCache() {
     this.policyCache.clear();
-    this.logger.debug('Policy cache cleared');
+    this.logger.debug(POLICY_LOG_MSG.POLICY_CACHE_CLEARED);
   }
 
   /**
@@ -462,7 +447,7 @@ class TablePolicyService extends EventEmitter {
    */
   invalidateCache(tableId) {
     this.policyCache.delete(tableId);
-    this.logger.debug('Policy cache invalidated', {tableId});
+    this.logger.debug(POLICY_LOG_MSG.POLICY_CACHE_INVALIDATED, {tableId});
   }
 
   /**
@@ -471,12 +456,8 @@ class TablePolicyService extends EventEmitter {
   shutdown() {
     this.clearCache();
     this.removeAllListeners();
-    this.logger.info('TablePolicyService shutdown');
+    this.logger.info(POLICY_LOG_MSG.TABLE_POLICY_SHUTDOWN);
   }
 }
 
-export {
-  TablePolicyService,
-  DEFAULT_TABLE_POLICY,
-  PolicyFieldTypes,
-};
+export {TablePolicyService};

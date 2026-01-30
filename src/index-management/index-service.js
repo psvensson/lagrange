@@ -7,14 +7,21 @@
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {STRING, TABLES} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  INDEX_CONFIG_KEY,
+  INDEX_DEFAULTS,
+  INDEX_ERROR_MSG,
+  INDEX_LOG_MSG,
+  INDEX_SUBSYSTEM,
+  INDEX_TYPE,
+} from './index-constants.js';
 
 /**
  * Index types supported by the system.
  */
-const IndexType = {
-  BTREE: 'btree',
-  HASH: 'hash',
-};
+const IndexType = INDEX_TYPE;
 
 /**
  * IndexService manages database indices for query optimization.
@@ -27,21 +34,20 @@ class IndexService {
    * @param {Object} options - Configuration options.
    * @param {Object} options.cdcIntegrationService - CDC integration service for writes.
    * @param {Object} options.systemTableCache - Read-only system table cache.
-   * @param {Object} options.partitionRegistry - Registry of partition services.
    */
   constructor(options = {}) {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
-    this.partitionRegistry = options.partitionRegistry || new Map();
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.defaultIndexType = config.get('index.defaultType') || IndexType.BTREE;
+    this.defaultIndexType = config.get(INDEX_CONFIG_KEY.DEFAULT_TYPE) ||
+      INDEX_DEFAULTS.DEFAULT_TYPE;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('index-service') : console;
+      loggingService.forSubsystem(INDEX_SUBSYSTEM.INDEX_SERVICE) : console;
 
     // Track indices by table for quick lookup
     this.indexCache = new Map(); // tableId -> Map(indexName -> indexMetadata)
@@ -58,13 +64,13 @@ class IndexService {
       return;
     }
 
-    this.logger.info('Initializing index service');
+    this.logger.info(INDEX_LOG_MSG.SERVICE_INITIALIZING);
 
     // Load existing indices from system table cache
     await this.loadIndicesFromCache();
 
     this.initialized = true;
-    this.logger.info('Index service initialized', {
+    this.logger.info(INDEX_LOG_MSG.SERVICE_INITIALIZED, {
       indexCount: this.getTotalIndexCount(),
     });
   }
@@ -75,12 +81,13 @@ class IndexService {
    * @private
    */
   async loadIndicesFromCache() {
-    if (!this.systemTableCache) {
-      return;
-    }
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      INDEX_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
 
     try {
-      const indices = this.systemTableCache.getAll('indices') || [];
+      const indices = systemTableCache.getAll(TABLES.INDICES) || [];
 
       for (const index of indices) {
         const tableId = index.table_id;
@@ -92,21 +99,22 @@ class IndexService {
           indexId: index.index_id,
           tableId: index.table_id,
           indexName: index.index_name,
-          columnNames: JSON.parse(index.column_names || '[]'),
-          indexType: index.index_type || IndexType.BTREE,
+          columnNames: JSON.parse(index.column_names || STRING.EMPTY_JSON_ARRAY),
+          indexType: index.index_type || INDEX_TYPE.BTREE,
           createdAt: index.created_at,
         };
 
         this.indexCache.get(tableId).set(index.index_name, indexMetadata);
       }
 
-      this.logger.debug('Loaded indices from cache', {
+      this.logger.debug(INDEX_LOG_MSG.INDICES_LOADED, {
         indexCount: this.getTotalIndexCount(),
       });
     } catch (error) {
-      this.logger.error('Failed to load indices from cache', {
+      this.logger.error(INDEX_LOG_MSG.INDICES_LOAD_FAILED, {
         error: error.message,
       });
+      throw error;
     }
   }
 
@@ -131,16 +139,16 @@ class IndexService {
     } = options;
 
     if (!tableId) {
-      throw new Error('tableId is required');
+      throw new Error(INDEX_ERROR_MSG.TABLE_ID_REQUIRED);
     }
     if (!indexName) {
-      throw new Error('indexName is required');
+      throw new Error(INDEX_ERROR_MSG.INDEX_NAME_REQUIRED);
     }
     if (!columnNames || columnNames.length === 0) {
-      throw new Error('columnNames is required and must not be empty');
+      throw new Error(INDEX_ERROR_MSG.COLUMN_NAMES_REQUIRED);
     }
 
-    this.logger.info('Creating index', {
+    this.logger.info(INDEX_LOG_MSG.CREATING_INDEX, {
       tableId,
       tableName,
       indexName,
@@ -150,7 +158,11 @@ class IndexService {
 
     // Check if index already exists
     if (this.indexExists(tableId, indexName)) {
-      throw new Error(`Index '${indexName}' already exists on table '${tableId}'`);
+      throw new Error(
+        `${INDEX_ERROR_MSG.INDEX_ALREADY_EXISTS_PREFIX}${indexName}` +
+        `${INDEX_ERROR_MSG.INDEX_ALREADY_EXISTS_MIDDLE}${tableId}` +
+        INDEX_ERROR_MSG.INDEX_ALREADY_EXISTS_SUFFIX,
+      );
     }
 
     // Generate index ID
@@ -169,7 +181,7 @@ class IndexService {
 
     // Store in indices system table via CDC
     if (this.cdcIntegrationService) {
-      await this.cdcIntegrationService.insertSystemTableRow('indices', {
+      await this.cdcIntegrationService.insertSystemTableRow(TABLES.INDICES, {
         index_id: indexId,
         table_id: tableId,
         index_name: indexName,
@@ -188,7 +200,7 @@ class IndexService {
     }
     this.indexCache.get(tableId).set(indexName, indexMetadata);
 
-    this.logger.info('Index created successfully', {
+    this.logger.info(INDEX_LOG_MSG.INDEX_CREATED, {
       indexId,
       tableId,
       indexName,
@@ -212,14 +224,14 @@ class IndexService {
     const partitions = this.getPartitionsForTable(tableId);
 
     if (partitions.length === 0) {
-      this.logger.warn('No partitions found for table', {tableId, tableName});
+      this.logger.warn(INDEX_LOG_MSG.NO_PARTITIONS_FOR_TABLE, {tableId, tableName});
       return;
     }
 
     const columns = columnNames.join(', ');
     const sql = `CREATE INDEX IF NOT EXISTS ${indexName} ON ${tableName}(${columns})`;
 
-    this.logger.debug('Creating SQLite index on partitions', {
+    this.logger.debug(INDEX_LOG_MSG.CREATING_SQLITE_INDEX, {
       tableId,
       indexName,
       partitionCount: partitions.length,
@@ -232,21 +244,26 @@ class IndexService {
           await partition.executeQuery(sql, []);
           return {partitionId: partition.partitionId, success: true};
         } catch (error) {
-          this.logger.error('Failed to create index on partition', {
+          this.logger.error(INDEX_LOG_MSG.PARTITION_INDEX_FAILED, {
             partitionId: partition.partitionId,
             indexName,
             error: error.message,
           });
-          return {partitionId: partition.partitionId, success: false, error: error.message};
+          throw error;
         }
       }),
     );
+
+    const rejected = results.find((result) => result.status === 'rejected');
+    if (rejected) {
+      throw rejected.reason;
+    }
 
     const successCount = results.filter((r) =>
       r.status === 'fulfilled' && r.value.success,
     ).length;
 
-    this.logger.debug('SQLite index creation completed', {
+    this.logger.debug(INDEX_LOG_MSG.SQLITE_INDEX_COMPLETED, {
       indexName,
       successCount,
       totalPartitions: partitions.length,
@@ -263,29 +280,19 @@ class IndexService {
     const partitions = [];
 
     // Get partition IDs from system table cache
-    if (this.systemTableCache) {
-      const partitionRecords = this.systemTableCache.filter(
-        'partitions',
-        (p) => p.table_id === tableId,
-      ) || [];
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      INDEX_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    const partitionRecords = systemTableCache.filter(
+      TABLES.PARTITIONS,
+      (p) => p.table_id === tableId,
+    ) || [];
 
-      for (const record of partitionRecords) {
-        const partition = this.getPartition(record.partition_id);
-        if (partition) {
-          partitions.push(partition);
-        }
-      }
-    }
-
-    // Fallback: search partition registry directly
-    if (partitions.length === 0 && this.partitionRegistry) {
-      const registry = this.partitionRegistry instanceof Map ?
-        this.partitionRegistry : new Map(Object.entries(this.partitionRegistry));
-
-      for (const partition of registry.values()) {
-        if (partition.tableId === tableId) {
-          partitions.push(partition);
-        }
+    for (const record of partitionRecords) {
+      const partition = this.getPartition(record.partition_id);
+      if (partition) {
+        partitions.push(partition);
       }
     }
 
@@ -293,16 +300,17 @@ class IndexService {
   }
 
   /**
-   * Get a partition by ID.
+   * Get a partition by ID from system cache.
    * @param {string} partitionId - Partition ID.
-   * @return {Object|null} Partition service or null.
+   * @return {Object|null} Partition info or null.
    * @private
    */
   getPartition(partitionId) {
-    if (this.partitionRegistry instanceof Map) {
-      return this.partitionRegistry.get(partitionId);
-    }
-    return this.partitionRegistry[partitionId] || null;
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      INDEX_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    return systemTableCache.get(TABLES.PARTITIONS, partitionId);
   }
 
   /**
@@ -312,17 +320,21 @@ class IndexService {
    * @return {Promise<boolean>} True if dropped successfully.
    */
   async dropIndex(tableId, indexName) {
-    this.logger.info('Dropping index', {tableId, indexName});
+    this.logger.info(INDEX_LOG_MSG.DROPPING_INDEX, {tableId, indexName});
 
     // Get index metadata
     const indexMetadata = this.getIndex(tableId, indexName);
     if (!indexMetadata) {
-      throw new Error(`Index '${indexName}' not found on table '${tableId}'`);
+      throw new Error(
+        `${INDEX_ERROR_MSG.INDEX_NOT_FOUND_PREFIX}${indexName}` +
+        `${INDEX_ERROR_MSG.INDEX_NOT_FOUND_MIDDLE}${tableId}` +
+        INDEX_ERROR_MSG.INDEX_NOT_FOUND_SUFFIX,
+      );
     }
 
     // Drop from indices system table via CDC
     if (this.cdcIntegrationService) {
-      await this.cdcIntegrationService.deleteSystemTableRow('indices', {
+      await this.cdcIntegrationService.deleteSystemTableRow(TABLES.INDICES, {
         index_id: indexMetadata.indexId,
       });
     }
@@ -335,7 +347,7 @@ class IndexService {
       this.indexCache.get(tableId).delete(indexName);
     }
 
-    this.logger.info('Index dropped successfully', {
+    this.logger.info(INDEX_LOG_MSG.INDEX_DROPPED, {
       indexId: indexMetadata.indexId,
       tableId,
       indexName,
@@ -355,19 +367,25 @@ class IndexService {
     const partitions = this.getPartitionsForTable(tableId);
     const sql = `DROP INDEX IF EXISTS ${indexName}`;
 
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       partitions.map(async (partition) => {
         try {
           await partition.executeQuery(sql, []);
         } catch (error) {
-          this.logger.error('Failed to drop index on partition', {
+          this.logger.error(INDEX_LOG_MSG.INDEX_DROP_FAILED, {
             partitionId: partition.partitionId,
             indexName,
             error: error.message,
           });
+          throw error;
         }
       }),
     );
+
+    const rejected = results.find((result) => result.status === 'rejected');
+    if (rejected) {
+      throw rejected.reason;
+    }
   }
 
   /**
@@ -439,13 +457,13 @@ class IndexService {
    */
   async handleCDCEvent(cdcEvent) {
     // Handle indices table CDC events
-    if (cdcEvent.tableName === 'indices') {
+    if (cdcEvent.tableName === TABLES.INDICES) {
       await this.handleIndicesCDCEvent(cdcEvent);
       return;
     }
 
     // Handle partitions table CDC events for automatic index maintenance
-    if (cdcEvent.tableName === 'partitions') {
+    if (cdcEvent.tableName === TABLES.PARTITIONS) {
       await this.handlePartitionsCDCEvent(cdcEvent);
       return;
     }
@@ -471,13 +489,13 @@ class IndexService {
         indexId: data.index_id,
         tableId: data.table_id,
         indexName: data.index_name,
-        columnNames: JSON.parse(data.column_names || '[]'),
+        columnNames: JSON.parse(data.column_names || STRING.EMPTY_JSON_ARRAY),
         indexType: data.index_type || IndexType.BTREE,
         createdAt: data.created_at,
       };
 
       this.indexCache.get(tableId).set(data.index_name, indexMetadata);
-      this.logger.debug('Index added to cache via CDC', {
+      this.logger.debug(INDEX_LOG_MSG.INDEX_ADDED_FROM_CDC, {
         indexId: data.index_id,
         indexName: data.index_name,
       });
@@ -488,7 +506,7 @@ class IndexService {
       const tableId = data.table_id;
       if (this.indexCache.has(tableId)) {
         this.indexCache.get(tableId).delete(data.index_name);
-        this.logger.debug('Index removed from cache via CDC', {
+        this.logger.debug(INDEX_LOG_MSG.INDEX_REMOVED_FROM_CDC, {
           indexId: data.index_id,
           indexName: data.index_name,
         });
@@ -529,7 +547,7 @@ class IndexService {
       return;
     }
 
-    this.logger.info('Creating indices on new partition', {
+    this.logger.info(INDEX_LOG_MSG.CREATING_INDICES_FOR_PARTITION, {
       tableId,
       partitionId,
       indexCount: indices.length,
@@ -553,7 +571,7 @@ class IndexService {
     const partition = this.getPartition(partitionId);
 
     if (!partition) {
-      this.logger.warn('Partition not found for index creation', {
+      this.logger.warn(INDEX_LOG_MSG.PARTITION_NOT_FOUND, {
         partitionId,
         indexName: indexMetadata.indexName,
       });
@@ -567,18 +585,18 @@ class IndexService {
 
     try {
       await partition.executeQuery(sql, []);
-      this.logger.debug('Index created on partition', {
+      this.logger.debug(INDEX_LOG_MSG.INDEX_CREATED_ON_PARTITION, {
         partitionId,
         indexName: indexMetadata.indexName,
       });
       return true;
     } catch (error) {
-      this.logger.error('Failed to create index on partition', {
+      this.logger.error(INDEX_LOG_MSG.PARTITION_INDEX_FAILED, {
         partitionId,
         indexName: indexMetadata.indexName,
         error: error.message,
       });
-      return false;
+      throw error;
     }
   }
 
@@ -597,7 +615,7 @@ class IndexService {
       return 0;
     }
 
-    this.logger.debug('Ensuring indices on partition', {
+    this.logger.debug(INDEX_LOG_MSG.ENSURING_INDICES, {
       partitionId,
       tableId,
       indexCount: indices.length,
@@ -625,10 +643,14 @@ class IndexService {
     const indexMetadata = this.getIndex(tableId, indexName);
 
     if (!indexMetadata) {
-      throw new Error(`Index '${indexName}' not found on table '${tableId}'`);
+      throw new Error(
+        `${INDEX_ERROR_MSG.INDEX_NOT_FOUND_PREFIX}${indexName}` +
+        `${INDEX_ERROR_MSG.INDEX_NOT_FOUND_MIDDLE}${tableId}` +
+        INDEX_ERROR_MSG.INDEX_NOT_FOUND_SUFFIX,
+      );
     }
 
-    this.logger.info('Rebuilding index', {tableId, indexName});
+    this.logger.info(INDEX_LOG_MSG.REBUILDING_INDEX, {tableId, indexName});
 
     const partitions = this.getPartitionsForTable(tableId);
     let successCount = 0;
@@ -647,12 +669,12 @@ class IndexService {
         );
         successCount++;
       } catch (error) {
-        this.logger.error('Failed to rebuild index on partition', {
+        this.logger.error(INDEX_LOG_MSG.INDEX_REBUILD_FAILED, {
           partitionId: partition.partitionId,
           indexName,
           error: error.message,
         });
-        failCount++;
+        throw error;
       }
     }
 
@@ -663,14 +685,6 @@ class IndexService {
       successCount,
       failCount,
     };
-  }
-
-  /**
-   * Set the partition registry.
-   * @param {Map|Object} registry - Partition registry.
-   */
-  setPartitionRegistry(registry) {
-    this.partitionRegistry = registry;
   }
 
   /**
@@ -694,7 +708,7 @@ class IndexService {
    * @return {Promise<void>}
    */
   async shutdown() {
-    this.logger.info('Shutting down index service');
+    this.logger.info(INDEX_LOG_MSG.SHUTTING_DOWN);
     this.indexCache.clear();
     this.initialized = false;
   }

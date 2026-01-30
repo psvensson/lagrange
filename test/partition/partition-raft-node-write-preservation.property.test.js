@@ -5,7 +5,7 @@
  * Validates: Requirements 10.2, 10.3, 10.4
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 
 /**

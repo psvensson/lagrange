@@ -5,6 +5,9 @@
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5
  */
 
+import {NUM} from '../constants/index.js';
+import {RAFT_ERROR_NAME} from './constants.js';
+
 /**
  * In-memory log adapter for liferaft.
  * Implements the liferaft Log interface with async methods.
@@ -18,8 +21,8 @@ class InMemoryLogAdapter {
   constructor(node, _options = {}) {
     this.node = node;
     this.entries = new Map(); // index -> entry
-    this.committedIndex = 0;
-    this.lastIndex = 0;
+    this.committedIndex = NUM.ZERO;
+    this.lastIndex = NUM.ZERO;
   }
 
   /**
@@ -32,7 +35,7 @@ class InMemoryLogAdapter {
   async saveCommand(command, term, index) {
     if (!index) {
       const {index: lastIndex} = await this.getLastInfo();
-      index = lastIndex + 1;
+      index = lastIndex + NUM.ONE;
     }
 
     const entry = {
@@ -72,15 +75,15 @@ class InMemoryLogAdapter {
    * @return {Promise<Object>} Last entry or default
    */
   async getLastEntry() {
-    if (this.lastIndex === 0) {
+    if (this.lastIndex === NUM.ZERO) {
       return {
-        index: 0,
-        term: this.node ? this.node.term : 0,
+        index: NUM.ZERO,
+        term: this.node ? this.node.term : NUM.ZERO,
       };
     }
     return this.entries.get(this.lastIndex) || {
-      index: 0,
-      term: this.node ? this.node.term : 0,
+      index: NUM.ZERO,
+      term: this.node ? this.node.term : NUM.ZERO,
     };
   }
 
@@ -101,7 +104,7 @@ class InMemoryLogAdapter {
   async get(index) {
     const entry = this.entries.get(index);
     if (!entry) {
-      const error = new Error('NotFoundError');
+      const error = new Error(RAFT_ERROR_NAME.NOT_FOUND);
       error.notFound = true;
       throw error;
     }
@@ -120,7 +123,7 @@ class InMemoryLogAdapter {
       }
     }
     // Update lastIndex
-    this.lastIndex = 0;
+    this.lastIndex = NUM.ZERO;
     for (const [key] of this.entries) {
       if (key > this.lastIndex) {
         this.lastIndex = key;
@@ -158,7 +161,7 @@ class InMemoryLogAdapter {
     }
 
     const existingIndex = entry.responses.findIndex((r) => r.address === address);
-    if (existingIndex === -1) {
+    if (existingIndex === NUM.NEGATIVE_ONE) {
       entry.responses.push({address, ack: true});
     }
 
@@ -203,11 +206,11 @@ class InMemoryLogAdapter {
    */
   async getEntryBefore(entry) {
     const defaultInfo = {
-      index: 0,
-      term: this.node ? this.node.term : 0,
+      index: NUM.ZERO,
+      term: this.node ? this.node.term : NUM.ZERO,
     };
 
-    if (entry.index <= 1) {
+    if (entry.index <= NUM.ONE) {
       return defaultInfo;
     }
 
@@ -241,8 +244,8 @@ class InMemoryLogAdapter {
    */
   end() {
     this.entries.clear();
-    this.lastIndex = 0;
-    this.committedIndex = 0;
+    this.lastIndex = NUM.ZERO;
+    this.committedIndex = NUM.ZERO;
     return true;
   }
 
@@ -251,8 +254,8 @@ class InMemoryLogAdapter {
    */
   reset() {
     this.entries.clear();
-    this.lastIndex = 0;
-    this.committedIndex = 0;
+    this.lastIndex = NUM.ZERO;
+    this.committedIndex = NUM.ZERO;
   }
 }
 

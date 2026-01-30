@@ -2,21 +2,23 @@ TAP version 14
 # Subtest: Property 3: RaftNode.write() preserves all packet fields
     ok 1 - RaftNode.write() preserves all packet fields
     1..1
-ok 1 - Property 3: RaftNode.write() preserves all packet fields # time=6.252ms
+ok 1 - Property 3: RaftNode.write() preserves all packet fields # time=5.416ms
 
 # Subtest: Property 3: RaftNode.write() adds only destination address
     ok 1 - RaftNode.write() adds only destination address without type conversion
     1..1
-ok 2 - Property 3: RaftNode.write() adds only destination address # time=0.957ms
+ok 2 - Property 3: RaftNode.write() adds only destination address # time=0.925ms
 
 # Subtest: Property 3: RaftNode.write() invokes callback with result
     ok 1 - RaftNode.write() invokes callback with delivery result
     1..1
-ok 3 - Property 3: RaftNode.write() invokes callback with result # time=1.325ms
+ok 3 - Property 3: RaftNode.write() invokes callback with result # time=1.221ms
 
 # Subtest: Property 3: RaftNode.write() invokes callback with error on failure
     ok 1 - RaftNode.write() invokes callback with error on failure
     1..1
-ok 4 - Property 3: RaftNode.write() invokes callback with error on failure # time=0.743ms
+ok 4 - Property 3: RaftNode.write() invokes callback with error on failure # time=0.794ms
 
 1..4
+# { total: 4, pass: 4 }
+# time=21.819ms

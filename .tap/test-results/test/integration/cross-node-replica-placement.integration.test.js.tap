@@ -3,29 +3,54 @@ TAP version 14
     # Subtest: full flow: seed node, second node joins, replica placed via message group
         ok 1 - message group should elect leader
         ok 2 - partition should become leader
-{"level":50,"time":"2026-01-23T06:22:44.199Z","nodeId":"test-node","pid":418216,"subsystem":"partition","partitionId":"test-partition-1","tableName":"test_table","replicaId":"217aeca0-4bf0-43d3-9d53-7716fc601fd2","targetNodeId":"second-node-002","error":"Delivery failed: No connection to node second-node-002","errorStack":"Error: Delivery failed: No connection to node second-node-002\n    at PartitionService.deliverWithAck (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2434:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async PartitionService.handleRebalancerAddReplica (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2092:24)","elapsedMs":1,"nodeId":"test-node","msg":"CREATE_REPLICA failed via messageRouter"}
-        ok 3 - rebalancing should trigger events
-        ok 4 - should have rebalancer events
-        ok 5 - should have add replica events
-        ok 6 - add event should target second node
-{"level":50,"time":"2026-01-23T06:22:44.200Z","nodeId":"test-node","pid":418216,"subsystem":"partition","partitionId":"test-partition-1","tableName":"test_table","replicaId":"0e38adcf-5e3e-4af3-a28f-b6895bea8a3f","targetNodeId":"second-node-002","error":"Delivery failed: No connection to node second-node-002","errorStack":"Error: Delivery failed: No connection to node second-node-002\n    at PartitionService.deliverWithAck (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2434:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async PartitionService.handleRebalancerAddReplica (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/partition/partition-service.js:2092:24)","elapsedMs":0,"nodeId":"test-node","msg":"CREATE_REPLICA failed via messageRouter"}
-{"level":50,"time":"2026-01-23T06:22:44.201Z","nodeId":"test-node","pid":418216,"subsystem":"partition","partitionId":"test-partition-1","replicaId":"test-partition-1-r1","targetNodeId":"seed-node-001","error":"Router shutdown","nodeId":"test-node","msg":"REMOVE_REPLICA failed via messageRouter"}
-{"level":50,"time":"2026-01-23T06:22:44.201Z","nodeId":"test-node","pid":418216,"subsystem":"partition","partitionId":"test-partition-1","replicaId":"test-partition-1-r2","targetNodeId":"seed-node-001","error":"Router shutdown","nodeId":"test-node","msg":"REMOVE_REPLICA failed via messageRouter"}
-{"level":50,"time":"2026-01-23T06:22:44.202Z","nodeId":"test-node","pid":418216,"subsystem":"message-router","nodeId":"test-node","connectionId":"639aab79-d2e8-4d64-a0e9-d9bdf7dc65ce","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-23T06:22:44.202Z","nodeId":"test-node","pid":418216,"subsystem":"message-router","nodeId":"test-node","connectionId":"4ab60ee0-a52f-4b72-8f2a-be305e896e44","msg":"Self-connection lost - fatal error"}
-        1..6
-    ok 1 - full flow: seed node, second node joins, replica placed via message group # time=29.269ms
+        not ok 3 - Cannot read properties of null (reading 'rebalance')
+          ---
+          stack: >
+            Test.<anonymous>
+            (test/integration/cross-node-replica-placement.integration.test.js:424:74)
+          at:
+            fileName: test/integration/cross-node-replica-placement.integration.test.js
+            lineNumber: 424
+            columnNumber: 74
+            typeName: Test
+            methodName: <anonymous>
+            functionName: Test.<anonymous>
+          type: TypeError
+          tapCaught: returnedPromiseRejection
+          source: >2
+                    // Directly call rebalance() to bypass stabilization period for testing
+                    // In production, triggerRebalanceCheck() would be used which respects stabilization
+                    const rebalanceResult = await resources.seedPartition.rebalancer.rebalance('node_join');
+            -------------------------------------------------------------------------^
+          
+                    // ========================================
+          ...
+        
+        1..3
+    not ok 1 - full flow: seed node, second node joins, replica placed via message group # time=49.087ms
+      ---
+      at:
+        fileName: test/integration/cross-node-replica-placement.integration.test.js
+        lineNumber: 183
+        columnNumber: 5
+        typeName: Test
+      source: >2
+          });
+      
+          t.test('full flow: seed node, second node joins, replica placed via message group',
+        ----^
+            async (t) => {
+              // Track all resources for cleanup
+      ...
     
-{"level":50,"time":"2026-01-23T06:22:44.203Z","nodeId":"test-node","pid":418216,"subsystem":"message-router","nodeId":"test-node","connectionId":"4d63a3ab-418b-46ac-9c93-e2538c4d7305","msg":"Self-connection lost - fatal error"}
     # Subtest: message group routes CREATE_REPLICA via real WebSocket
         ok 1 - should have message ID
         ok 2 - should be acknowledged
         ok 3 - should receive message
         ok 4 - should receive CREATE_REPLICA message
         ok 5 - should have correct request ID
-{"level":50,"time":"2026-01-23T06:22:44.237Z","nodeId":"test-node","pid":418216,"subsystem":"message-router","nodeId":"test-node","connectionId":"fbbc5f63-4c1c-495e-8da4-9c44f92e05f5","msg":"Self-connection lost - fatal error"}
         1..5
-    ok 2 - message group routes CREATE_REPLICA via real WebSocket # time=3.487ms
+    ok 2 - message group routes CREATE_REPLICA via real WebSocket # time=8.381ms
     
     # Subtest: rebalancer only spreads when multiple nodes available
         ok 1 - rebalance should succeed
@@ -34,16 +59,36 @@ TAP version 14
         ok 4 - rebalance should succeed
         ok 5 - should have moves with two nodes
         1..5
-    ok 3 - rebalancer only spreads when multiple nodes available # time=1.473ms
+    ok 3 - rebalancer only spreads when multiple nodes available # time=4.639ms
     
     # Subtest: replica lifecycle manager handles CREATE_REPLICA idempotently
         ok 1 - first call should return initiated
-        ok 2 - second call should return already_exists
-        ok 3 - should only create replica once
-        1..3
-    ok 4 - replica lifecycle manager handles CREATE_REPLICA idempotently # time=52.042ms
+        ok 2 - replica should be created asynchronously
+        ok 3 - second call should return already_exists
+        ok 4 - should only create replica once
+        1..4
+    ok 4 - replica lifecycle manager handles CREATE_REPLICA idempotently # time=26.76ms
     
     1..4
-ok 1 - Cross-node replica placement integration tests # time=208.537ms
+not ok 1 - Cross-node replica placement integration tests # time=250.978ms
+  ---
+  at:
+    fileName: test/integration/cross-node-replica-placement.integration.test.js
+    lineNumber: 174
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('Cross-node replica placement integration tests', {timeout: 15000}, async
+    (t) => {
+  
+    ^
+      t.beforeEach(() => {
+        initializeTestEnvironment();
+  ...
 
 1..1
+# { total: 17, pass: 16, fail: 1 }
+# time=258.444ms

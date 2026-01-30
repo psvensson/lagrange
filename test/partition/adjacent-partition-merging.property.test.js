@@ -7,7 +7,7 @@
  * merging them should produce a single partition with combined key range.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   PartitionSplitMergeManager,

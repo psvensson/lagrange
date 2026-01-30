@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';
 
 test('EventBus - basic subscription and emission', async (t) => {

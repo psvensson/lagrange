@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {BaseViewModel} from '../../../src/cli/core/base-view-model.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';
 

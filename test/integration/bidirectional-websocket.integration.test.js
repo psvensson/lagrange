@@ -9,7 +9,7 @@
  * 2. Seed node sends CREATE_REPLICA to joining node via the incoming connection
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
@@ -25,6 +25,7 @@ function initializeTestEnvironment() {
   config.initialize({
     node: {id: 'test-node'},
     logging: {level: 'error'},
+    transport: {wsHost: '127.0.0.1'},
   });
 
   const logging = LoggingService.getInstance();

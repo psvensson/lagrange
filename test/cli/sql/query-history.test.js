@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {
   QueryHistory,
   DEFAULT_MAX_ENTRIES,

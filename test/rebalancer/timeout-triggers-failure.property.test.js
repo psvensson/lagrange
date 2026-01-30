@@ -11,7 +11,7 @@
  * Failure
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
@@ -19,30 +19,115 @@ import {
   ReplicaStatus,
   isTerminalStep,
 } from '../../src/rebalancer/replica-status.js';
+import {
+  createMockCache,
+  createMockPolicyService,
+  createMockMessageRouter,
+} from './test-helpers.js';
 
 /**
- * Create a mock RPC client for testing.
- * @return {Object} Mock RPC client.
+ * Create a RebalanceCoordinator for timeout testing.
+ * Returns both the coordinator and a function to backdate operations.
+ * @param {Object} options - Options for the coordinator.
+ * @return {Object} Coordinator and helper functions.
  */
-function createMockRpcClient() {
-  return {
-    call: async (_target, _request, _options) => {
-      return {status: 'initiated', error: null};
+function createTimeoutTestCoordinator(options = {}) {
+  const trackedOperations = new Map();
+
+  // Mock CDC service (not used for persistence in new architecture)
+  const cdcService = {
+    insertSystemTableRow: async () => ({success: true}),
+    updateSystemTableRow: async () => ({success: true}),
+  };
+
+  // SQL engine that tracks operations via INSERT/UPDATE queries
+  const sqlEngine = {
+    executeQuery: async (sql, params) => {
+      // Handle INSERT operations
+      if (sql.includes('INSERT INTO replica_operations')) {
+        const [
+          operationId, type, partitionId, replicaId, sourceNodeId, targetNodeId,
+          status, workflowStep, createdAt, updatedAt, completedAt, errorMessage,
+          stepsHistory,
+        ] = params;
+
+        trackedOperations.set(operationId, {
+          operation_id: operationId,
+          type,
+          partition_id: partitionId,
+          replica_id: replicaId,
+          source_node_id: sourceNodeId,
+          target_node_id: targetNodeId,
+          status,
+          workflow_step: workflowStep,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          completed_at: completedAt,
+          error_message: errorMessage,
+          steps_history: stepsHistory,
+        });
+        return {success: true};
+      }
+
+      // Handle UPDATE operations
+      if (sql.includes('UPDATE replica_operations')) {
+        const [
+          status, workflowStep, updatedAt, completedAt, errorMessage,
+          stepsHistory, replicaId, operationId,
+        ] = params;
+
+        const existing = trackedOperations.get(operationId);
+        if (existing) {
+          trackedOperations.set(operationId, {
+            ...existing,
+            status,
+            workflow_step: workflowStep,
+            updated_at: updatedAt,
+            completed_at: completedAt,
+            error_message: errorMessage,
+            steps_history: stepsHistory,
+            replica_id: replicaId,
+          });
+        }
+        return {success: true};
+      }
+
+      // Handle SELECT queries
+      if (sql.includes('replica_operations')) {
+        const allOps = Array.from(trackedOperations.values());
+
+        // Handle deduplication query (partition_id AND target_node_id)
+        if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
+          const [partitionId, targetNodeId] = params;
+          const matching = allOps.filter((op) =>
+            op.partition_id === partitionId &&
+            op.target_node_id === targetNodeId &&
+            !['active', 'removed', 'failed'].includes(op.status));
+          return {success: true, rows: matching};
+        }
+
+        // Filter for non-terminal operations if query includes status filter
+        if (sql.includes('NOT IN')) {
+          const incompleteOps = allOps.filter((op) =>
+            !['active', 'removed', 'failed'].includes(op.status));
+          return {success: true, rows: incompleteOps};
+        }
+
+        return {success: true, rows: allOps};
+      }
+
+      return {success: true, rows: []};
     },
   };
-}
 
-/**
- * Create a RebalanceCoordinator for testing with short timeouts.
- * @param {Object} options - Options for the coordinator.
- * @return {RebalanceCoordinator} Coordinator instance.
- */
-function createTestCoordinator(options = {}) {
   const coordinator = new RebalanceCoordinator({
     nodeId: options.nodeId || 'test-node-1',
-    rpcClient: options.rpcClient || createMockRpcClient(),
-    systemTableCache: options.systemTableCache || null,
-    cdcIntegrationService: options.cdcIntegrationService || null,
+    systemTableCache: createMockCache(),
+    cdcIntegrationService: cdcService,
+    tablePolicyService: createMockPolicyService(),
+    messageRouter: createMockMessageRouter(),
+    sqlQueryEngine: sqlEngine,
+    enableTimeouts: false,
   });
 
   // Set very short timeouts for testing
@@ -51,15 +136,34 @@ function createTestCoordinator(options = {}) {
   coordinator.config.syncingTimeoutMs = options.syncingTimeoutMs || 10;
   coordinator.config.removingTimeoutMs = options.removingTimeoutMs || 10;
 
-  // Don't start automatic timeout checking
-  coordinator.timeoutCheckIntervalMs = 1000000;
+  /**
+   * Backdate an operation's updated_at to simulate time passing.
+   * @param {string} operationId - Operation ID to backdate.
+   * @param {number} msAgo - Milliseconds in the past.
+   */
+  const backdateOperation = (operationId, msAgo) => {
+    const op = trackedOperations.get(operationId);
+    if (op) {
+      op.updated_at = Date.now() - msAgo;
+    }
+  };
 
-  return coordinator;
+  /**
+   * Get the current state of an operation from the tracked store.
+   * @param {string} operationId - Operation ID.
+   * @return {Object|null} Operation or null.
+   */
+  const getTrackedOperation = (operationId) => {
+    return trackedOperations.get(operationId) || null;
+  };
+
+  return {coordinator, backdateOperation, getTrackedOperation, trackedOperations};
 }
 
 test('Property 7: Timeout Triggers Failure', async (t) => {
   await t.test('operation in PENDING times out and fails', async (t) => {
-    const coordinator = createTestCoordinator({pendingTimeoutMs: 1});
+    const {coordinator, backdateOperation, getTrackedOperation} =
+      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -72,16 +176,19 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
       t.equal(operation.workflowStep, 'PENDING', 'Initial step is PENDING');
       t.equal(operation.status, ReplicaStatus.PENDING, 'Initial status is pending');
 
-      // Simulate time passing by backdating updatedAt
-      operation.updatedAt = Date.now() - 100;
+      // Backdate the operation in the tracked store
+      backdateOperation(operation.operationId, 100);
 
       // Trigger timeout check
       await coordinator.checkTimeouts();
 
+      // Get the updated operation from the tracked store
+      const updatedOp = getTrackedOperation(operation.operationId);
+
       // Verify operation failed
-      t.equal(operation.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
-      t.equal(operation.workflowStep, 'FAILED', 'Workflow step is FAILED');
-      t.ok(operation.errorMessage.includes('Timeout'),
+      t.equal(updatedOp.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
+      t.equal(updatedOp.workflow_step, 'FAILED', 'Workflow step is FAILED');
+      t.ok(updatedOp.error_message.includes('Timeout'),
         'Error message mentions timeout');
     } finally {
       await coordinator.shutdown();
@@ -89,7 +196,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
   });
 
   await t.test('operation in SENDING times out and fails', async (t) => {
-    const coordinator = createTestCoordinator({pendingTimeoutMs: 1});
+    const {coordinator, backdateOperation, getTrackedOperation} =
+      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -102,15 +210,18 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
       await coordinator.updateStep(operation, 'SENDING');
       t.equal(operation.workflowStep, 'SENDING', 'Step is SENDING');
 
-      // Simulate time passing
-      operation.updatedAt = Date.now() - 100;
+      // Backdate the operation
+      backdateOperation(operation.operationId, 100);
 
       // Trigger timeout check
       await coordinator.checkTimeouts();
 
+      // Get the updated operation
+      const updatedOp = getTrackedOperation(operation.operationId);
+
       // Verify operation failed
-      t.equal(operation.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
-      t.ok(operation.errorMessage.includes('SENDING'),
+      t.equal(updatedOp.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
+      t.ok(updatedOp.error_message.includes('SENDING'),
         'Error message mentions SENDING step');
     } finally {
       await coordinator.shutdown();
@@ -118,7 +229,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
   });
 
   await t.test('operation in CREATING times out and fails', async (t) => {
-    const coordinator = createTestCoordinator({creatingTimeoutMs: 1});
+    const {coordinator, backdateOperation, getTrackedOperation} =
+      createTimeoutTestCoordinator({creatingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -131,15 +243,18 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
       await coordinator.updateStep(operation, 'CREATING');
       t.equal(operation.workflowStep, 'CREATING', 'Step is CREATING');
 
-      // Simulate time passing
-      operation.updatedAt = Date.now() - 100;
+      // Backdate the operation
+      backdateOperation(operation.operationId, 100);
 
       // Trigger timeout check
       await coordinator.checkTimeouts();
 
+      // Get the updated operation
+      const updatedOp = getTrackedOperation(operation.operationId);
+
       // Verify operation failed
-      t.equal(operation.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
-      t.ok(operation.errorMessage.includes('CREATING'),
+      t.equal(updatedOp.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
+      t.ok(updatedOp.error_message.includes('CREATING'),
         'Error message mentions CREATING step');
     } finally {
       await coordinator.shutdown();
@@ -147,7 +262,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
   });
 
   await t.test('operation in SYNCING times out and fails', async (t) => {
-    const coordinator = createTestCoordinator({syncingTimeoutMs: 1});
+    const {coordinator, backdateOperation, getTrackedOperation} =
+      createTimeoutTestCoordinator({syncingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -160,15 +276,18 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
       await coordinator.updateStep(operation, 'SYNCING');
       t.equal(operation.workflowStep, 'SYNCING', 'Step is SYNCING');
 
-      // Simulate time passing
-      operation.updatedAt = Date.now() - 100;
+      // Backdate the operation
+      backdateOperation(operation.operationId, 100);
 
       // Trigger timeout check
       await coordinator.checkTimeouts();
 
+      // Get the updated operation
+      const updatedOp = getTrackedOperation(operation.operationId);
+
       // Verify operation failed
-      t.equal(operation.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
-      t.ok(operation.errorMessage.includes('SYNCING'),
+      t.equal(updatedOp.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
+      t.ok(updatedOp.error_message.includes('SYNCING'),
         'Error message mentions SYNCING step');
     } finally {
       await coordinator.shutdown();
@@ -176,7 +295,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
   });
 
   await t.test('operation in STOPPING times out and fails', async (t) => {
-    const coordinator = createTestCoordinator({removingTimeoutMs: 1});
+    const {coordinator, backdateOperation, getTrackedOperation} =
+      createTimeoutTestCoordinator({removingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -190,15 +310,18 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
       await coordinator.updateStep(operation, 'STOPPING');
       t.equal(operation.workflowStep, 'STOPPING', 'Step is STOPPING');
 
-      // Simulate time passing
-      operation.updatedAt = Date.now() - 100;
+      // Backdate the operation
+      backdateOperation(operation.operationId, 100);
 
       // Trigger timeout check
       await coordinator.checkTimeouts();
 
+      // Get the updated operation
+      const updatedOp = getTrackedOperation(operation.operationId);
+
       // Verify operation failed
-      t.equal(operation.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
-      t.ok(operation.errorMessage.includes('STOPPING'),
+      t.equal(updatedOp.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
+      t.ok(updatedOp.error_message.includes('STOPPING'),
         'Error message mentions STOPPING step');
     } finally {
       await coordinator.shutdown();
@@ -206,7 +329,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
   });
 
   await t.test('completed operation does not timeout', async (t) => {
-    const coordinator = createTestCoordinator({pendingTimeoutMs: 1});
+    const {coordinator, backdateOperation, getTrackedOperation} =
+      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -219,16 +343,19 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
       await coordinator.completeOperation(operation);
       t.equal(operation.workflowStep, 'ACTIVE', 'Step is ACTIVE');
 
-      // Simulate time passing
-      operation.updatedAt = Date.now() - 100;
+      // Backdate the operation
+      backdateOperation(operation.operationId, 100);
 
       // Trigger timeout check
       await coordinator.checkTimeouts();
 
+      // Get the operation
+      const updatedOp = getTrackedOperation(operation.operationId);
+
       // Verify operation is still completed (not failed)
-      t.equal(operation.status, ReplicaStatus.ACTIVE,
+      t.equal(updatedOp.status, ReplicaStatus.ACTIVE,
         'Status is still active after timeout check');
-      t.equal(operation.workflowStep, 'ACTIVE',
+      t.equal(updatedOp.workflow_step, 'ACTIVE',
         'Workflow step is still ACTIVE');
     } finally {
       await coordinator.shutdown();
@@ -236,7 +363,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
   });
 
   await t.test('failed operation does not timeout again', async (t) => {
-    const coordinator = createTestCoordinator({pendingTimeoutMs: 1});
+    const {coordinator, backdateOperation, getTrackedOperation} =
+      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -247,16 +375,20 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
 
       // Fail the operation
       await coordinator.failOperation(operation, 'Initial failure');
-      const initialErrorMessage = operation.errorMessage;
+      const initialOp = getTrackedOperation(operation.operationId);
+      const initialErrorMessage = initialOp.error_message;
 
-      // Simulate time passing
-      operation.updatedAt = Date.now() - 100;
+      // Backdate the operation
+      backdateOperation(operation.operationId, 100);
 
       // Trigger timeout check
       await coordinator.checkTimeouts();
 
+      // Get the operation
+      const updatedOp = getTrackedOperation(operation.operationId);
+
       // Verify error message hasn't changed
-      t.equal(operation.errorMessage, initialErrorMessage,
+      t.equal(updatedOp.error_message, initialErrorMessage,
         'Error message unchanged after timeout check');
     } finally {
       await coordinator.shutdown();
@@ -264,7 +396,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
   });
 
   await t.test('timeout increments statistics', async (t) => {
-    const coordinator = createTestCoordinator({pendingTimeoutMs: 1});
+    const {coordinator, backdateOperation} =
+      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -273,16 +406,16 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
         nodeId: 'test-node',
       });
 
-      const initialStats = coordinator.getStats();
+      const initialStats = await coordinator.getStats();
       t.equal(initialStats.operationsTimedOut, 0, 'Initial timeout count is 0');
 
-      // Simulate time passing
-      operation.updatedAt = Date.now() - 100;
+      // Backdate the operation
+      backdateOperation(operation.operationId, 100);
 
       // Trigger timeout check
       await coordinator.checkTimeouts();
 
-      const afterStats = coordinator.getStats();
+      const afterStats = await coordinator.getStats();
       t.equal(afterStats.operationsTimedOut, 1, 'Timeout count is 1 after timeout');
     } finally {
       await coordinator.shutdown();
@@ -290,7 +423,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
   });
 
   await t.test('multiple operations can timeout in same check', async (t) => {
-    const coordinator = createTestCoordinator({pendingTimeoutMs: 1});
+    const {coordinator, backdateOperation, getTrackedOperation, trackedOperations} =
+      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const op1 = await coordinator.createOperation({
@@ -305,18 +439,25 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
         nodeId: 'test-node-2',
       });
 
-      // Simulate time passing for both
-      op1.updatedAt = Date.now() - 100;
-      op2.updatedAt = Date.now() - 100;
+      // Verify both operations were created
+      t.equal(trackedOperations.size, 2, 'Two operations tracked');
+
+      // Backdate both operations
+      backdateOperation(op1.operationId, 100);
+      backdateOperation(op2.operationId, 100);
 
       // Trigger timeout check
       await coordinator.checkTimeouts();
 
-      // Verify both operations failed
-      t.equal(op1.status, ReplicaStatus.FAILED, 'Op1 status is failed');
-      t.equal(op2.status, ReplicaStatus.FAILED, 'Op2 status is failed');
+      // Get the updated operations
+      const updatedOp1 = getTrackedOperation(op1.operationId);
+      const updatedOp2 = getTrackedOperation(op2.operationId);
 
-      const stats = coordinator.getStats();
+      // Verify both operations failed
+      t.equal(updatedOp1.status, ReplicaStatus.FAILED, 'Op1 status is failed');
+      t.equal(updatedOp2.status, ReplicaStatus.FAILED, 'Op2 status is failed');
+
+      const stats = await coordinator.getStats();
       t.equal(stats.operationsTimedOut, 2, 'Two operations timed out');
     } finally {
       await coordinator.shutdown();
@@ -331,9 +472,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator({
-            pendingTimeoutMs: 10000, // Long timeout
-          });
+          const {coordinator, getTrackedOperation} =
+            createTimeoutTestCoordinator({pendingTimeoutMs: 10000});
 
           try {
             const operation = await coordinator.createOperation({
@@ -345,9 +485,12 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
             // Trigger timeout check
             await coordinator.checkTimeouts();
 
+            // Get the operation
+            const updatedOp = getTrackedOperation(operation.operationId);
+
             // Operation should still be pending
-            return operation.status === ReplicaStatus.PENDING &&
-              !isTerminalStep(operation.type, operation.workflowStep);
+            return updatedOp.status === ReplicaStatus.PENDING &&
+              !isTerminalStep(operation.type, updatedOp.workflow_step);
           } finally {
             await coordinator.shutdown();
           }
@@ -360,7 +503,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
   });
 
   await t.test('operationFailed event is emitted on timeout', async (t) => {
-    const coordinator = createTestCoordinator({pendingTimeoutMs: 1});
+    const {coordinator, backdateOperation} =
+      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
     let failedEvent = null;
 
     coordinator.on('operationFailed', (event) => {
@@ -374,8 +518,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
         nodeId: 'test-node',
       });
 
-      // Simulate time passing
-      operation.updatedAt = Date.now() - 100;
+      // Backdate the operation
+      backdateOperation(operation.operationId, 100);
 
       // Trigger timeout check
       await coordinator.checkTimeouts();

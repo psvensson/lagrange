@@ -10,15 +10,39 @@
  * 4. Clean up local resources for orphaned replicas
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
+import fs from 'fs';
+import path from 'path';
 import {
   ReplicaLifecycleManager,
   ReplicaStatus,
 } from '../../src/node/replica-lifecycle-manager.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
+import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+const TEST_DATA_DIR = '/tmp/test-lifecycle-recovery';
+
+/**
+ * Ensure test directories exist for a partition.
+ * @param {string} partitionId - Partition ID.
+ */
+function ensurePartitionDir(partitionId) {
+  const partitionDir = path.join(TEST_DATA_DIR, 'partitions', partitionId);
+  fs.mkdirSync(partitionDir, {recursive: true});
+}
+
+/**
+ * Clean up test directories.
+ */
+function cleanupTestDirs() {
+  try {
+    fs.rmSync(TEST_DATA_DIR, {recursive: true, force: true});
+  } catch (_e) {
+    // Ignore cleanup errors
+  }
+}
 
 /**
  * Create a mock CDC integration service.
@@ -41,9 +65,34 @@ function createMockCDCService() {
       operations.push({type: 'delete', tableName, whereClause});
       return {success: true};
     },
+    async upsertSystemTableRow(tableName, data) {
+      operations.push({type: 'upsert', tableName, data});
+      return {success: true};
+    },
     reset() {
       operations.length = 0;
     },
+  };
+}
+
+/**
+ * Create a mock partition service factory.
+ * @return {Object} Factory and tracking.
+ */
+function createMockPartitionServiceFactory() {
+  const createdServices = [];
+  return {
+    factory: async (options) => {
+      createdServices.push(options);
+      return {
+        partitionId: options.partitionId,
+        replicaId: options.replicaId,
+        initialized: true,
+        async shutdown() {},
+        async syncFromLeader() {},
+      };
+    },
+    createdServices,
   };
 }
 
@@ -86,11 +135,15 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
 
     const logging = LoggingService.getInstance();
     logging.initialize({level: 'error'});
+
+    // Clean up any leftover test directories
+    cleanupTestDirs();
   });
 
   t.afterEach(async () => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
+    cleanupTestDirs();
   });
 
   /**
@@ -116,12 +169,17 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
           ];
 
           const mockCache = createMockCache(nodeId, services);
+          const {factory} = createMockPartitionServiceFactory();
+
+          // Create partition directory for cleanup
+          ensurePartitionDir(partitionId);
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             systemTableCache: mockCache,
             cdcIntegrationService: mockCDC,
-            dataDir: '/tmp/test-lifecycle',
+            createPartitionService: factory,
+            dataDir: TEST_DATA_DIR,
           });
 
           manager.initialize();
@@ -168,12 +226,17 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
           ];
 
           const mockCache = createMockCache(nodeId, services);
+          const {factory} = createMockPartitionServiceFactory();
+
+          // Create partition directory for cleanup
+          ensurePartitionDir(partitionId);
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             systemTableCache: mockCache,
             cdcIntegrationService: mockCDC,
-            dataDir: '/tmp/test-lifecycle',
+            createPartitionService: factory,
+            dataDir: TEST_DATA_DIR,
           });
 
           manager.initialize();
@@ -220,12 +283,17 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
           ];
 
           const mockCache = createMockCache(nodeId, services);
+          const {factory} = createMockPartitionServiceFactory();
+
+          // Create partition directory for cleanup
+          ensurePartitionDir(partitionId);
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             systemTableCache: mockCache,
             cdcIntegrationService: mockCDC,
-            dataDir: '/tmp/test-lifecycle',
+            createPartitionService: factory,
+            dataDir: TEST_DATA_DIR,
           });
 
           manager.initialize();
@@ -270,44 +338,52 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
 
           // Add starting replicas
           for (let i = 0; i < startingCount; i++) {
+            const partitionId = `partition-starting-${i}`;
             services.push({
               service_id: `starting-${i}`,
               node_id: nodeId,
               service_type: 'partition',
-              partition_id: `partition-starting-${i}`,
+              partition_id: partitionId,
               status: ReplicaStatus.STARTING,
             });
+            ensurePartitionDir(partitionId);
           }
 
           // Add syncing replicas
           for (let i = 0; i < syncingCount; i++) {
+            const partitionId = `partition-syncing-${i}`;
             services.push({
               service_id: `syncing-${i}`,
               node_id: nodeId,
               service_type: 'partition',
-              partition_id: `partition-syncing-${i}`,
+              partition_id: partitionId,
               status: ReplicaStatus.SYNCING,
             });
+            ensurePartitionDir(partitionId);
           }
 
           // Add stopping replicas
           for (let i = 0; i < stoppingCount; i++) {
+            const partitionId = `partition-stopping-${i}`;
             services.push({
               service_id: `stopping-${i}`,
               node_id: nodeId,
               service_type: 'partition',
-              partition_id: `partition-stopping-${i}`,
+              partition_id: partitionId,
               status: ReplicaStatus.STOPPING,
             });
+            ensurePartitionDir(partitionId);
           }
 
           const mockCache = createMockCache(nodeId, services);
+          const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             systemTableCache: mockCache,
             cdcIntegrationService: mockCDC,
-            dataDir: '/tmp/test-lifecycle',
+            createPartitionService: factory,
+            dataDir: TEST_DATA_DIR,
           });
 
           manager.initialize();
@@ -362,12 +438,14 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
           ];
 
           const mockCache = createMockCache(nodeId, services);
+          const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             systemTableCache: mockCache,
             cdcIntegrationService: mockCDC,
-            dataDir: '/tmp/test-lifecycle',
+            createPartitionService: factory,
+            dataDir: TEST_DATA_DIR,
           });
 
           manager.initialize();
@@ -411,12 +489,14 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
           ];
 
           const mockCache = createMockCache(nodeId, services);
+          const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             systemTableCache: mockCache,
             cdcIntegrationService: mockCDC,
-            dataDir: '/tmp/test-lifecycle',
+            createPartitionService: factory,
+            dataDir: TEST_DATA_DIR,
           });
 
           manager.initialize();
@@ -448,22 +528,26 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
 
           const services = [];
           for (let i = 0; i < orphanCount; i++) {
+            const partitionId = `partition-${i}`;
             services.push({
               service_id: `orphan-${i}`,
               node_id: nodeId,
               service_type: 'partition',
-              partition_id: `partition-${i}`,
+              partition_id: partitionId,
               status: ReplicaStatus.STARTING,
             });
+            ensurePartitionDir(partitionId);
           }
 
           const mockCache = createMockCache(nodeId, services);
+          const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
             systemTableCache: mockCache,
             cdcIntegrationService: mockCDC,
-            dataDir: '/tmp/test-lifecycle',
+            createPartitionService: factory,
+            dataDir: TEST_DATA_DIR,
           });
 
           manager.initialize();

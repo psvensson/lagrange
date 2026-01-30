@@ -7,20 +7,20 @@ TAP version 14
         ok 4 - should have no handlers
         ok 5 - should have no connections
         1..5
-    ok 1 - should create router with default options # time=9.253ms
+    ok 1 - should create router with default options # time=12.873ms
     
     # Subtest: should create router with custom options
         ok 1 - should use custom node ID
         ok 2 - should use custom address
         ok 3 - should use custom port
         1..3
-    ok 2 - should create router with custom options # time=0.772ms
+    ok 2 - should create router with custom options # time=0.742ms
     
     # Subtest: should initialize without starting server
         ok 1 - should be initialized
         ok 2 - should not have server
         1..2
-    ok 3 - should initialize without starting server # time=0.505ms
+    ok 3 - should initialize without starting server # time=0.693ms
     
     # Subtest: should register and unregister local handlers
         ok 1 - should have one handler
@@ -29,55 +29,55 @@ TAP version 14
         ok 4 - should have one handler after unregister
         ok 5 - should not be registered
         1..5
-    ok 4 - should register and unregister local handlers # time=1.422ms
+    ok 4 - should register and unregister local handlers # time=1.319ms
     
     # Subtest: should throw when registering non-function handler
         ok 1 - should throw for non-function handler
         1..1
-    ok 5 - should throw when registering non-function handler # time=1.123ms
+    ok 5 - should throw when registering non-function handler # time=0.945ms
     
     # Subtest: should throw when registering with invalid address format
         ok 1 - should throw for invalid address format
         ok 2 - should throw for invalid entity type
         ok 3 - should throw for missing entity id
         1..3
-    ok 6 - should throw when registering with invalid address format # time=1.129ms
+    ok 6 - should throw when registering with invalid address format # time=0.861ms
     
-    # Subtest: should allow skipValidation option for legacy addresses
-        ok 1 - should register legacy address
+    # Subtest: should reject non-unified addresses
+        ok 1 - should reject non-unified address formats
         1..1
-    ok 7 - should allow skipValidation option for legacy addresses # time=0.866ms
+    ok 7 - should reject non-unified addresses # time=0.469ms
     
     # Subtest: should return error when delivering without connection
         ok 1 - should have message ID
-        ok 2 - should not be acknowledged without connection
-        ok 3 - should have error message
-        ok 4 - should not receive message without connection
+        ok 2 - should not be acknowledged
+        ok 3 - should include error message
+        ok 4 - should not invoke handler
         1..4
-    ok 8 - should return error when delivering without connection # time=1.442ms
+    ok 8 - should return error when delivering without connection # time=0.701ms
     
     # Subtest: should return error for async handler without connection
-        ok 1 - should not be acknowledged without connection
-        ok 2 - should have error message
+        ok 1 - should not be acknowledged
+        ok 2 - should include error message
         1..2
-    ok 9 - should return error for async handler without connection # time=0.784ms
+    ok 9 - should return error for async handler without connection # time=0.807ms
     
     # Subtest: should return error for handler error without connection
         ok 1 - should not be acknowledged
         ok 2 - should have error message
         1..2
-    ok 10 - should return error for handler error without connection # time=0.858ms
+    ok 10 - should return error for handler error without connection # time=0.628ms
     
     # Subtest: should return error for unknown service without connection
         ok 1 - should not be acknowledged
-        ok 2 - should have error message
+        ok 2 - should include error message
         1..2
-    ok 11 - should return error for unknown service without connection # time=0.878ms
+    ok 11 - should return error for unknown service without connection # time=0.503ms
     
     # Subtest: should set service node resolver
         ok 1 - should set resolver
         1..1
-    ok 12 - should set service node resolver # time=0.746ms
+    ok 12 - should set service node resolver # time=0.55ms
     
     # Subtest: should get registered addresses
         ok 1 - should have three addresses
@@ -85,7 +85,7 @@ TAP version 14
         ok 3 - should include service-b
         ok 4 - should include service-c
         1..4
-    ok 13 - should get registered addresses # time=0.835ms
+    ok 13 - should get registered addresses # time=0.682ms
     
     # Subtest: should get stats
         ok 1 - should have node ID
@@ -96,12 +96,12 @@ TAP version 14
         ok 6 - should have zero pending
         ok 7 - should have zero connections
         1..7
-    ok 14 - should get stats # time=0.928ms
+    ok 14 - should get stats # time=1.226ms
     
     # Subtest: should increment message count on deliver attempt
         ok 1 - should count three messages
         1..1
-    ok 15 - should increment message count on deliver attempt # time=0.42ms
+    ok 15 - should increment message count on deliver attempt # time=0.431ms
     
     # Subtest: should export ConnectionState enum
         ok 1 - should be equal
@@ -110,7 +110,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 16 - should export ConnectionState enum # time=0.952ms
+    ok 16 - should export ConnectionState enum # time=0.744ms
     
     # Subtest: should export RouterMessageType enum
         ok 1 - should be equal
@@ -119,20 +119,30 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 17 - should export RouterMessageType enum # time=0.735ms
+    ok 17 - should export RouterMessageType enum # time=0.555ms
+    
+    # Subtest: should emit nodeConnected on identification
+        ok 1 - should emit nodeConnected
+        ok 2 - should include nodeId
+        ok 3 - should include nodeAddress
+        ok 4 - should include connectionId
+        ok 5 - should re-key connection by nodeId
+        ok 6 - should remove old connection key
+        1..6
+    ok 18 - should emit nodeConnected on identification # time=0.966ms
     
     # Subtest: should emit initialized event
         ok 1 - should emit one event
         ok 2 - should have node ID
         ok 3 - should have router ID
         1..3
-    ok 18 - should emit initialized event # time=0.566ms
+    ok 19 - should emit initialized event # time=0.6ms
     
     # Subtest: should emit shutdown event
         ok 1 - should emit one event
         ok 2 - should have router ID
         1..2
-    ok 19 - should emit shutdown event # time=0.446ms
+    ok 20 - should emit shutdown event # time=0.474ms
     
     # Subtest: should clear all state on shutdown
         ok 1 - should not be initialized
@@ -140,72 +150,79 @@ TAP version 14
         ok 3 - should clear connections
         ok 4 - should clear pending messages
         1..4
-    ok 20 - should clear all state on shutdown # time=0.684ms
+    ok 21 - should clear all state on shutdown # time=0.847ms
     
     # Subtest: should handle multiple initializations idempotently
         ok 1 - should only emit once
         ok 2 - should be initialized
         1..2
-    ok 21 - should handle multiple initializations idempotently # time=0.609ms
+    ok 22 - should handle multiple initializations idempotently # time=0.636ms
     
     # Subtest: should return null connection state for unknown node
         ok 1 - should return null for unknown node
         1..1
-    ok 22 - should return null connection state for unknown node # time=0.53ms
+    ok 23 - should return null connection state for unknown node # time=0.433ms
     
     # Subtest: should return empty array for connected nodes when none connected
         ok 1 - should return empty array
         1..1
-    ok 23 - should return empty array for connected nodes when none connected # time=1.186ms
+    ok 24 - should return empty array for connected nodes when none connected # time=1.022ms
     
     # Subtest: should establish self-connection when starting server
         ok 1 - should have self-connection
         ok 2 - self-connection should be connected
         ok 3 - should include self in connected nodes
-{"level":50,"time":"2026-01-23T06:23:04.309Z","nodeId":"test-node","pid":421019,"subsystem":"message-router","nodeId":"test-node","connectionId":"109f5e0d-3deb-412e-b28d-4e93c71f5b6c","msg":"Self-connection lost - fatal error"}
         1..3
-    ok 24 - should establish self-connection when starting server # time=16.344ms
+    ok 25 - should establish self-connection when starting server # time=12.644ms
     
     # Subtest: should deliver messages to self via WebSocket
         ok 1 - should be acknowledged
         ok 2 - should have response data
         ok 3 - should receive one message
         ok 4 - should have correct payload
-{"level":50,"time":"2026-01-23T06:23:04.322Z","nodeId":"test-node","pid":421019,"subsystem":"message-router","nodeId":"test-node","connectionId":"e6a8e3d2-31f4-46ed-848b-0ab09afc48fe","msg":"Self-connection lost - fatal error"}
         1..4
-    ok 25 - should deliver messages to self via WebSocket # time=3.354ms
+    ok 26 - should deliver messages to self via WebSocket # time=3.661ms
     
     # Subtest: should emit selfDisconnect event when self-connection is lost
         ok 1 - should have self-connection
         ok 2 - should be marked as self-connection
         ok 3 - self-connection should be outgoing
         ok 4 - should be connected
-{"level":50,"time":"2026-01-23T06:23:04.336Z","nodeId":"test-node","pid":421019,"subsystem":"message-router","nodeId":"test-node","connectionId":"3bd4387e-daf4-42d4-98c1-9dc6b60816a2","msg":"Self-connection lost - fatal error"}
         1..4
-    ok 26 - should emit selfDisconnect event when self-connection is lost # time=1.824ms
+    ok 27 - should emit selfDisconnect event when self-connection is lost # time=1.712ms
     
     # Subtest: should mark self-connection as isSelfConnection
         ok 1 - should have self-connection
         ok 2 - should be marked as self-connection
         ok 3 - isSelfConnection should be boolean
-{"level":50,"time":"2026-01-23T06:23:04.349Z","nodeId":"test-node","pid":421019,"subsystem":"message-router","nodeId":"test-node","connectionId":"0fc57256-9270-43be-979b-b4062b4b6e67","msg":"Self-connection lost - fatal error"}
         1..3
-    ok 27 - should mark self-connection as isSelfConnection # time=2.364ms
+    ok 28 - should mark self-connection as isSelfConnection # time=1.723ms
     
     # Subtest: should not have self-connection without starting server
         ok 1 - should not have self-connection
         ok 2 - should not have server
         1..2
-    ok 28 - should not have self-connection without starting server # time=0.595ms
+    ok 29 - should not have self-connection without starting server # time=0.552ms
     
-{"level":50,"time":"2026-01-23T06:23:04.371Z","nodeId":"test-node","pid":421019,"subsystem":"message-router","error":"listen EADDRINUSE: address already in use :::9890","routerId":"0a64da13-d4ec-4add-80b4-7cb5a5548f6c","nodeId":"test-node","msg":"MessageRouter WebSocket server error"}
+{"level":50,"time":"2026-01-30T11:18:48.840Z","nodeId":"test-node","pid":1334413,"subsystem":"message-router","error":"listen EADDRINUSE: address already in use 127.0.0.1:9890","routerId":"68c1127a-b591-4439-b8ae-31566d1abb67","nodeId":"test-node","msg":"MessageRouter WebSocket server error"}
     # Subtest: should fail initialization if self-connection fails
         ok 1 - should have error message
         1..1
-    ok 29 - should fail initialization if self-connection fails # time=2.177ms
+    ok 30 - should fail initialization if self-connection fails # time=2.197ms
     
-    1..29
-ok 1 - MessageRouter unit tests # time=514.859ms
+    # Subtest: outbound queue enforces per-node concurrency
+        ok 1 - limits in-flight per node
+        1..1
+    ok 31 - outbound queue enforces per-node concurrency # time=0.476ms
+    
+    # Subtest: failOutboundQueue rejects pending deliveries
+        ok 1 - pending delivery rejected
+        1..1
+    ok 32 - failOutboundQueue rejects pending deliveries # time=1.084ms
+    
+    1..32
+ok 1 - MessageRouter unit tests # time=555.645ms
 
-{"level":50,"time":"2026-01-23T06:23:04.371Z","nodeId":"test-node","pid":421019,"subsystem":"message-router","nodeId":"test-node","connectionId":"d8b261a8-5248-455d-81e4-f98e0165585e","msg":"Self-connection lost - fatal error"}
 1..1
+# { total: 91, pass: 91 }
+# time=574.926ms

@@ -6,7 +6,7 @@
  * Requirements: 32.3, 32.4, 32.5, 32.12
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {LiveStreamPanel, EVENT_COLORS} from '../../../src/cli/sql/live-stream-panel.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';
 

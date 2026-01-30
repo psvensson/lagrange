@@ -1,0 +1,110 @@
+/**
+ * Unit tests for NodeJoiningService.registerNodeInCluster() method.
+ * Tests task 5.1: Add registerNodeInCluster() method to NodeJoiningService.
+ */
+
+import {test} from '../../src/test-helpers/tap.js';
+import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
+import {STATE, TABLES} from '../../src/constants/index.js';
+
+test('registerNodeInCluster() - should execute INSERT query with correct parameters', async (t) => {
+  // Create a mock SQL query engine
+  const executedQueries = [];
+  const mockQueryEngine = {
+    executeQuery: async (sql, params) => {
+      executedQueries.push({sql, params});
+      return {success: true};
+    },
+  };
+
+  // Create a mock CDC integration service
+  const mockCDCService = {
+    sqlQueryEngine: mockQueryEngine,
+  };
+
+  // Create NodeJoiningService instance
+  const service = new NodeJoiningService({
+    nodeId: 'test-node-123',
+    nodeAddress: 'ws://localhost:9000',
+    seedNodeAddress: 'ws://seed:8000',
+  });
+
+  // Set the mock CDC service
+  service.cdcIntegrationService = mockCDCService;
+
+  // Call registerNodeInCluster
+  await service.registerNodeInCluster();
+
+  // Verify query was executed
+  t.equal(executedQueries.length, 1, 'should execute one query');
+
+  const query = executedQueries[0];
+  t.ok(query.sql.includes('INSERT INTO nodes'), 'should be INSERT INTO nodes');
+  t.ok(query.sql.includes('node_id'), 'should include node_id column');
+  t.ok(query.sql.includes('node_address'), 'should include node_address column');
+  t.ok(query.sql.includes('cpu_cores'), 'should include cpu_cores column');
+  t.ok(query.sql.includes('memory_mb'), 'should include memory_mb column');
+  t.ok(query.sql.includes('disk_gb'), 'should include disk_gb column');
+  t.ok(query.sql.includes('status'), 'should include status column');
+  t.ok(query.sql.includes('ws_connection_state'), 'should include ws_connection_state column');
+
+  // Verify parameters
+  t.equal(query.params[0], 'test-node-123', 'should use correct node_id');
+  t.equal(query.params[1], 'ws://localhost:9000', 'should use correct node_address');
+  t.ok(query.params[2] > 0, 'should have cpu_cores > 0');
+  t.ok(query.params[3] > 0, 'should have memory_mb > 0');
+  t.ok(query.params[4] > 0, 'should have disk_gb > 0');
+  t.equal(query.params[8], STATE.ACTIVE, 'should set status to ACTIVE');
+  t.equal(query.params[9], STATE.CONNECTED, 'should set ws_connection_state to CONNECTED');
+});
+
+test('registerNodeInCluster() - should throw error if query fails', async (t) => {
+  // Create a mock SQL query engine that fails
+  const mockQueryEngine = {
+    executeQuery: async () => {
+      return {success: false, error: 'Database error'};
+    },
+  };
+
+  // Create a mock CDC integration service
+  const mockCDCService = {
+    sqlQueryEngine: mockQueryEngine,
+  };
+
+  // Create NodeJoiningService instance
+  const service = new NodeJoiningService({
+    nodeId: 'test-node-456',
+    nodeAddress: 'ws://localhost:9001',
+    seedNodeAddress: 'ws://seed:8000',
+  });
+
+  // Set the mock CDC service
+  service.cdcIntegrationService = mockCDCService;
+
+  // Call registerNodeInCluster and expect it to throw
+  try {
+    await service.registerNodeInCluster();
+    t.fail('should have thrown an error');
+  } catch (error) {
+    t.ok(error.message.includes('Failed to register node'), 'should throw error with correct message');
+  }
+});
+
+test('registerNodeInCluster() - should throw error if CDC service not available', async (t) => {
+  // Create NodeJoiningService instance without CDC service
+  const service = new NodeJoiningService({
+    nodeId: 'test-node-789',
+    nodeAddress: 'ws://localhost:9002',
+    seedNodeAddress: 'ws://seed:8000',
+  });
+
+  // Don't set CDC service (it's null)
+
+  // Call registerNodeInCluster and expect it to throw
+  try {
+    await service.registerNodeInCluster();
+    t.fail('should have thrown an error');
+  } catch (error) {
+    t.ok(error.message.length > 0, 'should throw error');
+  }
+});

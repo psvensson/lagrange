@@ -7,7 +7,7 @@
  * **Validates: Requirements 2.1, 3.2, 4.1, 5.1, 6.1, 7.1**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {NodesView} from '../../../src/cli/views/nodes-view.js';
 

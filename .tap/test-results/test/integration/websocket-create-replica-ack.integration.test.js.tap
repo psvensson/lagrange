@@ -11,34 +11,27 @@ TAP version 14
         ok 8 - replica should be created asynchronously
         ok 9 - should create one replica
         ok 10 - correct replica created
-{"level":50,"time":"2026-01-23T06:22:44.661Z","nodeId":"test-node","pid":418268,"subsystem":"message-router","nodeId":"test-node","connectionId":"5e47ad3e-b5a0-408f-bba8-5be48db8dbfe","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-23T06:22:44.662Z","nodeId":"test-node","pid":418268,"subsystem":"message-router","nodeId":"test-node","connectionId":"257dc26d-aab8-488e-9734-8ed3191ecc41","msg":"Self-connection lost - fatal error"}
         1..10
-    ok 1 - async lifecycle handler returns ACK via WebSocket # time=100.84ms
+    ok 1 - async lifecycle handler returns ACK via WebSocket # time=106.981ms
     
     # Subtest: flat ACK structure is preserved through WebSocket
         ok 1 - should be acknowledged
         ok 2 - ACK should have correct request_id
         ok 3 - ACK should have status
         ok 4 - ACK should have correct responseType
-{"level":50,"time":"2026-01-23T06:22:44.760Z","nodeId":"test-node","pid":418268,"subsystem":"message-router","nodeId":"test-node","connectionId":"ce4e3697-6f93-4d11-a6ba-6bd680c68966","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-23T06:22:44.761Z","nodeId":"test-node","pid":418268,"subsystem":"message-router","nodeId":"test-node","connectionId":"c2e1884d-4f35-42b5-88a6-6948dbd8485a","msg":"Self-connection lost - fatal error"}
         1..4
-    ok 2 - flat ACK structure is preserved through WebSocket # time=62.074ms
+    ok 2 - flat ACK structure is preserved through WebSocket # time=66.361ms
     
     # Subtest: timeout occurs when handler does not return ACK data
         ok 1 - should not be acknowledged (timeout)
         ok 2 - should have error
         ok 3 - error should mention timeout
-{"level":50,"time":"2026-01-23T06:22:45.029Z","nodeId":"test-node","pid":418268,"subsystem":"message-router","nodeId":"test-node","connectionId":"62b45fbf-5cc8-485c-8517-d474de306145","msg":"Self-connection lost - fatal error"}
-{"level":50,"time":"2026-01-23T06:22:45.029Z","nodeId":"test-node","pid":418268,"subsystem":"message-router","nodeId":"test-node","connectionId":"e2f4cc05-5103-4049-b2d3-60026c6507c3","msg":"Self-connection lost - fatal error"}
         1..3
-    ok 3 - timeout occurs when handler does not return ACK data # time=255.591ms
+    ok 3 - timeout occurs when handler does not return ACK data # time=256.932ms
     
     1..3
-ok 1 - WebSocket CREATE_REPLICA ACK delivery # time=516.008ms
+ok 1 - WebSocket CREATE_REPLICA ACK delivery # time=549.768ms
 
-{"level":50,"time":"2026-01-23T06:22:45.662Z","nodeId":"test-node","pid":418268,"subsystem":"message-router","nodeId":"test-node","error":"connect ECONNREFUSED 127.0.0.1:19877","msg":"WebSocket error"}
-{"level":50,"time":"2026-01-23T06:22:45.761Z","nodeId":"test-node","pid":418268,"subsystem":"message-router","nodeId":"test-node","error":"connect ECONNREFUSED 127.0.0.1:19879","msg":"WebSocket error"}
-{"level":50,"time":"2026-01-23T06:22:46.030Z","nodeId":"test-node","pid":418268,"subsystem":"message-router","nodeId":"test-node","error":"connect ECONNREFUSED 127.0.0.1:19881","msg":"WebSocket error"}
 1..1
+# { total: 17, pass: 17 }
+# time=851.092ms

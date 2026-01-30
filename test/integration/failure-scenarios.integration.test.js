@@ -5,13 +5,15 @@
  * Requirements: 15.1-15.5 (Fault Tolerance and Recovery)
  */
 
-import {test} from 'tap';
-import {FailureDetector, NodeStatus} from '../../src/node/failure-detector.js';
+import {test} from '../../src/test-helpers/tap.js';
+import {FailureDetector} from '../../src/node/failure-detector.js';
+import {NODE_STATUS} from '../../src/node/node-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 
 /**
  * Initialize test environment.
@@ -24,6 +26,7 @@ function initializeTestEnvironment() {
   config.initialize({
     node: {id: 'test-node'},
     logging: {level: 'error'},
+    transport: {wsHost: '127.0.0.1'},
     raft: {
       electionTimeoutMinMs: 100,
       electionTimeoutMaxMs: 200,
@@ -43,16 +46,22 @@ function initializeTestEnvironment() {
  * Create a mock CDC integration service.
  * @return {Object} Mock CDC service with tracking.
  */
-function createMockCDCService() {
+function createMockCDCService(systemTableCache = null) {
   const updates = [];
   return {
     updates,
     async updateSystemTableRow(tableName, where, data) {
       updates.push({tableName, where, data});
+      if (systemTableCache) {
+        systemTableCache.applySystemTableChange(tableName, 'UPDATE', {...where, ...data});
+      }
       return {success: true};
     },
     async insertSystemTableRow(tableName, data) {
       updates.push({tableName, data, operation: 'insert'});
+      if (systemTableCache) {
+        systemTableCache.applySystemTableChange(tableName, 'INSERT', data);
+      }
       return {success: true};
     },
     async deleteSystemTableRow(tableName, where) {
@@ -63,13 +72,85 @@ function createMockCDCService() {
 }
 
 /**
+ * Create a mock TablePolicyService for rebalancer tests.
+ * @return {Object} Mock policy service.
+ */
+function createMockTablePolicyService() {
+  return {
+    getDefaultPolicy() {
+      return {...DEFAULT_TABLE_POLICY};
+    },
+    getTablePolicy() {
+      return {...DEFAULT_TABLE_POLICY};
+    },
+    getPolicyForPartition() {
+      return {...DEFAULT_TABLE_POLICY};
+    },
+  };
+}
+
+/**
+ * Create a mock MessageRouter for rebalancer tests.
+ * @return {Object} Mock message router.
+ */
+function createMockMessageRouter() {
+  return {
+    async deliver() {
+      return {acknowledged: true, status: 'initiated'};
+    },
+    getConnectionState() {
+      return 'connected';
+    },
+    isOutboundQueueAvailable() {
+      return true;
+    },
+    async pingNode() {
+      return true;
+    },
+  };
+}
+
+function createMockRebalanceCoordinator() {
+  let counter = 0;
+  return {
+    async createOperation({type, partitionId, nodeId, replicaId}) {
+      counter += 1;
+      return {
+        operationId: `op-${counter}`,
+        type,
+        partitionId,
+        replicaId,
+        targetNodeId: nodeId,
+      };
+    },
+    getStats() {
+      return {operationsCreated: counter};
+    },
+  };
+}
+
+/**
+ * Create unified peer addresses for replica IDs.
+ * @param {string[]} replicaIds - Replica identifiers.
+ * @return {string[]} Unified addresses.
+ */
+function createPeerAddresses(replicaIds) {
+  return replicaIds.map((replicaId, index) => `node-${index + 1}/partition/${replicaId}`);
+}
+
+/**
  * Create a mock system table cache for testing.
  * @param {Object} data - Initial cache data.
  * @return {Object} Mock system table cache.
  */
 function createMockCache(data = {}) {
+  const readyLeaseExpiresAt = Date.now() + 10000;
   const cache = {
-    nodes: data.nodes || [],
+    nodes: (data.nodes || []).map((node) => ({
+      ws_connection_state: node.ws_connection_state || 'ready',
+      ready_lease_expires_at: node.ready_lease_expires_at || readyLeaseExpiresAt,
+      ...node,
+    })),
     services: data.services || [],
   };
 
@@ -111,6 +192,7 @@ function createTestCache(options = {}) {
 
   // Add nodes
   const nodeCount = options.nodeCount || 3;
+  const readyLeaseExpiresAt = Date.now() + 10000;
   for (let i = 1; i <= nodeCount; i++) {
     cache.applySystemTableChange('nodes', 'INSERT', {
       id: `node-${i}`,
@@ -119,6 +201,8 @@ function createTestCache(options = {}) {
       last_heartbeat: Date.now(),
       cpu_usage_percent: 10 * i,
       memory_usage_percent: 15 * i,
+      ws_connection_state: 'ready',
+      ready_lease_expires_at: readyLeaseExpiresAt,
     });
   }
 
@@ -202,7 +286,7 @@ test('Failure scenario integration tests', async (t) => {
 
     // Verify CDC updates were made for node status
     const nodeUpdate = cdcService.updates.find(
-      (u) => u.data && u.data.status === NodeStatus.FAILED,
+      (u) => u.data && u.data.status === NODE_STATUS.FAILED,
     );
     t.ok(nodeUpdate, 'should update node status to failed');
 
@@ -211,6 +295,10 @@ test('Failure scenario integration tests', async (t) => {
 
   t.test('Req 15.2 - rebalancer creates replacement replicas', async (t) => {
     const cache = createTestCache({nodeCount: 5});
+    const cdcService = createMockCDCService(cache);
+    const tablePolicyService = createMockTablePolicyService();
+    const messageRouter = createMockMessageRouter();
+    const rebalanceCoordinator = createMockRebalanceCoordinator();
 
     // Add partition with replicas, one on failed node
     cache.applySystemTableChange('services', 'INSERT', {
@@ -242,6 +330,10 @@ test('Failure scenario integration tests', async (t) => {
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       systemTableCache: cache,
+      cdcIntegrationService: cdcService,
+      tablePolicyService: tablePolicyService,
+      messageRouter: messageRouter,
+      rebalanceCoordinator,
       nodeId: 'node-1',
     });
 
@@ -258,7 +350,7 @@ test('Failure scenario integration tests', async (t) => {
     t.equal(result.success, true, 'rebalance should succeed');
 
     // Should generate add move to replace failed replica
-    const addMoves = result.moves.filter((m) => m.type === 'add');
+    const addMoves = result.moves.filter((m) => m.operation === 'add');
     t.ok(addMoves.length > 0 || addEvents.length > 0, 'should add replacement replica');
 
     rebalancer.cancelScheduledCheck();
@@ -266,12 +358,14 @@ test('Failure scenario integration tests', async (t) => {
 
   t.test('Req 15.3 - Raft maintains consistency during partition', async (t) => {
     // Create partition with 3 replicas
+    const replicaIds = ['replica-1', 'replica-2', 'replica-3'];
     const partition = new PartitionService({
       partitionId: 'consistency-test',
       tableId: 'test-table',
       tableName: 'test_data',
       replicaId: 'replica-1',
-      replicaIds: ['replica-1', 'replica-2', 'replica-3'],
+      replicaIds: replicaIds,
+      peerAddresses: createPeerAddresses(replicaIds),
       nodeId: 'node-1',
       dbPath: ':memory:',
       schema: {
@@ -320,7 +414,7 @@ test('Failure scenario integration tests', async (t) => {
         {node_id: 'test-node', status: 'active', last_heartbeat: now},
         {
           node_id: 'node-3',
-          status: NodeStatus.FAILED,
+          status: NODE_STATUS.FAILED,
           last_heartbeat: now, // Fresh heartbeat indicates recovery
           failed_at: now - 5000,
         },
@@ -350,7 +444,7 @@ test('Failure scenario integration tests', async (t) => {
 
     // Verify CDC update was called for recovery
     const recoveryUpdate = cdcService.updates.find(
-      (u) => u.data && u.data.status === NodeStatus.RECOVERING,
+      (u) => u.data && u.data.status === NODE_STATUS.RECOVERING,
     );
     t.ok(recoveryUpdate, 'should update node status to recovering');
 
@@ -359,12 +453,14 @@ test('Failure scenario integration tests', async (t) => {
 
   t.test('Req 15.5 - data available with majority replicas', async (t) => {
     // Create partition simulating 2 of 3 replicas available
+    const replicaIds = ['replica-1', 'replica-2', 'replica-3'];
     const partition = new PartitionService({
       partitionId: 'availability-test',
       tableId: 'test-table',
       tableName: 'available_data',
       replicaId: 'replica-1',
-      replicaIds: ['replica-1', 'replica-2', 'replica-3'],
+      replicaIds: replicaIds,
+      peerAddresses: createPeerAddresses(replicaIds),
       nodeId: 'node-1',
       dbPath: ':memory:',
       schema: {
@@ -596,12 +692,14 @@ test('Failure scenario integration tests', async (t) => {
 
   t.test('network partition - minority partition cannot write', async (t) => {
     // Create partition simulating minority (1 of 3 replicas)
+    const replicaIds = ['replica-1', 'replica-2', 'replica-3'];
     const partition = new PartitionService({
       partitionId: 'minority-test',
       tableId: 'test-table',
       tableName: 'minority_data',
       replicaId: 'replica-1',
-      replicaIds: ['replica-1', 'replica-2', 'replica-3'],
+      replicaIds: replicaIds,
+      peerAddresses: createPeerAddresses(replicaIds),
       nodeId: 'node-1',
       dbPath: ':memory:',
       schema: {
@@ -637,12 +735,14 @@ test('Failure scenario integration tests', async (t) => {
 
   t.test('data availability - reads succeed on any replica', async (t) => {
     // Create partition as follower
+    const replicaIds = ['replica-1', 'replica-2', 'replica-3'];
     const partition = new PartitionService({
       partitionId: 'read-availability-test',
       tableId: 'test-table',
       tableName: 'read_data',
       replicaId: 'replica-1',
-      replicaIds: ['replica-1', 'replica-2', 'replica-3'],
+      replicaIds: replicaIds,
+      peerAddresses: createPeerAddresses(replicaIds),
       nodeId: 'node-1',
       dbPath: ':memory:',
       schema: {

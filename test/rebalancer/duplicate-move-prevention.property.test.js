@@ -9,51 +9,36 @@
  * 3. Skip move generation when transitioning replicas exist
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
-  UnifiedRebalancer,
   EntityType,
   MoveType,
-  ReplicaStatus,
 } from '../../src/rebalancer/unified-rebalancer.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createTestRebalancer} from './test-helpers.js';
 
 /**
- * Create a mock system table cache.
- * @param {Object} data - Initial cache data.
- * @return {Object} Mock cache.
+ * Build a replica operation row.
+ * @param {Object} data - Operation data.
+ * @return {Object} Operation row.
  */
-function createMockCache(data = {}) {
-  const cache = {
-    nodes: data.nodes || [],
-    services: data.services || [],
-    partitions: data.partitions || [],
-    tables: data.tables || [],
-  };
-
+function createOperation(data) {
   return {
-    getAll(tableName) {
-      return cache[tableName] || [];
-    },
-    filter(tableName, predicate) {
-      const items = cache[tableName] || [];
-      return items.filter(predicate);
-    },
-    get(tableName, id) {
-      const items = cache[tableName] || [];
-      return items.find((item) =>
-        item.id === id ||
-        item.node_id === id ||
-        item.partition_id === id ||
-        item.service_id === id);
-    },
+    operation_id: data.operationId,
+    type: data.type || 'ADD',
+    partition_id: data.partitionId,
+    replica_id: data.replicaId,
+    target_node_id: data.targetNodeId,
+    status: data.status || ReplicaStatus.PENDING,
+    workflow_step: data.workflowStep || 'PENDING',
   };
 }
 
 test('Property 81: Duplicate Move Prevention', async (t) => {
-  t.beforeEach(async () => {
+  t.beforeEach(() => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
 
@@ -64,51 +49,42 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
     logging.initialize({level: 'error'});
   });
 
-  t.afterEach(async () => {
+  t.afterEach(() => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   });
 
-  /**
-   * Property: For any replica with pending ADD move, no duplicate ADD
-   * is generated for the same node.
-   */
   t.test('no duplicate ADD moves for same node', async (t) => {
     await fc.assert(
       fc.asyncProperty(
-        fc.uuid(), // entity_id
-        fc.uuid(), // node_id
+        fc.uuid(),
+        fc.uuid(),
         async (entityId, nodeId) => {
-          const mockCache = createMockCache({
-            nodes: [
-              {node_id: nodeId, status: 'active'},
-              {node_id: 'other-node', status: 'active'},
-            ],
-            services: [],
-            partitions: [{partition_id: entityId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId,
             entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
             nodeId: 'test-node',
+            cacheData: {
+              nodes: [
+                {node_id: nodeId, status: 'active'},
+                {node_id: 'other-node', status: 'active'},
+              ],
+              partitions: [{partition_id: entityId, table_id: 'table-1'}],
+              replicaOperations: [
+                createOperation({
+                  operationId: 'op-1',
+                  partitionId: entityId,
+                  replicaId: 'pending-replica',
+                  targetNodeId: nodeId,
+                  type: 'ADD',
+                }),
+              ],
+            },
           });
 
           rebalancer.initialize();
           rebalancer.setLeader(true);
 
-          // Add a pending ADD move for the node
-          rebalancer.pendingMoves.set('pending-add', {
-            type: MoveType.ADD,
-            replicaId: 'pending-replica',
-            nodeId,
-            entityId,
-            startedAt: Date.now(),
-            status: 'pending',
-          });
-
-          // Calculate moves - should not generate ADD for same node
           const currentReplicas = [];
           const targetState = {
             targetReplicaCount: 3,
@@ -119,7 +95,6 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
 
           rebalancer.shutdown();
 
-          // Should not have any ADD moves for the node with pending move
           const addMovesForNode = moves.filter((m) =>
             m.type === MoveType.ADD && m.nodeId === nodeId);
 
@@ -132,52 +107,44 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
     t.pass('no duplicate ADD moves for same node');
   });
 
-  /**
-   * Property: For any replica with pending REMOVE move, no duplicate
-   * REMOVE is generated.
-   */
   t.test('no duplicate REMOVE moves for same replica', async (t) => {
     await fc.assert(
       fc.asyncProperty(
-        fc.uuid(), // entity_id
-        fc.uuid(), // replica_id
-        fc.uuid(), // node_id
+        fc.uuid(),
+        fc.uuid(),
+        fc.uuid(),
         async (entityId, replicaId, nodeId) => {
-          const mockCache = createMockCache({
-            nodes: [{node_id: nodeId, status: 'active'}],
-            services: [
-              {
-                service_id: replicaId,
-                partition_id: entityId,
-                node_id: nodeId,
-                service_type: 'partition',
-                status: ReplicaStatus.ACTIVE,
-              },
-            ],
-            partitions: [{partition_id: entityId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId,
             entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
             nodeId: 'test-node',
+            cacheData: {
+              nodes: [{node_id: nodeId, status: 'active'}],
+              services: [
+                {
+                  service_id: replicaId,
+                  partition_id: entityId,
+                  node_id: nodeId,
+                  service_type: 'partition',
+                  status: ReplicaStatus.ACTIVE,
+                },
+              ],
+              partitions: [{partition_id: entityId, table_id: 'table-1'}],
+              replicaOperations: [
+                createOperation({
+                  operationId: 'op-1',
+                  partitionId: entityId,
+                  replicaId,
+                  targetNodeId: nodeId,
+                  type: 'REMOVE',
+                }),
+              ],
+            },
           });
 
           rebalancer.initialize();
           rebalancer.setLeader(true);
 
-          // Add a pending REMOVE move for the replica
-          rebalancer.pendingMoves.set('pending-remove', {
-            type: MoveType.REMOVE,
-            replicaId,
-            nodeId,
-            entityId,
-            startedAt: Date.now(),
-            status: 'pending',
-          });
-
-          // Calculate moves - should not generate REMOVE for same replica
           const currentReplicas = [
             {
               service_id: replicaId,
@@ -195,7 +162,6 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
 
           rebalancer.shutdown();
 
-          // Should not have any REMOVE moves for the replica with pending move
           const removeMovesForReplica = moves.filter((m) =>
             m.type === MoveType.REMOVE && m.replicaId === replicaId);
 
@@ -208,48 +174,41 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
     t.pass('no duplicate REMOVE moves for same replica');
   });
 
-  /**
-   * Property: When any pending moves exist, calculateMoves returns empty.
-   */
-  t.test('pending moves block new move generation', async (t) => {
+  t.test('pending operations block new move generation', async (t) => {
     await fc.assert(
       fc.asyncProperty(
-        fc.uuid(), // entity_id
-        fc.integer({min: 1, max: 3}), // pending move count
+        fc.uuid(),
+        fc.integer({min: 1, max: 3}),
         async (entityId, pendingCount) => {
-          const mockCache = createMockCache({
-            nodes: [
-              {node_id: 'node-1', status: 'active'},
-              {node_id: 'node-2', status: 'active'},
-              {node_id: 'node-3', status: 'active'},
-            ],
-            services: [],
-            partitions: [{partition_id: entityId, table_id: 'table-1'}],
-          });
+          const replicaOperations = [];
+          for (let i = 0; i < pendingCount; i++) {
+            replicaOperations.push(createOperation({
+              operationId: `pending-${i}`,
+              partitionId: entityId,
+              replicaId: `replica-${i}`,
+              targetNodeId: `node-${i + 1}`,
+              type: 'ADD',
+            }));
+          }
 
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId,
             entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
             nodeId: 'test-node',
+            cacheData: {
+              nodes: [
+                {node_id: 'node-1', status: 'active'},
+                {node_id: 'node-2', status: 'active'},
+                {node_id: 'node-3', status: 'active'},
+              ],
+              partitions: [{partition_id: entityId, table_id: 'table-1'}],
+              replicaOperations,
+            },
           });
 
           rebalancer.initialize();
           rebalancer.setLeader(true);
 
-          // Add pending moves
-          for (let i = 0; i < pendingCount; i++) {
-            rebalancer.pendingMoves.set(`pending-${i}`, {
-              type: MoveType.ADD,
-              replicaId: `replica-${i}`,
-              nodeId: `node-${i + 1}`,
-              entityId,
-              startedAt: Date.now(),
-              status: 'pending',
-            });
-          }
-
-          // Calculate moves - should return empty due to pending moves
           const currentReplicas = [];
           const targetState = {
             targetReplicaCount: 3,
@@ -266,45 +225,37 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
       {numRuns: 10},
     );
 
-    t.pass('pending moves block new move generation');
+    t.pass('pending operations block new move generation');
   });
 
-  /**
-   * Property: Transitioning replicas (starting/stopping/syncing) block
-   * move generation.
-   */
   t.test('transitioning replicas block move generation', async (t) => {
     const transitioningStatuses = [
-      ReplicaStatus.STARTING,
-      ReplicaStatus.STOPPING,
-      'syncing',
+      ReplicaStatus.CREATING,
+      ReplicaStatus.SYNCING,
+      ReplicaStatus.REMOVING,
     ];
 
     await fc.assert(
       fc.asyncProperty(
-        fc.uuid(), // entity_id
+        fc.uuid(),
         fc.constantFrom(...transitioningStatuses),
         async (entityId, transitionStatus) => {
-          const mockCache = createMockCache({
-            nodes: [
-              {node_id: 'node-1', status: 'active'},
-              {node_id: 'node-2', status: 'active'},
-            ],
-            services: [],
-            partitions: [{partition_id: entityId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId,
             entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
             nodeId: 'test-node',
+            cacheData: {
+              nodes: [
+                {node_id: 'node-1', status: 'active'},
+                {node_id: 'node-2', status: 'active'},
+              ],
+              partitions: [{partition_id: entityId, table_id: 'table-1'}],
+            },
           });
 
           rebalancer.initialize();
           rebalancer.setLeader(true);
 
-          // Current replicas include one in transitioning state
           const currentReplicas = [
             {
               service_id: 'replica-1',
@@ -323,7 +274,6 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
 
           rebalancer.shutdown();
 
-          // Should return empty due to transitioning replicas
           return moves.length === 0;
         },
       ),
@@ -333,46 +283,38 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
     t.pass('transitioning replicas block move generation');
   });
 
-  /**
-   * Property: Completed pending moves don't block new move generation.
-   */
-  t.test('completed moves do not block new moves', async (t) => {
+  t.test('completed operations do not block new moves', async (t) => {
     await fc.assert(
       fc.asyncProperty(
-        fc.uuid(), // entity_id
+        fc.uuid(),
         async (entityId) => {
-          const mockCache = createMockCache({
-            nodes: [
-              {node_id: 'node-1', status: 'active'},
-              {node_id: 'node-2', status: 'active'},
-              {node_id: 'node-3', status: 'active'},
-            ],
-            services: [],
-            partitions: [{partition_id: entityId, table_id: 'table-1'}],
-          });
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId,
             entityType: EntityType.PARTITION,
-            systemTableCache: mockCache,
             nodeId: 'test-node',
+            cacheData: {
+              nodes: [
+                {node_id: 'node-1', status: 'active'},
+                {node_id: 'node-2', status: 'active'},
+                {node_id: 'node-3', status: 'active'},
+              ],
+              partitions: [{partition_id: entityId, table_id: 'table-1'}],
+              replicaOperations: [
+                createOperation({
+                  operationId: 'completed-1',
+                  partitionId: entityId,
+                  replicaId: 'replica-1',
+                  targetNodeId: 'node-1',
+                  status: ReplicaStatus.ACTIVE,
+                  type: 'ADD',
+                }),
+              ],
+            },
           });
 
           rebalancer.initialize();
           rebalancer.setLeader(true);
 
-          // Add completed moves (should not block)
-          rebalancer.pendingMoves.set('completed-1', {
-            type: MoveType.ADD,
-            replicaId: 'replica-1',
-            nodeId: 'node-1',
-            entityId,
-            startedAt: Date.now() - 10000,
-            status: 'completed',
-            completedAt: Date.now() - 5000,
-          });
-
-          // Calculate moves - should generate moves since no pending
           const currentReplicas = [];
           const targetState = {
             targetReplicaCount: 3,
@@ -383,55 +325,46 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
 
           rebalancer.shutdown();
 
-          // Should generate ADD moves since completed moves don't block
           return moves.length > 0;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('completed moves do not block new moves');
+    t.pass('completed operations do not block new moves');
   });
 
-  /**
-   * Property: hasPendingAddForNode correctly identifies pending ADD moves.
-   */
   t.test('hasPendingAddForNode identifies pending ADD moves', async (t) => {
     await fc.assert(
       fc.asyncProperty(
-        fc.uuid(), // entity_id
-        fc.uuid(), // node_id
+        fc.uuid(),
+        fc.uuid(),
         async (entityId, nodeId) => {
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId,
             entityType: EntityType.PARTITION,
             nodeId: 'test-node',
+            cacheData: {
+              replicaOperations: [
+                createOperation({
+                  operationId: 'op-1',
+                  partitionId: entityId,
+                  replicaId: 'replica-1',
+                  targetNodeId: nodeId,
+                  type: 'ADD',
+                }),
+              ],
+            },
           });
 
           rebalancer.initialize();
 
-          // Initially no pending ADD
-          const hasPendingBefore = rebalancer.hasPendingAddForNode(nodeId);
-
-          // Add a pending ADD move
-          rebalancer.pendingMoves.set('test-add', {
-            type: MoveType.ADD,
-            replicaId: 'replica-1',
-            nodeId,
-            entityId,
-            startedAt: Date.now(),
-            status: 'pending',
-          });
-
-          // Now should have pending ADD
+          const hasPendingBefore = rebalancer.hasPendingAddForNode('other-node');
           const hasPendingAfter = rebalancer.hasPendingAddForNode(nodeId);
-
-          // Different node should not have pending ADD
-          const hasPendingOther = rebalancer.hasPendingAddForNode('other-node');
 
           rebalancer.shutdown();
 
-          return !hasPendingBefore && hasPendingAfter && !hasPendingOther;
+          return !hasPendingBefore && hasPendingAfter;
         },
       ),
       {numRuns: 10},

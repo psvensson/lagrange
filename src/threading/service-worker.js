@@ -5,6 +5,11 @@
  */
 
 import {workerData} from 'worker_threads';
+import {
+  THREADING_ERROR_MSG,
+  WORKER_OPERATION,
+  WORKER_RESPONSE_STATUS,
+} from './threading-constants.js';
 
 /**
  * Service registry for worker thread.
@@ -52,15 +57,15 @@ async function executeOperation(task) {
 
   // Handle built-in operations
   switch (operation) {
-  case 'ping':
+  case WORKER_OPERATION.PING:
     return {
-      status: 'ok',
+      status: WORKER_RESPONSE_STATUS.OK,
       serviceId,
       timestamp: Date.now(),
       workerId: workerData?.workerId,
     };
 
-  case 'getStatus':
+  case WORKER_OPERATION.GET_STATUS:
     return {
       serviceId,
       registered: serviceHandlers.has(serviceId),
@@ -68,11 +73,11 @@ async function executeOperation(task) {
       timestamp: Date.now(),
     };
 
-  case 'register':
+  case WORKER_OPERATION.REGISTER:
     registerServiceHandler(serviceId, data.handler || {});
     return {success: true, serviceId};
 
-  case 'unregister': {
+  case WORKER_OPERATION.UNREGISTER: {
     const removed = unregisterServiceHandler(serviceId);
     return {success: removed, serviceId};
   }
@@ -81,11 +86,11 @@ async function executeOperation(task) {
     // Delegate to service handler
     const handler = getServiceHandler(serviceId);
     if (!handler) {
-      throw new Error(`No handler registered for service: ${serviceId}`);
+      throw new Error(THREADING_ERROR_MSG.NO_HANDLER_REGISTERED(serviceId));
     }
 
     if (typeof handler[operation] !== 'function') {
-      throw new Error(`Unknown operation: ${operation} for service: ${serviceId}`);
+      throw new Error(THREADING_ERROR_MSG.UNKNOWN_OPERATION(operation, serviceId));
     }
 
     return await handler[operation](data);

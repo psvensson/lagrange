@@ -4,7 +4,7 @@
  * Requirements: 8.1, 8.2, 8.3, 8.4
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -156,7 +156,7 @@ test('Bootstrap sequence - services created after self-connection', async (t) =>
   }
 });
 
-test('Bootstrap sequence - without wsPort (no server/self-connection)', async (t) => {
+test('Bootstrap sequence - without wsPort (no server)', async (t) => {
   initializeTestEnvironment();
 
   const nodeId = `test-node-${Date.now()}`;
@@ -175,14 +175,14 @@ test('Bootstrap sequence - without wsPort (no server/self-connection)', async (t
   try {
     const result = await bootstrap.bootstrap();
 
-    // Without wsPort, bootstrap should fail because message groups can't
-    // establish leadership without WebSocket communication
-    t.equal(result.success, false, 'bootstrap should fail without wsPort');
-    t.ok(result.error, 'should have error message');
-    t.ok(
-      result.error.includes('leadership') || result.error.includes('failed'),
-      'error should mention leadership failure',
-    );
+    // Without wsPort, we do not start a WebSocket server. The system should still be able
+    // to bootstrap using in-process local delivery for intra-node communication.
+    t.equal(result.success, true, 'bootstrap should succeed without wsPort');
+    t.ok(result.messageRouter, 'should have messageRouter');
+    t.notOk(result.messageRouter.server, 'WebSocket server should not be running');
+    t.notOk(result.messageRouter.hasSelfConnection(),
+      'self-connection should not be required when not starting a server');
+    t.ok(result.messageGroupServices.size > 0, 'message group services should be created');
   } finally {
     await bootstrap.shutdown();
   }
@@ -302,4 +302,41 @@ test('Bootstrap sequence - epoch manager cleaned up on shutdown', async (t) => {
   await bootstrap.shutdown();
 
   t.equal(bootstrap.getEpochManager(), null, 'epoch manager should be null after shutdown');
+});
+
+test('Bootstrap sequence - partition leadership wait fails when no leaders', async (t) => {
+  initializeTestEnvironment();
+
+  const bootstrap = new BootstrapService({
+    nodeId: 'test-node',
+    config: {
+      leadershipWaitTimeoutMs: 5,
+      leadershipWaitInitialDelayMs: 1,
+      leadershipWaitBackoffMultiplier: 1,
+    },
+  });
+
+  bootstrap.partitionServices = new Map([
+    ['services-p1-r1', {partitionId: 'services-p1', isLeader: false}],
+    ['nodes-p1-r1', {partitionId: 'nodes-p1', isLeader: false}],
+  ]);
+
+  const originalNow = Date.now;
+  let now = 1000;
+  Date.now = () => now;
+  bootstrap.sleep = async () => {
+    now += 10;
+  };
+
+  try {
+    await bootstrap.waitForPartitionLeadership();
+    t.fail('should throw when partition leadership is missing');
+  } catch (error) {
+    t.match(error.message, /Partition leaders not established within 5ms/,
+      'should report leadership timeout');
+    t.match(error.message, /services-p1/, 'should list services partition');
+    t.match(error.message, /nodes-p1/, 'should list nodes partition');
+  } finally {
+    Date.now = originalNow;
+  }
 });

@@ -7,7 +7,7 @@
  * **Validates: Requirements 18.2, 18.4**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {ConfigManager} from '../../../src/cli/core/config-manager.js';
 

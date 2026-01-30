@@ -5,7 +5,7 @@
  * Validates: Requirements 17.5, 17.7
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {MetadataCache} from '../../src/message-group/metadata-cache.js';
 import {LoggingService} from '../../src/logging/logging-service.js';

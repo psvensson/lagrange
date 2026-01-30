@@ -3,7 +3,7 @@
  * Requirements: 27.8
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {
   LogRetentionService,
   DEFAULT_CONFIG,
@@ -78,15 +78,17 @@ test('LogRetentionService setRetentionPeriod rejects negative', async (t) => {
   LogRetentionService.resetInstance();
 });
 
-test('LogRetentionService runCleanup without engine returns error', async (t) => {
+test('LogRetentionService runCleanup without engine throws error', async (t) => {
   LogRetentionService.resetInstance();
   const service = LogRetentionService.getInstance();
   service.initialize();
 
-  const result = await service.runCleanup();
-
-  t.notOk(result.success, 'should fail without engine');
-  t.ok(result.error, 'should have error message');
+  try {
+    await service.runCleanup();
+    t.fail('should throw error');
+  } catch (error) {
+    t.ok(error.message.includes('not available'), 'should have error message');
+  }
 
   LogRetentionService.resetInstance();
 });

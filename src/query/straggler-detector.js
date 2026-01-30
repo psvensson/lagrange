@@ -6,6 +6,13 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {STATE, STRING} from '../constants/index.js';
+import {
+  QUERY_CONFIG_KEY,
+  QUERY_DEFAULTS,
+  QUERY_LOG_MSG,
+  QUERY_SUBSYSTEM,
+} from './query-constants.js';
 
 /**
  * StragglerDetector monitors partition query latencies and detects
@@ -24,7 +31,8 @@ class StragglerDetector {
     // Load configuration
     const config = ConfigurationManager.getInstance();
     this.thresholdMultiplier = options.thresholdMultiplier ||
-      config.get('queryCoordinator.stragglerThresholdMultiplier') || 2.0;
+      config.get(QUERY_CONFIG_KEY.COORDINATOR_STRAGGLER_THRESHOLD_MULTIPLIER) ||
+      QUERY_DEFAULTS.COORDINATOR_STRAGGLER_THRESHOLD_MULTIPLIER;
 
     this.onStragglerDetected = options.onStragglerDetected || null;
 
@@ -43,7 +51,7 @@ class StragglerDetector {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('straggler-detector');
+        return loggingService.forSubsystem(QUERY_SUBSYSTEM.STRAGGLER_DETECTOR);
       }
     } catch {
       // Logging not available
@@ -120,7 +128,7 @@ class StragglerDetector {
    * @private
    */
   logStragglerDetected(partitionId, elapsedMs, threshold) {
-    this.logger.warn('Slow partition detected (straggler)', {
+    this.logger.warn(QUERY_LOG_MSG.STRAGGLER_DETECTED, {
       partitionId,
       elapsedMs,
       medianLatencyMs: this.getMedianLatency(),
@@ -202,8 +210,9 @@ class SpeculativeExecutor {
 
     const config = ConfigurationManager.getInstance();
     this.delayMs = options.delayMs ||
-      config.get('queryCoordinator.speculativeExecutionDelayMs') || 100;
-    this.enabled = config.get('queryCoordinator.speculativeExecutionEnabled') !== false;
+      config.get(QUERY_CONFIG_KEY.COORDINATOR_SPECULATIVE_EXECUTION_DELAY_MS) ||
+      QUERY_DEFAULTS.COORDINATOR_SPECULATIVE_EXECUTION_DELAY_MS;
+    this.enabled = config.get(QUERY_CONFIG_KEY.COORDINATOR_SPECULATIVE_EXECUTION_ENABLED) !== false;
 
     // Track active speculative executions
     this.activeExecutions = new Map(); // partitionId -> {promise, abortController}
@@ -219,7 +228,7 @@ class SpeculativeExecutor {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('speculative-executor');
+        return loggingService.forSubsystem(QUERY_SUBSYSTEM.SPECULATIVE_EXECUTOR);
       }
     } catch {
       // Logging not available
@@ -249,7 +258,7 @@ class SpeculativeExecutor {
       replicas = this.replicaRegistry[partitionId];
     }
     return (replicas || []).filter((r) =>
-      r.status === 'active' || r.status === undefined,
+      r.status === STATE.ACTIVE || r.status === undefined,
     );
   }
 
@@ -272,7 +281,7 @@ class SpeculativeExecutor {
 
     const replicas = this.getAlternativeReplicas(partitionId);
     if (replicas.length === 0) {
-      this.logger.debug('No alternative replicas for speculative execution', {
+      this.logger.debug(QUERY_LOG_MSG.NO_ALTERNATIVE_REPLICAS, {
         partitionId,
       });
       return null;
@@ -281,9 +290,9 @@ class SpeculativeExecutor {
     // Select a replica (prefer one that's not the primary)
     const replica = replicas[0];
 
-    this.logger.debug('Starting speculative execution', {
+    this.logger.debug(QUERY_LOG_MSG.SPECULATIVE_EXEC_START, {
       partitionId,
-      replicaId: replica.replicaId || 'unknown',
+      replicaId: replica.replicaId || STRING.UNKNOWN,
     });
 
     this.executionCount++;
@@ -340,7 +349,7 @@ class SpeculativeExecutor {
         speculative: true,
       };
     } catch (error) {
-      this.logger.debug('Speculative execution failed', {
+      this.logger.debug(QUERY_LOG_MSG.SPECULATIVE_EXEC_FAILED, {
         partitionId,
         error: error.message,
       });

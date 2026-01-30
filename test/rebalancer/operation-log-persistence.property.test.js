@@ -6,86 +6,125 @@
  * The persisted record SHALL contain all required fields.
  *
  * Validates: Requirements 9.1, 9.2
- *
- * Feature: simplified-rebalancing-architecture, Property 10: Operation Log Persistence
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
+import {
+  createMockCache,
+  createMockPolicyService,
+  createMockMessageRouter,
+  createMockCdcService,
+} from './test-helpers.js';
 
-/**
- * Create a mock CDC integration service that tracks persisted operations.
- * @return {Object} Mock CDC service with tracking.
- */
-function createMockCdcService() {
+function createTestCoordinatorWithPersistence() {
   const persistedOperations = new Map();
 
-  return {
-    persistedOperations,
-    insertSystemTableRow: async (tableName, row) => {
-      if (tableName === SystemTableName.REPLICA_OPERATIONS) {
-        persistedOperations.set(row.operation_id, {...row});
+  const sqlQueryEngine = {
+    executeQuery: async (sql, params) => {
+      if (sql.includes('INSERT INTO replica_operations')) {
+        const [
+          operationId, type, partitionId, replicaId, sourceNodeId, targetNodeId,
+          status, workflowStep, createdAt, updatedAt, completedAt, errorMessage,
+          stepsHistory,
+        ] = params;
+
+        persistedOperations.set(operationId, {
+          operation_id: operationId,
+          type,
+          partition_id: partitionId,
+          replica_id: replicaId,
+          source_node_id: sourceNodeId,
+          target_node_id: targetNodeId,
+          status,
+          workflow_step: workflowStep,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          completed_at: completedAt,
+          error_message: errorMessage,
+          steps_history: stepsHistory,
+        });
+        return {success: true};
       }
-    },
-    updateSystemTableRow: async (tableName, _where, row) => {
-      if (tableName === SystemTableName.REPLICA_OPERATIONS) {
-        const existing = persistedOperations.get(row.operation_id);
+
+      if (sql.includes('UPDATE replica_operations')) {
+        const [
+          status, workflowStep, updatedAt, completedAt, errorMessage,
+          stepsHistory, replicaId, operationId,
+        ] = params;
+
+        const existing = persistedOperations.get(operationId);
         if (existing) {
-          persistedOperations.set(row.operation_id, {...existing, ...row});
+          persistedOperations.set(operationId, {
+            ...existing,
+            status,
+            workflow_step: workflowStep,
+            updated_at: updatedAt,
+            completed_at: completedAt,
+            error_message: errorMessage,
+            steps_history: stepsHistory,
+            replica_id: replicaId,
+          });
         }
+        return {success: true};
       }
+
+      if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
+        const [partitionId, targetNodeId] = params;
+        const allOps = Array.from(persistedOperations.values());
+        const matching = allOps.filter((op) =>
+          op.partition_id === partitionId &&
+          op.target_node_id === targetNodeId &&
+          !['active', 'removed', 'failed'].includes(op.status));
+        return {success: true, rows: matching};
+      }
+
+      if (sql.includes('WHERE operation_id = ?')) {
+        const [operationId] = params;
+        const op = persistedOperations.get(operationId);
+        return {success: true, rows: op ? [op] : []};
+      }
+
+      if (sql.includes('replica_operations') && sql.includes('NOT IN')) {
+        if (sql.includes('type = ?')) {
+          const [type] = params;
+          const allOps = Array.from(persistedOperations.values());
+          const matching = allOps.filter((op) =>
+            op.type === type &&
+            !['active', 'removed', 'failed'].includes(op.status));
+          return {success: true, rows: matching};
+        }
+        const allOps = Array.from(persistedOperations.values());
+        const incompleteOps = allOps.filter((op) =>
+          !['active', 'removed', 'failed'].includes(op.status));
+        return {success: true, rows: incompleteOps};
+      }
+
+      if (sql.includes('SELECT * FROM replica_operations') &&
+          sql.includes('ORDER BY')) {
+        return {success: true, rows: Array.from(persistedOperations.values())};
+      }
+
+      return {success: true, rows: []};
     },
   };
-}
-
-/**
- * Create a mock system table cache for testing.
- * @param {Map} persistedOperations - Map of persisted operations.
- * @return {Object} Mock system table cache.
- */
-function createMockSystemTableCache(persistedOperations) {
-  return {
-    get: (tableName, id) => {
-      if (tableName === SystemTableName.REPLICA_OPERATIONS) {
-        return persistedOperations.get(id) || null;
-      }
-      return null;
-    },
-    filter: (tableName, predicate) => {
-      if (tableName === SystemTableName.REPLICA_OPERATIONS) {
-        return Array.from(persistedOperations.values()).filter(predicate);
-      }
-      return [];
-    },
-  };
-}
-
-/**
- * Create a RebalanceCoordinator for testing with persistence.
- * @param {Object} options - Options for the coordinator.
- * @return {Object} Coordinator and mock services.
- */
-function createTestCoordinatorWithPersistence(options = {}) {
-  const cdcService = createMockCdcService();
-  const systemTableCache = createMockSystemTableCache(cdcService.persistedOperations);
 
   const coordinator = new RebalanceCoordinator({
-    nodeId: options.nodeId || 'test-node-1',
-    rpcClient: options.rpcClient || null,
-    systemTableCache,
-    cdcIntegrationService: cdcService,
+    nodeId: 'test-node-1',
+    systemTableCache: createMockCache(),
+    cdcIntegrationService: createMockCdcService(),
+    tablePolicyService: createMockPolicyService(),
+    messageRouter: createMockMessageRouter(),
+    sqlQueryEngine,
+    enableTimeouts: false,
   });
 
-  // Don't start timeout checking in tests
-  coordinator.timeoutCheckIntervalMs = 1000000;
-
-  return {coordinator, cdcService, systemTableCache};
+  return {coordinator, persistedOperations};
 }
 
 test('Property 10: Operation Log Persistence', async (t) => {
@@ -96,16 +135,14 @@ test('Property 10: Operation Log Persistence', async (t) => {
           type: fc.constantFrom(OperationType.ADD, OperationType.REMOVE),
           partitionId: fc.uuid(),
           nodeId: fc.uuid(),
-          replicaId: fc.option(fc.uuid(), {nil: undefined}),
         }),
         async (move) => {
-          const {coordinator, cdcService} = createTestCoordinatorWithPersistence();
+          const {coordinator, persistedOperations} =
+            createTestCoordinatorWithPersistence();
 
           try {
             const operation = await coordinator.createOperation(move);
-
-            // Verify operation was persisted
-            const persisted = cdcService.persistedOperations.get(operation.operationId);
+            const persisted = persistedOperations.get(operation.operationId);
 
             return persisted !== undefined &&
               persisted.operation_id === operation.operationId;
@@ -127,30 +164,27 @@ test('Property 10: Operation Log Persistence', async (t) => {
           type: fc.constantFrom(OperationType.ADD, OperationType.REMOVE),
           partitionId: fc.uuid(),
           nodeId: fc.uuid(),
-          replicaId: fc.option(fc.uuid(), {nil: undefined}),
         }),
         async (move) => {
-          const {coordinator, cdcService} = createTestCoordinatorWithPersistence();
+          const {coordinator, persistedOperations} =
+            createTestCoordinatorWithPersistence();
 
           try {
             const operation = await coordinator.createOperation(move);
-            const persisted = cdcService.persistedOperations.get(operation.operationId);
+            const persisted = persistedOperations.get(operation.operationId);
 
-            // Verify all required fields per Requirements 9.2
-            const hasOperationId = typeof persisted.operation_id === 'string';
-            const hasType = persisted.type === move.type;
-            const hasPartitionId = persisted.partition_id === move.partitionId;
-            const hasSourceNodeId = typeof persisted.source_node_id === 'string';
-            const hasTargetNodeId = persisted.target_node_id === move.nodeId;
-            const hasStatus = typeof persisted.status === 'string';
-            const hasWorkflowStep = typeof persisted.workflow_step === 'string';
-            const hasCreatedAt = typeof persisted.created_at === 'number';
-            const hasUpdatedAt = typeof persisted.updated_at === 'number';
-            const hasStepsHistory = typeof persisted.steps_history === 'string';
+            if (!persisted) return false;
 
-            return hasOperationId && hasType && hasPartitionId &&
-              hasSourceNodeId && hasTargetNodeId && hasStatus &&
-              hasWorkflowStep && hasCreatedAt && hasUpdatedAt && hasStepsHistory;
+            return typeof persisted.operation_id === 'string' &&
+              persisted.type === move.type &&
+              persisted.partition_id === move.partitionId &&
+              typeof persisted.source_node_id === 'string' &&
+              persisted.target_node_id === move.nodeId &&
+              typeof persisted.status === 'string' &&
+              typeof persisted.workflow_step === 'string' &&
+              typeof persisted.created_at === 'number' &&
+              typeof persisted.updated_at === 'number' &&
+              typeof persisted.steps_history === 'string';
           } finally {
             await coordinator.shutdown();
           }
@@ -171,17 +205,16 @@ test('Property 10: Operation Log Persistence', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
-          const {coordinator, cdcService} = createTestCoordinatorWithPersistence();
+          const {coordinator, persistedOperations} =
+            createTestCoordinatorWithPersistence();
 
           try {
             const operation = await coordinator.createOperation(move);
-
-            // Update step
             await coordinator.updateStep(operation, 'SENDING');
 
-            const persisted = cdcService.persistedOperations.get(operation.operationId);
+            const persisted = persistedOperations.get(operation.operationId);
+            if (!persisted) return false;
 
-            // Verify step was updated in persisted record
             return persisted.workflow_step === 'SENDING' &&
               persisted.updated_at >= persisted.created_at;
           } finally {
@@ -204,21 +237,20 @@ test('Property 10: Operation Log Persistence', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
-          const {coordinator, cdcService} = createTestCoordinatorWithPersistence();
+          const {coordinator, persistedOperations} =
+            createTestCoordinatorWithPersistence();
 
           try {
             const operation = await coordinator.createOperation(move);
             await coordinator.completeOperation(operation);
 
-            const persisted = cdcService.persistedOperations.get(operation.operationId);
+            const persisted = persistedOperations.get(operation.operationId);
+            if (!persisted) return false;
 
-            // Verify completion was persisted
-            const hasCompletedAt = typeof persisted.completed_at === 'number' &&
-              persisted.completed_at > 0;
             const expectedStep = move.type === OperationType.ADD ? 'ACTIVE' : 'REMOVED';
-            const hasCorrectStep = persisted.workflow_step === expectedStep;
-
-            return hasCompletedAt && hasCorrectStep;
+            return typeof persisted.completed_at === 'number' &&
+              persisted.completed_at > 0 &&
+              persisted.workflow_step === expectedStep;
           } finally {
             await coordinator.shutdown();
           }
@@ -240,21 +272,20 @@ test('Property 10: Operation Log Persistence', async (t) => {
         }),
         fc.string({minLength: 1, maxLength: 100}),
         async (move, errorMessage) => {
-          const {coordinator, cdcService} = createTestCoordinatorWithPersistence();
+          const {coordinator, persistedOperations} =
+            createTestCoordinatorWithPersistence();
 
           try {
             const operation = await coordinator.createOperation(move);
             await coordinator.failOperation(operation, errorMessage);
 
-            const persisted = cdcService.persistedOperations.get(operation.operationId);
+            const persisted = persistedOperations.get(operation.operationId);
+            if (!persisted) return false;
 
-            // Verify failure was persisted
-            const hasCompletedAt = typeof persisted.completed_at === 'number';
-            const hasErrorMessage = persisted.error_message === errorMessage;
-            const hasFailedStatus = persisted.status === ReplicaStatus.FAILED;
-            const hasFailedStep = persisted.workflow_step === 'FAILED';
-
-            return hasCompletedAt && hasErrorMessage && hasFailedStatus && hasFailedStep;
+            return typeof persisted.completed_at === 'number' &&
+              persisted.error_message === errorMessage &&
+              persisted.status === ReplicaStatus.FAILED &&
+              persisted.workflow_step === 'FAILED';
           } finally {
             await coordinator.shutdown();
           }
@@ -275,21 +306,19 @@ test('Property 10: Operation Log Persistence', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
-          const {coordinator, cdcService} = createTestCoordinatorWithPersistence();
+          const {coordinator, persistedOperations} =
+            createTestCoordinatorWithPersistence();
 
           try {
             const operation = await coordinator.createOperation(move);
-
-            // Add some steps
             await coordinator.updateStep(operation, 'SENDING');
             await coordinator.updateStep(operation, 'CREATING');
 
-            const persisted = cdcService.persistedOperations.get(operation.operationId);
+            const persisted = persistedOperations.get(operation.operationId);
+            if (!persisted) return false;
 
-            // Verify steps_history is valid JSON
             const stepsHistory = JSON.parse(persisted.steps_history);
 
-            // Should have 3 steps: PENDING, SENDING, CREATING
             return Array.isArray(stepsHistory) &&
               stepsHistory.length === 3 &&
               stepsHistory[0].step === 'PENDING' &&
@@ -306,11 +335,10 @@ test('Property 10: Operation Log Persistence', async (t) => {
     t.pass('steps_history is persisted as valid JSON');
   });
 
-  await t.test('loadIncompleteOperations returns non-terminal operations', async (t) => {
-    const {coordinator, cdcService} = createTestCoordinatorWithPersistence();
+  await t.test('getInFlightOperations returns non-terminal operations', async (t) => {
+    const {coordinator} = createTestCoordinatorWithPersistence();
 
     try {
-      // Create operations in different states
       const op1 = await coordinator.createOperation({
         type: OperationType.ADD,
         partitionId: 'partition-1',
@@ -331,34 +359,29 @@ test('Property 10: Operation Log Persistence', async (t) => {
       });
       await coordinator.failOperation(op3, 'Test error');
 
-      // Load incomplete operations
-      const incomplete = await coordinator.loadIncompleteOperations();
+      const inFlight = await coordinator.getInFlightOperations();
 
-      // Only op1 should be returned (PENDING state)
-      t.equal(incomplete.length, 1, 'Should return 1 incomplete operation');
-      t.equal(incomplete[0].operationId, op1.operationId,
+      t.equal(inFlight.length, 1, 'Should return 1 in-flight operation');
+      t.equal(inFlight[0].operationId, op1.operationId,
         'Should return the pending operation');
     } finally {
       await coordinator.shutdown();
     }
   });
 
-  await t.test('loadIncompleteOperations converts row to operation object', async (t) => {
+  await t.test('getInFlightOperations converts row to operation object', async (t) => {
     const {coordinator} = createTestCoordinatorWithPersistence();
 
     try {
-      // Create an operation
       await coordinator.createOperation({
         type: OperationType.ADD,
         partitionId: 'partition-1',
         nodeId: 'node-1',
       });
 
-      // Load incomplete operations
-      const incomplete = await coordinator.loadIncompleteOperations();
+      const inFlight = await coordinator.getInFlightOperations();
+      const op = inFlight[0];
 
-      // Verify the returned object has the correct structure
-      const op = incomplete[0];
       t.ok(op.operationId, 'Has operationId');
       t.ok(op.type, 'Has type');
       t.ok(op.partitionId, 'Has partitionId');

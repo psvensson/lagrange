@@ -9,7 +9,7 @@ export {
 
 export {
   LogsTableService,
-  DEFAULT_CONFIG as LOGS_TABLE_DEFAULT_CONFIG,
+  LOGS_TABLE_DEFAULT as LOGS_TABLE_DEFAULT_CONFIG,
 } from './logs-table-service.js';
 
 export {

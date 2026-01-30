@@ -8,7 +8,7 @@
  * **Validates: Requirements 4.11, 4.12, 4.13**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {TablesView, POLICY_SUMMARY_MAX_LENGTH} from
   '../../../src/cli/views/tables-view.js';

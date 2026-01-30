@@ -6,188 +6,30 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-import {DEFAULT_CONFIG} from './configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas.js';
+import {CDC_OPERATION, NUM, STRING, TYPEOF} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  CONFIG_DEFINITIONS,
+  CONFIG_ENV,
+  CONFIG_ENV_REGEX,
+  CONFIG_ENV_REPLACE,
+  CONFIG_ERROR_MSG,
+  CONFIG_EVENT,
+  CONFIG_KEY,
+  CONFIG_KEY_FRAGMENT,
+  CONFIG_LOG_LEVELS,
+  CONFIG_LOG_MSG,
+  CONFIG_SEPARATOR,
+  CONFIG_SEED_SOURCE,
+  CONFIG_STATS_DEFAULT,
+  CONFIG_SUBSYSTEM,
+  CONFIG_TABLE_COLUMN,
+  CONFIG_VALUE_DEFAULT,
+  CONFIG_VALUE_TYPE,
+} from './config-constants.js';
 
-/**
- * Configuration value types.
- */
-const ConfigValueType = {
-  STRING: 'string',
-  NUMBER: 'number',
-  BOOLEAN: 'boolean',
-  JSON: 'json',
-};
-
-/**
- * Default configuration definitions with metadata.
- * Each entry defines the key, default value, type, and whether restart is required.
- */
-const CONFIG_DEFINITIONS = {
-  // Node configuration
-  'node.heartbeatIntervalMs': {
-    defaultValue: DEFAULT_CONFIG.node.heartbeatIntervalMs,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Interval between node heartbeats in milliseconds',
-  },
-  'node.heartbeatTimeoutMs': {
-    defaultValue: DEFAULT_CONFIG.node.heartbeatTimeoutMs,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Timeout for node heartbeat detection in milliseconds',
-  },
-  'node.statsCollectionIntervalMs': {
-    defaultValue: DEFAULT_CONFIG.node.statsCollectionIntervalMs,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Interval for collecting node statistics in milliseconds',
-  },
-  'node.maxServicesPerNode': {
-    defaultValue: DEFAULT_CONFIG.node.maxServicesPerNode,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: true,
-    description: 'Maximum number of services per node',
-  },
-  'node.restApiPort': {
-    defaultValue: DEFAULT_CONFIG.node.restApiPort,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: true,
-    description: 'REST API port for node service',
-  },
-
-  // Raft configuration
-  'raft.electionTimeoutMinMs': {
-    defaultValue: DEFAULT_CONFIG.raft.electionTimeoutMinMs,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: true,
-    description: 'Minimum election timeout in milliseconds',
-  },
-  'raft.electionTimeoutMaxMs': {
-    defaultValue: DEFAULT_CONFIG.raft.electionTimeoutMaxMs,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: true,
-    description: 'Maximum election timeout in milliseconds',
-  },
-  'raft.heartbeatIntervalMs': {
-    defaultValue: DEFAULT_CONFIG.raft.heartbeatIntervalMs,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: true,
-    description: 'Raft heartbeat interval in milliseconds',
-  },
-
-  // Message group configuration
-  'messageGroup.replicaCount': {
-    defaultValue: DEFAULT_CONFIG.messageGroup.replicaCount,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: true,
-    description: 'Default replica count for message groups',
-  },
-  'messageGroup.deliveryTimeoutMs': {
-    defaultValue: DEFAULT_CONFIG.messageGroup.deliveryTimeoutMs,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Message delivery timeout in milliseconds',
-  },
-  'messageGroup.retryMaxAttempts': {
-    defaultValue: DEFAULT_CONFIG.messageGroup.retryMaxAttempts,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Maximum retry attempts for message delivery',
-  },
-  'messageGroup.cacheTtlMs': {
-    defaultValue: DEFAULT_CONFIG.messageGroup.cacheTtlMs,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Cache TTL in milliseconds',
-  },
-
-  // Partition configuration
-  'partition.defaultReplicaCount': {
-    defaultValue: DEFAULT_CONFIG.partition.defaultReplicaCount,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: true,
-    description: 'Default replica count for partitions',
-  },
-  'partition.splitThresholdBytes': {
-    defaultValue: DEFAULT_CONFIG.partition.splitThresholdBytes,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Partition split threshold in bytes',
-  },
-  'partition.splitThresholdQpm': {
-    defaultValue: DEFAULT_CONFIG.partition.splitThresholdQpm,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Partition split threshold in queries per minute',
-  },
-  'partition.mergeThresholdBytes': {
-    defaultValue: DEFAULT_CONFIG.partition.mergeThresholdBytes,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Partition merge threshold in bytes',
-  },
-  'partition.mergeThresholdQpm': {
-    defaultValue: DEFAULT_CONFIG.partition.mergeThresholdQpm,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Partition merge threshold in queries per minute',
-  },
-  'partition.evaluationIntervalMs': {
-    defaultValue: DEFAULT_CONFIG.partition.evaluationIntervalMs,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Partition evaluation interval in milliseconds',
-  },
-
-  // Logging configuration
-  'logging.level': {
-    defaultValue: DEFAULT_CONFIG.logging.level,
-    type: ConfigValueType.STRING,
-    requiresRestart: false,
-    description: 'Log level (trace, debug, info, warn, error, fatal)',
-  },
-  'logging.retentionDays': {
-    defaultValue: DEFAULT_CONFIG.logging.retentionDays,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Log retention period in days',
-  },
-
-  // Rebalancer configuration
-  'rebalancer.periodicCheckIntervalMs': {
-    defaultValue: DEFAULT_CONFIG.rebalancer.periodicCheckIntervalMs,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Rebalancer periodic check interval in milliseconds',
-  },
-  'rebalancer.maxConcurrentMoves': {
-    defaultValue: DEFAULT_CONFIG.rebalancer.maxConcurrentMoves,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Maximum concurrent replica moves',
-  },
-
-  // Query coordinator configuration
-  'queryCoordinator.maxParallelPartitions': {
-    defaultValue: DEFAULT_CONFIG.queryCoordinator.maxParallelPartitions,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Maximum partitions per parallel query',
-  },
-  'queryCoordinator.queryTimeoutMs': {
-    defaultValue: DEFAULT_CONFIG.queryCoordinator.queryTimeoutMs,
-    type: ConfigValueType.NUMBER,
-    requiresRestart: false,
-    description: 'Query timeout in milliseconds',
-  },
-  'queryCoordinator.speculativeExecutionEnabled': {
-    defaultValue: DEFAULT_CONFIG.queryCoordinator.speculativeExecutionEnabled,
-    type: ConfigValueType.BOOLEAN,
-    requiresRestart: false,
-    description: 'Enable speculative execution for slow partitions',
-  },
-};
+const ConfigValueType = CONFIG_VALUE_TYPE;
 
 
 /**
@@ -207,7 +49,7 @@ class DynamicConfigService extends EventEmitter {
 
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
-    this.nodeId = options.nodeId || 'unknown';
+    this.nodeId = options.nodeId || STRING.UNKNOWN;
 
     // Local cache of configuration values
     this.configCache = new Map();
@@ -218,14 +60,10 @@ class DynamicConfigService extends EventEmitter {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('dynamic-config') : console;
+      loggingService.forSubsystem(CONFIG_SUBSYSTEM.DYNAMIC_CONFIG) : console;
 
     // Statistics
-    this.stats = {
-      reads: 0,
-      writes: 0,
-      watcherNotifications: 0,
-    };
+    this.stats = {...CONFIG_STATS_DEFAULT};
 
     this.initialized = false;
   }
@@ -247,7 +85,7 @@ class DynamicConfigService extends EventEmitter {
 
     this.initialized = true;
 
-    this.logger.info('Dynamic configuration service initialized', {
+    this.logger.info(CONFIG_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
       definedKeys: Object.keys(CONFIG_DEFINITIONS).length,
     });
@@ -260,9 +98,9 @@ class DynamicConfigService extends EventEmitter {
    * @param {string} updatedBy - Identity of who is seeding (e.g., 'system').
    * @return {Promise<Object>} Seeding result.
    */
-  async seedConfiguration(updatedBy = 'system') {
+  async seedConfiguration(updatedBy = CONFIG_SEED_SOURCE.SYSTEM) {
     if (!this.cdcIntegrationService) {
-      throw new Error('CDC integration service not available');
+      throw new Error(CONFIG_ERROR_MSG.CDC_UNAVAILABLE);
     }
 
     const seeded = [];
@@ -288,24 +126,27 @@ class DynamicConfigService extends EventEmitter {
       await this.cdcIntegrationService.insertSystemTableRow(
         SystemTableName.CONFIG,
         {
-          config_key: key,
-          config_value: this.serializeValue(value, definition.type),
-          value_type: definition.type,
-          requires_restart: definition.requiresRestart ? 1 : 0,
-          description: definition.description,
-          default_value: this.serializeValue(
+          [CONFIG_TABLE_COLUMN.KEY]: key,
+          [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(
+            value, definition.type,
+          ),
+          [CONFIG_TABLE_COLUMN.VALUE_TYPE]: definition.type,
+          [CONFIG_TABLE_COLUMN.REQUIRES_RESTART]:
+            definition.requiresRestart ? NUM.ONE : NUM.ZERO,
+          [CONFIG_TABLE_COLUMN.DESCRIPTION]: definition.description,
+          [CONFIG_TABLE_COLUMN.DEFAULT_VALUE]: this.serializeValue(
             definition.defaultValue, definition.type,
           ),
-          updated_by: updatedBy,
-          updated_at: now,
-          created_at: now,
+          [CONFIG_TABLE_COLUMN.UPDATED_BY]: updatedBy,
+          [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
+          [CONFIG_TABLE_COLUMN.CREATED_AT]: now,
         },
       );
 
       seeded.push(key);
     }
 
-    this.logger.info('Configuration seeding complete', {
+    this.logger.info(CONFIG_LOG_MSG.SEEDING_COMPLETE, {
       seeded: seeded.length,
       skipped: skipped.length,
     });
@@ -353,15 +194,15 @@ class DynamicConfigService extends EventEmitter {
    * @param {string} updatedBy - Identity of who made the change.
    * @return {Promise<Object>} Update result.
    */
-  async set(key, value, updatedBy = 'unknown') {
+  async set(key, value, updatedBy = CONFIG_ENV.UPDATED_BY_UNKNOWN) {
     if (!this.cdcIntegrationService) {
-      throw new Error('CDC integration service not available');
+      throw new Error(CONFIG_ERROR_MSG.CDC_UNAVAILABLE);
     }
 
     // Validate the value
     const validation = this.validateValue(key, value);
     if (!validation.valid) {
-      throw new Error(`Invalid configuration value: ${validation.error}`);
+      throw new Error(`${CONFIG_ERROR_MSG.INVALID_VALUE_PREFIX}${validation.error}`);
     }
 
     const definition = CONFIG_DEFINITIONS[key];
@@ -377,9 +218,9 @@ class DynamicConfigService extends EventEmitter {
         SystemTableName.CONFIG,
         {config_key: key},
         {
-          config_value: this.serializeValue(value, valueType),
-          updated_by: updatedBy,
-          updated_at: now,
+          [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(value, valueType),
+          [CONFIG_TABLE_COLUMN.UPDATED_BY]: updatedBy,
+          [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
         },
       );
     } else {
@@ -387,34 +228,32 @@ class DynamicConfigService extends EventEmitter {
       await this.cdcIntegrationService.insertSystemTableRow(
         SystemTableName.CONFIG,
         {
-          config_key: key,
-          config_value: this.serializeValue(value, valueType),
-          value_type: valueType,
-          requires_restart: definition ? (definition.requiresRestart ? 1 : 0) : 0,
-          description: definition ? definition.description : '',
-          default_value: this.serializeValue(
+          [CONFIG_TABLE_COLUMN.KEY]: key,
+          [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(value, valueType),
+          [CONFIG_TABLE_COLUMN.VALUE_TYPE]: valueType,
+          [CONFIG_TABLE_COLUMN.REQUIRES_RESTART]: definition ?
+            (definition.requiresRestart ? NUM.ONE : NUM.ZERO) : NUM.ZERO,
+          [CONFIG_TABLE_COLUMN.DESCRIPTION]: definition ?
+            definition.description : STRING.EMPTY,
+          [CONFIG_TABLE_COLUMN.DEFAULT_VALUE]: this.serializeValue(
             definition ? definition.defaultValue : value, valueType,
           ),
-          updated_by: updatedBy,
-          updated_at: now,
-          created_at: now,
+          [CONFIG_TABLE_COLUMN.UPDATED_BY]: updatedBy,
+          [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
+          [CONFIG_TABLE_COLUMN.CREATED_AT]: now,
         },
       );
     }
 
-    // Update local cache
-    this.configCache.set(key, value);
     this.stats.writes++;
 
     // Log the change for auditing
-    this.logger.info('Configuration updated', {
+    // Note: Local cache will be updated when CDC event arrives via handleCDCEvent()
+    this.logger.info(CONFIG_LOG_MSG.UPDATED, {
       key,
       updatedBy,
       requiresRestart: definition ? definition.requiresRestart : false,
     });
-
-    // Notify watchers
-    await this.notifyWatchers(key, value, existing?.config_value);
 
     return {
       success: true,
@@ -432,14 +271,17 @@ class DynamicConfigService extends EventEmitter {
     const result = {};
 
     // Get all from table
-    if (this.systemTableCache) {
-      const configs = this.systemTableCache.getAll(SystemTableName.CONFIG);
-      if (configs) {
-        for (const config of configs) {
-          result[config.config_key] = this.deserializeValue(
-            config.config_value, config.value_type,
-          );
-        }
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      CONFIG_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    const configs = systemTableCache.getAll(SystemTableName.CONFIG);
+    if (configs) {
+      for (const config of configs) {
+        result[config[CONFIG_TABLE_COLUMN.KEY]] = this.deserializeValue(
+          config[CONFIG_TABLE_COLUMN.VALUE],
+          config[CONFIG_TABLE_COLUMN.VALUE_TYPE],
+        );
       }
     }
 
@@ -467,14 +309,14 @@ class DynamicConfigService extends EventEmitter {
     }
     this.watchers.get(key).add(callback);
 
-    this.logger.debug('Configuration watcher registered', {key});
+    this.logger.debug(CONFIG_LOG_MSG.WATCHER_REGISTERED, {key});
 
     // Return unsubscribe function
     return () => {
       const keyWatchers = this.watchers.get(key);
       if (keyWatchers) {
         keyWatchers.delete(callback);
-        if (keyWatchers.size === 0) {
+        if (keyWatchers.size === NUM.ZERO) {
           this.watchers.delete(key);
         }
       }
@@ -490,7 +332,7 @@ class DynamicConfigService extends EventEmitter {
    */
   async notifyWatchers(key, newValue, oldValueSerialized) {
     const keyWatchers = this.watchers.get(key);
-    if (!keyWatchers || keyWatchers.size === 0) {
+    if (!keyWatchers || keyWatchers.size === NUM.ZERO) {
       return;
     }
 
@@ -504,15 +346,16 @@ class DynamicConfigService extends EventEmitter {
         await callback(newValue, oldValue, key);
         this.stats.watcherNotifications++;
       } catch (error) {
-        this.logger.error('Configuration watcher callback failed', {
+        this.logger.error(CONFIG_LOG_MSG.WATCHER_CALLBACK_FAILED, {
           key,
           error: error.message,
         });
+        throw error;
       }
     }
 
     // Emit event for general listeners
-    this.emit('change', {key, newValue, oldValue});
+    this.emit(CONFIG_EVENT.CHANGE, {key, newValue, oldValue});
   }
 
   /**
@@ -522,10 +365,13 @@ class DynamicConfigService extends EventEmitter {
    */
   async handleCDCEvent(event) {
     const {operation, data} = event;
-    const key = data.config_key;
+    const key = data[CONFIG_TABLE_COLUMN.KEY];
 
-    if (operation === 'INSERT' || operation === 'UPDATE') {
-      const newValue = this.deserializeValue(data.config_value, data.value_type);
+    if (operation === CDC_OPERATION.INSERT || operation === CDC_OPERATION.UPDATE) {
+      const newValue = this.deserializeValue(
+        data[CONFIG_TABLE_COLUMN.VALUE],
+        data[CONFIG_TABLE_COLUMN.VALUE_TYPE],
+      );
       const oldValue = this.configCache.get(key);
 
       // Update local cache
@@ -534,12 +380,12 @@ class DynamicConfigService extends EventEmitter {
       // Notify watchers if value changed
       if (oldValue !== newValue) {
         await this.notifyWatchers(key, newValue, this.serializeValue(
-          oldValue, data.value_type,
+          oldValue, data[CONFIG_TABLE_COLUMN.VALUE_TYPE],
         ));
       }
-    } else if (operation === 'DELETE') {
+    } else if (operation === CDC_OPERATION.DELETE) {
       this.configCache.delete(key);
-      this.emit('delete', {key});
+      this.emit(CONFIG_EVENT.DELETE, {key});
     }
   }
 
@@ -602,40 +448,54 @@ class DynamicConfigService extends EventEmitter {
     // Type validation
     switch (definition.type) {
     case ConfigValueType.STRING:
-      if (typeof value !== 'string') {
-        return {valid: false, error: `Expected string, got ${typeof value}`};
+      if (typeof value !== TYPEOF.STRING) {
+        return {
+          valid: false,
+          error: `${CONFIG_ERROR_MSG.EXPECTED_STRING_PREFIX}${typeof value}`,
+        };
       }
       // Special validation for log level
-      if (key === 'logging.level') {
-        const validLevels = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
+      if (key === CONFIG_KEY.LOGGING_LEVEL) {
+        const validLevels = CONFIG_LOG_LEVELS.VALUES;
         if (!validLevels.includes(value)) {
           return {
             valid: false,
-            error: `Invalid log level. Must be one of: ${validLevels.join(', ')}`,
+            error: `${CONFIG_ERROR_MSG.LOG_LEVEL_INVALID_PREFIX}${
+              validLevels.join(CONFIG_SEPARATOR.COMMA_SPACE)
+            }`,
           };
         }
       }
       break;
 
     case ConfigValueType.NUMBER:
-      if (typeof value !== 'number' || isNaN(value)) {
-        return {valid: false, error: `Expected number, got ${typeof value}`};
+      if (typeof value !== TYPEOF.NUMBER || Number.isNaN(value)) {
+        return {
+          valid: false,
+          error: `${CONFIG_ERROR_MSG.EXPECTED_NUMBER_PREFIX}${typeof value}`,
+        };
       }
       // Validate positive numbers for most numeric configs
-      if (value < 0 && !key.includes('Threshold')) {
-        return {valid: false, error: 'Value must be non-negative'};
+      if (value < NUM.ZERO && !key.includes(CONFIG_KEY_FRAGMENT.THRESHOLD)) {
+        return {valid: false, error: CONFIG_ERROR_MSG.NON_NEGATIVE_REQUIRED};
       }
       break;
 
     case ConfigValueType.BOOLEAN:
-      if (typeof value !== 'boolean') {
-        return {valid: false, error: `Expected boolean, got ${typeof value}`};
+      if (typeof value !== TYPEOF.BOOLEAN) {
+        return {
+          valid: false,
+          error: `${CONFIG_ERROR_MSG.EXPECTED_BOOLEAN_PREFIX}${typeof value}`,
+        };
       }
       break;
 
     case ConfigValueType.JSON:
-      if (typeof value !== 'object') {
-        return {valid: false, error: `Expected object, got ${typeof value}`};
+      if (typeof value !== TYPEOF.OBJECT) {
+        return {
+          valid: false,
+          error: `${CONFIG_ERROR_MSG.EXPECTED_OBJECT_PREFIX}${typeof value}`,
+        };
       }
       break;
     }
@@ -650,11 +510,12 @@ class DynamicConfigService extends EventEmitter {
    * @private
    */
   async getConfigFromTable(key) {
-    if (!this.systemTableCache) {
-      return null;
-    }
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      CONFIG_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
 
-    return this.systemTableCache.get(SystemTableName.CONFIG, key);
+    return systemTableCache.get(SystemTableName.CONFIG, key);
   }
 
   /**
@@ -669,7 +530,7 @@ class DynamicConfigService extends EventEmitter {
     case ConfigValueType.JSON:
       return JSON.stringify(value);
     case ConfigValueType.BOOLEAN:
-      return value ? 'true' : 'false';
+      return value ? CONFIG_ENV.TRUE : CONFIG_ENV.FALSE;
     default:
       return String(value);
     }
@@ -687,12 +548,12 @@ class DynamicConfigService extends EventEmitter {
     case ConfigValueType.NUMBER:
       return Number(serialized);
     case ConfigValueType.BOOLEAN:
-      return serialized === 'true' || serialized === '1';
+      return serialized === CONFIG_ENV.TRUE || serialized === CONFIG_ENV.ONE;
     case ConfigValueType.JSON:
       try {
         return JSON.parse(serialized);
       } catch {
-        return {};
+        return CONFIG_VALUE_DEFAULT.EMPTY_OBJECT;
       }
     default:
       return serialized;
@@ -707,8 +568,8 @@ class DynamicConfigService extends EventEmitter {
    */
   keyToEnvVar(key) {
     return key
-      .replace(/\./g, '_')
-      .replace(/([a-z])([A-Z])/g, '$1_$2')
+      .replace(CONFIG_ENV_REGEX.DOT, CONFIG_SEPARATOR.UNDERSCORE)
+      .replace(CONFIG_ENV_REGEX.CAMEL_CASE, CONFIG_ENV_REPLACE.CAMEL_CASE)
       .toUpperCase();
   }
 
@@ -724,12 +585,12 @@ class DynamicConfigService extends EventEmitter {
     case ConfigValueType.NUMBER:
       return Number(value);
     case ConfigValueType.BOOLEAN:
-      return value.toLowerCase() === 'true' || value === '1';
+      return value.toLowerCase() === CONFIG_ENV.TRUE || value === CONFIG_ENV.ONE;
     case ConfigValueType.JSON:
       try {
         return JSON.parse(value);
       } catch {
-        return {};
+        return CONFIG_VALUE_DEFAULT.EMPTY_OBJECT;
       }
     default:
       return value;
@@ -743,9 +604,9 @@ class DynamicConfigService extends EventEmitter {
    * @private
    */
   inferType(value) {
-    if (typeof value === 'number') return ConfigValueType.NUMBER;
-    if (typeof value === 'boolean') return ConfigValueType.BOOLEAN;
-    if (typeof value === 'object') return ConfigValueType.JSON;
+    if (typeof value === TYPEOF.NUMBER) return ConfigValueType.NUMBER;
+    if (typeof value === TYPEOF.BOOLEAN) return ConfigValueType.BOOLEAN;
+    if (typeof value === TYPEOF.OBJECT) return ConfigValueType.JSON;
     return ConfigValueType.STRING;
   }
 
@@ -757,7 +618,7 @@ class DynamicConfigService extends EventEmitter {
     return {
       ...this.stats,
       watcherCount: Array.from(this.watchers.values())
-        .reduce((sum, set) => sum + set.size, 0),
+        .reduce((sum, set) => sum + set.size, NUM.ZERO),
       cachedKeys: this.configCache.size,
     };
   }

@@ -3,16 +3,20 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
   JoiningPhase,
 } from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {AssignmentStrategy} from '../../src/bootstrap/message-group-assignment.js';
+import {
+  MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
+} from '../../src/bootstrap/message-group-assignment.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {URL} from 'url';
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -98,22 +102,33 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     messageGroupServices: new Map(),
+    systemTableCache: new SystemTableCache(),
   });
+
+  const httpPost = async (url, body) => {
+    const u = new URL(url);
+    const res = await seedApi.getFastify().inject({
+      method: 'POST',
+      url: u.pathname,
+      payload: body,
+    });
+    return JSON.parse(res.payload);
+  };
 
   let service = null;
   // Use random port to avoid conflicts
   const joiningNodeWsPort = 19090 + Math.floor(Math.random() * 1000);
 
   try {
-    await seedApi.initialize(0);
-    const port = seedApi.getFastify().server.address().port;
+    await seedApi.initialize(0, {listen: false});
 
     // Create joining service with wsPort for WebSocket server
     service = new NodeJoiningService({
       nodeId: '550e8400-e29b-41d4-a716-446655440010',
       nodeAddress: `ws://localhost:${joiningNodeWsPort}`,
-      seedNodeAddress: `http://localhost:${port}`,
+      seedNodeAddress: 'http://localhost:0',
       wsPort: joiningNodeWsPort, // Enable WebSocket server for self-connection
+      httpPost,
       config: {
         httpTimeoutMs: 2000,
         leadershipWaitTimeoutMs: 5000,
@@ -156,6 +171,74 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
   }
 });
 
+test('NodeJoiningService - signals readiness after querying state', async (t) => {
+  initializeTestEnvironment();
+
+  const service = new NodeJoiningService({
+    nodeId: '550e8400-e29b-41d4-a716-446655440013',
+    nodeAddress: 'ws://localhost:19100',
+    seedNodeAddress: 'http://localhost:0',
+  });
+
+  const order = [];
+
+  // Mock getLeaderMessageGroupService to return a mock service
+  service.getLeaderMessageGroupService = () => ({
+    isLeaderReplica: () => true,
+    getLeaderId: () => 'mg-1-r0',
+    unifiedAddress: 'seed-node-1/message-group/mg-1-r0',
+  });
+
+  service.phaseContactSeed = async () => {
+    service.bootstrapResponse = {
+      seedNodeId: 'seed-node-1',
+      seedNodeWsAddress: 'ws://localhost:8080',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+        groupId: 'mg-1',
+        replicaCount: 1,
+      },
+      systemTableSnapshots: {
+        nodes: [],
+        partitions: [],
+        services: [],
+        tables: [],
+        message_groups: [],
+        replica_operations: [],
+      },
+    };
+    service.seedNodeId = 'seed-node-1';
+    service.seedNodeWsAddress = 'ws://localhost:8080';
+  };
+  service.phaseConnectWebSocket = async () => {
+    service.messageRouter = {
+      deliver: async () => ({acknowledged: true}),
+    };
+    service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
+  };
+  service.phaseCreateSelfHostedMessageGroup = async () => {};
+  service.phaseJoinExistingMessageGroup = async () => {};
+  service.phaseWaitForLeadership = async () => {};
+  service.initializeReplicaHandler = () => {};
+  service.initializeControlPlaneService = async () => {};
+  service.initializePullBasedAssignment = async () => {};
+  service.syncPulledReplicas = async () => {};
+  service.phaseQuerySystemState = async () => {
+    order.push('query');
+  };
+  service.signalReadyForReplicas = async () => {
+    order.push('ready');
+  };
+
+  const result = await service.join();
+
+  t.equal(result.success, true, 'join should succeed');
+  t.equal(order.includes('query'), true, 'should query system state');
+  t.equal(order.includes('ready'), true, 'should signal readiness');
+  t.equal(order.indexOf('query') < order.indexOf('ready'), true,
+    'should signal readiness after state query');
+});
+
 test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
   initializeTestEnvironment();
 
@@ -168,40 +251,81 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
     heartbeatIntervalMs: 10,
   };
 
-  // Create mock message group services with 2+ replicas on same node
-  // This triggers MOVE_REPLICA strategy in the assignment logic
-  const messageGroupServices = new Map();
-  const mockService = {
-    groupId: 'mg-1',
-    nodeId: 'seed-node-1',
-    replicaId: 'mg-1-r1',
-  };
-  messageGroupServices.set('mg-1-r1', mockService);
-  messageGroupServices.set('mg-1-r2', {...mockService, replicaId: 'mg-1-r2'});
-  messageGroupServices.set('mg-1-r3', {...mockService, replicaId: 'mg-1-r3'});
+  // Create system table cache with message group data
+  // This triggers MOVE_REPLICA strategy when there are 2+ replicas on same node
+  const systemTableCache = new SystemTableCache();
 
-  // Start a seed node API
+  // Add message group to cache - no message_groups table entry means no leader check
+  // The services table entries are used for MOVE_REPLICA assignment
+
+  // Add 3 replicas on the same node (seed-node-1) with leader role and addresses
+  // This satisfies the leader readiness check
+  systemTableCache.applySystemTableChange('services', 'INSERT', {
+    id: 'mg-1-r1',
+    service_id: 'mg-1-r1',
+    replica_id: 'mg-1-r1',
+    group_id: 'mg-1',
+    node_id: 'seed-node-1',
+    service_type: 'message_group',
+    address: 'seed-node-1/message-group/mg-1-r1',
+    raft_role: 'leader',
+    status: 'active',
+  });
+  systemTableCache.applySystemTableChange('services', 'INSERT', {
+    id: 'mg-1-r2',
+    service_id: 'mg-1-r2',
+    replica_id: 'mg-1-r2',
+    group_id: 'mg-1',
+    node_id: 'seed-node-1',
+    service_type: 'message_group',
+    address: 'seed-node-1/message-group/mg-1-r2',
+    raft_role: 'follower',
+    status: 'active',
+  });
+  systemTableCache.applySystemTableChange('services', 'INSERT', {
+    id: 'mg-1-r3',
+    service_id: 'mg-1-r3',
+    replica_id: 'mg-1-r3',
+    group_id: 'mg-1',
+    node_id: 'seed-node-1',
+    service_type: 'message_group',
+    address: 'seed-node-1/message-group/mg-1-r3',
+    raft_role: 'follower',
+    status: 'active',
+  });
+
+  // Start a seed node API with the system table cache
   const seedApi = new BootstrapAPI({
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
-    messageGroupServices,
+    systemTableCache: systemTableCache,
   });
+
+  const httpPost = async (url, body) => {
+    const u = new URL(url);
+    const res = await seedApi.getFastify().inject({
+      method: 'POST',
+      url: u.pathname,
+      payload: body,
+    });
+    return JSON.parse(res.payload);
+  };
 
   let service = null;
   // Use random port to avoid conflicts
   const joiningNodeWsPort = 19091 + Math.floor(Math.random() * 1000);
 
   try {
-    await seedApi.initialize(0);
-    const port = seedApi.getFastify().server.address().port;
+    await seedApi.initialize(0, {listen: false});
 
     // Create joining service with wsPort for WebSocket server
     // Use short leadership timeout since mock peers can't respond
     service = new NodeJoiningService({
       nodeId: '550e8400-e29b-41d4-a716-446655440011',
       nodeAddress: `ws://localhost:${joiningNodeWsPort}`,
-      seedNodeAddress: `http://localhost:${port}`,
+      seedNodeAddress: 'http://localhost:0',
       wsPort: joiningNodeWsPort, // Enable WebSocket server for self-connection
+      httpPost,
       config: {
         httpTimeoutMs: 2000,
         leadershipWaitTimeoutMs: 500, // Short timeout - mock peers can't respond
@@ -209,6 +333,10 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
         leadershipWaitMaxDelayMs: 50,
       },
     });
+
+    service.phaseWaitForLeadership = async () => {
+      throw new Error('leadership timeout (test)');
+    };
 
     const result = await service.join();
 
@@ -295,21 +423,32 @@ test('NodeJoiningService - emits events', async (t) => {
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     messageGroupServices: new Map(),
+    systemTableCache: new SystemTableCache(),
   });
+
+  const httpPost = async (url, body) => {
+    const u = new URL(url);
+    const res = await seedApi.getFastify().inject({
+      method: 'POST',
+      url: u.pathname,
+      payload: body,
+    });
+    return JSON.parse(res.payload);
+  };
 
   let service = null;
   // Use random port to avoid conflicts
   const joiningNodeWsPort = 19092 + Math.floor(Math.random() * 1000);
 
   try {
-    await seedApi.initialize(0);
-    const port = seedApi.getFastify().server.address().port;
+    await seedApi.initialize(0, {listen: false});
 
     service = new NodeJoiningService({
       nodeId: '550e8400-e29b-41d4-a716-446655440012',
       nodeAddress: `ws://localhost:${joiningNodeWsPort}`,
-      seedNodeAddress: `http://localhost:${port}`,
+      seedNodeAddress: 'http://localhost:0',
       wsPort: joiningNodeWsPort, // Enable WebSocket server for self-connection
+      httpPost,
       config: {
         httpTimeoutMs: 2000,
         leadershipWaitTimeoutMs: 5000,

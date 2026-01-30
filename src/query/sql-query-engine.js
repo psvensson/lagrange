@@ -1,56 +1,93 @@
 /**
  * SQL Query Engine - Main entry point for SQL query processing.
  * Coordinates parsing, partition resolution, and execution.
- * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 15.1, 15.2, 15.3, 15.4, 20.1, 20.2, 20.3, 20.6, 20.7,
- *               20.10, 21.1, 21.2, 21.3
+ *
+ * System Cache-Based Routing:
+ * - All queries route through system cache (single source of truth)
+ * - System cache provides partition metadata and leader addresses
+ * - No bootstrap directories or fallback mechanisms
+ * - All communication through message router using service addresses
+ *
+ * Query Routing Flow:
+ * 1. Parse SQL to determine target table
+ * 2. Get partitions from system cache
+ * 3. Resolve which partitions to query based on WHERE clause
+ * 4. Find partition leader addresses from system cache
+ * 5. Route queries through message router to leaders
+ * 6. Aggregate and return results
+ *
+ * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 15.1, 15.2, 15.3, 15.4, 20.1, 20.2, 20.3,
+ *               20.6, 20.7, 20.10, 21.1, 21.2, 21.3
  */
 
 import {SQLParser} from './sql-parser.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {PartitionResolver} from './partition-resolver.js';
 import {QueryExecutor} from './query-executor.js';
 import {TableCreationService} from './table-creation-service.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {LOG_MSG, TABLES} from '../constants/index.js';
+import {
+  QUERY_AST_NODE,
+  QUERY_AST_TYPE,
+  QUERY_CONFIG_KEY,
+  QUERY_DEFAULTS,
+  QUERY_DEFAULT_VALUE,
+  QUERY_ERROR_CODE,
+  QUERY_ERROR_MSG,
+  QUERY_LOG_MSG,
+  QUERY_OPERATION,
+  QUERY_SESSION,
+  QUERY_SUBSYSTEM,
+} from './query-constants.js';
 
 /**
  * SQLQueryEngine is the main entry point for SQL query processing.
  * It coordinates parsing, partition resolution, and parallel execution.
+ *
+ * System Cache-Based Routing:
+ * - Routes ALL queries through message router (no local vs remote distinction)
+ * - System cache is the single source of truth for partition locations
+ * - No bootstrap directories or fallback mechanisms
+ * - All partition leader addresses come from system cache
  */
 class SQLQueryEngine {
   /**
    * Create a new SQL query engine.
    * @param {Object} options - Configuration options.
-   * @param {Object} options.systemCache - System table cache.
-   * @param {Object} options.partitionRegistry - Registry of partition services.
+   * @param {Object} options.systemCache - System table cache for lookups.
+   * @param {Object} options.messageRouter - Message router for query routing.
    * @param {Object} options.cdcIntegrationService - CDC integration service.
    * @param {string} options.nodeId - Node ID.
    */
   constructor(options = {}) {
     this.systemCache = options.systemCache || null;
-    this.partitionRegistry = options.partitionRegistry || new Map();
+    this.messageRouter = options.messageRouter || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.nodeId = options.nodeId || 'sql-engine';
+    this.nodeId = options.nodeId || QUERY_SUBSYSTEM.SQL_QUERY_ENGINE;
 
     this.partitionResolver = new PartitionResolver({
       systemCache: this.systemCache,
     });
 
     this.queryExecutor = new QueryExecutor({
-      partitionRegistry: this.partitionRegistry,
+      messageRouter: this.messageRouter,
+      systemCache: this.systemCache,
       nodeId: this.nodeId,
     });
 
     this.tableCreationService = new TableCreationService({
       systemCache: this.systemCache,
       cdcIntegrationService: this.cdcIntegrationService,
-      partitionRegistry: this.partitionRegistry,
     });
 
     this.logger = this.initLogger();
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.queryTimeoutMs = config.get('query.timeoutMs') || 30000;
+    this.queryTimeoutMs = config.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
+      QUERY_DEFAULTS.QUERY_TIMEOUT_MS;
 
     // Transaction state per client/session
     this.activeTransactions = new Map(); // sessionId -> {partitionId, partition}
@@ -65,7 +102,7 @@ class SQLQueryEngine {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('sql-query-engine');
+        return loggingService.forSubsystem(QUERY_SUBSYSTEM.SQL_QUERY_ENGINE);
       }
     } catch {
       // Logging not available
@@ -81,15 +118,16 @@ class SQLQueryEngine {
     this.systemCache = cache;
     this.partitionResolver.setSystemCache(cache);
     this.tableCreationService.setSystemCache(cache);
+    this.queryExecutor.setSystemCache(cache);
   }
 
   /**
-   * Set the partition registry.
-   * @param {Map|Object} registry - Partition registry.
+   * Set the message router for query routing.
+   * @param {Object} router - Message router instance.
    */
-  setPartitionRegistry(registry) {
-    this.partitionRegistry = registry;
-    this.queryExecutor.setPartitionRegistry(registry);
+  setMessageRouter(router) {
+    this.messageRouter = router;
+    this.queryExecutor.setMessageRouter(router);
   }
 
   /**
@@ -110,63 +148,75 @@ class SQLQueryEngine {
    * @return {Promise<Object>} Query result.
    */
   async executeQuery(sql, params = [], options = {}) {
-    const sessionId = options.sessionId || 'default';
+    const sessionId = options.sessionId || QUERY_SESSION.DEFAULT;
 
-    this.logger.debug('Executing SQL query', {
+    this.logger.debug(QUERY_LOG_MSG.EXECUTING_SQL_QUERY, {
       sql: sql.substring(0, 100),
       paramCount: params.length,
       sessionId,
     });
 
+    // Parse the SQL
+    let ast;
     try {
-      // Parse the SQL
       const parser = new SQLParser(sql);
-      const ast = parser.parse();
+      ast = parser.parse();
+    } catch (parseError) {
+      this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
+        sql: sql.substring(0, 100),
+        error: parseError.message,
+      });
+      return {
+        success: false,
+        error: parseError.message,
+        errorCode: QUERY_ERROR_CODE.SYNTAX_ERROR,
+      };
+    }
 
+    try {
       // Route based on statement type
       let result;
       switch (ast.type) {
-      case 'SELECT':
+      case QUERY_AST_TYPE.SELECT:
         result = await this.executeSelect(ast, params, sessionId);
         break;
 
-      case 'INSERT':
+      case QUERY_AST_TYPE.INSERT:
         result = await this.executeInsert(ast, params, sessionId);
         break;
 
-      case 'UPDATE':
+      case QUERY_AST_TYPE.UPDATE:
         result = await this.executeUpdate(ast, params, sessionId);
         break;
 
-      case 'DELETE':
+      case QUERY_AST_TYPE.DELETE:
         result = await this.executeDelete(ast, params, sessionId);
         break;
 
-      case 'CREATE_TABLE':
+      case QUERY_AST_TYPE.CREATE_TABLE:
         result = await this.executeCreateTable(ast, sessionId);
         break;
 
-      case 'BEGIN_TRANSACTION':
+      case QUERY_AST_TYPE.BEGIN_TRANSACTION:
         return this.handleBeginTransaction(sessionId);
 
-      case 'COMMIT':
+      case QUERY_AST_TYPE.COMMIT:
         return this.handleCommit(sessionId);
 
-      case 'ROLLBACK':
+      case QUERY_AST_TYPE.ROLLBACK:
         return this.handleRollback(sessionId);
 
       default:
-        throw new Error(`Unsupported statement type: ${ast.type}`);
+        throw new Error(`${QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX}${ast.type}`);
       }
 
       // Strip partition details from results (Requirement 20.10)
       return this.tableCreationService.stripPartitionDetails(result);
     } catch (error) {
-      this.logger.error('Query execution failed', {
+      this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
         sql: sql.substring(0, 100),
         error: error.message,
       });
-
       return {
         success: false,
         error: error.message,
@@ -204,8 +254,8 @@ class SQLQueryEngine {
     if (partitions.length === 0) {
       return {
         success: false,
-        error: `Table not found: ${tableName}`,
-        errorCode: 'TABLE_NOT_FOUND',
+        error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
+        errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
       };
     }
 
@@ -216,18 +266,21 @@ class SQLQueryEngine {
       partitions,
     );
 
-    this.logger.debug('Resolved partitions for SELECT', {
+    this.logger.debug(QUERY_LOG_MSG.RESOLVED_PARTITIONS_SELECT, {
       tableName,
       totalPartitions: partitions.length,
       targetPartitions: partitionIds.length,
       sessionId,
     });
 
+    const preferLeader = this.isSystemTable(tableName);
+
     // Execute on resolved partitions
     const result = await this.queryExecutor.executeSelect(
       ast,
       partitionIds,
       params,
+      {preferLeader},
     );
 
     return {
@@ -253,14 +306,14 @@ class SQLQueryEngine {
     if (partitions.length === 0) {
       return {
         success: false,
-        error: `Table not found: ${tableName}`,
-        errorCode: 'TABLE_NOT_FOUND',
+        error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
+        errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
       };
     }
 
     // Get table info to find primary key
     const tableInfo = this.getTableInfo(tableName);
-    const primaryKey = tableInfo?.primaryKey || 'id';
+    const primaryKey = tableInfo?.primaryKey || QUERY_DEFAULT_VALUE.PRIMARY_KEY;
     const primaryKeyIndex = this.findPrimaryKeyIndex(ast, primaryKey);
 
     // Route each row to appropriate partition
@@ -277,8 +330,8 @@ class SQLQueryEngine {
       if (!partitionId) {
         return {
           success: false,
-          error: `No partition found for key: ${keyValue}`,
-          errorCode: 'PARTITION_NOT_FOUND',
+          error: `${QUERY_ERROR_MSG.PARTITION_FOR_KEY_PREFIX}${keyValue}`,
+          errorCode: QUERY_ERROR_CODE.PARTITION_NOT_FOUND,
         };
       }
 
@@ -293,9 +346,8 @@ class SQLQueryEngine {
     if (txState && rowsByPartition.size > 1) {
       return {
         success: false,
-        error: 'Cross-partition transactions are not supported. ' +
-               'INSERT affects multiple partitions.',
-        errorCode: 'CROSS_PARTITION_TRANSACTION',
+        error: QUERY_ERROR_MSG.CROSS_PARTITION_INSERT,
+        errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
       };
     }
 
@@ -305,16 +357,15 @@ class SQLQueryEngine {
         if (partitionId !== txState.partitionId) {
           return {
             success: false,
-            error: 'Cross-partition transactions are not supported. ' +
-                   `Transaction bound to partition ${txState.partitionId}, ` +
-                   `but INSERT targets partition ${partitionId}`,
-            errorCode: 'CROSS_PARTITION_TRANSACTION',
+            error: `${QUERY_ERROR_MSG.TX_BOUND_PREFIX}${txState.partitionId}` +
+              `${QUERY_ERROR_MSG.TX_BOUND_INSERT_SUFFIX}${partitionId}`,
+            errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
           };
         }
       }
     }
 
-    this.logger.debug('Routing INSERT to partitions', {
+    this.logger.debug(QUERY_LOG_MSG.ROUTING_INSERT, {
       tableName,
       rowCount: ast.values.length,
       partitionCount: rowsByPartition.size,
@@ -328,10 +379,7 @@ class SQLQueryEngine {
     for (const [partitionId, rows] of rowsByPartition) {
       // Bind transaction to partition if in transaction
       if (txState && !txState.partitionId) {
-        const partition = this.getPartition(partitionId);
-        if (partition) {
-          await this.bindTransactionToPartition(sessionId, partitionId, partition);
-        }
+        await this.bindTransactionToPartition(sessionId, partitionId);
       }
 
       const partitionAst = {
@@ -351,7 +399,7 @@ class SQLQueryEngine {
 
     return {
       success: true,
-      operation: 'INSERT',
+      operation: QUERY_OPERATION.INSERT,
       affectedRows: totalAffected,
       partitions: affectedPartitions,
       tableName,
@@ -375,8 +423,8 @@ class SQLQueryEngine {
     if (partitions.length === 0) {
       return {
         success: false,
-        error: `Table not found: ${tableName}`,
-        errorCode: 'TABLE_NOT_FOUND',
+        error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
+        errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
       };
     }
 
@@ -392,9 +440,8 @@ class SQLQueryEngine {
     if (txState && partitionIds.length > 1) {
       return {
         success: false,
-        error: 'Cross-partition transactions are not supported. ' +
-               'UPDATE affects multiple partitions.',
-        errorCode: 'CROSS_PARTITION_TRANSACTION',
+        error: QUERY_ERROR_MSG.CROSS_PARTITION_UPDATE,
+        errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
       };
     }
 
@@ -402,23 +449,19 @@ class SQLQueryEngine {
       if (!partitionIds.includes(txState.partitionId)) {
         return {
           success: false,
-          error: 'Cross-partition transactions are not supported. ' +
-                 `Transaction bound to partition ${txState.partitionId}, ` +
-                 'but UPDATE targets different partition(s)',
-          errorCode: 'CROSS_PARTITION_TRANSACTION',
+          error: `${QUERY_ERROR_MSG.TX_BOUND_PREFIX}${txState.partitionId}` +
+            QUERY_ERROR_MSG.TX_BOUND_UPDATE_SUFFIX,
+          errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
         };
       }
     }
 
     // Bind transaction to partition if in transaction
     if (txState && !txState.partitionId && partitionIds.length === 1) {
-      const partition = this.getPartition(partitionIds[0]);
-      if (partition) {
-        await this.bindTransactionToPartition(sessionId, partitionIds[0], partition);
-      }
+      await this.bindTransactionToPartition(sessionId, partitionIds[0]);
     }
 
-    this.logger.debug('Routing UPDATE to partitions', {
+    this.logger.debug(QUERY_LOG_MSG.ROUTING_UPDATE, {
       tableName,
       partitionCount: partitionIds.length,
       sessionId,
@@ -454,8 +497,8 @@ class SQLQueryEngine {
     if (partitions.length === 0) {
       return {
         success: false,
-        error: `Table not found: ${tableName}`,
-        errorCode: 'TABLE_NOT_FOUND',
+        error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
+        errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
       };
     }
 
@@ -471,9 +514,8 @@ class SQLQueryEngine {
     if (txState && partitionIds.length > 1) {
       return {
         success: false,
-        error: 'Cross-partition transactions are not supported. ' +
-               'DELETE affects multiple partitions.',
-        errorCode: 'CROSS_PARTITION_TRANSACTION',
+        error: QUERY_ERROR_MSG.CROSS_PARTITION_DELETE,
+        errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
       };
     }
 
@@ -481,23 +523,19 @@ class SQLQueryEngine {
       if (!partitionIds.includes(txState.partitionId)) {
         return {
           success: false,
-          error: 'Cross-partition transactions are not supported. ' +
-                 `Transaction bound to partition ${txState.partitionId}, ` +
-                 'but DELETE targets different partition(s)',
-          errorCode: 'CROSS_PARTITION_TRANSACTION',
+          error: `${QUERY_ERROR_MSG.TX_BOUND_PREFIX}${txState.partitionId}` +
+            QUERY_ERROR_MSG.TX_BOUND_DELETE_SUFFIX,
+          errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
         };
       }
     }
 
     // Bind transaction to partition if in transaction
     if (txState && !txState.partitionId && partitionIds.length === 1) {
-      const partition = this.getPartition(partitionIds[0]);
-      if (partition) {
-        await this.bindTransactionToPartition(sessionId, partitionIds[0], partition);
-      }
+      await this.bindTransactionToPartition(sessionId, partitionIds[0]);
     }
 
-    this.logger.debug('Routing DELETE to partitions', {
+    this.logger.debug(QUERY_LOG_MSG.ROUTING_DELETE, {
       tableName,
       partitionCount: partitionIds.length,
       sessionId,
@@ -522,17 +560,17 @@ class SQLQueryEngine {
    * @return {Object} Transaction result.
    * @private
    */
-  handleBeginTransaction(sessionId = 'default') {
+  handleBeginTransaction(sessionId = QUERY_SESSION.DEFAULT) {
     // Check if session already has an active transaction
     if (this.activeTransactions.has(sessionId)) {
       return {
         success: false,
-        error: 'Transaction already active for this session',
-        errorCode: 'TRANSACTION_ACTIVE',
+        error: QUERY_ERROR_MSG.TRANSACTION_ACTIVE,
+        errorCode: QUERY_ERROR_CODE.TRANSACTION_ACTIVE,
       };
     }
 
-    this.logger.debug('BEGIN TRANSACTION', {sessionId});
+    this.logger.debug(QUERY_LOG_MSG.BEGIN_TRANSACTION, {sessionId});
 
     // Transaction will be bound to a partition on first write
     this.activeTransactions.set(sessionId, {
@@ -543,36 +581,49 @@ class SQLQueryEngine {
 
     return {
       success: true,
-      operation: 'BEGIN_TRANSACTION',
+      operation: QUERY_OPERATION.BEGIN_TRANSACTION,
       sessionId,
     };
   }
 
   /**
    * Handle COMMIT.
+   * Routes through message router to the bound partition.
    * @param {string} sessionId - Session ID.
    * @return {Promise<Object>} Commit result.
    * @private
    */
-  async handleCommit(sessionId = 'default') {
+  async handleCommit(sessionId = QUERY_SESSION.DEFAULT) {
     const txState = this.activeTransactions.get(sessionId);
 
     if (!txState) {
       return {
         success: false,
-        error: 'No active transaction to commit',
-        errorCode: 'NO_TRANSACTION',
+        error: QUERY_ERROR_MSG.NO_TRANSACTION_COMMIT,
+        errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
       };
     }
 
-    this.logger.debug('COMMIT', {sessionId, partitionId: txState.partitionId});
+    this.logger.debug(QUERY_LOG_MSG.COMMIT, {sessionId, partitionId: txState.partitionId});
 
     try {
-      let result = {success: true, operation: 'COMMIT'};
+      let result = {success: true, operation: QUERY_OPERATION.COMMIT};
 
-      // If transaction was bound to a partition, commit it
-      if (txState.partition && txState.partition.isInTransaction()) {
-        result = await txState.partition.commitTransaction();
+      // If transaction was bound to a partition, commit it via message router
+      if (txState.partitionId) {
+        const serviceInfo = this.queryExecutor.findPartitionService(txState.partitionId);
+        if (serviceInfo) {
+          const response = await this.messageRouter.deliver(serviceInfo.address, {
+            type: QUERY_OPERATION.TRANSACTION,
+            operation: QUERY_OPERATION.COMMIT,
+            sessionId,
+          });
+
+          if (!response.acknowledged || !response.success) {
+            throw new Error(response.error || QUERY_ERROR_MSG.COMMIT_FAILED);
+          }
+          result = {success: true, operation: QUERY_OPERATION.COMMIT};
+        }
       }
 
       // Clean up transaction state
@@ -582,40 +633,53 @@ class SQLQueryEngine {
     } catch (error) {
       // Clean up on error
       this.activeTransactions.delete(sessionId);
-
-      return {
-        success: false,
+      this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
+        operation: QUERY_OPERATION.COMMIT,
+        sessionId,
         error: error.message,
-        errorCode: 'COMMIT_FAILED',
-      };
+      });
+      throw error;
     }
   }
 
   /**
    * Handle ROLLBACK.
+   * Routes through message router to the bound partition.
    * @param {string} sessionId - Session ID.
    * @return {Promise<Object>} Rollback result.
    * @private
    */
-  async handleRollback(sessionId = 'default') {
+  async handleRollback(sessionId = QUERY_SESSION.DEFAULT) {
     const txState = this.activeTransactions.get(sessionId);
 
     if (!txState) {
       return {
         success: false,
-        error: 'No active transaction to rollback',
-        errorCode: 'NO_TRANSACTION',
+        error: QUERY_ERROR_MSG.NO_TRANSACTION_ROLLBACK,
+        errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
       };
     }
 
-    this.logger.debug('ROLLBACK', {sessionId, partitionId: txState.partitionId});
+    this.logger.debug(QUERY_LOG_MSG.ROLLBACK, {sessionId, partitionId: txState.partitionId});
 
     try {
-      let result = {success: true, operation: 'ROLLBACK'};
+      let result = {success: true, operation: QUERY_OPERATION.ROLLBACK};
 
-      // If transaction was bound to a partition, rollback it
-      if (txState.partition && txState.partition.isInTransaction()) {
-        result = await txState.partition.rollbackTransaction();
+      // If transaction was bound to a partition, rollback it via message router
+      if (txState.partitionId) {
+        const serviceInfo = this.queryExecutor.findPartitionService(txState.partitionId);
+        if (serviceInfo) {
+          const response = await this.messageRouter.deliver(serviceInfo.address, {
+            type: QUERY_OPERATION.TRANSACTION,
+            operation: QUERY_OPERATION.ROLLBACK,
+            sessionId,
+          });
+
+          if (!response.acknowledged || !response.success) {
+            throw new Error(response.error || QUERY_ERROR_MSG.ROLLBACK_FAILED);
+          }
+          result = {success: true, operation: QUERY_OPERATION.ROLLBACK};
+        }
       }
 
       // Clean up transaction state
@@ -625,12 +689,12 @@ class SQLQueryEngine {
     } catch (error) {
       // Clean up on error
       this.activeTransactions.delete(sessionId);
-
-      return {
-        success: false,
+      this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
+        operation: QUERY_OPERATION.ROLLBACK,
+        sessionId,
         error: error.message,
-        errorCode: 'ROLLBACK_FAILED',
-      };
+      });
+      throw error;
     }
   }
 
@@ -639,7 +703,7 @@ class SQLQueryEngine {
    * @param {string} sessionId - Session ID.
    * @return {boolean} True if transaction is active.
    */
-  hasActiveTransaction(sessionId = 'default') {
+  hasActiveTransaction(sessionId = QUERY_SESSION.DEFAULT) {
     return this.activeTransactions.has(sessionId);
   }
 
@@ -648,111 +712,100 @@ class SQLQueryEngine {
    * @param {string} sessionId - Session ID.
    * @return {string|null} Partition ID or null.
    */
-  getTransactionPartition(sessionId = 'default') {
+  getTransactionPartition(sessionId = QUERY_SESSION.DEFAULT) {
     const txState = this.activeTransactions.get(sessionId);
     return txState?.partitionId || null;
   }
 
   /**
    * Bind a transaction to a partition (on first write).
+   * Transactions are routed through message router like all other operations.
    * @param {string} sessionId - Session ID.
    * @param {string} partitionId - Partition ID.
-   * @param {Object} partition - Partition service.
    * @return {Promise<void>}
    * @private
    */
-  async bindTransactionToPartition(sessionId, partitionId, partition) {
+  async bindTransactionToPartition(sessionId, partitionId) {
     const txState = this.activeTransactions.get(sessionId);
 
     if (!txState) {
-      throw new Error('No active transaction');
+      throw new Error(QUERY_ERROR_MSG.NO_ACTIVE_TRANSACTION);
     }
 
     if (txState.partitionId && txState.partitionId !== partitionId) {
       throw new Error(
-        'Cross-partition transactions are not supported. ' +
-        `Transaction bound to partition ${txState.partitionId}, ` +
-        `but operation targets partition ${partitionId}`,
+        `${QUERY_ERROR_MSG.TX_BOUND_PREFIX}${txState.partitionId}` +
+        `${QUERY_ERROR_MSG.TX_BOUND_OPERATION_SUFFIX}${partitionId}`,
       );
     }
 
     if (!txState.partitionId) {
-      // First write - bind to this partition and begin transaction
+      // First write - bind to this partition
       txState.partitionId = partitionId;
-      txState.partition = partition;
 
-      // Begin transaction on the partition
-      await partition.beginTransaction();
-    }
-  }
+      // Begin transaction via message router
+      // The partition service will handle the BEGIN TRANSACTION message
+      const serviceInfo = this.queryExecutor.findPartitionService(partitionId);
+      if (!serviceInfo) {
+        throw new Error(`${QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND_PREFIX}${partitionId}`);
+      }
 
-  /**
-   * Get a partition service by ID.
-   * @param {string} partitionId - Partition ID.
-   * @return {Object|null} Partition service or null.
-   * @private
-   */
-  getPartition(partitionId) {
-    if (this.partitionRegistry instanceof Map) {
-      return this.partitionRegistry.get(partitionId);
+      const response = await this.messageRouter.deliver(serviceInfo.address, {
+        type: QUERY_OPERATION.TRANSACTION,
+        operation: QUERY_OPERATION.BEGIN,
+        sessionId,
+      });
+
+      if (!response.acknowledged || !response.success) {
+        throw new Error(response.error || QUERY_ERROR_MSG.BEGIN_FAILED);
+      }
     }
-    return this.partitionRegistry[partitionId] || null;
   }
 
   /**
    * Get partitions for a table.
+   *
+   * System Cache Lookup:
+   * - Uses ONLY the system cache (single source of truth)
+   * - No fallbacks or bootstrap directories
+   * - System cache populated from bootstrap snapshots
+   * - CDC events keep cache synchronized
+   * - Throws error if cache not available
+   *
+   * Requirements: 3.1, 5.1
    * @param {string} tableName - Table name.
    * @return {Array} Array of partition objects.
+   * @throws {Error} If system cache is not available.
    * @private
    */
   getTablePartitions(tableName) {
-    // Try to get from system cache
-    if (this.systemCache) {
-      try {
-        let cachePartitions = [];
-        if (typeof this.systemCache.filter === 'function') {
-          cachePartitions = this.systemCache.filter('partitions', (p) =>
-            p.table_name === tableName ||
-            p.tableName === tableName ||
-            p.table_id === tableName ||
-            p.tableId === tableName,
-          ) || [];
-        } else if (typeof this.systemCache.getAll === 'function') {
-          const all = this.systemCache.getAll('partitions') || [];
-          cachePartitions = all.filter((p) =>
-            p.table_name === tableName ||
-            p.tableName === tableName ||
-            p.table_id === tableName ||
-            p.tableId === tableName,
-          );
-        }
-        // Only return cache results if we found partitions
-        if (cachePartitions.length > 0) {
-          return cachePartitions;
-        }
-      } catch {
-        // Cache not available, fall through to registry
-      }
+    if (!this.systemCache) {
+      throw new Error(`${QUERY_ERROR_MSG.SYSTEM_CACHE_NOT_AVAILABLE}: ${tableName}`);
     }
 
-    // Fallback: check partition registry directly
-    const partitions = [];
-    const registry = this.partitionRegistry instanceof Map ?
-      this.partitionRegistry : new Map(Object.entries(this.partitionRegistry));
-
-    for (const [partitionId, partition] of registry) {
-      if (partition.tableName === tableName ||
-          partition.tableId === tableName) {
-        partitions.push({
-          partition_id: partitionId,
-          table_name: partition.tableName,
-          partition_key_start: partition.keyRange?.start,
-          partition_key_end: partition.keyRange?.end,
-        });
-      }
+    // Get partitions from system cache - the single source of truth
+    if (typeof this.systemCache.filter === 'function') {
+      const partitions = this.systemCache.filter(TABLES.PARTITIONS, (p) =>
+        p.table_name === tableName ||
+        p.tableName === tableName ||
+        p.table_id === tableName ||
+        p.tableId === tableName,
+      ) || [];
+      return partitions;
     }
 
-    return partitions;
+    if (typeof this.systemCache.getAll === 'function') {
+      const all = this.systemCache.getAll(TABLES.PARTITIONS) || [];
+      const partitions = all.filter((p) =>
+        p.table_name === tableName ||
+        p.tableName === tableName ||
+        p.table_id === tableName ||
+        p.tableId === tableName,
+      );
+      return partitions;
+    }
+
+    throw new Error(`${QUERY_ERROR_MSG.SYSTEM_CACHE_UNSUPPORTED}: ${tableName}`);
   }
 
   /**
@@ -768,10 +821,10 @@ class SQLQueryEngine {
 
     try {
       if (typeof this.systemCache.get === 'function') {
-        return this.systemCache.get('tables', tableName);
+        return this.systemCache.get(TABLES.TABLES, tableName);
       }
       if (typeof this.systemCache.find === 'function') {
-        return this.systemCache.find('tables', (t) =>
+        return this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === tableName || t.tableName === tableName,
         );
       }
@@ -780,6 +833,16 @@ class SQLQueryEngine {
     }
 
     return null;
+  }
+
+  /**
+   * Check if a table is a system table.
+   * @param {string} tableName - Table name.
+   * @return {boolean} True if system table.
+   * @private
+   */
+  isSystemTable(tableName) {
+    return Object.values(SystemTableName).includes(tableName);
   }
 
   /**
@@ -814,7 +877,7 @@ class SQLQueryEngine {
     }
 
     const valueExpr = row[keyIndex];
-    if (valueExpr.type === 'literal') {
+    if (valueExpr.type === QUERY_AST_NODE.LITERAL) {
       return valueExpr.value;
     }
 
@@ -831,16 +894,16 @@ class SQLQueryEngine {
     const message = error.message.toLowerCase();
 
     if (message.includes('parse') || message.includes('syntax')) {
-      return 'SYNTAX_ERROR';
+      return QUERY_ERROR_CODE.SYNTAX_ERROR;
     }
     if (message.includes('table not found')) {
-      return 'TABLE_NOT_FOUND';
+      return QUERY_ERROR_CODE.TABLE_NOT_FOUND;
     }
     if (message.includes('timeout')) {
-      return 'TIMEOUT';
+      return QUERY_ERROR_CODE.TIMEOUT;
     }
 
-    return 'INTERNAL_ERROR';
+    return QUERY_ERROR_CODE.INTERNAL_ERROR;
   }
 
   /**

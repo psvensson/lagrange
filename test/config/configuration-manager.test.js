@@ -3,7 +3,7 @@
  * Tests for centralized configuration management.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {
   ConfigurationManager,
   DEFAULT_CONFIG,

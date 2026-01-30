@@ -3,77 +3,77 @@ TAP version 14
     ok 1 - should set nodeId
     ok 2 - should not be initialized
     1..2
-ok 1 - CDCIntegrationService - constructor # time=3.981ms
+ok 1 - CDCIntegrationService - constructor # time=4.003ms
 
 # Subtest: CDCIntegrationService - initialize
     ok 1 - should be initialized
     1..1
-ok 2 - CDCIntegrationService - initialize # time=0.875ms
+ok 2 - CDCIntegrationService - initialize # time=0.92ms
 
 # Subtest: CDCIntegrationService - insertSystemTableRow
     ok 1 - should succeed
     ok 2 - should be INSERT operation
     ok 3 - should have correct table name
-    ok 4 - should insert one row
-    ok 5 - should insert to correct table
+    ok 4 - should execute one query
+    ok 5 - should be INSERT query
     1..5
-ok 3 - CDCIntegrationService - insertSystemTableRow # time=1.345ms
+ok 3 - CDCIntegrationService - insertSystemTableRow # time=2.128ms
 
 # Subtest: CDCIntegrationService - insertSystemTableRow generates id
     ok 1 - should succeed
     ok 2 - should generate node_id
     1..2
-ok 4 - CDCIntegrationService - insertSystemTableRow generates id # time=0.915ms
+ok 4 - CDCIntegrationService - insertSystemTableRow generates id # time=0.877ms
 
 # Subtest: CDCIntegrationService - updateSystemTableRow
     ok 1 - should succeed
     ok 2 - should be UPDATE operation
     ok 3 - should have correct table name
-    ok 4 - should update one row
-    ok 5 - should have correct whereClause
+    ok 4 - should execute one query
+    ok 5 - should be UPDATE query
     1..5
-ok 5 - CDCIntegrationService - updateSystemTableRow # time=1.912ms
+ok 5 - CDCIntegrationService - updateSystemTableRow # time=1.378ms
 
 # Subtest: CDCIntegrationService - deleteSystemTableRow
     ok 1 - should succeed
     ok 2 - should be DELETE operation
     ok 3 - should have correct table name
-    ok 4 - should delete one row
-    ok 5 - should have correct whereClause
+    ok 4 - should execute one query
+    ok 5 - should be DELETE query
     1..5
-ok 6 - CDCIntegrationService - deleteSystemTableRow # time=1.158ms
+ok 6 - CDCIntegrationService - deleteSystemTableRow # time=1.228ms
 
 # Subtest: CDCIntegrationService - validates table name
     ok 1 - should have error message
     1..1
-ok 7 - CDCIntegrationService - validates table name # time=0.675ms
+ok 7 - CDCIntegrationService - validates table name # time=0.436ms
 
 # Subtest: CDCIntegrationService - validates data object
     ok 1 - should have error message
     1..1
-ok 8 - CDCIntegrationService - validates data object # time=0.818ms
+ok 8 - CDCIntegrationService - validates data object # time=0.364ms
 
 # Subtest: CDCIntegrationService - requires primary key for update
     ok 1 - should have error message
     1..1
-ok 9 - CDCIntegrationService - requires primary key for update # time=0.906ms
+ok 9 - CDCIntegrationService - requires primary key for update # time=0.375ms
 
 # Subtest: CDCIntegrationService - requires primary key for delete
     ok 1 - should have error message
     1..1
-ok 10 - CDCIntegrationService - requires primary key for delete # time=0.716ms
+ok 10 - CDCIntegrationService - requires primary key for delete # time=0.462ms
 
-{"level":50,"time":"2026-01-23T06:22:33.796Z","nodeId":"6d5016f9-3f30-44ba-8b4c-43c02658aae0","pid":416854,"subsystem":"cdc-integration","tableName":"nodes","id":"1","error":"No partition available for system table: nodes","nodeId":"6d5016f9-3f30-44ba-8b4c-43c02658aae0","msg":"Failed to insert system table row"}
-# Subtest: CDCIntegrationService - throws when partition not available
+{"level":50,"time":"2026-01-30T11:17:58.645Z","nodeId":"c04d485c-f9f0-42da-8435-32a7e14fd7f6","pid":1331032,"subsystem":"cdc-integration","tableName":"nodes","id":"1","error":"CDCIntegrationService not properly initialized: sqlQueryEngine not provided","nodeId":"c04d485c-f9f0-42da-8435-32a7e14fd7f6","msg":"Failed to insert system table row"}
+# Subtest: CDCIntegrationService - throws when sqlQueryEngine not available
     ok 1 - should have error message
     1..1
-ok 11 - CDCIntegrationService - throws when partition not available # time=1.908ms
+ok 11 - CDCIntegrationService - throws when sqlQueryEngine not available # time=1.741ms
 
-{"level":50,"time":"2026-01-23T06:22:33.817Z","nodeId":"d9f8b86f-ee09-4ae9-8e0e-9881f7c2767d","pid":416854,"subsystem":"cdc-integration","tableName":"nodes","id":"1","error":"CDCIntegrationService not properly initialized: getPartitionForTable function not provided","nodeId":"d9f8b86f-ee09-4ae9-8e0e-9881f7c2767d","msg":"Failed to insert system table row"}
+{"level":50,"time":"2026-01-30T11:17:58.659Z","nodeId":"55170e1f-965a-4687-afb7-3446224e660c","pid":1331032,"subsystem":"cdc-integration","tableName":"nodes","id":"1","error":"CDCIntegrationService not properly initialized: sqlQueryEngine not provided","nodeId":"55170e1f-965a-4687-afb7-3446224e660c","msg":"Failed to insert system table row"}
 # Subtest: CDCIntegrationService - throws when not initialized
     ok 1 - should have error message
     1..1
-ok 12 - CDCIntegrationService - throws when not initialized # time=1.099ms
+ok 12 - CDCIntegrationService - throws when not initialized # time=0.563ms
 
 # Subtest: CDCIntegrationService - tracks statistics
     ok 1 - should track inserts
@@ -81,7 +81,7 @@ ok 12 - CDCIntegrationService - throws when not initialized # time=1.099ms
     ok 3 - should track deletes
     ok 4 - should track total
     1..4
-ok 13 - CDCIntegrationService - tracks statistics # time=0.696ms
+ok 13 - CDCIntegrationService - tracks statistics # time=1.083ms
 
 # Subtest: CDCIntegrationService - emits events
     ok 1 - should emit 3 events
@@ -89,7 +89,7 @@ ok 13 - CDCIntegrationService - tracks statistics # time=0.696ms
     ok 3 - should emit update event
     ok 4 - should emit delete event
     1..4
-ok 14 - CDCIntegrationService - emits events # time=0.573ms
+ok 14 - CDCIntegrationService - emits events # time=1.409ms
 
 # Subtest: CDCIntegrationService - VALID_SYSTEM_TABLES contains all system tables
     ok 1 - should include nodes
@@ -101,31 +101,31 @@ ok 14 - CDCIntegrationService - emits events # time=0.573ms
     ok 7 - should include logs
     ok 8 - should include config
     1..8
-ok 15 - CDCIntegrationService - VALID_SYSTEM_TABLES contains all system tables # time=0.615ms
+ok 15 - CDCIntegrationService - VALID_SYSTEM_TABLES contains all system tables # time=0.783ms
 
 # Subtest: CDCIntegrationService - resetStats
     ok 1 - should have 1 insert
     ok 2 - should reset inserts
     ok 3 - should reset total
     1..3
-ok 16 - CDCIntegrationService - resetStats # time=0.563ms
+ok 16 - CDCIntegrationService - resetStats # time=0.616ms
 
 # Subtest: CDCIntegrationService - setEpochManager
     ok 1 - should set epoch manager
     1..1
-ok 17 - CDCIntegrationService - setEpochManager # time=0.609ms
+ok 17 - CDCIntegrationService - setEpochManager # time=0.568ms
 
 # Subtest: CDCIntegrationService - setEpochManager throws on null
     ok 1 - should have error message
     1..1
-ok 18 - CDCIntegrationService - setEpochManager throws on null # time=0.545ms
+ok 18 - CDCIntegrationService - setEpochManager throws on null # time=0.319ms
 
 # Subtest: CDCIntegrationService - handleEpochChangeCDC applies valid epoch
     ok 1 - should apply epoch
     ok 2 - should return epoch number
     ok 3 - epoch manager should have new epoch
     1..3
-ok 19 - CDCIntegrationService - handleEpochChangeCDC applies valid epoch # time=1.286ms
+ok 19 - CDCIntegrationService - handleEpochChangeCDC applies valid epoch # time=0.936ms
 
 # Subtest: CDCIntegrationService - handleEpochChangeCDC emits epochChange event
     ok 1 - should emit one epochChange event
@@ -133,66 +133,155 @@ ok 19 - CDCIntegrationService - handleEpochChangeCDC applies valid epoch # time=
     ok 3 - event should have cdc source
     ok 4 - event should have proposedBy
     1..4
-ok 20 - CDCIntegrationService - handleEpochChangeCDC emits epochChange event # time=0.916ms
+ok 20 - CDCIntegrationService - handleEpochChangeCDC emits epochChange event # time=0.668ms
 
 # Subtest: CDCIntegrationService - handleEpochChangeCDC rejects non-epoch config key
     ok 1 - should not apply
     ok 2 - should have error message
     1..2
-ok 21 - CDCIntegrationService - handleEpochChangeCDC rejects non-epoch config key # time=0.814ms
+ok 21 - CDCIntegrationService - handleEpochChangeCDC rejects non-epoch config key # time=0.684ms
 
 # Subtest: CDCIntegrationService - handleEpochChangeCDC rejects stale epoch
     ok 1 - should not apply stale epoch
     ok 2 - should have stale error message
     ok 3 - epoch should remain at 5
     1..3
-ok 22 - CDCIntegrationService - handleEpochChangeCDC rejects stale epoch # time=0.831ms
+ok 22 - CDCIntegrationService - handleEpochChangeCDC rejects stale epoch # time=0.58ms
 
 # Subtest: CDCIntegrationService - handleEpochChangeCDC without epoch manager
     ok 1 - should not apply without epoch manager
     ok 2 - should have error message
     1..2
-ok 23 - CDCIntegrationService - handleEpochChangeCDC without epoch manager # time=0.721ms
+ok 23 - CDCIntegrationService - handleEpochChangeCDC without epoch manager # time=0.787ms
 
 # Subtest: CDCIntegrationService - handleEpochChangeCDC with invalid event
     ok 1 - should not apply null event
     ok 2 - should have error message
     1..2
-ok 24 - CDCIntegrationService - handleEpochChangeCDC with invalid event # time=0.401ms
+ok 24 - CDCIntegrationService - handleEpochChangeCDC with invalid event # time=0.616ms
 
-{"level":50,"time":"2026-01-23T06:22:34.016Z","nodeId":"446ed70f-03bf-46f7-a035-c7d66b7d5923","pid":416854,"subsystem":"cdc-integration","nodeId":"446ed70f-03bf-46f7-a035-c7d66b7d5923","error":"Unexpected token 'o', \"not valid json {{{\" is not valid JSON","msg":"Failed to parse epoch data from CDC event"}
+{"level":50,"time":"2026-01-30T11:17:58.855Z","nodeId":"86b68855-9284-46cc-9bdb-61f90fef3bc3","pid":1331032,"subsystem":"cdc-integration","nodeId":"86b68855-9284-46cc-9bdb-61f90fef3bc3","error":"Unexpected token 'o', \"not valid json {{{\" is not valid JSON","msg":"Failed to parse epoch data from CDC event"}
 # Subtest: CDCIntegrationService - handleEpochChangeCDC with invalid JSON
-    ok 1 - should not apply with invalid JSON
-    ok 2 - should have parse error
-    1..2
-ok 25 - CDCIntegrationService - handleEpochChangeCDC with invalid JSON # time=0.732ms
+    not ok 1 - Unexpected token 'o', "not valid json {{{" is not valid JSON
+      ---
+      stack: >
+        JSON.parse (<anonymous>)
+      
+        CDCIntegrationService.handleEpochChangeCDC
+        (src/cdc/cdc-integration-service.js:1279:26)
+      
+        Test.<anonymous> (test/cdc/cdc-integration-service.test.js:622:26)
+      at:
+        fileName: src/cdc/cdc-integration-service.js
+        lineNumber: 1279
+        columnNumber: 26
+        typeName: CDCIntegrationService
+        methodName: handleEpochChangeCDC
+        functionName: CDCIntegrationService.handleEpochChangeCDC
+      type: SyntaxError
+      tapCaught: returnedPromiseRejection
+      source: >2
+              const configValue = cdcEvent.data?.[COLUMN.CONFIG_VALUE];
+              if (typeof configValue === TYPEOF.STRING) {
+                epochData = JSON.parse(configValue);
+        -------------------------^
+              } else if (typeof configValue === TYPEOF.OBJECT && configValue !== null) {
+                epochData = configValue;
+      ...
+    
+    1..1
+not ok 25 - CDCIntegrationService - handleEpochChangeCDC with invalid JSON # time=13.591ms
+  ---
+  at:
+    fileName: test/cdc/cdc-integration-service.test.js
+    lineNumber: 603
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('CDCIntegrationService - handleEpochChangeCDC with invalid JSON', async
+    (t) => {
+  
+    ^
+      const service = new CDCIntegrationService({
+        nodeId: 'test-node',
+  ...
 
-{"level":50,"time":"2026-01-23T06:22:34.029Z","nodeId":"a5fc6561-4632-4300-865f-9f9bc1144ab8","pid":416854,"subsystem":"cdc-integration","nodeId":"a5fc6561-4632-4300-865f-9f9bc1144ab8","error":"Epoch must be non-negative","msg":"Failed to create AssignmentEpoch from CDC data"}
+{"level":50,"time":"2026-01-30T11:17:58.886Z","nodeId":"3a4d1c74-2f0f-4758-8275-56d2cbc71863","pid":1331032,"subsystem":"cdc-integration","nodeId":"3a4d1c74-2f0f-4758-8275-56d2cbc71863","error":"Epoch must be non-negative","msg":"Failed to create AssignmentEpoch from CDC data"}
 # Subtest: CDCIntegrationService - handleEpochChangeCDC with invalid epoch data
-    ok 1 - should not apply with invalid epoch data
-    ok 2 - should have create error
-    1..2
-ok 26 - CDCIntegrationService - handleEpochChangeCDC with invalid epoch data # time=0.511ms
+    not ok 1 - Epoch must be non-negative
+      ---
+      stack: >
+        AssignmentEpoch._validateOptions (src/rebalancer/assignment-epoch.js:105:13)
+      
+        new AssignmentEpoch (src/rebalancer/assignment-epoch.js:63:10)
+      
+        AssignmentEpoch.fromObject (src/rebalancer/assignment-epoch.js:342:12)
+      
+        CDCIntegrationService.handleEpochChangeCDC
+        (src/cdc/cdc-integration-service.js:1296:31)
+      
+        Test.<anonymous> (test/cdc/cdc-integration-service.test.js:653:26)
+      at:
+        fileName: src/rebalancer/assignment-epoch.js
+        lineNumber: 105
+        columnNumber: 13
+        typeName: AssignmentEpoch
+        methodName: _validateOptions
+        functionName: AssignmentEpoch._validateOptions
+      type: EpochValidationError
+      field: epoch
+      tapCaught: returnedPromiseRejection
+      source: |2
+            }
+            if (options.epoch < 0) {
+              throw new EpochValidationError(
+        ------------^
+                'Epoch must be non-negative',
+                'epoch',
+      ...
+    
+    1..1
+not ok 26 - CDCIntegrationService - handleEpochChangeCDC with invalid epoch data # time=4.1ms
+  ---
+  at:
+    fileName: test/cdc/cdc-integration-service.test.js
+    lineNumber: 629
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('CDCIntegrationService - handleEpochChangeCDC with invalid epoch data',
+    async (t) => {
+  
+    ^
+      const service = new CDCIntegrationService({
+        nodeId: 'test-node',
+  ...
 
 # Subtest: CDCIntegrationService - tracks epochChanges in stats
     ok 1 - should track epoch changes
     1..1
-ok 27 - CDCIntegrationService - tracks epochChanges in stats # time=0.859ms
+ok 27 - CDCIntegrationService - tracks epochChanges in stats # time=0.509ms
 
 # Subtest: CDCIntegrationService - EPOCH_CONFIG_KEY is exported
     ok 1 - should export correct config key
     1..1
-ok 28 - CDCIntegrationService - EPOCH_CONFIG_KEY is exported # time=0.419ms
+ok 28 - CDCIntegrationService - EPOCH_CONFIG_KEY is exported # time=0.547ms
 
 # Subtest: CDCIntegrationService - setRebalancer
     ok 1 - should set rebalancer
     1..1
-ok 29 - CDCIntegrationService - setRebalancer # time=0.598ms
+ok 29 - CDCIntegrationService - setRebalancer # time=0.568ms
 
 # Subtest: CDCIntegrationService - setRebalancer throws on null
     ok 1 - should have error message
     1..1
-ok 30 - CDCIntegrationService - setRebalancer throws on null # time=0.912ms
+ok 30 - CDCIntegrationService - setRebalancer throws on null # time=0.298ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC processes valid event
     ok 1 - should process event
@@ -200,7 +289,7 @@ ok 30 - CDCIntegrationService - setRebalancer throws on null # time=0.912ms
     ok 3 - should return new state
     ok 4 - should indicate state changed
     1..4
-ok 31 - CDCIntegrationService - handleNodeStateCDC processes valid event # time=1.142ms
+ok 31 - CDCIntegrationService - handleNodeStateCDC processes valid event # time=0.839ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC emits nodeStateChange event
     ok 1 - should emit one nodeStateChange event
@@ -208,38 +297,38 @@ ok 31 - CDCIntegrationService - handleNodeStateCDC processes valid event # time=
     ok 3 - event should have new state
     ok 4 - event should have cdc source
     1..4
-ok 32 - CDCIntegrationService - handleNodeStateCDC emits nodeStateChange event # time=0.762ms
+ok 32 - CDCIntegrationService - handleNodeStateCDC emits nodeStateChange event # time=1.195ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC triggers rebalancer
     ok 1 - should trigger rebalancer
     ok 2 - rebalancer should receive node ID
     ok 3 - rebalancer should receive new state
     1..3
-ok 33 - CDCIntegrationService - handleNodeStateCDC triggers rebalancer # time=1.206ms
+ok 33 - CDCIntegrationService - handleNodeStateCDC triggers rebalancer # time=0.635ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC rejects non-nodes table
     ok 1 - should not process
     ok 2 - should have error message
     1..2
-ok 34 - CDCIntegrationService - handleNodeStateCDC rejects non-nodes table # time=0.724ms
+ok 34 - CDCIntegrationService - handleNodeStateCDC rejects non-nodes table # time=0.412ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC rejects invalid event
     ok 1 - should not process null event
     ok 2 - should have error message
     1..2
-ok 35 - CDCIntegrationService - handleNodeStateCDC rejects invalid event # time=0.718ms
+ok 35 - CDCIntegrationService - handleNodeStateCDC rejects invalid event # time=0.53ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC rejects missing node_id
     ok 1 - should not process
     ok 2 - should have error message
     1..2
-ok 36 - CDCIntegrationService - handleNodeStateCDC rejects missing node_id # time=1.008ms
+ok 36 - CDCIntegrationService - handleNodeStateCDC rejects missing node_id # time=0.499ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC rejects missing status
     ok 1 - should not process
     ok 2 - should have error message
     1..2
-ok 37 - CDCIntegrationService - handleNodeStateCDC rejects missing status # time=0.574ms
+ok 37 - CDCIntegrationService - handleNodeStateCDC rejects missing status # time=0.682ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC tracks state changes
     ok 1 - first event should have null old state
@@ -247,29 +336,388 @@ ok 37 - CDCIntegrationService - handleNodeStateCDC rejects missing status # time
     ok 3 - second event should have JOINING old state
     ok 4 - second event should have READY new state
     1..4
-ok 38 - CDCIntegrationService - handleNodeStateCDC tracks state changes # time=0.79ms
+ok 38 - CDCIntegrationService - handleNodeStateCDC tracks state changes # time=0.829ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC skips unchanged state
     ok 1 - should process event
     ok 2 - should indicate state not changed
     ok 3 - should only emit one event (for first change)
     1..3
-ok 39 - CDCIntegrationService - handleNodeStateCDC skips unchanged state # time=1.106ms
+ok 39 - CDCIntegrationService - handleNodeStateCDC skips unchanged state # time=0.993ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC tracks nodeStateChanges in stats
     ok 1 - should track node state changes
     1..1
-ok 40 - CDCIntegrationService - handleNodeStateCDC tracks nodeStateChanges in stats # time=0.844ms
+ok 40 - CDCIntegrationService - handleNodeStateCDC tracks nodeStateChanges in stats # time=0.612ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC without rebalancer
     ok 1 - should process event without rebalancer
     ok 2 - should indicate state changed
     1..2
-ok 41 - CDCIntegrationService - handleNodeStateCDC without rebalancer # time=0.597ms
+ok 41 - CDCIntegrationService - handleNodeStateCDC without rebalancer # time=0.599ms
 
 # Subtest: CDCIntegrationService - handleNodeStateCDC handles DRAINING state
     ok 1 - should trigger rebalance for draining node
     1..1
-ok 42 - CDCIntegrationService - handleNodeStateCDC handles DRAINING state # time=0.506ms
+ok 42 - CDCIntegrationService - handleNodeStateCDC handles DRAINING state # time=0.698ms
 
-1..42
+# Subtest: CDCIntegrationService - setBootstrapMode enables bootstrap mode
+    ok 1 - should enable bootstrap mode
+    ok 2 - should store partition services
+    1..2
+ok 43 - CDCIntegrationService - setBootstrapMode enables bootstrap mode # time=0.661ms
+
+# Subtest: CDCIntegrationService - setBootstrapMode disables bootstrap mode
+    ok 1 - should enable bootstrap mode
+    ok 2 - should disable bootstrap mode
+    ok 3 - should clear partition services
+    1..3
+ok 44 - CDCIntegrationService - setBootstrapMode disables bootstrap mode # time=0.765ms
+
+# Subtest: CDCIntegrationService - clearBootstrapMode disables bootstrap mode
+    ok 1 - should enable bootstrap mode
+    ok 2 - should disable bootstrap mode
+    ok 3 - should clear partition services
+    1..3
+ok 45 - CDCIntegrationService - clearBootstrapMode disables bootstrap mode # time=0.732ms
+
+# Subtest: CDCIntegrationService - setBootstrapMode requires Map when enabling
+    ok 1 - should throw error about Map requirement
+    ok 2 - should throw error about Map requirement
+    1..2
+ok 46 - CDCIntegrationService - setBootstrapMode requires Map when enabling # time=0.949ms
+
+# Subtest: CDCIntegrationService - bootstrap mode starts disabled
+    ok 1 - should start with bootstrap mode disabled
+    ok 2 - should start with null partition services
+    1..2
+ok 47 - CDCIntegrationService - bootstrap mode starts disabled # time=0.531ms
+
+# Subtest: CDCIntegrationService - extractTableNameFromSQL extracts from INSERT
+    ok 1 - should extract table name from INSERT
+    1..1
+ok 48 - CDCIntegrationService - extractTableNameFromSQL extracts from INSERT # time=0.589ms
+
+# Subtest: CDCIntegrationService - extractTableNameFromSQL extracts from INSERT OR REPLACE
+    ok 1 - should extract table name from INSERT OR REPLACE
+    1..1
+ok 49 - CDCIntegrationService - extractTableNameFromSQL extracts from INSERT OR REPLACE # time=0.593ms
+
+# Subtest: CDCIntegrationService - extractTableNameFromSQL extracts from UPDATE
+    ok 1 - should extract table name from UPDATE
+    1..1
+ok 50 - CDCIntegrationService - extractTableNameFromSQL extracts from UPDATE # time=0.544ms
+
+# Subtest: CDCIntegrationService - extractTableNameFromSQL extracts from DELETE
+    ok 1 - should extract table name from DELETE
+    1..1
+ok 51 - CDCIntegrationService - extractTableNameFromSQL extracts from DELETE # time=1.014ms
+
+# Subtest: CDCIntegrationService - extractTableNameFromSQL returns null for invalid SQL
+    ok 1 - should return null for empty string
+    ok 2 - should return null for null
+    ok 3 - should return null for invalid SQL
+    1..3
+ok 52 - CDCIntegrationService - extractTableNameFromSQL returns null for invalid SQL # time=0.671ms
+
+# Subtest: CDCIntegrationService - executeSQLDirectToLocalPartition executes on local partition
+    not ok 1 - Partition services not initialized for table: services. Partitions:
+      ---
+      stack: >
+        CDCIntegrationService.executeSQLDirectToLocalPartition
+        (src/cdc/cdc-integration-service.js:300:13)
+      
+        Test.<anonymous> (test/cdc/cdc-integration-service.test.js:1229:32)
+      at:
+        fileName: src/cdc/cdc-integration-service.js
+        lineNumber: 300
+        columnNumber: 13
+        typeName: CDCIntegrationService
+        methodName: executeSQLDirectToLocalPartition
+        functionName: CDCIntegrationService.executeSQLDirectToLocalPartition
+      tapCaught: returnedPromiseRejection
+      source: >2
+            const initializedCandidates = candidates.length > NUM.ZERO ? candidates : [];
+            if (initializedCandidates.length === NUM.ZERO) {
+              throw new Error(
+        ------------^
+                `Partition services not initialized for table: ${tableName}. ` +
+                `Partitions: ${candidates.map((service) => service?.partitionId).filter(Boolean).join(', ')}`,
+      ...
+    
+    1..1
+not ok 53 - CDCIntegrationService - executeSQLDirectToLocalPartition executes on local partition # time=2.695ms
+  ---
+  at:
+    fileName: test/cdc/cdc-integration-service.test.js
+    lineNumber: 1208
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('CDCIntegrationService - executeSQLDirectToLocalPartition executes on
+    local partition', async (t) => {
+  
+    ^
+      const service = new CDCIntegrationService({
+        nodeId: 'test-node',
+  ...
+
+# Subtest: CDCIntegrationService - executeSQLDirectToLocalPartition throws when not in bootstrap mode
+    ok 1 - should throw error about bootstrap mode
+    1..1
+ok 54 - CDCIntegrationService - executeSQLDirectToLocalPartition throws when not in bootstrap mode # time=0.489ms
+
+# Subtest: CDCIntegrationService - executeSQLDirectToLocalPartition throws when partition not found
+    not ok 1 - should throw error about missing partition
+      ---
+      at:
+        fileName: test/cdc/cdc-integration-service.test.js
+        lineNumber: 1276
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-integration-service.test.js:1276:7)
+      source: >2
+            t.fail('should throw error when partition not found');
+          } catch (error) {
+            t.ok(error.message.includes('No local partition service found'), 'should throw error about missing partition');
+        ------^
+            t.ok(error.message.includes('services'), 'should mention the table name');
+          }
+      ...
+    
+    ok 2 - should mention the table name
+    1..2
+not ok 55 - CDCIntegrationService - executeSQLDirectToLocalPartition throws when partition not found # time=2.303ms
+  ---
+  at:
+    fileName: test/cdc/cdc-integration-service.test.js
+    lineNumber: 1258
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('CDCIntegrationService - executeSQLDirectToLocalPartition throws when
+    partition not found', async (t) => {
+  
+    ^
+      const service = new CDCIntegrationService({
+        nodeId: 'test-node',
+  ...
+
+# Subtest: CDCIntegrationService - executeSQLDirectToLocalPartition throws when SQL parsing fails
+    ok 1 - should throw error about table name extraction
+    1..1
+ok 56 - CDCIntegrationService - executeSQLDirectToLocalPartition throws when SQL parsing fails # time=0.437ms
+
+# Subtest: CDCIntegrationService - executeSQLDirectToLocalPartition handles partition errors
+    not ok 1 - should throw partition error
+      ---
+      at:
+        fileName: test/cdc/cdc-integration-service.test.js
+        lineNumber: 1329
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-integration-service.test.js:1329:7)
+      source: >2
+            t.fail('should throw error when partition returns error');
+          } catch (error) {
+            t.ok(error.message.includes('Partition error'), 'should throw partition error');
+        ------^
+          }
+      ...
+    
+    1..1
+not ok 57 - CDCIntegrationService - executeSQLDirectToLocalPartition handles partition errors # time=1.772ms
+  ---
+  at:
+    fileName: test/cdc/cdc-integration-service.test.js
+    lineNumber: 1304
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('CDCIntegrationService - executeSQLDirectToLocalPartition handles
+    partition errors', async (t) => {
+  
+    ^
+      const service = new CDCIntegrationService({
+        nodeId: 'test-node',
+  ...
+
+{"level":50,"time":"2026-01-30T11:17:59.432Z","nodeId":"4cca18c7-6df3-4a5f-aab4-35918741fa65","pid":1331032,"subsystem":"cdc-integration","tableName":"services","id":"service-1","error":"Partition services not initialized for table: services. Partitions: ","nodeId":"4cca18c7-6df3-4a5f-aab4-35918741fa65","msg":"Failed to insert system table row"}
+# Subtest: CDCIntegrationService - executeSQL routes to direct partition in bootstrap mode
+    not ok 1 - Partition services not initialized for table: services. Partitions:
+      ---
+      stack: >
+        CDCIntegrationService.executeSQLDirectToLocalPartition
+        (src/cdc/cdc-integration-service.js:300:13)
+      
+        CDCIntegrationService.executeSQL (src/cdc/cdc-integration-service.js:417:25)
+      
+        CDCIntegrationService.insertSystemTableRow
+        (src/cdc/cdc-integration-service.js:839:33)
+      
+        Test.<anonymous> (test/cdc/cdc-integration-service.test.js:1356:34)
+      at:
+        fileName: src/cdc/cdc-integration-service.js
+        lineNumber: 300
+        columnNumber: 13
+        typeName: CDCIntegrationService
+        methodName: executeSQLDirectToLocalPartition
+        functionName: CDCIntegrationService.executeSQLDirectToLocalPartition
+      tapCaught: returnedPromiseRejection
+      source: >2
+            const initializedCandidates = candidates.length > NUM.ZERO ? candidates : [];
+            if (initializedCandidates.length === NUM.ZERO) {
+              throw new Error(
+        ------------^
+                `Partition services not initialized for table: ${tableName}. ` +
+                `Partitions: ${candidates.map((service) => service?.partitionId).filter(Boolean).join(', ')}`,
+      ...
+    
+    1..1
+not ok 58 - CDCIntegrationService - executeSQL routes to direct partition in bootstrap mode # time=3.749ms
+  ---
+  at:
+    fileName: test/cdc/cdc-integration-service.test.js
+    lineNumber: 1335
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('CDCIntegrationService - executeSQL routes to direct partition in
+    bootstrap mode',
+  
+    ^
+      async (t) => {
+        const service = new CDCIntegrationService({
+  ...
+
+# Subtest: CDCIntegrationService - executeSQL routes to SQL engine in normal mode
+    ok 1 - bootstrap mode should be disabled
+    ok 2 - should succeed
+    ok 3 - should execute query through SQL engine
+    ok 4 - should execute INSERT query
+    1..4
+ok 59 - CDCIntegrationService - executeSQL routes to SQL engine in normal mode # time=0.708ms
+
+{"level":50,"time":"2026-01-30T11:17:59.463Z","nodeId":"b2e1e710-8b09-4ba6-8618-af58c6817e5c","pid":1331032,"subsystem":"cdc-integration","tableName":"services","id":"service-1","error":"Partition services not initialized for table: services. Partitions: ","nodeId":"b2e1e710-8b09-4ba6-8618-af58c6817e5c","msg":"Failed to insert system table row"}
+# Subtest: CDCIntegrationService - executeSQL switches from bootstrap to normal mode
+    not ok 1 - Partition services not initialized for table: services. Partitions:
+      ---
+      stack: >
+        CDCIntegrationService.executeSQLDirectToLocalPartition
+        (src/cdc/cdc-integration-service.js:300:13)
+      
+        CDCIntegrationService.executeSQL (src/cdc/cdc-integration-service.js:417:25)
+      
+        CDCIntegrationService.insertSystemTableRow
+        (src/cdc/cdc-integration-service.js:839:33)
+      
+        Test.<anonymous> (test/cdc/cdc-integration-service.test.js:1427:19)
+      at:
+        fileName: src/cdc/cdc-integration-service.js
+        lineNumber: 300
+        columnNumber: 13
+        typeName: CDCIntegrationService
+        methodName: executeSQLDirectToLocalPartition
+        functionName: CDCIntegrationService.executeSQLDirectToLocalPartition
+      tapCaught: returnedPromiseRejection
+      source: >2
+            const initializedCandidates = candidates.length > NUM.ZERO ? candidates : [];
+            if (initializedCandidates.length === NUM.ZERO) {
+              throw new Error(
+        ------------^
+                `Partition services not initialized for table: ${tableName}. ` +
+                `Partitions: ${candidates.map((service) => service?.partitionId).filter(Boolean).join(', ')}`,
+      ...
+    
+    1..1
+not ok 60 - CDCIntegrationService - executeSQL switches from bootstrap to normal mode # time=2.398ms
+  ---
+  at:
+    fileName: test/cdc/cdc-integration-service.test.js
+    lineNumber: 1402
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('CDCIntegrationService - executeSQL switches from bootstrap to normal
+    mode',
+  
+    ^
+      async (t) => {
+        const mockSqlEngine = createMockSqlQueryEngine();
+  ...
+
+# Subtest: CDCIntegrationService - executeSQL throws when SQL engine missing in normal mode
+    ok 1 - bootstrap mode should be disabled
+    ok 2 - SQL engine should be null
+{"level":50,"time":"2026-01-30T11:17:59.478Z","nodeId":"42127233-4193-4f2d-b7cb-ff67a8981205","pid":1331032,"subsystem":"cdc-integration","tableName":"services","id":"service-1","error":"CDCIntegrationService not properly initialized: sqlQueryEngine not provided","nodeId":"42127233-4193-4f2d-b7cb-ff67a8981205","msg":"Failed to insert system table row"}
+    ok 3 - should throw error about missing SQL engine
+    1..3
+ok 61 - CDCIntegrationService - executeSQL throws when SQL engine missing in normal mode # time=0.924ms
+
+{"level":50,"time":"2026-01-30T11:17:59.490Z","nodeId":"2d4bf098-2363-4d98-bded-86a43cb95514","pid":1331032,"subsystem":"cdc-integration","tableName":"nodes","id":"node-1","error":"Partition services not initialized for table: nodes. Partitions: ","nodeId":"2d4bf098-2363-4d98-bded-86a43cb95514","msg":"Failed to insert system table row"}
+# Subtest: CDCIntegrationService - executeSQL single code path based on mode flag
+    not ok 1 - Partition services not initialized for table: nodes. Partitions:
+      ---
+      stack: >
+        CDCIntegrationService.executeSQLDirectToLocalPartition
+        (src/cdc/cdc-integration-service.js:300:13)
+      
+        CDCIntegrationService.executeSQL (src/cdc/cdc-integration-service.js:417:25)
+      
+        CDCIntegrationService.insertSystemTableRow
+        (src/cdc/cdc-integration-service.js:839:33)
+      
+        Test.<anonymous> (test/cdc/cdc-integration-service.test.js:1509:19)
+      at:
+        fileName: src/cdc/cdc-integration-service.js
+        lineNumber: 300
+        columnNumber: 13
+        typeName: CDCIntegrationService
+        methodName: executeSQLDirectToLocalPartition
+        functionName: CDCIntegrationService.executeSQLDirectToLocalPartition
+      tapCaught: returnedPromiseRejection
+      source: >2
+            const initializedCandidates = candidates.length > NUM.ZERO ? candidates : [];
+            if (initializedCandidates.length === NUM.ZERO) {
+              throw new Error(
+        ------------^
+                `Partition services not initialized for table: ${tableName}. ` +
+                `Partitions: ${candidates.map((service) => service?.partitionId).filter(Boolean).join(', ')}`,
+      ...
+    
+    1..1
+not ok 62 - CDCIntegrationService - executeSQL single code path based on mode flag # time=2.383ms
+  ---
+  at:
+    fileName: test/cdc/cdc-integration-service.test.js
+    lineNumber: 1488
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('CDCIntegrationService - executeSQL single code path based on mode flag',
+    ^
+      async (t) => {
+        const mockSqlEngine = createMockSqlQueryEngine();
+  ...
+
+1..62
+# { total: 134, pass: 126, fail: 8 }
+# time=1150.854ms

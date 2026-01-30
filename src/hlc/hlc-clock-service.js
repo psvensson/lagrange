@@ -7,6 +7,7 @@
 import {HLCTimestamp} from './hlc-timestamp.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
+import {HLC_CONFIG_KEY, HLC_DEFAULT, HLC_LOG_MSG, HLC_SUBSYSTEM} from './hlc-constants.js';
 
 /**
  * HLCClockService provides hybrid logical clock functionality.
@@ -25,14 +26,17 @@ class HLCClockService {
 
     // Get configuration
     const config = ConfigurationManager.getInstance();
-    this.maxDrift = options.maxDrift ?? config.get('hlc.maxDriftMs') ?? 500;
+    this.maxDrift = options.maxDrift ??
+      config.get(HLC_CONFIG_KEY.MAX_DRIFT_MS) ??
+      HLC_DEFAULT.MAX_DRIFT_MS;
     this.maxLogicalCounter = options.maxLogicalCounter ??
-      config.get('hlc.maxLogicalCounter') ?? 65535;
+      config.get(HLC_CONFIG_KEY.MAX_LOGICAL_COUNTER) ??
+      HLC_DEFAULT.MAX_LOGICAL_COUNTER;
 
     // Set up subsystem logger
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('hlc') : null;
+      loggingService.forSubsystem(HLC_SUBSYSTEM) : null;
 
     // Legacy callback for drift warnings (for backwards compatibility)
     this.onDriftWarning = options.onDriftWarning || null;
@@ -86,10 +90,10 @@ class HLCClockService {
 
       // Log via subsystem logger if available
       if (this.logger) {
-        this.logger.warn('Excessive clock drift detected', driftInfo);
+        this.logger.warn(HLC_LOG_MSG.EXCESSIVE_CLOCK_DRIFT, driftInfo);
       }
 
-      // Also call legacy callback if provided
+      // Invoke drift warning callback if provided
       if (this.onDriftWarning) {
         this.onDriftWarning(driftInfo);
       }

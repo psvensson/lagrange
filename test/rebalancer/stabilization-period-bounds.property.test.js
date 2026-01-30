@@ -2,7 +2,7 @@
  * Property Test: Stabilization Period Configuration Bounds (Property 3)
  *
  * For any stabilization period configuration value, the effective value
- * SHALL be clamped to the range [1000ms, 10000ms] with a default of 5000ms.
+ * SHALL be clamped to the range [1000ms, 10000ms] with a default of 1000ms.
  *
  * Validates: Requirements 2.1
  *
@@ -10,14 +10,12 @@
  * Configuration Bounds
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {
-  UnifiedRebalancer,
-  EntityType,
-} from '../../src/rebalancer/unified-rebalancer.js';
+import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createTestRebalancer} from './test-helpers.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -37,11 +35,11 @@ function initializeTestEnvironment() {
 }
 
 test('Property 3: Stabilization Period Configuration Bounds', async (t) => {
-  await t.test('default stabilization period is 5000ms', async (t) => {
+  await t.test('default stabilization period is 1000ms', async (t) => {
     // Reset and initialize without stabilization config
     initializeTestEnvironment();
 
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
@@ -49,7 +47,7 @@ test('Property 3: Stabilization Period Configuration Bounds', async (t) => {
 
     const effectiveValue = rebalancer.getStabilizationPeriodMs();
 
-    t.equal(effectiveValue, 5000, 'Default stabilization period should be 5000ms');
+    t.equal(effectiveValue, 1000, 'Default stabilization period should be 1000ms');
   });
 
   await t.test('values within valid range are preserved', async (t) => {
@@ -66,7 +64,7 @@ test('Property 3: Stabilization Period Configuration Bounds', async (t) => {
             rebalancer: {stabilizationPeriodMs: configuredValue},
           });
 
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-1',
@@ -91,7 +89,7 @@ test('Property 3: Stabilization Period Configuration Bounds', async (t) => {
         (inputValue) => {
           initializeTestEnvironment();
 
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-1',
@@ -117,7 +115,7 @@ test('Property 3: Stabilization Period Configuration Bounds', async (t) => {
         (inputValue) => {
           initializeTestEnvironment();
 
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-1',
@@ -143,7 +141,7 @@ test('Property 3: Stabilization Period Configuration Bounds', async (t) => {
         (inputValue) => {
           initializeTestEnvironment();
 
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-1',
@@ -165,20 +163,20 @@ test('Property 3: Stabilization Period Configuration Bounds', async (t) => {
   await t.test('clampStabilizationPeriod handles non-numeric values', async (t) => {
     initializeTestEnvironment();
 
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
     });
 
     // Test with various non-numeric values
-    t.equal(rebalancer.clampStabilizationPeriod(undefined), 5000,
+    t.equal(rebalancer.clampStabilizationPeriod(undefined), 1000,
       'undefined should return default');
-    t.equal(rebalancer.clampStabilizationPeriod(null), 5000,
+    t.equal(rebalancer.clampStabilizationPeriod(null), 1000,
       'null should return default');
-    t.equal(rebalancer.clampStabilizationPeriod(NaN), 5000,
+    t.equal(rebalancer.clampStabilizationPeriod(NaN), 1000,
       'NaN should return default');
-    t.equal(rebalancer.clampStabilizationPeriod('invalid'), 5000,
+    t.equal(rebalancer.clampStabilizationPeriod('invalid'), 1000,
       'string should return default');
   });
 
@@ -195,7 +193,7 @@ test('Property 3: Stabilization Period Configuration Bounds', async (t) => {
             rebalancer: {stabilizationPeriodMs: configuredValue},
           });
 
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-1',

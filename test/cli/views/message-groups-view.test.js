@@ -11,7 +11,7 @@
  * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {MessageGroupsView} from '../../../src/cli/views/message-groups-view.js';
 import {ROW_STATUS} from '../../../src/cli/core/base-view.js';
 

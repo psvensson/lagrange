@@ -4,11 +4,14 @@
 
 export {
   MessageGroupService,
-  MessageStatus,
-  RaftRole,
   RaftLogEntry,
   InMemoryRaftStorage,
 } from './message-group-service.js';
+
+export {
+  MESSAGE_STATUS as MessageStatus,
+  RAFT_ROLE as RaftRole,
+} from './constants.js';
 
 export {
   CDCHandler,

@@ -1,57 +1,16 @@
 /**
  * SQL Parser Tests
- * Tests for the SQL parser supporting SELECT, INSERT, UPDATE, DELETE.
+ * Tests for the SQL parser using node-sql-parser.
  * Requirements: 7.1, 7.3
  */
 
-import {test} from 'tap';
-import {SQLParser, SQLTokenizer, TokenType} from '../../src/query/sql-parser.js';
+import {test} from '../../src/test-helpers/tap.js';
+import {SQLParser} from '../../src/query/sql-parser.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
-
-test('SQLTokenizer - tokenizes simple SELECT', async (t) => {
-  const tokenizer = new SQLTokenizer('SELECT * FROM users');
-  const tokens = tokenizer.tokenize();
-
-  t.equal(tokens[0].type, TokenType.SELECT);
-  t.equal(tokens[1].type, TokenType.STAR);
-  t.equal(tokens[2].type, TokenType.FROM);
-  t.equal(tokens[3].type, TokenType.IDENTIFIER);
-  t.equal(tokens[3].value, 'users');
-  t.equal(tokens[4].type, TokenType.EOF);
-});
-
-test('SQLTokenizer - tokenizes string literals', async (t) => {
-  const tokenizer = new SQLTokenizer('SELECT * FROM users WHERE name = \'John\'');
-  const tokens = tokenizer.tokenize();
-
-  const stringToken = tokens.find((t) => t.type === TokenType.STRING);
-  t.ok(stringToken);
-  t.equal(stringToken.value, 'John');
-});
-
-test('SQLTokenizer - tokenizes numbers', async (t) => {
-  const tokenizer = new SQLTokenizer('SELECT * FROM items WHERE price > 99.99');
-  const tokens = tokenizer.tokenize();
-
-  const numberToken = tokens.find((t) => t.type === TokenType.NUMBER);
-  t.ok(numberToken);
-  t.equal(numberToken.value, 99.99);
-});
-
-test('SQLTokenizer - tokenizes comparison operators', async (t) => {
-  const tokenizer = new SQLTokenizer('a = b AND c != d AND e >= f AND g <= h');
-  const tokens = tokenizer.tokenize();
-
-  const types = tokens.map((t) => t.type);
-  t.ok(types.includes(TokenType.EQUALS));
-  t.ok(types.includes(TokenType.NOT_EQUALS));
-  t.ok(types.includes(TokenType.GREATER_THAN_OR_EQUAL));
-  t.ok(types.includes(TokenType.LESS_THAN_OR_EQUAL));
-});
 
 test('SQLParser - parses simple SELECT', async (t) => {
   const parser = new SQLParser('SELECT * FROM users');
@@ -163,6 +122,17 @@ test('SQLParser - parses SELECT with IN clause', async (t) => {
 
   t.equal(ast.where.type, 'in');
   t.equal(ast.where.values.length, 3);
+});
+
+test('SQLParser - parses SELECT with NOT IN clause', async (t) => {
+  const parser = new SQLParser(
+    'SELECT * FROM users WHERE status NOT IN (\'deleted\', \'banned\')',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.where.type, 'in');
+  t.equal(ast.where.negated, true);
+  t.equal(ast.where.values.length, 2);
 });
 
 test('SQLParser - parses SELECT with BETWEEN', async (t) => {

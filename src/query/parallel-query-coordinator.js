@@ -7,6 +7,15 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {TABLES} from '../constants/index.js';
+import {
+  QUERY_CONFIG_KEY,
+  QUERY_DEFAULTS,
+  QUERY_ERROR_MSG,
+  QUERY_LOG_MSG,
+  QUERY_STATUS,
+  QUERY_SUBSYSTEM,
+} from './query-constants.js';
 
 /**
  * Tracks execution metrics for a single partition query.
@@ -23,7 +32,7 @@ class PartitionQueryMetrics {
     this.latencyMs = null;
     this.rowCount = 0;
     this.bytesRead = 0;
-    this.status = 'pending'; // pending, running, completed, failed, timeout
+    this.status = QUERY_STATUS.PENDING; // pending, running, completed, failed, timeout
     this.error = null;
     this.isSpeculative = false;
   }
@@ -33,7 +42,7 @@ class PartitionQueryMetrics {
    */
   start() {
     this.startTime = Date.now();
-    this.status = 'running';
+    this.status = QUERY_STATUS.RUNNING;
   }
 
   /**
@@ -46,7 +55,7 @@ class PartitionQueryMetrics {
     this.latencyMs = this.endTime - this.startTime;
     this.rowCount = rowCount;
     this.bytesRead = bytesRead;
-    this.status = 'completed';
+    this.status = QUERY_STATUS.COMPLETED;
   }
 
   /**
@@ -56,7 +65,7 @@ class PartitionQueryMetrics {
   fail(error) {
     this.endTime = Date.now();
     this.latencyMs = this.endTime - this.startTime;
-    this.status = 'failed';
+    this.status = QUERY_STATUS.FAILED;
     this.error = error.message;
   }
 
@@ -66,7 +75,7 @@ class PartitionQueryMetrics {
   timeout() {
     this.endTime = Date.now();
     this.latencyMs = this.endTime - this.startTime;
-    this.status = 'timeout';
+    this.status = QUERY_STATUS.TIMEOUT;
   }
 }
 
@@ -139,35 +148,39 @@ class ParallelQueryCoordinator {
   /**
    * Create a new parallel query coordinator.
    * @param {Object} options - Configuration options.
-   * @param {Object} options.partitionRegistry - Registry of partition services.
+   * @param {Object} options.systemCache - System table cache for partition lookups.
    * @param {Object} options.replicaRegistry - Registry of replica services.
    * @param {string} options.nodeId - Node ID for logging.
    */
   constructor(options = {}) {
-    this.partitionRegistry = options.partitionRegistry || new Map();
+    this.systemCache = options.systemCache || null;
     this.replicaRegistry = options.replicaRegistry || new Map();
-    this.nodeId = options.nodeId || 'coordinator';
+    this.nodeId = options.nodeId || QUERY_SUBSYSTEM.PARALLEL_QUERY_COORDINATOR;
     this.logger = this.initLogger();
 
     // Load configuration
     const config = ConfigurationManager.getInstance();
-    this.maxParallelPartitions = config.get('queryCoordinator.maxParallelPartitions') || 1000;
-    this.maxConcurrentConnections = config.get('queryCoordinator.maxConcurrentConnections') ||
-      10000;
-    this.maxResultBufferBytes = config.get('queryCoordinator.maxResultBufferBytes') ||
-      1073741824;
-    this.queryTimeoutMs = config.get('queryCoordinator.queryTimeoutMs') || 30000;
-    this.stragglerThresholdMultiplier = config.get(
-      'queryCoordinator.stragglerThresholdMultiplier',
-    ) || 2.0;
+    this.maxParallelPartitions = config.get(QUERY_CONFIG_KEY.COORDINATOR_MAX_PARALLEL_PARTITIONS) ||
+      QUERY_DEFAULTS.COORDINATOR_MAX_PARALLEL_PARTITIONS;
+    this.maxConcurrentConnections =
+      config.get(QUERY_CONFIG_KEY.COORDINATOR_MAX_CONCURRENT_CONNECTIONS) ||
+      QUERY_DEFAULTS.COORDINATOR_MAX_CONCURRENT_CONNECTIONS;
+    this.maxResultBufferBytes = config.get(QUERY_CONFIG_KEY.COORDINATOR_MAX_RESULT_BUFFER_BYTES) ||
+      QUERY_DEFAULTS.COORDINATOR_MAX_RESULT_BUFFER_BYTES;
+    this.queryTimeoutMs = config.get(QUERY_CONFIG_KEY.COORDINATOR_QUERY_TIMEOUT_MS) ||
+      QUERY_DEFAULTS.COORDINATOR_QUERY_TIMEOUT_MS;
+    this.stragglerThresholdMultiplier =
+      config.get(QUERY_CONFIG_KEY.COORDINATOR_STRAGGLER_THRESHOLD_MULTIPLIER) ||
+      QUERY_DEFAULTS.COORDINATOR_STRAGGLER_THRESHOLD_MULTIPLIER;
     this.speculativeExecutionEnabled = config.get(
-      'queryCoordinator.speculativeExecutionEnabled',
+      QUERY_CONFIG_KEY.COORDINATOR_SPECULATIVE_EXECUTION_ENABLED,
     ) !== false;
     this.speculativeExecutionDelayMs = config.get(
-      'queryCoordinator.speculativeExecutionDelayMs',
-    ) || 100;
-    this.streamingEnabled = config.get('queryCoordinator.streamingEnabled') !== false;
-    this.streamingChunkSize = config.get('queryCoordinator.streamingChunkSize') || 1000;
+      QUERY_CONFIG_KEY.COORDINATOR_SPECULATIVE_EXECUTION_DELAY_MS,
+    ) || QUERY_DEFAULTS.COORDINATOR_SPECULATIVE_EXECUTION_DELAY_MS;
+    this.streamingEnabled = config.get(QUERY_CONFIG_KEY.COORDINATOR_STREAMING_ENABLED) !== false;
+    this.streamingChunkSize = config.get(QUERY_CONFIG_KEY.COORDINATOR_STREAMING_CHUNK_SIZE) ||
+      QUERY_DEFAULTS.COORDINATOR_STREAMING_CHUNK_SIZE;
 
     // Track active queries for resource management
     this.activeConnections = 0;
@@ -183,7 +196,7 @@ class ParallelQueryCoordinator {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('parallel-query-coordinator');
+        return loggingService.forSubsystem(QUERY_SUBSYSTEM.PARALLEL_QUERY_COORDINATOR);
       }
     } catch {
       // Logging not available
@@ -192,11 +205,11 @@ class ParallelQueryCoordinator {
   }
 
   /**
-   * Set the partition registry.
-   * @param {Map|Object} registry - Partition registry.
+   * Set the system cache.
+   * @param {Object} cache - System table cache.
    */
-  setPartitionRegistry(registry) {
-    this.partitionRegistry = registry;
+  setSystemCache(cache) {
+    this.systemCache = cache;
   }
 
   /**
@@ -208,16 +221,16 @@ class ParallelQueryCoordinator {
   }
 
   /**
-   * Get a partition service by ID.
+   * Get a partition by ID from system cache.
    * @param {string} partitionId - Partition ID.
-   * @return {Object|null} Partition service or null.
+   * @return {Object|null} Partition info or null.
    * @private
    */
   getPartition(partitionId) {
-    if (this.partitionRegistry instanceof Map) {
-      return this.partitionRegistry.get(partitionId);
+    if (!this.systemCache) {
+      return null;
     }
-    return this.partitionRegistry[partitionId] || null;
+    return this.systemCache.get(TABLES.PARTITIONS, partitionId);
   }
 
   /**
@@ -256,7 +269,7 @@ class ParallelQueryCoordinator {
     // Limit partitions if exceeding max
     const limitedPartitionIds = this.enforcePartitionLimit(partitionIds);
 
-    this.logger.debug('Starting parallel query execution', {
+    this.logger.debug(QUERY_LOG_MSG.PARALLEL_QUERY_START, {
       queryId,
       partitionCount: limitedPartitionIds.length,
       originalCount: partitionIds.length,
@@ -285,17 +298,11 @@ class ParallelQueryCoordinator {
       };
     } catch (error) {
       metrics.finalize();
-      this.logger.error('Parallel query execution failed', {
+      this.logger.error(QUERY_LOG_MSG.PARALLEL_QUERY_FAILED, {
         queryId,
         error: error.message,
       });
-
-      return {
-        success: false,
-        error: error.message,
-        metrics: this.formatMetrics(metrics),
-        partitions: limitedPartitionIds,
-      };
+      throw error;
     }
   }
 
@@ -310,7 +317,7 @@ class ParallelQueryCoordinator {
     // Check concurrent connections limit
     if (this.activeConnections + partitionCount > this.maxConcurrentConnections) {
       throw new Error(
-        'Query would exceed max concurrent connections: ' +
+        `${QUERY_ERROR_MSG.MAX_CONNECTIONS_PREFIX}` +
         `${this.activeConnections + partitionCount} > ${this.maxConcurrentConnections}`,
       );
     }
@@ -328,7 +335,7 @@ class ParallelQueryCoordinator {
       return partitionIds;
     }
 
-    this.logger.warn('Partition count exceeds limit, truncating', {
+    this.logger.warn(QUERY_LOG_MSG.PARTITION_LIMIT_TRUNCATE, {
       requested: partitionIds.length,
       limit: this.maxParallelPartitions,
     });
@@ -360,7 +367,10 @@ class ParallelQueryCoordinator {
       // Create timeout promise with clearable timer
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
-          reject(new Error(`Query timeout after ${this.queryTimeoutMs}ms`));
+          reject(new Error(
+            `${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_PREFIX}` +
+            `${this.queryTimeoutMs}${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX}`,
+          ));
         }, this.queryTimeoutMs);
       });
 
@@ -515,7 +525,7 @@ class ParallelQueryCoordinator {
 
     if (!alternativeReplica) return;
 
-    this.logger.debug('Starting speculative execution for straggler', {
+    this.logger.debug(QUERY_LOG_MSG.SPECULATIVE_EXEC_START, {
       partitionId,
       replicaId: alternativeReplica.replicaId,
     });
@@ -561,12 +571,12 @@ class ParallelQueryCoordinator {
 
     const partition = this.getPartition(partitionId);
     if (!partition) {
-      partitionMetrics.fail(new Error('Partition not found'));
+      partitionMetrics.fail(new Error(QUERY_ERROR_MSG.PARTITION_NOT_FOUND));
       metrics.addPartitionMetrics(partitionMetrics);
       return {
         partitionId,
         success: false,
-        error: 'Partition not found',
+        error: QUERY_ERROR_MSG.PARTITION_NOT_FOUND,
         rows: [],
       };
     }
@@ -609,7 +619,7 @@ class ParallelQueryCoordinator {
     if (typeof service.executeQuery === 'function') {
       return service.executeQuery(sql, params);
     }
-    throw new Error('Service does not support executeQuery');
+    throw new Error(QUERY_ERROR_MSG.SERVICE_EXECUTE_UNSUPPORTED);
   }
 
   /**
@@ -639,7 +649,8 @@ class ParallelQueryCoordinator {
   validateResultBufferSize(results, metrics) {
     if (metrics.totalBytes > this.maxResultBufferBytes) {
       throw new Error(
-        `Result buffer exceeds limit: ${metrics.totalBytes} > ${this.maxResultBufferBytes}`,
+        `${QUERY_ERROR_MSG.RESULT_BUFFER_LIMIT_PREFIX}` +
+        `${metrics.totalBytes} > ${this.maxResultBufferBytes}`,
       );
     }
   }
@@ -665,7 +676,7 @@ class ParallelQueryCoordinator {
           metrics.stragglers.push(partitionId);
         }
 
-        this.logger.warn('Slow partition detected (straggler)', {
+        this.logger.warn(QUERY_LOG_MSG.STRAGGLER_DETECTED, {
           partitionId,
           latencyMs: partitionMetrics.latencyMs,
           medianLatencyMs: medianLatency,

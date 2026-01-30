@@ -10,12 +10,14 @@
  * Requirements: 3.2, 3.3, 6.1, 6.2, 6.3, 6.4
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 
 /**
  * Initialize test environment.
@@ -28,6 +30,7 @@ function initializeTestEnvironment() {
   config.initialize({
     node: {id: 'test-node'},
     logging: {level: 'error'},
+    transport: {wsHost: '127.0.0.1'},
   });
 
   const logging = LoggingService.getInstance();
@@ -52,6 +55,27 @@ function createTestSchema(tableName) {
       {name: 'id', type: 'TEXT', primaryKey: true},
       {name: 'data', type: 'TEXT'},
     ],
+  };
+}
+
+function createMockCDCIntegrationService(systemTableCache) {
+  return {
+    async insertSystemTableRow(tableName, data) {
+      systemTableCache.applySystemTableChange(tableName, 'INSERT', data);
+      return {success: true};
+    },
+    async updateSystemTableRow(tableName, whereClause, data) {
+      systemTableCache.applySystemTableChange(
+        tableName,
+        'UPDATE',
+        {...whereClause, ...data},
+      );
+      return {success: true};
+    },
+    async upsertSystemTableRow(tableName, data) {
+      systemTableCache.applySystemTableChange(tableName, 'UPSERT', data);
+      return {success: true};
+    },
   };
 }
 
@@ -108,9 +132,37 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Create lifecycle manager on joining node
+      const systemTableCache = new SystemTableCache();
+      const cdcIntegrationService = createMockCDCIntegrationService(systemTableCache);
+      const now = Date.now();
+      systemTableCache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+        table_id: 'test_table',
+        table_name: 'test_table',
+        schema_definition: JSON.stringify(createTestSchema('test_table')),
+      });
+      systemTableCache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+        partition_id: 'ws-test-partition',
+        table_id: 'test_table',
+        partition_key_start: null,
+        partition_key_end: null,
+        leader_node_id: seedNodeId,
+      });
+      systemTableCache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+        service_id: 'ws-test-partition-r1',
+        service_type: 'partition',
+        partition_id: 'ws-test-partition',
+        node_id: seedNodeId,
+        raft_role: 'leader',
+        status: 'active',
+        address: `${seedNodeId}/partition/ws-test-partition-r1`,
+        created_at: now,
+        updated_at: now,
+      });
       const createdReplicas = [];
       const lifecycleManager = new ReplicaLifecycleManager({
         nodeId: joiningNodeId,
+        systemTableCache,
+        cdcIntegrationService,
         createPartitionService: async (options) => {
           // Simulate async partition creation
           await new Promise((resolve) => setTimeout(resolve, 10));

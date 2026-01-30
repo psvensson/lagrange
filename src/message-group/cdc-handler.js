@@ -7,7 +7,8 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {CDC_OPERATIONS} from '../cache/system-table-cache.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {CDC_OPERATION} from '../constants/index.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 
 /**
@@ -51,6 +52,8 @@ class CDCEvent {
   }
 }
 
+const CDC_OPERATIONS = CDC_OPERATION;
+
 /**
  * CDCHandler manages CDC subscriptions and applies events to the cache.
  * It ensures events are applied in HLC timestamp order for consistency.
@@ -77,9 +80,9 @@ class CDCHandler extends EventEmitter {
     // Configuration
     const config = ConfigurationManager.getInstance();
     this.bufferSize = options.bufferSize ||
-      config.get('messageGroup.cdcBufferSize') || 100;
+      config.get(CONFIG_KEY.MESSAGE_GROUP_CDC_BUFFER_SIZE) || 100;
     this.flushIntervalMs = options.flushIntervalMs ||
-      config.get('messageGroup.cdcFlushIntervalMs') || 1000;
+      config.get(CONFIG_KEY.MESSAGE_GROUP_CDC_FLUSH_INTERVAL_MS) || 1000;
     this.maxProcessedEventIds = options.maxProcessedEventIds || 10000;
 
     // Logging
@@ -339,6 +342,7 @@ class CDCHandler extends EventEmitter {
         key,
         error: error.message,
       });
+      throw error;
     }
   }
 

@@ -3,29 +3,31 @@ TAP version 14
     # Subtest: each class has exactly one implementation
         ok 1 - No unexpected duplicate class implementations should exist. Found: []
         1..1
-    ok 1 - each class has exactly one implementation # time=7.439ms
+    ok 1 - each class has exactly one implementation # time=5.652ms
     
     # Subtest: no feature flags for core functionality
         ok 1 - No files should have core feature flags. Found: []
         1..1
-    ok 2 - no feature flags for core functionality # time=11.63ms
+    ok 2 - no feature flags for core functionality # time=18.661ms
     
     # Subtest: no conditional compilation patterns
         ok 1 - No files should have conditional compilation. Found: []
         1..1
-    ok 3 - no conditional compilation patterns # time=7.245ms
+    ok 3 - no conditional compilation patterns # time=14.063ms
     
     # Subtest: consistent service implementation patterns
         ok 1 - all service classes have consistent implementation patterns
         1..1
-    ok 4 - consistent service implementation patterns # time=1.161ms
+    ok 4 - consistent service implementation patterns # time=1.256ms
     
     # Subtest: transport implementations serve distinct purposes
         ok 1 - transport implementations match expected distinct purposes
         1..1
-    ok 5 - transport implementations serve distinct purposes # time=1.292ms
+    ok 5 - transport implementations serve distinct purposes # time=1.642ms
     
     1..5
-ok 1 - Property 14: Code Path Uniqueness # time=32.714ms
+ok 1 - Property 14: Code Path Uniqueness # time=45.754ms
 
 1..1
+# { total: 5, pass: 5 }
+# time=57.738ms

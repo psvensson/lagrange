@@ -6,6 +6,16 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {
+  QUERY_AGGREGATE,
+  QUERY_AST_NODE,
+  QUERY_CONFIG_KEY,
+  QUERY_DEFAULTS,
+  QUERY_LOG_MSG,
+  QUERY_SORT_DIRECTION,
+  QUERY_SQL_FRAGMENT,
+  QUERY_SUBSYSTEM,
+} from './query-constants.js';
 
 /**
  * StreamingAggregator processes query results in a streaming fashion
@@ -23,10 +33,12 @@ class StreamingAggregator {
 
     const config = ConfigurationManager.getInstance();
     this.chunkSize = options.chunkSize ||
-      config.get('queryCoordinator.streamingChunkSize') || 1000;
+      config.get(QUERY_CONFIG_KEY.COORDINATOR_STREAMING_CHUNK_SIZE) ||
+      QUERY_DEFAULTS.COORDINATOR_STREAMING_CHUNK_SIZE;
     this.maxMemoryBytes = options.maxMemoryBytes ||
-      config.get('queryCoordinator.maxResultBufferBytes') || 1073741824;
-    this.enabled = config.get('queryCoordinator.streamingEnabled') !== false;
+      config.get(QUERY_CONFIG_KEY.COORDINATOR_MAX_RESULT_BUFFER_BYTES) ||
+      QUERY_DEFAULTS.COORDINATOR_MAX_RESULT_BUFFER_BYTES;
+    this.enabled = config.get(QUERY_CONFIG_KEY.COORDINATOR_STREAMING_ENABLED) !== false;
 
     // Streaming state
     this.chunks = [];
@@ -44,7 +56,7 @@ class StreamingAggregator {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('streaming-aggregator');
+        return loggingService.forSubsystem(QUERY_SUBSYSTEM.STREAMING_AGGREGATOR);
       }
     } catch {
       // Logging not available
@@ -64,7 +76,7 @@ class StreamingAggregator {
 
     // Check memory limit
     if (this.estimatedBytes + rowBytes > this.maxMemoryBytes) {
-      this.logger.warn('Streaming aggregator memory limit reached', {
+      this.logger.warn(QUERY_LOG_MSG.STREAMING_MEMORY_LIMIT_REACHED, {
         currentBytes: this.estimatedBytes,
         newBytes: rowBytes,
         maxBytes: this.maxMemoryBytes,
@@ -175,7 +187,7 @@ class StreamingAggregator {
   compareRows(a, b, orderBy) {
     for (const clause of orderBy) {
       const col = clause.expression?.column || clause.column;
-      const dir = clause.direction === 'DESC' ? -1 : 1;
+      const dir = clause.direction === QUERY_SORT_DIRECTION.DESC ? -1 : 1;
 
       const aVal = a[col];
       const bVal = b[col];
@@ -284,14 +296,14 @@ class StreamingAggregator {
 
     for (const col of ast.columns || []) {
       const expr = col.expression || col;
-      if (expr.type === 'aggregate') {
+      if (expr.type === QUERY_AST_NODE.AGGREGATE) {
         const colName = expr.argument?.column || null;
         aggregates.push({
           function: expr.function.toUpperCase(),
           column: colName,
           distinct: expr.distinct || false,
-          alias: col.alias || `${expr.function}(${colName || '*'})`,
-          isStar: expr.argument?.type === 'star',
+          alias: col.alias || `${expr.function}(${colName || QUERY_SQL_FRAGMENT.STAR})`,
+          isStar: expr.argument?.type === QUERY_AST_NODE.STAR,
         });
       }
     }
@@ -311,14 +323,14 @@ class StreamingAggregator {
 
       // Skip null values for non-COUNT(*)
       if (value === null || value === undefined) {
-        if (acc.function === 'COUNT' && acc.isStar) {
+        if (acc.function === QUERY_AGGREGATE.COUNT && acc.isStar) {
           acc.count++;
         }
         continue;
       }
 
       switch (acc.function) {
-      case 'COUNT':
+      case QUERY_AGGREGATE.COUNT:
         if (acc.distinct) {
           if (!acc.values.includes(value)) {
             acc.values.push(value);
@@ -329,22 +341,22 @@ class StreamingAggregator {
         }
         break;
 
-      case 'SUM':
+      case QUERY_AGGREGATE.SUM:
         acc.sum += Number(value) || 0;
         break;
 
-      case 'AVG':
+      case QUERY_AGGREGATE.AVG:
         acc.sum += Number(value) || 0;
         acc.count++;
         break;
 
-      case 'MIN':
+      case QUERY_AGGREGATE.MIN:
         if (acc.min === null || value < acc.min) {
           acc.min = value;
         }
         break;
 
-      case 'MAX':
+      case QUERY_AGGREGATE.MAX:
         if (acc.max === null || value > acc.max) {
           acc.max = value;
         }
@@ -361,15 +373,15 @@ class StreamingAggregator {
    */
   computeFinalAggregate(acc) {
     switch (acc.function) {
-    case 'COUNT':
+    case QUERY_AGGREGATE.COUNT:
       return acc.count;
-    case 'SUM':
+    case QUERY_AGGREGATE.SUM:
       return acc.sum;
-    case 'AVG':
+    case QUERY_AGGREGATE.AVG:
       return acc.count > 0 ? acc.sum / acc.count : null;
-    case 'MIN':
+    case QUERY_AGGREGATE.MIN:
       return acc.min;
-    case 'MAX':
+    case QUERY_AGGREGATE.MAX:
       return acc.max;
     default:
       return null;
@@ -398,7 +410,9 @@ class StreamingAggregator {
     // Process chunks incrementally
     for (const chunk of this.chunks) {
       for (const row of chunk) {
-        const groupKey = groupByColumns.map((col) => row[col]).join('|');
+        const groupKey = groupByColumns.map((col) => row[col]).join(
+          QUERY_SQL_FRAGMENT.PIPE,
+        );
 
         if (!groups.has(groupKey)) {
           // Initialize accumulators for new group

@@ -7,6 +7,8 @@
  * Requirements: 5.1, 5.2
  */
 
+import {WORKFLOW_STEP} from '../constants/index.js';
+
 /**
  * ReplicaStatus - Single source of truth for replica states.
  * Used by RebalanceCoordinator, ReplicaHandler, CDC, and Admin CLI.
@@ -37,13 +39,13 @@ const ReplicaStatus = {
  * @type {Object.<string, string>}
  */
 const WORKFLOW_STEP_TO_STATUS = {
-  'PENDING': ReplicaStatus.PENDING,
-  'SENDING': ReplicaStatus.PENDING,
-  'CREATING': ReplicaStatus.CREATING,
-  'SYNCING': ReplicaStatus.SYNCING,
-  'ACTIVE': ReplicaStatus.ACTIVE,
-  'STOPPING': ReplicaStatus.REMOVING,
-  'REMOVED': ReplicaStatus.REMOVED,
+  [WORKFLOW_STEP.PENDING]: ReplicaStatus.PENDING,
+  [WORKFLOW_STEP.SENDING]: ReplicaStatus.PENDING,
+  [WORKFLOW_STEP.CREATING]: ReplicaStatus.CREATING,
+  [WORKFLOW_STEP.SYNCING]: ReplicaStatus.SYNCING,
+  [WORKFLOW_STEP.ACTIVE]: ReplicaStatus.ACTIVE,
+  [WORKFLOW_STEP.STOPPING]: ReplicaStatus.REMOVING,
+  [WORKFLOW_STEP.REMOVED]: ReplicaStatus.REMOVED,
 };
 
 /**
@@ -64,7 +66,13 @@ const OperationType = {
  *
  * @type {string[]}
  */
-const ADD_WORKFLOW_STEPS = ['PENDING', 'SENDING', 'CREATING', 'SYNCING', 'ACTIVE'];
+const ADD_WORKFLOW_STEPS = [
+  WORKFLOW_STEP.PENDING,
+  WORKFLOW_STEP.SENDING,
+  WORKFLOW_STEP.CREATING,
+  WORKFLOW_STEP.SYNCING,
+  WORKFLOW_STEP.ACTIVE,
+];
 
 /**
  * Workflow steps for REMOVE operations.
@@ -72,7 +80,12 @@ const ADD_WORKFLOW_STEPS = ['PENDING', 'SENDING', 'CREATING', 'SYNCING', 'ACTIVE
  *
  * @type {string[]}
  */
-const REMOVE_WORKFLOW_STEPS = ['PENDING', 'SENDING', 'STOPPING', 'REMOVED'];
+const REMOVE_WORKFLOW_STEPS = [
+  WORKFLOW_STEP.PENDING,
+  WORKFLOW_STEP.SENDING,
+  WORKFLOW_STEP.STOPPING,
+  WORKFLOW_STEP.REMOVED,
+];
 
 /**
  * Get the workflow steps for an operation type.
@@ -126,7 +139,7 @@ function getNextWorkflowStep(operationType, currentStep) {
  * @return {boolean} True if the step is terminal.
  */
 function isTerminalStep(operationType, step) {
-  if (step === 'FAILED') {
+  if (step === WORKFLOW_STEP.FAILED) {
     return true;
   }
   const steps = getWorkflowSteps(operationType);
@@ -170,7 +183,7 @@ function isTerminalStep(operationType, step) {
  */
 function createOperation(params) {
   const now = Date.now();
-  const initialStep = 'PENDING';
+  const initialStep = WORKFLOW_STEP.PENDING;
 
   return {
     operationId: params.operationId,

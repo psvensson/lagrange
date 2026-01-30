@@ -3,13 +3,11 @@
  * Requirements: 14.1
  */
 
-import {test, beforeEach, afterEach} from 'tap';
-import {
-  FailureDetector,
-  NodeStatus,
-  ReplicaStatus,
-} from '../../src/node/failure-detector.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+import {FailureDetector} from '../../src/node/failure-detector.js';
+import {NODE_STATUS as NodeStatus} from '../../src/node/node-constants.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -100,8 +98,12 @@ test('FailureDetector - constructor', async (t) => {
 });
 
 test('FailureDetector - initialize', async (t) => {
+  const mockCDC = createMockCDCService();
+  const mockCache = createMockCache();
   const detector = new FailureDetector({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
 
   detector.initialize();
@@ -123,8 +125,12 @@ test('FailureDetector - initialize requires nodeId', async (t) => {
 });
 
 test('FailureDetector - start and stop', async (t) => {
+  const mockCDC = createMockCDCService();
+  const mockCache = createMockCache();
   const detector = new FailureDetector({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
   detector.initialize();
 
@@ -400,8 +406,12 @@ test('FailureDetector - healthy nodes are not affected', async (t) => {
 });
 
 test('FailureDetector - getStats', async (t) => {
+  const mockCDC = createMockCDCService();
+  const mockCache = createMockCache();
   const detector = new FailureDetector({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
   detector.initialize();
 
@@ -416,8 +426,12 @@ test('FailureDetector - getStats', async (t) => {
 });
 
 test('FailureDetector - shutdown', async (t) => {
+  const mockCDC = createMockCDCService();
+  const mockCache = createMockCache();
   const detector = new FailureDetector({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
   detector.initialize();
   detector.start();
@@ -440,10 +454,12 @@ test('FailureDetector - NodeStatus values', async (t) => {
 });
 
 test('FailureDetector - ReplicaStatus values', async (t) => {
+  t.equal(ReplicaStatus.PENDING, 'pending', 'should have pending');
+  t.equal(ReplicaStatus.CREATING, 'creating', 'should have creating');
+  t.equal(ReplicaStatus.SYNCING, 'syncing', 'should have syncing');
   t.equal(ReplicaStatus.ACTIVE, 'active', 'should have active');
-  t.equal(ReplicaStatus.INACTIVE, 'inactive', 'should have inactive');
+  t.equal(ReplicaStatus.REMOVING, 'removing', 'should have removing');
+  t.equal(ReplicaStatus.REMOVED, 'removed', 'should have removed');
   t.equal(ReplicaStatus.FAILED, 'failed', 'should have failed');
-  t.equal(ReplicaStatus.STARTING, 'starting', 'should have starting');
-  t.equal(ReplicaStatus.STOPPING, 'stopping', 'should have stopping');
   t.end();
 });

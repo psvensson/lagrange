@@ -11,21 +11,20 @@ import path from 'path';
 import {fileURLToPath} from 'url';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
+import {
+  SERVICE_STATUS,
+  THREADING_CONFIG_KEY,
+  THREADING_DEFAULT,
+  THREADING_ERROR_MSG,
+  THREADING_HEALTH_STATUS,
+  THREADING_EVENT,
+  THREADING_LOG_MSG,
+  THREADING_SUBSYSTEM,
+  WORKER_OPERATION,
+} from './threading-constants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-/**
- * Service status enumeration.
- */
-const ServiceStatus = {
-  PENDING: 'pending',
-  STARTING: 'starting',
-  RUNNING: 'running',
-  STOPPING: 'stopping',
-  STOPPED: 'stopped',
-  FAILED: 'failed',
-};
 
 /**
  * ServiceThreadManager manages worker thread pool for service execution.
@@ -83,14 +82,14 @@ class ServiceThreadManager extends EventEmitter {
 
     this.config = ConfigurationManager.getInstance();
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.forSubsystem('threading');
+    this.logger = loggingService.forSubsystem(THREADING_SUBSYSTEM);
 
     const minThreads = options.minThreads ||
-      this.config.get('worker.minThreads') || 2;
+      this.config.get(THREADING_CONFIG_KEY.MIN_THREADS) || THREADING_DEFAULT.MIN_THREADS;
     const maxThreads = options.maxThreads ||
-      this.config.get('worker.maxThreads') || os.cpus().length;
+      this.config.get(THREADING_CONFIG_KEY.MAX_THREADS) || THREADING_DEFAULT.MAX_THREADS;
     const idleTimeoutMs = options.idleTimeoutMs ||
-      this.config.get('worker.idleTimeoutMs') || 30000;
+      this.config.get(THREADING_CONFIG_KEY.IDLE_TIMEOUT_MS) || THREADING_DEFAULT.IDLE_TIMEOUT_MS;
 
     // Create piscina thread pool
     this.pool = new Piscina({
@@ -102,11 +101,11 @@ class ServiceThreadManager extends EventEmitter {
 
     // Set up pool event handlers
     this.pool.on('error', (error) => {
-      this.logger.error('Worker pool error', {error: error.message});
-      this.emit('poolError', error);
+      this.logger.error(THREADING_LOG_MSG.POOL_ERROR, {error: error.message});
+      this.emit(THREADING_EVENT.POOL_ERROR, error);
     });
 
-    this.logger.info('Service thread manager initialized', {
+    this.logger.info(THREADING_LOG_MSG.INITIALIZED, {
       minThreads,
       maxThreads,
       idleTimeoutMs,
@@ -124,7 +123,7 @@ class ServiceThreadManager extends EventEmitter {
    */
   async executeServiceOperation(serviceId, operation, data = {}) {
     if (!this.initialized) {
-      throw new Error('ServiceThreadManager not initialized');
+      throw new Error(THREADING_ERROR_MSG.NOT_INITIALIZED);
     }
 
     const startTime = Date.now();
@@ -137,7 +136,7 @@ class ServiceThreadManager extends EventEmitter {
       });
 
       const duration = Date.now() - startTime;
-      this.logger.debug('Service operation completed', {
+      this.logger.debug(THREADING_LOG_MSG.OPERATION_COMPLETED, {
         serviceId,
         operation,
         durationMs: duration,
@@ -146,7 +145,7 @@ class ServiceThreadManager extends EventEmitter {
       return result;
     } catch (error) {
       const duration = Date.now() - startTime;
-      this.logger.error('Service operation failed', {
+      this.logger.error(THREADING_LOG_MSG.OPERATION_FAILED, {
         serviceId,
         operation,
         durationMs: duration,
@@ -164,17 +163,17 @@ class ServiceThreadManager extends EventEmitter {
    */
   async registerService(serviceId, serviceConfig = {}) {
     if (!this.initialized) {
-      throw new Error('ServiceThreadManager not initialized');
+      throw new Error(THREADING_ERROR_MSG.NOT_INITIALIZED);
     }
 
     if (this.services.has(serviceId)) {
-      throw new Error(`Service already registered: ${serviceId}`);
+      throw new Error(THREADING_ERROR_MSG.SERVICE_ALREADY_REGISTERED(serviceId));
     }
 
     const serviceInfo = {
       id: serviceId,
       config: serviceConfig,
-      status: ServiceStatus.PENDING,
+      status: SERVICE_STATUS.PENDING,
       registeredAt: Date.now(),
       lastHealthCheck: null,
       healthStatus: null,
@@ -183,18 +182,18 @@ class ServiceThreadManager extends EventEmitter {
     this.services.set(serviceId, serviceInfo);
 
     try {
-      const result = await this.executeServiceOperation(serviceId, 'register', {
+      const result = await this.executeServiceOperation(serviceId, WORKER_OPERATION.REGISTER, {
         handler: serviceConfig.handler || {},
       });
 
-      serviceInfo.status = ServiceStatus.RUNNING;
-      this.logger.info('Service registered', {serviceId});
-      this.emit('serviceRegistered', serviceId);
+      serviceInfo.status = SERVICE_STATUS.RUNNING;
+      this.logger.info(THREADING_LOG_MSG.SERVICE_REGISTERED, {serviceId});
+      this.emit(THREADING_EVENT.SERVICE_REGISTERED, serviceId);
 
       return result;
     } catch (error) {
-      serviceInfo.status = ServiceStatus.FAILED;
-      this.logger.error('Service registration failed', {
+      serviceInfo.status = SERVICE_STATUS.FAILED;
+      this.logger.error(THREADING_LOG_MSG.SERVICE_REGISTRATION_FAILED, {
         serviceId,
         error: error.message,
       });
@@ -209,27 +208,27 @@ class ServiceThreadManager extends EventEmitter {
    */
   async unregisterService(serviceId) {
     if (!this.initialized) {
-      throw new Error('ServiceThreadManager not initialized');
+      throw new Error(THREADING_ERROR_MSG.NOT_INITIALIZED);
     }
 
     const serviceInfo = this.services.get(serviceId);
     if (!serviceInfo) {
-      throw new Error(`Service not found: ${serviceId}`);
+      throw new Error(THREADING_ERROR_MSG.SERVICE_NOT_FOUND(serviceId));
     }
 
-    serviceInfo.status = ServiceStatus.STOPPING;
+    serviceInfo.status = SERVICE_STATUS.STOPPING;
 
     try {
-      const result = await this.executeServiceOperation(serviceId, 'unregister');
+      const result = await this.executeServiceOperation(serviceId, WORKER_OPERATION.UNREGISTER);
       this.services.delete(serviceId);
 
-      this.logger.info('Service unregistered', {serviceId});
-      this.emit('serviceUnregistered', serviceId);
+      this.logger.info(THREADING_LOG_MSG.SERVICE_UNREGISTERED, {serviceId});
+      this.emit(THREADING_EVENT.SERVICE_UNREGISTERED, serviceId);
 
       return result;
     } catch (error) {
-      serviceInfo.status = ServiceStatus.FAILED;
-      this.logger.error('Service unregistration failed', {
+      serviceInfo.status = SERVICE_STATUS.FAILED;
+      this.logger.error(THREADING_LOG_MSG.SERVICE_UNREGISTRATION_FAILED, {
         serviceId,
         error: error.message,
       });
@@ -264,18 +263,18 @@ class ServiceThreadManager extends EventEmitter {
    */
   async checkServiceHealth(serviceId) {
     if (!this.initialized) {
-      throw new Error('ServiceThreadManager not initialized');
+      throw new Error(THREADING_ERROR_MSG.NOT_INITIALIZED);
     }
 
     const serviceInfo = this.services.get(serviceId);
     if (!serviceInfo) {
-      throw new Error(`Service not found: ${serviceId}`);
+      throw new Error(THREADING_ERROR_MSG.SERVICE_NOT_FOUND(serviceId));
     }
 
     try {
-      const result = await this.executeServiceOperation(serviceId, 'ping');
+      const result = await this.executeServiceOperation(serviceId, WORKER_OPERATION.PING);
       serviceInfo.lastHealthCheck = Date.now();
-      serviceInfo.healthStatus = 'healthy';
+      serviceInfo.healthStatus = THREADING_HEALTH_STATUS.HEALTHY;
 
       return {
         serviceId,
@@ -284,7 +283,7 @@ class ServiceThreadManager extends EventEmitter {
       };
     } catch (error) {
       serviceInfo.lastHealthCheck = Date.now();
-      serviceInfo.healthStatus = 'unhealthy';
+      serviceInfo.healthStatus = THREADING_HEALTH_STATUS.UNHEALTHY;
 
       return {
         serviceId,
@@ -355,7 +354,7 @@ class ServiceThreadManager extends EventEmitter {
       return;
     }
 
-    this.logger.info('Shutting down service thread manager');
+    this.logger.info(THREADING_LOG_MSG.SHUTDOWN_START);
 
     // Unregister all services
     const serviceIds = Array.from(this.services.keys());
@@ -363,10 +362,11 @@ class ServiceThreadManager extends EventEmitter {
       try {
         await this.unregisterService(serviceId);
       } catch (error) {
-        this.logger.warn('Error unregistering service during shutdown', {
+        this.logger.warn(THREADING_LOG_MSG.SHUTDOWN_UNREGISTER_ERROR, {
           serviceId,
           error: error.message,
         });
+        throw error;
       }
     }
 
@@ -377,8 +377,9 @@ class ServiceThreadManager extends EventEmitter {
     }
 
     this.initialized = false;
-    this.logger.info('Service thread manager shutdown complete');
+    this.logger.info(THREADING_LOG_MSG.SHUTDOWN_COMPLETE);
   }
 }
 
-export {ServiceThreadManager, ServiceStatus};
+export {ServiceThreadManager};
+export {SERVICE_STATUS as ServiceStatus};

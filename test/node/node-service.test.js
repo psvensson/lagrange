@@ -4,17 +4,19 @@
  * Requirements: 1.3, 2.3
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {NodeService, NodeStatus, NodeState} from '../../src/node/node-service.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 
+// Shared thread manager for all tests to avoid expensive pool creation/destruction
+let sharedThreadManager = null;
+
 test('NodeService', async (t) => {
   t.beforeEach(() => {
     NodeService.resetInstance();
-    ServiceThreadManager.resetInstance();
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
     AddressManager.resetInstance();
@@ -24,16 +26,35 @@ test('NodeService', async (t) => {
 
     const logging = LoggingService.getInstance();
     logging.initialize({level: 'error'});
+
+    // Reuse thread manager across tests to avoid expensive pool recreation
+    if (!sharedThreadManager || !sharedThreadManager.isInitialized()) {
+      ServiceThreadManager.resetInstance();
+      sharedThreadManager = ServiceThreadManager.getInstance();
+      sharedThreadManager.initialize({
+        minThreads: 1,
+        maxThreads: 2,
+        idleTimeoutMs: 100,
+      });
+    }
   });
 
   t.afterEach(async () => {
     await NodeService.getInstance().shutdown().catch(() => {});
-    await ServiceThreadManager.getInstance().shutdown().catch(() => {});
     NodeService.resetInstance();
-    ServiceThreadManager.resetInstance();
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
     AddressManager.resetInstance();
+    // Don't reset thread manager - reuse it
+  });
+
+  // Clean up thread manager after all tests
+  t.teardown(async () => {
+    if (sharedThreadManager) {
+      await sharedThreadManager.shutdown().catch(() => {});
+      ServiceThreadManager.resetInstance();
+      sharedThreadManager = null;
+    }
   });
 
   t.test('singleton pattern', async (t) => {

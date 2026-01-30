@@ -15,7 +15,7 @@
  * 3. No separate proposals for individual moves
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {StateAwareRebalancer} from '../../src/rebalancer/state-aware-rebalancer.js';
 import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';

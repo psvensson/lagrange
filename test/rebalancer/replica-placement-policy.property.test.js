@@ -8,15 +8,12 @@
  * Validates: Requirements 2.2, 2.5, 8.1, 8.2
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {
-  UnifiedRebalancer,
-  EntityType,
-  NodeStatus,
-} from '../../src/rebalancer/unified-rebalancer.js';
+import {EntityType, NodeStatus} from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createTestRebalancer} from './test-helpers.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -33,31 +30,6 @@ function initializeTestEnvironment() {
   if (!logging.isInitialized()) {
     logging.initialize({level: 'error'});
   }
-}
-
-// Create a mock system table cache
-function createMockCache(nodes) {
-  const cache = {
-    nodes: new Map(nodes.map((n) => [n.node_id, n])),
-    services: new Map(),
-    partitions: new Map(),
-    tables: new Map(),
-    message_groups: new Map(),
-  };
-
-  return {
-    get: (tableName, key) => cache[tableName]?.get(key),
-    filter: (tableName, predicate) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values()).filter(predicate);
-    },
-    getAll: (tableName) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values());
-    },
-  };
 }
 
 // Arbitrary for generating node configurations
@@ -103,13 +75,11 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             status: i < 3 ? NodeStatus.ACTIVE : n.status,
           }));
 
-          const mockCache = createMockCache(activeNodes);
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
-            systemTableCache: mockCache,
+            cacheData: {nodes: activeNodes},
           });
 
           // Calculate target state with no existing replicas
@@ -143,13 +113,11 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             status: NodeStatus.ACTIVE,
           }));
 
-          const mockCache = createMockCache(activeNodes);
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
-            systemTableCache: mockCache,
+            cacheData: {nodes: activeNodes},
           });
 
           const policy = {
@@ -206,13 +174,11 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             },
           ];
 
-          const mockCache = createMockCache(nodes);
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
-            systemTableCache: mockCache,
+            cacheData: {nodes},
           });
 
           // Get available nodes - should filter based on status
@@ -241,13 +207,11 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             {node_id: 'node-4', status: NodeStatus.ACTIVE},
           ];
 
-          const mockCache = createMockCache(nodes);
-
-          const rebalancer = new UnifiedRebalancer({
+          const rebalancer = createTestRebalancer({
             entityId: 'partition-1',
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
-            systemTableCache: mockCache,
+            cacheData: {nodes},
           });
 
           // Calculate target state and check result

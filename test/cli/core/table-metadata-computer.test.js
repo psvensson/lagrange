@@ -1,4 +1,4 @@
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {RemoteCache} from '../../../src/cli/core/remote-cache.js';
 import {TableMetadataComputer} from '../../../src/cli/core/table-metadata-computer.js';
 

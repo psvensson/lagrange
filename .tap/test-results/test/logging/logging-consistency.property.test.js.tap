@@ -2,134 +2,132 @@ TAP version 14
 # Subtest: setup
     ok 1 - configuration initialized
     1..1
-ok 1 - setup # time=35.379ms
+ok 1 - setup # time=66.445ms
 
 # Subtest: Property 19: Structured Logging Consistency
-{"level":50,"time":"2026-01-23T06:22:45.495Z","nodeId":"test-node","pid":418332,"serviceId":"69756c44-2107-27ab-aecb-f69d00000015","serviceType":"message_group","traceId":"eb3827e2-0008-1000-b2e6-5a1affffffe2","nodeId":"test-node","msg":"g{iy!hbj#G\""}
-{"level":40,"time":"2026-01-23T06:22:45.496Z","nodeId":"test-node","pid":418332,"serviceId":"aea2cc5f-5b4d-5721-8000-00010000000c","serviceType":"message_group","traceId":"d0aaf027-001b-1000-9cbb-99932a1ac748","nodeId":"test-node","msg":"prototype"}
-{"level":10,"time":"2026-01-23T06:22:45.496Z","nodeId":"test-node","pid":418332,"serviceId":"65919022-fff6-5fff-a93b-a4c1de8aeefa","serviceType":"message_group","traceId":"ffffffff-0006-1000-8000-000200000014","nodeId":"test-node","msg":"[W371"}
-{"level":40,"time":"2026-01-23T06:22:45.496Z","nodeId":"test-node","pid":418332,"serviceId":"00000001-01a8-25a9-8000-001672f3d0c5","serviceType":"partition","nodeId":"test-node","msg":"pk~>"}
-{"level":40,"time":"2026-01-23T06:22:45.496Z","nodeId":"test-node","pid":418332,"serviceId":"a61cac0c-68a9-2cb1-b33b-798cfffffff5","serviceType":"message_group","nodeId":"test-node","msg":"_"}
-{"level":40,"time":"2026-01-23T06:22:45.496Z","nodeId":"test-node","pid":418332,"serviceId":"0000000c-001d-1000-930c-cabbd682c9fd","serviceType":"partition","traceId":"f94cef34-fff5-5fff-adb9-f052fffffffa","nodeId":"test-node","msg":"!pv"}
-{"level":50,"time":"2026-01-23T06:22:45.496Z","nodeId":"test-node","pid":418332,"serviceType":"message_group","traceId":"00000001-000a-1000-8000-001100000000","nodeId":"test-node","msg":"%"}
-{"level":50,"time":"2026-01-23T06:22:45.497Z","nodeId":"test-node","pid":418332,"serviceId":"864123c2-ffed-5fff-8000-000d1fb3ae6b","serviceType":"partition","nodeId":"test-node","msg":"nh/Re#dOO!,"}
-{"level":30,"time":"2026-01-23T06:22:45.497Z","nodeId":"test-node","pid":418332,"serviceType":"partition","nodeId":"test-node","msg":"yRw%A!~&w"}
-{"level":20,"time":"2026-01-23T06:22:45.497Z","nodeId":"test-node","pid":418332,"serviceType":"partition","traceId":"eb12dad0-c837-1cf2-8cb1-01eb4f9d9487","nodeId":"test-node","msg":"}call:)!r!r"}
+{"level":30,"time":"2026-01-30T11:18:13.584Z","nodeId":"test-node","pid":1332592,"serviceId":"d68149ed-0006-1000-8bd9-8ec0d5fb12b0","serviceType":"message_group","nodeId":"test-node","msg":"!$\""}
+{"level":20,"time":"2026-01-30T11:18:13.585Z","nodeId":"test-node","pid":1332592,"serviceId":"4f71d443-001b-1000-8000-00060c899051","serviceType":"message_group","nodeId":"test-node","msg":"bind"}
+{"level":30,"time":"2026-01-30T11:18:13.585Z","nodeId":"test-node","pid":1332592,"traceId":"00000013-0006-1000-8000-000f484b9b81","nodeId":"test-node","msg":"4F?a5#"}
+{"level":40,"time":"2026-01-30T11:18:13.585Z","nodeId":"test-node","pid":1332592,"serviceId":"667bb70d-6a8e-1ac7-bfff-fff4d57ba67f","serviceType":"node","traceId":"00000010-0003-1000-980d-07d4ffffffeb","nodeId":"test-node","msg":"va"}
+{"level":30,"time":"2026-01-30T11:18:13.586Z","nodeId":"test-node","pid":1332592,"serviceId":"0000001f-f5dd-5042-8000-0000cc685768","traceId":"44b09adf-ffff-5fff-8000-00013d335c94","nodeId":"test-node","msg":"JJPtP"}
+{"level":50,"time":"2026-01-30T11:18:13.586Z","nodeId":"test-node","pid":1332592,"serviceType":"message_group","traceId":"0000001f-ffee-5fff-956b-01f5288d0dc0","nodeId":"test-node","msg":",vE3\\ d~[),]"}
+{"level":50,"time":"2026-01-30T11:18:13.586Z","nodeId":"test-node","pid":1332592,"serviceId":"7ba3bc46-0008-1000-bcb9-f4f560e06c15","serviceType":"message_group","nodeId":"test-node","msg":"<T+&Z]4-#35"}
+{"level":50,"time":"2026-01-30T11:18:13.587Z","nodeId":"test-node","pid":1332592,"serviceId":"7c68e697-000e-1000-8000-000e0000001a","serviceType":"partition","traceId":"ffffffef-001d-1000-ab34-754efffffff1","nodeId":"test-node","msg":"_Nzx"}
+{"level":20,"time":"2026-01-30T11:18:13.587Z","nodeId":"test-node","pid":1332592,"serviceId":"85c7a4b3-001b-1000-87cb-98051a7a99bb","traceId":"fffffff9-ce74-2066-bfff-ffe9a655686e","nodeId":"test-node","msg":"2EtvJr%Q\\<"}
+{"level":50,"time":"2026-01-30T11:18:13.587Z","nodeId":"test-node","pid":1332592,"serviceId":"cd1cb430-5f25-3a28-8866-5e2f13227338","serviceType":"node","traceId":"ffffffe9-0011-1000-8f21-1f50d22209b0","nodeId":"test-node","msg":",izfM/Cxfap!"}
     # Subtest: log entries include required metadata
         ok 1 - all log entries include required metadata
         1..1
-    ok 1 - log entries include required metadata # time=7.861ms
+    ok 1 - log entries include required metadata # time=15.152ms
     
-{"level":50,"time":"2026-01-23T06:22:45.499Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"8[%\"ADt"}
-{"level":30,"time":"2026-01-23T06:22:45.499Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"}~{"}
-{"level":40,"time":"2026-01-23T06:22:45.499Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"key"}
-{"level":30,"time":"2026-01-23T06:22:45.499Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"vNHay"}
-{"level":30,"time":"2026-01-23T06:22:45.499Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"[CfB[aBKIhq"}
-{"level":50,"time":"2026-01-23T06:22:45.499Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"C,;poN/d_"}
-{"level":10,"time":"2026-01-23T06:22:45.500Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"eiwgv /}Bs"}
-{"level":10,"time":"2026-01-23T06:22:45.500Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"#pro"}
-{"level":50,"time":"2026-01-23T06:22:45.500Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"ap"}
-{"level":20,"time":"2026-01-23T06:22:45.500Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"A)+PpUAS<"}
+{"level":30,"time":"2026-01-30T11:18:13.591Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"[m"}
+{"level":20,"time":"2026-01-30T11:18:13.591Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"k1c-SL^"}
+{"level":40,"time":"2026-01-30T11:18:13.592Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"__d"}
+{"level":10,"time":"2026-01-30T11:18:13.592Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"a41#c+h;"}
+{"level":30,"time":"2026-01-30T11:18:13.592Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"3"}
+{"level":10,"time":"2026-01-30T11:18:13.592Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"{w03"}
+{"level":40,"time":"2026-01-30T11:18:13.593Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"<!U"}
+{"level":40,"time":"2026-01-30T11:18:13.593Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"/"}
+{"level":30,"time":"2026-01-30T11:18:13.593Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":" <Q+Iz"}
+{"level":30,"time":"2026-01-30T11:18:13.593Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"!%rp8d;%}!tg"}
     # Subtest: log structure is consistent across all levels
         ok 1 - log structure is consistent across all levels
         1..1
-    ok 2 - log structure is consistent across all levels # time=1.587ms
+    ok 2 - log structure is consistent across all levels # time=3.016ms
     
-{"level":30,"time":"2026-01-23T06:22:45.501Z","nodeId":"test-node","pid":418332,"serviceId":"0000000c-0004-1000-8000-00147510dfce","serviceType":"message_group","nodeId":"test-node","msg":"{| "}
-{"level":30,"time":"2026-01-23T06:22:45.501Z","nodeId":"test-node","pid":418332,"serviceId":"ffffffff-ffe4-5fff-8000-000b00000000","serviceType":"message_group","nodeId":"test-node","msg":"\".E4+"}
-{"level":30,"time":"2026-01-23T06:22:45.501Z","nodeId":"test-node","pid":418332,"serviceId":"e5a772cd-0c78-1000-a7a9-fe7f0000000c","serviceType":"node","nodeId":"test-node","msg":"toString"}
-{"level":30,"time":"2026-01-23T06:22:45.501Z","nodeId":"test-node","pid":418332,"serviceId":"8daee896-ffed-5fff-b0a4-4f46ffffffec","serviceType":"partition","nodeId":"test-node","msg":"&3-z*"}
-{"level":30,"time":"2026-01-23T06:22:45.501Z","nodeId":"test-node","pid":418332,"serviceId":"2ac95e9c-ca40-285e-a847-dc1a00000000","serviceType":"partition","nodeId":"test-node","msg":"_NvN('|M`:"}
-{"level":30,"time":"2026-01-23T06:22:45.501Z","nodeId":"test-node","pid":418332,"serviceId":"00000003-f495-42a9-a7a3-67b3fffffff9","serviceType":"partition","nodeId":"test-node","msg":"P"}
-{"level":30,"time":"2026-01-23T06:22:45.502Z","nodeId":"test-node","pid":418332,"serviceId":"fcb80e46-000f-1000-8000-00198e993bfc","serviceType":"message_group","nodeId":"test-node","msg":"Qp+y>(L"}
-{"level":30,"time":"2026-01-23T06:22:45.502Z","nodeId":"test-node","pid":418332,"serviceId":"0000000f-000b-1000-b7ff-2940afcbfa80","serviceType":"message_group","nodeId":"test-node","msg":"cR"}
-{"level":30,"time":"2026-01-23T06:22:45.502Z","nodeId":"test-node","pid":418332,"serviceId":"ffffffed-f1f9-4d65-946b-fe76ffffffe6","serviceType":"node","nodeId":"test-node","msg":"3# "}
-{"level":30,"time":"2026-01-23T06:22:45.502Z","nodeId":"test-node","pid":418332,"serviceId":"6c27f7a2-682d-44ad-8000-000100000005","serviceType":"partition","nodeId":"test-node","msg":"E*ref) proto"}
+{"level":30,"time":"2026-01-30T11:18:13.595Z","nodeId":"test-node","pid":1332592,"serviceId":"ffffffe3-001b-1000-8000-000290c427db","serviceType":"partition","nodeId":"test-node","msg":"}"}
+{"level":30,"time":"2026-01-30T11:18:13.595Z","nodeId":"test-node","pid":1332592,"serviceId":"44af1f7f-0001-1000-8000-000d0000000e","serviceType":"message_group","nodeId":"test-node","msg":"3a}N"}
+{"level":30,"time":"2026-01-30T11:18:13.595Z","nodeId":"test-node","pid":1332592,"serviceId":"69aec821-0018-1000-a5e1-0cceffffffe4","serviceType":"message_group","nodeId":"test-node","msg":"3fin"}
+{"level":30,"time":"2026-01-30T11:18:13.595Z","nodeId":"test-node","pid":1332592,"serviceId":"fbbde28a-fffb-5fff-aae0-08310000001c","serviceType":"partition","nodeId":"test-node","msg":"!"}
+{"level":30,"time":"2026-01-30T11:18:13.596Z","nodeId":"test-node","pid":1332592,"serviceId":"00000002-7f8f-24b5-bfff-fffa0000001d","serviceType":"node","nodeId":"test-node","msg":"FW3V"}
+{"level":30,"time":"2026-01-30T11:18:13.596Z","nodeId":"test-node","pid":1332592,"serviceId":"00000011-2ed3-42c1-8000-001cffffffff","serviceType":"node","nodeId":"test-node","msg":"9F~v9$}#>Q\""}
+{"level":30,"time":"2026-01-30T11:18:13.596Z","nodeId":"test-node","pid":1332592,"serviceId":"00000018-0003-1000-90c3-f1ea8df03c80","serviceType":"message_group","nodeId":"test-node","msg":"y]#xJ#!\"&R"}
+{"level":30,"time":"2026-01-30T11:18:13.596Z","nodeId":"test-node","pid":1332592,"serviceId":"0000001b-001e-1000-8000-000900000013","serviceType":"partition","nodeId":"test-node","msg":"{&"}
+{"level":30,"time":"2026-01-30T11:18:13.597Z","nodeId":"test-node","pid":1332592,"serviceId":"9983fffc-001c-1000-8000-001425bf321f","serviceType":"node","nodeId":"test-node","msg":"k"}
+{"level":30,"time":"2026-01-30T11:18:13.597Z","nodeId":"test-node","pid":1332592,"serviceId":"fffffffa-ffee-5fff-a536-b7987ecda384","serviceType":"node","nodeId":"test-node","msg":"E^"}
     # Subtest: child logger preserves metadata
         ok 1 - child logger preserves metadata in all entries
         1..1
-    ok 3 - child logger preserves metadata # time=1.786ms
+    ok 3 - child logger preserves metadata # time=3.398ms
     
-{"level":30,"time":"2026-01-23T06:22:45.503Z","nodeId":"test-node","pid":418332,"serviceId":"00000008-7975-4a55-8000-0003fffffff3","traceId":"9bba378b-000c-1000-bfff-ffe3ac0f5beb","nodeId":"test-node","msg":"$j&"}
-{"level":30,"time":"2026-01-23T06:22:45.503Z","nodeId":"test-node","pid":418332,"serviceId":"00000015-001a-1000-a8f6-5ba5082dbd87","traceId":"3766a643-0014-1000-8000-000300000007","nodeId":"test-node","msg":"=mKK6;8}"}
-{"level":30,"time":"2026-01-23T06:22:45.503Z","nodeId":"test-node","pid":418332,"serviceId":"00000002-3fde-1f17-8000-001000000000","traceId":"00000010-001c-1000-a269-758f0000001f","nodeId":"test-node","msg":"-\""}
-{"level":30,"time":"2026-01-23T06:22:45.503Z","nodeId":"test-node","pid":418332,"serviceId":"fffffff0-a1b6-5158-8000-001900000000","traceId":"00000011-5745-19c0-bfff-ffeb89c411a6","nodeId":"test-node","msg":"+k*j{"}
-{"level":30,"time":"2026-01-23T06:22:45.503Z","nodeId":"test-node","pid":418332,"serviceId":"00000017-2dff-5448-b4b5-11c79afb93cb","traceId":"00000003-0744-2d75-8000-001dfffffffd","nodeId":"test-node","msg":":p,V<>NzziD{"}
-{"level":30,"time":"2026-01-23T06:22:45.503Z","nodeId":"test-node","pid":418332,"serviceId":"e71e87ad-3b53-310b-810c-30a50000001d","traceId":"e8f55657-6796-357a-b926-d3bd54d02683","nodeId":"test-node","msg":":"}
-{"level":30,"time":"2026-01-23T06:22:45.503Z","nodeId":"test-node","pid":418332,"serviceId":"b3302de9-ffef-5fff-8000-0008ffffffff","traceId":"0000000f-ffee-5fff-8000-000fe6343d1d","nodeId":"test-node","msg":"D:y(jVFfmG@;"}
-{"level":30,"time":"2026-01-23T06:22:45.503Z","nodeId":"test-node","pid":418332,"serviceId":"6d71633f-0001-1000-bfff-ffe400000001","traceId":"d0d43474-61d1-4c43-8000-0005fbf04ab5","nodeId":"test-node","msg":"3L'[1$ZepM"}
-{"level":30,"time":"2026-01-23T06:22:45.504Z","nodeId":"test-node","pid":418332,"serviceId":"0000001f-000d-1000-93f9-6d0200000011","traceId":"00000009-0006-1000-8000-00170000001c","nodeId":"test-node","msg":"ar"}
-{"level":30,"time":"2026-01-23T06:22:45.504Z","nodeId":"test-node","pid":418332,"serviceId":"e9505ed8-2736-4e9d-9482-9fc2f9466104","traceId":"ba88c2ba-64d4-321e-8000-0000b72daa40","nodeId":"test-node","msg":"(QB+5d"}
+{"level":30,"time":"2026-01-30T11:18:13.599Z","nodeId":"test-node","pid":1332592,"serviceId":"0000001b-fff1-5fff-b8ab-34b50000001b","traceId":"ebca9b98-000a-1000-8000-000318b8c601","nodeId":"test-node","msg":"^T0nD"}
+{"level":30,"time":"2026-01-30T11:18:13.599Z","nodeId":"test-node","pid":1332592,"serviceId":"90907d7a-97d3-572f-8000-00150000001f","traceId":"bac8eea3-7d80-5d4e-aa1f-7e7900000001","nodeId":"test-node","msg":"a"}
+{"level":30,"time":"2026-01-30T11:18:13.599Z","nodeId":"test-node","pid":1332592,"serviceId":"8a0b55e7-0010-1000-8000-001600000006","traceId":"0000001d-be06-45cd-8000-001acb29d3a8","nodeId":"test-node","msg":"bYBf;\""}
+{"level":30,"time":"2026-01-30T11:18:13.599Z","nodeId":"test-node","pid":1332592,"serviceId":"ffffffed-8fd3-23ad-bfff-ffec381c0392","traceId":"759b8470-ffff-5fff-bbe1-0da5ffffffe7","nodeId":"test-node","msg":"g{"}
+{"level":30,"time":"2026-01-30T11:18:13.599Z","nodeId":"test-node","pid":1332592,"serviceId":"7f63aafc-000b-1000-8000-001b00000016","traceId":"00000012-fff1-5fff-8000-00143e30a0c1","nodeId":"test-node","msg":"i0z4"}
+{"level":30,"time":"2026-01-30T11:18:13.600Z","nodeId":"test-node","pid":1332592,"serviceId":"b0fb1e3c-9a71-31ec-8132-da1dfa8de542","traceId":"00000016-0001-1000-8000-00115594e8b4","nodeId":"test-node","msg":"U\"{9` "}
+{"level":30,"time":"2026-01-30T11:18:13.600Z","nodeId":"test-node","pid":1332592,"serviceId":"0000000e-000d-1000-86b0-b9fb8a232b94","traceId":"fffffff4-ae21-337f-bfff-ffee00000010","nodeId":"test-node","msg":"YDDx./)<fRW"}
+{"level":30,"time":"2026-01-30T11:18:13.600Z","nodeId":"test-node","pid":1332592,"serviceId":"00000018-35c0-2b30-8065-ca270000000c","traceId":"4155590c-ad75-4e2d-bfff-fff8fffffff3","nodeId":"test-node","msg":". a b|5$M#"}
+{"level":30,"time":"2026-01-30T11:18:13.600Z","nodeId":"test-node","pid":1332592,"serviceId":"fffffffa-0011-1000-ab22-e33900000011","traceId":"6fa14b56-2bd1-1609-b7f4-8129fffffff7","nodeId":"test-node","msg":"|"}
+{"level":30,"time":"2026-01-30T11:18:13.601Z","nodeId":"test-node","pid":1332592,"serviceId":"8573230e-0018-1000-8000-001c0000001a","traceId":"0000000a-15a7-5015-ac23-86e600000014","nodeId":"test-node","msg":"qj~l]S"}
     # Subtest: nested child loggers merge bindings
         ok 1 - nested child loggers merge all bindings
         1..1
-    ok 4 - nested child loggers merge bindings # time=1.649ms
+    ok 4 - nested child loggers merge bindings # time=3.28ms
     
-{"level":30,"time":"2026-01-23T06:22:45.504Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"z{}v>x$XH!X"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"m"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"hFb$PCWd|6k"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"8\""}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":" 'K~Z"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"ref"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"-1TtM1;au"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"0gS`cU"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"\"K"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"\\p+:/+k#S$"}
+{"level":30,"time":"2026-01-30T11:18:13.602Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"7<&-Pm<"}
+{"level":30,"time":"2026-01-30T11:18:13.602Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"TsQ|M-jm:"}
+{"level":30,"time":"2026-01-30T11:18:13.602Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":" C#^"}
+{"level":30,"time":"2026-01-30T11:18:13.602Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"o__defineSet"}
+{"level":30,"time":"2026-01-30T11:18:13.602Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"O;zVJs@"}
+{"level":30,"time":"2026-01-30T11:18:13.602Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"NU#dP%y3"}
+{"level":30,"time":"2026-01-30T11:18:13.602Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"%"}
+{"level":30,"time":"2026-01-30T11:18:13.602Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"name"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"2{"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"rZIw"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"Kv@idi@(O&"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":">oG}b"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"[|W%4bO"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"oX"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"A"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"cf8-F;"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"6\"(%Op"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"2#t)IM"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"yth"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"Jxc"}
+{"level":30,"time":"2026-01-30T11:18:13.603Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"valueOf"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"ASP*.'B}g"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"1Qm!`tu~k=Rz"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"LBWb9Uc@(>7"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"q*(qF5{"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"p3Q"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"}IuK@qE3Ww~"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"8`[>>E%"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"=G&A?C"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"ival"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"J~%"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"hx|y"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"CD+EXocb\\%}$"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"6"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"V^"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"nY@JmWIqM"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"&r"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"G"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"ly<cg"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"'s&Tf`MH'y"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"sQ-^B"}
+{"level":30,"time":"2026-01-30T11:18:13.604Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"lmg"}
+{"level":30,"time":"2026-01-30T11:18:13.605Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"`<?`.fKo*#e"}
+{"level":30,"time":"2026-01-30T11:18:13.605Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":":mQT"}
+{"level":30,"time":"2026-01-30T11:18:13.605Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"<_4~p"}
+{"level":30,"time":"2026-01-30T11:18:13.605Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"New"}
+{"level":30,"time":"2026-01-30T11:18:13.605Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"applyneGet"}
+{"level":30,"time":"2026-01-30T11:18:13.605Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"0$"}
+{"level":30,"time":"2026-01-30T11:18:13.605Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"zMRFm\\"}
+{"level":30,"time":"2026-01-30T11:18:13.605Z","nodeId":"test-node","pid":1332592,"nodeId":"test-node","msg":"?z"}
     # Subtest: timestamps are monotonically increasing
         ok 1 - timestamps are monotonically increasing
         1..1
-    ok 5 - timestamps are monotonically increasing # time=1.99ms
+    ok 5 - timestamps are monotonically increasing # time=4.417ms
     
     1..5
-ok 2 - Property 19: Structured Logging Consistency # time=16.496ms
+ok 2 - Property 19: Structured Logging Consistency # time=32.473ms
 
 # Subtest: cleanup
     ok 1 - cleanup complete
     1..1
-ok 3 - cleanup # time=0.202ms
+ok 3 - cleanup # time=0.427ms
 
-{"level":30,"time":"2026-01-23T06:22:45.504Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"NkZ Odz?hb)D"}
-{"level":30,"time":"2026-01-23T06:22:45.504Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"6QPR4}&bnm$"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"-ooG|w"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":".M\\DqyQ]so"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"]j2"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"G"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"apply"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":")eX"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"WC(D`ylfG#"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"n)>})\"lnJ@r<"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":".d%/!HkJ1Sb2"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"N!Yi*cG|"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"cJe^3v\\;"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"@,xpD9uJwqV"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"w4T%'"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"Jxb}*8-p4{C."}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"/m].}"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"\"%~. X<"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"YC4Em"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"isPr"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"%#\"32r%"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"|!0"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"p9]GyzAa"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":",[H2TJ"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"zo"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"g"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"uki!R"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"TS/{"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"qN:~d"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"DlFu?"}
-{"level":30,"time":"2026-01-23T06:22:45.505Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"v"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"=$Bs)cN? "}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"0suM"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"?4iKV'8`&ZJ"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":";"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"bOEM^"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"@"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"2')z"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"__proto__"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"6n&n:]_&:mE"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"4#"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"05E@WX"}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"eMmFL "}
-{"level":30,"time":"2026-01-23T06:22:45.506Z","nodeId":"test-node","pid":418332,"nodeId":"test-node","msg":"XxV/N,g'o"}
 1..3
+# { total: 7, pass: 7 }
+# time=111.233ms

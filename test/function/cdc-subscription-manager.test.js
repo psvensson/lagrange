@@ -3,7 +3,7 @@
  * Requirements: 34.14, 34.15
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {
   CDCSubscriptionManager,
   SubscriptionType,

@@ -5,6 +5,13 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {NUM} from '../constants/index.js';
+import {
+  PARTITION_SUBSYSTEM,
+  PENDING_REQUEST_DEFAULT,
+  PENDING_REQUEST_ERROR_MSG,
+  PENDING_REQUEST_LOG_MSG,
+} from './partition-constants.js';
 
 /**
  * PendingRequestTracker manages pending lifecycle requests using a Map.
@@ -19,14 +26,16 @@ class PendingRequestTracker {
    */
   constructor(options = {}) {
     this.pendingRequests = new Map();
-    this.defaultTimeoutMs = options.defaultTimeoutMs || 30000;
-    this.cleanupIntervalMs = options.cleanupIntervalMs || 60000;
+    this.defaultTimeoutMs = options.defaultTimeoutMs ||
+      PENDING_REQUEST_DEFAULT.REQUEST_TIMEOUT_MS;
+    this.cleanupIntervalMs = options.cleanupIntervalMs ||
+      PENDING_REQUEST_DEFAULT.CLEANUP_INTERVAL_MS;
     this.cleanupTimer = null;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('pending-request-tracker') : console;
+      loggingService.forSubsystem(PARTITION_SUBSYSTEM.PENDING_REQUEST_TRACKER) : console;
   }
 
   /**
@@ -41,12 +50,12 @@ class PendingRequestTracker {
 
       const timeoutId = setTimeout(() => {
         this.pendingRequests.delete(requestId);
-        this.logger.warn('Request timed out', {
+        this.logger.warn(PENDING_REQUEST_LOG_MSG.REQUEST_TIMED_OUT, {
           requestId,
           timeoutMs,
           type: metadata.type,
         });
-        reject(new Error(`ACK timeout after ${timeoutMs}ms for request ${requestId}`));
+        reject(new Error(PENDING_REQUEST_ERROR_MSG.ACK_TIMEOUT(timeoutMs, requestId)));
       }, timeoutMs);
 
       this.pendingRequests.set(requestId, {
@@ -57,7 +66,7 @@ class PendingRequestTracker {
         startedAt: Date.now(),
       });
 
-      this.logger.debug('Tracking request', {
+      this.logger.debug(PENDING_REQUEST_LOG_MSG.TRACKING_REQUEST, {
         requestId,
         type: metadata.type,
         targetAddress: metadata.targetAddress,
@@ -78,7 +87,7 @@ class PendingRequestTracker {
       this.pendingRequests.delete(requestId);
       pending.resolve(ack);
 
-      this.logger.debug('Request resolved', {
+      this.logger.debug(PENDING_REQUEST_LOG_MSG.REQUEST_RESOLVED, {
         requestId,
         durationMs: Date.now() - pending.startedAt,
       });
@@ -86,7 +95,7 @@ class PendingRequestTracker {
       return true;
     }
 
-    this.logger.debug('No pending request found for resolution', {requestId});
+    this.logger.debug(PENDING_REQUEST_LOG_MSG.NO_PENDING_REQUEST_RESOLVE, {requestId});
     return false;
   }
 
@@ -105,7 +114,7 @@ class PendingRequestTracker {
       const errorObj = error instanceof Error ? error : new Error(error);
       pending.reject(errorObj);
 
-      this.logger.debug('Request rejected', {
+      this.logger.debug(PENDING_REQUEST_LOG_MSG.REQUEST_REJECTED, {
         requestId,
         error: errorObj.message,
       });
@@ -113,7 +122,7 @@ class PendingRequestTracker {
       return true;
     }
 
-    this.logger.debug('No pending request found for rejection', {requestId});
+    this.logger.debug(PENDING_REQUEST_LOG_MSG.NO_PENDING_REQUEST_REJECT, {requestId});
     return false;
   }
 
@@ -161,7 +170,7 @@ class PendingRequestTracker {
 
     for (const [_requestId, pending] of this.pendingRequests) {
       clearTimeout(pending.timeoutId);
-      pending.reject(new Error('Tracker shutdown'));
+      pending.reject(new Error(PENDING_REQUEST_LOG_MSG.TRACKER_SHUTDOWN));
     }
 
     this.pendingRequests.clear();
@@ -171,8 +180,8 @@ class PendingRequestTracker {
       this.cleanupTimer = null;
     }
 
-    if (count > 0) {
-      this.logger.info('Cleared pending requests on shutdown', {count});
+    if (count > NUM.ZERO) {
+      this.logger.info(PENDING_REQUEST_LOG_MSG.CLEARED_PENDING_REQUESTS, {count});
     }
   }
 
@@ -212,20 +221,20 @@ class PendingRequestTracker {
    */
   cleanupStaleRequests() {
     const now = Date.now();
-    let cleanedCount = 0;
+    let cleanedCount = NUM.ZERO;
 
     for (const [requestId, pending] of this.pendingRequests) {
       const timeoutMs = pending.metadata?.timeoutMs || this.defaultTimeoutMs;
       const elapsed = now - pending.startedAt;
 
       // Add buffer to timeout to avoid race conditions
-      if (elapsed > timeoutMs + 5000) {
+      if (elapsed > timeoutMs + PENDING_REQUEST_DEFAULT.STALE_REQUEST_BUFFER_MS) {
         clearTimeout(pending.timeoutId);
         this.pendingRequests.delete(requestId);
-        pending.reject(new Error(`Stale request cleanup after ${elapsed}ms`));
-        cleanedCount++;
+        pending.reject(new Error(PENDING_REQUEST_ERROR_MSG.STALE_REQUEST(elapsed)));
+        cleanedCount += NUM.ONE;
 
-        this.logger.warn('Cleaned up stale request', {
+        this.logger.warn(PENDING_REQUEST_LOG_MSG.CLEANED_STALE_REQUEST, {
           requestId,
           elapsed,
           timeoutMs,

@@ -8,7 +8,7 @@
  * transition method returns.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaStateMachine,
@@ -277,48 +277,12 @@ test('Property 6: State Persistence via CDC', async (t) => {
     t.pass('previous state persisted correctly');
   });
 
-  /**
-   * Property: State machine works without CDC service (backward compatible).
-   */
-  t.test('backward compatible without CDC service', async (t) => {
-    await fc.assert(
-      fc.property(
-        fc.constantFrom(...VALID_TRANSITION_SEQUENCES),
-        fc.uuid(),
-        fc.uuid(),
-        (transitionSequence, replicaId, partitionId) => {
-          // Create state machine WITHOUT CDC service
-          const stateMachine = new ReplicaStateMachine({
-            nodeId: 'test-node',
-            // No cdcIntegrationService provided
-          });
-
-          // Execute transition sequence - should work without CDC
-          let allSucceeded = true;
-          for (const state of transitionSequence) {
-            const result = stateMachine.transition(replicaId, state, {
-              partitionId,
-              nodeId: 'test-node',
-              reason: `transition to ${state}`,
-            });
-            if (!result) {
-              allSucceeded = false;
-              break;
-            }
-          }
-
-          // Verify final state
-          const finalState = stateMachine.getState(replicaId);
-          const expectedFinalState = transitionSequence[transitionSequence.length - 1];
-
-          stateMachine.clear();
-
-          return allSucceeded && finalState?.state === expectedFinalState;
-        },
-      ),
-      {numRuns: 10},
+  t.test('requires CDC service', async (t) => {
+    t.throws(
+      () => new ReplicaStateMachine({nodeId: 'test-node'}),
+      /cdcIntegrationService/,
+      'should require CDC integration service',
     );
-
-    t.pass('backward compatible without CDC service');
+    t.end();
   });
 });

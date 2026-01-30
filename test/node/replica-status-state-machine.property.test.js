@@ -9,7 +9,7 @@
  * 3. Allow transition to FAILED from any state
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaLifecycleManager,
@@ -40,10 +40,40 @@ function createMockCDCService() {
       operations.push({type: 'delete', tableName, whereClause});
       return {success: true};
     },
+    async upsertSystemTableRow(tableName, data) {
+      operations.push({type: 'upsert', tableName, data});
+      return {success: true};
+    },
     reset() {
       operations.length = 0;
     },
   };
+}
+
+/**
+ * Create a mock system table cache.
+ * @return {Object} Mock system table cache.
+ */
+function createMockSystemTableCache() {
+  return {
+    filter: (_tableName, _predicate) => [],
+    get: (_tableName, _key) => null,
+    set: (_tableName, _key, _value) => {},
+  };
+}
+
+/**
+ * Create a mock partition service factory.
+ * @return {Function} Factory function.
+ */
+function createMockPartitionServiceFactory() {
+  return async (options) => ({
+    partitionId: options.partitionId,
+    replicaId: options.replicaId,
+    initialized: true,
+    async shutdown() {},
+    async syncFromLeader() {},
+  });
 }
 
 // All possible statuses
@@ -103,7 +133,9 @@ test('Property 79: Replica Status State Machine Validity', async (t) => {
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
+            systemTableCache: createMockSystemTableCache(),
             cdcIntegrationService: mockCDC,
+            createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
           });
 
@@ -172,7 +204,9 @@ test('Property 79: Replica Status State Machine Validity', async (t) => {
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
+            systemTableCache: createMockSystemTableCache(),
             cdcIntegrationService: mockCDC,
+            createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
           });
 
@@ -219,7 +253,9 @@ test('Property 79: Replica Status State Machine Validity', async (t) => {
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
+            systemTableCache: createMockSystemTableCache(),
             cdcIntegrationService: mockCDC,
+            createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
           });
 
@@ -262,8 +298,13 @@ test('Property 79: Replica Status State Machine Validity', async (t) => {
         fc.constantFrom(...ALL_STATUSES),
         fc.constantFrom(...ALL_STATUSES),
         async (fromStatus, toStatus) => {
+          const mockCDC = createMockCDCService();
+
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
+            systemTableCache: createMockSystemTableCache(),
+            cdcIntegrationService: mockCDC,
+            createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
           });
 
@@ -302,7 +343,9 @@ test('Property 79: Replica Status State Machine Validity', async (t) => {
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
+            systemTableCache: createMockSystemTableCache(),
             cdcIntegrationService: mockCDC,
+            createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
           });
 
@@ -348,7 +391,9 @@ test('Property 79: Replica Status State Machine Validity', async (t) => {
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
+            systemTableCache: createMockSystemTableCache(),
             cdcIntegrationService: mockCDC,
+            createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
           });
 

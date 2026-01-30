@@ -8,7 +8,7 @@
  * state machine SHALL report `canStartOperation()` as false.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaStateMachine,
@@ -16,6 +16,13 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+function createMockCDCService() {
+  return {
+    updateSystemTableRow: async () => ({success: true}),
+    insertSystemTableRow: async () => ({success: true}),
+  };
+}
 
 test('Property 12: Concurrent Operation Limits', async (t) => {
   t.beforeEach(async () => {
@@ -46,6 +53,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
         (limit, extraReplicas) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             maxConcurrentAdds: limit,
           });
 
@@ -99,6 +107,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             maxConcurrentAdds: limit,
           });
 
@@ -136,6 +145,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
         (limit, extraReplicas) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             maxConcurrentRemoves: limit,
           });
 
@@ -196,6 +206,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             maxConcurrentRemoves: limit,
           });
 
@@ -242,6 +253,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
         (limit) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
             maxConcurrentAdds: limit,
           });
 

@@ -6,7 +6,7 @@
  * Validates: Requirements 9.1, 9.2, 9.3
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   isRaftPacket as sharedIsRaftPacket,

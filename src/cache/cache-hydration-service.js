@@ -5,24 +5,19 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {CDC_OPERATION} from '../constants/index.js';
+import {
+  CACHE_HYDRATION_ERROR_MSG,
+  CACHE_HYDRATION_LOG_MSG,
+  CACHE_HYDRATION_TABLES,
+  CACHE_SUBSYSTEM,
+} from './cache-constants.js';
 
 /**
  * System tables to hydrate on startup.
  * These are the core system tables that the Admin CLI needs.
  */
-const SYSTEM_TABLES_TO_HYDRATE = [
-  'nodes',
-  'services',
-  'tables',
-  'partitions',
-  'message_groups',
-  'indices',
-  'config',
-  'logs',
-  'live_queries',
-  'contexts',
-  'code',
-];
+const SYSTEM_TABLES_TO_HYDRATE = CACHE_HYDRATION_TABLES;
 
 /**
  * CacheHydrationService populates the SystemTableCache with existing data
@@ -33,12 +28,19 @@ class CacheHydrationService {
    * Create a new CacheHydrationService.
    * @param {Object} queryEngine - SQL query engine for querying partitions
    * @param {Object} systemTableCache - SystemTableCache to populate
-   * @param {Object} [logger] - Optional logger instance
+   * @param {Object} [options] - Optional configuration.
+   * @param {Object} [options.logger] - Optional logger instance.
+   * @param {Function} [options.cdcEventApplier] - CDC event applier.
    */
-  constructor(queryEngine, systemTableCache, logger = null) {
+  constructor(queryEngine, systemTableCache, options = {}) {
     this.queryEngine = queryEngine;
     this.systemTableCache = systemTableCache;
-    this.logger = logger || this.initLogger();
+    this.logger = options.logger || this.initLogger();
+    // Hydration is explicitly non-CDC: apply rows straight into the cache by default.
+    // Tests and bootstrap can inject a custom applier if they need extra behavior.
+    this.cdcEventApplier = options.cdcEventApplier || (async (tableName, op, row) => {
+      this.systemTableCache.applySystemTableChange(tableName, op, row);
+    });
   }
 
   /**
@@ -50,7 +52,7 @@ class CacheHydrationService {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('cache-hydration');
+        return loggingService.forSubsystem(CACHE_SUBSYSTEM.HYDRATION);
       }
     } catch {
       // Logging not available
@@ -76,7 +78,7 @@ class CacheHydrationService {
    * @return {Promise<Object>} Hydration result with counts per table
    */
   async hydrateCache() {
-    this.logger.info('Starting cache hydration');
+    this.logger.info(CACHE_HYDRATION_LOG_MSG.STARTING);
 
     const results = {
       success: true,
@@ -92,19 +94,20 @@ class CacheHydrationService {
           rowCount,
         };
 
-        this.logger.info('Hydrated system table cache', {
+        this.logger.info(CACHE_HYDRATION_LOG_MSG.TABLE_HYDRATED, {
           tableName,
           rowCount,
         });
       } catch (error) {
-        // Log error but continue with other tables (Requirement 1.5)
+        this.logger.error(CACHE_HYDRATION_LOG_MSG.TABLE_FAILED, {
+          tableName,
+          error: error.message,
+        });
         results.tables[tableName] = {
           success: false,
           error: error.message,
         };
-        results.errors.push({tableName, error: error.message});
-
-        this.logger.error('Failed to hydrate system table', {
+        results.errors.push({
           tableName,
           error: error.message,
         });
@@ -116,7 +119,7 @@ class CacheHydrationService {
       results.success = false;
     }
 
-    this.logger.info('Cache hydration complete', {
+    this.logger.info(CACHE_HYDRATION_LOG_MSG.COMPLETE, {
       tablesHydrated: Object.keys(results.tables).length,
       errors: results.errors.length,
     });
@@ -135,18 +138,13 @@ class CacheHydrationService {
     const result = await this.queryEngine.executeQuery(sql);
 
     if (!result.success) {
-      throw new Error(result.error || `Failed to query ${tableName}`);
+      throw new Error(result.error || CACHE_HYDRATION_ERROR_MSG.QUERY_FAILED(tableName));
     }
 
     const rows = result.rows || [];
 
     for (const row of rows) {
-      // Direct cache population - no CDC event (Requirement 1.6)
-      this.systemTableCache.applySystemTableChange(
-        tableName,
-        'INSERT',
-        row,
-      );
+      await this.cdcEventApplier(tableName, CDC_OPERATION.INSERT, row);
     }
 
     return rows.length;

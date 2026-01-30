@@ -6,15 +6,19 @@
 
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
+import {LOG_MSG, TABLES} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  FUNCTION_CONTEXT_TYPE,
+  FUNCTION_ERROR_MSG,
+  FUNCTION_LOG_MSG,
+  FUNCTION_SUBSYSTEM,
+} from './function-constants.js';
 
 /**
  * Valid context types.
  */
-const ContextType = {
-  FUNCTION: 'function',
-  SERVICE: 'service',
-  USER: 'user',
-};
+const ContextType = FUNCTION_CONTEXT_TYPE;
 
 /**
  * ContextManager provides state storage for external function executors.
@@ -43,7 +47,7 @@ class ContextManager {
     try {
       const loggingService = LoggingService.getInstance();
       if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem('context-manager');
+        return loggingService.forSubsystem(FUNCTION_SUBSYSTEM.CONTEXT_MANAGER);
       }
     } catch {
       // Logging not available
@@ -67,7 +71,7 @@ class ContextManager {
 
     this.initialized = true;
 
-    this.logger.info('Context manager initialized');
+    this.logger.info(FUNCTION_LOG_MSG.CONTEXT_MANAGER_INITIALIZED);
   }
 
   /**
@@ -80,8 +84,8 @@ class ContextManager {
     const validTypes = Object.values(ContextType);
     if (!validTypes.includes(contextType)) {
       throw new Error(
-        `Invalid context type: ${contextType}. ` +
-        `Valid types are: ${validTypes.join(', ')}`,
+        `${FUNCTION_ERROR_MSG.INVALID_CONTEXT_TYPE_PREFIX}${contextType}. ` +
+        `${FUNCTION_ERROR_MSG.VALID_CONTEXT_TYPE_PREFIX}${validTypes.join(', ')}`,
       );
     }
   }
@@ -95,13 +99,13 @@ class ContextManager {
   getContext(contextType, contextName) {
     this.validateContextType(contextType);
 
-    if (!this.systemTableCache) {
-      this.logger.warn('System table cache not available');
-      return null;
-    }
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
 
     try {
-      const contexts = this.systemTableCache.filter('contexts', (c) =>
+      const contexts = systemTableCache.filter(TABLES.CONTEXTS, (c) =>
         c.context_type === contextType && c.context_name === contextName,
       );
 
@@ -120,12 +124,12 @@ class ContextManager {
         updatedAt: context.updated_at,
       };
     } catch (error) {
-      this.logger.error('Failed to get context', {
+      this.logger.error(FUNCTION_LOG_MSG.CONTEXT_LOOKUP_FAILED, {
         contextType,
         contextName,
         error: error.message,
       });
-      return null;
+      throw error;
     }
   }
 
@@ -142,13 +146,18 @@ class ContextManager {
     this.validateContextType(contextType);
 
     if (!this.cdcIntegrationService) {
-      throw new Error('CDC integration service not available');
+      throw new Error(FUNCTION_ERROR_MSG.CDC_INTEGRATION_REQUIRED);
     }
+
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
 
     const now = Date.now();
 
     // Check if context already exists
-    const existing = this.systemTableCache?.find('contexts', (c) =>
+    const existing = systemTableCache.find(TABLES.CONTEXTS, (c) =>
       c.context_type === contextType && c.context_name === contextName,
     );
 
@@ -157,7 +166,7 @@ class ContextManager {
     if (existing) {
       // Update existing context
       await this.cdcIntegrationService.updateSystemTableRow(
-        'contexts',
+        TABLES.CONTEXTS,
         {context_id: contextId},
         {
           context_data: JSON.stringify(contextData),
@@ -166,7 +175,7 @@ class ContextManager {
         },
       );
 
-      this.logger.info('Context updated', {
+      this.logger.info(FUNCTION_LOG_MSG.CONTEXT_UPDATED, {
         contextId,
         contextType,
         contextName,
@@ -174,7 +183,7 @@ class ContextManager {
       });
     } else {
       // Insert new context
-      await this.cdcIntegrationService.insertSystemTableRow('contexts', {
+      await this.cdcIntegrationService.insertSystemTableRow(TABLES.CONTEXTS, {
         context_id: contextId,
         id: contextId, // For cache compatibility
         context_type: contextType,
@@ -185,7 +194,7 @@ class ContextManager {
         updated_at: now,
       });
 
-      this.logger.info('Context created', {
+      this.logger.info(FUNCTION_LOG_MSG.CONTEXT_CREATED, {
         contextId,
         contextType,
         contextName,
@@ -211,26 +220,31 @@ class ContextManager {
     this.validateContextType(contextType);
 
     if (!this.cdcIntegrationService) {
-      throw new Error('CDC integration service not available');
+      throw new Error(FUNCTION_ERROR_MSG.CDC_INTEGRATION_REQUIRED);
     }
 
-    const existing = this.systemTableCache?.find('contexts', (c) =>
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+
+    const existing = systemTableCache.find(TABLES.CONTEXTS, (c) =>
       c.context_type === contextType && c.context_name === contextName,
     );
 
     if (!existing) {
-      this.logger.debug('Context not found for deletion', {
+      this.logger.debug(FUNCTION_LOG_MSG.CONTEXT_DELETE_NOT_FOUND, {
         contextType,
         contextName,
       });
       return false;
     }
 
-    await this.cdcIntegrationService.deleteSystemTableRow('contexts', {
+    await this.cdcIntegrationService.deleteSystemTableRow(TABLES.CONTEXTS, {
       context_id: existing.context_id,
     });
 
-    this.logger.info('Context deleted', {
+    this.logger.info(FUNCTION_LOG_MSG.CONTEXT_DELETED, {
       contextId: existing.context_id,
       contextType,
       contextName,
@@ -245,13 +259,13 @@ class ContextManager {
    * @return {Array} List of contexts.
    */
   getContextsByOwner(ownerId) {
-    if (!this.systemTableCache) {
-      this.logger.warn('System table cache not available');
-      return [];
-    }
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
 
     try {
-      const contexts = this.systemTableCache.filter('contexts', (c) =>
+      const contexts = systemTableCache.filter(TABLES.CONTEXTS, (c) =>
         c.owner_id === ownerId,
       );
 
@@ -265,11 +279,11 @@ class ContextManager {
         updatedAt: c.updated_at,
       }));
     } catch (error) {
-      this.logger.error('Failed to get contexts by owner', {
+      this.logger.error(FUNCTION_LOG_MSG.CONTEXTS_BY_OWNER_FAILED, {
         ownerId,
         error: error.message,
       });
-      return [];
+      throw error;
     }
   }
 
@@ -281,13 +295,13 @@ class ContextManager {
   getContextsByType(contextType) {
     this.validateContextType(contextType);
 
-    if (!this.systemTableCache) {
-      this.logger.warn('System table cache not available');
-      return [];
-    }
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
 
     try {
-      const contexts = this.systemTableCache.filter('contexts', (c) =>
+      const contexts = systemTableCache.filter(TABLES.CONTEXTS, (c) =>
         c.context_type === contextType,
       );
 
@@ -301,11 +315,11 @@ class ContextManager {
         updatedAt: c.updated_at,
       }));
     } catch (error) {
-      this.logger.error('Failed to get contexts by type', {
+      this.logger.error(FUNCTION_LOG_MSG.CONTEXTS_BY_TYPE_FAILED, {
         contextType,
         error: error.message,
       });
-      return [];
+      throw error;
     }
   }
 

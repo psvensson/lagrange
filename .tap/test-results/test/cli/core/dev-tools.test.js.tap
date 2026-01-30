@@ -5,36 +5,36 @@ TAP version 14
         ok 2 - default tab is state
         ok 3 - enabled when explicitly set
         1..3
-    ok 1 - constructor initializes with default options # time=1.986ms
+    ok 1 - constructor initializes with default options # time=2.112ms
     
     # Subtest: constructor respects enabled option
         ok 1 - disabled when option is false
         1..1
-    ok 2 - constructor respects enabled option # time=0.269ms
+    ok 2 - constructor respects enabled option # time=0.215ms
     
     # Subtest: show() sets visible and emits event
         ok 1 - is visible
         ok 2 - emitted devtools:show
         1..2
-    ok 3 - show() sets visible and emits event # time=0.591ms
+    ok 3 - show() sets visible and emits event # time=0.664ms
     
     # Subtest: show() does nothing when disabled
         ok 1 - still not visible
         1..1
-    ok 4 - show() does nothing when disabled # time=0.249ms
+    ok 4 - show() does nothing when disabled # time=0.293ms
     
     # Subtest: hide() clears visible and emits event
         ok 1 - not visible
         ok 2 - emitted devtools:hide
         1..2
-    ok 5 - hide() clears visible and emits event # time=0.365ms
+    ok 5 - hide() clears visible and emits event # time=0.387ms
     
     # Subtest: toggle() toggles visibility
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 6 - toggle() toggles visibility # time=0.411ms
+    ok 6 - toggle() toggles visibility # time=0.312ms
     
     # Subtest: getTabs() returns all available tabs
         ok 1 - has 5 tabs
@@ -44,18 +44,18 @@ TAP version 14
         ok 5 - has cdc tab
         ok 6 - has performance tab
         1..6
-    ok 7 - getTabs() returns all available tabs # time=0.666ms
+    ok 7 - getTabs() returns all available tabs # time=0.521ms
     
     # Subtest: switchTab() changes current tab
         ok 1 - should be equal
         ok 2 - emitted tab change
         1..2
-    ok 8 - switchTab() changes current tab # time=0.372ms
+    ok 8 - switchTab() changes current tab # time=0.311ms
     
     # Subtest: switchTab() ignores invalid tabs
         ok 1 - still on state tab
         1..1
-    ok 9 - switchTab() ignores invalid tabs # time=0.242ms
+    ok 9 - switchTab() ignores invalid tabs # time=0.179ms
     
     # Subtest: getStateContent() returns state tree
         ok 1 - should be equal
@@ -63,14 +63,14 @@ TAP version 14
         ok 3 - has state tree
         ok 4 - has snapshots array
         1..4
-    ok 10 - getStateContent() returns state tree # time=0.768ms
+    ok 10 - getStateContent() returns state tree # time=0.751ms
     
     # Subtest: getStateContent() handles missing stateManager
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - has error message
         1..3
-    ok 11 - getStateContent() handles missing stateManager # time=0.341ms
+    ok 11 - getStateContent() handles missing stateManager # time=0.458ms
     
     # Subtest: formatStateTree() formats nested objects
         ok 1 - includes string value
@@ -78,7 +78,7 @@ TAP version 14
         ok 3 - includes nested object
         ok 4 - includes array
         1..4
-    ok 12 - formatStateTree() formats nested objects # time=0.349ms
+    ok 12 - formatStateTree() formats nested objects # time=0.525ms
     
     # Subtest: formatValue() formats different types
         ok 1 - should be equal
@@ -89,21 +89,21 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 13 - formatValue() formats different types # time=0.574ms
+    ok 13 - formatValue() formats different types # time=0.541ms
     
     # Subtest: getEventsContent() returns event log
         ok 1 - should be equal
         ok 2 - has events array
         ok 3 - has total count
         1..3
-    ok 14 - getEventsContent() returns event log # time=0.652ms
+    ok 14 - getEventsContent() returns event log # time=0.517ms
     
     # Subtest: getEventsContent() handles missing eventBus
         ok 1 - should be equal
         ok 2 - should be equivalent
         ok 3 - has error message
         1..3
-    ok 15 - getEventsContent() handles missing eventBus # time=0.895ms
+    ok 15 - getEventsContent() handles missing eventBus # time=0.984ms
     
     # Subtest: getComponentsContent() returns registry info
         ok 1 - should be equal
@@ -112,27 +112,27 @@ TAP version 14
         ok 4 - has dependency graph
         ok 5 - has init order
         1..5
-    ok 16 - getComponentsContent() returns registry info # time=0.605ms
+    ok 16 - getComponentsContent() returns registry info # time=0.612ms
     
     # Subtest: getComponentsContent() handles missing registry
         ok 1 - should be equal
         ok 2 - should be equivalent
         ok 3 - has error message
         1..3
-    ok 17 - getComponentsContent() handles missing registry # time=0.336ms
+    ok 17 - getComponentsContent() handles missing registry # time=0.35ms
     
     # Subtest: trackCDCEvent() stores CDC events
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 18 - trackCDCEvent() stores CDC events # time=0.339ms
+    ok 18 - trackCDCEvent() stores CDC events # time=0.318ms
     
     # Subtest: setCDCFilter() filters CDC events
         ok 1 - total count unchanged
         ok 2 - filtered count is 1
         ok 3 - should be equal
         1..3
-    ok 19 - setCDCFilter() filters CDC events # time=0.346ms
+    ok 19 - setCDCFilter() filters CDC events # time=0.328ms
     
     # Subtest: trackRenderTime() stores render metrics
         ok 1 - should be equal
@@ -140,101 +140,101 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 20 - trackRenderTime() stores render metrics # time=0.473ms
+    ok 20 - trackRenderTime() stores render metrics # time=0.468ms
     
     # Subtest: trackEventLatency() stores latency metrics
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 21 - trackEventLatency() stores latency metrics # time=0.273ms
+    ok 21 - trackEventLatency() stores latency metrics # time=0.264ms
     
     # Subtest: createSnapshot() creates state snapshot
         ok 1 - should be equal
         ok 2 - emitted snapshot created
         1..2
-    ok 22 - createSnapshot() creates state snapshot # time=0.383ms
+    ok 22 - createSnapshot() creates state snapshot # time=0.395ms
     
     # Subtest: createSnapshot() returns null without stateManager
         ok 1 - should be equal
         1..1
-    ok 23 - createSnapshot() returns null without stateManager # time=0.233ms
+    ok 23 - createSnapshot() returns null without stateManager # time=0.182ms
     
     # Subtest: restoreSnapshot() restores state
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 24 - restoreSnapshot() restores state # time=0.609ms
+    ok 24 - restoreSnapshot() restores state # time=0.538ms
     
     # Subtest: restoreSnapshot() returns false on error
         ok 1 - should be equal
         1..1
-    ok 25 - restoreSnapshot() returns false on error # time=0.254ms
+    ok 25 - restoreSnapshot() returns false on error # time=0.196ms
     
     # Subtest: getSnapshots() returns snapshot list
         ok 1 - should be equal
         1..1
-    ok 26 - getSnapshots() returns snapshot list # time=0.302ms
+    ok 26 - getSnapshots() returns snapshot list # time=0.359ms
     
     # Subtest: handleKey() switches tabs with number keys
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 27 - handleKey() switches tabs with number keys # time=0.362ms
+    ok 27 - handleKey() switches tabs with number keys # time=0.452ms
     
     # Subtest: handleKey() closes with escape
         ok 1 - should be equal
         1..1
-    ok 28 - handleKey() closes with escape # time=0.249ms
+    ok 28 - handleKey() closes with escape # time=0.209ms
     
     # Subtest: handleKey() closes with q
         ok 1 - should be equal
         1..1
-    ok 29 - handleKey() closes with q # time=0.243ms
+    ok 29 - handleKey() closes with q # time=0.194ms
     
     # Subtest: handleKey() returns false when not visible
         ok 1 - should be equal
         1..1
-    ok 30 - handleKey() returns false when not visible # time=0.263ms
+    ok 30 - handleKey() returns false when not visible # time=0.204ms
     
     # Subtest: handleKey() creates snapshot with s
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 31 - handleKey() creates snapshot with s # time=0.319ms
+    ok 31 - handleKey() creates snapshot with s # time=0.265ms
     
     # Subtest: handleKey() clears metrics with c on performance tab
         ok 1 - should be equal
         1..1
-    ok 32 - handleKey() clears metrics with c on performance tab # time=0.298ms
+    ok 32 - handleKey() clears metrics with c on performance tab # time=0.228ms
     
     # Subtest: handleKey() clears CDC events with c on cdc tab
         ok 1 - should be equal
         1..1
-    ok 33 - handleKey() clears CDC events with c on cdc tab # time=0.315ms
+    ok 33 - handleKey() clears CDC events with c on cdc tab # time=0.211ms
     
     # Subtest: formatTextContent() returns formatted string
         ok 1 - has title
         ok 2 - has state tab
         ok 3 - has key hints
         1..3
-    ok 34 - formatTextContent() returns formatted string # time=0.651ms
+    ok 34 - formatTextContent() returns formatted string # time=0.539ms
     
     # Subtest: resetMetrics() clears all metrics
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 35 - resetMetrics() clears all metrics # time=0.436ms
+    ok 35 - resetMetrics() clears all metrics # time=0.321ms
     
     # Subtest: clearCDCEvents() clears event history
         ok 1 - should be equal
         1..1
-    ok 36 - clearCDCEvents() clears event history # time=0.46ms
+    ok 36 - clearCDCEvents() clears event history # time=0.254ms
     
     # Subtest: destroy() cleans up resources
         ok 1 - should be equal
         ok 2 - emitted devtools:destroyed
         1..2
-    ok 37 - destroy() cleans up resources # time=0.384ms
+    ok 37 - destroy() cleans up resources # time=0.294ms
     
     # Subtest: getTabContent() returns correct content for each tab
         ok 1 - should be equal
@@ -243,51 +243,53 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 38 - getTabContent() returns correct content for each tab # time=0.438ms
+    ok 38 - getTabContent() returns correct content for each tab # time=0.399ms
     
     # Subtest: calculateStats() handles empty array
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 39 - calculateStats() handles empty array # time=0.277ms
+    ok 39 - calculateStats() handles empty array # time=0.237ms
     
     # Subtest: formatTimestamp() formats correctly
         ok 1 - has time separator
         ok 2 - correct length HH:mm:ss.SSS
         1..2
-    ok 40 - formatTimestamp() formats correctly # time=0.229ms
+    ok 40 - formatTimestamp() formats correctly # time=0.247ms
     
     # Subtest: formatDataPreview() truncates long data
         ok 1 - truncated to max length
         ok 2 - ends with ellipsis
         1..2
-    ok 41 - formatDataPreview() truncates long data # time=0.229ms
+    ok 41 - formatDataPreview() truncates long data # time=0.214ms
     
     # Subtest: formatDataPreview() handles null/undefined
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 42 - formatDataPreview() handles null/undefined # time=0.208ms
+    ok 42 - formatDataPreview() handles null/undefined # time=0.203ms
     
     # Subtest: metrics are limited to maxSamples
         ok 1 - should be equal
         ok 2 - oldest samples removed
         1..2
-    ok 43 - metrics are limited to maxSamples # time=0.225ms
+    ok 43 - metrics are limited to maxSamples # time=0.339ms
     
     # Subtest: CDC events are limited to maxCDCEvents
         ok 1 - should be equal
         1..1
-    ok 44 - CDC events are limited to maxCDCEvents # time=0.197ms
+    ok 44 - CDC events are limited to maxCDCEvents # time=0.245ms
     
     # Subtest: trackEventLatency() filters invalid values
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 45 - trackEventLatency() filters invalid values # time=0.224ms
+    ok 45 - trackEventLatency() filters invalid values # time=0.216ms
     
     1..45
-ok 1 - DevTools # time=38.492ms
+ok 1 - DevTools # time=33.519ms
 
 1..1
+# { total: 107, pass: 107 }
+# time=37.061ms

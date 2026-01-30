@@ -3,6 +3,7 @@
  */
 
 import {ConfigurationManager} from './config/configuration-manager.js';
+import {CONFIG_KEY} from './config/config-constants.js';
 import {LoggingService} from './logging/logging-service.js';
 import {HLCClockService} from './hlc/hlc-clock-service.js';
 import {DataDirectoryManager} from './storage/data-directory-manager.js';
@@ -10,6 +11,19 @@ import {BootstrapService} from './bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
 import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
+import {NodeService} from './node/node-service.js';
+import {assertCritical} from './utils/assert.js';
+import {
+  ENTRYPOINT_APP,
+  ENTRYPOINT_DEFAULT,
+  ENTRYPOINT_ENV,
+  ENTRYPOINT_FLAG,
+  ENTRYPOINT_ERROR_MSG,
+  ENTRYPOINT_LOG_MSG,
+  ENTRYPOINT_SUBSYSTEM,
+  ENTRYPOINT_TEXT,
+  ENTRYPOINT_VERSION,
+} from './constants/entrypoint.js';
 
 // Re-export modules for external use
 export * from './query/index.js';
@@ -31,7 +45,7 @@ export * from './storage/index.js';
 /**
  * System version.
  */
-export const VERSION = '1.0.0';
+export const VERSION = ENTRYPOINT_VERSION;
 
 /**
  * Check for version flag.
@@ -39,22 +53,19 @@ export const VERSION = '1.0.0';
  */
 function checkVersionFlag() {
   const args = process.argv.slice(2);
-  if (args.includes('--version') || args.includes('-v')) {
-    console.log(`distributed-database-system v${VERSION}`);
+  if (args.includes(ENTRYPOINT_FLAG.VERSION_LONG) || args.includes(ENTRYPOINT_FLAG.VERSION_SHORT)) {
+    console.log(ENTRYPOINT_TEXT.VERSION_LINE(VERSION));
     return true;
   }
-  if (args.includes('--help') || args.includes('-h')) {
-    console.log(`Distributed Database System v${VERSION}`);
+  if (args.includes(ENTRYPOINT_FLAG.HELP_LONG) || args.includes(ENTRYPOINT_FLAG.HELP_SHORT)) {
+    console.log(ENTRYPOINT_TEXT.HEADER_LINE(VERSION));
     console.log('');
-    console.log('Usage: distributed-db [options]');
+    console.log(ENTRYPOINT_TEXT.USAGE_LINE);
     console.log('');
     console.log('Options:');
-    console.log('  --version, -v    Show version number');
-    console.log('  --help, -h       Show this help message');
-    console.log('  --seed <url>     Seed node URL to join existing cluster');
-    console.log('  --config <path>  Path to configuration file');
-    console.log('  --data-dir <path>  Base directory for partition storage');
-    console.log('  --dry-run        Validate configuration without starting');
+    for (const line of ENTRYPOINT_TEXT.OPTIONS_LINES) {
+      console.log(line);
+    }
     return true;
   }
   return false;
@@ -69,16 +80,16 @@ function parseCommandLineArgs() {
   const result = {};
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--data-dir' && i + 1 < args.length) {
+    if (args[i] === ENTRYPOINT_FLAG.DATA_DIR && i + 1 < args.length) {
       result.dataDir = args[i + 1];
       i++;
-    } else if (args[i] === '--seed' && i + 1 < args.length) {
+    } else if (args[i] === ENTRYPOINT_FLAG.SEED && i + 1 < args.length) {
       result.seedNodeAddress = args[i + 1];
       i++;
-    } else if (args[i] === '--config' && i + 1 < args.length) {
+    } else if (args[i] === ENTRYPOINT_FLAG.CONFIG && i + 1 < args.length) {
       result.configPath = args[i + 1];
       i++;
-    } else if (args[i] === '--dry-run') {
+    } else if (args[i] === ENTRYPOINT_FLAG.DRY_RUN) {
       result.dryRun = true;
     }
   }
@@ -92,7 +103,9 @@ function parseCommandLineArgs() {
 async function main() {
   // Handle version/help flags early
   if (checkVersionFlag()) {
-    process.exit(0);
+    // Return early and let Node exit naturally. This keeps the entrypoint
+    // testable without needing to intercept `process.exit()`.
+    return;
   }
 
   // Parse command-line arguments
@@ -112,14 +125,14 @@ async function main() {
   // Initialize logging
   const loggingService = LoggingService.getInstance();
   loggingService.initialize({
-    nodeId: config.get('node.id'),
-    level: config.get('logging.level'),
-    prettyPrint: config.get('logging.prettyPrint'),
+    nodeId: config.get(CONFIG_KEY.NODE_ID),
+    level: config.get(CONFIG_KEY.LOGGING_LEVEL),
+    prettyPrint: config.get(CONFIG_KEY.LOGGING_PRETTY_PRINT),
   });
 
   // Create subsystem-specific loggers
-  const mainLogger = loggingService.forSubsystem('main');
-  const configLogger = loggingService.forSubsystem('config');
+  const mainLogger = loggingService.forSubsystem(ENTRYPOINT_SUBSYSTEM.MAIN);
+  const configLogger = loggingService.forSubsystem(ENTRYPOINT_SUBSYSTEM.CONFIG);
 
   configLogger.debug('Configuration loaded', {
     categories: config.getCategories(),
@@ -130,13 +143,13 @@ async function main() {
   dataDirectoryManager.initialize();
 
   // Initialize HLC clock (it will create its own subsystem logger)
-  const hlcClock = new HLCClockService(config.get('node.id'), {
-    maxDrift: config.get('hlc.maxDriftMs'),
-    maxLogicalCounter: config.get('hlc.maxLogicalCounter'),
+  const hlcClock = new HLCClockService(config.get(CONFIG_KEY.NODE_ID), {
+    maxDrift: config.get(CONFIG_KEY.HLC_MAX_DRIFT_MS),
+    maxLogicalCounter: config.get(CONFIG_KEY.HLC_MAX_LOGICAL_COUNTER),
   });
 
-  mainLogger.info('Distributed Database System starting', {
-    nodeId: config.get('node.id'),
+  mainLogger.info(ENTRYPOINT_LOG_MSG.STARTING, {
+    nodeId: config.get(CONFIG_KEY.NODE_ID),
     version: VERSION,
     dataDir: dataDirectoryManager.getDataDir(),
     hlcTimestamp: hlcClock.now().toString(),
@@ -144,42 +157,46 @@ async function main() {
 
   // Check if we're joining an existing cluster or starting as seed node
   const seedNodeAddress = cliArgs.seedNodeAddress ||
-    process.env.SEED_NODE_ADDRESS;
+    process.env[ENTRYPOINT_ENV.SEED_NODE_ADDRESS];
 
   if (seedNodeAddress) {
     // Join existing cluster
-    mainLogger.info('Joining existing cluster', {
+    mainLogger.info(ENTRYPOINT_LOG_MSG.JOINING_CLUSTER, {
       seedNodeAddress,
     });
 
     // Ensure seed node address has protocol
     const seedUrl = seedNodeAddress.startsWith('http') ?
       seedNodeAddress :
-      `http://${seedNodeAddress}`;
+      `${ENTRYPOINT_DEFAULT.HTTP_PREFIX}${seedNodeAddress}`;
 
     // Determine WebSocket port for this joining node
-    const restApiPort = config.get('node.restApiPort') || 8080;
-    const wsPort = config.get('node.wsPort') || (restApiPort + 1000);
+    const restApiPort =
+      config.get(CONFIG_KEY.NODE_REST_API_PORT) || ENTRYPOINT_DEFAULT.REST_API_PORT;
+    const wsPort =
+      config.get(CONFIG_KEY.NODE_WS_PORT) ||
+      (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
 
     const nodeJoiningService = new NodeJoiningService({
-      nodeId: config.get('node.id'),
-      nodeAddress: config.get('node.address') ||
-        `localhost:${config.get('node.restApiPort')}`,
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
+      nodeAddress: config.get(CONFIG_KEY.NODE_ADDRESS) ||
+        `${ENTRYPOINT_DEFAULT.LOCALHOST}:${config.get(CONFIG_KEY.NODE_REST_API_PORT)}`,
       seedNodeAddress: seedUrl,
       wsPort: wsPort,
+      dataDir: dataDirectoryManager.getDataDir(),
     });
 
     const joinResult = await nodeJoiningService.join();
 
     if (!joinResult.success) {
-      mainLogger.error('Failed to join cluster', {
+      mainLogger.error(ENTRYPOINT_LOG_MSG.FAILED_JOIN, {
         error: joinResult.error,
         phase: joinResult.phase,
       });
       process.exit(1);
     }
 
-    mainLogger.info('Successfully joined cluster', {
+    mainLogger.info(ENTRYPOINT_LOG_MSG.JOINED_CLUSTER, {
       messageGroupCount: joinResult.messageGroupServices.size,
       duration: joinResult.duration,
     });
@@ -194,69 +211,69 @@ async function main() {
       }
       break;
     }
+    systemTableCache = assertCritical(
+      systemTableCache,
+      ENTRYPOINT_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
 
-    // Create SQL query engine with partition registry (if available)
+    // Create SQL query engine for transparent query routing
     let sqlQueryEngine = null;
-    if (joinResult.partitionServices && joinResult.partitionServices.size > 0) {
-      // Build partition registry keyed by partitionId (not replicaId)
-      const partitionRegistry = new Map();
-      for (const [_replicaId, partition] of joinResult.partitionServices) {
-        const partitionId = partition.partitionId;
-        if (!partitionRegistry.has(partitionId) || partition.isLeader) {
-          partitionRegistry.set(partitionId, partition);
-        }
-      }
-
+    if (joinResult.messageRouter) {
       const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
       sqlQueryEngine = new SQLQueryEngine({
         systemCache: systemTableCache,
-        partitionRegistry,
-        nodeId: config.get('node.id'),
+        messageRouter: joinResult.messageRouter,
+        nodeId: config.get(CONFIG_KEY.NODE_ID),
       });
     }
 
     // Start Admin WebSocket API for this node
     const adminAPI = new AdminWebSocketAPI({
-      nodeId: config.get('node.id'),
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
       systemTableCache,
       sqlQueryEngine,
     });
 
-    const adminPort = config.get('admin.websocketPort') || 8081;
+    const adminPort =
+      config.get(CONFIG_KEY.ADMIN_WEBSOCKET_PORT) || ENTRYPOINT_DEFAULT.ADMIN_PORT;
     await adminAPI.initialize(adminPort);
 
-    mainLogger.info('Node fully operational', {
-      nodeId: config.get('node.id'),
+    mainLogger.info(ENTRYPOINT_LOG_MSG.NODE_READY, {
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
       adminWebSocketPort: adminPort,
       dataDir: dataDirectoryManager.getDataDir(),
     });
 
     // Keep the process running
     process.on('SIGINT', async () => {
-      mainLogger.info('Shutting down...');
+      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN);
       await nodeJoiningService.cleanup();
       await adminAPI.shutdown();
       process.exit(0);
     });
 
     process.on('SIGTERM', async () => {
-      mainLogger.info('Shutting down...');
+      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN);
       await nodeJoiningService.cleanup();
       await adminAPI.shutdown();
       process.exit(0);
     });
   } else {
     // Start as seed node - bootstrap the system
-    mainLogger.info('Starting as seed node');
+    mainLogger.info(ENTRYPOINT_LOG_MSG.STARTING_SEED);
 
     // Determine WebSocket port for cross-node communication
     // Use REST API port + 1000 as default (e.g., 8080 -> 9080)
-    const restApiPort = config.get('node.restApiPort') || 8080;
-    const wsPort = config.get('node.wsPort') || (restApiPort + 1000);
+    const restApiPort =
+      config.get(CONFIG_KEY.NODE_REST_API_PORT) || ENTRYPOINT_DEFAULT.REST_API_PORT;
+    const wsPort =
+      config.get(CONFIG_KEY.NODE_WS_PORT) ||
+      (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
 
     const bootstrapService = new BootstrapService({
-      nodeId: config.get('node.id'),
-      nodeAddress: config.get('node.address') || `localhost:${restApiPort}`,
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
+      nodeAddress:
+        config.get(CONFIG_KEY.NODE_ADDRESS) || `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`,
       dataDirectoryManager,
       wsPort: wsPort,
     });
@@ -264,26 +281,31 @@ async function main() {
     const bootstrapResult = await bootstrapService.bootstrap();
 
     if (!bootstrapResult.success) {
-      mainLogger.error('Bootstrap failed', {
+      mainLogger.error(ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED, {
         error: bootstrapResult.error,
       });
       process.exit(1);
     }
 
-    mainLogger.info('Bootstrap completed', {
+    mainLogger.info(ENTRYPOINT_LOG_MSG.BOOTSTRAP_COMPLETED, {
       servicesCreated: bootstrapResult.servicesCreated,
       partitionsCreated: bootstrapResult.partitionsCreated,
       messageGroupsCreated: bootstrapResult.messageGroupsCreated,
     });
 
     // Start Bootstrap API for node discovery
+    // Get system table cache from NodeService singleton
+    const systemTableCache = NodeService.getInstance().getSystemTableCache();
+
     const bootstrapAPI = new BootstrapAPI({
-      seedNodeId: config.get('node.id'),
-      seedNodeAddress: config.get('node.address'),
+      seedNodeId: config.get(CONFIG_KEY.NODE_ID),
+      seedNodeAddress: config.get(CONFIG_KEY.NODE_ADDRESS),
       wsPort: wsPort,
       messageGroupServices: bootstrapResult.messageGroupServices,
       partitionServices: bootstrapResult.partitionServices,
-      replicaLifecycleManager: bootstrapResult.replicaLifecycleManager,
+      replicaHandler: bootstrapResult.replicaHandler,
+      systemTableCache: systemTableCache,
+      bootstrapService: bootstrapService,
     });
 
     await bootstrapAPI.initialize();
@@ -292,59 +314,46 @@ async function main() {
     // This allows joining nodes to connect and receive lifecycle messages
     try {
       await bootstrapService.startWebSocketServer();
-      mainLogger.info('WebSocket server started for cross-node communication');
+      mainLogger.info(ENTRYPOINT_LOG_MSG.WS_STARTED);
     } catch (wsError) {
-      mainLogger.warn('Failed to start WebSocket server', {
+      mainLogger.warn(ENTRYPOINT_LOG_MSG.WS_START_FAILED, {
         error: wsError.message,
       });
     }
 
-    // Get system table cache from first message group service
-    let systemTableCache = null;
-    for (const mgService of bootstrapResult.messageGroupServices.values()) {
-      systemTableCache = mgService.getReadOnlyCache();
-      break;
-    }
-
     // Build partition registry keyed by partitionId (not replicaId)
-    // The query executor expects partitionId -> partition service mapping
-    const partitionRegistry = new Map();
-    for (const [_replicaId, partition] of bootstrapResult.partitionServices) {
-      const partitionId = partition.partitionId;
-      // Only add if not already present, or if this one is the leader
-      if (!partitionRegistry.has(partitionId) || partition.isLeader) {
-        partitionRegistry.set(partitionId, partition);
-      }
-    }
-
-    // Create SQL query engine with partition registry
+    // Create SQL query engine for transparent query routing
     const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
     const sqlQueryEngine = new SQLQueryEngine({
       systemCache: systemTableCache,
-      partitionRegistry,
-      nodeId: config.get('node.id'),
+      messageRouter: bootstrapResult.messageRouter,
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
     });
+
+    // Set SQL query engine on bootstrap API for distributed node registration
+    bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
 
     // Start Admin WebSocket API
     const adminAPI = new AdminWebSocketAPI({
-      nodeId: config.get('node.id'),
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
       systemTableCache,
       sqlQueryEngine,
     });
 
-    const adminPort = config.get('admin.websocketPort') || 8081;
+    const adminPort =
+      config.get(CONFIG_KEY.ADMIN_WEBSOCKET_PORT) || ENTRYPOINT_DEFAULT.ADMIN_PORT;
     await adminAPI.initialize(adminPort);
 
-    mainLogger.info('Node fully operational', {
-      nodeId: config.get('node.id'),
-      restApiPort: config.get('node.restApiPort'),
+    mainLogger.info(ENTRYPOINT_LOG_MSG.NODE_READY, {
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
+      restApiPort: config.get(CONFIG_KEY.NODE_REST_API_PORT),
       adminWebSocketPort: adminPort,
       dataDir: dataDirectoryManager.getDataDir(),
     });
 
     // Keep the process running
     process.on('SIGINT', async () => {
-      mainLogger.info('Shutting down...');
+      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN);
       await bootstrapService.shutdown();
       await bootstrapAPI.shutdown();
       await adminAPI.shutdown();
@@ -352,7 +361,7 @@ async function main() {
     });
 
     process.on('SIGTERM', async () => {
-      mainLogger.info('Shutting down...');
+      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN);
       await bootstrapService.shutdown();
       await bootstrapAPI.shutdown();
       await adminAPI.shutdown();
@@ -362,6 +371,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('Fatal error:', err);
+  console.error(`${ENTRYPOINT_TEXT.FATAL_ERROR_PREFIX}`, err);
   process.exit(1);
 });

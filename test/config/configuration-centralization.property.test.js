@@ -12,7 +12,7 @@
  * 3. Configuration categories provide organized access to related values
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ConfigurationManager,

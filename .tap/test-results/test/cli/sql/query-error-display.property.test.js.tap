@@ -3,66 +3,68 @@ TAP version 14
     # Subtest: error message is stored in panel
         ok 1 - error message is stored in panel
         1..1
-    ok 1 - error message is stored in panel # time=6.383ms
+    ok 1 - error message is stored in panel # time=7.498ms
     
     # Subtest: result type is set to ERROR
         ok 1 - result type is set to ERROR
         1..1
-    ok 2 - result type is set to ERROR # time=1.073ms
+    ok 2 - result type is set to ERROR # time=0.739ms
     
     # Subtest: hasError returns true after displayError
         ok 1 - hasError returns true after displayError
         1..1
-    ok 3 - hasError returns true after displayError # time=0.692ms
+    ok 3 - hasError returns true after displayError # time=0.749ms
     
     # Subtest: hasResults returns false after displayError
         ok 1 - hasResults returns false after displayError
         1..1
-    ok 4 - hasResults returns false after displayError # time=0.502ms
+    ok 4 - hasResults returns false after displayError # time=0.59ms
     
     # Subtest: error code is preserved when provided
         ok 1 - error code is preserved when provided
         1..1
-    ok 5 - error code is preserved when provided # time=0.602ms
+    ok 5 - error code is preserved when provided # time=0.876ms
     
     # Subtest: error detail is preserved when provided
         ok 1 - error detail is preserved when provided
         1..1
-    ok 6 - error detail is preserved when provided # time=0.599ms
+    ok 6 - error detail is preserved when provided # time=0.874ms
     
     # Subtest: status line contains error message
         ok 1 - status line contains error message
         1..1
-    ok 7 - status line contains error message # time=0.486ms
+    ok 7 - status line contains error message # time=0.722ms
     
     # Subtest: error message content includes error text
         ok 1 - error message content includes error text
         1..1
-    ok 8 - error message content includes error text # time=0.443ms
+    ok 8 - error message content includes error text # time=0.7ms
     
     # Subtest: error message content includes code when provided
         ok 1 - error message content includes code when provided
         1..1
-    ok 9 - error message content includes code when provided # time=0.537ms
+    ok 9 - error message content includes code when provided # time=0.678ms
     
     # Subtest: error message content includes detail when provided
         ok 1 - error message content includes detail when provided
         1..1
-    ok 10 - error message content includes detail when provided # time=0.663ms
+    ok 10 - error message content includes detail when provided # time=0.659ms
     
     # Subtest: displayError clears previous result state
         ok 1 - displayError clears previous result state
         1..1
-    ok 11 - displayError clears previous result state # time=1.185ms
+    ok 11 - displayError clears previous result state # time=1.236ms
     
     # Subtest: unknown error handled gracefully
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - unknown error handled gracefully
         1..3
-    ok 12 - unknown error handled gracefully # time=0.453ms
+    ok 12 - unknown error handled gracefully # time=0.391ms
     
     1..12
-ok 1 - Property 16: Query Error Display # time=18.825ms
+ok 1 - Property 16: Query Error Display # time=20.935ms
 
 1..1
+# { total: 14, pass: 14 }
+# time=27.128ms

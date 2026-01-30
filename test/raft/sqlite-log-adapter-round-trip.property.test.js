@@ -10,7 +10,7 @@
  * Property 7: SQLite Log Adapter Round-Trip
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import Database from 'better-sqlite3';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';

@@ -8,7 +8,7 @@
  * no executor available.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {FunctionRegistry} from '../../src/function/function-registry.js';
 import {LoggingService} from '../../src/logging/logging-service.js';

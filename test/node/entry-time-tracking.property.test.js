@@ -8,7 +8,7 @@
  * timestamp and make it available via `getState()`.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaStateMachine,
@@ -16,6 +16,13 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+function createMockCDCService() {
+  return {
+    updateSystemTableRow: async () => ({success: true}),
+    insertSystemTableRow: async () => ({success: true}),
+  };
+}
 
 // Transitional states as defined in requirements
 const TRANSITIONAL_STATES = [
@@ -55,6 +62,7 @@ test('Property 9: Entry Time Tracking', async (t) => {
         (targetState, replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const beforeTime = Date.now();
@@ -101,6 +109,7 @@ test('Property 9: Entry Time Tracking', async (t) => {
         (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Transition to pending
@@ -144,6 +153,7 @@ test('Property 9: Entry Time Tracking', async (t) => {
         (replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           const beforeTime = Date.now();
@@ -192,6 +202,7 @@ test('Property 9: Entry Time Tracking', async (t) => {
           (replicaId, partitionId) => {
             const stateMachine = new ReplicaStateMachine({
               nodeId: 'test-node',
+              cdcIntegrationService: createMockCDCService(),
             });
 
             // Get replica to active state (non-transitional)
@@ -228,6 +239,7 @@ test('Property 9: Entry Time Tracking', async (t) => {
         (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
+            cdcIntegrationService: createMockCDCService(),
           });
 
           // Transition through states

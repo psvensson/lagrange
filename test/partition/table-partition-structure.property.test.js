@@ -7,7 +7,7 @@
  * as one or more partitions, each using SQLite with Raft consensus.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   PartitionService,

@@ -4,7 +4,7 @@
  * Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import {DetailPanel, PANEL_POSITION} from '../../../src/cli/core/detail-panel.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';
 

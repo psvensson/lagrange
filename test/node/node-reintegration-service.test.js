@@ -3,13 +3,13 @@
  * Requirements: 14.4
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   NodeReintegrationService,
   NodeStatus,
   ReintegrationStatus,
 } from '../../src/node/node-reintegration-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas.js';
+import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -96,8 +96,12 @@ test('NodeReintegrationService - constructor', async (t) => {
 });
 
 test('NodeReintegrationService - initialize', async (t) => {
+  const mockCDC = createMockCDCService();
+  const mockCache = createMockCache();
   const service = new NodeReintegrationService({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
 
   service.initialize();
@@ -119,8 +123,12 @@ test('NodeReintegrationService - initialize requires nodeId', async (t) => {
 });
 
 test('NodeReintegrationService - start and stop', async (t) => {
+  const mockCDC = createMockCDCService();
+  const mockCache = createMockCache();
   const service = new NodeReintegrationService({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
   service.initialize();
 
@@ -179,8 +187,8 @@ test('NodeReintegrationService - reintegrates recovering node', async (t) => {
 
   await service.checkRecoveringNodes();
 
-  // Wait for async operations
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  // Allow microtasks to complete
+  await Promise.resolve();
 
   t.ok(events.some((e) => e.type === 'reintegrated'),
     'should emit nodeReintegrated event');
@@ -292,8 +300,8 @@ test('NodeReintegrationService - fails reintegration on stale heartbeat', async 
 
   await service.checkRecoveringNodes();
 
-  // Wait for async operations
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  // Allow microtasks to complete
+  await Promise.resolve();
 
   t.equal(events.length, 1, 'should emit reintegrationFailed event');
   t.equal(events[0].nodeId, 'node-1', 'should have correct nodeId');
@@ -313,8 +321,13 @@ test('NodeReintegrationService - fails reintegration on stale heartbeat', async 
 });
 
 test('NodeReintegrationService - getStats', async (t) => {
+  const mockCache = createMockCache();
+  const mockCDC = createMockCDCService();
+
   const service = new NodeReintegrationService({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
   service.initialize();
 
@@ -331,8 +344,13 @@ test('NodeReintegrationService - getStats', async (t) => {
 });
 
 test('NodeReintegrationService - getPendingReintegrations', async (t) => {
+  const mockCache = createMockCache();
+  const mockCDC = createMockCDCService();
+
   const service = new NodeReintegrationService({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
   service.initialize();
 
@@ -344,8 +362,13 @@ test('NodeReintegrationService - getPendingReintegrations', async (t) => {
 });
 
 test('NodeReintegrationService - shutdown', async (t) => {
+  const mockCache = createMockCache();
+  const mockCDC = createMockCDCService();
+
   const service = new NodeReintegrationService({
     nodeId: 'test-node',
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCDC,
   });
   service.initialize();
   service.start();

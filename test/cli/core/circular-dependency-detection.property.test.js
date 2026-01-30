@@ -6,7 +6,7 @@
  * **Validates: Requirements 24.7**
  */
 
-import {test} from 'tap';
+import {test} from '../../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {ComponentRegistry} from '../../../src/cli/core/component-registry.js';
 

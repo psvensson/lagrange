@@ -9,14 +9,14 @@
  * contents.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import WebSocket from 'ws';
 import {AdminWebSocketAPI, MessageType} from
   '../../src/admin/admin-websocket-api.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
 
 const SYSTEM_TABLES = ['nodes', 'services', 'partitions', 'tables',
   'message_groups', 'indices'];
@@ -57,35 +57,36 @@ const cacheStateArbitrary = fc.record({
 });
 
 /**
- * Connect to WebSocket and wait for first message.
- * @param {string} url - WebSocket URL.
+ * Connect to AdminWebSocketAPI in-process and wait for first message.
+ * @param {AdminWebSocketAPI} api - Admin API instance.
  * @param {number} timeout - Timeout in ms.
- * @return {Promise<{ws: WebSocket, message: Object}>}
+ * @return {Promise<{ws: Object, message: Object}>}
  */
-function connectAndReceive(url, timeout = 2000) {
+function connectAndReceive(api, timeout = 2000) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(url);
-    let timeoutId;
+    const {clientSocket, serverSocket} = createInProcWebSocketPair();
+    try {
+      api.handleConnection(serverSocket);
+    } catch (error) {
+      clientSocket.close();
+      reject(error);
+      return;
+    }
 
-    timeoutId = setTimeout(() => {
-      ws.close();
+    const timeoutId = setTimeout(() => {
+      clientSocket.close();
       reject(new Error('Timeout waiting for connection/message'));
     }, timeout);
 
-    ws.on('message', (data) => {
+    clientSocket.on('message', (data) => {
       clearTimeout(timeoutId);
       try {
         const message = JSON.parse(data.toString());
-        resolve({ws, message});
+        resolve({ws: clientSocket, message});
       } catch (e) {
-        ws.close();
+        clientSocket.close();
         reject(e);
       }
-    });
-
-    ws.on('error', (err) => {
-      clearTimeout(timeoutId);
-      reject(err);
     });
   });
 }
@@ -125,12 +126,8 @@ test('Property 5: Cache dump contains all six system tables', async (t) => {
         });
 
         try {
-          await api.initialize(0);
-          const port = api.getFastify().server.address().port;
-
-          const {ws, message} = await connectAndReceive(
-            `ws://localhost:${port}/api/admin/stream`,
-          );
+          await api.initialize(0, {listen: false});
+          const {ws, message} = await connectAndReceive(api);
 
           ws.close();
 
@@ -175,12 +172,8 @@ test('Property 5: Cache dump data matches cache contents', async (t) => {
         });
 
         try {
-          await api.initialize(0);
-          const port = api.getFastify().server.address().port;
-
-          const {ws, message} = await connectAndReceive(
-            `ws://localhost:${port}/api/admin/stream`,
-          );
+          await api.initialize(0, {listen: false});
+          const {ws, message} = await connectAndReceive(api);
 
           ws.close();
 
@@ -232,12 +225,8 @@ test('Property 5: Cache dump format matches protocol', async (t) => {
         });
 
         try {
-          await api.initialize(0);
-          const port = api.getFastify().server.address().port;
-
-          const {ws, message} = await connectAndReceive(
-            `ws://localhost:${port}/api/admin/stream`,
-          );
+          await api.initialize(0, {listen: false});
+          const {ws, message} = await connectAndReceive(api);
 
           ws.close();
 
@@ -264,19 +253,11 @@ test('Property 5: Cache dump format matches protocol', async (t) => {
   t.pass('Cache dump format matches protocol');
 });
 
-/**
- * Property 5: Empty cache fallback queries partitions.
- * When cache is empty, queryPartitionsForDump() should be called.
- */
-test('Property 5: Empty cache returns valid dump structure', async (t) => {
-  // Test with empty cache - should still return valid structure
+test('Property 5: Empty cache rejects cache dump', async (t) => {
   const cache = new SystemTableCache();
 
-  // Create mock query engine that returns empty results
   const mockQueryEngine = {
-    executeQuery: async (_sql) => {
-      return {results: []};
-    },
+    executeQuery: async () => ({results: []}),
   };
 
   const api = new AdminWebSocketAPI({
@@ -286,83 +267,13 @@ test('Property 5: Empty cache returns valid dump structure', async (t) => {
   });
 
   try {
-    await api.initialize(0);
-    const port = api.getFastify().server.address().port;
-
-    const {ws, message} = await connectAndReceive(
-      `ws://localhost:${port}/api/admin/stream`,
+    await api.initialize(0, {listen: false});
+    await t.rejects(
+      connectAndReceive(api),
+      /System table cache is empty/,
+      'should reject empty cache dumps',
     );
-
-    ws.close();
-
-    // Verify all tables are present even when empty
-    t.equal(message.type, MessageType.CACHE_DUMP, 'should be cache_dump');
-    for (const tableName of SYSTEM_TABLES) {
-      t.ok(Array.isArray(message.data[tableName]),
-        `${tableName} should be an array`);
-    }
   } finally {
     await api.shutdown();
   }
 });
-
-/**
- * Property 5: Empty cache fallback uses query engine.
- */
-test('Property 5: Empty cache fallback queries partitions', async (t) => {
-  await fc.assert(
-    fc.asyncProperty(
-      cacheStateArbitrary,
-      async (partitionData) => {
-        const cache = new SystemTableCache();
-        // Cache is empty - don't populate it
-
-        // Mock query engine returns partition data
-        const mockQueryEngine = {
-          executeQuery: async (sql) => {
-            const tableName = sql.match(/FROM\s+(\w+)/i)?.[1];
-            if (tableName && partitionData[tableName]) {
-              return {results: partitionData[tableName]};
-            }
-            return {results: []};
-          },
-        };
-
-        const api = new AdminWebSocketAPI({
-          nodeId: 'test-node',
-          systemTableCache: cache,
-          sqlQueryEngine: mockQueryEngine,
-        });
-
-        try {
-          await api.initialize(0);
-          const port = api.getFastify().server.address().port;
-
-          const {ws, message} = await connectAndReceive(
-            `ws://localhost:${port}/api/admin/stream`,
-          );
-
-          ws.close();
-
-          // Verify data came from query engine (partition fallback)
-          for (const tableName of SYSTEM_TABLES) {
-            const expectedRecords = partitionData[tableName] || [];
-            const actualRecords = message.data[tableName] || [];
-
-            if (actualRecords.length !== expectedRecords.length) {
-              return false;
-            }
-          }
-
-          return true;
-        } finally {
-          await api.shutdown();
-        }
-      },
-    ),
-    {numRuns: 10},
-  );
-
-  t.pass('Empty cache fallback queries partitions');
-});
-

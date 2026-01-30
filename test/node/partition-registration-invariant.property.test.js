@@ -8,7 +8,7 @@
  * for that replica_id with correct partition metadata.
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaLifecycleManager,
@@ -16,6 +16,45 @@ import {
 } from '../../src/node/replica-lifecycle-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+/**
+ * Create a mock system table cache.
+ * @return {Object} Mock system table cache.
+ */
+function createMockSystemTableCache() {
+  return {
+    filter: (_tableName, _predicate) => [],
+    get: (_tableName, _key) => null,
+    set: (_tableName, _key, _value) => {},
+  };
+}
+
+/**
+ * Create a mock CDC integration service.
+ * @return {Object} Mock CDC service.
+ */
+function createMockCDCService() {
+  return {
+    async insertSystemTableRow() { return {success: true}; },
+    async updateSystemTableRow() { return {success: true}; },
+    async deleteSystemTableRow() { return {success: true}; },
+    async upsertSystemTableRow() { return {success: true}; },
+  };
+}
+
+/**
+ * Create a mock partition service factory.
+ * @return {Function} Factory function.
+ */
+function createMockPartitionServiceFactory() {
+  return async (options) => ({
+    partitionId: options.partitionId,
+    replicaId: options.replicaId,
+    initialized: true,
+    async shutdown() {},
+    async syncFromLeader() {},
+  });
+}
 
 test('Property 1: Partition Registration Invariant', async (t) => {
   t.beforeEach(async () => {
@@ -49,6 +88,9 @@ test('Property 1: Partition Registration Invariant', async (t) => {
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
             dataDir: '/tmp/test-lifecycle',
+            systemTableCache: createMockSystemTableCache(),
+            cdcIntegrationService: createMockCDCService(),
+            createPartitionService: createMockPartitionServiceFactory(),
           });
 
           manager.initialize();
@@ -94,6 +136,9 @@ test('Property 1: Partition Registration Invariant', async (t) => {
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
             dataDir: '/tmp/test-lifecycle',
+            systemTableCache: createMockSystemTableCache(),
+            cdcIntegrationService: createMockCDCService(),
+            createPartitionService: createMockPartitionServiceFactory(),
           });
 
           manager.initialize();
@@ -135,6 +180,9 @@ test('Property 1: Partition Registration Invariant', async (t) => {
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
             dataDir: '/tmp/test-lifecycle',
+            systemTableCache: createMockSystemTableCache(),
+            cdcIntegrationService: createMockCDCService(),
+            createPartitionService: createMockPartitionServiceFactory(),
           });
 
           manager.initialize();
@@ -191,6 +239,9 @@ test('Property 1: Partition Registration Invariant', async (t) => {
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
             dataDir: '/tmp/test-lifecycle',
+            systemTableCache: createMockSystemTableCache(),
+            cdcIntegrationService: createMockCDCService(),
+            createPartitionService: createMockPartitionServiceFactory(),
           });
 
           manager.initialize();

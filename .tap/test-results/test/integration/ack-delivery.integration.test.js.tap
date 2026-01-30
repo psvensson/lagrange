@@ -4,8 +4,9 @@ TAP version 14
     ok 2 - correct request_id
     ok 3 - status initiated
     ok 4 - replica created
-{"level":50,"time":"2026-01-23T06:22:44.007Z","nodeId":"test-node","pid":418181,"subsystem":"message-router","nodeId":"test-node","connectionId":"5400b443-4a01-4ca2-a8ae-3ae7a3112337","msg":"Self-connection lost - fatal error"}
     1..4
-ok 1 - ACK delivery via real WebSocket # time=81.092ms
+ok 1 - ACK delivery via real WebSocket # time=68.379ms
 
 1..1
+# { total: 4, pass: 4 }
+# time=72.796ms

@@ -9,15 +9,17 @@ Resolved partitions for SELECT {
 }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1769149376956-0-sql-engine',
+  timestamp: '1769771919033-0-sql-query-engine',
   hasJoins: false,
   hasAggregates: false
 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 # Subtest: SQLQueryEngine - executes SELECT query
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 1 - SQLQueryEngine - executes SELECT query # time=7.85ms
+ok 1 - SQLQueryEngine - executes SELECT query # time=8.368ms
 
 Executing SQL query {
   sql: "SELECT * FROM users WHERE id = 'alice'",
@@ -45,16 +47,17 @@ Resolved partitions for SELECT {
 }
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1769149376968-0-sql-engine',
+  timestamp: '1769771919045-0-sql-query-engine',
   hasJoins: false,
   hasAggregates: false
 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 # Subtest: SQLQueryEngine - routes SELECT with key filter to single partition
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 2 - SQLQueryEngine - routes SELECT with key filter to single partition # time=6.112ms
+ok 2 - SQLQueryEngine - routes SELECT with key filter to single partition # time=7.513ms
 
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice')",
@@ -68,13 +71,14 @@ Routing INSERT to partitions {
   sessionId: 'default'
 }
 Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 # Subtest: SQLQueryEngine - executes INSERT and routes to correct partition
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 3 - SQLQueryEngine - executes INSERT and routes to correct partition # time=1.33ms
+ok 3 - SQLQueryEngine - executes INSERT and routes to correct partition # time=2.173ms
 
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice'), ('zack', 'Zack')",
@@ -88,12 +92,14 @@ Routing INSERT to partitions {
   sessionId: 'default'
 }
 Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 # Subtest: SQLQueryEngine - routes INSERT to multiple partitions
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 4 - SQLQueryEngine - routes INSERT to multiple partitions # time=0.708ms
+ok 4 - SQLQueryEngine - routes INSERT to multiple partitions # time=0.963ms
 
 Executing SQL query {
   sql: "UPDATE users SET status = 'active' WHERE id = 'alice'",
@@ -115,13 +121,14 @@ Resolved partitions for query {
 }
 Routing UPDATE to partitions { tableName: 'users', partitionCount: 1, sessionId: 'default' }
 Executing UPDATE { table: 'users', partitionCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 # Subtest: SQLQueryEngine - executes UPDATE with key filter
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 5 - SQLQueryEngine - executes UPDATE with key filter # time=1.119ms
+ok 5 - SQLQueryEngine - executes UPDATE with key filter # time=1.711ms
 
 Executing SQL query {
   sql: "UPDATE users SET status = 'active' WHERE age > 18",
@@ -131,11 +138,13 @@ Executing SQL query {
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 Routing UPDATE to partitions { tableName: 'users', partitionCount: 2, sessionId: 'default' }
 Executing UPDATE { table: 'users', partitionCount: 2 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 # Subtest: SQLQueryEngine - executes UPDATE on all partitions without key filter
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 6 - SQLQueryEngine - executes UPDATE on all partitions without key filter # time=1.096ms
+ok 6 - SQLQueryEngine - executes UPDATE on all partitions without key filter # time=1.26ms
 
 Executing SQL query {
   sql: "DELETE FROM users WHERE id = 'alice'",
@@ -157,12 +166,13 @@ Resolved partitions for query {
 }
 Routing DELETE to partitions { tableName: 'users', partitionCount: 1, sessionId: 'default' }
 Executing DELETE { table: 'users', partitionCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 # Subtest: SQLQueryEngine - executes DELETE with key filter
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 7 - SQLQueryEngine - executes DELETE with key filter # time=1.334ms
+ok 7 - SQLQueryEngine - executes DELETE with key filter # time=1.471ms
 
 Executing SQL query {
   sql: 'SELECT * FROM nonexistent',
@@ -173,7 +183,7 @@ Executing SQL query {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 8 - SQLQueryEngine - returns error for non-existent table # time=0.536ms
+ok 8 - SQLQueryEngine - returns error for non-existent table # time=0.537ms
 
 Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'default' }
 BEGIN TRANSACTION { sessionId: 'default' }
@@ -193,14 +203,14 @@ ROLLBACK { sessionId: 'default', partitionId: null }
     ok 7 - should be equal
     ok 8 - should be equal
     1..8
-ok 9 - SQLQueryEngine - handles transaction statements # time=1.771ms
+ok 9 - SQLQueryEngine - handles transaction statements # time=1.389ms
 
 Executing SQL query { sql: 'INVALID SQL STATEMENT', paramCount: 0, sessionId: 'default' }
 # Subtest: SQLQueryEngine - returns syntax error for invalid SQL
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 10 - SQLQueryEngine - returns syntax error for invalid SQL # time=0.94ms
+ok 10 - SQLQueryEngine - returns syntax error for invalid SQL # time=2.059ms
 
 # Subtest: SQLQueryEngine - parse method returns AST
     ok 1 - should be equal
@@ -208,12 +218,28 @@ ok 10 - SQLQueryEngine - returns syntax error for invalid SQL # time=0.94ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 11 - SQLQueryEngine - parse method returns AST # time=0.535ms
+ok 11 - SQLQueryEngine - parse method returns AST # time=0.902ms
 
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 # Subtest: SQLQueryEngine - resolvePartitions method works
     ok 1 - should be equal
     1..1
-ok 12 - SQLQueryEngine - resolvePartitions method works # time=0.426ms
+ok 12 - SQLQueryEngine - resolvePartitions method works # time=0.364ms
 
-1..12
+Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
+# Subtest: SQLQueryEngine - throws error when system cache not available
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 13 - SQLQueryEngine - throws error when system cache not available # time=0.639ms
+
+Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
+# Subtest: SQLQueryEngine - returns empty array when no partitions found in cache
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 14 - SQLQueryEngine - returns empty array when no partitions found in cache # time=0.493ms
+
+1..14
+# { total: 41, pass: 41 }
+# time=68.364ms

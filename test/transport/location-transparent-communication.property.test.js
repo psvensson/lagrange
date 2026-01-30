@@ -8,7 +8,7 @@
  * (Note: Requirements map to 4.6, 4.9, 4.10, 10.2, 10.3, 10.4 in actual doc)
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

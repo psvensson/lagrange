@@ -11,49 +11,15 @@
  * Progression
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   OperationType,
   ReplicaStatus,
   ADD_WORKFLOW_STEPS,
   WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-status.js';
-
-/**
- * Create a mock RPC client for testing.
- * @param {Object} options - Options for the mock.
- * @return {Object} Mock RPC client.
- */
-function createMockRpcClient(options = {}) {
-  const responseStatus = options.responseStatus || 'initiated';
-
-  return {
-    call: async (_target, _request, _options) => {
-      return {status: responseStatus, error: null};
-    },
-  };
-}
-
-/**
- * Create a RebalanceCoordinator for testing.
- * @param {Object} options - Options for the coordinator.
- * @return {RebalanceCoordinator} Coordinator instance.
- */
-function createTestCoordinator(options = {}) {
-  const coordinator = new RebalanceCoordinator({
-    nodeId: options.nodeId || 'test-node-1',
-    rpcClient: options.rpcClient || createMockRpcClient(),
-    systemTableCache: options.systemTableCache || null,
-    cdcIntegrationService: options.cdcIntegrationService || null,
-  });
-
-  // Don't start timeout checking in tests
-  coordinator.timeoutCheckIntervalMs = 1000000;
-
-  return coordinator;
-}
+import {createTestCoordinator} from './test-helpers.js';
 
 test('Property 5: ADD Workflow Step Progression', async (t) => {
   await t.test('ADD operation starts at PENDING step', async (t) => {

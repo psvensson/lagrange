@@ -8,7 +8,7 @@
  * resulting partitions.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   PartitionSplitMergeManager,
@@ -34,10 +34,12 @@ afterEach(() => {
 /**
  * Generate a sorted array of unique integer keys.
  */
-const sortedKeysArbitrary = fc.array(
-  fc.integer({min: 1, max: 10000}),
-  {minLength: 2, maxLength: 100},
-).map((arr) => [...new Set(arr)].sort((a, b) => a - b));
+const sortedKeysArbitrary = fc
+  .uniqueArray(fc.integer({min: 1, max: 10000}), {
+    minLength: 2,
+    maxLength: 100,
+  })
+  .map((arr) => arr.slice().sort((a, b) => a - b));
 
 /**
  * Create a mock partition service that returns the median key.

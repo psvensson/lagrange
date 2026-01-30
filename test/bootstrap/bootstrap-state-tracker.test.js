@@ -3,7 +3,7 @@
  * Requirements: 28.1, 28.2, 28.5, 28.6, 28.8, 28.9
  */
 
-import {test} from 'tap';
+import {test} from '../../src/test-helpers/tap.js';
 import {
   BootstrapStateTracker,
   BootstrapPhase,

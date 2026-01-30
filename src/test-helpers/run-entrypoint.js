@@ -1,0 +1,57 @@
+import {Worker} from 'node:worker_threads';
+import {fileURLToPath} from 'node:url';
+import {dirname, join} from 'node:path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const workerPath = join(__dirname, 'worker', 'entry-runner.js');
+
+/**
+ * Run a JS entrypoint in a worker thread and capture stdout/stderr.
+ * Avoids `child_process.spawnSync()` which may be blocked in CI sandboxes.
+ *
+ * @param {string} entryPath absolute path to an entrypoint file (ESM)
+ * @param {object} [opts]
+ * @param {string[]} [opts.args]
+ * @param {Record<string,string>} [opts.env]
+ * @param {number} [opts.timeoutMs]
+ * @return {Promise<{stdout: string, stderr: string, exitCode: number}>}
+ */
+export function runEntrypoint(entryPath, opts = {}) {
+  const {args = [], env = {}, timeoutMs = 5000} = opts;
+
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(workerPath, {
+      workerData: {entryPath, args, env},
+    });
+    // Don't keep the event loop alive if something goes wrong.
+    worker.unref();
+
+    const timer = setTimeout(() => {
+      // Terminate best-effort; don't wait for termination to resolve.
+      worker.terminate().catch(() => {});
+      reject(new Error(`runEntrypoint timeout after ${timeoutMs}ms: ${entryPath}`));
+    }, timeoutMs);
+
+    worker.once('message', (msg) => {
+      clearTimeout(timer);
+      worker.terminate().catch(() => {});
+      if (msg && msg.error) {
+        reject(new Error(msg.stderr || 'Entrypoint failed'));
+        return;
+      }
+      resolve({
+        stdout: msg.stdout || '',
+        stderr: msg.stderr || '',
+        exitCode: msg.exitCode ?? 0,
+      });
+    });
+
+    worker.once('error', (err) => {
+      clearTimeout(timer);
+      worker.terminate().catch(() => {});
+      reject(err);
+    });
+  });
+}
+

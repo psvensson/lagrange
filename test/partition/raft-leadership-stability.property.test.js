@@ -7,15 +7,17 @@
  * after initialization completes, exactly one replica SHALL have isLeader=true.
  */
 
-import {test, beforeEach, afterEach} from 'tap';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {PartitionService, RaftRole} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {AddressManager} from '../../src/address/address-manager.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
+  AddressManager.resetInstance();
   const config = ConfigurationManager.getInstance();
   config.initialize({node: {id: 'test-node'}});
   const logger = LoggingService.getInstance();
@@ -25,6 +27,7 @@ beforeEach(() => {
 afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
+  AddressManager.resetInstance();
 });
 
 /**
@@ -73,11 +76,18 @@ test('Property 1: Single replica elects exactly one leader', async (t) => {
         const replicaId = `${partitionId}-r1`;
         const replicaIds = [replicaId];
 
+        // Generate peer addresses
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((rid) =>
+          addressManager.format(nodeId, 'partition', rid),
+        );
+
         const partition = new PartitionService({
           partitionId,
           tableId,
           replicaId,
           replicaIds,
+          peerAddresses,
           nodeId,
           dbPath: ':memory:',
         });
@@ -142,6 +152,12 @@ test('Property 1: At most one leader exists (no split-brain)', async (t) => {
           replicaIds.push(`${partitionId}-r${i + 1}`);
         }
 
+        // Generate peer addresses
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((rid) =>
+          addressManager.format(nodeId, 'partition', rid),
+        );
+
         // Create all partitions on the same node
         const partitions = [];
         const mockTransport = createMockTransport();
@@ -153,6 +169,7 @@ test('Property 1: At most one leader exists (no split-brain)', async (t) => {
               tableId,
               replicaId: replicaIds[i],
               replicaIds,
+              peerAddresses,
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
@@ -222,11 +239,18 @@ test('Property 1: Partition status reflects correct leader state', async (t) => 
         const replicaId = `${partitionId}-r1`;
         const replicaIds = [replicaId];
 
+        // Generate peer addresses
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((rid) =>
+          addressManager.format(nodeId, 'partition', rid),
+        );
+
         const partition = new PartitionService({
           partitionId,
           tableId,
           replicaId,
           replicaIds,
+          peerAddresses,
           nodeId,
           dbPath: ':memory:',
         });
@@ -313,11 +337,18 @@ test('Property 2: Leadership remains stable without topology changes', async (t)
         const replicaId = `${partitionId}-r1`;
         const replicaIds = [replicaId];
 
+        // Generate peer addresses
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((rid) =>
+          addressManager.format(nodeId, 'partition', rid),
+        );
+
         const partition = new PartitionService({
           partitionId,
           tableId,
           replicaId,
           replicaIds,
+          peerAddresses,
           nodeId,
           dbPath: ':memory:',
         });
@@ -391,11 +422,18 @@ test('Property 2: Term numbers stabilize after election', async (t) => {
         const replicaId = `${partitionId}-r1`;
         const replicaIds = [replicaId];
 
+        // Generate peer addresses
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((rid) =>
+          addressManager.format(nodeId, 'partition', rid),
+        );
+
         const partition = new PartitionService({
           partitionId,
           tableId,
           replicaId,
           replicaIds,
+          peerAddresses,
           nodeId,
           dbPath: ':memory:',
         });
@@ -452,6 +490,12 @@ test('Property 2: Multi-replica leadership stability', async (t) => {
           replicaIds.push(`${partitionId}-r${i + 1}`);
         }
 
+        // Generate peer addresses
+        const addressManager = AddressManager.getInstance();
+        const peerAddresses = replicaIds.map((rid) =>
+          addressManager.format(nodeId, 'partition', rid),
+        );
+
         const partitions = [];
         const mockTransport = createMockTransport();
 
@@ -462,6 +506,7 @@ test('Property 2: Multi-replica leadership stability', async (t) => {
               tableId,
               replicaId: replicaIds[i],
               replicaIds,
+              peerAddresses,
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
