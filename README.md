@@ -6,6 +6,18 @@ A scalable distributed database system with self-contained metadata storage, bui
 
 This system implements a distributed database where ALL persistent information is stored in tables, ALL tables are implemented as partitions, and ALL partitions are Raft consensus groups with odd-numbered replicas (minimum 3) using SQLite for storage.
 
+It aims to have similar(ish) functionality to that of Spanner and CockroachDB, a sclalble and distributed Db where the system itself partitions and replicas according to user policy - no manual placement.
+
+It also aims, as a future feature to allow code to be executed near teh data it should operate on or with. Like rpc calls with SELECT routing, or accomodating stored procedures, perhaps.
+
+Everything in the system is stoed as tables.
+All tables are imnplemented as partitions.
+All partitions are raft groups using sqlite for storage..
+
+The system stores infromation abohut itself in itself.
+
+There are other raft abstractions - one is the message group, where every node in the system must be a part of one. So nodes organizes in one way themselves in three-ring raft group replicas which uses in-memory sqlite to ensure message deliveries to other nodes.
+
 ## Requirements
 
 - Node.js >= 22.0.0
