@@ -1393,20 +1393,51 @@ class NodeJoiningService extends EventEmitter {
       return null;
     }
 
-    // Parse hostname:port format
+    let hostname;
+    let restPort;
+
+    // Check if address is already a full WebSocket URL (ws:// or wss://)
+    if (nodeAddress.startsWith(PROTOCOL.WS) || nodeAddress.startsWith(PROTOCOL.WSS)) {
+      // Parse URL format: ws://hostname:port or wss://hostname:port
+      const isSecure = nodeAddress.startsWith(PROTOCOL.WSS);
+      const protocolPrefix = isSecure ? PROTOCOL.WSS : PROTOCOL.WS;
+      const withoutProtocol = nodeAddress.substring(protocolPrefix.length);
+
+      const colonIndex = withoutProtocol.lastIndexOf(ADDRESS.PORT_SEPARATOR);
+      if (colonIndex === NUM.NEGATIVE_ONE || colonIndex === NUM.ZERO) {
+        return null;
+      }
+
+      hostname = withoutProtocol.substring(NUM.ZERO, colonIndex);
+      const portStr = withoutProtocol.substring(colonIndex + NUM.ONE);
+      restPort = parseInt(portStr, NUM.TEN);
+
+      if (!hostname || hostname.length === NUM.ZERO) {
+        return null;
+      }
+
+      if (!Number.isFinite(restPort) || restPort <= NUM.ZERO) {
+        return null;
+      }
+
+      // For WebSocket URLs, the port is already the WS port, return as-is
+      return nodeAddress;
+    }
+
+    // Parse hostname:port format (REST API address)
     const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
     if (colonIndex === NUM.NEGATIVE_ONE || colonIndex === NUM.ZERO) {
       // No colon found or colon at start (empty hostname)
       return null;
     }
 
-    const hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
+    hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
     if (!hostname || hostname.length === NUM.ZERO) {
       return null;
     }
 
     const portStr = nodeAddress.substring(colonIndex + NUM.ONE);
-    const restPort = parseInt(portStr, NUM.TEN);
+    restPort = parseInt(portStr, NUM.TEN);
 
     if (!Number.isFinite(restPort) || restPort <= NUM.ZERO) {
       return null;

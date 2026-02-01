@@ -16,9 +16,9 @@ All partitions are raft groups using sqlite for storage..
 
 The system stores information abohut itself in itself.
 
-There are other raft abstractions - one is the message group, where every node in the system must be a part of one. So nodes organizes in one way themselves in three-ring raft group replicas which uses in-memory sqlite to ensure message deliveries to other nodes. ANother will be a service group, where interface code runs, where any replica can handle messages and where repllicas share in-memory storage.
+There are other raft abstractions - one is the message group, where every node in the system must be a part of one. So nodes organizes in one way themselves in three-ring raft group replicas which uses in-memory sqlite to ensure message deliveries to other nodes. Another will be a service group, where interface code runs, where any replica run message handlers and where replicas share in-memory storage.
 
-It will be several orders of mangitude slower than any comparable system running on just one node, but it will never get slower - regardless of how much the system grows horizontally.
+It will be several orders of magnitude slower than any comparable system running on just one node, but it will never get slower - regardless of how much the system grows horizontally.
 
 ## Requirements
 

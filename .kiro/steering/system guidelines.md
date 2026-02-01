@@ -20,6 +20,7 @@ There must be only one way to write system information to a table (to the leader
 Reading system information must always try the local cache first, then fall back to read from any replica of the correct partition(s) of the table
 Accessing system information must only use the in-build SQL angine, which whill use the system cache to find the address of the replicas of the partition needed to address the query to (unless the information was already in the system cache (for reading))
 
+Do not use naked scalars in the code. Always use shared enums and constants instead.
 Do not use try/catch for conditionals or comunication
 Try/catch errors MUST NOT be swalllowed, instead either re-thrown or clearly logged
 Always write code according to Google's JS lint standard.
@@ -27,7 +28,7 @@ NEVER EVER write eslint exception comments!!!
 NEVER EVER modify the eslint rules
 
 When changes are made to the system, ensure that architecture.md is kept up to date.
-
+Prefer small files which focus on one thing and break out logic into smaller files/functions as much as relevant
 
 
 
