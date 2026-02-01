@@ -12,7 +12,7 @@ TAP version 14
         ok 9 - should create one replica
         ok 10 - correct replica created
         1..10
-    ok 1 - async lifecycle handler returns ACK via WebSocket # time=106.981ms
+    ok 1 - async lifecycle handler returns ACK via WebSocket # time=106.924ms
     
     # Subtest: flat ACK structure is preserved through WebSocket
         ok 1 - should be acknowledged
@@ -20,18 +20,18 @@ TAP version 14
         ok 3 - ACK should have status
         ok 4 - ACK should have correct responseType
         1..4
-    ok 2 - flat ACK structure is preserved through WebSocket # time=66.361ms
+    ok 2 - flat ACK structure is preserved through WebSocket # time=62.849ms
     
     # Subtest: timeout occurs when handler does not return ACK data
         ok 1 - should not be acknowledged (timeout)
         ok 2 - should have error
         ok 3 - error should mention timeout
         1..3
-    ok 3 - timeout occurs when handler does not return ACK data # time=256.932ms
+    ok 3 - timeout occurs when handler does not return ACK data # time=263.787ms
     
     1..3
-ok 1 - WebSocket CREATE_REPLICA ACK delivery # time=549.768ms
+ok 1 - WebSocket CREATE_REPLICA ACK delivery # time=582.413ms
 
 1..1
 # { total: 17, pass: 17 }
-# time=851.092ms
+# time=878.458ms

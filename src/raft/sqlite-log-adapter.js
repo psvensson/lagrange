@@ -214,9 +214,9 @@ class SQLiteLogAdapter {
 
     // Store in SQLite (only if database is open)
     if (this.isOpen()) {
-      this.db.prepare(
-        'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)',
-      ).run(index, term, JSON.stringify(entry), Date.now());
+      const sql = 'INSERT OR REPLACE INTO _raft_log ' +
+        '(log_index, term, command, timestamp) VALUES (?, ?, ?, ?)';
+      this.db.prepare(sql).run(index, term, JSON.stringify(entry), Date.now());
     }
 
     return entry;
@@ -486,9 +486,9 @@ class SQLiteLogAdapter {
     try {
       // Use INSERT OR REPLACE to handle duplicate indices gracefully
       // This can happen during Raft log replication when entries are re-sent
-      const stmt = this.db.prepare(
-        'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)',
-      );
+      const sql = 'INSERT OR REPLACE INTO _raft_log ' +
+        '(log_index, term, command, timestamp) VALUES (?, ?, ?, ?)';
+      const stmt = this.db.prepare(sql);
 
       const insertMany = this.db.transaction((entries) => {
         for (const entry of entries) {

@@ -94,9 +94,9 @@ const BootstrapPhase = BOOTSTRAP_PHASE;
 const BootstrapEvent = BOOTSTRAP_EVENT;
 const BootstrapLog = BOOTSTRAP_LOG_MSG;
 const bootstrapError = BOOTSTRAP_ERROR;
-const routerInitFailed = bootstrapError.ROUTER_INIT_FAILED;
-const messageGroupLeadershipTimeout = bootstrapError.MESSAGE_GROUP_LEADERSHIP_TIMEOUT;
-const partitionLeadershipTimeout = bootstrapError.PARTITION_LEADERSHIP_TIMEOUT;
+const routerInitFailed = bootstrapError.routerInitFailed;
+const messageGroupLeadershipTimeout = bootstrapError.messageGroupLeadershipTimeout;
+const partitionLeadershipTimeout = bootstrapError.partitionLeadershipTimeout;
 const DEFAULT_BOOTSTRAP_CONFIG = BOOTSTRAP_DEFAULT;
 
 /**
@@ -752,7 +752,7 @@ class BootstrapService extends EventEmitter {
       delay = Math.min(delay * backoffMultiplier, maxDelay);
     }
 
-    throw new Error(bootstrapError.SEED_READY_TIMEOUT(nodeId, timeoutMs));
+    throw new Error(bootstrapError.seedReadyTimeout(nodeId, timeoutMs));
   }
 
   /**
@@ -792,6 +792,11 @@ class BootstrapService extends EventEmitter {
       sqlQueryEngine,
     });
     cdcIntegrationService.initialize();
+
+    // Set message router for mesh connectivity on node join
+    if (this.messageRouter) {
+      cdcIntegrationService.setMessageRouter(this.messageRouter);
+    }
 
     this.cdcIntegrationService = cdcIntegrationService;
     return cdcIntegrationService;
@@ -958,7 +963,6 @@ class BootstrapService extends EventEmitter {
       }
 
       this.partitionsCreated++;
-
     }
 
     // ALL partitions are now created and registered
@@ -1142,9 +1146,10 @@ class BootstrapService extends EventEmitter {
                   this._rebalanceTriggeredForNodes.add(nodeId);
                   // Delay rebalancing to give new replicas time to stabilize as learners
                   // This prevents leadership disruption during node join
+                  // Use unref() to prevent this timer from keeping the process alive
                   setTimeout(() => {
                     this.triggerRebalancingOnAllPartitions(BOOTSTRAP_REBALANCE_REASON.NODE_READY);
-                  }, BOOTSTRAP_REBALANCE_DELAY_MS);
+                  }, BOOTSTRAP_REBALANCE_DELAY_MS).unref();
                 }
               }
             }
@@ -1644,11 +1649,21 @@ class BootstrapService extends EventEmitter {
       cdcIntegrationService.initialize();
       cdcIntegrationService.setSystemTableCache(systemTableCache);
 
+      // Set message router for mesh connectivity on node join
+      if (this.messageRouter) {
+        cdcIntegrationService.setMessageRouter(this.messageRouter);
+      }
+
       this.cdcIntegrationService = cdcIntegrationService;
     } else {
       // Update existing CDC integration service to use cache-based routing
       this.cdcIntegrationService.sqlQueryEngine = cdcQueryEngine;
       this.cdcIntegrationService.setSystemTableCache(systemTableCache);
+
+      // Ensure message router is set for mesh connectivity
+      if (this.messageRouter && !this.cdcIntegrationService.messageRouter) {
+        this.cdcIntegrationService.setMessageRouter(this.messageRouter);
+      }
     }
 
     const cdcIntegrationService = this.cdcIntegrationService;
@@ -2325,6 +2340,12 @@ class BootstrapService extends EventEmitter {
     if (this.controlPlaneService) {
       this.controlPlaneService.shutdown();
       this.controlPlaneService = null;
+    }
+
+    // Shutdown RPC client to cancel pending requests
+    if (this.rpcClient) {
+      await this.rpcClient.shutdown();
+      this.rpcClient = null;
     }
 
     // Shutdown replica state machine

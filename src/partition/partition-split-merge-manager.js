@@ -110,7 +110,7 @@ class PartitionSplitMergeManager extends EventEmitter {
 
     // Get total count
     const countResult = await partitionService.executeQuery(
-      SPLIT_MERGE_SQL.COUNT_ROWS(tableName),
+      SPLIT_MERGE_SQL.countRows(tableName),
     );
 
     const totalRows = countResult.rows[NUM.ZERO]?.total || NUM.ZERO;
@@ -122,7 +122,7 @@ class PartitionSplitMergeManager extends EventEmitter {
 
     // Get median value using OFFSET
     const medianResult = await partitionService.executeQuery(
-      SPLIT_MERGE_SQL.SELECT_MEDIAN(primaryKeyColumn, tableName),
+      SPLIT_MERGE_SQL.selectMedian(primaryKeyColumn, tableName),
       [medianOffset],
     );
 
@@ -232,7 +232,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     } = options;
 
     if (this.state !== OperationState.IDLE) {
-      throw new Error(SPLIT_MERGE_ERROR_MSG.MANAGER_BUSY(this.state));
+      throw new Error(SPLIT_MERGE_ERROR_MSG.managerBusy(this.state));
     }
 
     this.state = OperationState.SPLITTING;
@@ -259,7 +259,7 @@ class PartitionSplitMergeManager extends EventEmitter {
         partitionService.getKeyRange();
 
       if (!currentRange) {
-        throw new Error(SPLIT_MERGE_ERROR_MSG.PARTITION_RANGE_MISSING(partitionId));
+        throw new Error(SPLIT_MERGE_ERROR_MSG.partitionRangeMissing(partitionId));
       }
 
       // Generate new partition IDs
@@ -336,7 +336,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     const {leftPartitionId, rightPartitionId, tableId} = options;
 
     if (this.state !== OperationState.IDLE) {
-      throw new Error(SPLIT_MERGE_ERROR_MSG.MERGE_MANAGER_BUSY(this.state));
+      throw new Error(SPLIT_MERGE_ERROR_MSG.mergeManagerBusy(this.state));
     }
 
     this.state = OperationState.MERGING;
@@ -357,16 +357,16 @@ class PartitionSplitMergeManager extends EventEmitter {
       const rightRange = this.keyRangeManager.getRange(rightPartitionId);
 
       if (!leftRange) {
-        throw new Error(SPLIT_MERGE_ERROR_MSG.LEFT_PARTITION_MISSING(leftPartitionId));
+        throw new Error(SPLIT_MERGE_ERROR_MSG.leftPartitionMissing(leftPartitionId));
       }
       if (!rightRange) {
-        throw new Error(SPLIT_MERGE_ERROR_MSG.RIGHT_PARTITION_MISSING(rightPartitionId));
+        throw new Error(SPLIT_MERGE_ERROR_MSG.rightPartitionMissing(rightPartitionId));
       }
 
       // Verify adjacency: left.end must equal right.start
       if (!leftRange.isAdjacentTo(rightRange)) {
         throw new Error(
-          SPLIT_MERGE_ERROR_MSG.PARTITIONS_NOT_ADJACENT(
+          SPLIT_MERGE_ERROR_MSG.partitionsNotAdjacent(
             leftPartitionId,
             leftRange.end,
             rightPartitionId,
@@ -441,7 +441,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     // Left range must start where original started
     if (leftRange.start !== originalRange.start) {
       throw new Error(
-        SPLIT_MERGE_ERROR_MSG.RANGE_INTEGRITY_LEFT_START(
+        SPLIT_MERGE_ERROR_MSG.rangeIntegrityLeftStart(
           leftRange.start,
           originalRange.start,
         ),
@@ -451,7 +451,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     // Right range must end where original ended
     if (rightRange.end !== originalRange.end) {
       throw new Error(
-        SPLIT_MERGE_ERROR_MSG.RANGE_INTEGRITY_RIGHT_END(
+        SPLIT_MERGE_ERROR_MSG.rangeIntegrityRightEnd(
           rightRange.end,
           originalRange.end,
         ),
@@ -461,7 +461,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     // Left end must equal right start (contiguous)
     if (!leftRange.isAdjacentTo(rightRange)) {
       throw new Error(
-        SPLIT_MERGE_ERROR_MSG.RANGE_INTEGRITY_NOT_CONTIGUOUS(
+        SPLIT_MERGE_ERROR_MSG.rangeIntegrityNotContiguous(
           leftRange.end,
           rightRange.start,
         ),
@@ -493,7 +493,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     // Merged range must start where left started
     if (mergedRange.start !== leftRange.start) {
       throw new Error(
-        SPLIT_MERGE_ERROR_MSG.RANGE_INTEGRITY_MERGED_START(
+        SPLIT_MERGE_ERROR_MSG.rangeIntegrityMergedStart(
           mergedRange.start,
           leftRange.start,
         ),
@@ -503,7 +503,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     // Merged range must end where right ended
     if (mergedRange.end !== rightRange.end) {
       throw new Error(
-        SPLIT_MERGE_ERROR_MSG.RANGE_INTEGRITY_MERGED_END(
+        SPLIT_MERGE_ERROR_MSG.rangeIntegrityMergedEnd(
           mergedRange.end,
           rightRange.end,
         ),
@@ -537,6 +537,7 @@ class PartitionSplitMergeManager extends EventEmitter {
         });
       });
     }, this.evaluationIntervalMs);
+    this.evaluationTimer.unref();
   }
 
   /**

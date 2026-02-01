@@ -117,7 +117,7 @@ const NODE_LIFECYCLE_ERROR_NAME = Object.freeze({
 });
 
 const NODE_LIFECYCLE_ERROR_MSG = Object.freeze({
-  INVALID_TRANSITION: (currentState, attemptedState, validTransitions) => {
+  invalidTransition: (currentState, attemptedState, validTransitions) => {
     const validStr = validTransitions.length > NUM.ZERO ?
       validTransitions.join(', ') : STRING.NONE;
     return `Invalid state transition from '${currentState}' to '${attemptedState}'. ` +

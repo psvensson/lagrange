@@ -195,10 +195,10 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
 });
 
 const BOOTSTRAP_ERROR = Object.freeze({
-  ROUTER_INIT_FAILED: (message) => `MessageRouter initialization failed: ${message}`,
-  MESSAGE_GROUP_LEADERSHIP_TIMEOUT: (groupId, timeoutMs) =>
+  routerInitFailed: (message) => `MessageRouter initialization failed: ${message}`,
+  messageGroupLeadershipTimeout: (groupId, timeoutMs) =>
     `Message group ${groupId} failed to establish leadership within ${timeoutMs}ms`,
-  PARTITION_LEADERSHIP_TIMEOUT: (missingLeaders, timeoutMs) =>
+  partitionLeadershipTimeout: (missingLeaders, timeoutMs) =>
     `Partition leaders not established within ${timeoutMs}ms: ${missingLeaders.join(', ')}`,
   PARTITION_REPLICAS_MISSING: 'Partition replica set not configured',
   NODES_LEADER_MISSING: 'Nodes partition leader not available',
@@ -207,7 +207,7 @@ const BOOTSTRAP_ERROR = Object.freeze({
   CDC_CONTROL_PLANE_MISSING: 'CDC integration service not initialized for control plane',
   CDC_HYDRATION_MISSING: 'No message group available for CDC hydration',
   SYSTEM_CACHE_MISSING: 'System table cache not available',
-  SEED_READY_TIMEOUT: (nodeId, timeoutMs) =>
+  seedReadyTimeout: (nodeId, timeoutMs) =>
     `Seed node ${nodeId} not ready in system cache within ${timeoutMs}ms`,
 });
 

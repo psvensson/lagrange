@@ -747,3 +747,216 @@ test('SystemTableCache - updateFromEpoch sequence of updates', async (t) => {
   t.equal(cache.updateFromEpoch({epoch: 4, assignments: {}}), true, 'Accept epoch 4');
   t.equal(cache.getEpoch(), 4, 'Should be epoch 4');
 });
+
+
+// ============================================================================
+// Endpoint Query Methods Tests - Requirements 6.6
+// ============================================================================
+
+test('SystemTableCache - getEndpointsForNode returns empty array when no endpoints',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    const endpoints = cache.getEndpointsForNode('node-1');
+    t.same(endpoints, [], 'Should return empty array');
+  });
+
+test('SystemTableCache - getEndpointsForNode returns endpoints for specific node',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    // Insert endpoints for multiple nodes
+    cache.applySystemTableChange('node_endpoints', CDC_OPERATIONS.INSERT, {
+      endpoint_id: 'ep-1',
+      node_id: 'node-1',
+      transport_type: 'ws',
+      address: 'ws://192.168.1.10:8080',
+      priority: 0,
+      status: 'active',
+    });
+    cache.applySystemTableChange('node_endpoints', CDC_OPERATIONS.INSERT, {
+      endpoint_id: 'ep-2',
+      node_id: 'node-2',
+      transport_type: 'ws',
+      address: 'ws://192.168.1.20:8080',
+      priority: 0,
+      status: 'active',
+    });
+    cache.applySystemTableChange('node_endpoints', CDC_OPERATIONS.INSERT, {
+      endpoint_id: 'ep-3',
+      node_id: 'node-1',
+      transport_type: 'nats',
+      address: 'nats://192.168.1.10:4222',
+      priority: 1,
+      status: 'active',
+    });
+
+    const endpoints = cache.getEndpointsForNode('node-1');
+    t.equal(endpoints.length, 2, 'Should return 2 endpoints for node-1');
+    t.ok(endpoints.every((ep) => ep.node_id === 'node-1'),
+      'All endpoints should belong to node-1');
+  });
+
+test('SystemTableCache - getEndpointsForNode sorts by priority ascending',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    // Insert endpoints with different priorities (out of order)
+    cache.applySystemTableChange('node_endpoints', CDC_OPERATIONS.INSERT, {
+      endpoint_id: 'ep-1',
+      node_id: 'node-1',
+      transport_type: 'veilid',
+      address: 'veilid://key123',
+      priority: 10,
+      status: 'active',
+    });
+    cache.applySystemTableChange('node_endpoints', CDC_OPERATIONS.INSERT, {
+      endpoint_id: 'ep-2',
+      node_id: 'node-1',
+      transport_type: 'ws',
+      address: 'ws://192.168.1.10:8080',
+      priority: 0,
+      status: 'active',
+    });
+    cache.applySystemTableChange('node_endpoints', CDC_OPERATIONS.INSERT, {
+      endpoint_id: 'ep-3',
+      node_id: 'node-1',
+      transport_type: 'nats',
+      address: 'nats://192.168.1.10:4222',
+      priority: 5,
+      status: 'active',
+    });
+
+    const endpoints = cache.getEndpointsForNode('node-1');
+    t.equal(endpoints.length, 3, 'Should return 3 endpoints');
+    t.equal(endpoints[0].priority, 0, 'First endpoint should have priority 0');
+    t.equal(endpoints[1].priority, 5, 'Second endpoint should have priority 5');
+    t.equal(endpoints[2].priority, 10, 'Third endpoint should have priority 10');
+  });
+
+test('SystemTableCache - getEndpointsForNode handles missing priority as 0',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    cache.applySystemTableChange('node_endpoints', CDC_OPERATIONS.INSERT, {
+      endpoint_id: 'ep-1',
+      node_id: 'node-1',
+      transport_type: 'ws',
+      address: 'ws://192.168.1.10:8080',
+      priority: 5,
+      status: 'active',
+    });
+    cache.applySystemTableChange('node_endpoints', CDC_OPERATIONS.INSERT, {
+      endpoint_id: 'ep-2',
+      node_id: 'node-1',
+      transport_type: 'nats',
+      address: 'nats://192.168.1.10:4222',
+      // No priority field - should default to 0
+      status: 'active',
+    });
+
+    const endpoints = cache.getEndpointsForNode('node-1');
+    t.equal(endpoints.length, 2, 'Should return 2 endpoints');
+    t.equal(endpoints[0].endpoint_id, 'ep-2',
+      'Endpoint without priority should come first (treated as 0)');
+    t.equal(endpoints[1].endpoint_id, 'ep-1',
+      'Endpoint with priority 5 should come second');
+  });
+
+test('SystemTableCache - filterEndpointsByStatus filters active endpoints',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    const endpoints = [
+      {endpoint_id: 'ep-1', status: 'active'},
+      {endpoint_id: 'ep-2', status: 'inactive'},
+      {endpoint_id: 'ep-3', status: 'active'},
+    ];
+
+    const activeEndpoints = cache.filterEndpointsByStatus(endpoints, 'active');
+    t.equal(activeEndpoints.length, 2, 'Should return 2 active endpoints');
+    t.ok(activeEndpoints.every((ep) => ep.status === 'active'),
+      'All endpoints should be active');
+  });
+
+test('SystemTableCache - filterEndpointsByStatus filters inactive endpoints',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    const endpoints = [
+      {endpoint_id: 'ep-1', status: 'active'},
+      {endpoint_id: 'ep-2', status: 'inactive'},
+      {endpoint_id: 'ep-3', status: 'active'},
+    ];
+
+    const inactiveEndpoints = cache.filterEndpointsByStatus(endpoints, 'inactive');
+    t.equal(inactiveEndpoints.length, 1, 'Should return 1 inactive endpoint');
+    t.equal(inactiveEndpoints[0].endpoint_id, 'ep-2',
+      'Should return the inactive endpoint');
+  });
+
+test('SystemTableCache - filterEndpointsByStatus returns empty for non-array',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    t.same(cache.filterEndpointsByStatus(null, 'active'), [],
+      'Should return empty array for null');
+    t.same(cache.filterEndpointsByStatus(undefined, 'active'), [],
+      'Should return empty array for undefined');
+    t.same(cache.filterEndpointsByStatus('not-array', 'active'), [],
+      'Should return empty array for string');
+  });
+
+test('SystemTableCache - filterEndpointsByStatus returns empty when no match',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    const endpoints = [
+      {endpoint_id: 'ep-1', status: 'active'},
+      {endpoint_id: 'ep-2', status: 'active'},
+    ];
+
+    const result = cache.filterEndpointsByStatus(endpoints, 'inactive');
+    t.same(result, [], 'Should return empty array when no matches');
+  });
+
+test('SystemTableCache - getEndpointsForNode combined with filterEndpointsByStatus',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    // Insert endpoints with different statuses
+    cache.applySystemTableChange('node_endpoints', CDC_OPERATIONS.INSERT, {
+      endpoint_id: 'ep-1',
+      node_id: 'node-1',
+      transport_type: 'ws',
+      address: 'ws://192.168.1.10:8080',
+      priority: 0,
+      status: 'active',
+    });
+    cache.applySystemTableChange('node_endpoints', CDC_OPERATIONS.INSERT, {
+      endpoint_id: 'ep-2',
+      node_id: 'node-1',
+      transport_type: 'nats',
+      address: 'nats://192.168.1.10:4222',
+      priority: 1,
+      status: 'inactive',
+    });
+    cache.applySystemTableChange('node_endpoints', CDC_OPERATIONS.INSERT, {
+      endpoint_id: 'ep-3',
+      node_id: 'node-1',
+      transport_type: 'veilid',
+      address: 'veilid://key123',
+      priority: 2,
+      status: 'active',
+    });
+
+    const allEndpoints = cache.getEndpointsForNode('node-1');
+    const activeEndpoints = cache.filterEndpointsByStatus(allEndpoints, 'active');
+
+    t.equal(allEndpoints.length, 3, 'Should have 3 total endpoints');
+    t.equal(activeEndpoints.length, 2, 'Should have 2 active endpoints');
+    t.equal(activeEndpoints[0].priority, 0,
+      'Active endpoints should still be sorted by priority');
+    t.equal(activeEndpoints[1].priority, 2,
+      'Second active endpoint should have priority 2');
+  });

@@ -84,7 +84,7 @@ function createMockMessageRouter() {
   };
 }
 
-test('SELECT query uses cache to find partition leader', async (t) => {
+test('SELECT query uses cache to find partition leader', async (_t) => {
   const systemCache = createMockSystemCache(['p1']);
   const messageRouter = createMockMessageRouter();
 
@@ -106,7 +106,7 @@ test('SELECT query uses cache to find partition leader', async (t) => {
   );
 });
 
-test('INSERT query uses cache to find partition leader', async (t) => {
+test('INSERT query uses cache to find partition leader', async (_t) => {
   const systemCache = createMockSystemCache(['p1']);
   const messageRouter = createMockMessageRouter();
 
@@ -128,7 +128,7 @@ test('INSERT query uses cache to find partition leader', async (t) => {
   );
 });
 
-test('UPDATE query uses cache to find partition leader', async (t) => {
+test('UPDATE query uses cache to find partition leader', async (_t) => {
   const systemCache = createMockSystemCache(['p1']);
   const messageRouter = createMockMessageRouter();
 
@@ -150,7 +150,7 @@ test('UPDATE query uses cache to find partition leader', async (t) => {
   );
 });
 
-test('DELETE query uses cache to find partition leader', async (t) => {
+test('DELETE query uses cache to find partition leader', async (_t) => {
   const systemCache = createMockSystemCache(['p1']);
   const messageRouter = createMockMessageRouter();
 
@@ -172,7 +172,7 @@ test('DELETE query uses cache to find partition leader', async (t) => {
   );
 });
 
-test('All queries route through message router', async (t) => {
+test('All queries route through message router', async (_t) => {
   const systemCache = createMockSystemCache(['p1', 'p2']);
   const messageRouter = createMockMessageRouter();
 
@@ -226,7 +226,7 @@ test('All queries route through message router', async (t) => {
   );
 });
 
-test('Query returns empty when cache missing partition info', async (t) => {
+test('Query returns empty when cache missing partition info', async (_t) => {
   const systemCache = {
     filter: function(_tableName, _predicate) {
       return []; // No partitions or services
@@ -249,7 +249,7 @@ test('Query returns empty when cache missing partition info', async (t) => {
   assert.equal(result.rows.length, 0, 'Should return empty rows');
 });
 
-test('SQLQueryEngine uses cache for partition lookup', async (t) => {
+test('SQLQueryEngine uses cache for partition lookup', async (_t) => {
   const systemCache = createMockSystemCache(['p1']);
   const messageRouter = createMockMessageRouter();
 
@@ -272,7 +272,7 @@ test('SQLQueryEngine uses cache for partition lookup', async (t) => {
   );
 });
 
-test('SQLQueryEngine fails when cache not available', async (t) => {
+test('SQLQueryEngine fails when cache not available', async (_t) => {
   const messageRouter = createMockMessageRouter();
 
   const engine = new SQLQueryEngine({

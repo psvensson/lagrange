@@ -42,6 +42,7 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
     'updateNodeStatus is not supported - use CDC integration service',
   SHUTDOWN: 'Bootstrap API shutdown',
   SERVER_CLOSE_ERROR: 'Bootstrap server close error',
+  READY_NODES_FOR_BOOTSTRAP: 'Ready nodes for bootstrap response',
 });
 
 const BOOTSTRAP_API_ERROR = Object.freeze({

@@ -699,16 +699,67 @@ test('CDCIntegrationService - EPOCH_CONFIG_KEY is exported', async (t) => {
 });
 
 
-// Import StateAwareRebalancer for testing node state CDC handler
-import {StateAwareRebalancer} from '../../src/rebalancer/state-aware-rebalancer.js';
+// Import EventEmitter for creating mock rebalancer
+import {EventEmitter} from 'events';
 import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
+
+/**
+ * Create a mock rebalancer for testing CDC integration.
+ * Mimics the event-emitting behavior of UnifiedRebalancer.onNodeStateChange().
+ * @return {Object} Mock rebalancer with onNodeStateChange method.
+ */
+function createMockRebalancer() {
+  const emitter = new EventEmitter();
+  emitter.onNodeStateChange = function(nodeId, oldState, newState) {
+    // Emit nodeStateChange event (always)
+    this.emit('nodeStateChange', {
+      nodeId,
+      oldState,
+      newState,
+      timestamp: Date.now(),
+    });
+
+    // Determine if rebalancing is needed
+    let rebalanceNeeded = false;
+    let reason = null;
+
+    if (newState === NodeState.READY && oldState !== NodeState.READY) {
+      rebalanceNeeded = true;
+      reason = 'node_became_ready';
+    }
+    if (newState === NodeState.DRAINING) {
+      rebalanceNeeded = true;
+      reason = 'node_draining';
+    }
+    if (oldState === NodeState.READY && newState !== NodeState.READY &&
+        newState !== NodeState.DRAINING) {
+      rebalanceNeeded = true;
+      reason = 'node_left_ready';
+    }
+    if (newState === NodeState.STOPPED) {
+      rebalanceNeeded = true;
+      reason = 'node_stopped';
+    }
+
+    if (rebalanceNeeded) {
+      this.emit('rebalanceNeeded', {
+        nodeId,
+        oldState,
+        newState,
+        reason,
+        timestamp: Date.now(),
+      });
+    }
+  };
+  return emitter;
+}
 
 test('CDCIntegrationService - setRebalancer', async (t) => {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
   });
 
-  const rebalancer = new StateAwareRebalancer({nodeId: 'test-node'});
+  const rebalancer = createMockRebalancer();
 
   service.setRebalancer(rebalancer);
 
@@ -787,7 +838,7 @@ test('CDCIntegrationService - handleNodeStateCDC triggers rebalancer', async (t)
   });
   service.initialize();
 
-  const rebalancer = new StateAwareRebalancer({nodeId: 'test-node'});
+  const rebalancer = createMockRebalancer();
   const rebalancerEvents = [];
   rebalancer.on('nodeStateChange', (e) => rebalancerEvents.push(e));
 
@@ -1015,7 +1066,7 @@ test('CDCIntegrationService - handleNodeStateCDC handles DRAINING state', async 
   });
   service.initialize();
 
-  const rebalancer = new StateAwareRebalancer({nodeId: 'test-node'});
+  const rebalancer = createMockRebalancer();
   const rebalanceNeededEvents = [];
   rebalancer.on('rebalanceNeeded', (e) => rebalanceNeededEvents.push(e));
 
@@ -1151,7 +1202,7 @@ test('CDCIntegrationService - extractTableNameFromSQL extracts from INSERT', asy
   t.end();
 });
 
-test('CDCIntegrationService - extractTableNameFromSQL extracts from INSERT OR REPLACE', async (t) => {
+test('extractTableNameFromSQL extracts from INSERT OR REPLACE', async (t) => {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
   });
@@ -1201,11 +1252,15 @@ test('CDCIntegrationService - extractTableNameFromSQL returns null for invalid S
 
   t.equal(service.extractTableNameFromSQL(''), null, 'should return null for empty string');
   t.equal(service.extractTableNameFromSQL(null), null, 'should return null for null');
-  t.equal(service.extractTableNameFromSQL('INVALID SQL'), null, 'should return null for invalid SQL');
+  t.equal(
+    service.extractTableNameFromSQL('INVALID SQL'),
+    null,
+    'should return null for invalid SQL',
+  );
   t.end();
 });
 
-test('CDCIntegrationService - executeSQLDirectToLocalPartition executes on local partition', async (t) => {
+test('executeSQLDirectToLocalPartition executes on local partition', async (t) => {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
   });
@@ -1236,7 +1291,7 @@ test('CDCIntegrationService - executeSQLDirectToLocalPartition executes on local
   t.end();
 });
 
-test('CDCIntegrationService - executeSQLDirectToLocalPartition throws when not in bootstrap mode', async (t) => {
+test('executeSQLDirectToLocalPartition throws when not in bootstrap mode', async (t) => {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
   });
@@ -1255,7 +1310,7 @@ test('CDCIntegrationService - executeSQLDirectToLocalPartition throws when not i
   t.end();
 });
 
-test('CDCIntegrationService - executeSQLDirectToLocalPartition throws when partition not found', async (t) => {
+test('executeSQLDirectToLocalPartition throws when partition not found', async (t) => {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
   });
@@ -1273,14 +1328,17 @@ test('CDCIntegrationService - executeSQLDirectToLocalPartition throws when parti
     );
     t.fail('should throw error when partition not found');
   } catch (error) {
-    t.ok(error.message.includes('No local partition service found'), 'should throw error about missing partition');
+    t.ok(
+      error.message.includes('No local partition service found'),
+      'should throw error about missing partition',
+    );
     t.ok(error.message.includes('services'), 'should mention the table name');
   }
 
   t.end();
 });
 
-test('CDCIntegrationService - executeSQLDirectToLocalPartition throws when SQL parsing fails', async (t) => {
+test('executeSQLDirectToLocalPartition throws when SQL parsing fails', async (t) => {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
   });
@@ -1295,13 +1353,16 @@ test('CDCIntegrationService - executeSQLDirectToLocalPartition throws when SQL p
     await service.executeSQLDirectToLocalPartition('INVALID SQL', []);
     t.fail('should throw error when SQL parsing fails');
   } catch (error) {
-    t.ok(error.message.includes('Could not extract table name'), 'should throw error about table name extraction');
+    t.ok(
+      error.message.includes('Could not extract table name'),
+      'should throw error about table name extraction',
+    );
   }
 
   t.end();
 });
 
-test('CDCIntegrationService - executeSQLDirectToLocalPartition handles partition errors', async (t) => {
+test('executeSQLDirectToLocalPartition handles partition errors', async (t) => {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
   });

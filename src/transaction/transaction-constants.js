@@ -39,9 +39,9 @@ const TRANSACTION_LOG_MSG = Object.freeze({
 const TRANSACTION_ERROR_MSG = Object.freeze({
   MAX_CONCURRENT_EXCEEDED: 'Maximum concurrent transactions exceeded',
   NOT_FOUND: 'Transaction not found',
-  NOT_FOUND_WITH_ID: (transactionId) => `Transaction not found: ${transactionId}`,
-  NOT_ACTIVE: (state) => `Transaction is not active: ${state}`,
-  RECORD_OPERATION_INACTIVE: (state) =>
+  notFoundWithId: (transactionId) => `Transaction not found: ${transactionId}`,
+  notActive: (state) => `Transaction is not active: ${state}`,
+  recordOperationInactive: (state) =>
     `Cannot record operation: transaction is ${state}`,
 });
 

@@ -1,5 +1,5 @@
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {NUM, STRING} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 
 const ADMIN_SUBSYSTEM = Object.freeze({
   WEBSOCKET_API: 'admin-websocket-api',
@@ -67,7 +67,7 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
   MISSING_QUERY_ID: 'Query message must include queryId',
   MISSING_SQL: 'Query message must include sql string',
   QUERY_ENGINE_UNAVAILABLE: 'SQL query engine not available',
-  QUERY_TIMEOUT: (timeoutMs) => `Query timeout after ${timeoutMs}ms`,
+  queryTimeout: (timeoutMs) => `Query timeout after ${timeoutMs}ms`,
 });
 
 const ADMIN_ERROR_HINT = Object.freeze({
@@ -101,6 +101,7 @@ const ADMIN_LOG_MSG = Object.freeze({
   REFRESH_REQUESTED: 'Refresh requested',
   SEND_FAILED: 'Failed to send message to client',
   SHUTDOWN: 'Admin WebSocket API shutdown',
+  SERVER_CLOSE_ERROR: 'Error closing HTTP server',
 });
 
 const ADMIN_CACHE_DUMP = Object.freeze({

@@ -40,7 +40,8 @@ function initializeTestEnvironment() {
 /**
  * Clean up test environment.
  */
-function cleanupTestEnvironment() {
+async function cleanupTestEnvironment() {
+  await LoggingService.getInstance().shutdown().catch(() => {});
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 }
@@ -98,8 +99,8 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
     initializeTestEnvironment();
   });
 
-  t.afterEach(() => {
-    cleanupTestEnvironment();
+  t.afterEach(async () => {
+    await cleanupTestEnvironment();
   });
 
   t.test('async lifecycle handler returns ACK via WebSocket', async (t) => {

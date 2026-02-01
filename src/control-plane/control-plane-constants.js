@@ -59,9 +59,14 @@ const CONTROL_PLANE_LOG_MSG = Object.freeze({
   ATTACHED_MESSAGE_GROUP: 'Attached control plane to message group service',
   LEASE_SWEEP_FAILED: 'Lease sweep failed',
   LOCAL_HEARTBEAT_FAILED: 'Control plane local heartbeat failed',
+  LOCAL_HEARTBEAT_CONSECUTIVE_FAILURES: 'Control plane heartbeat failing repeatedly',
+  LOCAL_HEARTBEAT_RECOVERED: 'Control plane heartbeat recovered after failures',
   SHUTDOWN: 'Control plane service shutdown',
   IGNORE_UNKNOWN_NODE_STATE: 'Ignoring unknown node state update',
 });
+
+// Number of consecutive heartbeat failures before logging at warn level
+const HEARTBEAT_FAILURE_WARN_THRESHOLD = 3;
 
 const CONTROL_PLANE_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'ControlPlaneService requires nodeId',
@@ -92,4 +97,5 @@ export {
   CONTROL_PLANE_LOG_MSG,
   CONTROL_PLANE_ERROR_MSG,
   CONTROL_PLANE_ALLOWED_STATES,
+  HEARTBEAT_FAILURE_WARN_THRESHOLD,
 };

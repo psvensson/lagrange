@@ -135,12 +135,13 @@ class FunctionRegistry {
 
     if (!executor) {
       const availableTypes = this.getRegisteredExecutorTypes();
+      const availableStr = availableTypes.length > 0 ?
+        availableTypes.join(', ') : FUNCTION_ERROR_MSG.EXECUTOR_AVAILABLE_NONE;
       throw new Error(
         `${FUNCTION_ERROR_MSG.EXECUTOR_NOT_FOUND_PREFIX}` +
         `'${func.executor_type}'` +
         `${FUNCTION_ERROR_MSG.EXECUTOR_NOT_FOUND_SUFFIX} ` +
-        `${FUNCTION_ERROR_MSG.EXECUTOR_AVAILABLE_PREFIX}` +
-        `${availableTypes.length > 0 ? availableTypes.join(', ') : FUNCTION_ERROR_MSG.EXECUTOR_AVAILABLE_NONE}`,
+        `${FUNCTION_ERROR_MSG.EXECUTOR_AVAILABLE_PREFIX}${availableStr}`,
       );
     }
 

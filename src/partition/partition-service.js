@@ -16,12 +16,12 @@ import {LoggingService} from '../logging/logging-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {UnifiedRebalancer, EntityType} from '../rebalancer/unified-rebalancer.js';
 import {RebalanceCoordinator} from '../rebalancer/rebalance-coordinator.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {assertCritical} from '../utils/assert.js';
 import {PendingRequestTracker} from './pending-request-tracker.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {
-  INITIAL_PARTITION_IDS,
   SystemTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {AddressManager} from '../address/address-manager.js';
@@ -35,7 +35,6 @@ import {
   NUM,
   SQL,
   SERVICE_TYPE,
-  STATE,
   STRING,
   TABLES,
   TIME_MS,
@@ -54,6 +53,7 @@ import {
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,
   PARTITION_SERVICE_REASON,
+  PARTITION_SERVICE_RESPONSE,
   PARTITION_SERVICE_ROLE,
   PARTITION_SERVICE_SQL,
   PARTITION_SERVICE_SQL_FRAGMENT,
@@ -1171,7 +1171,7 @@ class PartitionService extends EventEmitter {
       });
       return {
         acknowledged: false,
-        error: PARTITION_SERVICE_ERROR_MSG.UNKNOWN_MESSAGE(payload.type),
+        error: PARTITION_SERVICE_ERROR_MSG.unknownMessage(payload.type),
       };
     }
   }
@@ -1215,7 +1215,7 @@ class PartitionService extends EventEmitter {
       default:
         return {
           acknowledged: false,
-          error: PARTITION_SERVICE_ERROR_MSG.UNKNOWN_OPERATION(operation),
+          error: PARTITION_SERVICE_ERROR_MSG.unknownOperation(operation),
         };
       }
 
@@ -1238,10 +1238,11 @@ class PartitionService extends EventEmitter {
   /**
    * Handle remote SQL query execution.
    * Enables transparent query routing - any node can execute queries on any partition.
+   * For write operations on non-leaders, returns a redirect response with leader address.
    * @param {Object} payload - Query payload.
    * @param {string} payload.sql - SQL query string.
    * @param {Array} payload.params - Query parameters.
-   * @return {Promise<Object>} Query result.
+   * @return {Promise<Object>} Query result or redirect response.
    * @private
    */
   async handleRemoteQuery(payload) {
@@ -1249,6 +1250,34 @@ class PartitionService extends EventEmitter {
 
     if (!sql) {
       return {acknowledged: false, error: PARTITION_SERVICE_ERROR_MSG.MISSING_SQL_QUERY};
+    }
+
+    const isWriteOperation = this.isWriteQuery(sql);
+
+    // For write operations, redirect to leader if we're not the leader
+    if (isWriteOperation && this.role !== RaftRole.LEADER) {
+      const leaderAddress = this.resolveLeaderAddress();
+      if (leaderAddress) {
+        this.logger.debug(PARTITION_SERVICE_LOG_MSG.REDIRECTING_WRITE_TO_LEADER, {
+          partitionId: this.partitionId,
+          replicaId: this.replicaId,
+          leaderAddress,
+        });
+        return {
+          acknowledged: true,
+          success: false,
+          redirect: PARTITION_SERVICE_RESPONSE.LEADER_REDIRECT,
+          leaderAddress,
+          partitionId: this.partitionId,
+        };
+      }
+      // No leader known - return error so client can retry
+      return {
+        acknowledged: true,
+        success: false,
+        error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+        partitionId: this.partitionId,
+      };
     }
 
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_REMOTE_QUERY, {
@@ -1275,6 +1304,23 @@ class PartitionService extends EventEmitter {
       });
       throw error;
     }
+  }
+
+  /**
+   * Check if a SQL query is a write operation.
+   * @param {string} sql - SQL query string.
+   * @return {boolean} True if write operation.
+   * @private
+   */
+  isWriteQuery(sql) {
+    if (!sql) return false;
+    const trimmed = sql.trim().toUpperCase();
+    return trimmed.startsWith('INSERT') ||
+           trimmed.startsWith('UPDATE') ||
+           trimmed.startsWith('DELETE') ||
+           trimmed.startsWith('CREATE') ||
+           trimmed.startsWith('DROP') ||
+           trimmed.startsWith('ALTER');
   }
 
   /**
@@ -1849,7 +1895,7 @@ class PartitionService extends EventEmitter {
         });
         return result;
       } catch (error) {
-        throw new Error(PARTITION_SERVICE_ERROR_MSG.FORWARD_WRITE_FAILED(error.message));
+        throw new Error(PARTITION_SERVICE_ERROR_MSG.forwardWriteFailed(error.message));
       }
     }
 
@@ -2603,6 +2649,7 @@ class PartitionService extends EventEmitter {
         await this.updatePartitionSize();
       }
     }, this.sizeUpdateIntervalMs);
+    this.sizeUpdateTimer.unref();
   }
 
   /**
@@ -3273,6 +3320,8 @@ class PartitionService extends EventEmitter {
    * Promotion happens when:
    * 1. Minimum delay has passed (already satisfied by timer)
    * 2. We have received at least one heartbeat from the leader
+   * 3. Promoting would not result in an even number of voters (prevents split votes)
+   *    OR promoting all pending learners would result in an odd count
    * @private
    */
   checkLearnerPromotion() {
@@ -3283,12 +3332,66 @@ class PartitionService extends EventEmitter {
       return;
     }
 
+    // Check if promoting would result in an even number of voters
+    // This prevents election storms caused by split votes (e.g., 2-2)
+    // Count current active voters (followers + candidates + leader, excluding learners)
+    const activeVoterCount = this.countActiveVoters();
+    const learnerCount = this.countPendingLearners();
+
+    // If promoting this learner would result in an even number of voters,
+    // defer promotion until the old replica is removed
+    // activeVoterCount is current voters, adding this learner makes it activeVoterCount + 1
+    const votersAfterPromotion = activeVoterCount + NUM.ONE;
+    const wouldBeEven = votersAfterPromotion % NUM.TWO === NUM.ZERO;
+
+    // Check if promoting ALL learners would result in an odd count
+    // This handles the case where multiple nodes join simultaneously
+    // e.g., 3 voters + 2 learners = 5 (odd) - allow promotion
+    const votersAfterAllLearners = activeVoterCount + learnerCount;
+    const allLearnersWouldBeOdd = votersAfterAllLearners % NUM.TWO === NUM.ONE;
+
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_CHECK, {
       replicaId: this.replicaId,
       partitionId: this.partitionId,
       leaderId: this.leaderId,
-      logLength: this.storage?.getLogLength() || 0,
+      logLength: this.storage?.getLogLength() || NUM.ZERO,
+      activeVoterCount,
+      votersAfterPromotion,
+      wouldBeEven,
+      learnerCount,
+      votersAfterAllLearners,
+      allLearnersWouldBeOdd,
     });
+
+    // Allow promotion if:
+    // 1. Promoting this learner alone would result in odd count, OR
+    // 2. There are multiple learners and promoting ALL would result in odd count
+    if (wouldBeEven && activeVoterCount >= NUM.THREE && !allLearnersWouldBeOdd) {
+      // Defer promotion - reschedule check after a shorter interval
+      // The old replica should be removed soon, which will make the count odd again
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
+        replicaId: this.replicaId,
+        partitionId: this.partitionId,
+        activeVoterCount,
+        votersAfterPromotion,
+        learnerCount,
+        votersAfterAllLearners,
+        reason: 'would_cause_even_voter_count',
+      });
+      this.scheduleLearnerPromotion();
+      return;
+    }
+
+    // Log if we're allowing promotion due to multiple learners
+    if (wouldBeEven && allLearnersWouldBeOdd) {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_ALLOWED_MULTI, {
+        replicaId: this.replicaId,
+        partitionId: this.partitionId,
+        activeVoterCount,
+        learnerCount,
+        votersAfterAllLearners,
+      });
+    }
 
     // Promote to follower - now eligible to participate in elections
     this.role = RaftRole.FOLLOWER;
@@ -3298,10 +3401,96 @@ class PartitionService extends EventEmitter {
       replicaId: this.replicaId,
       partitionId: this.partitionId,
       leaderId: this.leaderId,
+      activeVoterCount: votersAfterPromotion,
     });
 
     // Start election timer now that we're a full participant
     this.startElection();
+  }
+
+  /**
+   * Count pending learners in the Raft group.
+   * Uses the system table cache to get current replica states.
+   * @return {number} Number of pending learners.
+   * @private
+   */
+  countPendingLearners() {
+    // If no system table cache, return 1 (just this learner)
+    if (!this.systemTableCache) {
+      return NUM.ONE;
+    }
+
+    // Query services table for replicas of this partition
+    const services = this.systemTableCache.filter(TABLES.SERVICES, (service) => {
+      return service.partition_id === this.partitionId &&
+        service.service_type === SERVICE_TYPE.PARTITION;
+    });
+
+    // Count replicas that are learners
+    let learnerCount = NUM.ZERO;
+    for (const service of services) {
+      const status = service.status || ReplicaStatus.ACTIVE;
+      const raftRole = service.raft_role;
+
+      // Skip failed, removing, or removed replicas
+      if (status === ReplicaStatus.FAILED ||
+          status === ReplicaStatus.REMOVING ||
+          status === ReplicaStatus.REMOVED) {
+        continue;
+      }
+
+      // Count learners
+      if (raftRole === PARTITION_RAFT_ROLE.LEARNER) {
+        learnerCount++;
+      }
+    }
+
+    // Ensure we count at least 1 (this learner) even if cache is stale
+    return Math.max(learnerCount, NUM.ONE);
+  }
+
+  /**
+   * Count active voters in the Raft group (excluding learners).
+   * Uses the system table cache to get current replica states.
+   * @return {number} Number of active voters.
+   * @private
+   */
+  countActiveVoters() {
+    // If no system table cache, fall back to replicaIds count
+    // This is a conservative estimate that may include learners
+    if (!this.systemTableCache) {
+      return this.replicaIds.length;
+    }
+
+    // Query services table for replicas of this partition
+    const services = this.systemTableCache.filter(TABLES.SERVICES, (service) => {
+      return service.partition_id === this.partitionId &&
+        service.service_type === SERVICE_TYPE.PARTITION;
+    });
+
+    // Count replicas that are active voters (not learners, not failed, not removing)
+    let voterCount = NUM.ZERO;
+    for (const service of services) {
+      const status = service.status || ReplicaStatus.ACTIVE;
+      const raftRole = service.raft_role;
+
+      // Skip failed, removing, or removed replicas
+      if (status === ReplicaStatus.FAILED ||
+          status === ReplicaStatus.REMOVING ||
+          status === ReplicaStatus.REMOVED) {
+        continue;
+      }
+
+      // Skip learners (they don't vote)
+      if (raftRole === PARTITION_RAFT_ROLE.LEARNER) {
+        continue;
+      }
+
+      // Count as voter (leader, follower, candidate, or unknown role but active)
+      voterCount++;
+    }
+
+    return voterCount;
   }
 
   /**
@@ -3326,8 +3515,11 @@ class PartitionService extends EventEmitter {
       this.logAdapter.close();
     }
 
-    // Stop liferaft instance
+    // Stop liferaft instance - clear all timers first
     if (this.raft) {
+      if (this.raft.timers) {
+        this.raft.timers.clear();
+      }
       this.raft.end();
       this.raft = null;
     }

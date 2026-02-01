@@ -2,28 +2,28 @@ TAP version 14
 # Subtest: Property 40: Initial partition covers full key space
     ok 1 - Initial partition covers full key space
     1..1
-ok 1 - Property 40: Initial partition covers full key space # time=7.825ms
+ok 1 - Property 40: Initial partition covers full key space # time=9.619ms
 
 # Subtest: Property 40: Ranges remain contiguous after splits
     ok 1 - Ranges remain contiguous after splits
     1..1
-ok 2 - Property 40: Ranges remain contiguous after splits # time=2.728ms
+ok 2 - Property 40: Ranges remain contiguous after splits # time=3.28ms
 
 # Subtest: Property 40: No overlapping ranges allowed
     ok 1 - No overlapping ranges allowed
     1..1
-ok 3 - Property 40: No overlapping ranges allowed # time=2.052ms
+ok 3 - Property 40: No overlapping ranges allowed # time=2.607ms
 
 # Subtest: Property 40: Any key maps to exactly one partition
     ok 1 - Any key maps to exactly one partition
     1..1
-ok 4 - Property 40: Any key maps to exactly one partition # time=1.853ms
+ok 4 - Property 40: Any key maps to exactly one partition # time=2.978ms
 
 # Subtest: Property 40: Merged partitions maintain contiguity
     ok 1 - Merged partitions maintain contiguity
     1..1
-ok 5 - Property 40: Merged partitions maintain contiguity # time=1.588ms
+ok 5 - Property 40: Merged partitions maintain contiguity # time=2.792ms
 
 1..5
 # { total: 5, pass: 5 }
-# time=162.195ms
+# time=203.322ms

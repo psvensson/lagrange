@@ -3,9 +3,9 @@ TAP version 14
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: 'ffffffe8-0009-1000-8000-001700000006',
+  operationId: '7050ffc6-678b-4ee0-adcd-eb2c2d600bb9',
   workflowStep: 'FAILED',
-  partitionId: '0000001c-0014-1000-bb8d-0e75a4c8a066'
+  partitionId: '27745ef3-583a-2086-81b6-b3988f21f12b'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -18,19 +18,19 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: 'e7ca12f2-8f23-578d-93b8-12181e3af2b4',
+  operationId: '64c4e280-fd82-303f-898f-949e70a49371',
   workflowStep: 'FAILED',
-  partitionId: 'faf00b89-d462-1ac8-bc49-0f0057aeb484'
+  partitionId: 'f95f70f2-4ffb-1040-90d5-5647822222c6'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '3d915e2b-11b9-1531-8265-c8c21838c56c',
+  operationId: 'e6e853c8-76c9-4143-a481-d5ff56ba069c',
   workflowStep: 'FAILED',
-  partitionId: 'eaab81f9-ab0c-50ca-8d7e-da9f757bac62'
+  partitionId: '17450f8e-a757-51f0-ba08-1237019f38e9'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '9801decc-6a04-5e00-b1d7-3be678edab9b',
+  operationId: '729be9b6-3c7b-4e8c-aec2-829f4856aa2b',
   workflowStep: 'FAILED',
-  partitionId: '0e677c4a-8f0c-370d-9ca1-31f0e500c9b4'
+  partitionId: 'b5f43022-07e8-5324-a206-2c78f1ee4172'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -43,19 +43,19 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: 'fffffff3-000b-1000-8000-000b2f7f5d99',
+  operationId: 'ffffffe6-bdb5-4926-a000-4d4400000014',
   workflowStep: 'FAILED',
-  partitionId: '00000000-0004-1000-8d94-374c40b1e4c1'
+  partitionId: 'ffffffea-0002-1000-8000-001600000004'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '679cefb6-8c92-46b2-8b26-d87e356845c4',
+  operationId: '00000009-3a7c-2f6f-b65e-ad3dffffffff',
   workflowStep: 'FAILED',
-  partitionId: '452eeb1f-23e6-436a-8aab-29a40000000a'
+  partitionId: '0000001f-001c-1000-babf-e47fe4b3c31e'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '00000018-0001-1000-acd4-fcc600000000',
+  operationId: '0000001c-ffe5-5fff-bfff-ffed0000001d',
   workflowStep: 'FAILED',
-  partitionId: '09f0fb0e-a2a1-18c9-a6a2-450e00000011'
+  partitionId: '53fafa9d-001b-1000-8000-001dbbb31eef'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -66,31 +66,46 @@ Recovery process completed {
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 4, nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: '0000001e-000e-1000-8000-0010a2275e31',
+  operationId: '9a0136e1-d049-321a-879d-de3cf8e19c60',
   workflowStep: 'FAILED',
-  partitionId: '00000015-0017-1000-928e-a482d4ab43b5'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'f0df428b-c80f-539e-bf82-a1e238614de3',
-  workflowStep: 'FAILED',
-  partitionId: '0000000a-a833-278e-8000-000a00000016'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'ffffffe6-1123-3924-8000-001ce56b1a69',
-  workflowStep: 'FAILED',
-  partitionId: 'e5942ad1-ffea-5fff-b8bf-cbc330c8d875'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '00000010-0018-1000-8000-001200000012',
-  workflowStep: 'FAILED',
-  partitionId: '0000001c-14d6-2f1c-a448-b7921b193167'
+  partitionId: '3175a360-765b-4aa5-8f60-4c1458623b20'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
-  totalIncomplete: 4,
-  markedFailed: 4,
+  totalIncomplete: 1,
+  markedFailed: 1,
+  reconciled: 0,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Marked incomplete operation as failed during recovery {
+  operationId: 'ffffffe9-0017-1000-8000-001b0000000e',
+  workflowStep: 'FAILED',
+  partitionId: '946e7581-fff9-5fff-88b0-bbe1d67a4e45'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 1,
+  reconciled: 0,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Marked incomplete operation as failed during recovery {
+  operationId: 'e536e0c2-ac88-3bf4-b086-f4eec86320f0',
+  workflowStep: 'FAILED',
+  partitionId: 'c128af4b-29fe-1976-b385-d5c7e527f7a6'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 1,
   reconciled: 0,
   errors: []
 }
@@ -98,19 +113,19 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: '0000001e-000a-1000-bdc8-88e0f5e7cd91',
+  operationId: 'eaf0a955-766d-51db-bfff-ffe9206aff71',
   workflowStep: 'FAILED',
-  partitionId: 'ac21e1bb-6793-3650-9343-5f0600000005'
+  partitionId: '31c785ca-0006-1000-b63d-603b0e737708'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '0000001a-26cf-4555-bfff-ffe9fffffff0',
+  operationId: 'fffffffb-9e6b-10ba-bfff-fff67a8441b1',
   workflowStep: 'FAILED',
-  partitionId: 'd22b693e-f9c6-5daf-ac50-e603ffffffe4'
+  partitionId: '4cedc7da-68a1-1587-8000-00100000001e'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '70f4eee0-0018-1000-bfff-fffb00000006',
+  operationId: '07ed6d13-0001-1000-a11d-bd73972a8be4',
   workflowStep: 'FAILED',
-  partitionId: 'eb89cf79-a652-46d1-8000-0016ebdf1127'
+  partitionId: '00000005-0ed1-5b4c-9208-fa2bffffffeb'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -121,116 +136,26 @@ Recovery process completed {
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 5, nodeId: 'test-node-1' }
-Marked incomplete operation as failed during recovery {
-  operationId: 'c8d10274-312f-1a03-826d-3881107fa8fb',
-  workflowStep: 'FAILED',
-  partitionId: '91e0859d-c969-17d2-9d79-aab8c1d3ecf4'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '2c1a3e79-2bd1-263f-beaa-8d82bfe638f1',
-  workflowStep: 'FAILED',
-  partitionId: '2eda3a50-a138-520f-b66b-d2bdcaa4aab7'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'd518fadc-d4fb-14ae-a37d-75cf9de3302f',
-  workflowStep: 'FAILED',
-  partitionId: 'ea0258e2-db70-20b7-9acb-1172d4c07464'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'eafe4227-758d-2715-8085-cf5a349ba7cf',
-  workflowStep: 'FAILED',
-  partitionId: '962a0cb7-38cc-5e59-a4d1-d54d9c337b47'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'a507885c-5c69-2a7c-8c50-f6d42b0a8092',
-  workflowStep: 'FAILED',
-  partitionId: 'b0f15014-52ae-295e-af0c-a6434432276d'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 5,
-  markedFailed: 5,
-  reconciled: 0,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
-Marked incomplete operation as failed during recovery {
-  operationId: '8c8258c3-000e-1000-8000-001c0000000c',
-  workflowStep: 'FAILED',
-  partitionId: '9aa1ff7d-3589-1019-9565-d31cbc427e28'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'e42540b5-79d1-3ed2-bfff-ffed6b05ece7',
-  workflowStep: 'FAILED',
-  partitionId: '42aaae30-000c-1000-8000-001ace23b34c'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 2,
-  markedFailed: 2,
-  reconciled: 0,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 5, nodeId: 'test-node-1' }
-Marked incomplete operation as failed during recovery {
-  operationId: 'bcfcf446-672a-34ab-9c8f-dd6d08085f06',
-  workflowStep: 'FAILED',
-  partitionId: 'f1707a92-9da3-4fcc-a186-af56765defb7'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '4b05f0bf-f0e6-3919-9c27-26007d874331',
-  workflowStep: 'FAILED',
-  partitionId: '1aff4061-e85e-2e30-a83f-e52a9787a14b'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'b8f0294c-846e-24f5-aaee-16b89454dc31',
-  workflowStep: 'FAILED',
-  partitionId: '65a1bd92-2ead-1b1a-ae75-58011d9ed19f'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '4d67572c-e50b-3f58-a8fd-a4064b4bb9b7',
-  workflowStep: 'FAILED',
-  partitionId: '95545753-cea6-3a97-a0ed-a49b03a4f79b'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '1f67f5e4-6f74-301f-aa3e-ee8d41697a4c',
-  workflowStep: 'FAILED',
-  partitionId: 'd6e03c3c-edf3-1143-813f-e31e66df6eff'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 5,
-  markedFailed: 5,
-  reconciled: 0,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 4, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: '00000013-0003-1000-afdc-206dfffffffa',
+  operationId: '00000000-000e-1000-bfff-ffe80000001a',
   workflowStep: 'FAILED',
-  partitionId: '00000016-001d-1000-8000-001c4db972a5'
+  partitionId: 'e14371f2-001a-1000-9ee5-fc349a57e300'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: 'fffffff5-17e1-4b02-8000-001c9a2b37ae',
+  operationId: '00000017-d592-2d56-bfff-fffa00000005',
   workflowStep: 'FAILED',
-  partitionId: 'ffffffe8-df5f-189f-8000-0005588c20bb'
+  partitionId: '11feba7e-4793-4012-8025-00da80ccf5eb'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '00000007-1fbe-1e7b-bfff-fffe40e13329',
+  operationId: '36bd0cfc-251f-5326-bfaa-e3010000000c',
   workflowStep: 'FAILED',
-  partitionId: '78bdf73c-fff2-5fff-b89f-7b830000000a'
+  partitionId: 'ffffffe1-000e-1000-a762-769ab6e1d074'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '0000001e-0003-1000-b31b-5d913788bf59',
+  operationId: 'c8fcfa72-8f23-48f0-8000-0003a69dcc11',
   workflowStep: 'FAILED',
-  partitionId: '0080f0f5-0019-1000-9c32-e5880000000f'
+  partitionId: 'ffffffe8-000b-1000-bc48-dec212a8bc23'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -241,21 +166,31 @@ Recovery process completed {
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: '872f3e1e-aadd-2833-9ed9-8c26fb8572ba',
+  operationId: 'af338110-100c-120e-8000-00136060377f',
   workflowStep: 'FAILED',
-  partitionId: 'b9c3e3a0-99ee-110d-8fb1-3ff7ebdcbe5d'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'd9698ae3-cbd4-3d30-a3ba-d271159caaaa',
-  workflowStep: 'FAILED',
-  partitionId: '47dc2fb7-134a-445d-b7b1-c2efbdea24b8'
+  partitionId: 'fffffff8-ae81-1025-95e5-05a10000001d'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
-  totalIncomplete: 2,
-  markedFailed: 2,
+  totalIncomplete: 1,
+  markedFailed: 1,
+  reconciled: 0,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Marked incomplete operation as failed during recovery {
+  operationId: '48c2f1d8-000f-1000-8000-001d4337a3fd',
+  workflowStep: 'FAILED',
+  partitionId: '4bcd74a9-0001-1000-a249-a72367a9dc12'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 1,
   reconciled: 0,
   errors: []
 }
@@ -263,24 +198,149 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
     # Subtest: all incomplete operations have terminal status after recovery
         ok 1 - All incomplete operations have terminal status after recovery
         1..1
-    ok 1 - all incomplete operations have terminal status after recovery # time=82.678ms
+    ok 1 - all incomplete operations have terminal status after recovery # time=95.054ms
     
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Reconciling SYNCING operation {
-  operationId: '870681f5-fffa-5fff-bf4b-08ff9dc57bc1',
-  partitionId: '8a115b5c-dae4-5b04-99ea-374c30fc591a',
-  targetNodeId: '00000000-8b8e-4d8d-aba8-48480b6a99e5'
+  operationId: 'b3b874a7-0005-1000-a7e1-793d711dd348',
+  partitionId: 'ef2afaf4-bc36-46c3-bfff-fff600000004',
+  targetNodeId: 'c7078ec1-f119-13c5-b30e-a9eaee1a930d'
+}
+Reconciled SYNCING operation to FAILED {
+  operationId: 'b3b874a7-0005-1000-a7e1-793d711dd348',
+  partitionId: 'ef2afaf4-bc36-46c3-bfff-fff600000004'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 0,
+  reconciled: 1,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Reconciling SYNCING operation {
+  operationId: '44da8d0b-fff6-5fff-aa95-69f000000008',
+  partitionId: '2338718c-6bb0-3984-8000-00066833946f',
+  targetNodeId: 'c3d87c97-ffe9-5fff-86af-c14d0000000e'
+}
+Reconciled SYNCING operation to FAILED {
+  operationId: '44da8d0b-fff6-5fff-aa95-69f000000008',
+  partitionId: '2338718c-6bb0-3984-8000-00066833946f'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 0,
+  reconciled: 1,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Reconciling SYNCING operation {
+  operationId: '8e9a5244-001c-1000-bfff-fffe0000001e',
+  partitionId: '99b8c995-b8ab-55a5-bfff-ffe700000005',
+  targetNodeId: 'be58b567-fff8-5fff-abfe-760fafe704bf'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 0,
+  reconciled: 1,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Reconciling SYNCING operation {
+  operationId: '0000000b-4eb6-50bc-9a75-e043fdb19eae',
+  partitionId: '5f0bb8e9-4221-534c-bfff-ffff945738ba',
+  targetNodeId: '0000001b-5ff6-20b1-bf5b-da140000001e'
+}
+Reconciled SYNCING operation to FAILED {
+  operationId: '0000000b-4eb6-50bc-9a75-e043fdb19eae',
+  partitionId: '5f0bb8e9-4221-534c-bfff-ffff945738ba'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 0,
+  reconciled: 1,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Reconciling SYNCING operation {
+  operationId: '00000006-fffa-5fff-bfff-ffe6fffffff3',
+  partitionId: '00000005-68c1-407e-8000-000700000001',
+  targetNodeId: '7bcb8b22-3f2b-4fe5-b549-583400000004'
+}
+Reconciled SYNCING operation to FAILED {
+  operationId: '00000006-fffa-5fff-bfff-ffe6fffffff3',
+  partitionId: '00000005-68c1-407e-8000-000700000001'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 0,
+  reconciled: 1,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Reconciling SYNCING operation {
+  operationId: '6f8edf5d-0000-1000-8596-a9c500000018',
+  partitionId: 'd4213fb5-fff0-5fff-8b07-ef820000000f',
+  targetNodeId: '6193c93f-34da-4e4d-a3df-2d41fffffffa'
+}
+Reconciled SYNCING operation to FAILED {
+  operationId: '6f8edf5d-0000-1000-8596-a9c500000018',
+  partitionId: 'd4213fb5-fff0-5fff-8b07-ef820000000f'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 0,
+  reconciled: 1,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Reconciling SYNCING operation {
+  operationId: 'ffffffe7-2a60-35d4-8785-9334a18adc60',
+  partitionId: '00000004-001a-1000-8000-0004fffffffe',
+  targetNodeId: '00000018-cb40-5b7a-8000-000a69d0efe2'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 0,
+  reconciled: 1,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Reconciling SYNCING operation {
+  operationId: '038c2d8a-ffec-5fff-a749-399d663dee4f',
+  partitionId: '0000001e-0015-1000-9702-b51b00000011',
+  targetNodeId: 'fffffffa-0015-1000-8626-7f2200000016'
 }
 Operation completed {
-  operationId: '870681f5-fffa-5fff-bf4b-08ff9dc57bc1',
+  operationId: '038c2d8a-ffec-5fff-a749-399d663dee4f',
   type: 'ADD',
-  partitionId: '8a115b5c-dae4-5b04-99ea-374c30fc591a',
-  targetNodeId: '00000000-8b8e-4d8d-aba8-48480b6a99e5'
+  partitionId: '0000001e-0015-1000-9702-b51b00000011',
+  targetNodeId: 'fffffffa-0015-1000-8626-7f2200000016'
 }
 Reconciled SYNCING operation to ACTIVE {
-  operationId: '870681f5-fffa-5fff-bf4b-08ff9dc57bc1',
-  partitionId: '8a115b5c-dae4-5b04-99ea-374c30fc591a'
+  operationId: '038c2d8a-ffec-5fff-a749-399d663dee4f',
+  partitionId: '0000001e-0015-1000-9702-b51b00000011'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -293,145 +353,38 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Reconciling SYNCING operation {
-  operationId: '0000000b-dff4-12b7-8000-001c00000010',
-  partitionId: '7ce9a58a-366b-55c3-9780-e047ffffffe4',
-  targetNodeId: 'f2860895-0009-1000-9ccf-28f30000000d'
+  operationId: '68e57ae0-0007-1000-8000-001cf29a9687',
+  partitionId: 'ffffffe4-515c-1058-bfff-fff2fffffff4',
+  targetNodeId: '00000017-ffff-5fff-ac6b-efb1ee0b510c'
+}
+Operation completed {
+  operationId: '68e57ae0-0007-1000-8000-001cf29a9687',
+  type: 'ADD',
+  partitionId: 'ffffffe4-515c-1058-bfff-fff2fffffff4',
+  targetNodeId: '00000017-ffff-5fff-ac6b-efb1ee0b510c'
+}
+Reconciled SYNCING operation to ACTIVE {
+  operationId: '68e57ae0-0007-1000-8000-001cf29a9687',
+  partitionId: 'ffffffe4-515c-1058-bfff-fff2fffffff4'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 0,
+  reconciled: 1,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Reconciling SYNCING operation {
+  operationId: '0000001e-e747-5c6a-8000-000700000005',
+  partitionId: '1a180192-001d-1000-90c4-4be3f44ed088',
+  targetNodeId: '6e193851-0002-1000-bbb5-4fd2e8dc6b6c'
 }
 Reconciled SYNCING operation to FAILED {
-  operationId: '0000000b-dff4-12b7-8000-001c00000010',
-  partitionId: '7ce9a58a-366b-55c3-9780-e047ffffffe4'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 1,
-  markedFailed: 0,
-  reconciled: 1,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
-Reconciling SYNCING operation {
-  operationId: 'eb62ff3e-000c-1000-9ec3-cdbaffffffec',
-  partitionId: 'abdda3dd-208f-1add-8000-000a2f0a27aa',
-  targetNodeId: '00000019-02fa-1a4c-8000-0019a843adb9'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 1,
-  markedFailed: 0,
-  reconciled: 1,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
-Reconciling SYNCING operation {
-  operationId: '0000000e-2f6d-2c60-8896-08f900000007',
-  partitionId: 'ffffffe5-ffec-5fff-8000-001a8c167417',
-  targetNodeId: '00000012-0008-1000-bfff-fff4fffffff6'
-}
-Reconciled SYNCING operation to FAILED {
-  operationId: '0000000e-2f6d-2c60-8896-08f900000007',
-  partitionId: 'ffffffe5-ffec-5fff-8000-001a8c167417'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 1,
-  markedFailed: 0,
-  reconciled: 1,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
-Reconciling SYNCING operation {
-  operationId: '0000001b-6e2a-40b9-943e-e08c0000000e',
-  partitionId: 'd554a2bc-e442-3032-bfff-fffc00000007',
-  targetNodeId: 'd93265cf-ef83-14f6-ae47-18a80000001b'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 1,
-  markedFailed: 0,
-  reconciled: 1,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
-Reconciling SYNCING operation {
-  operationId: 'e0a82450-ffea-5fff-8000-0019df88c951',
-  partitionId: '00000017-4fde-14db-8000-000700000014',
-  targetNodeId: '00000000-c7dd-242d-8000-00172edfb43a'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 1,
-  markedFailed: 0,
-  reconciled: 1,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
-Reconciling SYNCING operation {
-  operationId: '00000003-0005-1000-8c79-146e00000014',
-  partitionId: '00000007-de36-2673-bfff-fff1030be420',
-  targetNodeId: '00000003-98bc-4206-8839-252dca9a6aeb'
-}
-Reconciled SYNCING operation to FAILED {
-  operationId: '00000003-0005-1000-8c79-146e00000014',
-  partitionId: '00000007-de36-2673-bfff-fff1030be420'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 1,
-  markedFailed: 0,
-  reconciled: 1,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
-Reconciling SYNCING operation {
-  operationId: '5cd419f6-ffe3-5fff-8000-000dfffffff4',
-  partitionId: 'ffffffed-fffc-5fff-a5aa-e9d50000001f',
-  targetNodeId: '00000011-0012-1000-bfff-ffe200000008'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 1,
-  markedFailed: 0,
-  reconciled: 1,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
-Reconciling SYNCING operation {
-  operationId: '3a6c71e3-3391-4d2c-8104-b9407fb4705b',
-  partitionId: '00000017-1814-2dcc-8000-0006fffffff1',
-  targetNodeId: 'bc31ad1c-bdd8-4a70-9085-1d41f1b2548b'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 1,
-  markedFailed: 0,
-  reconciled: 1,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
-Reconciling SYNCING operation {
-  operationId: '20e447e4-beec-2c31-99c0-6313ffffffe1',
-  partitionId: '00000017-0015-1000-bfff-fffb55481c44',
-  targetNodeId: '7ad4638d-54e5-4998-82e5-05543031728a'
-}
-Reconciled SYNCING operation to FAILED {
-  operationId: '20e447e4-beec-2c31-99c0-6313ffffffe1',
-  partitionId: '00000017-0015-1000-bfff-fffb55481c44'
+  operationId: '0000001e-e747-5c6a-8000-000700000005',
+  partitionId: '1a180192-001d-1000-90c4-4be3f44ed088'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -444,74 +397,74 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
     # Subtest: SYNCING operations are reconciled to terminal state
         ok 1 - SYNCING operations are reconciled to terminal state
         1..1
-    ok 2 - SYNCING operations are reconciled to terminal state # time=11.116ms
+    ok 2 - SYNCING operations are reconciled to terminal state # time=13.734ms
     
 Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
-Marked incomplete removal operation as failed during recovery {
-  operationId: '4e486a5d-b043-3de5-9de9-e9c300000004',
-  workflowStep: 'FAILED',
-  partitionId: '00000019-e39a-35f0-a39f-d18e878e6651'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '32ba1b1e-21f4-1121-8000-001150718256',
-  workflowStep: 'FAILED',
-  partitionId: '613a4783-c431-5781-b645-39c9091feaeb'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 2,
-  markedFailed: 2,
-  reconciled: 0,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 4, nodeId: 'test-node-1' }
-Marked incomplete removal operation as failed during recovery {
-  operationId: '615af65e-881f-1746-8394-884a35e051fc',
-  workflowStep: 'FAILED',
-  partitionId: 'bd2021b9-4bd5-4f04-907c-5f938861c63c'
+Reconciling SYNCING operation {
+  operationId: 'e353a32e-a87b-57dc-8000-000e00000001',
+  partitionId: '0000001e-804e-26c0-bfff-ffe6e5168cc8',
+  targetNodeId: '16d662f3-ea4f-5785-814e-1e400000000a'
 }
-Marked incomplete removal operation as failed during recovery {
-  operationId: 'bc1292ec-4720-495e-9bfb-f299b144a86d',
-  workflowStep: 'FAILED',
-  partitionId: '4ed7184a-e60d-21ad-adc5-29d890c0c53f'
-}
-Marked incomplete removal operation as failed during recovery {
-  operationId: '12966deb-d5a6-3e11-a2f2-8af678be1e57',
-  workflowStep: 'FAILED',
-  partitionId: '323ed885-b030-41d4-8fc3-b63cc19eb07d'
+Reconciling SYNCING operation {
+  operationId: '72967214-8a08-2278-8000-001b00000003',
+  partitionId: 'a9415dcd-e9b9-4835-939f-8eff988adeac',
+  targetNodeId: '93f248e4-001c-1000-be7f-941ef31f2aa3'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: 'fb4e04de-a261-2aab-a6ba-76fe7c6f722e',
+  operationId: 'd1ec59a0-fffc-5fff-bfff-fff83330ad2e',
   workflowStep: 'FAILED',
-  partitionId: '43064022-5503-3955-b32b-73eed8d3ae49'
+  partitionId: '00000005-fffd-5fff-a6c7-195fffffffed'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: '6927aab0-7cef-32af-bfff-ffe70000000d',
+  workflowStep: 'FAILED',
+  partitionId: 'ffffffe3-769c-28c0-ae5f-4bef0000001b'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
   totalIncomplete: 4,
-  markedFailed: 4,
-  reconciled: 0,
+  markedFailed: 2,
+  reconciled: 2,
   errors: []
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
 Reconciling SYNCING operation {
-  operationId: '0000000d-001a-1000-bfff-fffcb7280aee',
-  partitionId: '00000004-da58-584a-bfff-ffedffffffe8',
-  targetNodeId: 'ad9cad27-35ed-3117-bfbd-43a80000001f'
+  operationId: 'ccc7c98f-a2a0-5fd7-9c86-16a6f2dd0c72',
+  partitionId: 'adab9995-d3ab-4820-84a3-676f84ca6c8e',
+  targetNodeId: '116ae0bb-cf14-1d20-b85b-02bae873e5bd'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '0000000c-22fc-138c-8ea7-affb53fe5def',
+  operationId: '58a07867-4a47-50c7-9a17-19753a3f4f16',
   workflowStep: 'FAILED',
-  partitionId: '0000000c-fffb-5fff-bfff-fffffc808302'
+  partitionId: '2905d150-4649-5044-b250-7f03a27e7be2'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: 'eb983bad-ff49-58bf-8ca4-b5378f44d92e',
+  workflowStep: 'FAILED',
+  partitionId: 'd46e8f0f-f58e-411d-beb3-e94aeb8ba2f5'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
-  totalIncomplete: 2,
-  markedFailed: 1,
+  totalIncomplete: 3,
+  markedFailed: 2,
+  reconciled: 1,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Reconciling SYNCING operation {
+  operationId: '85167034-226e-5590-9ccc-f98efe71fccd',
+  partitionId: '723b5875-13f5-53f7-bd36-e71731c4eda4',
+  targetNodeId: '063d4451-86a0-1d1d-b2dd-3a712f2df0b8'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 0,
   reconciled: 1,
   errors: []
 }
@@ -519,99 +472,49 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 5, nodeId: 'test-node-1' }
 Marked incomplete removal operation as failed during recovery {
-  operationId: '079170da-540f-1a5c-baa6-4c32a48bf96d',
+  operationId: 'cc30dd3c-b8c5-12c2-9552-c031952b3dfb',
   workflowStep: 'FAILED',
-  partitionId: '5dd5d2f3-acd8-15ae-9fe0-8f51cfc1c49d'
-}
-Reconciling SYNCING operation {
-  operationId: 'db9a945a-fb3e-164e-98ed-bfe93ff2e049',
-  partitionId: 'b8bab9c9-57d7-426d-84c8-ef9dd747e5aa',
-  targetNodeId: 'b33868be-e2dc-4056-ab8e-f627a14c016d'
+  partitionId: '2c47c70b-488c-4d8b-806b-763fcd7d29f2'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '17be59bd-c1d3-1fbe-86d4-1c298d4e394e',
+  operationId: '0c07c9e8-6d45-47c0-9cfc-04dfe4fa8ce1',
   workflowStep: 'FAILED',
-  partitionId: '56159237-5d9f-271e-acf1-f43abcdacc44'
+  partitionId: 'a3971fd8-0107-59f6-9746-d9d5a696f736'
 }
-Marked incomplete removal operation as failed during recovery {
-  operationId: '7461625c-aad7-3282-9081-222653bd0825',
+Marked incomplete operation as failed during recovery {
+  operationId: '37fd692b-2689-491d-95af-a32960dbcb34',
   workflowStep: 'FAILED',
-  partitionId: '6c937ba7-6f2f-4236-8171-d2cbfb0d4b51'
+  partitionId: 'd7e6575b-1821-2e5c-9140-086158099d3e'
 }
 Reconciling SYNCING operation {
-  operationId: 'f799be6d-546d-1dec-a272-053a18ee65d2',
-  partitionId: '7b758f76-8a10-5f39-bbe8-58b8e0f7124a',
-  targetNodeId: 'e09bb3ee-55fb-3cd9-b9b0-058be97c9cfa'
+  operationId: '6e0e8e1b-acb2-102d-8af6-02fd16e18439',
+  partitionId: 'c8844452-d0a5-3374-ae0f-90a2f11b4101',
+  targetNodeId: 'c2612abe-5c43-46d4-bec5-a5f3792db864'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: '0abe465d-bfe5-13b0-b8a0-987fab05898a',
+  workflowStep: 'FAILED',
+  partitionId: 'b3601e9e-d45d-3887-8557-57d4e7932922'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
   totalIncomplete: 5,
-  markedFailed: 3,
-  reconciled: 2,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
-Reconciling SYNCING operation {
-  operationId: '0000000a-fff3-5fff-8000-0008ffffffe2',
-  partitionId: '0000000e-2330-579b-b57c-2adec1cddad3',
-  targetNodeId: '00000017-e16a-1745-984e-a8a000caeb41'
-}
-Marked incomplete removal operation as failed during recovery {
-  operationId: '9f2de885-0014-1000-8000-00020000000d',
-  workflowStep: 'FAILED',
-  partitionId: 'e54be892-76c1-5ba8-9ba3-5531ffffffe5'
-}
-Reconciling SYNCING operation {
-  operationId: '00000000-fff2-5fff-bfff-fffa263dae8f',
-  partitionId: '3049043a-0017-1000-906f-bb9b00000006',
-  targetNodeId: '00000010-9d6e-2016-bfff-fff9ffffffe3'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 3,
-  markedFailed: 1,
-  reconciled: 2,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
-Marked incomplete operation as failed during recovery {
-  operationId: '19aaa414-ab07-28d8-9d48-4d88253ebbc0',
-  workflowStep: 'FAILED',
-  partitionId: 'b17b39ec-8e75-198d-93e5-52ec155a34cb'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '521e3864-4b7b-17a6-b6fd-a20f3c9b3729',
-  workflowStep: 'FAILED',
-  partitionId: '91249af9-1aa6-5be4-83f0-7d65c157e8cf'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '526683d5-0db7-2261-8450-69ba02c92dbc',
-  workflowStep: 'FAILED',
-  partitionId: '54c6c3bc-d48c-4c28-a674-2d52ab35ba6a'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 3,
-  markedFailed: 3,
-  reconciled: 0,
+  markedFailed: 4,
+  reconciled: 1,
   errors: []
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: '23c750f7-6c78-4c33-9438-3937123dc6a8',
+  operationId: '1eb26696-6468-5cec-bfff-ffeb1c4bfc9e',
   workflowStep: 'FAILED',
-  partitionId: '246e252b-f034-2ba8-8905-240e15c34913'
+  partitionId: '7f2cfbec-f3b4-2f50-bfff-fff500000011'
 }
-Marked incomplete removal operation as failed during recovery {
-  operationId: '9bf6b332-1e58-3d7a-9077-769969c4cd09',
+Marked incomplete operation as failed during recovery {
+  operationId: '8a19aaeb-9e09-55a9-ad89-c03c1104e2d4',
   workflowStep: 'FAILED',
-  partitionId: '2f22ada6-033d-4a0e-9c2c-097d0f084c53'
+  partitionId: 'fffffff1-8507-1abf-bfff-ffe7cca9693e'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -622,21 +525,36 @@ Recovery process completed {
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Marked incomplete removal operation as failed during recovery {
+  operationId: '09fa718b-ffe1-5fff-acbb-b9446b4e605f',
+  workflowStep: 'FAILED',
+  partitionId: 'b05c760b-3679-1971-8000-00012c3ad3e9'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 1,
+  reconciled: 0,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: '53499ebe-6dbd-4e64-8d18-d5150f6cad8a',
+  operationId: '54c3a81b-23e0-11ff-bfff-fffe0000001c',
   workflowStep: 'FAILED',
-  partitionId: '113a3e0e-d8ae-496e-98a0-8db2d3de5a17'
+  partitionId: 'fffffff8-50c3-2084-9557-66c800000016'
 }
 Marked incomplete removal operation as failed during recovery {
-  operationId: 'd823495a-f7ad-4775-997d-c8b984356e75',
+  operationId: '01c07366-0008-1000-8000-0002e2449e1f',
   workflowStep: 'FAILED',
-  partitionId: '958ac251-0fe4-321f-879a-33f9f2036280'
+  partitionId: '00000015-5a8a-2b23-b8f2-c4745c17879a'
 }
-Marked incomplete operation as failed during recovery {
-  operationId: 'afeae298-eb9d-5b27-aa4d-8489a43602cf',
+Marked incomplete removal operation as failed during recovery {
+  operationId: 'ffffffe3-0016-1000-bfff-fffea7c6523b',
   workflowStep: 'FAILED',
-  partitionId: '6a21b0e4-ff5f-56fb-bc34-54dafc57b1eb'
+  partitionId: 'ffffffe5-0002-1000-a478-b9e300000001'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -647,59 +565,74 @@ Recovery process completed {
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: 'e3213054-50e5-2530-9632-14e40000000e',
+  operationId: '0000000d-000c-1000-aea6-fb83e97f4845',
   workflowStep: 'FAILED',
-  partitionId: 'fffffff1-5c11-3861-bfff-fffe00000010'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'ee81d2d5-000d-1000-bfff-ffe6723b86a4',
-  workflowStep: 'FAILED',
-  partitionId: '8c939752-9549-2bbe-9b00-0a09036117e0'
-}
-Marked incomplete removal operation as failed during recovery {
-  operationId: '6c944357-ffe1-5fff-8000-00031ffe4aad',
-  workflowStep: 'FAILED',
-  partitionId: '0000001b-001a-1000-b131-94db00000002'
+  partitionId: '0ea9917f-0006-1000-827d-483cd23157d6'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
-  totalIncomplete: 3,
-  markedFailed: 3,
+  totalIncomplete: 1,
+  markedFailed: 1,
   reconciled: 0,
   errors: []
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
-Reconciling SYNCING operation {
-  operationId: '5326ed64-062d-52bb-9ae5-e6b48b6a22d4',
-  partitionId: '7192ad63-d425-567a-92ef-5550bbb40cca',
-  targetNodeId: '86018592-f998-48b5-9a50-dfd2f024e1d4'
+Found incomplete operations during recovery { count: 5, nodeId: 'test-node-1' }
+Marked incomplete operation as failed during recovery {
+  operationId: '0000001c-4820-13c0-bfff-ffeced8f6350',
+  workflowStep: 'FAILED',
+  partitionId: '7d63811a-7919-197f-83d9-00e9817d82ed'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '09f07ffb-47ec-2cfd-a304-90b75d18bfe0',
+  operationId: '00000009-9f0c-23e6-bfff-fff63acea008',
   workflowStep: 'FAILED',
-  partitionId: '9eadc5cf-7c8c-3d49-bebc-d462117cd732'
+  partitionId: 'f2ad58bf-2072-17e8-bfff-fffe688fa523'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: '43cb877a-11a4-3488-aaf5-2a6804b1f821',
+  operationId: 'e0342043-ffef-5fff-8000-0006fffffffe',
   workflowStep: 'FAILED',
-  partitionId: 'b44e0b5f-63ed-440c-b2f6-e68024bd2af4'
+  partitionId: '103dcf55-ffef-5fff-9119-03238e3ac1b1'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: '4b572527-0006-1000-be9c-7cd5778cd844',
+  workflowStep: 'FAILED',
+  partitionId: '00000006-7ca2-3c5d-98bd-246dffffffe9'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: 'd140b728-ffe8-5fff-8000-000de2503771',
+  workflowStep: 'FAILED',
+  partitionId: '0000000d-0011-1000-bfff-fff7ffffffe1'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
-  totalIncomplete: 3,
-  markedFailed: 2,
-  reconciled: 1,
+  totalIncomplete: 5,
+  markedFailed: 5,
+  reconciled: 0,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Marked incomplete operation as failed during recovery {
+  operationId: 'c34e3b3e-a274-1aa7-ae46-d13e3fcc8e1e',
+  workflowStep: 'FAILED',
+  partitionId: '981dabf5-502d-59ca-9556-ea048a985e67'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 1,
+  reconciled: 0,
   errors: []
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
     # Subtest: no operations left in transitional state after recovery
         ok 1 - No operations left in transitional state after recovery
         1..1
-    ok 3 - no operations left in transitional state after recovery # time=12.708ms
+    ok 3 - no operations left in transitional state after recovery # time=16.764ms
     
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
@@ -741,154 +674,19 @@ Recovery process completed {
         ok 6 - SYNCING op is ACTIVE
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..6
-    ok 4 - recovery result counts match actual state changes # time=1.401ms
+    ok 4 - recovery result counts match actual state changes # time=9.946ms
     
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: 'efa93c85-eb5d-2d2c-bf1e-30d65101f216',
+  operationId: '96e82fa6-5a3b-20d9-a3ae-4680d14307e0',
   workflowStep: 'FAILED',
-  partitionId: 'dbb8660a-2f0f-2024-bdad-2e9e0000000e'
+  partitionId: '289c53c1-d976-5393-8894-0a3e8b6b6ae9'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: 'fd36b6b1-a873-2437-a282-82ec1cf86310',
+  operationId: 'ce95e804-3beb-30f0-b71c-eeb79eb6401c',
   workflowStep: 'FAILED',
-  partitionId: 'f6ac8a30-fff8-5fff-8000-001c8bfff55b'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 2,
-  markedFailed: 2,
-  reconciled: 0,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
-Marked incomplete operation as failed during recovery {
-  operationId: 'd08d3dfa-a3e6-3aac-9c00-d68900000013',
-  workflowStep: 'FAILED',
-  partitionId: 'cca72e63-0009-1000-8000-000f730dafdc'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'ffffffe8-ca3a-4b67-8425-e68600000007',
-  workflowStep: 'FAILED',
-  partitionId: '2dc5f208-fffe-5fff-a09b-f91300000014'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'fffffff1-872b-2338-8000-001a00000004',
-  workflowStep: 'FAILED',
-  partitionId: '0000001d-20a2-3805-8dc5-884900000017'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 3,
-  markedFailed: 3,
-  reconciled: 0,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
-Marked incomplete operation as failed during recovery {
-  operationId: '769de6aa-dc9e-54e4-80e5-892a73714cf5',
-  workflowStep: 'FAILED',
-  partitionId: 'bcdbdffe-ce07-4e70-95f4-84fcfc806974'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'c251eb0a-0517-3b71-83cb-04d0d7f23d32',
-  workflowStep: 'FAILED',
-  partitionId: '913ff1a1-3349-4482-83f8-36bee2982e58'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '5b97955c-c06e-1522-b723-e69cfa8c22ee',
-  workflowStep: 'FAILED',
-  partitionId: '7851df70-ed0a-1796-880a-058b92674037'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 3,
-  markedFailed: 3,
-  reconciled: 0,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
-Marked incomplete operation as failed during recovery {
-  operationId: '00000008-fff3-5fff-b2f5-1bb49c84109f',
-  workflowStep: 'FAILED',
-  partitionId: 'ad3a80b1-001d-1000-a6f1-bff95eb1904a'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '00000018-0014-1000-8000-00053b835f4f',
-  workflowStep: 'FAILED',
-  partitionId: '419ba59d-9bf9-36ac-8000-001ce6a2bb7e'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 2,
-  markedFailed: 2,
-  reconciled: 0,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
-Marked incomplete operation as failed during recovery {
-  operationId: '2bf80f6c-000d-1000-8000-00081bec4be5',
-  workflowStep: 'FAILED',
-  partitionId: 'ffffffeb-5bf7-2c6f-8389-338e00000002'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '1de6018b-f04f-482a-8000-001cba101922',
-  workflowStep: 'FAILED',
-  partitionId: '5d3fb124-05d8-3f89-b707-a14a0000001e'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '00000013-000c-1000-8753-b200ffffffe5',
-  workflowStep: 'FAILED',
-  partitionId: '0000001d-e657-18e0-8000-00007e79cc7d'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 3,
-  markedFailed: 3,
-  reconciled: 0,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
-Marked incomplete operation as failed during recovery {
-  operationId: '0000001d-5bcc-2004-be0f-a9a100000006',
-  workflowStep: 'FAILED',
-  partitionId: '981f4ace-0908-4f96-bfff-fff4e4b9f723'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: '74d6672c-82c8-4587-ac5f-559c00000019',
-  workflowStep: 'FAILED',
-  partitionId: '11ef4c23-0007-1000-99bf-5435213b12eb'
-}
-Recovery process completed {
-  nodeId: 'test-node-1',
-  totalIncomplete: 2,
-  markedFailed: 2,
-  reconciled: 0,
-  errors: []
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-Starting recovery process { nodeId: 'test-node-1' }
-Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
-Marked incomplete operation as failed during recovery {
-  operationId: '00000008-3d2e-4bd4-bfff-ffe5ffffffec',
-  workflowStep: 'FAILED',
-  partitionId: 'f9d1df8c-5dd6-5652-9180-49fcffffffec'
-}
-Marked incomplete operation as failed during recovery {
-  operationId: 'ffffffe2-0009-1000-bfff-fff2dcfe4d82',
-  workflowStep: 'FAILED',
-  partitionId: '7aa03688-455b-566f-bfff-ffedfffffff1'
+  partitionId: '7e61be83-33f2-34ab-b316-22fdec877a9a'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -901,9 +699,9 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: '00000006-0006-1000-bc1b-de5c04689d0e',
+  operationId: '88b55b96-238e-4408-aeda-a1355fa52daf',
   workflowStep: 'FAILED',
-  partitionId: '54faf465-5773-3894-8000-0015ffffffe5'
+  partitionId: 'e0996fe5-99c2-5ace-a0c4-7a05418f6b11'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -916,14 +714,14 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: '701b184a-fff3-5fff-8000-00087b9d7cb5',
+  operationId: '5af38990-aafe-1f48-97c7-179331d842dc',
   workflowStep: 'FAILED',
-  partitionId: '31ad8638-073c-54bb-8000-00087bcce4ed'
+  partitionId: 'e2fa90bf-3fbf-3889-931b-ddbd0b17f63c'
 }
 Marked incomplete operation as failed during recovery {
-  operationId: 'd6255e7b-ffd9-59ef-8dfd-e47200000001',
+  operationId: '1b880d4d-fcb3-2be9-ab64-9c6f6efb651b',
   workflowStep: 'FAILED',
-  partitionId: '6aef94b9-0012-1000-86f3-6fb500000007'
+  partitionId: '543f5cd6-1177-2842-ad33-4b5106adee3a'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -936,14 +734,139 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete operation as failed during recovery {
-  operationId: 'd982340e-f6f3-3758-8657-12fbb6ba5f48',
+  operationId: 'd4f6588e-6827-1a6f-bd05-b84ae2039791',
   workflowStep: 'FAILED',
-  partitionId: '835241ad-eaa1-226e-bb29-56b69810e5db'
+  partitionId: 'a407e860-6561-26c1-8a68-76d490394f58'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
   totalIncomplete: 1,
   markedFailed: 1,
+  reconciled: 0,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
+Marked incomplete operation as failed during recovery {
+  operationId: 'dd939803-0004-1000-89d2-8753b0d10a46',
+  workflowStep: 'FAILED',
+  partitionId: 'b19810c9-0603-37d9-8d33-7aca00000004'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: '6be985df-dda4-40bb-86c5-bee40000000a',
+  workflowStep: 'FAILED',
+  partitionId: 'ffffffe0-001e-1000-a8ad-da0f00000018'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 2,
+  markedFailed: 2,
+  reconciled: 0,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
+Marked incomplete operation as failed during recovery {
+  operationId: 'd6fe28ab-ffe1-5fff-bfff-fffb670af633',
+  workflowStep: 'FAILED',
+  partitionId: '00000012-ffed-5fff-8000-00050000001f'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 1,
+  markedFailed: 1,
+  reconciled: 0,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
+Marked incomplete operation as failed during recovery {
+  operationId: 'fffffff1-0002-1000-8000-0015ecce4abb',
+  workflowStep: 'FAILED',
+  partitionId: '6b79a6d3-6f49-2e65-8000-00010000001a'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: 'ffffffeb-d7a3-1406-ad4b-7616d2b22cf0',
+  workflowStep: 'FAILED',
+  partitionId: '7c0ee756-fff7-5fff-8000-0013a2f6764e'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: '0000001b-c54e-5e07-bfff-ffe9e410cf6a',
+  workflowStep: 'FAILED',
+  partitionId: '65eac3a1-0015-1000-bfff-fff00000001b'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 3,
+  markedFailed: 3,
+  reconciled: 0,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
+Marked incomplete operation as failed during recovery {
+  operationId: 'fffffffd-001d-1000-8708-49c50000001c',
+  workflowStep: 'FAILED',
+  partitionId: 'fffffffb-27c8-3ea9-8000-000600000009'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: '2626698d-ffe7-5fff-8a40-24c400000001',
+  workflowStep: 'FAILED',
+  partitionId: '0000000c-0003-1000-a6e2-b15500000004'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 2,
+  markedFailed: 2,
+  reconciled: 0,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 3, nodeId: 'test-node-1' }
+Marked incomplete operation as failed during recovery {
+  operationId: '573d2661-eee5-5245-86f2-839d711127f6',
+  workflowStep: 'FAILED',
+  partitionId: '249fb188-1bf2-54f5-93a1-e01e1bbb2044'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: '106051a6-02b7-4db6-8ab3-2fe0c85fa030',
+  workflowStep: 'FAILED',
+  partitionId: 'e51a3404-a530-5202-bb6a-4408ed2fbe44'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: '638952a9-73a8-5dc1-9f78-075cfbe9eb82',
+  workflowStep: 'FAILED',
+  partitionId: '2d677304-e48b-5903-8ede-75cd86bb32d3'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 3,
+  markedFailed: 3,
+  reconciled: 0,
+  errors: []
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Starting recovery process { nodeId: 'test-node-1' }
+Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
+Marked incomplete operation as failed during recovery {
+  operationId: 'b5d29664-1756-40cc-bdb0-2378584f4efd',
+  workflowStep: 'FAILED',
+  partitionId: 'c639c6f1-d7e8-5c3c-b577-8583a1c3e5e0'
+}
+Marked incomplete operation as failed during recovery {
+  operationId: '2b8d2b39-b003-427c-8203-7c582d4f615a',
+  workflowStep: 'FAILED',
+  partitionId: 'b747ae64-fadb-31c1-8049-d60a3009bf8d'
+}
+Recovery process completed {
+  nodeId: 'test-node-1',
+  totalIncomplete: 2,
+  markedFailed: 2,
   reconciled: 0,
   errors: []
 }
@@ -951,14 +874,14 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
     # Subtest: operations are loaded into memory during recovery
         ok 1 - Operations are loaded into memory during recovery
         1..1
-    ok 5 - operations are loaded into memory during recovery # time=7.923ms
+    ok 5 - operations are loaded into memory during recovery # time=31.757ms
     
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete removal operation as failed during recovery {
-  operationId: '00000007-001a-1000-aa20-9c6c00000006',
+  operationId: '683b52b6-001d-1000-8000-001500000008',
   workflowStep: 'FAILED',
-  partitionId: '00000015-001e-1000-8000-00180000001c'
+  partitionId: '90a08006-fff0-5fff-af08-3695fffffff3'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -971,9 +894,9 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete removal operation as failed during recovery {
-  operationId: '0000000d-fff8-5fff-8000-000737cab6b9',
+  operationId: '0000000e-52ba-5997-8000-00060000001b',
   workflowStep: 'FAILED',
-  partitionId: '5456fbc4-4553-2b02-8754-d63c00000017'
+  partitionId: 'ffffffef-0016-1000-bfff-fff800000013'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -986,9 +909,9 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete removal operation as failed during recovery {
-  operationId: 'fffffff3-c691-5886-bfff-fff7cfd18b51',
+  operationId: '0000000c-541b-59c9-bfff-ffeeffffffe4',
   workflowStep: 'FAILED',
-  partitionId: '0000000e-0010-1000-8000-001700000006'
+  partitionId: '0f4d0a2c-ffe9-5fff-8000-00005a8de249'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -1001,9 +924,9 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete removal operation as failed during recovery {
-  operationId: '0000000f-0005-1000-8000-000611f7309c',
+  operationId: '00000016-cb90-158a-b17f-be44fffffff4',
   workflowStep: 'FAILED',
-  partitionId: '83fbd5c2-0019-1000-834f-16ef0000000a'
+  partitionId: 'f958f70b-000d-1000-bfff-ffe8ffffffeb'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -1016,9 +939,9 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete removal operation as failed during recovery {
-  operationId: '00000001-3cd5-1d6d-8000-000000000011',
+  operationId: '00000013-bf00-5ad7-8000-0015137e6ec8',
   workflowStep: 'FAILED',
-  partitionId: '00000011-ffff-5fff-969d-3b559b381ca1'
+  partitionId: '00000013-80bc-1a3c-bc93-354445ad0620'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -1031,9 +954,9 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete removal operation as failed during recovery {
-  operationId: 'ffffffe1-5a4a-34d4-8000-0015717e05aa',
+  operationId: '1c7b2b13-93b8-10e7-87f5-4f76ffffffe0',
   workflowStep: 'FAILED',
-  partitionId: 'e292d09e-b342-5381-8000-000fffffffe2'
+  partitionId: '0000001b-001e-1000-bfff-fff6ffffffe8'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -1046,9 +969,9 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete removal operation as failed during recovery {
-  operationId: 'ffffffff-2bb7-225e-bfff-ffe400000019',
+  operationId: '33448ddb-fff5-5fff-949e-91046759a484',
   workflowStep: 'FAILED',
-  partitionId: '325cf881-0f8a-1dc3-ad75-fbaf4b274fba'
+  partitionId: 'ffffffe3-000d-1000-a983-680f00000000'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -1061,9 +984,9 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete removal operation as failed during recovery {
-  operationId: '836c2803-000c-1000-8000-000e36ec4b12',
+  operationId: 'fffffffb-7b1c-5e72-bfff-ffe400000018',
   workflowStep: 'FAILED',
-  partitionId: 'fc8778e3-778f-40f6-8145-85acaf4d48b2'
+  partitionId: '58c933a4-000a-1000-8ab6-736212f89241'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -1076,9 +999,9 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete removal operation as failed during recovery {
-  operationId: '270d9503-0009-1000-bfff-fffc00000009',
+  operationId: '00000019-3672-4ee5-b924-9bfb16d6c322',
   workflowStep: 'FAILED',
-  partitionId: '7295e458-330c-3b0a-b1e5-ce61ffffffe8'
+  partitionId: '00000005-9957-2aae-8000-00072cac1eb7'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -1091,9 +1014,9 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 1, nodeId: 'test-node-1' }
 Marked incomplete removal operation as failed during recovery {
-  operationId: '0000001b-b5fa-2d50-8000-0005ffffffe8',
+  operationId: 'da34950f-0d01-54c5-8000-000dc9d699dd',
   workflowStep: 'FAILED',
-  partitionId: '6804c1a2-2f65-35f1-8000-001b1513aa35'
+  partitionId: 'ffffffe8-62f6-449e-8000-00150000001f'
 }
 Recovery process completed {
   nodeId: 'test-node-1',
@@ -1106,7 +1029,7 @@ Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 
     # Subtest: REMOVE operations in STOPPING are handled
         ok 1 - REMOVE operations in STOPPING are handled
         1..1
-    ok 6 - REMOVE operations in STOPPING are handled # time=5.212ms
+    ok 6 - REMOVE operations in STOPPING are handled # time=15.154ms
     
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 0, nodeId: 'test-node-1' }
@@ -1123,7 +1046,7 @@ Recovery process completed {
         ok 3 - No operations reconciled
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..3
-    ok 7 - completed operations are not affected by recovery # time=0.732ms
+    ok 7 - completed operations are not affected by recovery # time=1.582ms
     
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 0, nodeId: 'test-node-1' }
@@ -1138,7 +1061,7 @@ Recovery process completed {
         ok 1 - No incomplete operations
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..1
-    ok 8 - failed operations are not reprocessed # time=0.629ms
+    ok 8 - failed operations are not reprocessed # time=1.437ms
     
 Starting recovery process { nodeId: 'test-node-1' }
 Found incomplete operations during recovery { count: 2, nodeId: 'test-node-1' }
@@ -1166,11 +1089,11 @@ Recovery process completed {
         ok 4 - REMOVE op is FAILED
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..4
-    ok 9 - recovery handles mixed operation types # time=1.292ms
+    ok 9 - recovery handles mixed operation types # time=2.336ms
     
     1..9
-ok 1 - Property 9: No Orphaned Replicas After Recovery # time=131.267ms
+ok 1 - Property 9: No Orphaned Replicas After Recovery # time=208.809ms
 
 1..1
 # { total: 19, pass: 19 }
-# time=139.91ms
+# time=238.863ms

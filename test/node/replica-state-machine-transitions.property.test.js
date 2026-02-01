@@ -32,7 +32,7 @@ function createMockCDCService() {
  * Create a mock system table cache.
  * @return {Object} Mock system table cache.
  */
-function createMockSystemTableCache() {
+function _createMockSystemTableCache() {
   return {
     filter: (_tableName, _predicate) => [],
     get: (_tableName, _key) => null,

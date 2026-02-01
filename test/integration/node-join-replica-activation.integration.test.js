@@ -14,14 +14,16 @@ import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {AddressManager} from '../../src/address/address-manager.js';
-import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {URL} from 'url';
+import {
+  initializeTestEnvironment,
+  cleanupTestEnvironment,
+  getUniquePort,
+  TEST_CONFIG,
+} from './helpers/cluster-test-helpers.js';
 
 function createInProcHttpPost(seedApi) {
   return async (url, body) => {
@@ -36,58 +38,6 @@ function createInProcHttpPost(seedApi) {
     }
     return res.json();
   };
-}
-
-/**
- * Initialize test environment with fast Raft elections.
- */
-function initializeTestEnvironment() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  NodeService.resetInstance();
-  AddressManager.resetInstance();
-  ServiceThreadManager.resetInstance();
-
-  const config = ConfigurationManager.getInstance();
-  config.initialize({
-    node: {id: 'test-node'},
-    logging: {level: 'error'},
-    transport: {wsHost: '127.0.0.1'},
-    raft: {
-      electionTimeoutMinMs: 100,
-      electionTimeoutMaxMs: 200,
-      heartbeatIntervalMs: 50,
-    },
-    rebalancer: {
-      periodicCheckIntervalMs: 1000,
-      periodicCheckJitterMs: 100,
-      stabilizationPeriodMs: 1000,
-    },
-  });
-
-  const logging = LoggingService.getInstance();
-  logging.initialize({level: 'error'});
-}
-
-/**
- * Clean up test environment.
- */
-async function cleanupTestEnvironment() {
-  try {
-    await NodeService.getInstance().shutdown().catch(() => {});
-  } catch {
-    // Ignore
-  }
-  try {
-    await ServiceThreadManager.getInstance().shutdown().catch(() => {});
-  } catch {
-    // Ignore
-  }
-  NodeService.resetInstance();
-  ServiceThreadManager.resetInstance();
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  AddressManager.resetInstance();
 }
 
 async function waitForNodes(sqlQueryEngine, minCount, timeoutMs = 1500, intervalMs = 50) {
@@ -167,7 +117,7 @@ async function waitForServiceLeaderRow(
   return null;
 }
 
-test('Node join replica activation', async (t) => {
+test('Node join replica activation', {timeout: 30000}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });
@@ -181,18 +131,13 @@ test('Node join replica activation', async (t) => {
     // PHASE 1: Bootstrap seed node with system tables
     // =========================================================================
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440001';
-    const seedWsPort = 18080;
+    const seedWsPort = getUniquePort();
 
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
-      config: {
-        leadershipWaitTimeoutMs: 1000,
-        leadershipWaitInitialDelayMs: 5,
-        leadershipWaitMaxDelayMs: 50,
-        replicaStaggerDelayMs: 20,
-      },
+      config: TEST_CONFIG.bootstrap,
     });
 
     let bootstrapResult;
@@ -255,7 +200,7 @@ test('Node join replica activation', async (t) => {
       // PHASE 3: Join a new node
       // =========================================================================
       const joiningNodeId = '550e8400-e29b-41d4-a716-446655440002';
-      const joiningWsPort = 18090;
+      const joiningWsPort = getUniquePort();
 
       joiningService = new NodeJoiningService({
         nodeId: joiningNodeId,
@@ -339,18 +284,13 @@ test('Node join replica activation', async (t) => {
 
   await t.test('joining fails when system table hydration fails', async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440021';
-    const seedWsPort = 18180;
+    const seedWsPort = getUniquePort();
 
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
-      config: {
-        leadershipWaitTimeoutMs: 1000,
-        leadershipWaitInitialDelayMs: 5,
-        leadershipWaitMaxDelayMs: 50,
-        replicaStaggerDelayMs: 20,
-      },
+      config: TEST_CONFIG.bootstrap,
     });
 
     let bootstrapResult;
@@ -377,7 +317,7 @@ test('Node join replica activation', async (t) => {
       const httpPost = createInProcHttpPost(seedApi);
 
       const joiningNodeId = '550e8400-e29b-41d4-a716-446655440022';
-      const joiningWsPort = 18190;
+      const joiningWsPort = getUniquePort();
 
       joiningService = new NodeJoiningService({
         nodeId: joiningNodeId,
@@ -441,17 +381,15 @@ test('Node join replica activation', async (t) => {
 
   await t.test('writes succeed when services leader is missing in cache', async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440020';
-    const seedWsPort = 19380;
+    const seedWsPort = getUniquePort();
 
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
+        ...TEST_CONFIG.bootstrap,
         leadershipWaitTimeoutMs: 1500,
-        leadershipWaitInitialDelayMs: 5,
-        leadershipWaitMaxDelayMs: 50,
-        replicaStaggerDelayMs: 20,
       },
     });
 
@@ -542,18 +480,13 @@ test('Node join replica activation', async (t) => {
 
   await t.test('replica operations insert uses operation_id primary key', async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440013';
-    const seedWsPort = 19280;
+    const seedWsPort = getUniquePort();
 
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
-      config: {
-        leadershipWaitTimeoutMs: 1000,
-        leadershipWaitInitialDelayMs: 5,
-        leadershipWaitMaxDelayMs: 50,
-        replicaStaggerDelayMs: 20,
-      },
+      config: TEST_CONFIG.bootstrap,
     });
 
     let bootstrapResult;
@@ -628,17 +561,15 @@ test('Node join replica activation', async (t) => {
     // 2. The SQL query to SELECT * FROM nodes returns all three nodes
     // =========================================================================
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440010';
-    const seedWsPort = 19080;
+    const seedWsPort = getUniquePort();
 
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
+        ...TEST_CONFIG.bootstrap,
         leadershipWaitTimeoutMs: 2000,
-        leadershipWaitInitialDelayMs: 10,
-        leadershipWaitMaxDelayMs: 100,
-        replicaStaggerDelayMs: 20,
       },
     });
 
@@ -700,7 +631,7 @@ test('Node join replica activation', async (t) => {
       // PHASE 4: Join second node
       // =========================================================================
       const joiningNodeId2 = '550e8400-e29b-41d4-a716-446655440011';
-      const joiningWsPort2 = 19090;
+      const joiningWsPort2 = getUniquePort();
 
       joiningService2 = new NodeJoiningService({
         nodeId: joiningNodeId2,
@@ -734,7 +665,7 @@ test('Node join replica activation', async (t) => {
       // PHASE 5: Join third node
       // =========================================================================
       const joiningNodeId3 = '550e8400-e29b-41d4-a716-446655440012';
-      const joiningWsPort3 = 19100;
+      const joiningWsPort3 = getUniquePort();
 
       joiningService3 = new NodeJoiningService({
         nodeId: joiningNodeId3,

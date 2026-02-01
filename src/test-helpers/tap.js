@@ -26,9 +26,8 @@ if (process.env.TAP_CHILD_ID) {
 }
 
 if (typeof process.send === 'function') {
-  // eslint-disable-next-line no-undefined
   process.send = undefined;
-  // eslint-disable-next-line no-undefined
+
   process.disconnect = undefined;
 }
 

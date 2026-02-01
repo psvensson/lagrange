@@ -2,17 +2,17 @@ TAP version 14
 # Subtest: PartitionService - constructor requires partitionId
     ok 1 - expected to throw
     1..1
-ok 1 - PartitionService - constructor requires partitionId # time=9.283ms
+ok 1 - PartitionService - constructor requires partitionId # time=12.048ms
 
 # Subtest: PartitionService - constructor requires tableId
     ok 1 - expected to throw
     1..1
-ok 2 - PartitionService - constructor requires tableId # time=0.517ms
+ok 2 - PartitionService - constructor requires tableId # time=0.725ms
 
 # Subtest: PartitionService - constructor requires replicaId
     ok 1 - expected to throw
     1..1
-ok 3 - PartitionService - constructor requires replicaId # time=0.416ms
+ok 3 - PartitionService - constructor requires replicaId # time=0.655ms
 
 # Subtest: PartitionService - initializes with in-memory database
     ok 1 - should be equal
@@ -22,13 +22,13 @@ ok 3 - PartitionService - constructor requires replicaId # time=0.416ms
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 4 - PartitionService - initializes with in-memory database # time=5.069ms
+ok 4 - PartitionService - initializes with in-memory database # time=8.152ms
 
 # Subtest: PartitionService - creates table from schema
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 5 - PartitionService - creates table from schema # time=2.668ms
+ok 5 - PartitionService - creates table from schema # time=3.365ms
 
 # Subtest: PartitionService - executeQuery for SELECT
     ok 1 - should be equal
@@ -36,14 +36,14 @@ ok 5 - PartitionService - creates table from schema # time=2.668ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 6 - PartitionService - executeQuery for SELECT # time=2.56ms
+ok 6 - PartitionService - executeQuery for SELECT # time=2.414ms
 
 # Subtest: PartitionService - updateData modifies records
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 7 - PartitionService - updateData modifies records # time=1.725ms
+ok 7 - PartitionService - updateData modifies records # time=2.137ms
 
 # Subtest: PartitionService - deleteData removes records
     ok 1 - should be equal
@@ -51,7 +51,7 @@ ok 7 - PartitionService - updateData modifies records # time=1.725ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 8 - PartitionService - deleteData removes records # time=1.284ms
+ok 8 - PartitionService - deleteData removes records # time=2.311ms
 
 # Subtest: PartitionService - generates CDC events on insert
     ok 1 - should be equal
@@ -59,26 +59,26 @@ ok 8 - PartitionService - deleteData removes records # time=1.284ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 9 - PartitionService - generates CDC events on insert # time=1.303ms
+ok 9 - PartitionService - generates CDC events on insert # time=2.055ms
 
 # Subtest: PartitionService - generates CDC events on update
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 10 - PartitionService - generates CDC events on update # time=1.141ms
+ok 10 - PartitionService - generates CDC events on update # time=1.92ms
 
 # Subtest: PartitionService - generates CDC events on delete
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - DELETE CDC event should contain primary key
     1..3
-ok 11 - PartitionService - generates CDC events on delete # time=1.917ms
+ok 11 - PartitionService - generates CDC events on delete # time=2.119ms
 
 # Subtest: PartitionService - calculates partition size
     ok 1 - Initial size should be non-negative
     ok 2 - Size should increase after inserts
     1..2
-ok 12 - PartitionService - calculates partition size # time=2.124ms
+ok 12 - PartitionService - calculates partition size # time=2.709ms
 
 # Subtest: PartitionService - key range management
     ok 1 - should be equal
@@ -89,7 +89,7 @@ ok 12 - PartitionService - calculates partition size # time=2.124ms
     ok 6 - should be equal
     ok 7 - should be equal
     1..7
-ok 13 - PartitionService - key range management # time=1.732ms
+ok 13 - PartitionService - key range management # time=2.571ms
 
 # Subtest: PartitionService - full key range (null, null)
     ok 1 - should be equal
@@ -97,7 +97,7 @@ ok 13 - PartitionService - key range management # time=1.732ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 14 - PartitionService - full key range (null, null) # time=1.263ms
+ok 14 - PartitionService - full key range (null, null) # time=1.727ms
 
 # Subtest: PartitionService - getStatus returns complete status
     ok 1 - should be equal
@@ -109,20 +109,20 @@ ok 14 - PartitionService - full key range (null, null) # time=1.263ms
     ok 7 - should be equal
     ok 8 - should be equal
     1..8
-ok 15 - PartitionService - getStatus returns complete status # time=1.577ms
+ok 15 - PartitionService - getStatus returns complete status # time=2.97ms
 
 # Subtest: PartitionService - single replica becomes leader
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 16 - PartitionService - single replica becomes leader # time=2.001ms
+ok 16 - PartitionService - single replica becomes leader # time=1.538ms
 
 # Subtest: PartitionService - unsubscribe from CDC
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 17 - PartitionService - unsubscribe from CDC # time=1.639ms
+ok 17 - PartitionService - unsubscribe from CDC # time=2.038ms
 
 # Subtest: PartitionService - handleTransportMessage routes Raft packets to liferaft
     ok 1 - Raft packet should be acknowledged
@@ -131,7 +131,7 @@ ok 17 - PartitionService - unsubscribe from CDC # time=1.639ms
     ok 4 - Packet type should be preserved
     ok 5 - Packet term should be preserved
     1..5
-ok 18 - PartitionService - handleTransportMessage routes Raft packets to liferaft # time=1.981ms
+ok 18 - PartitionService - handleTransportMessage routes Raft packets to liferaft # time=2.021ms
 
 # Subtest: PartitionService - handleTransportMessage handles application messages
     ok 1 - FORWARD_WRITE should succeed
@@ -139,43 +139,43 @@ ok 18 - PartitionService - handleTransportMessage routes Raft packets to liferaf
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 19 - PartitionService - handleTransportMessage handles application messages # time=2.139ms
+ok 19 - PartitionService - handleTransportMessage handles application messages # time=2.135ms
 
 # Subtest: PartitionService - handleTransportMessage rejects unknown message types
     ok 1 - Unknown message should not be acknowledged
     ok 2 - Error message should be present
     ok 3 - Error should mention unknown type
     1..3
-ok 20 - PartitionService - handleTransportMessage rejects unknown message types # time=1.732ms
+ok 20 - PartitionService - handleTransportMessage rejects unknown message types # time=2.388ms
 
 # Subtest: PartitionService - liferaft instance is created with correct configuration
     ok 1 - Liferaft instance should exist
     ok 2 - should be equal
     1..2
-ok 21 - PartitionService - liferaft instance is created with correct configuration # time=1.358ms
+ok 21 - PartitionService - liferaft instance is created with correct configuration # time=1.376ms
 
 # Subtest: PartitionService - buildPeerAddress returns correct format
     ok 1 - Should resolve correct address
     ok 2 - Should return formatted address as-is
     1..2
-ok 22 - PartitionService - buildPeerAddress returns correct format # time=1.266ms
+ok 22 - PartitionService - buildPeerAddress returns correct format # time=1.501ms
 
 # Subtest: PartitionService - emits leaderElected event for single replica
     ok 1 - leaderElected event should be emitted
     ok 2 - Leader should be this replica
     ok 3 - Partition ID should match
     1..3
-ok 23 - PartitionService - emits leaderElected event for single replica # time=1.582ms
+ok 23 - PartitionService - emits leaderElected event for single replica # time=1.727ms
 
 # Subtest: PartitionService - persists raft role updates to services table
     ok 1 - raft role update should be persisted via CDC
     1..1
-ok 24 - PartitionService - persists raft role updates to services table # time=3.579ms
+ok 24 - PartitionService - persists raft role updates to services table # time=2.958ms
 
 # Subtest: PartitionService - persists leader node updates to partitions table
     ok 1 - leader node update should be persisted via CDC
     1..1
-ok 25 - PartitionService - persists leader node updates to partitions table # time=1.538ms
+ok 25 - PartitionService - persists leader node updates to partitions table # time=1.683ms
 
 # Subtest: PartitionService - setCdcIntegrationService sets service on partition and rebalancer
     ok 1 - Initially null
@@ -183,8 +183,70 @@ ok 25 - PartitionService - persists leader node updates to partitions table # ti
     ok 3 - Should be set on rebalancer
     ok 4 - Should be set on coordinator
     1..4
-ok 26 - PartitionService - setCdcIntegrationService sets service on partition and rebalancer # time=1.487ms
+ok 26 - PartitionService - setCdcIntegrationService sets service on partition and rebalancer # time=1.682ms
 
-1..26
-# { total: 82, pass: 82 }
-# time=645.017ms
+# Subtest: PartitionService - learner promotion deferred for even voter count
+    ok 1 - Should remain learner to avoid even voter count
+    ok 2 - Should reschedule promotion check
+    1..2
+ok 27 - PartitionService - learner promotion deferred for even voter count # time=1.224ms
+
+# Subtest: PartitionService - learner promotes when voter count would be odd
+    ok 1 - Should promote to follower for odd voter count
+    1..1
+ok 28 - PartitionService - learner promotes when voter count would be odd # time=0.958ms
+
+# Subtest: PartitionService - learner promotes when multiple learners reach odd count
+    ok 1 - Should promote when all learners would reach odd count
+    1..1
+ok 29 - PartitionService - learner promotes when multiple learners reach odd count # time=0.744ms
+
+# Subtest: PartitionService - learner deferred when all learners would still be even
+    ok 1 - Should remain learner when all learners would still be even
+    ok 2 - Should reschedule promotion check
+    1..2
+ok 30 - PartitionService - learner deferred when all learners would still be even # time=0.883ms
+
+# Subtest: PartitionService - countPendingLearners counts learner replicas
+    ok 1 - Should count only active learner replicas
+    1..1
+ok 31 - PartitionService - countPendingLearners counts learner replicas # time=1.154ms
+
+# Subtest: PartitionService - countActiveVoters excludes learners and failed replicas
+    ok 1 - Should count only active non-learner replicas
+    1..1
+ok 32 - PartitionService - countActiveVoters excludes learners and failed replicas # time=0.806ms
+
+# Subtest: PartitionService - handleRemoteQuery returns redirect for writes on follower
+    ok 1 - should acknowledge the request
+    ok 2 - should not succeed (redirect instead)
+    ok 3 - should return redirect type
+    ok 4 - should include leader address
+    1..4
+ok 33 - PartitionService - handleRemoteQuery returns redirect for writes on follower # time=1.922ms
+
+# Subtest: PartitionService - handleRemoteQuery executes reads on follower
+    ok 1 - should acknowledge the request
+    ok 2 - should succeed for reads
+    ok 3 - should return data
+    ok 4 - should return correct data
+    1..4
+ok 34 - PartitionService - handleRemoteQuery executes reads on follower # time=1.733ms
+
+# Subtest: PartitionService - isWriteQuery detects write operations
+    ok 1 - INSERT is write
+    ok 2 - UPDATE is write
+    ok 3 - DELETE is write
+    ok 4 - CREATE is write
+    ok 5 - DROP is write
+    ok 6 - ALTER is write
+    ok 7 - SELECT is not write
+    ok 8 - lowercase SELECT is not write
+    ok 9 - null is not write
+    ok 10 - empty string is not write
+    1..10
+ok 35 - PartitionService - isWriteQuery detects write operations # time=0.731ms
+
+1..35
+# { total: 108, pass: 108 }
+# time=911.111ms

@@ -12,6 +12,7 @@ const CDC_EVENT = Object.freeze({
   ERROR: 'error',
   EPOCH_CHANGE: 'epochChange',
   NODE_STATE_CHANGE: 'nodeStateChange',
+  NODE_JOINED: 'nodeJoined',
 });
 
 const CDC_CONFIG_KEY = Object.freeze({
@@ -101,6 +102,13 @@ const CDC_LOG_MSG = Object.freeze({
   REBALANCER_NOTIFIED: 'Rebalancer notified of node state change',
   REBALANCER_NOTIFY_FAILED: 'Failed to notify rebalancer of node state change',
   REBALANCER_NOT_SET: 'No rebalancer set, skipping rebalancer notification',
+  MESSAGE_ROUTER_SET: 'Message router set for CDC mesh connectivity',
+  NEW_NODE_DETECTED: 'New node detected via CDC, establishing connection',
+  NEW_NODE_CONNECTED: 'Connected to new node via CDC event',
+  NEW_NODE_CONNECT_FAILED: 'Failed to connect to new node via CDC event',
+  NEW_NODE_SKIP_SELF: 'Skipping connection to self node',
+  NEW_NODE_SKIP_CONNECTED: 'Skipping already connected node',
+  NEW_NODE_MISSING_ADDRESS: 'New node missing address, cannot connect',
 });
 
 const CDC_ERROR_MSG = Object.freeze({
@@ -135,6 +143,7 @@ const CDC_ERROR_MSG = Object.freeze({
   NOT_NODES_TABLE_PREFIX: 'Not a nodes table event: tableName is ',
   NODE_ID_MISSING: 'Missing node_id in CDC event data',
   NODE_STATUS_MISSING: 'Missing status in CDC event data',
+  MESSAGE_ROUTER_REQUIRED: 'messageRouter is required',
 });
 
 export {

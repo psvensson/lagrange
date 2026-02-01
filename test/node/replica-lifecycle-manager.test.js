@@ -13,11 +13,9 @@ import os from 'os';
 import {
   ReplicaLifecycleManager,
   ReplicaStatus,
-  VALID_STATUS_TRANSITIONS,
   MessageType,
   AckStatus,
 } from '../../src/node/replica-lifecycle-manager.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 

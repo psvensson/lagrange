@@ -168,7 +168,7 @@ test('Property 3: Error Message Consistency - constructor transport validation',
  * All transport unavailability errors should contain "WebSocket transport".
  * Validates: Requirements 4.1, 4.2
  */
-test('Property 3: Error Message Consistency - all errors contain WebSocket transport', async (t) => {
+test('Property 3: Error Message Consistency - errors contain WebSocket transport', async (t) => {
   await fc.assert(
     fc.asyncProperty(
       fc.uuid(),

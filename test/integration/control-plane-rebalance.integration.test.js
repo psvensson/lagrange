@@ -1,229 +1,227 @@
 /**
  * Integration test: control plane dispatch of replica operations.
  * Requirements: 5.2, 5.3, 5.4
+ *
+ * Refactored to use real components from BootstrapService instead of mocks.
+ * Requirements: 1.1, 2.1, 2.2, 3.1, 3.2
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ControlPlaneService} from '../../src/control-plane/control-plane-service.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
-import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
-
-function createMockCDCService(cache) {
-  const operations = [];
-
-  return {
-    operations,
-    async insertSystemTableRow(tableName, data) {
-      operations.push({type: 'insert', tableName, data});
-      cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true, operation: 'INSERT', tableName, data};
-    },
-    async upsertSystemTableRow(tableName, data) {
-      operations.push({type: 'upsert', tableName, data});
-      cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true, operation: 'UPSERT', tableName, data};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      const merged = {...whereClause, ...data};
-      operations.push({type: 'update', tableName, whereClause, data: merged});
-      cache.applySystemTableChange(tableName, 'UPDATE', merged);
-      return {success: true, operation: 'UPDATE', tableName, whereClause, data: merged};
-    },
-  };
-}
-
-function createMockTablePolicyService() {
-  return {
-    getPolicyForPartition() {
-      return {...DEFAULT_TABLE_POLICY};
-    },
-    getDefaultPolicy() {
-      return {...DEFAULT_TABLE_POLICY};
-    },
-  };
-}
-
-/**
- * Create a mock SQL engine that tracks operations.
- * @param {SystemTableCache} cache - System table cache.
- * @return {Object} Mock SQL engine.
- */
-function createMockSqlQueryEngine(cache) {
-  const trackedOperations = new Map();
-
-  return {
-    executeQuery: async (sql, params) => {
-      // Handle INSERT operations
-      if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, sourceNodeId, targetNodeId,
-          status, workflowStep, createdAt, updatedAt, completedAt, errorMessage,
-          stepsHistory,
-        ] = params;
-
-        const operation = {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-        };
-
-        trackedOperations.set(operationId, operation);
-        cache.applySystemTableChange(SystemTableName.REPLICA_OPERATIONS, 'INSERT', operation);
-        return {success: true};
-      }
-
-      // Handle UPDATE operations
-      if (sql.includes('UPDATE replica_operations')) {
-        const [
-          status, workflowStep, updatedAt, completedAt, errorMessage,
-          stepsHistory, replicaId, operationId,
-        ] = params;
-
-        const existing = trackedOperations.get(operationId);
-        if (existing) {
-          const updated = {
-            ...existing,
-            status,
-            workflow_step: workflowStep,
-            updated_at: updatedAt,
-            completed_at: completedAt,
-            error_message: errorMessage,
-            steps_history: stepsHistory,
-            replica_id: replicaId,
-          };
-          trackedOperations.set(operationId, updated);
-          cache.applySystemTableChange(SystemTableName.REPLICA_OPERATIONS, 'UPDATE', updated);
-        }
-        return {success: true};
-      }
-
-      // Handle SELECT queries for deduplication
-      if (sql.includes('replica_operations') && sql.includes('partition_id = ?')) {
-        const [partitionId, targetNodeId] = params;
-        const matching = Array.from(trackedOperations.values()).filter((op) =>
-          op.partition_id === partitionId &&
-          op.target_node_id === targetNodeId &&
-          !['active', 'removed', 'failed'].includes(op.status));
-        return {success: true, rows: matching};
-      }
-
-      // Handle SELECT for non-terminal operations (matches <> or NOT IN syntax)
-      if (sql.includes('replica_operations') &&
-          (sql.includes('status <>') || sql.includes('NOT IN'))) {
-        const incompleteOps = Array.from(trackedOperations.values()).filter((op) =>
-          !['active', 'removed', 'failed'].includes(op.status));
-        return {success: true, rows: incompleteOps};
-      }
-
-      return {success: true, rows: []};
-    },
-  };
-}
+import {NodeService} from '../../src/node/node-service.js';
+import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {NodeStatus} from '../../src/rebalancer/unified-rebalancer.js';
+import {STATE} from '../../src/constants/index.js';
+import {
+  initializeTestEnvironment,
+  cleanupTestEnvironment,
+  getUniquePort,
+  waitFor,
+} from './helpers/cluster-test-helpers.js';
 
 test('Control plane dispatch integration', async (t) => {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-
-  const config = ConfigurationManager.getInstance();
-  config.initialize({
-    logging: {level: 'error'},
-    transport: {wsHost: '127.0.0.1'},
+  t.beforeEach(() => {
+    initializeTestEnvironment();
   });
 
-  const logging = LoggingService.getInstance();
-  logging.initialize({level: 'error'});
+  t.afterEach(async () => {
+    await cleanupTestEnvironment();
+  });
 
-  const cache = new SystemTableCache();
-  const cdc = createMockCDCService(cache);
-  const tablePolicyService = createMockTablePolicyService();
+  await t.test('dispatches replica operation to target node', async (t) => {
+    // Use real BootstrapService to create seed node
+    const seedNodeId = '550e8400-e29b-41d4-a716-446655440050';
+    const seedWsPort = getUniquePort();
 
-  const deliveries = [];
-  const messageRouter = {
-    deliver: async (target, payload, options) => {
-      deliveries.push({target, payload, options});
-      return {
-        acknowledged: true,
-        status: ReplicaOperationResponseStatus.INITIATED,
+    const bootstrapService = new BootstrapService({
+      nodeId: seedNodeId,
+      nodeAddress: `ws://localhost:${seedWsPort}`,
+      wsPort: seedWsPort,
+      config: {
+        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitInitialDelayMs: 10,
+        leadershipWaitMaxDelayMs: 100,
+        replicaStaggerDelayMs: 20,
+      },
+    });
+
+    let bootstrapResult;
+
+    try {
+      // Bootstrap the seed node
+      bootstrapResult = await bootstrapService.bootstrap();
+      t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
+
+      // Get real SystemTableCache from NodeService singleton
+      const systemTableCache = NodeService.getInstance().getSystemTableCache();
+      t.ok(systemTableCache, 'should have system table cache');
+
+      // Get real CDCIntegrationService from bootstrap
+      const cdcIntegrationService = bootstrapService.cdcIntegrationService;
+      t.ok(cdcIntegrationService, 'should have CDC integration service');
+
+      // Get real TablePolicyService from bootstrap
+      const tablePolicyService = bootstrapService.tablePolicyService;
+      t.ok(tablePolicyService, 'should have table policy service');
+
+      // Track deliveries by wrapping the real message router's deliver method
+      // Only intercept deliveries to replica-handler, let SQL queries go through normally
+      const deliveries = [];
+      const realMessageRouter = bootstrapResult.messageRouter;
+      const originalDeliver = realMessageRouter.deliver.bind(realMessageRouter);
+
+      // Create a wrapper that tracks deliveries to replica-handler
+      // but lets other deliveries (like SQL queries) go through normally
+      realMessageRouter.deliver = async (target, payload, options) => {
+        // Only intercept deliveries to replica-handler on the target node
+        if (target && target.includes('/service/replica-handler')) {
+          deliveries.push({target, payload, options});
+          // Return a successful INITIATED response to allow the workflow to proceed
+          return {
+            acknowledged: true,
+            status: ReplicaOperationResponseStatus.INITIATED,
+          };
+        }
+        // Let all other deliveries (SQL queries, etc.) go through normally
+        return originalDeliver(target, payload, options);
       };
-    },
-    getConnectionState() {
-      return 'connected';
-    },
-    isOutboundQueueAvailable() {
-      return true;
-    },
-  };
 
-  const mockSqlQueryEngine = createMockSqlQueryEngine(cache);
+      // Override connection state checks to allow dispatch to the target node
+      const originalGetConnectionState = realMessageRouter.getConnectionState ?
+        realMessageRouter.getConnectionState.bind(realMessageRouter) : null;
+      const originalIsOutboundQueueAvailable = realMessageRouter.isOutboundQueueAvailable ?
+        realMessageRouter.isOutboundQueueAvailable.bind(realMessageRouter) : null;
 
-  const coordinator = new RebalanceCoordinator({
-    nodeId: 'seed-node',
-    systemTableCache: cache,
-    cdcIntegrationService: cdc,
-    messageRouter,
-    tablePolicyService,
-    sqlQueryEngine: mockSqlQueryEngine,
-    enableTimeouts: false,
+      realMessageRouter.getConnectionState = (nodeId) => {
+        // Return connected for the target node, use original for others
+        if (nodeId === 'node-target-dispatch') {
+          return STATE.CONNECTED;
+        }
+        return originalGetConnectionState ? originalGetConnectionState(nodeId) : STATE.CONNECTED;
+      };
+      realMessageRouter.isOutboundQueueAvailable = (nodeId) => {
+        // Return true for the target node, use original for others
+        if (nodeId === 'node-target-dispatch') {
+          return true;
+        }
+        return originalIsOutboundQueueAvailable ?
+          originalIsOutboundQueueAvailable(nodeId) : true;
+      };
+
+      // Create real SQL query engine
+      const sqlQueryEngine = new SQLQueryEngine({
+        systemCache: systemTableCache,
+        messageRouter: realMessageRouter,
+        nodeId: seedNodeId,
+      });
+
+      // Create real RebalanceCoordinator
+      const rebalanceCoordinator = new RebalanceCoordinator({
+        nodeId: seedNodeId,
+        systemTableCache,
+        cdcIntegrationService,
+        messageRouter: realMessageRouter,
+        tablePolicyService,
+        sqlQueryEngine,
+        enableTimeouts: false,
+      });
+      rebalanceCoordinator.initialize();
+
+      // Create real ControlPlaneService
+      const controlPlane = new ControlPlaneService({
+        nodeId: seedNodeId,
+        nodeAddress: `ws://localhost:${seedWsPort}`,
+        systemTableCache,
+        cdcIntegrationService,
+        messageRouter: realMessageRouter,
+        rebalanceCoordinator,
+      });
+      controlPlane.initialize();
+
+      // Attach message group services to control plane for CDC event handling
+      for (const mgService of bootstrapResult.messageGroupServices.values()) {
+        controlPlane.attachMessageGroupService(mgService);
+      }
+
+      // Add a target node to the cache (simulating a node that has joined and is ready)
+      const now = Date.now();
+      const targetNodeId = 'node-target-dispatch';
+      systemTableCache.applySystemTableChange(SystemTableName.NODES, 'INSERT', {
+        node_id: targetNodeId,
+        node_address: 'ws://node-target-dispatch:9001',
+        cpu_cores: 4,
+        memory_mb: 1024,
+        disk_gb: 10,
+        cpu_usage_percent: 10,
+        memory_usage_percent: 10,
+        disk_usage_percent: 10,
+        status: NodeStatus.ACTIVE,
+        ws_connection_state: STATE.READY,
+        capabilities: '[]',
+        last_heartbeat: now,
+        ready_lease_expires_at: now + 10000,
+        created_at: now,
+      });
+
+      // Get a partition ID from the bootstrapped partitions
+      const partitions = systemTableCache.getAll('partitions') || [];
+      t.ok(partitions.length > 0, 'should have partitions');
+      const partitionId = partitions[0].partition_id;
+
+      // Create a replica operation using the real coordinator
+      // This will trigger the real CDC flow:
+      // 1. Operation is persisted via SQL engine
+      // 2. CDC event is emitted when the operation is written to the partition
+      // 3. ControlPlaneService handles the CDC event (via attached message group services)
+      // 4. Operation is dispatched to target node's replica-handler
+      const operation = await rebalanceCoordinator.createOperation({
+        type: 'ADD',
+        partitionId,
+        nodeId: targetNodeId,
+        replicaId: `replica-${targetNodeId}-${partitionId}`,
+      });
+
+      t.ok(operation, 'should create operation');
+      t.ok(operation.operationId, 'operation should have ID');
+
+      // Wait for the CDC event to be processed and the operation to be dispatched
+      // The real flow is asynchronous: create -> persist -> CDC -> dispatch
+      const dispatched = await waitFor(() => deliveries.length >= 1, 1000, 25);
+      t.ok(dispatched, 'operation should be dispatched via CDC flow');
+
+      // Verify the operation was dispatched
+      t.ok(deliveries.length >= 1, 'should dispatch replica operation');
+      t.equal(
+        deliveries[0].target,
+        `${targetNodeId}/service/replica-handler`,
+        'should target replica-handler on target node',
+      );
+
+      // Verify the operation moved to CREATING state
+      const updatedOperation = systemTableCache.get(
+        SystemTableName.REPLICA_OPERATIONS,
+        operation.operationId,
+      );
+      t.equal(updatedOperation.workflow_step, 'CREATING', 'operation should move to CREATING');
+
+      // Restore original deliver method before cleanup
+      realMessageRouter.deliver = originalDeliver;
+
+      // Cleanup
+      controlPlane.shutdown();
+      await rebalanceCoordinator.shutdown();
+    } finally {
+      if (bootstrapService) {
+        await bootstrapService.shutdown().catch(() => {});
+      }
+      if (bootstrapResult?.messageRouter) {
+        await bootstrapResult.messageRouter.shutdown().catch(() => {});
+      }
+    }
   });
-  coordinator.initialize();
-
-  const controlPlane = new ControlPlaneService({
-    nodeId: 'seed-node',
-    nodeAddress: 'ws://localhost:0',
-    systemTableCache: cache,
-    cdcIntegrationService: cdc,
-    messageRouter,
-    rebalanceCoordinator: coordinator,
-  });
-  controlPlane.initialize();
-
-  const now = Date.now();
-  cache.applySystemTableChange(SystemTableName.NODES, 'INSERT', {
-    node_id: 'node-1',
-    node_address: 'localhost:8082',
-    status: 'active',
-    ws_connection_state: 'ready',
-    ready_lease_expires_at: now + 10000,
-    last_heartbeat: now,
-    created_at: now,
-  });
-
-  const operation = await coordinator.createOperation({
-    type: 'ADD',
-    partitionId: 'partition-1',
-    nodeId: 'node-1',
-    replicaId: 'replica-1',
-  });
-
-  const messageGroupService = {
-    isLeaderReplica: () => true,
-  };
-
-  await controlPlane.handleCdcApplied(messageGroupService, {
-    tableName: SystemTableName.REPLICA_OPERATIONS,
-    data: cache.get(SystemTableName.REPLICA_OPERATIONS, operation.operationId),
-  });
-
-  t.equal(deliveries.length, 1, 'dispatches replica operation');
-  t.equal(deliveries[0].target, 'node-1/service/replica-handler',
-    'targets replica-handler');
-
-  const updated = cache.get(SystemTableName.REPLICA_OPERATIONS, operation.operationId);
-  t.equal(updated.workflow_step, 'CREATING', 'operation moves to CREATING');
 });

@@ -5,6 +5,7 @@
  * completes in < 100ms for a typical cluster.
  */
 
+import {performance} from 'perf_hooks';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -243,7 +244,7 @@ test('Bootstrap response building performance - large cluster', async (t) => {
 
   for (let i = 0; i < iterations; i++) {
     const startTime = performance.now();
-    const snapshots = api.buildSystemTableSnapshots();
+    api.buildSystemTableSnapshots();
     const endTime = performance.now();
     const duration = endTime - startTime;
     times.push(duration);

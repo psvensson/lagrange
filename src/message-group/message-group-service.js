@@ -1476,8 +1476,11 @@ class MessageGroupService extends EventEmitter {
       replicaId: this.replicaId,
     });
 
-    // End liferaft instance
+    // End liferaft instance - clear all timers first
     if (this.raft) {
+      if (this.raft.timers) {
+        this.raft.timers.clear();
+      }
       this.raft.end();
       this.raft = null;
     }

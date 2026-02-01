@@ -154,6 +154,7 @@ class FailureDetector extends EventEmitter {
         throw error;
       }
     }, this.checkIntervalMs);
+    this.checkTimer.unref();
 
     // Start adaptive threshold reset timer
     this.startAdaptiveThresholdReset();
@@ -543,6 +544,7 @@ class FailureDetector extends EventEmitter {
         }
       }
     }, FAILURE_DETECTOR_DEFAULT.ADAPTIVE_RESET_INTERVAL_MS);
+    this.adaptiveResetTimer.unref();
   }
 
   /**

@@ -140,6 +140,7 @@ class NodeReintegrationService extends EventEmitter {
         });
       }
     }, this.checkIntervalMs);
+    this.checkTimer.unref();
   }
 
   /**
@@ -170,9 +171,9 @@ class NodeReintegrationService extends EventEmitter {
       }
 
       // Process recovering nodes
-    if (node.status === NODE_STATUS.RECOVERING) {
-      await this.processRecoveringNode(node);
-    }
+      if (node.status === NODE_STATUS.RECOVERING) {
+        await this.processRecoveringNode(node);
+      }
     }
   }
 

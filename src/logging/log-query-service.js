@@ -382,11 +382,11 @@ class LogQueryService extends EventEmitter {
       'service_id', 'service_type', 'message', 'created_at',
     ];
     if (!validColumns.includes(orderBy)) {
-      throw new Error(LOG_QUERY_ERROR_MSG.INVALID_ORDER_BY(orderBy));
+      throw new Error(LOG_QUERY_ERROR_MSG.invalidOrderBy(orderBy));
     }
     const normalizedDir = orderDir.toUpperCase();
     if (normalizedDir !== 'ASC' && normalizedDir !== 'DESC') {
-      throw new Error(LOG_QUERY_ERROR_MSG.INVALID_ORDER_DIR(orderDir));
+      throw new Error(LOG_QUERY_ERROR_MSG.invalidOrderDir(orderDir));
     }
     const safeOrderBy = orderBy;
     const safeOrderDir = normalizedDir;

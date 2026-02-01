@@ -37,10 +37,10 @@ const THREADING_LOG_MSG = Object.freeze({
 
 const THREADING_ERROR_MSG = Object.freeze({
   NOT_INITIALIZED: 'ServiceThreadManager not initialized',
-  SERVICE_ALREADY_REGISTERED: (serviceId) => `Service already registered: ${serviceId}`,
-  SERVICE_NOT_FOUND: (serviceId) => `Service not found: ${serviceId}`,
-  NO_HANDLER_REGISTERED: (serviceId) => `No handler registered for service: ${serviceId}`,
-  UNKNOWN_OPERATION: (operation, serviceId) =>
+  serviceAlreadyRegistered: (serviceId) => `Service already registered: ${serviceId}`,
+  serviceNotFound: (serviceId) => `Service not found: ${serviceId}`,
+  noHandlerRegistered: (serviceId) => `No handler registered for service: ${serviceId}`,
+  unknownOperation: (operation, serviceId) =>
     `Unknown operation: ${operation} for service: ${serviceId}`,
 });
 

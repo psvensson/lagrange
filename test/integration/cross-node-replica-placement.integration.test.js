@@ -66,6 +66,7 @@ function initializeTestEnvironment() {
 async function cleanupTestEnvironment() {
   await NodeService.getInstance().shutdown().catch(() => {});
   await ServiceThreadManager.getInstance().shutdown().catch(() => {});
+  await LoggingService.getInstance().shutdown().catch(() => {});
   NodeService.resetInstance();
   ServiceThreadManager.resetInstance();
   ConfigurationManager.resetInstance();
@@ -157,6 +158,14 @@ function createMockRebalanceCoordinator() {
   };
 }
 
+function createMockSqlQueryEngine() {
+  return {
+    async executeQuery() {
+      return {success: true, rows: []};
+    },
+  };
+}
+
 /**
  * Wait for a condition with timeout.
  */
@@ -203,6 +212,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         const systemTableCache = new SystemTableCache();
         const cdcIntegrationService = createMockCDCService(systemTableCache);
         const tablePolicyService = createMockTablePolicyService();
+        const sqlQueryEngine = createMockSqlQueryEngine();
         const readyLeaseExpiresAt = Date.now() + 10000;
 
         // Register seed node in the cache
@@ -299,6 +309,9 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           cdcIntegrationService,
           tablePolicyService,
         });
+
+        // Set SQL query engine to enable rebalancer initialization
+        resources.seedPartition.setSqlQueryEngine(sqlQueryEngine);
 
         const partitionAddress = `${seedNodeId}/partition/${partitionId}-r1`;
         resources.seedRouter.register(partitionAddress, (envelope) => {

@@ -46,6 +46,7 @@ function initializeTestEnvironment() {
 async function cleanupTestEnvironment() {
   await NodeService.getInstance().shutdown().catch(() => {});
   await ServiceThreadManager.getInstance().shutdown().catch(() => {});
+  await LoggingService.getInstance().shutdown().catch(() => {});
   NodeService.resetInstance();
   ServiceThreadManager.resetInstance();
   ConfigurationManager.resetInstance();
@@ -195,19 +196,12 @@ test('Seed node bootstrap integration', async (t) => {
 
     let bootstrapResult;
     let registrationPhaseCompleted = false;
-    let bootstrapModeWasEnabled = false;
 
     try {
       // Listen for phase completion events
       bootstrapService.on('phase:complete', (event) => {
         if (event.phase === 'registration') {
           registrationPhaseCompleted = true;
-          // Check if bootstrap mode was used during registration
-          const cdcService = bootstrapService.cdcIntegrationService;
-          if (cdcService) {
-            // Bootstrap mode should be disabled after registration
-            bootstrapModeWasEnabled = cdcService.bootstrapMode === false;
-          }
         }
       });
 

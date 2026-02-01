@@ -6,22 +6,22 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 1 - creates rebalancer with default options # time=4.688ms
+    ok 1 - creates rebalancer with default options # time=6.846ms
     
     # Subtest: initializes rebalancer
         ok 1 - should be equal
         1..1
-    ok 2 - initializes rebalancer # time=0.708ms
+    ok 2 - initializes rebalancer # time=1.178ms
     
     # Subtest: sets leader status
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 3 - sets leader status # time=0.688ms
+    ok 3 - sets leader status # time=1.079ms
     
     1..3
-ok 1 - UnifiedRebalancer - Basic Initialization # time=54.81ms
+ok 1 - UnifiedRebalancer - Basic Initialization # time=87.338ms
 
 # Subtest: UnifiedRebalancer - Policy Management
     # Subtest: returns default table policy when no cache data
@@ -29,22 +29,22 @@ ok 1 - UnifiedRebalancer - Basic Initialization # time=54.81ms
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - returns default table policy when no cache data # time=0.658ms
+    ok 1 - returns default table policy when no cache data # time=0.897ms
     
     # Subtest: returns default message group policy
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 2 - returns default message group policy # time=0.379ms
+    ok 2 - returns default message group policy # time=0.539ms
     
     # Subtest: returns table policy from cache
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 3 - returns table policy from cache # time=0.398ms
+    ok 3 - returns table policy from cache # time=0.654ms
     
     1..3
-ok 2 - UnifiedRebalancer - Policy Management # time=37.294ms
+ok 2 - UnifiedRebalancer - Policy Management # time=45.699ms
 
 # Subtest: UnifiedRebalancer - Node Management
     # Subtest: gets available nodes from cache
@@ -53,36 +53,36 @@ ok 2 - UnifiedRebalancer - Policy Management # time=37.294ms
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 1 - gets available nodes from cache # time=0.981ms
+    ok 1 - gets available nodes from cache # time=1.646ms
     
     # Subtest: sorts nodes by load
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 2 - sorts nodes by load # time=0.521ms
+    ok 2 - sorts nodes by load # time=0.76ms
     
     1..2
-ok 3 - UnifiedRebalancer - Node Management # time=22.237ms
+ok 3 - UnifiedRebalancer - Node Management # time=44.646ms
 
 # Subtest: UnifiedRebalancer - Readiness Checks
     # Subtest: returns true when node is ready and connected
         ok 1 - should be equal
         1..1
-    ok 1 - returns true when node is ready and connected # time=0.894ms
+    ok 1 - returns true when node is ready and connected # time=0.733ms
     
     # Subtest: returns false when node is disconnected
         ok 1 - should be equal
         1..1
-    ok 2 - returns false when node is disconnected # time=0.371ms
+    ok 2 - returns false when node is disconnected # time=0.432ms
     
     # Subtest: returns false when readiness ping fails
         ok 1 - should be equal
         1..1
-    ok 3 - returns false when readiness ping fails # time=0.358ms
+    ok 3 - returns false when readiness ping fails # time=0.542ms
     
     1..3
-ok 4 - UnifiedRebalancer - Readiness Checks # time=24.214ms
+ok 4 - UnifiedRebalancer - Readiness Checks # time=33.864ms
 
 # Subtest: UnifiedRebalancer - Replica State
     # Subtest: gets healthy replicas only
@@ -90,16 +90,16 @@ ok 4 - UnifiedRebalancer - Readiness Checks # time=24.214ms
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - gets healthy replicas only # time=0.557ms
+    ok 1 - gets healthy replicas only # time=1.174ms
     
     # Subtest: detects multiple replicas on same node
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 2 - detects multiple replicas on same node # time=0.397ms
+    ok 2 - detects multiple replicas on same node # time=1.191ms
     
     1..2
-ok 5 - UnifiedRebalancer - Replica State # time=15.74ms
+ok 5 - UnifiedRebalancer - Replica State # time=38.423ms
 
 # Subtest: UnifiedRebalancer - Move Calculation
     # Subtest: calculates add moves when below target
@@ -107,67 +107,76 @@ ok 5 - UnifiedRebalancer - Replica State # time=15.74ms
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - calculates add moves when below target # time=1.116ms
+    ok 1 - calculates add moves when below target # time=1.841ms
     
     # Subtest: calculates remove moves for failed replicas
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 2 - calculates remove moves for failed replicas # time=0.607ms
+    ok 2 - calculates remove moves for failed replicas # time=0.787ms
     
-    # Subtest: defers remove moves when add moves are pending
+    # Subtest: includes node_not_in_target removes with add moves
         ok 1 - should have one ADD move
         ok 2 - ADD should be for node-3
-        ok 3 - REMOVE moves should be deferred
+        ok 3 - should have one REMOVE move
+        ok 4 - REMOVE should be for node-4
+        ok 5 - reason should be node_not_in_target
+        1..5
+    ok 3 - includes node_not_in_target removes with add moves # time=0.884ms
+    
+    # Subtest: defers spread_replicas removes when add moves pending
+        ok 1 - should have one ADD move
+        ok 2 - ADD should be for node-3
+        ok 3 - spread_replicas REMOVE should be deferred
         1..3
-    ok 3 - defers remove moves when add moves are pending # time=0.398ms
+    ok 4 - defers spread_replicas removes when add moves pending # time=0.72ms
     
     # Subtest: calculates remove moves when no add moves needed
         ok 1 - should have no ADD moves
         ok 2 - should remove from node-4
         1..2
-    ok 4 - calculates remove moves when no add moves needed # time=0.348ms
+    ok 5 - calculates remove moves when no add moves needed # time=0.595ms
     
-    1..4
-ok 6 - UnifiedRebalancer - Move Calculation # time=17.447ms
+    1..5
+ok 6 - UnifiedRebalancer - Move Calculation # time=40.308ms
 
 # Subtest: UnifiedRebalancer - State Evaluation
     # Subtest: detects critical state when below minimum replicas
         ok 1 - should be equal
         1..1
-    ok 1 - detects critical state when below minimum replicas # time=0.627ms
+    ok 1 - detects critical state when below minimum replicas # time=0.535ms
     
     # Subtest: detects suboptimal state when not at target count
         ok 1 - should be equal
         1..1
-    ok 2 - detects suboptimal state when not at target count # time=0.467ms
+    ok 2 - detects suboptimal state when not at target count # time=0.552ms
     
     # Subtest: detects suboptimal state when replicas not spread
         ok 1 - should be equal
         1..1
-    ok 3 - detects suboptimal state when replicas not spread # time=0.401ms
+    ok 3 - detects suboptimal state when replicas not spread # time=0.529ms
     
     # Subtest: not suboptimal when no unused nodes for spreading
         ok 1 - should be equal
         1..1
-    ok 4 - not suboptimal when no unused nodes for spreading # time=0.412ms
+    ok 4 - not suboptimal when no unused nodes for spreading # time=0.401ms
     
     1..4
-ok 7 - UnifiedRebalancer - State Evaluation # time=17.988ms
+ok 7 - UnifiedRebalancer - State Evaluation # time=31.699ms
 
 # Subtest: UnifiedRebalancer - Rebalancing
     # Subtest: skips rebalance when not leader
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 1 - skips rebalance when not leader # time=0.455ms
+    ok 1 - skips rebalance when not leader # time=0.864ms
     
     # Subtest: returns no changes when already optimal
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 2 - returns no changes when already optimal # time=0.621ms
+    ok 2 - returns no changes when already optimal # time=1.031ms
     
     # Subtest: emits rebalanceComplete event
         ok 1 - should be equal
@@ -175,10 +184,10 @@ ok 7 - UnifiedRebalancer - State Evaluation # time=17.988ms
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 3 - emits rebalanceComplete event # time=1.097ms
+    ok 3 - emits rebalanceComplete event # time=2.071ms
     
     1..3
-ok 8 - UnifiedRebalancer - Rebalancing # time=20.708ms
+ok 8 - UnifiedRebalancer - Rebalancing # time=29.028ms
 
 # Subtest: UnifiedRebalancer - Statistics
     # Subtest: returns statistics
@@ -188,10 +197,10 @@ ok 8 - UnifiedRebalancer - Rebalancing # time=20.708ms
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 1 - returns statistics # time=0.532ms
+    ok 1 - returns statistics # time=0.49ms
     
     1..1
-ok 9 - UnifiedRebalancer - Statistics # time=12.2ms
+ok 9 - UnifiedRebalancer - Statistics # time=24.292ms
 
 # Subtest: UnifiedRebalancer - Odd Replica Count Helpers
     # Subtest: isOddReplicaCount returns true for odd numbers
@@ -200,7 +209,7 @@ ok 9 - UnifiedRebalancer - Statistics # time=12.2ms
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 1 - isOddReplicaCount returns true for odd numbers # time=0.675ms
+    ok 1 - isOddReplicaCount returns true for odd numbers # time=0.524ms
     
     # Subtest: isOddReplicaCount returns false for even numbers
         ok 1 - should be equal
@@ -208,7 +217,7 @@ ok 9 - UnifiedRebalancer - Statistics # time=12.2ms
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 2 - isOddReplicaCount returns false for even numbers # time=0.724ms
+    ok 2 - isOddReplicaCount returns false for even numbers # time=0.87ms
     
     # Subtest: adjustToOddCount adjusts up by default
         ok 1 - should be equal
@@ -216,7 +225,7 @@ ok 9 - UnifiedRebalancer - Statistics # time=12.2ms
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 3 - adjustToOddCount adjusts up by default # time=0.655ms
+    ok 3 - adjustToOddCount adjusts up by default # time=0.546ms
     
     # Subtest: adjustToOddCount adjusts down when specified
         ok 1 - should be equal
@@ -224,24 +233,24 @@ ok 9 - UnifiedRebalancer - Statistics # time=12.2ms
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 4 - adjustToOddCount adjusts down when specified # time=0.612ms
+    ok 4 - adjustToOddCount adjusts down when specified # time=0.474ms
     
     # Subtest: getNextOddCount returns next odd number
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 5 - getNextOddCount returns next odd number # time=0.495ms
+    ok 5 - getNextOddCount returns next odd number # time=0.413ms
     
     # Subtest: getPreviousOddCount returns previous odd number
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 6 - getPreviousOddCount returns previous odd number # time=0.529ms
+    ok 6 - getPreviousOddCount returns previous odd number # time=0.41ms
     
     1..6
-ok 10 - UnifiedRebalancer - Odd Replica Count Helpers # time=24.313ms
+ok 10 - UnifiedRebalancer - Odd Replica Count Helpers # time=20.781ms
 
 # Subtest: UnifiedRebalancer - Policy-Driven Rebalancing
     # Subtest: validates replica count to be odd
@@ -253,17 +262,17 @@ ok 10 - UnifiedRebalancer - Odd Replica Count Helpers # time=24.313ms
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 1 - validates replica count to be odd # time=1.26ms
+    ok 1 - validates replica count to be odd # time=0.873ms
     
     # Subtest: calculates target replica count for growth
         ok 1 - should be equal
         1..1
-    ok 2 - calculates target replica count for growth # time=0.492ms
+    ok 2 - calculates target replica count for growth # time=0.457ms
     
     # Subtest: calculates target replica count for shrink
         ok 1 - should be equal
         1..1
-    ok 3 - calculates target replica count for shrink # time=0.442ms
+    ok 3 - calculates target replica count for shrink # time=0.298ms
     
     # Subtest: applyPolicy detects need for rebalancing
         ok 1 - should be equal
@@ -271,16 +280,16 @@ ok 10 - UnifiedRebalancer - Odd Replica Count Helpers # time=24.313ms
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 4 - applyPolicy detects need for rebalancing # time=0.817ms
+    ok 4 - applyPolicy detects need for rebalancing # time=0.457ms
     
     # Subtest: applyPolicy detects replicas not spread
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 5 - applyPolicy detects replicas not spread # time=0.546ms
+    ok 5 - applyPolicy detects replicas not spread # time=0.328ms
     
     1..5
-ok 11 - UnifiedRebalancer - Policy-Driven Rebalancing # time=27.166ms
+ok 11 - UnifiedRebalancer - Policy-Driven Rebalancing # time=22.616ms
 
 # Subtest: UnifiedRebalancer - Rebalancing Triggers
     # Subtest: schedules periodic checks when becoming leader
@@ -288,90 +297,133 @@ ok 11 - UnifiedRebalancer - Policy-Driven Rebalancing # time=27.166ms
         ok 2 - Check was scheduled
         ok 3 - should be equal
         1..3
-    ok 1 - schedules periodic checks when becoming leader # time=0.79ms
+    ok 1 - schedules periodic checks when becoming leader # time=0.531ms
     
     # Subtest: cancels scheduled checks when losing leadership
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 2 - cancels scheduled checks when losing leadership # time=0.511ms
+    ok 2 - cancels scheduled checks when losing leadership # time=0.368ms
     
     # Subtest: triggers immediate check for critical events
         ok 1 - Immediate check was triggered
         1..1
-    ok 3 - triggers immediate check for critical events # time=0.409ms
+    ok 3 - triggers immediate check for critical events # time=0.341ms
     
     # Subtest: detects critical CDC events
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 4 - detects critical CDC events # time=0.616ms
+    ok 4 - detects critical CDC events # time=0.638ms
     
     # Subtest: detects service failure CDC events
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 5 - detects service failure CDC events # time=0.471ms
+    ok 5 - detects service failure CDC events # time=0.486ms
     
     # Subtest: uses exponential backoff when stable
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 6 - uses exponential backoff when stable # time=0.487ms
+    ok 6 - uses exponential backoff when stable # time=0.473ms
     
     # Subtest: resets interval after rebalancing action
         ok 1 - should be equal
         1..1
-    ok 7 - resets interval after rebalancing action # time=0.353ms
+    ok 7 - resets interval after rebalancing action # time=0.244ms
     
     1..7
-ok 12 - UnifiedRebalancer - Rebalancing Triggers # time=27.746ms
+ok 12 - UnifiedRebalancer - Rebalancing Triggers # time=20.218ms
 
 # Subtest: UnifiedRebalancer - Replica State Management
     # Subtest: excludes failed replicas from healthy count
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 1 - excludes failed replicas from healthy count # time=0.63ms
+    ok 1 - excludes failed replicas from healthy count # time=0.528ms
     
     # Subtest: generates remove moves for failed replicas
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 2 - generates remove moves for failed replicas # time=0.679ms
+    ok 2 - generates remove moves for failed replicas # time=0.415ms
     
     # Subtest: generates add moves to create replacement replicas
         ok 1 - Should have at least one remove move
         ok 2 - Should have at least one add move
         1..2
-    ok 3 - generates add moves to create replacement replicas # time=0.65ms
+    ok 3 - generates add moves to create replacement replicas # time=0.394ms
     
     # Subtest: places new replicas on healthy nodes only
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 4 - places new replicas on healthy nodes only # time=0.696ms
+    ok 4 - places new replicas on healthy nodes only # time=0.567ms
     
     # Subtest: uses policy replica count regardless of current count
         ok 1 - should be equal
         1..1
-    ok 5 - uses policy replica count regardless of current count # time=0.384ms
+    ok 5 - uses policy replica count regardless of current count # time=0.328ms
     
     # Subtest: respects minimum replica count
         ok 1 - should be equal
         1..1
-    ok 6 - respects minimum replica count # time=0.382ms
+    ok 6 - respects minimum replica count # time=0.26ms
     
     # Subtest: respects maximum replica count
         ok 1 - should be equal
         1..1
-    ok 7 - respects maximum replica count # time=0.475ms
+    ok 7 - respects maximum replica count # time=0.289ms
     
     1..7
-ok 13 - UnifiedRebalancer - Replica State Management # time=26.958ms
+ok 13 - UnifiedRebalancer - Replica State Management # time=20.611ms
 
-1..13
-# { total: 121, pass: 121 }
-# time=335.971ms
+# Subtest: UnifiedRebalancer - onNodeStateChange
+    # Subtest: triggers immediate check when node becomes ready
+        ok 1 - reason should be node_became_ready
+        ok 2 - should trigger immediate check
+        1..2
+    ok 1 - triggers immediate check when node becomes ready # time=0.969ms
+    
+    # Subtest: triggers immediate check when node fails
+        ok 1 - reason should be node_failed
+        ok 2 - should trigger immediate check
+        1..2
+    ok 2 - triggers immediate check when node fails # time=0.467ms
+    
+    # Subtest: does not trigger when not leader
+        ok 1 - should not trigger when not leader
+        1..1
+    ok 3 - does not trigger when not leader # time=0.349ms
+    
+    # Subtest: emits nodeStateChange event always
+        ok 1 - should emit one nodeStateChange event
+        ok 2 - event should have nodeId
+        ok 3 - event should have oldState
+        ok 4 - event should have newState
+        ok 5 - event should have timestamp
+        1..5
+    ok 4 - emits nodeStateChange event always # time=0.566ms
+    
+    # Subtest: emits rebalanceNeeded event when leader and rebalance needed
+        ok 1 - should emit one rebalanceNeeded event
+        ok 2 - event should have nodeId
+        ok 3 - event should have reason
+        ok 4 - event should have timestamp
+        1..4
+    ok 5 - emits rebalanceNeeded event when leader and rebalance needed # time=0.5ms
+    
+    # Subtest: does not emit rebalanceNeeded when not leader
+        ok 1 - should not emit rebalanceNeeded when not leader
+        1..1
+    ok 6 - does not emit rebalanceNeeded when not leader # time=0.225ms
+    
+    1..6
+ok 14 - UnifiedRebalancer - onNodeStateChange # time=22.851ms
+
+1..14
+# { total: 141, pass: 141 }
+# time=490.763ms

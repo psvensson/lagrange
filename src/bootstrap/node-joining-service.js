@@ -43,7 +43,6 @@ import {AssignmentEpochManager} from '../rebalancer/assignment-epoch-manager.js'
 import {AssignmentEpoch} from '../rebalancer/assignment-epoch.js';
 import {CDCIntegrationService} from '../cdc/cdc-integration-service.js';
 import {SQLQueryEngine} from '../query/sql-query-engine.js';
-import {CacheHydrationService} from '../cache/cache-hydration-service.js';
 import {CACHE_SYSTEM_TABLES} from '../cache/cache-constants.js';
 import {TablePolicyService} from '../policy/table-policy-service.js';
 import {RebalanceCoordinator} from '../rebalancer/rebalance-coordinator.js';
@@ -65,7 +64,6 @@ import {
 } from './node-joining-constants.js';
 import {ControlPlaneService} from '../control-plane/control-plane-service.js';
 import {RPCClient} from '../transport/rpc-client.js';
-import {RAFT_ROLE} from '../raft/constants.js';
 import {
   ControlPlaneMessageType,
   ControlPlaneField,
@@ -77,13 +75,17 @@ import {
   CDC_OPERATION,
   COLUMN,
   ENTITY_TYPE,
+  ENDPOINT_STATUS,
   NUM,
+  PROTOCOL,
   SERVICE_TYPE,
   STATE,
   STRING,
   TABLES,
+  TRANSPORT_TYPE,
   TYPEOF,
 } from '../constants/index.js';
+import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 
 const JoiningPhase = JOINING_PHASE;
 const DEFAULT_JOINING_CONFIG = JOINING_DEFAULT;
@@ -439,6 +441,8 @@ class NodeJoiningService extends EventEmitter {
     };
 
     this.heartbeatTimer = setInterval(sendHeartbeat, this.config.heartbeatIntervalMs);
+    // Unref to allow process exit when this is the only timer
+    this.heartbeatTimer.unref();
     sendHeartbeat();
   }
 
@@ -546,7 +550,7 @@ class NodeJoiningService extends EventEmitter {
         if (parsedError.code ===
             BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
           throw new Error(
-            JOINING_ERROR_MSG.LEADER_METADATA_INCOMPLETE(
+            JOINING_ERROR_MSG.leaderMetadataIncomplete(
               this.formatLeaderMetadataDetails(parsedError),
             ),
           );
@@ -555,7 +559,7 @@ class NodeJoiningService extends EventEmitter {
         if (parsedError.code ===
             BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
           throw new Error(
-            JOINING_ERROR_MSG.BOOTSTRAP_NOT_READY(parsedError.phase),
+            JOINING_ERROR_MSG.bootstrapNotReady(parsedError.phase),
           );
         }
       }
@@ -565,8 +569,7 @@ class NodeJoiningService extends EventEmitter {
         bootstrapUrl,
         error: error.message,
       });
-      const contactSeedFailed = JOINING_ERROR_MSG.CONTACT_SEED_FAILED;
-      throw new Error(contactSeedFailed(error.message));
+      throw new Error(JOINING_ERROR_MSG.contactSeedFailed(error.message));
     }
   }
 
@@ -588,7 +591,7 @@ class NodeJoiningService extends EventEmitter {
 
     try {
       return JSON.parse(match[1]);
-    } catch (parseError) {
+    } catch (_parseError) {
       return null;
     }
   }
@@ -602,13 +605,13 @@ class NodeJoiningService extends EventEmitter {
   buildBootstrapFailureError(response) {
     if (response?.code ===
         BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
-      return JOINING_ERROR_MSG.LEADER_METADATA_INCOMPLETE(
+      return JOINING_ERROR_MSG.leaderMetadataIncomplete(
         this.formatLeaderMetadataDetails(response),
       );
     }
 
     if (response?.code === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
-      return JOINING_ERROR_MSG.BOOTSTRAP_NOT_READY(response.phase);
+      return JOINING_ERROR_MSG.bootstrapNotReady(response.phase);
     }
 
     return response?.error || JOINING_ERROR_MSG.BOOTSTRAP_REQUEST_FAILED;
@@ -1238,6 +1241,10 @@ class NodeJoiningService extends EventEmitter {
       throw error;
     }
 
+    // Connect to all cluster nodes for full mesh connectivity
+    // This ensures Raft messages can flow between all nodes
+    await this.connectToClusterNodes();
+
     const targetAddress = this.controlPlaneTargetAddress ||
       this.resolveControlPlaneTargetAddress();
     if (!targetAddress) {
@@ -1271,7 +1278,7 @@ class NodeJoiningService extends EventEmitter {
         state: STATE.CONNECTED,
         error: error.message,
       });
-      throw new Error(JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_FAILED(error.message));
+      throw new Error(JOINING_ERROR_MSG.controlPlaneMessageFailed(error.message));
     }
 
     this.logger.debug(JOINING_LOG_MSG.WS_INFRA_READY, {
@@ -1281,6 +1288,133 @@ class NodeJoiningService extends EventEmitter {
       hasMessageRouter: !!this.messageRouter,
       hasSelfConnection: wsPort ? this.messageRouter.hasSelfConnection() : false,
     });
+  }
+
+  /**
+   * Connect to all cluster nodes for full mesh connectivity.
+   * Skips nodes we're already connected to (checked via messageRouter).
+   * All nodes are equal peers - no special treatment for any node.
+   * @return {Promise<void>}
+   * @private
+   */
+  async connectToClusterNodes() {
+    const snapshots = this.bootstrapResponse?.systemTableSnapshots;
+    const nodesSnapshot = snapshots?.nodes;
+
+    if (!Array.isArray(nodesSnapshot) || nodesSnapshot.length === NUM.ZERO) {
+      return;
+    }
+
+    // Filter to nodes that are not this node
+    const otherNodes = nodesSnapshot.filter((node) => {
+      const nodeId = node?.node_id;
+      return nodeId && nodeId !== this.nodeId;
+    });
+
+    if (otherNodes.length === NUM.ZERO) {
+      return;
+    }
+
+    this.logger.info(JOINING_LOG_MSG.CONNECTING_TO_CLUSTER_NODES, {
+      nodeId: this.nodeId,
+      otherNodeCount: otherNodes.length,
+      otherNodeIds: otherNodes.map((n) => n.node_id),
+    });
+
+    // Connect to each node in parallel, skipping already-connected nodes
+    const connectionPromises = otherNodes.map(async (node) => {
+      const targetNodeId = node.node_id;
+      const nodeAddress = node.node_address;
+
+      // Skip if already connected (check via nodeConnections map)
+      if (this.messageRouter.nodeConnections?.has(targetNodeId)) {
+        return;
+      }
+
+      if (!nodeAddress) {
+        this.logger.warn(JOINING_LOG_MSG.CLUSTER_NODE_CONNECT_FAILED, {
+          nodeId: this.nodeId,
+          targetNodeId,
+          error: 'Missing node_address',
+        });
+        return;
+      }
+
+      // Derive WebSocket address from node address
+      // node_address format: "hostname:port" (e.g., "localhost:8082")
+      // WebSocket port = REST port + WS_PORT_OFFSET (1000)
+      const wsAddress = this.deriveWsAddressFromNodeAddress(nodeAddress);
+      if (!wsAddress) {
+        this.logger.warn(JOINING_LOG_MSG.CLUSTER_NODE_CONNECT_FAILED, {
+          nodeId: this.nodeId,
+          targetNodeId,
+          nodeAddress,
+          error: 'Could not derive WebSocket address',
+        });
+        return;
+      }
+
+      try {
+        await this.messageRouter.connectToNode(targetNodeId, wsAddress);
+        this.logger.info(JOINING_LOG_MSG.CLUSTER_NODE_CONNECTED, {
+          nodeId: this.nodeId,
+          targetNodeId,
+          wsAddress,
+        });
+      } catch (error) {
+        // Log but don't fail - the node might be temporarily unavailable
+        // Raft will handle retries and leader election
+        this.logger.warn(JOINING_LOG_MSG.CLUSTER_NODE_CONNECT_FAILED, {
+          nodeId: this.nodeId,
+          targetNodeId,
+          wsAddress,
+          error: error.message,
+        });
+      }
+    });
+
+    await Promise.all(connectionPromises);
+
+    this.logger.info(JOINING_LOG_MSG.CLUSTER_CONNECTIONS_COMPLETE, {
+      nodeId: this.nodeId,
+      connectedNodes: this.messageRouter.getConnectedNodes?.() ||
+        Array.from(this.messageRouter.nodeConnections?.keys() || []),
+    });
+  }
+
+  /**
+   * Derive WebSocket address from node REST address.
+   * @param {string} nodeAddress - Node address in format "hostname:port".
+   * @return {string|null} WebSocket address or null if cannot derive.
+   * @private
+   */
+  deriveWsAddressFromNodeAddress(nodeAddress) {
+    if (!nodeAddress || typeof nodeAddress !== TYPEOF.STRING) {
+      return null;
+    }
+
+    // Parse hostname:port format
+    const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
+    if (colonIndex === NUM.NEGATIVE_ONE || colonIndex === NUM.ZERO) {
+      // No colon found or colon at start (empty hostname)
+      return null;
+    }
+
+    const hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
+    if (!hostname || hostname.length === NUM.ZERO) {
+      return null;
+    }
+
+    const portStr = nodeAddress.substring(colonIndex + NUM.ONE);
+    const restPort = parseInt(portStr, NUM.TEN);
+
+    if (!Number.isFinite(restPort) || restPort <= NUM.ZERO) {
+      return null;
+    }
+
+    // WebSocket port = REST port + WS_PORT_OFFSET
+    const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
+    return `${PROTOCOL.WS}${hostname}${ADDRESS.PORT_SEPARATOR}${wsPort}`;
   }
 
   /**
@@ -1477,7 +1611,9 @@ class NodeJoiningService extends EventEmitter {
    * Register this node in the cluster's nodes table.
    * Uses SQL query engine to INSERT into nodes table.
    * Query routes through message router to partition leader.
+   * Also registers the WebSocket endpoint in node_endpoints table.
    * Requirements: 2.1 - Joining node registers itself in cluster.
+   * Requirements: 8.2 - Node registration creates endpoint in node_endpoints table.
    * @return {Promise<void>}
    * @private
    */
@@ -1550,8 +1686,74 @@ class NodeJoiningService extends EventEmitter {
         memoryMb: totalMemoryMb,
         diskGb,
       });
+
+      // Register WebSocket endpoint in node_endpoints table
+      // Requirements: 8.2 - Node registration creates endpoint
+      await this.registerNodeEndpoint(queryEngine, now);
     } catch (error) {
       this.logger.error('Failed to register node in cluster', {
+        nodeId: this.nodeId,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Register the WebSocket endpoint for this node in the node_endpoints table.
+   * Requirements: 8.2 - Node registration creates endpoint in node_endpoints table.
+   * @param {Object} queryEngine - SQL query engine instance.
+   * @param {number} now - Current timestamp.
+   * @return {Promise<void>}
+   * @private
+   */
+  async registerNodeEndpoint(queryEngine, now) {
+    this.logger.info(JOINING_LOG_MSG.ENDPOINT_REGISTERING, {
+      nodeId: this.nodeId,
+      nodeAddress: this.nodeAddress,
+    });
+
+    const endpointId = `ep-${this.nodeId}-ws`;
+
+    const endpointSql = `INSERT INTO ${TABLES.NODE_ENDPOINTS} (
+      ${COLUMN.ENDPOINT_ID},
+      ${COLUMN.NODE_ID},
+      ${COLUMN.TRANSPORT_TYPE},
+      ${COLUMN.ADDRESS},
+      ${COLUMN.PRIORITY},
+      ${COLUMN.METADATA},
+      ${COLUMN.STATUS},
+      ${COLUMN.CREATED_AT},
+      ${COLUMN.UPDATED_AT}
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+    const endpointParams = [
+      endpointId,
+      this.nodeId,
+      TRANSPORT_TYPE.WEBSOCKET,
+      this.nodeAddress,
+      NUM.ZERO, // priority (0 = highest)
+      JSON.stringify({}), // metadata
+      ENDPOINT_STATUS.ACTIVE,
+      now,
+      now,
+    ];
+
+    try {
+      const endpointResult = await queryEngine.executeQuery(endpointSql, endpointParams);
+
+      if (!endpointResult.success) {
+        throw new Error(`Failed to register endpoint: ${endpointResult.error}`);
+      }
+
+      this.logger.info(JOINING_LOG_MSG.ENDPOINT_REGISTERED, {
+        nodeId: this.nodeId,
+        endpointId,
+        transportType: TRANSPORT_TYPE.WEBSOCKET,
+        address: this.nodeAddress,
+      });
+    } catch (error) {
+      this.logger.error(JOINING_LOG_MSG.ENDPOINT_REGISTER_FAILED, {
         nodeId: this.nodeId,
         error: error.message,
       });
@@ -1569,7 +1771,7 @@ class NodeJoiningService extends EventEmitter {
   async subscribeToCDCEvents() {
     if (!this.cdcIntegrationService) {
       const error = new Error(
-        JOINING_ERROR_MSG.CONTROL_PLANE_CDC_SUBSCRIBE_FAILED(
+        JOINING_ERROR_MSG.controlPlaneCdcSubscribeFailed(
           'all system tables',
           'CDC integration service not available',
         ),
@@ -1728,7 +1930,7 @@ class NodeJoiningService extends EventEmitter {
         error: proposal.error,
         violations: proposal.violations,
       });
-      throw new Error(JOINING_ERROR_MSG.PULL_ASSIGN_FAILED(proposal.error));
+      throw new Error(JOINING_ERROR_MSG.pullAssignFailed(proposal.error));
     }
 
     if (!proposal.proposedAssignments) {
@@ -1751,7 +1953,7 @@ class NodeJoiningService extends EventEmitter {
         nodeId: this.nodeId,
         error: epochResult.error,
       });
-      throw new Error(JOINING_ERROR_MSG.EPOCH_PROPOSAL_FAILED(epochResult.error));
+      throw new Error(JOINING_ERROR_MSG.epochProposalFailed(epochResult.error));
     }
 
     this.logger.info(JOINING_LOG_MSG.EPOCH_PROPOSED, {
@@ -1780,7 +1982,7 @@ class NodeJoiningService extends EventEmitter {
 
       if (createResult.failed.length > NUM.ZERO) {
         throw new Error(
-          JOINING_ERROR_MSG.LOCAL_REPLICA_CREATE_FAILED(
+          JOINING_ERROR_MSG.localReplicaCreateFailed(
             createResult.failed.join(', '),
           ),
         );
@@ -1851,7 +2053,7 @@ class NodeJoiningService extends EventEmitter {
         `${failure.partitionId}: ${failure.error}`,
       ).join(', ');
       throw new Error(
-        JOINING_ERROR_MSG.REPLICA_SYNC_FAILED('replica_sync', failureSummary),
+        JOINING_ERROR_MSG.replicaSyncFailed('replica_sync', failureSummary),
       );
     }
   }
@@ -1973,6 +2175,12 @@ class NodeJoiningService extends EventEmitter {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
+    }
+
+    // Shutdown RPC client to cancel pending requests
+    if (this.rpcClient) {
+      await this.rpcClient.shutdown();
+      this.rpcClient = null;
     }
 
     // Shutdown control plane service
@@ -2191,7 +2399,7 @@ class NodeJoiningService extends EventEmitter {
     for (const messageGroupService of this.messageGroupServices.values()) {
       assertCritical(
         messageGroupService && typeof messageGroupService.subscribeToCDC === TYPEOF.FUNCTION,
-        JOINING_ERROR_MSG.CONTROL_PLANE_CDC_SUBSCRIBE_FAILED(
+        JOINING_ERROR_MSG.controlPlaneCdcSubscribeFailed(
           STRING.UNKNOWN,
           'subscribeToCDC not available',
         ),
@@ -2207,7 +2415,7 @@ class NodeJoiningService extends EventEmitter {
             error: error.message,
           });
           throw new Error(
-            JOINING_ERROR_MSG.CONTROL_PLANE_CDC_SUBSCRIBE_FAILED(
+            JOINING_ERROR_MSG.controlPlaneCdcSubscribeFailed(
               schema.tableName,
               error.message,
             ),
@@ -2289,6 +2497,11 @@ class NodeJoiningService extends EventEmitter {
     });
     cdcIntegrationService.initialize();
     cdcIntegrationService.setSystemTableCache(systemTableCache);
+
+    // Set message router for mesh connectivity on node join
+    if (this.messageRouter) {
+      cdcIntegrationService.setMessageRouter(this.messageRouter);
+    }
 
     for (const messageGroup of this.messageGroupServices.values()) {
       if (messageGroup.setCdcIntegrationService) {

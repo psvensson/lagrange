@@ -107,6 +107,7 @@ class CDCHandler extends EventEmitter {
     this.flushInterval = setInterval(() => {
       this.flushAllBuffers();
     }, this.flushIntervalMs);
+    this.flushInterval.unref();
 
     this.initialized = true;
 

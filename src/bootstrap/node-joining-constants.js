@@ -28,6 +28,10 @@ const JOINING_LOG_MSG = Object.freeze({
   SEED_CONTACTING: 'Contacting seed node',
   BOOTSTRAP_RESPONSE_RECEIVED: 'Received bootstrap response',
   SEED_CONTACT_FAILED: 'Failed to contact seed node',
+  CONNECTING_TO_CLUSTER_NODES: 'Connecting to other cluster nodes',
+  CLUSTER_NODE_CONNECTED: 'Connected to cluster node',
+  CLUSTER_NODE_CONNECT_FAILED: 'Failed to connect to cluster node',
+  CLUSTER_CONNECTIONS_COMPLETE: 'Cluster node connections complete',
   SELF_HOSTED_CREATING: 'Creating self-hosted message group',
   MESSAGE_ROUTER_REQUIRED: 'MessageRouter must be initialized before creating message groups',
   MESSAGE_GROUP_REPLICA_CREATED: 'Message group replica created',
@@ -86,6 +90,9 @@ const JOINING_LOG_MSG = Object.freeze({
   CDC_SUBSCRIPTION_FAILED: 'CDC subscription failed for message group service',
   REPLICA_HANDLER_READY: 'ReplicaHandler initialized',
   CDC_INTEGRATION_CREATE: 'Creating CDC integration service for joining node',
+  ENDPOINT_REGISTERING: 'Registering node endpoint in cluster',
+  ENDPOINT_REGISTERED: 'Node endpoint registered in cluster',
+  ENDPOINT_REGISTER_FAILED: 'Failed to register node endpoint in cluster',
 });
 
 const JOINING_ERROR_MSG = Object.freeze({
@@ -98,28 +105,28 @@ const JOINING_ERROR_MSG = Object.freeze({
   MOVE_REPLICA_MISSING: 'MOVE_REPLICA strategy requires replicaToMove in assignment',
   CONTROL_PLANE_TARGET_MISSING: 'No reachable control plane target address available',
   MESSAGE_GROUP_LEADER_REQUIRED: 'Message group leader is required for control plane routing',
-  LEADERSHIP_TIMEOUT: (timeoutMs) =>
+  leadershipTimeout: (timeoutMs) =>
     `Message group failed to establish leadership within ${timeoutMs}ms`,
-  CONTACT_SEED_FAILED: (message) => `Failed to contact seed node: ${message}`,
-  ROUTER_INIT_FAILED: (message) => `MessageRouter initialization failed: ${message}`,
+  contactSeedFailed: (message) => `Failed to contact seed node: ${message}`,
+  routerInitFailed: (message) => `MessageRouter initialization failed: ${message}`,
   STATE_QUERY_FAILED: 'State query failed',
   STATE_QUERY_CACHE_REQUIRED: 'System table cache is required for state query',
   STATE_QUERY_ENGINE_REQUIRED: 'SQL query engine is required for state query',
   STATE_QUERY_LEADERS_REQUIRED: 'Partition leaders are required for state query',
-  HTTP_STATUS: (status, body) => `HTTP ${status}: ${body}`,
-  HTTP_TIMEOUT: (timeoutMs) => `Request timeout after ${timeoutMs}ms`,
-  LEADER_METADATA_INCOMPLETE: (details) => `Leader metadata incomplete: ${details}`,
-  BOOTSTRAP_NOT_READY: (phase) =>
+  httpStatus: (status, body) => `HTTP ${status}: ${body}`,
+  httpTimeout: (timeoutMs) => `Request timeout after ${timeoutMs}ms`,
+  leaderMetadataIncomplete: (details) => `Leader metadata incomplete: ${details}`,
+  bootstrapNotReady: (phase) =>
     `Seed bootstrap not ready${phase ? ` (phase: ${phase})` : ''}`,
   READY_SIGNAL_NOT_ACK: 'Control plane did not acknowledge ready signal',
   READY_NODES_REQUIRED: 'Ready node list is required for pull-based assignment',
-  PULL_ASSIGN_FAILED: (message) => `Pull-based assignment failed: ${message}`,
-  EPOCH_PROPOSAL_FAILED: (message) => `Epoch proposal failed: ${message}`,
-  LOCAL_REPLICA_CREATE_FAILED: (details) => `Failed to create local replicas: ${details}`,
-  REPLICA_SYNC_FAILED: (partitionId, message) =>
+  pullAssignFailed: (message) => `Pull-based assignment failed: ${message}`,
+  epochProposalFailed: (message) => `Epoch proposal failed: ${message}`,
+  localReplicaCreateFailed: (details) => `Failed to create local replicas: ${details}`,
+  replicaSyncFailed: (partitionId, message) =>
     `Replica sync failed for ${partitionId}: ${message}`,
-  CONTROL_PLANE_MESSAGE_FAILED: (message) => `Control plane message failed: ${message}`,
-  CONTROL_PLANE_CDC_SUBSCRIBE_FAILED: (tableName, message) =>
+  controlPlaneMessageFailed: (message) => `Control plane message failed: ${message}`,
+  controlPlaneCdcSubscribeFailed: (tableName, message) =>
     `CDC subscription failed for ${tableName}: ${message}`,
   RPC_CLIENT_REQUIRED: 'RPC client is required for replica sync',
   REPLICA_HANDLER_ROUTER_REQUIRED: 'MessageRouter must be initialized before ReplicaHandler',

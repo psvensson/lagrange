@@ -36,6 +36,11 @@ const COLUMN = Object.freeze({
   READY_LEASE_EXPIRES_AT: 'ready_lease_expires_at',
   SERVICE_TYPE: 'service_type',
   RAFT_ROLE: 'raft_role',
+  // Endpoint columns for node_endpoints table
+  ENDPOINT_ID: 'endpoint_id',
+  TRANSPORT_TYPE: 'transport_type',
+  PRIORITY: 'priority',
+  METADATA: 'metadata',
 });
 
 export {COLUMN};

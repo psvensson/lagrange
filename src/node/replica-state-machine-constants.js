@@ -109,11 +109,11 @@ const REPLICA_STATE_MACHINE_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'ReplicaStateMachine requires nodeId',
   MISSING_CDC_SERVICE: 'ReplicaStateMachine requires cdcIntegrationService',
   MISSING_SYSTEM_TABLE_CACHE: 'ReplicaStateMachine requires systemTableCache',
-  TIMEOUT_REASON: (state, elapsedMs) =>
+  timeoutReason: (state, elapsedMs) =>
     `Timeout in ${state} state after ${elapsedMs}ms`,
-  TIMEOUT_MESSAGE: (timeoutMs) =>
+  timeoutMessage: (timeoutMs) =>
     `Operation timed out after ${timeoutMs}ms`,
-  RECOVERY_INCOMPLETE_OPERATION: (status) =>
+  recoveryIncompleteOperation: (status) =>
     `Replica was in ${status} state during node failure`,
 });
 

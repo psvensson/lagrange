@@ -35,10 +35,18 @@ function createMockSystemTableCache() {
  */
 function createMockCDCService() {
   return {
-    async insertSystemTableRow() { return {success: true}; },
-    async updateSystemTableRow() { return {success: true}; },
-    async deleteSystemTableRow() { return {success: true}; },
-    async upsertSystemTableRow() { return {success: true}; },
+    async insertSystemTableRow() {
+      return {success: true};
+    },
+    async updateSystemTableRow() {
+      return {success: true};
+    },
+    async deleteSystemTableRow() {
+      return {success: true};
+    },
+    async upsertSystemTableRow() {
+      return {success: true};
+    },
   };
 }
 

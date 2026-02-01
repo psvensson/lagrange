@@ -229,6 +229,9 @@ const CONFIG_KEY = Object.freeze({
   REPLICA_RECOVERY_MIN_PARTITION_REPLICAS: 'replicaRecovery.minPartitionReplicas',
   REPLICA_RECOVERY_MIN_MESSAGE_GROUP_REPLICAS: 'replicaRecovery.minMessageGroupReplicas',
   REPLICA_RECOVERY_DELAY_MS: 'replicaRecovery.recoveryDelayMs',
+
+  TRANSPORT_CONNECTION_POOL_TTL_MS: 'transport.connectionPoolTtlMs',
+  TRANSPORT_CONNECTION_POOL_CLEANUP_INTERVAL_MS: 'transport.connectionPoolCleanupIntervalMs',
 });
 
 /**
@@ -318,6 +321,8 @@ const CONFIG_SCHEMA = {
         pingIntervalMs: {type: 'number', minimum: 100},
         reconnectBackoffMultiplier: {type: 'number', minimum: 1},
         outboundQueueMaxConcurrent: {type: 'number', minimum: 1},
+        connectionPoolTtlMs: {type: 'number', minimum: 1000},
+        connectionPoolCleanupIntervalMs: {type: 'number', minimum: 1000},
       },
       additionalProperties: false,
     },
@@ -468,6 +473,8 @@ const DEFAULT_CONFIG = {
     pingIntervalMs: 30000,
     reconnectBackoffMultiplier: 1.5,
     outboundQueueMaxConcurrent: 2,
+    connectionPoolTtlMs: 300000, // 5 minutes
+    connectionPoolCleanupIntervalMs: 60000, // 1 minute
   },
   timeout: {
     bootstrapTotalMs: 30000,

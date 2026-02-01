@@ -20,7 +20,7 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {createMockCache, createMockCdcService, createTestRebalancer} from './test-helpers.js';
+import {createMockCdcService, createTestRebalancer} from './test-helpers.js';
 
 test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
   t.beforeEach(async () => {
@@ -245,5 +245,4 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
 
     t.pass('cleanup moves have replica_failed reason');
   });
-
 });

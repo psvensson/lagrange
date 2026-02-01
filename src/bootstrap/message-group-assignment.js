@@ -200,7 +200,7 @@ class MessageGroupAssignment {
     if (!assignment.strategy) {
       errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.STRATEGY_REQUIRED);
     } else if (!Object.values(MESSAGE_GROUP_ASSIGNMENT_STRATEGY).includes(assignment.strategy)) {
-      errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.INVALID_STRATEGY(assignment.strategy));
+      errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.invalidStrategy(assignment.strategy));
     }
 
     if (!assignment.groupId) {

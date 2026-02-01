@@ -15,5 +15,6 @@ export {STATE} from './states.js';
 export {STRING} from './strings.js';
 export {TABLES} from './tables.js';
 export {TIME_MS} from './time.js';
+export {TRANSPORT_TYPE, ENDPOINT_STATUS} from './transport-types.js';
 export {TYPEOF} from './types.js';
 export {WORKFLOW_STEP} from './workflow.js';

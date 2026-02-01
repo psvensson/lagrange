@@ -624,6 +624,7 @@ class ReplicaStateMachine extends EventEmitter {
     this.timeoutCheckInterval = setInterval(() => {
       this._checkTimeouts();
     }, this.timeoutCheckIntervalMs);
+    this.timeoutCheckInterval.unref();
 
     this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.TIMEOUT_CHECKER_STARTED, {
       intervalMs: this.timeoutCheckIntervalMs,
@@ -698,11 +699,11 @@ class ReplicaStateMachine extends EventEmitter {
       this.transition(timedOut.replicaId, ReplicaState.FAILED, {
         partitionId: timedOut.partitionId,
         nodeId: timedOut.nodeId,
-        reason: REPLICA_STATE_MACHINE_ERROR_MSG.TIMEOUT_REASON(
+        reason: REPLICA_STATE_MACHINE_ERROR_MSG.timeoutReason(
           timedOut.state,
           timedOut.elapsed,
         ),
-        errorMessage: REPLICA_STATE_MACHINE_ERROR_MSG.TIMEOUT_MESSAGE(
+        errorMessage: REPLICA_STATE_MACHINE_ERROR_MSG.timeoutMessage(
           timedOut.timeout,
         ),
       });
@@ -806,7 +807,7 @@ class ReplicaStateMachine extends EventEmitter {
             partitionId,
             nodeId,
             reason: REPLICA_STATE_MACHINE_REASON.RECOVERY_INCOMPLETE,
-            errorMessage: REPLICA_STATE_MACHINE_ERROR_MSG.RECOVERY_INCOMPLETE_OPERATION(
+            errorMessage: REPLICA_STATE_MACHINE_ERROR_MSG.recoveryIncompleteOperation(
               status,
             ),
             serviceId: service.service_id,

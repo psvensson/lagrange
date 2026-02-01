@@ -137,6 +137,43 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
       },
     });
 
+    // Mock the WebSocket connection to seed node (no real seed WS server in this test)
+    service.phaseConnectWebSocket = async function() {
+      // Initialize MessageRouter for local communication only
+      const {MessageRouter} = await import('../../src/transport/message-router.js');
+      this.messageRouter = new MessageRouter({
+        nodeId: this.nodeId,
+        nodeAddress: this.nodeAddress,
+        wsPort: this.wsPort,
+      });
+      this.messageRouter.setServiceNodeResolver((address) => {
+        const match = address.match(/^([^/]+)\//);
+        return match ? match[1] : null;
+      });
+      await this.messageRouter.initialize({startServer: true});
+      this.transport = this.messageRouter;
+    };
+
+    // Mock phases that require system tables (not available in this unit test)
+    service.phaseQuerySystemState = async function() {
+      // Skip actual system table queries - just mark as complete
+    };
+    service.initializeReplicaHandler = function() {
+      // Skip replica handler initialization
+    };
+    service.initializeControlPlaneService = async function() {
+      // Skip control plane service initialization
+    };
+    service.signalReadyForReplicas = async function() {
+      // Skip ready signal
+    };
+    service.initializePullBasedAssignment = async function() {
+      // Skip pull-based assignment
+    };
+    service.syncPulledReplicas = async function() {
+      // Skip replica sync
+    };
+
     // Track phase events
     const phases = [];
     service.on('phaseStart', (data) => phases.push(data.phase));
@@ -334,6 +371,28 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
       },
     });
 
+    // Mock the WebSocket connection to seed node (no real seed WS server in this test)
+    service.phaseConnectWebSocket = async function() {
+      // Initialize MessageRouter for local communication only
+      const {MessageRouter} = await import('../../src/transport/message-router.js');
+      this.messageRouter = new MessageRouter({
+        nodeId: this.nodeId,
+        nodeAddress: this.nodeAddress,
+        wsPort: this.wsPort,
+      });
+      this.messageRouter.setServiceNodeResolver((address) => {
+        const match = address.match(/^([^/]+)\//);
+        return match ? match[1] : null;
+      });
+      await this.messageRouter.initialize({startServer: true});
+      this.transport = this.messageRouter;
+    };
+
+    // Mock phaseJoinExistingMessageGroup - it requires SQL engine which isn't available
+    service.phaseJoinExistingMessageGroup = async function() {
+      // Skip actual message group joining - just mark as complete
+    };
+
     service.phaseWaitForLeadership = async () => {
       throw new Error('leadership timeout (test)');
     };
@@ -456,6 +515,31 @@ test('NodeJoiningService - emits events', async (t) => {
         leadershipWaitMaxDelayMs: 100,
       },
     });
+
+    // Mock the WebSocket connection to seed node (no real seed WS server in this test)
+    service.phaseConnectWebSocket = async function() {
+      // Initialize MessageRouter for local communication only
+      const {MessageRouter} = await import('../../src/transport/message-router.js');
+      this.messageRouter = new MessageRouter({
+        nodeId: this.nodeId,
+        nodeAddress: this.nodeAddress,
+        wsPort: this.wsPort,
+      });
+      this.messageRouter.setServiceNodeResolver((address) => {
+        const match = address.match(/^([^/]+)\//);
+        return match ? match[1] : null;
+      });
+      await this.messageRouter.initialize({startServer: true});
+      this.transport = this.messageRouter;
+    };
+
+    // Mock phases that require system tables (not available in this unit test)
+    service.phaseQuerySystemState = async function() {};
+    service.initializeReplicaHandler = function() {};
+    service.initializeControlPlaneService = async function() {};
+    service.signalReadyForReplicas = async function() {};
+    service.initializePullBasedAssignment = async function() {};
+    service.syncPulledReplicas = async function() {};
 
     const events = [];
     service.on('phaseStart', (data) => events.push({type: 'start', phase: data.phase}));

@@ -32,6 +32,7 @@ const SystemTableName = {
   CONTEXTS: TABLES.CONTEXTS,
   CODE: TABLES.CODE,
   REPLICA_OPERATIONS: TABLES.REPLICA_OPERATIONS,
+  NODE_ENDPOINTS: TABLES.NODE_ENDPOINTS,
 };
 
 /**
@@ -167,12 +168,13 @@ const SERVICES_SCHEMA = {
     {name: 'partition_id', type: ColumnType.TEXT},
     {name: 'group_id', type: ColumnType.TEXT},
     {name: 'replica_id', type: ColumnType.TEXT},
-    {name: 'raft_role', type: ColumnType.TEXT}, // leader, follower, candidate (Req 14.6)
+    {name: 'raft_role', type: ColumnType.TEXT}, // leader, follower, candidate
     {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
-    {name: 'state_entered_at', type: ColumnType.INTEGER}, // Timestamp when current state was entered (Req 4.1)
-    {name: 'previous_state', type: ColumnType.TEXT}, // Previous state for debugging (Req 4.1)
-    {name: 'trigger_reason', type: ColumnType.TEXT}, // What triggered the current state (Req 4.1)
-    {name: 'error_message', type: ColumnType.TEXT}, // Error message if in failed state (Req 4.1)
+    // Timestamp when current state was entered
+    {name: 'state_entered_at', type: ColumnType.INTEGER},
+    {name: 'previous_state', type: ColumnType.TEXT}, // Previous state for debugging
+    {name: 'trigger_reason', type: ColumnType.TEXT}, // What triggered current state
+    {name: 'error_message', type: ColumnType.TEXT}, // Error if in failed state
     {name: 'address', type: ColumnType.TEXT},
     {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
     {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
@@ -337,6 +339,31 @@ const REPLICA_OPERATIONS_SCHEMA = {
 };
 
 /**
+ * Node endpoints system table schema.
+ * Stores transport endpoints for nodes (WebSocket, NATS, Veilid, etc.).
+ * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5
+ */
+const NODE_ENDPOINTS_SCHEMA = {
+  tableName: SystemTableName.NODE_ENDPOINTS,
+  columns: [
+    {name: 'endpoint_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'node_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'transport_type', type: ColumnType.TEXT, notNull: true},
+    {name: 'address', type: ColumnType.TEXT, notNull: true},
+    {name: 'priority', type: ColumnType.INTEGER, notNull: true, defaultValue: 0},
+    {name: 'metadata', type: ColumnType.TEXT},
+    {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {name: 'idx_node_endpoints_node', columns: ['node_id']},
+    {name: 'idx_node_endpoints_type', columns: ['transport_type']},
+    {name: 'idx_node_endpoints_status', columns: ['status']},
+  ],
+};
+
+/**
  * All system table schemas in creation order.
  * Order matters for foreign key dependencies.
  */
@@ -353,6 +380,7 @@ const SYSTEM_TABLE_SCHEMAS = [
   CONTEXTS_SCHEMA,
   CODE_SCHEMA,
   REPLICA_OPERATIONS_SCHEMA,
+  NODE_ENDPOINTS_SCHEMA,
 ];
 
 /**
@@ -372,6 +400,7 @@ const INITIAL_PARTITION_IDS = {
   [SystemTableName.CONTEXTS]: 'contexts-p1',
   [SystemTableName.CODE]: 'code-p1',
   [SystemTableName.REPLICA_OPERATIONS]: 'replica_operations-p1',
+  [SystemTableName.NODE_ENDPOINTS]: 'node_endpoints-p1',
 };
 
 /**
@@ -396,6 +425,9 @@ const INITIAL_REPLICA_IDS = {
   [SystemTableName.CODE]: ['code-p1-r1', 'code-p1-r2', 'code-p1-r3'],
   [SystemTableName.REPLICA_OPERATIONS]: [
     'replica_operations-p1-r1', 'replica_operations-p1-r2', 'replica_operations-p1-r3',
+  ],
+  [SystemTableName.NODE_ENDPOINTS]: [
+    'node_endpoints-p1-r1', 'node_endpoints-p1-r2', 'node_endpoints-p1-r3',
   ],
 };
 
@@ -493,6 +525,7 @@ export {
   CONTEXTS_SCHEMA,
   CODE_SCHEMA,
   REPLICA_OPERATIONS_SCHEMA,
+  NODE_ENDPOINTS_SCHEMA,
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_PARTITION_IDS,
   INITIAL_REPLICA_IDS,

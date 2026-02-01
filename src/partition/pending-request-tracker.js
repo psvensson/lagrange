@@ -55,7 +55,7 @@ class PendingRequestTracker {
           timeoutMs,
           type: metadata.type,
         });
-        reject(new Error(PENDING_REQUEST_ERROR_MSG.ACK_TIMEOUT(timeoutMs, requestId)));
+        reject(new Error(PENDING_REQUEST_ERROR_MSG.ackTimeout(timeoutMs, requestId)));
       }, timeoutMs);
 
       this.pendingRequests.set(requestId, {
@@ -231,7 +231,7 @@ class PendingRequestTracker {
       if (elapsed > timeoutMs + PENDING_REQUEST_DEFAULT.STALE_REQUEST_BUFFER_MS) {
         clearTimeout(pending.timeoutId);
         this.pendingRequests.delete(requestId);
-        pending.reject(new Error(PENDING_REQUEST_ERROR_MSG.STALE_REQUEST(elapsed)));
+        pending.reject(new Error(PENDING_REQUEST_ERROR_MSG.staleRequest(elapsed)));
         cleanedCount += NUM.ONE;
 
         this.logger.warn(PENDING_REQUEST_LOG_MSG.CLEANED_STALE_REQUEST, {

@@ -6,7 +6,7 @@
 
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
-import {LOG_MSG, TABLES} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   FUNCTION_CONTEXT_TYPE,

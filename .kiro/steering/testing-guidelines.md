@@ -1,8 +1,35 @@
 # Testing Guidelines
 
+## Test-First Bug Fix Policy
+
+**All bug fixes MUST be preceded by a failing test that reproduces the bug.**
+
+Before implementing any fix for a reported bug or error:
+
+1. **REPRODUCE** - Create a test that demonstrates the bug
+   - The test must fail with the current code
+   - The test should capture the exact failure scenario from the bug report
+   - Use minimal setup to isolate the bug
+
+2. **VERIFY** - Run the test to confirm it fails as expected
+   - The failure message should match the reported error
+   - Document the root cause in test comments if known
+
+3. **FIX** - Only after the test fails, implement the fix
+   - The fix should make the failing test pass
+   - No other tests should break
+
+4. **CONFIRM** - Run the test again to verify the fix works
+
+This ensures:
+- Bugs are properly understood before fixing
+- Fixes are verified to actually solve the problem
+- Regressions are prevented by the new test
+- The test suite grows to cover real-world failure scenarios
+
 ## Test Duration Hard Limit
 
-**Any test taking longer than 2 seconds is a HARD ERROR that requires immediate analysis.**
+**Any uinit test taking longer than 2 seconds is a HARD ERROR that requires immediate analysis. INtegration tests can take up to 30 seconds**
 
 This is a powerful multi-core machine running in-memory tests. There is no valid reason for tests to take more than a couple of seconds. If a test exceeds this limit:
 

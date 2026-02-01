@@ -34,7 +34,7 @@ const MESSAGE_GROUP_ASSIGNMENT_ERROR = Object.freeze({
   REPLICA_ADDRESSES_REQUIRED: 'Replica addresses are required for MOVE_REPLICA',
   REPLICA_COUNT_MIN: 'Replica count must be at least 3 for CREATE_SELF_HOSTED',
   REPLICA_COUNT_ODD: 'Replica count must be odd for Raft consensus',
-  INVALID_STRATEGY: (strategy) => `Invalid strategy: ${strategy}`,
+  invalidStrategy: (strategy) => `Invalid strategy: ${strategy}`,
 });
 
 export {

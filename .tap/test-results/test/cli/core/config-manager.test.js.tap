@@ -7,19 +7,19 @@ TAP version 14
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 1 - ConfigManager - has correct defaults # time=4.243ms
+ok 1 - ConfigManager - has correct defaults # time=4.103ms
 
 # Subtest: ConfigManager - getAll returns copy of config
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 2 - ConfigManager - getAll returns copy of config # time=0.291ms
+ok 2 - ConfigManager - getAll returns copy of config # time=0.299ms
 
 # Subtest: ConfigManager - getDefault returns default value
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 3 - ConfigManager - getDefault returns default value # time=0.232ms
+ok 3 - ConfigManager - getDefault returns default value # time=0.226ms
 
 # Subtest: ConfigManager - validateField validates number type
     ok 1 - should be equivalent
@@ -27,96 +27,96 @@ ok 3 - ConfigManager - getDefault returns default value # time=0.232ms
     ok 3 - should be equivalent
     ok 4 - should be equivalent
     1..4
-ok 4 - ConfigManager - validateField validates number type # time=1.346ms
+ok 4 - ConfigManager - validateField validates number type # time=1.325ms
 
 # Subtest: ConfigManager - validateField validates string enum
     ok 1 - should be equivalent
     ok 2 - should be equivalent
     ok 3 - should be equivalent
     1..3
-ok 5 - ConfigManager - validateField validates string enum # time=0.431ms
+ok 5 - ConfigManager - validateField validates string enum # time=0.309ms
 
 # Subtest: ConfigManager - validateField validates boolean
     ok 1 - should be equivalent
     ok 2 - should be equivalent
     ok 3 - should be equivalent
     1..3
-ok 6 - ConfigManager - validateField validates boolean # time=0.312ms
+ok 6 - ConfigManager - validateField validates boolean # time=0.286ms
 
 # Subtest: ConfigManager - validateField rejects unknown keys
     ok 1 - should be equivalent
     1..1
-ok 7 - ConfigManager - validateField rejects unknown keys # time=0.189ms
+ok 7 - ConfigManager - validateField rejects unknown keys # time=0.167ms
 
 # Subtest: ConfigManager - validateConfig validates entire config
     ok 1 - should be equivalent
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 8 - ConfigManager - validateConfig validates entire config # time=0.507ms
+ok 8 - ConfigManager - validateConfig validates entire config # time=0.483ms
 
 # Subtest: ConfigManager - applyCliArgs applies address
     ok 1 - should be equal
     1..1
-ok 9 - ConfigManager - applyCliArgs applies address # time=0.214ms
+ok 9 - ConfigManager - applyCliArgs applies address # time=0.312ms
 
 # Subtest: ConfigManager - applyCliArgs applies refresh interval
     ok 1 - should be equal
     1..1
-ok 10 - ConfigManager - applyCliArgs applies refresh interval # time=0.163ms
+ok 10 - ConfigManager - applyCliArgs applies refresh interval # time=0.176ms
 
 # Subtest: ConfigManager - applyCliArgs applies view
     ok 1 - should be equal
     1..1
-ok 11 - ConfigManager - applyCliArgs applies view # time=0.15ms
+ok 11 - ConfigManager - applyCliArgs applies view # time=0.155ms
 
 # Subtest: ConfigManager - applyCliArgs applies monochrome
     ok 1 - should be equal
     1..1
-ok 12 - ConfigManager - applyCliArgs applies monochrome # time=0.147ms
+ok 12 - ConfigManager - applyCliArgs applies monochrome # time=0.163ms
 
 # Subtest: ConfigManager - applyCliArgs applies readOnly
     ok 1 - should be equal
     1..1
-ok 13 - ConfigManager - applyCliArgs applies readOnly # time=0.155ms
+ok 13 - ConfigManager - applyCliArgs applies readOnly # time=0.167ms
 
 # Subtest: ConfigManager - applyCliArgs warns on invalid refresh
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 14 - ConfigManager - applyCliArgs warns on invalid refresh # time=0.306ms
+ok 14 - ConfigManager - applyCliArgs warns on invalid refresh # time=0.384ms
 
 # Subtest: ConfigManager - applyCliArgs warns on invalid view
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 15 - ConfigManager - applyCliArgs warns on invalid view # time=0.248ms
+ok 15 - ConfigManager - applyCliArgs warns on invalid view # time=0.393ms
 
 # Subtest: ConfigManager - applyCliArgs handles null args
     ok 1 - should be equal
     1..1
-ok 16 - ConfigManager - applyCliArgs handles null args # time=0.15ms
+ok 16 - ConfigManager - applyCliArgs handles null args # time=0.246ms
 
 # Subtest: ConfigManager - load applies environment variables
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 17 - ConfigManager - load applies environment variables # time=0.646ms
+ok 17 - ConfigManager - load applies environment variables # time=0.639ms
 
 # Subtest: ConfigManager - load warns on invalid env refresh interval
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 18 - ConfigManager - load warns on invalid env refresh interval # time=0.3ms
+ok 18 - ConfigManager - load warns on invalid env refresh interval # time=0.277ms
 
 # Subtest: ConfigManager - getWarnings returns copy
     ok 1 - should be equal
     1..1
-ok 19 - ConfigManager - getWarnings returns copy # time=0.17ms
+ok 19 - ConfigManager - getWarnings returns copy # time=0.158ms
 
 1..19
 # { total: 42, pass: 42 }
-# time=16.423ms
+# time=16.216ms

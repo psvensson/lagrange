@@ -601,3 +601,131 @@ test('QueryExecutor - findPartitionLeaderAddress filters by active status', (t) 
   t.equal(address, 'node2/partition/p1');
   t.end();
 });
+
+test('QueryExecutor - follows leader redirect response', async (t) => {
+  mockPartitionData.set('p1', [{id: 1, name: 'Alice'}]);
+
+  // Mock router that returns redirect on first call, success on second
+  let callCount = 0;
+  const redirectRouter = {
+    deliver: async function(address, message) {
+      callCount++;
+      if (message.type === 'QUERY') {
+        // First call to follower returns redirect
+        if (address === 'follower-node/partition/p1') {
+          return {
+            acknowledged: true,
+            success: false,
+            redirect: 'LEADER_REDIRECT',
+            leaderAddress: 'leader-node/partition/p1',
+            partitionId: 'p1',
+          };
+        }
+        // Second call to leader succeeds
+        if (address === 'leader-node/partition/p1') {
+          return {
+            acknowledged: true,
+            success: true,
+            rows: mockPartitionData.get('p1') || [],
+            changes: 1,
+          };
+        }
+      }
+      return {acknowledged: true, success: true, changes: 1};
+    },
+  };
+
+  // Cache returns follower address first
+  const systemCache = {
+    services: [
+      {
+        service_id: 'p1-follower',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'follower-node',
+        raft_role: 'follower',
+        address: 'follower-node/partition/p1',
+        status: 'active',
+      },
+    ],
+    filter: function(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter: redirectRouter,
+    systemCache,
+  });
+
+  const ast = parseSQL('SELECT * FROM users');
+  const result = await executor.executeSelect(ast, ['p1']);
+
+  t.equal(result.success, true, 'query should succeed after redirect');
+  t.equal(result.rows.length, 1, 'should return data from leader');
+  t.equal(callCount, 2, 'should make two calls (follower + leader)');
+
+  mockPartitionData.clear();
+});
+
+test('QueryExecutor - handles redirect when leader also fails', async (t) => {
+  // Mock router where both follower and leader fail
+  const failingRouter = {
+    deliver: async function(address, message) {
+      if (message.type === 'QUERY') {
+        if (address === 'follower-node/partition/p1') {
+          return {
+            acknowledged: true,
+            success: false,
+            redirect: 'LEADER_REDIRECT',
+            leaderAddress: 'leader-node/partition/p1',
+            partitionId: 'p1',
+          };
+        }
+        // Leader also fails
+        return {
+          acknowledged: true,
+          success: false,
+          error: 'Leader unavailable',
+          partitionId: 'p1',
+        };
+      }
+      return {acknowledged: true, success: true};
+    },
+  };
+
+  const systemCache = {
+    services: [
+      {
+        service_id: 'p1-follower',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'follower-node',
+        raft_role: 'follower',
+        address: 'follower-node/partition/p1',
+        status: 'active',
+      },
+    ],
+    filter: function(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter: failingRouter,
+    systemCache,
+  });
+
+  const ast = parseSQL('SELECT * FROM users');
+  const result = await executor.executeSelect(ast, ['p1']);
+
+  // Should fail gracefully - no rows but still returns result
+  t.equal(result.success, true, 'overall query succeeds');
+  t.equal(result.rows.length, 0, 'no rows when all replicas fail');
+});

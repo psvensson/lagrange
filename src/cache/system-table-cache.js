@@ -111,6 +111,19 @@ class SystemTableCache {
    */
   getReadyNodes() {
     const now = Date.now();
+    const allNodes = this.getAll(TABLES.NODES) || [];
+
+    this.logger.debug(CACHE_LOG_MSG.GET_READY_NODES_DEBUG, {
+      totalNodes: allNodes.length,
+      now,
+      nodes: allNodes.map((n) => ({
+        nodeId: n?.[COLUMN.NODE_ID],
+        wsState: n?.[COLUMN.WS_CONNECTION_STATE],
+        leaseExpiry: n?.[COLUMN.READY_LEASE_EXPIRES_AT],
+        leaseValid: n?.[COLUMN.READY_LEASE_EXPIRES_AT] > now,
+      })),
+    });
+
     const readyNodes = this.filter(TABLES.NODES, (node) => {
       const wsState = node?.[COLUMN.WS_CONNECTION_STATE];
       const leaseExpiry = node?.[COLUMN.READY_LEASE_EXPIRES_AT];
@@ -121,6 +134,42 @@ class SystemTableCache {
       const nodeId = node?.[COLUMN.NODE_ID];
       assertCritical(nodeId, CACHE_ERROR_MSG.NODE_ID_MISSING);
       return nodeId;
+    });
+  }
+
+  /**
+   * Get all endpoints for a specific node from the node_endpoints table.
+   * Endpoints are sorted by priority (lower priority value = higher preference).
+   * Requirements: 6.6 - System_Cache SHALL provide methods to query endpoints by node_id
+   * @param {string} nodeId - The node ID to get endpoints for
+   * @return {Array<Object>} Array of endpoint records sorted by priority (ascending)
+   */
+  getEndpointsForNode(nodeId) {
+    const endpoints = this.filter(TABLES.NODE_ENDPOINTS, (endpoint) => {
+      return endpoint[COLUMN.NODE_ID] === nodeId;
+    });
+
+    // Sort by priority (lower value = higher preference)
+    return endpoints.sort((a, b) => {
+      const priorityA = a[COLUMN.PRIORITY] ?? NUM.ZERO;
+      const priorityB = b[COLUMN.PRIORITY] ?? NUM.ZERO;
+      return priorityA - priorityB;
+    });
+  }
+
+  /**
+   * Filter endpoints by status.
+   * Requirements: 6.6 - System_Cache SHALL provide methods to query endpoints
+   * @param {Array<Object>} endpoints - Array of endpoint records to filter
+   * @param {string} status - Status to filter by (e.g., 'active', 'inactive')
+   * @return {Array<Object>} Array of endpoints matching the specified status
+   */
+  filterEndpointsByStatus(endpoints, status) {
+    if (!Array.isArray(endpoints)) {
+      return [];
+    }
+    return endpoints.filter((endpoint) => {
+      return endpoint[COLUMN.STATUS] === status;
     });
   }
 
@@ -286,7 +335,7 @@ class SystemTableCache {
     const key = data[pkField] || data[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
 
     if (!data || typeof key === TYPEOF.UNDEFINED) {
-      throw new Error(CACHE_ERROR_MSG.PRIMARY_KEY_MISSING(pkField));
+      throw new Error(CACHE_ERROR_MSG.primaryKeyMissing(pkField));
     }
 
     const table = this.tables.get(tableName);
@@ -381,7 +430,7 @@ class SystemTableCache {
   validateTableName(tableName) {
     if (!SYSTEM_TABLES.includes(tableName)) {
       throw new Error(
-        CACHE_ERROR_MSG.INVALID_TABLE_NAME(tableName, SYSTEM_TABLES),
+        CACHE_ERROR_MSG.invalidTableName(tableName, SYSTEM_TABLES),
       );
     }
   }
@@ -395,7 +444,7 @@ class SystemTableCache {
   validateOperation(operation) {
     if (!Object.values(CDC_OPERATIONS).includes(operation)) {
       throw new Error(
-        CACHE_ERROR_MSG.INVALID_CDC_OPERATION(
+        CACHE_ERROR_MSG.invalidCdcOperation(
           operation,
           Object.values(CDC_OPERATIONS),
         ),

@@ -11,6 +11,7 @@ const TABLES = Object.freeze({
   CONTEXTS: 'contexts',
   CODE: 'code',
   TABLES: 'tables',
+  NODE_ENDPOINTS: 'node_endpoints',
 });
 
 export {TABLES};

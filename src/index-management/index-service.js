@@ -654,7 +654,7 @@ class IndexService {
 
     const partitions = this.getPartitionsForTable(tableId);
     let successCount = 0;
-    let failCount = 0;
+    const failCount = 0;
 
     for (const partition of partitions) {
       const tableName = partition.tableName;

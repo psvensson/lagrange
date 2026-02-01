@@ -13,7 +13,7 @@ import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CACHE_SYSTEM_TABLES} from '../../src/cache/cache-constants.js';
-import {NUM, SERVICE_TYPE, STATE, STRING} from '../../src/constants/index.js';
+import {SERVICE_TYPE, STATE} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 beforeEach(() => {
@@ -62,14 +62,17 @@ function createMockSystemTableCache(data) {
 
 function ensureLeaderServices(systemTableData) {
   const services = [...(systemTableData.services || [])];
-  const nodeId = systemTableData.nodes?.[NUM.ZERO]?.node_id || STRING.UNKNOWN;
-  const address = STRING.EMPTY;
+  const seedNodeId = 'seed-node-1';
+  const seedNodeAddress = 'ws://localhost:8080';
 
   for (const partition of systemTableData.partitions || []) {
     const partitionId = partition.partition_id;
     if (!partitionId) {
       continue;
     }
+
+    // Ensure partition has leader_node_id
+    partition.leader_node_id = partition.leader_node_id || seedNodeId;
 
     const hasLeader = services.some((service) =>
       service.partition_id === partitionId &&
@@ -83,8 +86,8 @@ function ensureLeaderServices(systemTableData) {
         service_id: partitionId,
         service_type: SERVICE_TYPE.PARTITION,
         partition_id: partitionId,
-        node_id: nodeId,
-        address,
+        node_id: seedNodeId,
+        address: seedNodeAddress,
         raft_role: RAFT_ROLE.LEADER,
         status: STATE.ACTIVE,
       });
@@ -96,6 +99,9 @@ function ensureLeaderServices(systemTableData) {
     if (!groupId) {
       continue;
     }
+
+    // Ensure message group has leader_node_id
+    group.leader_node_id = group.leader_node_id || seedNodeId;
 
     const hasLeader = services.some((service) =>
       service.group_id === groupId &&
@@ -109,8 +115,8 @@ function ensureLeaderServices(systemTableData) {
         service_id: groupId,
         service_type: SERVICE_TYPE.MESSAGE_GROUP,
         group_id: groupId,
-        node_id: nodeId,
-        address,
+        node_id: seedNodeId,
+        address: seedNodeAddress,
         raft_role: RAFT_ROLE.LEADER,
         status: STATE.ACTIVE,
       });

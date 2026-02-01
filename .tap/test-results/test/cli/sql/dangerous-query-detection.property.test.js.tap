@@ -3,61 +3,61 @@ TAP version 14
     # Subtest: DELETE without WHERE is detected as dangerous
         ok 1 - DELETE without WHERE is detected as dangerous
         1..1
-    ok 1 - DELETE without WHERE is detected as dangerous # time=10.916ms
+    ok 1 - DELETE without WHERE is detected as dangerous # time=12.515ms
     
     # Subtest: DELETE with WHERE is not dangerous
         ok 1 - DELETE with WHERE is not dangerous
         1..1
-    ok 2 - DELETE with WHERE is not dangerous # time=4.39ms
+    ok 2 - DELETE with WHERE is not dangerous # time=4.891ms
     
     # Subtest: UPDATE without WHERE is detected as dangerous
         ok 1 - UPDATE without WHERE is detected as dangerous
         1..1
-    ok 3 - UPDATE without WHERE is detected as dangerous # time=2.697ms
+    ok 3 - UPDATE without WHERE is detected as dangerous # time=2.815ms
     
     # Subtest: UPDATE with WHERE is not dangerous
         ok 1 - UPDATE with WHERE is not dangerous
         1..1
-    ok 4 - UPDATE with WHERE is not dangerous # time=2.781ms
+    ok 4 - UPDATE with WHERE is not dangerous # time=3.317ms
     
     # Subtest: INSERT is never dangerous
         ok 1 - INSERT is never dangerous
         1..1
-    ok 5 - INSERT is never dangerous # time=1.669ms
+    ok 5 - INSERT is never dangerous # time=1.847ms
     
     # Subtest: SELECT is never dangerous
         ok 1 - SELECT is never dangerous
         1..1
-    ok 6 - SELECT is never dangerous # time=1.953ms
+    ok 6 - SELECT is never dangerous # time=1.555ms
     
     # Subtest: DELETE detection is case insensitive
         ok 1 - DELETE detection is case insensitive
         1..1
-    ok 7 - DELETE detection is case insensitive # time=1.025ms
+    ok 7 - DELETE detection is case insensitive # time=1.458ms
     
     # Subtest: UPDATE detection is case insensitive
         ok 1 - UPDATE detection is case insensitive
         1..1
-    ok 8 - UPDATE detection is case insensitive # time=1.257ms
+    ok 8 - UPDATE detection is case insensitive # time=1.495ms
     
     # Subtest: WHERE detection is case insensitive
         ok 1 - WHERE detection is case insensitive
         1..1
-    ok 9 - WHERE detection is case insensitive # time=1.809ms
+    ok 9 - WHERE detection is case insensitive # time=2.358ms
     
     # Subtest: DELETE with trailing semicolon is still dangerous
         ok 1 - DELETE with trailing semicolon is still dangerous
         1..1
-    ok 10 - DELETE with trailing semicolon is still dangerous # time=1.096ms
+    ok 10 - DELETE with trailing semicolon is still dangerous # time=3.835ms
     
     # Subtest: whitespace variations are handled
         ok 1 - whitespace variations are handled
         1..1
-    ok 11 - whitespace variations are handled # time=1.802ms
+    ok 11 - whitespace variations are handled # time=1.963ms
     
     1..11
-ok 1 - Property 21: Dangerous Query Detection # time=39.988ms
+ok 1 - Property 21: Dangerous Query Detection # time=46.661ms
 
 1..1
 # { total: 11, pass: 11 }
-# time=47.806ms
+# time=52.668ms

@@ -11,7 +11,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {AssignmentEpochManager} from '../../src/rebalancer/assignment-epoch-manager.js';
-import {AssignmentEpoch} from '../../src/rebalancer/assignment-epoch.js';
 
 test('Feature: simplified-cluster-architecture, Property 11: Concurrent Epoch Proposals',
   async (t) => {
@@ -51,7 +50,8 @@ test('Feature: simplified-cluster-architecture, Property 11: Concurrent Epoch Pr
                 });
               }
 
-              // Execute all proposals "concurrently" (sequentially but all using same expected epoch)
+              // Execute all proposals "concurrently"
+              // (sequentially but all using same expected epoch)
               const results = proposals.map((proposal) =>
                 manager.proposeEpoch(proposal.expectedEpoch, proposal.assignments),
               );

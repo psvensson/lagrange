@@ -277,8 +277,19 @@ Entity types:
 
 ## Rebalancing
 
+### UnifiedRebalancer
+
+The `UnifiedRebalancer` is the single rebalancer implementation for both partitions and message groups. Each partition/message group leader runs its own rebalancer instance, making independent decisions that converge to optimal state.
+
+Key characteristics:
+- **Per-entity rebalancer**: Each partition/message group has its own rebalancer instance
+- **Leader-driven**: Only the Raft leader runs the rebalancer for that entity
+- **Event-driven**: Emits `nodeStateChange` and `rebalanceNeeded` events for observability
+- **Policy-based**: Uses `TablePolicyService` for placement decisions
+- **Coordinator delegation**: Delegates operation execution to `RebalanceCoordinator`
+
 ### Triggers
-- Node join/leave
+- Node join/leave (via CDC events)
 - Replica failure
 - Policy changes
 - Periodic checks
@@ -292,6 +303,131 @@ Entity types:
 - Target replica count (odd numbers: 3, 5, 7)
 - Placement constraints (spread across nodes)
 - Resource thresholds (CPU, memory, disk)
+
+### Move Strategy
+- ADD moves execute first to ensure data availability
+- Critical REMOVE moves (failed replicas, wrong nodes) execute alongside ADDs
+- Non-critical REMOVE moves (spread optimization) deferred until ADDs complete
+
+## Epoch Management
+
+Partition assignments are coordinated using versioned epochs with compare-and-swap (CAS) semantics.
+
+### AssignmentEpoch (Value Object)
+
+An immutable, versioned snapshot of all partition-to-node assignments:
+
+```javascript
+{
+  epoch: number,           // Monotonically increasing version
+  assignments: {           // Partition to node list mapping
+    [partitionId]: [nodeId, nodeId, nodeId],
+  },
+  timestamp: string,       // HLC timestamp
+  proposedBy: string       // nodeId that proposed this epoch
+}
+```
+
+Key properties:
+- **Immutable**: Once created, cannot be modified (Object.freeze)
+- **Validated**: All fields validated on construction
+- **Serializable**: Can be converted to/from JSON for CDC transmission
+
+### AssignmentEpochManager (Stateful Coordinator)
+
+Manages epoch transitions with CAS coordination:
+
+- **proposeEpoch(expectedEpoch, newAssignments)**: CAS operation - only succeeds if current epoch matches expected
+- **applyEpoch(epoch)**: Apply epoch received via CDC - rejects stale epochs
+- **proposeEpochWithRetry()**: Handles CAS failures with exponential backoff
+
+Events emitted:
+- `epochChange`: When a new epoch is successfully proposed
+- `epochApplied`: When an epoch is applied via CDC
+- `proposalRetry`: When a CAS failure triggers retry
+
+### Why Two Classes?
+
+The separation follows single responsibility principle:
+- `AssignmentEpoch`: Pure data structure (immutable value object)
+- `AssignmentEpochManager`: Stateful coordination (mutable manager)
+
+This allows epochs to be safely passed around and serialized without risk of modification.
+
+## Message Group Assignment
+
+When a new node joins the cluster, it needs at least one message group replica for communication. Two strategies determine how this is assigned:
+
+### CREATE_SELF_HOSTED Strategy
+
+Used when no existing replicas can be moved:
+
+```
+New Node joins
+     │
+     ▼
+┌─────────────────────────┐
+│ Create new message group│
+│ with 3 local replicas   │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ All 3 replicas on new   │
+│ node (temporary)        │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ Rebalancer spreads      │
+│ replicas to other nodes │
+└─────────────────────────┘
+```
+
+When used:
+- First node joining after seed node
+- No existing message groups have movable replicas
+- Cluster is scaling up rapidly
+
+### MOVE_REPLICA Strategy
+
+Used when an existing replica can be transferred:
+
+```
+New Node joins
+     │
+     ▼
+┌─────────────────────────┐
+│ Find node with excess   │
+│ message group replicas  │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ Transfer replica ID to  │
+│ new node (not copy)     │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ Update services table   │
+│ to point to new node    │
+└─────────────────────────┘
+```
+
+When used:
+- Existing nodes have more than one message group replica
+- Rebalancing message groups across cluster
+- Preferred strategy for even distribution
+
+### Strategy Selection
+
+The bootstrap API automatically selects the strategy:
+
+1. Query services table for message group replicas
+2. Find nodes with multiple replicas (candidates for MOVE_REPLICA)
+3. If found: Use MOVE_REPLICA with the excess replica
+4. If not found: Use CREATE_SELF_HOSTED with new group ID
 
 ## Configuration
 

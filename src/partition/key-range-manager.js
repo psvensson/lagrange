@@ -184,7 +184,7 @@ class KeyRangeManager {
     // Check for overlaps with existing ranges
     for (const [existingId, existingRange] of this.ranges) {
       if (existingId !== partitionId && keyRange.overlaps(existingRange)) {
-        throw new Error(KEY_RANGE_ERROR_MSG.OVERLAP(partitionId, existingId));
+        throw new Error(KEY_RANGE_ERROR_MSG.overlap(partitionId, existingId));
       }
     }
 
@@ -269,10 +269,10 @@ class KeyRangeManager {
       .map(([partitionId, range]) => ({partitionId, range}));
 
     entries.sort((a, b) => {
-    if (a.range.start === null) return NUM.NEGATIVE_ONE;
-    if (b.range.start === null) return NUM.ONE;
-    return a.range.compareKeys(a.range.start, b.range.start);
-  });
+      if (a.range.start === null) return NUM.NEGATIVE_ONE;
+      if (b.range.start === null) return NUM.ONE;
+      return a.range.compareKeys(a.range.start, b.range.start);
+    });
 
     return entries;
   }
@@ -311,14 +311,14 @@ class KeyRangeManager {
     // Check first partition starts at NULL (unbounded)
     if (sorted[NUM.ZERO].range.start !== null) {
       errors.push(
-        KEY_RANGE_ERROR_MSG.FIRST_PARTITION_STARTS(sorted[NUM.ZERO].partitionId),
+        KEY_RANGE_ERROR_MSG.firstPartitionStarts(sorted[NUM.ZERO].partitionId),
       );
     }
 
     // Check last partition ends at NULL (unbounded)
     if (sorted[sorted.length - NUM.ONE].range.end !== null) {
       errors.push(
-        KEY_RANGE_ERROR_MSG.LAST_PARTITION_ENDS(
+        KEY_RANGE_ERROR_MSG.lastPartitionEnds(
           sorted[sorted.length - NUM.ONE].partitionId,
         ),
       );
@@ -336,7 +336,7 @@ class KeyRangeManager {
 
         if (current.range.compareKeys(currentEnd, nextStart) < NUM.ZERO) {
           errors.push(
-            KEY_RANGE_ERROR_MSG.GAP_BETWEEN_PARTITIONS(
+            KEY_RANGE_ERROR_MSG.gapBetweenPartitions(
               current.partitionId,
               next.partitionId,
               currentEnd,
@@ -345,7 +345,7 @@ class KeyRangeManager {
           );
         } else if (current.range.compareKeys(currentEnd, nextStart) > NUM.ZERO) {
           errors.push(
-            KEY_RANGE_ERROR_MSG.OVERLAP_BETWEEN_PARTITIONS(
+            KEY_RANGE_ERROR_MSG.overlapBetweenPartitions(
               current.partitionId,
               next.partitionId,
             ),
@@ -371,11 +371,11 @@ class KeyRangeManager {
   splitPartition(partitionId, splitKey, leftPartitionId, rightPartitionId) {
     const range = this.ranges.get(partitionId);
     if (!range) {
-      throw new Error(KEY_RANGE_ERROR_MSG.PARTITION_NOT_FOUND(partitionId));
+      throw new Error(KEY_RANGE_ERROR_MSG.partitionNotFound(partitionId));
     }
 
     if (!range.contains(splitKey)) {
-      throw new Error(KEY_RANGE_ERROR_MSG.SPLIT_KEY_OUT_OF_RANGE(splitKey));
+      throw new Error(KEY_RANGE_ERROR_MSG.splitKeyOutOfRange(splitKey));
     }
 
     const leftRange = new KeyRange(range.start, splitKey);
@@ -411,15 +411,15 @@ class KeyRangeManager {
     const rightRange = this.ranges.get(rightPartitionId);
 
     if (!leftRange) {
-      throw new Error(KEY_RANGE_ERROR_MSG.LEFT_PARTITION_NOT_FOUND(leftPartitionId));
+      throw new Error(KEY_RANGE_ERROR_MSG.leftPartitionNotFound(leftPartitionId));
     }
     if (!rightRange) {
-      throw new Error(KEY_RANGE_ERROR_MSG.RIGHT_PARTITION_NOT_FOUND(rightPartitionId));
+      throw new Error(KEY_RANGE_ERROR_MSG.rightPartitionNotFound(rightPartitionId));
     }
 
     if (!leftRange.isAdjacentTo(rightRange)) {
       throw new Error(
-        KEY_RANGE_ERROR_MSG.PARTITIONS_NOT_ADJACENT(
+        KEY_RANGE_ERROR_MSG.partitionsNotAdjacent(
           leftPartitionId,
           rightPartitionId,
         ),

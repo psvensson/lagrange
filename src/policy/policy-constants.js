@@ -46,7 +46,7 @@ const POLICY_ERROR_MSG = Object.freeze({
   INVALID_RAFT_ROLE_PREFIX: 'Invalid Raft role: ',
   INVALID_POLICY_PREFIX: 'Invalid policy: ',
   INVALID_MERGED_POLICY_PREFIX: 'Invalid merged policy: ',
-  FIELD_TYPE_MISMATCH: (field, expectedType, actualType) =>
+  fieldTypeMismatch: (field, expectedType, actualType) =>
     `${field} must be ${expectedType}, got ${actualType}`,
   REPLICA_COUNT_MIN: 'replicaCount must be at least 1',
   REPLICA_COUNT_ODD: 'replicaCount must be odd for Raft quorum',

@@ -149,7 +149,7 @@ function createReadOnlyCache(underlyingCache) {
       // Check if attempting to access a blocked method
       if (blockedMethods.includes(prop)) {
         target.logViolation(prop, {attemptedMethod: prop});
-        throw new Error(CACHE_ERROR_MSG.READ_ONLY_METHOD_BLOCKED(prop));
+        throw new Error(CACHE_ERROR_MSG.readOnlyMethodBlocked(prop));
       }
 
       // Check if attempting to access the underlying cache directly

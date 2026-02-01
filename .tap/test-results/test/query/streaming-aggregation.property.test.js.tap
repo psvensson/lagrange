@@ -3,56 +3,56 @@ TAP version 14
     # Subtest: processes rows in chunks
         ok 1 - Processes rows in chunks
         1..1
-    ok 1 - processes rows in chunks # time=4.691ms
+    ok 1 - processes rows in chunks # time=4.42ms
     
     # Subtest: external merge sort produces correct order
         ok 1 - External merge sort produces correct order
         1..1
-    ok 2 - external merge sort produces correct order # time=3.332ms
+    ok 2 - external merge sort produces correct order # time=5.615ms
     
     # Subtest: merge sort handles descending order
         ok 1 - Merge sort handles descending order
         1..1
-    ok 3 - merge sort handles descending order # time=1.42ms
+    ok 3 - merge sort handles descending order # time=2.068ms
     
     # Subtest: streaming COUNT aggregate is correct
         ok 1 - Streaming COUNT aggregate is correct
         1..1
-    ok 4 - streaming COUNT aggregate is correct # time=1.106ms
+    ok 4 - streaming COUNT aggregate is correct # time=1.799ms
     
     # Subtest: streaming SUM aggregate is correct
         ok 1 - Streaming SUM aggregate is correct
         1..1
-    ok 5 - streaming SUM aggregate is correct # time=1.022ms
+    ok 5 - streaming SUM aggregate is correct # time=1.479ms
     
     # Subtest: streaming AVG aggregate is correct
         ok 1 - Streaming AVG aggregate is correct
         1..1
-    ok 6 - streaming AVG aggregate is correct # time=0.932ms
+    ok 6 - streaming AVG aggregate is correct # time=1.49ms
     
     # Subtest: streaming MIN/MAX aggregates are correct
         ok 1 - Streaming MIN/MAX aggregates are correct
         1..1
-    ok 7 - streaming MIN/MAX aggregates are correct # time=2.183ms
+    ok 7 - streaming MIN/MAX aggregates are correct # time=1.486ms
     
     # Subtest: streaming GROUP BY produces correct groups
         ok 1 - Streaming GROUP BY produces correct groups
         1..1
-    ok 8 - streaming GROUP BY produces correct groups # time=1.172ms
+    ok 8 - streaming GROUP BY produces correct groups # time=1.604ms
     
     # Subtest: tracks memory usage correctly
         ok 1 - Tracks memory usage correctly
         1..1
-    ok 9 - tracks memory usage correctly # time=1.888ms
+    ok 9 - tracks memory usage correctly # time=1.979ms
     
     # Subtest: reset clears all state
         ok 1 - Reset clears all state
         1..1
-    ok 10 - reset clears all state # time=0.681ms
+    ok 10 - reset clears all state # time=0.731ms
     
     1..10
-ok 1 - Property 75: Streaming Aggregation # time=23.556ms
+ok 1 - Property 75: Streaming Aggregation # time=28.704ms
 
 1..1
 # { total: 10, pass: 10 }
-# time=62.11ms
+# time=73.124ms

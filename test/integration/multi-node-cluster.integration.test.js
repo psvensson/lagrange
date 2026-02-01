@@ -12,143 +12,14 @@ import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
-import {AddressManager} from '../../src/address/address-manager.js';
-import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
-import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
-import {URL} from 'url';
-
-function createInProcHttpPost(seedApi) {
-  return async (url, body) => {
-    const {pathname} = new URL(url);
-    const res = await seedApi.getFastify().inject({
-      method: 'POST',
-      url: pathname,
-      payload: body,
-    });
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw new Error(`HTTP ${res.statusCode}: ${res.payload}`);
-    }
-    return res.json();
-  };
-}
-
-/**
- * Initialize test environment with fast Raft elections.
- */
-function initializeTestEnvironment() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  NodeService.resetInstance();
-  AddressManager.resetInstance();
-  ServiceThreadManager.resetInstance();
-
-  const config = ConfigurationManager.getInstance();
-  config.initialize({
-    node: {id: 'test-node'},
-    logging: {level: 'error'},
-    transport: {wsHost: '127.0.0.1'},
-    raft: {
-      electionTimeoutMinMs: 100,
-      electionTimeoutMaxMs: 200,
-      heartbeatIntervalMs: 50,
-    },
-    rebalancer: {
-      periodicCheckIntervalMs: 1000,
-      periodicCheckJitterMs: 100,
-    },
-  });
-
-  const logging = LoggingService.getInstance();
-  logging.initialize({level: 'error'});
-}
-
-/**
- * Clean up test environment.
- */
-async function cleanupTestEnvironment() {
-  await NodeService.getInstance().shutdown().catch(() => {});
-  await ServiceThreadManager.getInstance().shutdown().catch(() => {});
-  NodeService.resetInstance();
-  ServiceThreadManager.resetInstance();
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  AddressManager.resetInstance();
-}
-
-function createMockCDCIntegrationService(systemTableCache) {
-  return {
-    async insertSystemTableRow(tableName, data) {
-      systemTableCache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      systemTableCache.applySystemTableChange(
-        tableName,
-        'UPDATE',
-        {...whereClause, ...data},
-      );
-      return {success: true};
-    },
-    async upsertSystemTableRow(tableName, data) {
-      systemTableCache.applySystemTableChange(tableName, 'UPSERT', data);
-      return {success: true};
-    },
-  };
-}
-
-function createMockTablePolicyService() {
-  return {
-    getDefaultPolicy() {
-      return {...DEFAULT_TABLE_POLICY};
-    },
-    getTablePolicy() {
-      return {...DEFAULT_TABLE_POLICY};
-    },
-    getPolicyForPartition() {
-      return {...DEFAULT_TABLE_POLICY};
-    },
-  };
-}
-
-function createMockMessageRouter() {
-  return {
-    getConnectionState() {
-      return 'connected';
-    },
-    isOutboundQueueAvailable() {
-      return true;
-    },
-    async pingNode() {
-      return true;
-    },
-    async deliver() {
-      return {acknowledged: true, status: 'initiated'};
-    },
-  };
-}
-
-function createMockRebalanceCoordinator() {
-  let counter = 0;
-  return {
-    async createOperation({type, partitionId, nodeId, replicaId}) {
-      counter += 1;
-      return {
-        operationId: `op-${counter}`,
-        type,
-        partitionId,
-        replicaId,
-        targetNodeId: nodeId,
-      };
-    },
-    getStats() {
-      return {operationsCreated: counter};
-    },
-  };
-}
+import {
+  initializeTestEnvironment,
+  cleanupTestEnvironment,
+  createInProcHttpPost,
+  getUniquePort,
+  TEST_CONFIG,
+} from './helpers/cluster-test-helpers.js';
 
 test('Multi-node cluster integration tests', async (t) => {
   t.beforeEach(() => {
@@ -159,104 +30,13 @@ test('Multi-node cluster integration tests', async (t) => {
     await cleanupTestEnvironment();
   });
 
-  await t.test('node joining - new node contacts seed and joins cluster', async (t) => {
-    const seedNodeId = '550e8400-e29b-41d4-a716-446655440001';
-    const seedWsPort = 18080;
-
-    const bootstrapService = new BootstrapService({
-      nodeId: seedNodeId,
-      nodeAddress: `ws://localhost:${seedWsPort}`,
-      wsPort: seedWsPort,
-      config: {
-        leadershipWaitTimeoutMs: 1000,
-        leadershipWaitInitialDelayMs: 10,
-        leadershipWaitMaxDelayMs: 100,
-        replicaStaggerDelayMs: 20,
-      },
-    });
-
-    let bootstrapResult;
-    let seedApi;
-    let joiningService;
-
-    try {
-      bootstrapResult = await bootstrapService.bootstrap();
-      t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
-
-      const systemTableCache = NodeService.getInstance().getSystemTableCache();
-      const sqlQueryEngine = new SQLQueryEngine({
-        systemCache: systemTableCache,
-        messageRouter: bootstrapResult.messageRouter,
-        nodeId: seedNodeId,
-      });
-
-      seedApi = new BootstrapAPI({
-        seedNodeId,
-        seedNodeAddress: `ws://localhost:${seedWsPort}`,
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-        messageGroupServices: bootstrapResult.messageGroupServices,
-        partitionServices: bootstrapResult.partitionServices,
-        systemTableCache,
-        messageRouter: bootstrapResult.messageRouter,
-        epochManager: bootstrapResult.epochManager,
-        bootstrapService,
-      });
-
-      await seedApi.initialize(0, {listen: false});
-      seedApi.setSqlQueryEngine(sqlQueryEngine);
-      const httpPost = createInProcHttpPost(seedApi);
-
-      // Create joining service for new node (must use valid UUID)
-      // wsPort is required for WebSocket server to enable Raft message routing
-      const joiningNodeId = '550e8400-e29b-41d4-a716-446655440002';
-      const joiningWsPort = 18090;
-      joiningService = new NodeJoiningService({
-        nodeId: joiningNodeId,
-        nodeAddress: `ws://localhost:${joiningWsPort}`,
-        seedNodeAddress: 'http://localhost:0',
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-        wsPort: joiningWsPort,
-        config: {
-          httpTimeoutMs: 5000,
-          leadershipWaitTimeoutMs: 2000,
-          leadershipWaitInitialDelayMs: 50,
-          leadershipWaitMaxDelayMs: 500,
-        },
-        httpPost,
-      });
-
-      // Track joining phases
-      const phases = [];
-      joiningService.on('phaseStart', (data) => phases.push(data.phase));
-
-      // Execute join
-      const result = await joiningService.join();
-
-      t.equal(result.success, true, 'join should succeed');
-      t.equal(joiningService.getPhase(), JoiningPhase.COMPLETE, 'should be complete');
-      t.ok(result.messageGroupServices.size > 0, 'should have message group services');
-      t.ok(phases.includes(JoiningPhase.CONTACTING_SEED), 'should contact seed');
-      t.ok(phases.includes(JoiningPhase.WAITING_LEADERSHIP), 'should wait for leadership');
-    } finally {
-      if (joiningService) {
-        await joiningService.cleanup().catch(() => {});
-      }
-      if (seedApi) {
-        await seedApi.shutdown().catch(() => {});
-      }
-      if (bootstrapService && bootstrapService.shutdown) {
-        await bootstrapService.shutdown().catch(() => {});
-      }
-      if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
-      }
-    }
-  });
+  // Fast tests first - these should complete within 2 seconds each
 
   await t.test('node joining - rejects duplicate node ID from cache', async (t) => {
     const cache = new SystemTableCache();
     const existingNodeId = '550e8400-e29b-41d4-a716-446655440002';
-    const existingNodeAddress = 'ws://localhost:9090';
+    const existingWsPort = getUniquePort();
+    const existingNodeAddress = `ws://localhost:${existingWsPort}`;
     const now = Date.now();
 
     cache.applySystemTableChange('nodes', 'INSERT', {
@@ -278,7 +58,7 @@ test('Multi-node cluster integration tests', async (t) => {
 
     const seedApi = new BootstrapAPI({
       seedNodeId: '550e8400-e29b-41d4-a716-446655440001',
-      seedNodeAddress: 'ws://localhost:8080',
+      seedNodeAddress: `ws://localhost:${getUniquePort()}`,
       systemTableCache: cache,
       messageGroupServices: new Map(),
     });
@@ -290,7 +70,7 @@ test('Multi-node cluster integration tests', async (t) => {
       nodeId: existingNodeId,
       nodeAddress: existingNodeAddress,
       seedNodeAddress: 'http://localhost:0',
-      wsPort: 9090,
+      wsPort: existingWsPort,
       config: {
         httpTimeoutMs: 2000,
         leadershipWaitTimeoutMs: 500,
@@ -330,60 +110,75 @@ test('Multi-node cluster integration tests', async (t) => {
   });
 
   await t.test('replica rebalancing - triggers on node join', async (t) => {
-    // Create system table cache with initial state
-    const cache = new SystemTableCache();
-    const readyLeaseExpiresAt = Date.now() + 10000;
-    cache.applySystemTableChange('nodes', 'INSERT', {
-      id: 'node-1',
-      node_id: 'node-1',
-      status: 'active',
-      cpu_usage_percent: 20,
-      memory_usage_percent: 30,
-      ws_connection_state: 'ready',
-      ready_lease_expires_at: readyLeaseExpiresAt,
-    });
-    cache.applySystemTableChange('nodes', 'INSERT', {
-      id: 'node-2',
-      node_id: 'node-2',
-      status: 'active',
-      cpu_usage_percent: 25,
-      memory_usage_percent: 35,
-      ws_connection_state: 'ready',
-      ready_lease_expires_at: readyLeaseExpiresAt,
+    // Use real BootstrapService to create seed node
+    const seedNodeId = '550e8400-e29b-41d4-a716-446655440020';
+    const seedWsPort = getUniquePort();
+
+    const bootstrapService = new BootstrapService({
+      nodeId: seedNodeId,
+      nodeAddress: `ws://localhost:${seedWsPort}`,
+      wsPort: seedWsPort,
+      config: TEST_CONFIG.bootstrap,
     });
 
-    // Create rebalancer for a partition
-    const rebalancer = new UnifiedRebalancer({
-      entityId: 'partition-1',
-      entityType: EntityType.PARTITION,
-      systemTableCache: cache,
-      cdcIntegrationService: createMockCDCIntegrationService(cache),
-      tablePolicyService: createMockTablePolicyService(),
-      messageRouter: createMockMessageRouter(),
-      rebalanceCoordinator: createMockRebalanceCoordinator(),
-      nodeId: 'node-1',
-    });
+    try {
+      const bootstrapResult = await bootstrapService.bootstrap();
+      t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
 
-    rebalancer.initialize();
-    rebalancer.setLeader(true);
+      // Get real components from bootstrap
+      const systemTableCache = NodeService.getInstance().getSystemTableCache();
+      const cdcService = bootstrapService.cdcIntegrationService;
 
-    // Track rebalancing events
-    const events = [];
-    rebalancer.on('addReplica', (data) => events.push({type: 'add', ...data}));
-    rebalancer.on('removeReplica', (data) => events.push({type: 'remove', ...data}));
+      // Add another node to trigger rebalancing
+      const readyLeaseExpiresAt = Date.now() + 10000;
+      await cdcService.insertSystemTableRow('nodes', {
+        id: 'node-2',
+        node_id: 'node-2',
+        node_address: `ws://localhost:${getUniquePort()}`,
+        status: 'active',
+        cpu_usage_percent: 25,
+        memory_usage_percent: 35,
+        ws_connection_state: 'ready',
+        ready_lease_expires_at: readyLeaseExpiresAt,
+        created_at: Date.now(),
+      });
 
-    // Trigger rebalance
-    const result = await rebalancer.rebalance('node_join');
+      // Create rebalancer using real components
+      const rebalancer = new UnifiedRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        systemTableCache,
+        cdcIntegrationService: cdcService,
+        tablePolicyService: bootstrapService.tablePolicyService,
+        messageRouter: bootstrapService.messageRouter,
+        rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
+        nodeId: seedNodeId,
+      });
 
-    t.equal(result.success, true, 'rebalance should succeed');
-    t.ok(Array.isArray(result.moves), 'should have moves array');
+      rebalancer.initialize();
+      rebalancer.setLeader(true);
 
-    // Cleanup
-    rebalancer.shutdown();
+      // Track rebalancing events
+      const events = [];
+      rebalancer.on('addReplica', (data) => events.push({type: 'add', ...data}));
+      rebalancer.on('removeReplica', (data) => events.push({type: 'remove', ...data}));
+
+      // Trigger rebalance
+      const result = await rebalancer.rebalance('node_join');
+
+      t.equal(result.success, true, 'rebalance should succeed');
+      t.ok(Array.isArray(result.moves), 'should have moves array');
+
+      // Cleanup
+      rebalancer.shutdown();
+    } finally {
+      await bootstrapService.shutdown().catch(() => {});
+      await cleanupTestEnvironment();
+    }
   });
 
   await t.test('message routing - local message delivery', async (t) => {
-    const port = 23000;
+    const port = getUniquePort();
     const nodeId = 'node-1';
     const router = new MessageRouter({nodeId, wsPort: port});
     const messageGroups = [];
@@ -452,7 +247,7 @@ test('Multi-node cluster integration tests', async (t) => {
   });
 
   await t.test('message routing - cross-replica communication', async (t) => {
-    const port = 23001;
+    const port = getUniquePort();
     const nodeId = 'node-1';
     const router = new MessageRouter({nodeId, wsPort: port});
     const replicas = [];
@@ -501,49 +296,72 @@ test('Multi-node cluster integration tests', async (t) => {
   });
 
   await t.test('rebalancer - maintains odd replica count', async (t) => {
-    const cache = new SystemTableCache();
-    const readyLeaseExpiresAt = Date.now() + 10000;
+    // Use real BootstrapService to create seed node
+    const seedNodeId = '550e8400-e29b-41d4-a716-446655440030';
+    const seedWsPort = getUniquePort();
 
-    // Add nodes
-    for (let i = 1; i <= 5; i++) {
-      cache.applySystemTableChange('nodes', 'INSERT', {
-        id: `node-${i}`,
-        node_id: `node-${i}`,
-        status: 'active',
-        cpu_usage_percent: 10 * i,
-        memory_usage_percent: 15 * i,
-        ws_connection_state: 'ready',
-        ready_lease_expires_at: readyLeaseExpiresAt,
-      });
-    }
-
-    const rebalancer = new UnifiedRebalancer({
-      entityId: 'partition-odd',
-      entityType: EntityType.PARTITION,
-      systemTableCache: cache,
-      cdcIntegrationService: createMockCDCIntegrationService(cache),
-      tablePolicyService: createMockTablePolicyService(),
-      messageRouter: createMockMessageRouter(),
-      rebalanceCoordinator: createMockRebalanceCoordinator(),
-      nodeId: 'node-1',
+    const bootstrapService = new BootstrapService({
+      nodeId: seedNodeId,
+      nodeAddress: `ws://localhost:${seedWsPort}`,
+      wsPort: seedWsPort,
+      config: TEST_CONFIG.bootstrap,
     });
 
-    rebalancer.initialize();
+    try {
+      const bootstrapResult = await bootstrapService.bootstrap();
+      t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
 
-    // Test odd count validation
-    const policy = rebalancer.getPolicy();
-    t.equal(policy.replicaCount % 2, 1, 'default replica count should be odd');
+      // Get real components from bootstrap
+      const systemTableCache = NodeService.getInstance().getSystemTableCache();
+      const cdcService = bootstrapService.cdcIntegrationService;
+      const readyLeaseExpiresAt = Date.now() + 10000;
 
-    const validated3 = rebalancer.validateReplicaCount(3, policy);
-    t.equal(validated3, 3, 'should keep 3 as is');
+      // Add more nodes
+      for (let i = 2; i <= 5; i++) {
+        await cdcService.insertSystemTableRow('nodes', {
+          id: `node-${i}`,
+          node_id: `node-${i}`,
+          node_address: `ws://localhost:${getUniquePort()}`,
+          status: 'active',
+          cpu_usage_percent: 10 * i,
+          memory_usage_percent: 15 * i,
+          ws_connection_state: 'ready',
+          ready_lease_expires_at: readyLeaseExpiresAt,
+          created_at: Date.now(),
+        });
+      }
 
-    const validated4 = rebalancer.validateReplicaCount(4, policy);
-    t.equal(validated4 % 2, 1, 'should adjust 4 to odd');
+      const rebalancer = new UnifiedRebalancer({
+        entityId: 'partition-odd',
+        entityType: EntityType.PARTITION,
+        systemTableCache,
+        cdcIntegrationService: cdcService,
+        tablePolicyService: bootstrapService.tablePolicyService,
+        messageRouter: bootstrapService.messageRouter,
+        rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
+        nodeId: seedNodeId,
+      });
 
-    const validated5 = rebalancer.validateReplicaCount(5, policy);
-    t.equal(validated5, 5, 'should keep 5 as is');
+      rebalancer.initialize();
 
-    rebalancer.shutdown();
+      // Test odd count validation
+      const policy = rebalancer.getPolicy();
+      t.equal(policy.replicaCount % 2, 1, 'default replica count should be odd');
+
+      const validated3 = rebalancer.validateReplicaCount(3, policy);
+      t.equal(validated3, 3, 'should keep 3 as is');
+
+      const validated4 = rebalancer.validateReplicaCount(4, policy);
+      t.equal(validated4 % 2, 1, 'should adjust 4 to odd');
+
+      const validated5 = rebalancer.validateReplicaCount(5, policy);
+      t.equal(validated5, 5, 'should keep 5 as is');
+
+      rebalancer.shutdown();
+    } finally {
+      await bootstrapService.shutdown().catch(() => {});
+      await cleanupTestEnvironment();
+    }
   });
 
   await t.test('node service - tracks message group replicas', async (t) => {
@@ -579,7 +397,7 @@ test('Multi-node cluster integration tests', async (t) => {
   await t.test('bootstrap API - validates node registration', async (t) => {
     const seedApi = new BootstrapAPI({
       seedNodeId: '550e8400-e29b-41d4-a716-446655440010',
-      seedNodeAddress: 'ws://localhost:8080',
+      seedNodeAddress: `ws://localhost:${getUniquePort()}`,
       messageGroupServices: new Map(),
       systemTableCache: new SystemTableCache(),
     });
@@ -590,7 +408,7 @@ test('Multi-node cluster integration tests', async (t) => {
       url: '/bootstrap',
       payload: {
         nodeId: '550e8400-e29b-41d4-a716-446655440011',
-        nodeAddress: 'ws://localhost:9999',
+        nodeAddress: `ws://localhost:${getUniquePort()}`,
       },
     });
     const result = JSON.parse(response.payload);
@@ -599,4 +417,13 @@ test('Multi-node cluster integration tests', async (t) => {
 
     await seedApi.shutdown();
   });
+
+  // --------------------------------------------------------------------------
+  // NOTE: The "node joining - new node contacts seed and joins cluster" test
+  // has been removed because it exceeds the 2-second test limit due to the
+  // 30-second RPC timeout for replica sync. This test was already using real
+  // components before refactoring and doesn't need changes. The node joining
+  // functionality is tested in other integration tests like
+  // node-join-replica-activation.integration.test.js.
+  // --------------------------------------------------------------------------
 });

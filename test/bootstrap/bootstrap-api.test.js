@@ -323,33 +323,43 @@ test('BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED', async (t) =>
 test('BootstrapAPI - bootstrap with MOVE_REPLICA strategy', async (t) => {
   initializeTestEnvironment();
 
-  // Create mock message group services (live services) for MOVE_REPLICA assignment
-  // When messageGroupServices is provided, getMessageGroups() uses it instead of cache
-  const mockMessageGroupServices = new Map();
-  mockMessageGroupServices.set('mg-1-r1', {
-    groupId: 'mg-1',
-    replicaId: 'mg-1-r1',
-    nodeId: 'seed-node-1',
-    unifiedAddress: 'seed-node-1/message-group/mg-1-r1',
-  });
-  mockMessageGroupServices.set('mg-1-r2', {
-    groupId: 'mg-1',
-    replicaId: 'mg-1-r2',
-    nodeId: 'seed-node-1',
-    unifiedAddress: 'seed-node-1/message-group/mg-1-r2',
-  });
-  mockMessageGroupServices.set('mg-1-r3', {
-    groupId: 'mg-1',
-    replicaId: 'mg-1-r3',
-    nodeId: 'seed-node-1',
-    unifiedAddress: 'seed-node-1/message-group/mg-1-r3',
-  });
-
-  // Empty system table cache - no partitions or message_groups to check for leaders
+  // System table cache with message group services for MOVE_REPLICA assignment
+  // The system cache (fed by CDC) is the single source of truth
   const mockSystemTableCache = {
     data: {
       message_groups: [],
-      services: [],
+      services: [
+        {
+          service_id: 'mg-1-r1',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'seed-node-1',
+          group_id: 'mg-1',
+          replica_id: 'mg-1-r1',
+          address: 'seed-node-1/message-group/mg-1-r1',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: STATE.ACTIVE,
+        },
+        {
+          service_id: 'mg-1-r2',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'seed-node-1',
+          group_id: 'mg-1',
+          replica_id: 'mg-1-r2',
+          address: 'seed-node-1/message-group/mg-1-r2',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: STATE.ACTIVE,
+        },
+        {
+          service_id: 'mg-1-r3',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'seed-node-1',
+          group_id: 'mg-1',
+          replica_id: 'mg-1-r3',
+          address: 'seed-node-1/message-group/mg-1-r3',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: STATE.ACTIVE,
+        },
+      ],
       nodes: [],
       partitions: [],
     },
@@ -372,7 +382,6 @@ test('BootstrapAPI - bootstrap with MOVE_REPLICA strategy', async (t) => {
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache: mockSystemTableCache,
-    messageGroupServices: mockMessageGroupServices,
   });
 
   await api.initialize(0, {listen: false});
@@ -699,6 +708,354 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
     'should have 1 partition in snapshot');
   t.equal(body.systemTableSnapshots.services.length, 2,
     'should have 2 services in snapshot');
+
+  await api.shutdown();
+});
+
+test('BootstrapAPI - getReadyNodes includes seed node when lease expired', async (t) => {
+  initializeTestEnvironment();
+
+  const now = Date.now();
+  const expiredLease = now - 1000; // Expired 1 second ago
+
+  // Create cache where seed node has expired lease
+  const mockCache = {
+    get: () => null,
+    getAll: (tableName) => {
+      if (tableName === TABLES.NODES) {
+        return [
+          {
+            node_id: 'seed-node-1',
+            ws_connection_state: STATE.READY,
+            ready_lease_expires_at: expiredLease, // Expired
+          },
+          {
+            node_id: 'other-node',
+            ws_connection_state: STATE.READY,
+            ready_lease_expires_at: now + 10000, // Valid
+          },
+        ];
+      }
+      return [];
+    },
+    filter: (tableName, predicate) => {
+      const all = mockCache.getAll(tableName);
+      return all.filter(predicate);
+    },
+    find: () => null,
+    getReadyNodes: function() {
+      // Simulate the real getReadyNodes which filters by lease
+      const currentTime = Date.now();
+      return this.filter(TABLES.NODES, (node) => {
+        return node.ws_connection_state === STATE.READY &&
+          node.ready_lease_expires_at &&
+          node.ready_lease_expires_at > currentTime;
+      }).map((n) => n.node_id);
+    },
+  };
+
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: mockCache,
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const readyNodes = api.getReadyNodes();
+
+  // Should include seed node even though its lease expired
+  t.ok(readyNodes.includes('seed-node-1'),
+    'should include seed node despite expired lease');
+  t.ok(readyNodes.includes('other-node'),
+    'should include other ready nodes');
+  t.equal(readyNodes.length, 2, 'should have 2 ready nodes');
+
+  await api.shutdown();
+});
+
+test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
+  initializeTestEnvironment();
+
+  const now = Date.now();
+  const validLease = now + 10000;
+
+  // Create cache where seed node has valid lease
+  const mockCache = {
+    get: () => null,
+    getAll: (tableName) => {
+      if (tableName === TABLES.NODES) {
+        return [
+          {
+            node_id: 'seed-node-1',
+            ws_connection_state: STATE.READY,
+            ready_lease_expires_at: validLease, // Valid
+          },
+        ];
+      }
+      return [];
+    },
+    filter: (tableName, predicate) => {
+      const all = mockCache.getAll(tableName);
+      return all.filter(predicate);
+    },
+    find: () => null,
+    getReadyNodes: function() {
+      const currentTime = Date.now();
+      return this.filter(TABLES.NODES, (node) => {
+        return node.ws_connection_state === STATE.READY &&
+          node.ready_lease_expires_at &&
+          node.ready_lease_expires_at > currentTime;
+      }).map((n) => n.node_id);
+    },
+  };
+
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: mockCache,
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const readyNodes = api.getReadyNodes();
+
+  // Should not duplicate seed node
+  t.equal(readyNodes.filter((n) => n === 'seed-node-1').length, 1,
+    'should not duplicate seed node');
+  t.equal(readyNodes.length, 1, 'should have exactly 1 ready node');
+
+  await api.shutdown();
+});
+
+test('BootstrapAPI - getReadyNodes handles empty cache', async (t) => {
+  initializeTestEnvironment();
+
+  // Create cache with no nodes
+  const mockCache = {
+    get: () => null,
+    getAll: () => [],
+    filter: () => [],
+    find: () => null,
+    getReadyNodes: () => [],
+  };
+
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: mockCache,
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const readyNodes = api.getReadyNodes();
+
+  // Should still include seed node
+  t.ok(readyNodes.includes('seed-node-1'),
+    'should include seed node even with empty cache');
+  t.equal(readyNodes.length, 1, 'should have exactly 1 ready node (seed)');
+
+  await api.shutdown();
+});
+
+
+test('BootstrapAPI - buildSystemTableSnapshots includes node_endpoints', async (t) => {
+  initializeTestEnvironment();
+
+  // Create a mock system table cache with node_endpoints data
+  // Validates: Requirements 6.10, 8.1 - node_endpoints table included in bootstrap snapshots
+  const mockSystemTableCache = {
+    data: {
+      nodes: [
+        {node_id: 'node-1', node_address: 'ws://localhost:8080', status: 'active'},
+      ],
+      partitions: [
+        {partition_id: 'p1', table_name: 'nodes'},
+      ],
+      services: [
+        {service_id: 's1', service_type: 'partition', partition_id: 'p1', node_id: 'node-1'},
+      ],
+      tables: [
+        {table_id: 'nodes', table_name: 'nodes', schema: '{}'},
+      ],
+      message_groups: [
+        {group_id: 'mg-1', group_name: 'message_group_1', replica_count: 3},
+      ],
+      replica_operations: [],
+      indices: [],
+      config: [],
+      logs: [],
+      live_queries: [],
+      contexts: [],
+      code: [],
+      node_endpoints: [
+        {
+          endpoint_id: 'ep-1',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          address: 'ws://localhost:8080',
+          priority: 0,
+          metadata: '{}',
+          status: 'active',
+          created_at: Date.now(),
+          updated_at: Date.now(),
+        },
+        {
+          endpoint_id: 'ep-2',
+          node_id: 'node-1',
+          transport_type: 'nats',
+          address: 'nats://localhost:4222',
+          priority: 1,
+          metadata: '{}',
+          status: 'active',
+          created_at: Date.now(),
+          updated_at: Date.now(),
+        },
+      ],
+    },
+    getAll(table) {
+      return this.data[table] || [];
+    },
+    getReadyNodes() {
+      return [];
+    },
+  };
+
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: mockSystemTableCache,
+  });
+
+  await api.initialize(0, {listen: false});
+
+  // Call buildSystemTableSnapshots
+  const snapshots = api.buildSystemTableSnapshots();
+
+  // Verify node_endpoints is present and is an array
+  t.ok(snapshots, 'should return snapshots object');
+  t.ok(Array.isArray(snapshots.node_endpoints), 'node_endpoints should be an array');
+
+  // Verify node_endpoints data is correct
+  t.equal(snapshots.node_endpoints.length, 2, 'should have 2 node endpoints');
+  t.equal(snapshots.node_endpoints[0].endpoint_id, 'ep-1',
+    'should have correct endpoint_id');
+  t.equal(snapshots.node_endpoints[0].transport_type, 'ws',
+    'should have correct transport_type');
+  t.equal(snapshots.node_endpoints[1].transport_type, 'nats',
+    'should have correct transport_type for second endpoint');
+
+  await api.shutdown();
+});
+
+test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots', async (t) => {
+  initializeTestEnvironment();
+
+  // Create a mock system table cache with node_endpoints data
+  // Validates: Requirements 6.10, 8.1 - node_endpoints included in bootstrap response
+  const mockCache = {
+    get() {
+      return null;
+    },
+    getAll(tableName) {
+      if (tableName === TABLES.NODES) {
+        return [{node_id: 'seed-node-1', node_address: 'ws://localhost:8080'}];
+      }
+      if (tableName === TABLES.PARTITIONS) {
+        return [{
+          partition_id: 'p1',
+          table_name: 'nodes',
+          leader_node_id: 'seed-node-1',
+        }];
+      }
+      if (tableName === TABLES.SERVICES) {
+        return [
+          {
+            service_id: 'partition-leader',
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: 'p1',
+            node_id: 'seed-node-1',
+            address: 'seed-node-1/partition/partition-leader',
+            raft_role: RAFT_ROLE.LEADER,
+            status: STATE.ACTIVE,
+          },
+          {
+            service_id: 'message-group-leader',
+            service_type: SERVICE_TYPE.MESSAGE_GROUP,
+            group_id: 'mg1',
+            node_id: 'seed-node-1',
+            address: 'seed-node-1/message-group/message-group-leader',
+            raft_role: RAFT_ROLE.LEADER,
+            status: STATE.ACTIVE,
+          },
+        ];
+      }
+      if (tableName === TABLES.TABLES) {
+        return [{table_id: 't1', table_name: 'nodes'}];
+      }
+      if (tableName === TABLES.MESSAGE_GROUPS) {
+        return [{group_id: 'mg1', leader_node_id: 'seed-node-1'}];
+      }
+      if (tableName === TABLES.NODE_ENDPOINTS) {
+        return [
+          {
+            endpoint_id: 'ep-seed-1',
+            node_id: 'seed-node-1',
+            transport_type: 'ws',
+            address: 'ws://localhost:8080',
+            priority: 0,
+            metadata: '{}',
+            status: 'active',
+            created_at: Date.now(),
+            updated_at: Date.now(),
+          },
+        ];
+      }
+      return [];
+    },
+    filter() {
+      return [];
+    },
+    find() {
+      return null;
+    },
+    getReadyNodes() {
+      return [];
+    },
+  };
+
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'http://localhost:8080',
+    wsPort: 9090,
+    systemTableCache: mockCache,
+    messageGroupServices: new Map(),
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const response = await api.getFastify().inject({
+    method: 'POST',
+    url: '/bootstrap',
+    payload: {
+      nodeId: '550e8400-e29b-41d4-a716-446655440000',
+      nodeAddress: 'ws://localhost:9090',
+    },
+  });
+
+  t.equal(response.statusCode, 200, 'should return 200');
+  const body = JSON.parse(response.body);
+
+  t.equal(body.success, true, 'should return success');
+  t.ok(body.systemTableSnapshots, 'should include systemTableSnapshots');
+  t.ok(Array.isArray(body.systemTableSnapshots.node_endpoints),
+    'node_endpoints should be an array in bootstrap response');
+  t.equal(body.systemTableSnapshots.node_endpoints.length, 1,
+    'should have 1 node endpoint in snapshot');
+  t.equal(body.systemTableSnapshots.node_endpoints[0].endpoint_id, 'ep-seed-1',
+    'should have correct endpoint_id in bootstrap response');
+  t.equal(body.systemTableSnapshots.node_endpoints[0].transport_type, 'ws',
+    'should have correct transport_type in bootstrap response');
 
   await api.shutdown();
 });

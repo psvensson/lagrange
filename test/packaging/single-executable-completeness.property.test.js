@@ -41,9 +41,15 @@ test('Single Executable Completeness - Property Test', async (t) => {
     t.equal(result.exitCode, 0, `cli entry exitCode is 0 for ${flag}`);
     t.ok(result.stdout.length > 0, `cli entry produces output for ${flag}`);
     if (flag === '--version' || flag === '-v') {
-      t.ok(result.stdout.includes('1.0.0'), `cli entry version includes 1.0.0 for ${flag}`);
+      t.ok(
+        result.stdout.includes('1.0.0'),
+        `cli entry version includes 1.0.0 for ${flag}`,
+      );
     } else {
-      t.ok(result.stdout.includes('Usage') || result.stdout.includes('Options'), `cli entry help includes usage/options for ${flag}`);
+      t.ok(
+        result.stdout.includes('Usage') || result.stdout.includes('Options'),
+        `cli entry help includes usage/options for ${flag}`,
+      );
     }
   }
   t.pass('CLI responds correctly to help/version flags');
@@ -53,9 +59,15 @@ test('Single Executable Completeness - Property Test', async (t) => {
     t.equal(result.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
     t.ok(result.stdout.length > 0, `main entry produces output for ${flag}`);
     if (flag === '--version' || flag === '-v') {
-      t.ok(result.stdout.includes('1.0.0'), `main entry version includes 1.0.0 for ${flag}`);
+      t.ok(
+        result.stdout.includes('1.0.0'),
+        `main entry version includes 1.0.0 for ${flag}`,
+      );
     } else {
-      t.ok(result.stdout.includes('Usage') || result.stdout.includes('Options'), `main entry help includes usage/options for ${flag}`);
+      t.ok(
+        result.stdout.includes('Usage') || result.stdout.includes('Options'),
+        `main entry help includes usage/options for ${flag}`,
+      );
     }
   }
   t.pass('Main system responds correctly to help/version flags');

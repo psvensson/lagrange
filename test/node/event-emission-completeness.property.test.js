@@ -26,7 +26,7 @@ function createMockCDCService() {
 }
 
 // All possible states
-const ALL_STATES = [
+const _ALL_STATES = [
   ReplicaState.PENDING,
   ReplicaState.CREATING,
   ReplicaState.SYNCING,

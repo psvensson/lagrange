@@ -415,6 +415,7 @@ class NodeLifecycleService extends EventEmitter {
         throw error;
       }
     }, this.heartbeatIntervalMs);
+    this.heartbeatTimer.unref();
   }
 
   /**
@@ -451,6 +452,7 @@ class NodeLifecycleService extends EventEmitter {
     this.failureDetectionTimer = setInterval(async () => {
       await this.detectFailedNodes(getNodesFromCache);
     }, this.failureDetectionIntervalMs);
+    this.failureDetectionTimer.unref();
   }
 
   /**

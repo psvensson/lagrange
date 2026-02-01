@@ -56,8 +56,8 @@ const ENTRYPOINT_ERROR_MSG = Object.freeze({
 });
 
 const ENTRYPOINT_TEXT = Object.freeze({
-  VERSION_LINE: (version) => `${ENTRYPOINT_APP.PACKAGE_NAME} v${version}`,
-  HEADER_LINE: (version) => `${ENTRYPOINT_APP.NAME} v${version}`,
+  versionLine: (version) => `${ENTRYPOINT_APP.PACKAGE_NAME} v${version}`,
+  headerLine: (version) => `${ENTRYPOINT_APP.NAME} v${version}`,
   USAGE_LINE: `Usage: ${ENTRYPOINT_APP.CLI_NAME} [options]`,
   OPTIONS_LINES: [
     '  --version, -v    Show version number',

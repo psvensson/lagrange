@@ -12,6 +12,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
+import fs from 'fs';
 import Database from 'better-sqlite3';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 
@@ -185,7 +186,7 @@ test('Property 2: SQLite Storage Round-Trip and Restart Recovery', async (t) => 
 
           // Clean up
           try {
-            require('fs').unlinkSync(dbPath);
+            fs.unlinkSync(dbPath);
           } catch (_e) {
             // Ignore cleanup errors
           }
@@ -244,7 +245,7 @@ test('Property 2: SQLite Storage Round-Trip and Restart Recovery', async (t) => 
 
           // Clean up
           try {
-            require('fs').unlinkSync(dbPath);
+            fs.unlinkSync(dbPath);
           } catch (_e) {
             // Ignore cleanup errors
           }

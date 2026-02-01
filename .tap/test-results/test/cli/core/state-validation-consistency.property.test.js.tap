@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: invalid connection status leaves state unchanged
         ok 1 - Invalid connection status leaves state unchanged
         1..1
-    ok 1 - invalid connection status leaves state unchanged # time=8.816ms
+    ok 1 - invalid connection status leaves state unchanged # time=9.57ms
     
     # Subtest: invalid view leaves state unchanged
         ok 1 - Invalid view leaves state unchanged
         1..1
-    ok 2 - invalid view leaves state unchanged # time=1.96ms
+    ok 2 - invalid view leaves state unchanged # time=1.776ms
     
     # Subtest: negative selectedIndex leaves state unchanged
         ok 1 - Negative selectedIndex leaves state unchanged
         1..1
-    ok 3 - negative selectedIndex leaves state unchanged # time=1.51ms
+    ok 3 - negative selectedIndex leaves state unchanged # time=1.31ms
     
     # Subtest: invalid sortDirection leaves state unchanged
         ok 1 - Invalid sortDirection leaves state unchanged
         1..1
-    ok 4 - invalid sortDirection leaves state unchanged # time=1.528ms
+    ok 4 - invalid sortDirection leaves state unchanged # time=1.327ms
     
     # Subtest: too small refreshInterval leaves state unchanged
         ok 1 - Too small refreshInterval leaves state unchanged
         1..1
-    ok 5 - too small refreshInterval leaves state unchanged # time=1.165ms
+    ok 5 - too small refreshInterval leaves state unchanged # time=1.197ms
     
     # Subtest: valid state transitions succeed
         ok 1 - Valid state transitions succeed
         1..1
-    ok 6 - valid state transitions succeed # time=3.544ms
+    ok 6 - valid state transitions succeed # time=1.452ms
     
     1..6
-ok 1 - Property 33: State Validation Consistency # time=24.974ms
+ok 1 - Property 33: State Validation Consistency # time=23.52ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=31.034ms
+# time=29.839ms

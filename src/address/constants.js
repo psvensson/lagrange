@@ -36,12 +36,12 @@ const ADDRESS_LOG_MSG = Object.freeze({
 
 const ADDRESS_ERROR_MSG = Object.freeze({
   MUST_BE_STRING: 'Address must be a string',
-  COMPONENT_EMPTY: (component) =>
+  componentEmpty: (component) =>
     `Address component '${component}' cannot be empty`,
-  MUST_HAVE_COMPONENTS: (count) =>
+  mustHaveComponents: (count) =>
     `Address must have exactly ${NUM.THREE} components separated by ` +
     `'${ADDRESS.SEPARATOR}', got ${count}`,
-  COMPONENT_CANNOT_BE_EMPTY: (component) =>
+  componentCannotBeEmpty: (component) =>
     `${component} component cannot be empty`,
 });
 

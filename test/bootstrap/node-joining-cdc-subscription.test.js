@@ -5,7 +5,6 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
-import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -206,8 +205,7 @@ test('subscribeToCDCEvents - throws if no listeners registered', async (t) => {
 
   // Create a mock CDC integration service that doesn't register listeners
   const mockCDC = new EventEmitter();
-  const originalOn = mockCDC.on.bind(mockCDC);
-  mockCDC.on = (event, handler) => {
+  mockCDC.on = (_event, _handler) => {
     // Don't actually register the listener
     return mockCDC;
   };

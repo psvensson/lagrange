@@ -35,24 +35,24 @@ const KEY_RANGE_LOG_MSG = Object.freeze({
 });
 
 const KEY_RANGE_ERROR_MSG = Object.freeze({
-  OVERLAP: (partitionId, existingId) =>
+  overlap: (partitionId, existingId) =>
     `Key range overlap detected: partition ${partitionId} overlaps with ${existingId}`,
-  FIRST_PARTITION_STARTS: (partitionId) =>
+  firstPartitionStarts: (partitionId) =>
     `First partition ${partitionId} does not start at NULL`,
-  LAST_PARTITION_ENDS: (partitionId) =>
+  lastPartitionEnds: (partitionId) =>
     `Last partition ${partitionId} does not end at NULL`,
-  GAP_BETWEEN_PARTITIONS: (currentId, nextId, currentEnd, nextStart) =>
+  gapBetweenPartitions: (currentId, nextId, currentEnd, nextStart) =>
     `Gap between partitions ${currentId} and ${nextId}: [${currentEnd}, ${nextStart})`,
-  OVERLAP_BETWEEN_PARTITIONS: (currentId, nextId) =>
+  overlapBetweenPartitions: (currentId, nextId) =>
     `Overlap between partitions ${currentId} and ${nextId}`,
-  PARTITION_NOT_FOUND: (partitionId) => `Partition ${partitionId} not found`,
-  SPLIT_KEY_OUT_OF_RANGE: (splitKey) =>
+  partitionNotFound: (partitionId) => `Partition ${partitionId} not found`,
+  splitKeyOutOfRange: (splitKey) =>
     `Split key ${splitKey} is not in partition range`,
-  LEFT_PARTITION_NOT_FOUND: (partitionId) =>
+  leftPartitionNotFound: (partitionId) =>
     `Left partition ${partitionId} not found`,
-  RIGHT_PARTITION_NOT_FOUND: (partitionId) =>
+  rightPartitionNotFound: (partitionId) =>
     `Right partition ${partitionId} not found`,
-  PARTITIONS_NOT_ADJACENT: (leftId, rightId) =>
+  partitionsNotAdjacent: (leftId, rightId) =>
     `Partitions ${leftId} and ${rightId} are not adjacent`,
 });
 
@@ -85,8 +85,8 @@ const SPLIT_MERGE_ID = Object.freeze({
 });
 
 const SPLIT_MERGE_SQL = Object.freeze({
-  COUNT_ROWS: (tableName) => `SELECT COUNT(*) as total FROM ${tableName}`,
-  SELECT_MEDIAN: (primaryKeyColumn, tableName) =>
+  countRows: (tableName) => `SELECT COUNT(*) as total FROM ${tableName}`,
+  selectMedian: (primaryKeyColumn, tableName) =>
     `SELECT ${primaryKeyColumn} FROM ${tableName} ` +
     `ORDER BY ${primaryKeyColumn} LIMIT 1 OFFSET ?`,
 });
@@ -119,28 +119,29 @@ const SPLIT_MERGE_LOG_MSG = Object.freeze({
 });
 
 const SPLIT_MERGE_ERROR_MSG = Object.freeze({
-  RANGE_INTEGRITY_NOT_CONTIGUOUS: (leftEnd, rightStart) =>
+  rangeIntegrityNotContiguous: (leftEnd, rightStart) =>
     'Range integrity violation: ranges not contiguous - ' +
     `left end (${leftEnd}) != right start (${rightStart})`,
   KEY_RANGE_MANAGER_REQUIRED: 'KeyRangeManager is required for merge operations',
-  RANGE_INTEGRITY_LEFT_START: (leftStart, originalStart) =>
+  rangeIntegrityLeftStart: (leftStart, originalStart) =>
     `Range integrity violation: left start (${leftStart}) != original start (${originalStart})`,
-  RANGE_INTEGRITY_RIGHT_END: (rightEnd, originalEnd) =>
+  rangeIntegrityRightEnd: (rightEnd, originalEnd) =>
     `Range integrity violation: right end (${rightEnd}) != original end (${originalEnd})`,
-  RANGE_INTEGRITY_MERGED_START: (mergedStart, leftStart) =>
+  rangeIntegrityMergedStart: (mergedStart, leftStart) =>
     `Range integrity violation: merged start (${mergedStart}) != left start (${leftStart})`,
-  RANGE_INTEGRITY_MERGED_END: (mergedEnd, rightEnd) =>
+  rangeIntegrityMergedEnd: (mergedEnd, rightEnd) =>
     `Range integrity violation: merged end (${mergedEnd}) != right end (${rightEnd})`,
-  MANAGER_BUSY: (state) => `Cannot split: manager is in ${state} state`,
-  MERGE_MANAGER_BUSY: (state) => `Cannot merge: manager is in ${state} state`,
-  PARTITION_RANGE_MISSING: (partitionId) =>
+  managerBusy: (state) => `Cannot split: manager is in ${state} state`,
+  mergeManagerBusy: (state) => `Cannot merge: manager is in ${state} state`,
+  partitionRangeMissing: (partitionId) =>
     `Partition ${partitionId} not found in key range manager`,
-  LEFT_PARTITION_MISSING: (partitionId) =>
+  leftPartitionMissing: (partitionId) =>
     `Left partition ${partitionId} not found`,
-  RIGHT_PARTITION_MISSING: (partitionId) =>
+  rightPartitionMissing: (partitionId) =>
     `Right partition ${partitionId} not found`,
-  PARTITIONS_NOT_ADJACENT: (leftId, leftEnd, rightId, rightStart) =>
-    `Partitions are not adjacent: ${leftId} end (${leftEnd}) != ${rightId} start (${rightStart})`,
+  partitionsNotAdjacent: (leftId, leftEnd, rightId, rightStart) =>
+    `Partitions are not adjacent: ${leftId} end (${leftEnd}) != ` +
+    `${rightId} start (${rightStart})`,
 });
 
 const SPLIT_MERGE_DEFAULT = Object.freeze({
@@ -170,9 +171,9 @@ const PENDING_REQUEST_LOG_MSG = Object.freeze({
 });
 
 const PENDING_REQUEST_ERROR_MSG = Object.freeze({
-  ACK_TIMEOUT: (timeoutMs, requestId) =>
+  ackTimeout: (timeoutMs, requestId) =>
     `ACK timeout after ${timeoutMs}ms for request ${requestId}`,
-  STALE_REQUEST: (elapsedMs) =>
+  staleRequest: (elapsedMs) =>
     `Stale request cleanup after ${elapsedMs}ms`,
 });
 

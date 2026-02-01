@@ -84,7 +84,7 @@ test('RPCClient', async (t) => {
     // Clean up - let it timeout
     try {
       await callPromise;
-    } catch (e) {
+    } catch (_e) {
       // Expected timeout
     }
 
@@ -254,7 +254,7 @@ test('RPCClient', async (t) => {
     for (const p of promises) {
       try {
         await p;
-      } catch (e) {
+      } catch (_e) {
         // Expected
       }
     }
@@ -283,7 +283,7 @@ test('RPCClient', async (t) => {
     await client.shutdown();
     try {
       await callPromise;
-    } catch (e) {
+    } catch (_e) {
       // Expected
     }
   });
@@ -339,7 +339,7 @@ test('RPCClient', async (t) => {
     // Trigger a timeout
     try {
       await client.call('target', {type: 'test'});
-    } catch (e) {
+    } catch (_e) {
       // Expected timeout
     }
 
@@ -397,7 +397,7 @@ test('RPCClient', async (t) => {
 
     try {
       await client.call('target-service', {type: 'test'});
-    } catch (e) {
+    } catch (_e) {
       // Expected timeout
     }
 

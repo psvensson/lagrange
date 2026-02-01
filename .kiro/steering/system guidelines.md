@@ -22,5 +22,12 @@ Accessing system information must only use the in-build SQL angine, which whill 
 
 Do not use try/catch for conditionals or comunication
 Try/catch errors MUST NOT be swalllowed, instead either re-thrown or clearly logged
+Always write code according to Google's JS lint standard.
+NEVER EVER write eslint exception comments!!!
+NEVER EVER modify the eslint rules
+
+When changes are made to the system, ensure that architecture.md is kept up to date.
+
+
 
 

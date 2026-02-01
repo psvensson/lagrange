@@ -45,7 +45,7 @@ class InvalidTransitionError extends Error {
   */
   constructor(currentState, attemptedState, validTransitions) {
     super(
-      NODE_LIFECYCLE_ERROR_MSG.INVALID_TRANSITION(
+      NODE_LIFECYCLE_ERROR_MSG.invalidTransition(
         currentState,
         attemptedState,
         validTransitions,

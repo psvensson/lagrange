@@ -2,39 +2,39 @@ TAP version 14
 # Subtest: ConfigurationManager singleton
     ok 1 - should return the same instance
     1..1
-ok 1 - ConfigurationManager singleton # time=44.306ms
+ok 1 - ConfigurationManager singleton # time=69.463ms
 
 # Subtest: ConfigurationManager initialization
     ok 1 - should not be initialized before initialize()
     ok 2 - should be initialized after initialize()
     ok 3 - should generate node ID if not provided
     1..3
-ok 2 - ConfigurationManager initialization # time=22.87ms
+ok 2 - ConfigurationManager initialization # time=40.283ms
 
 # Subtest: ConfigurationManager default values
     ok 1 - should use default raft election timeout
     ok 2 - should use default log level
     ok 3 - should use default replica count
     1..3
-ok 3 - ConfigurationManager default values # time=18.432ms
+ok 3 - ConfigurationManager default values # time=30.306ms
 
 # Subtest: ConfigurationManager overrides
     ok 1 - should apply node ID override
     ok 2 - should apply logging level override
     1..2
-ok 4 - ConfigurationManager overrides # time=14.9ms
+ok 4 - ConfigurationManager overrides # time=19.091ms
 
 # Subtest: ConfigurationManager environment variables
     ok 1 - should load NODE_ID from env
     ok 2 - should load LOG_LEVEL from env
     ok 3 - should parse numeric env values
     1..3
-ok 5 - ConfigurationManager environment variables # time=18.48ms
+ok 5 - ConfigurationManager environment variables # time=16.577ms
 
 # Subtest: ConfigurationManager validation
     ok 1 - should throw on invalid log level
     1..1
-ok 6 - ConfigurationManager validation # time=17.606ms
+ok 6 - ConfigurationManager validation # time=15.158ms
 
 # Subtest: ConfigurationManager categories
     ok 1 - should have node category
@@ -44,12 +44,12 @@ ok 6 - ConfigurationManager validation # time=17.606ms
     ok 5 - should have logging category
     ok 6 - should return category configuration
     1..6
-ok 7 - ConfigurationManager categories # time=18.868ms
+ok 7 - ConfigurationManager categories # time=14.845ms
 
 # Subtest: ConfigurationManager getDefault
     ok 1 - should return default value
     1..1
-ok 8 - ConfigurationManager getDefault # time=16.772ms
+ok 8 - ConfigurationManager getDefault # time=15.676ms
 
 # Subtest: ConfigurationManager getAll
     ok 1 - should return all configuration
@@ -57,15 +57,15 @@ ok 8 - ConfigurationManager getDefault # time=16.772ms
     ok 3 - should include logging config
     ok 4 - should return a clone
     1..4
-ok 9 - ConfigurationManager getAll # time=18.754ms
+ok 9 - ConfigurationManager getAll # time=14.968ms
 
 # Subtest: ENV_MAPPINGS coverage
     ok 1 - should have NODE_ID mapping
     ok 2 - should have LOG_LEVEL mapping
     ok 3 - should have REST_API_PORT mapping
     1..3
-ok 10 - ENV_MAPPINGS coverage # time=0.42ms
+ok 10 - ENV_MAPPINGS coverage # time=0.28ms
 
 1..10
 # { total: 27, pass: 27 }
-# time=197.985ms
+# time=245.98ms

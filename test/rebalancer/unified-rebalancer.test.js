@@ -480,10 +480,11 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
     t.equal(removeMoves[0].reason, 'replica_failed');
   });
 
-  await t.test('defers remove moves when add moves are pending', async (t) => {
+  await t.test('includes node_not_in_target removes with add moves', async (t) => {
     // When there's a node not in target (node-4) AND a node missing (node-3),
-    // the rebalancer should ADD first and defer REMOVE until ADDs complete.
-    // This prevents losing replicas during rebalancing.
+    // the rebalancer should generate both ADD and REMOVE moves.
+    // The 'node_not_in_target' REMOVE is critical to prevent replica accumulation
+    // as nodes join the cluster.
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
@@ -508,9 +509,45 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
     t.equal(addMoves.length, 1, 'should have one ADD move');
     t.equal(addMoves[0].nodeId, 'node-3', 'ADD should be for node-3');
 
-    // REMOVE moves should be deferred when there are ADD moves
+    // REMOVE move for node_not_in_target should be included (critical)
     const removeMoves = moves.filter((m) => m.type === MoveType.REMOVE);
-    t.equal(removeMoves.length, 0, 'REMOVE moves should be deferred');
+    t.equal(removeMoves.length, 1, 'should have one REMOVE move');
+    t.equal(removeMoves[0].nodeId, 'node-4', 'REMOVE should be for node-4');
+    t.equal(removeMoves[0].reason, 'node_not_in_target', 'reason should be node_not_in_target');
+  });
+
+  await t.test('defers spread_replicas removes when add moves pending', async (t) => {
+    // When a node has excess replicas (spread_replicas reason) AND there are
+    // ADD moves pending, the spread_replicas REMOVE should be deferred.
+    // Only node_not_in_target and replica_failed REMOVEs are critical.
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    // node-1 has 2 replicas, node-2 has 1, node-3 needs 1
+    const currentReplicas = [
+      {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+      {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+      {replica_id: 'r3', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+    ];
+
+    const targetState = {
+      targetReplicaCount: 3,
+      targetNodes: ['node-1', 'node-2', 'node-3'],
+    };
+
+    const moves = rebalancer.calculateMoves(currentReplicas, targetState);
+
+    // Should have ADD move for node-3
+    const addMoves = moves.filter((m) => m.type === MoveType.ADD);
+    t.equal(addMoves.length, 1, 'should have one ADD move');
+    t.equal(addMoves[0].nodeId, 'node-3', 'ADD should be for node-3');
+
+    // spread_replicas REMOVE should be deferred (node-1 is in target, just has excess)
+    const removeMoves = moves.filter((m) => m.type === MoveType.REMOVE);
+    t.equal(removeMoves.length, 0, 'spread_replicas REMOVE should be deferred');
   });
 
   await t.test('calculates remove moves when no add moves needed', async (t) => {
@@ -1352,5 +1389,147 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
 
     // Should target at most maximum
     t.ok(targetCount <= policy.maxReplicaCount);
+  });
+});
+
+test('UnifiedRebalancer - onNodeStateChange', async (t) => {
+  initializeTestEnvironment();
+
+  await t.test('triggers immediate check when node becomes ready', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    rebalancer.initialize();
+    rebalancer.setLeader(true);
+
+    let checkTriggered = false;
+    rebalancer.triggerImmediateCheck = (reason) => {
+      checkTriggered = true;
+      t.equal(reason, 'node_became_ready', 'reason should be node_became_ready');
+    };
+
+    rebalancer.onNodeStateChange('node-2', 'disconnected', 'active');
+
+    t.equal(checkTriggered, true, 'should trigger immediate check');
+
+    rebalancer.shutdown();
+  });
+
+  await t.test('triggers immediate check when node fails', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    rebalancer.initialize();
+    rebalancer.setLeader(true);
+
+    let checkTriggered = false;
+    rebalancer.triggerImmediateCheck = (reason) => {
+      checkTriggered = true;
+      t.equal(reason, 'node_failed', 'reason should be node_failed');
+    };
+
+    rebalancer.onNodeStateChange('node-2', 'active', 'failed');
+
+    t.equal(checkTriggered, true, 'should trigger immediate check');
+
+    rebalancer.shutdown();
+  });
+
+  await t.test('does not trigger when not leader', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    rebalancer.initialize();
+    // Not setting leader
+
+    let checkTriggered = false;
+    rebalancer.triggerImmediateCheck = () => {
+      checkTriggered = true;
+    };
+
+    rebalancer.onNodeStateChange('node-2', 'disconnected', 'active');
+
+    t.equal(checkTriggered, false, 'should not trigger when not leader');
+
+    rebalancer.shutdown();
+  });
+
+  await t.test('emits nodeStateChange event always', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    rebalancer.initialize();
+    // Not setting leader - should still emit event
+
+    const events = [];
+    rebalancer.on('nodeStateChange', (e) => events.push(e));
+
+    rebalancer.onNodeStateChange('node-2', 'disconnected', 'active');
+
+    t.equal(events.length, 1, 'should emit one nodeStateChange event');
+    t.equal(events[0].nodeId, 'node-2', 'event should have nodeId');
+    t.equal(events[0].oldState, 'disconnected', 'event should have oldState');
+    t.equal(events[0].newState, 'active', 'event should have newState');
+    t.ok(events[0].timestamp, 'event should have timestamp');
+
+    rebalancer.shutdown();
+  });
+
+  await t.test('emits rebalanceNeeded event when leader and rebalance needed', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    rebalancer.initialize();
+    rebalancer.setLeader(true);
+
+    const events = [];
+    rebalancer.on('rebalanceNeeded', (e) => events.push(e));
+
+    // Suppress the actual check
+    rebalancer.triggerImmediateCheck = () => {};
+
+    rebalancer.onNodeStateChange('node-2', 'disconnected', 'active');
+
+    t.equal(events.length, 1, 'should emit one rebalanceNeeded event');
+    t.equal(events[0].nodeId, 'node-2', 'event should have nodeId');
+    t.equal(events[0].reason, 'node_became_ready', 'event should have reason');
+    t.ok(events[0].timestamp, 'event should have timestamp');
+
+    rebalancer.shutdown();
+  });
+
+  await t.test('does not emit rebalanceNeeded when not leader', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    rebalancer.initialize();
+    // Not setting leader
+
+    const events = [];
+    rebalancer.on('rebalanceNeeded', (e) => events.push(e));
+
+    rebalancer.onNodeStateChange('node-2', 'disconnected', 'active');
+
+    t.equal(events.length, 0, 'should not emit rebalanceNeeded when not leader');
+
+    rebalancer.shutdown();
   });
 });

@@ -3,26 +3,26 @@ TAP version 14
     # Subtest: extracts ACK from flat response (primary case)
         ok 1 - extracts ACK from flat response
         1..1
-    ok 1 - extracts ACK from flat response (primary case) # time=5.62ms
+    ok 1 - extracts ACK from flat response (primary case) # time=4.529ms
     
     # Subtest: returns null when requestId does not match
         ok 1 - returns null when requestId does not match
         1..1
-    ok 2 - returns null when requestId does not match # time=0.997ms
+    ok 2 - returns null when requestId does not match # time=0.827ms
     
     # Subtest: returns null for null/undefined responses
         ok 1 - returns null for null/undefined responses
         1..1
-    ok 3 - returns null for null/undefined responses # time=0.98ms
+    ok 3 - returns null for null/undefined responses # time=0.793ms
     
     # Subtest: returns null for empty object responses
         ok 1 - returns null for empty object responses
         1..1
-    ok 4 - returns null for empty object responses # time=1.018ms
+    ok 4 - returns null for empty object responses # time=0.542ms
     
     1..4
-ok 1 - Property 14: ACK Extraction From Response # time=132.972ms
+ok 1 - Property 14: ACK Extraction From Response # time=107.825ms
 
 1..1
 # { total: 4, pass: 4 }
-# time=138.714ms
+# time=122.991ms

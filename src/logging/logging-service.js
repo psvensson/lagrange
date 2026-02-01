@@ -300,6 +300,18 @@ class LoggingService {
   getPinoLogger() {
     return this.logger;
   }
+
+  /**
+   * Shutdown the logging service.
+   * Flushes any pending logs and releases resources.
+   * @return {Promise<void>}
+   */
+  async shutdown() {
+    if (this.logger && typeof this.logger.flush === 'function') {
+      this.logger.flush();
+    }
+    this.initialized = false;
+  }
 }
 
 export {LoggingService, LOG_LEVELS};

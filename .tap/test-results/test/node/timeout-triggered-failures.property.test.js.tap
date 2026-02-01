@@ -3,32 +3,32 @@ TAP version 14
     # Subtest: replicas exceeding timeout transition to failed
         ok 1 - replicas exceeding timeout transition to failed
         1..1
-    ok 1 - replicas exceeding timeout transition to failed # time=4.84ms
+    ok 1 - replicas exceeding timeout transition to failed # time=9.335ms
     
     # Subtest: timeout error message includes timeout value
         ok 1 - timeout error message includes timeout value
         1..1
-    ok 2 - timeout error message includes timeout value # time=1.517ms
+    ok 2 - timeout error message includes timeout value # time=2.749ms
     
     # Subtest: timeout reason includes state name
         ok 1 - timeout reason includes state name
         1..1
-    ok 3 - timeout reason includes state name # time=1.944ms
+    ok 3 - timeout reason includes state name # time=2.935ms
     
     # Subtest: replicas not exceeding timeout remain unchanged
         ok 1 - replicas not exceeding timeout remain unchanged
         1..1
-    ok 4 - replicas not exceeding timeout remain unchanged # time=1.205ms
+    ok 4 - replicas not exceeding timeout remain unchanged # time=1.374ms
     
     # Subtest: timeout event emitted on timeout
         ok 1 - timeout event emitted on timeout
         1..1
-    ok 5 - timeout event emitted on timeout # time=1.321ms
+    ok 5 - timeout event emitted on timeout # time=1.483ms
     
     # Subtest: non-transitional states do not timeout
         ok 1 - non-transitional states do not timeout
         1..1
-    ok 6 - non-transitional states do not timeout # time=1.139ms
+    ok 6 - non-transitional states do not timeout # time=1.196ms
     
     # Subtest: default timeouts match requirements
         ok 1 - pending timeout is 30s
@@ -36,7 +36,7 @@ TAP version 14
         ok 3 - syncing timeout is 300s
         ok 4 - removing timeout is 60s
         1..4
-    ok 7 - default timeouts match requirements # time=0.5ms
+    ok 7 - default timeouts match requirements # time=0.661ms
     
     # Subtest: timeout checker can be started and stopped
         ok 1 - timeout checker initially null
@@ -45,13 +45,13 @@ TAP version 14
         ok 4 - timeout checker stopped
         ok 5 - stopping again is safe
         1..5
-    ok 8 - timeout checker can be started and stopped # time=0.723ms
+    ok 8 - timeout checker can be started and stopped # time=0.968ms
     
     # Subtest: clear stops timeout checker
         ok 1 - timeout checker started
         ok 2 - clear stopped timeout checker
         1..2
-    ok 9 - clear stops timeout checker # time=0.459ms
+    ok 9 - clear stops timeout checker # time=0.609ms
     
     # Subtest: getTimeout returns correct values
         ok 1 - pending timeout correct
@@ -62,11 +62,11 @@ TAP version 14
         ok 6 - failed has no timeout
         ok 7 - removed has no timeout
         1..7
-    ok 10 - getTimeout returns correct values # time=0.643ms
+    ok 10 - getTimeout returns correct values # time=0.66ms
     
     1..10
-ok 1 - Property 10: Timeout-Triggered Failures # time=160.234ms
+ok 1 - Property 10: Timeout-Triggered Failures # time=270.985ms
 
 1..1
 # { total: 24, pass: 24 }
-# time=181.235ms
+# time=280.329ms

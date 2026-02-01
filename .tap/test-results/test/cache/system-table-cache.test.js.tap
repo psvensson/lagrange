@@ -12,95 +12,96 @@ TAP version 14
     ok 10 - Table config should be initialized
     ok 11 - Table logs should be initialized
     ok 12 - Table live_queries should be initialized
-    ok 13 - Should have all system tables
-    1..13
-ok 1 - SystemTableCache - constructor initializes all system tables # time=13.219ms
+    ok 13 - Table node_endpoints should be initialized
+    ok 14 - Should have all system tables
+    1..14
+ok 1 - SystemTableCache - constructor initializes all system tables # time=14.212ms
 
 # Subtest: SystemTableCache - get returns undefined for non-existent key
     ok 1 - Should return undefined
     1..1
-ok 2 - SystemTableCache - get returns undefined for non-existent key # time=0.62ms
+ok 2 - SystemTableCache - get returns undefined for non-existent key # time=0.909ms
 
 # Subtest: SystemTableCache - get returns cloned record
     ok 1 - Should return the record
     ok 2 - Original should not be modified
     1..2
-ok 3 - SystemTableCache - get returns cloned record # time=3.199ms
+ok 3 - SystemTableCache - get returns cloned record # time=2.991ms
 
 # Subtest: SystemTableCache - has returns correct boolean
     ok 1 - Should return false initially
     ok 2 - Should return true after insert
     1..2
-ok 4 - SystemTableCache - has returns correct boolean # time=0.698ms
+ok 4 - SystemTableCache - has returns correct boolean # time=0.62ms
 
 # Subtest: SystemTableCache - getAll returns all records
     ok 1 - Should return 2 records
     ok 2 - Should include node-1
     ok 3 - Should include node-2
     1..3
-ok 5 - SystemTableCache - getAll returns all records # time=0.977ms
+ok 5 - SystemTableCache - getAll returns all records # time=1.066ms
 
 # Subtest: SystemTableCache - find returns first matching record
     ok 1 - Should find a record
     ok 2 - Should match predicate
     1..2
-ok 6 - SystemTableCache - find returns first matching record # time=0.843ms
+ok 6 - SystemTableCache - find returns first matching record # time=0.745ms
 
 # Subtest: SystemTableCache - find returns undefined when no match
     ok 1 - Should return undefined
     1..1
-ok 7 - SystemTableCache - find returns undefined when no match # time=0.665ms
+ok 7 - SystemTableCache - find returns undefined when no match # time=0.487ms
 
 # Subtest: SystemTableCache - filter returns all matching records
     ok 1 - Should return 2 matching records
     ok 2 - All should match
     1..2
-ok 8 - SystemTableCache - filter returns all matching records # time=1.796ms
+ok 8 - SystemTableCache - filter returns all matching records # time=0.575ms
 
 # Subtest: SystemTableCache - count returns correct number
     ok 1 - Should be 0 initially
     ok 2 - Should be 1 after insert
     ok 3 - Should be 2 after second insert
     1..3
-ok 9 - SystemTableCache - count returns correct number # time=0.749ms
+ok 9 - SystemTableCache - count returns correct number # time=0.679ms
 
 # Subtest: SystemTableCache - applySystemTableChange INSERT
     ok 1 - Should insert the record
     1..1
-ok 10 - SystemTableCache - applySystemTableChange INSERT # time=0.635ms
+ok 10 - SystemTableCache - applySystemTableChange INSERT # time=0.538ms
 
 # Subtest: SystemTableCache - applySystemTableChange UPDATE
     ok 1 - Should update status
     ok 2 - Should preserve other fields
     1..2
-ok 11 - SystemTableCache - applySystemTableChange UPDATE # time=0.721ms
+ok 11 - SystemTableCache - applySystemTableChange UPDATE # time=0.804ms
 
 # Subtest: SystemTableCache - applySystemTableChange DELETE
     ok 1 - Should exist before delete
     ok 2 - Should not exist after delete
     1..2
-ok 12 - SystemTableCache - applySystemTableChange DELETE # time=1.153ms
+ok 12 - SystemTableCache - applySystemTableChange DELETE # time=0.814ms
 
 # Subtest: SystemTableCache - validates table name
     ok 1 - Should throw for invalid table name
     1..1
-ok 13 - SystemTableCache - validates table name # time=1.025ms
+ok 13 - SystemTableCache - validates table name # time=0.69ms
 
 # Subtest: SystemTableCache - validates CDC operation
     ok 1 - Should throw for invalid operation
     1..1
-ok 14 - SystemTableCache - validates CDC operation # time=0.622ms
+ok 14 - SystemTableCache - validates CDC operation # time=0.547ms
 
 # Subtest: SystemTableCache - requires primary key field in data
     ok 1 - Should throw when primary key is missing
     1..1
-ok 15 - SystemTableCache - requires primary key field in data # time=0.709ms
+ok 15 - SystemTableCache - requires primary key field in data # time=0.693ms
 
 # Subtest: SystemTableCache - clear removes all data
     ok 1 - nodes should be empty
     ok 2 - partitions should be empty
     1..2
-ok 16 - SystemTableCache - clear removes all data # time=0.751ms
+ok 16 - SystemTableCache - clear removes all data # time=1.11ms
 
 # Subtest: SystemTableCache - works with all system tables
     ok 1 - Should work with nodes
@@ -115,8 +116,9 @@ ok 16 - SystemTableCache - clear removes all data # time=0.751ms
     ok 10 - Should work with config
     ok 11 - Should work with logs
     ok 12 - Should work with live_queries
-    1..12
-ok 17 - SystemTableCache - works with all system tables # time=2.057ms
+    ok 13 - Should work with node_endpoints
+    1..13
+ok 17 - SystemTableCache - works with all system tables # time=1.909ms
 
 # Subtest: SystemTableCache - onCacheChange registers listener
     ok 1 - Should receive one event
@@ -124,28 +126,28 @@ ok 17 - SystemTableCache - works with all system tables # time=2.057ms
     ok 3 - Should have correct operation
     ok 4 - Should have correct record
     1..4
-ok 18 - SystemTableCache - onCacheChange registers listener # time=1.245ms
+ok 18 - SystemTableCache - onCacheChange registers listener # time=0.674ms
 
 # Subtest: SystemTableCache - onCacheChange throws for non-function
     ok 1 - Should throw for non-function listener
     1..1
-ok 19 - SystemTableCache - onCacheChange throws for non-function # time=0.618ms
+ok 19 - SystemTableCache - onCacheChange throws for non-function # time=0.622ms
 
 # Subtest: SystemTableCache - offCacheChange removes listener
     ok 1 - Should not receive events after removal
     1..1
-ok 20 - SystemTableCache - offCacheChange removes listener # time=0.834ms
+ok 20 - SystemTableCache - offCacheChange removes listener # time=3.301ms
 
 # Subtest: SystemTableCache - listener errors do not break cache
     ok 1 - Second listener should still receive event
     1..1
-ok 21 - SystemTableCache - listener errors do not break cache # time=0.753ms
+ok 21 - SystemTableCache - listener errors do not break cache # time=0.709ms
 
 # Subtest: SystemTableCache - notifications are non-blocking
     ok 1 - Listener should not be called synchronously
     ok 2 - Listener should be called after setImmediate
     1..2
-ok 22 - SystemTableCache - notifications are non-blocking # time=0.502ms
+ok 22 - SystemTableCache - notifications are non-blocking # time=3.864ms
 
 # Subtest: SystemTableCache - getAllData returns all tables
     ok 1 - nodes should be an array
@@ -154,26 +156,26 @@ ok 22 - SystemTableCache - notifications are non-blocking # time=0.502ms
     ok 4 - partitions should have 1 record
     ok 5 - Should contain correct node data
     1..5
-ok 23 - SystemTableCache - getAllData returns all tables # time=0.806ms
+ok 23 - SystemTableCache - getAllData returns all tables # time=1.178ms
 
 # Subtest: SystemTableCache - getAllData returns cloned data
     ok 1 - Original should not be modified
     1..1
-ok 24 - SystemTableCache - getAllData returns cloned data # time=0.664ms
+ok 24 - SystemTableCache - getAllData returns cloned data # time=0.648ms
 
 # Subtest: SystemTableCache - notifies on UPDATE
     ok 1 - Should receive one event
     ok 2 - Should have UPDATE operation
     ok 3 - Should have updated status
     1..3
-ok 25 - SystemTableCache - notifies on UPDATE # time=0.933ms
+ok 25 - SystemTableCache - notifies on UPDATE # time=1.052ms
 
 # Subtest: SystemTableCache - notifies on DELETE
     ok 1 - Should receive one event
     ok 2 - Should have DELETE operation
     ok 3 - Should have deleted record
     1..3
-ok 26 - SystemTableCache - notifies on DELETE # time=0.641ms
+ok 26 - SystemTableCache - notifies on DELETE # time=0.507ms
 
 # Subtest: SystemTableCache - DELETE with service_id primary key
     ok 1 - Should exist after insert
@@ -181,59 +183,59 @@ ok 26 - SystemTableCache - notifies on DELETE # time=0.641ms
     ok 3 - Should not exist after delete
     ok 4 - Should have 0 services
     1..4
-ok 27 - SystemTableCache - DELETE with service_id primary key # time=0.736ms
+ok 27 - SystemTableCache - DELETE with service_id primary key # time=0.496ms
 
 # Subtest: SystemTableCache - getEpoch returns 0 initially
     ok 1 - Should return 0 initially
     1..1
-ok 28 - SystemTableCache - getEpoch returns 0 initially # time=0.339ms
+ok 28 - SystemTableCache - getEpoch returns 0 initially # time=0.556ms
 
 # Subtest: SystemTableCache - updateFromEpoch updates current epoch
     ok 1 - Should update to epoch 42
     1..1
-ok 29 - SystemTableCache - updateFromEpoch updates current epoch # time=0.505ms
+ok 29 - SystemTableCache - updateFromEpoch updates current epoch # time=0.495ms
 
 # Subtest: SystemTableCache - updateFromEpoch throws for null epoch
     ok 1 - Should throw for null epoch
     1..1
-ok 30 - SystemTableCache - updateFromEpoch throws for null epoch # time=0.82ms
+ok 30 - SystemTableCache - updateFromEpoch throws for null epoch # time=0.408ms
 
 # Subtest: SystemTableCache - updateFromEpoch throws for non-object epoch
     ok 1 - Should throw for non-object epoch
     1..1
-ok 31 - SystemTableCache - updateFromEpoch throws for non-object epoch # time=1.019ms
+ok 31 - SystemTableCache - updateFromEpoch throws for non-object epoch # time=0.327ms
 
 # Subtest: SystemTableCache - updateFromEpoch throws for missing epoch number
     ok 1 - Should throw for missing epoch number
     1..1
-ok 32 - SystemTableCache - updateFromEpoch throws for missing epoch number # time=0.477ms
+ok 32 - SystemTableCache - updateFromEpoch throws for missing epoch number # time=0.709ms
 
 # Subtest: SystemTableCache - updateFromEpoch throws for non-numeric epoch
     ok 1 - Should throw for non-numeric epoch
     1..1
-ok 33 - SystemTableCache - updateFromEpoch throws for non-numeric epoch # time=0.457ms
+ok 33 - SystemTableCache - updateFromEpoch throws for non-numeric epoch # time=0.374ms
 
 # Subtest: SystemTableCache - updateFromEpoch throws for missing assignments
     ok 1 - Should throw for missing assignments
     1..1
-ok 34 - SystemTableCache - updateFromEpoch throws for missing assignments # time=0.527ms
+ok 34 - SystemTableCache - updateFromEpoch throws for missing assignments # time=0.364ms
 
 # Subtest: SystemTableCache - updateFromEpoch throws for non-object assignments
     ok 1 - Should throw for non-object assignments
     1..1
-ok 35 - SystemTableCache - updateFromEpoch throws for non-object assignments # time=0.452ms
+ok 35 - SystemTableCache - updateFromEpoch throws for non-object assignments # time=0.7ms
 
 # Subtest: SystemTableCache - updateFromEpoch can update multiple times
     ok 1 - Should be epoch 1
     ok 2 - Should be epoch 2
     ok 3 - Should be epoch 5
     1..3
-ok 36 - SystemTableCache - updateFromEpoch can update multiple times # time=0.611ms
+ok 36 - SystemTableCache - updateFromEpoch can update multiple times # time=0.468ms
 
 # Subtest: SystemTableCache - getReadyNodes returns empty array when no nodes
     ok 1 - Should return empty array
     1..1
-ok 37 - SystemTableCache - getReadyNodes returns empty array when no nodes # time=0.795ms
+ok 37 - SystemTableCache - getReadyNodes returns empty array when no nodes # time=0.741ms
 
 # Subtest: SystemTableCache - getReadyNodes returns only ready nodes
     ok 1 - Should return 2 ready nodes
@@ -242,17 +244,17 @@ ok 37 - SystemTableCache - getReadyNodes returns empty array when no nodes # tim
     ok 4 - Should not include joining node
     ok 5 - Should not include draining node
     1..5
-ok 38 - SystemTableCache - getReadyNodes returns only ready nodes # time=0.821ms
+ok 38 - SystemTableCache - getReadyNodes returns only ready nodes # time=0.688ms
 
 # Subtest: SystemTableCache - getReadyNodes returns empty when no ready nodes
     ok 1 - Should return empty array
     1..1
-ok 39 - SystemTableCache - getReadyNodes returns empty when no ready nodes # time=0.579ms
+ok 39 - SystemTableCache - getReadyNodes returns empty when no ready nodes # time=0.392ms
 
 # Subtest: SystemTableCache - getReadyNodes rejects missing node_id
     ok 1 - Should reject nodes without node_id
     1..1
-ok 40 - SystemTableCache - getReadyNodes rejects missing node_id # time=0.786ms
+ok 40 - SystemTableCache - getReadyNodes rejects missing node_id # time=0.405ms
 
 # Subtest: SystemTableCache - updateFromEpoch rejects older epochs
     ok 1 - Should accept initial epoch
@@ -260,39 +262,39 @@ ok 40 - SystemTableCache - getReadyNodes rejects missing node_id # time=0.786ms
     ok 3 - Should reject older epoch
     ok 4 - Should still be epoch 5
     1..4
-ok 41 - SystemTableCache - updateFromEpoch rejects older epochs # time=0.865ms
+ok 41 - SystemTableCache - updateFromEpoch rejects older epochs # time=0.542ms
 
 # Subtest: SystemTableCache - updateFromEpoch rejects equal epochs
     ok 1 - Should be epoch 5
     ok 2 - Should reject equal epoch
     ok 3 - Should still be epoch 5
     1..3
-ok 42 - SystemTableCache - updateFromEpoch rejects equal epochs # time=0.803ms
+ok 42 - SystemTableCache - updateFromEpoch rejects equal epochs # time=0.544ms
 
 # Subtest: SystemTableCache - updateFromEpoch accepts newer epochs
     ok 1 - Should be epoch 5
     ok 2 - Should accept newer epoch
     ok 3 - Should be epoch 6
     1..3
-ok 43 - SystemTableCache - updateFromEpoch accepts newer epochs # time=0.643ms
+ok 43 - SystemTableCache - updateFromEpoch accepts newer epochs # time=0.435ms
 
 # Subtest: SystemTableCache - updateFromEpoch returns true for first update
     ok 1 - Should accept first epoch update
     ok 2 - Should be epoch 1
     1..2
-ok 44 - SystemTableCache - updateFromEpoch returns true for first update # time=0.617ms
+ok 44 - SystemTableCache - updateFromEpoch returns true for first update # time=0.391ms
 
 # Subtest: SystemTableCache - updateFromEpoch rejects epoch 0 after initialization
     ok 1 - Should reject epoch 0
     ok 2 - Should still be epoch 1
     1..2
-ok 45 - SystemTableCache - updateFromEpoch rejects epoch 0 after initialization # time=0.558ms
+ok 45 - SystemTableCache - updateFromEpoch rejects epoch 0 after initialization # time=0.399ms
 
 # Subtest: SystemTableCache - updateFromEpoch atomic update on epoch change
     ok 1 - Should accept newer epoch
     ok 2 - Epoch should be atomically updated to 11
     1..2
-ok 46 - SystemTableCache - updateFromEpoch atomic update on epoch change # time=0.612ms
+ok 46 - SystemTableCache - updateFromEpoch atomic update on epoch change # time=0.556ms
 
 # Subtest: SystemTableCache - updateFromEpoch sequence of updates
     ok 1 - Accept epoch 1
@@ -303,8 +305,66 @@ ok 46 - SystemTableCache - updateFromEpoch atomic update on epoch change # time=
     ok 6 - Accept epoch 4
     ok 7 - Should be epoch 4
     1..7
-ok 47 - SystemTableCache - updateFromEpoch sequence of updates # time=1.47ms
+ok 47 - SystemTableCache - updateFromEpoch sequence of updates # time=0.854ms
 
-1..47
-# { total: 118, pass: 118 }
-# time=1004.899ms
+# Subtest: SystemTableCache - getEndpointsForNode returns empty array when no endpoints
+    ok 1 - Should return empty array
+    1..1
+ok 48 - SystemTableCache - getEndpointsForNode returns empty array when no endpoints # time=0.708ms
+
+# Subtest: SystemTableCache - getEndpointsForNode returns endpoints for specific node
+    ok 1 - Should return 2 endpoints for node-1
+    ok 2 - All endpoints should belong to node-1
+    1..2
+ok 49 - SystemTableCache - getEndpointsForNode returns endpoints for specific node # time=1.052ms
+
+# Subtest: SystemTableCache - getEndpointsForNode sorts by priority ascending
+    ok 1 - Should return 3 endpoints
+    ok 2 - First endpoint should have priority 0
+    ok 3 - Second endpoint should have priority 5
+    ok 4 - Third endpoint should have priority 10
+    1..4
+ok 50 - SystemTableCache - getEndpointsForNode sorts by priority ascending # time=0.976ms
+
+# Subtest: SystemTableCache - getEndpointsForNode handles missing priority as 0
+    ok 1 - Should return 2 endpoints
+    ok 2 - Endpoint without priority should come first (treated as 0)
+    ok 3 - Endpoint with priority 5 should come second
+    1..3
+ok 51 - SystemTableCache - getEndpointsForNode handles missing priority as 0 # time=0.767ms
+
+# Subtest: SystemTableCache - filterEndpointsByStatus filters active endpoints
+    ok 1 - Should return 2 active endpoints
+    ok 2 - All endpoints should be active
+    1..2
+ok 52 - SystemTableCache - filterEndpointsByStatus filters active endpoints # time=0.698ms
+
+# Subtest: SystemTableCache - filterEndpointsByStatus filters inactive endpoints
+    ok 1 - Should return 1 inactive endpoint
+    ok 2 - Should return the inactive endpoint
+    1..2
+ok 53 - SystemTableCache - filterEndpointsByStatus filters inactive endpoints # time=0.655ms
+
+# Subtest: SystemTableCache - filterEndpointsByStatus returns empty for non-array
+    ok 1 - Should return empty array for null
+    ok 2 - Should return empty array for undefined
+    ok 3 - Should return empty array for string
+    1..3
+ok 54 - SystemTableCache - filterEndpointsByStatus returns empty for non-array # time=0.575ms
+
+# Subtest: SystemTableCache - filterEndpointsByStatus returns empty when no match
+    ok 1 - Should return empty array when no matches
+    1..1
+ok 55 - SystemTableCache - filterEndpointsByStatus returns empty when no match # time=1.041ms
+
+# Subtest: SystemTableCache - getEndpointsForNode combined with filterEndpointsByStatus
+    ok 1 - Should have 3 total endpoints
+    ok 2 - Should have 2 active endpoints
+    ok 3 - Active endpoints should still be sorted by priority
+    ok 4 - Second active endpoint should have priority 2
+    1..4
+ok 56 - SystemTableCache - getEndpointsForNode combined with filterEndpointsByStatus # time=0.741ms
+
+1..56
+# { total: 142, pass: 142 }
+# time=1081.548ms

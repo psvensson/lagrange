@@ -108,6 +108,8 @@ const REBALANCER_DEFAULT_POLICY = Object.freeze({
 
 const REBALANCER_EVENT = Object.freeze({
   REBALANCE_COMPLETE: 'rebalanceComplete',
+  NODE_STATE_CHANGE: 'nodeStateChange',
+  REBALANCE_NEEDED: 'rebalanceNeeded',
 });
 
 const REBALANCER_LOG_MSG = Object.freeze({
@@ -122,6 +124,8 @@ const REBALANCER_LOG_MSG = Object.freeze({
   SKIP_ADD_TRANSITIONAL: 'Skipping ADD for node with transitional replica',
   DEFER_REMOVE_DETAIL: 'Deferring REMOVE until ADDs complete',
   DEFER_REMOVE: 'Deferring REMOVE moves until ADD moves complete',
+  INCLUDE_CRITICAL_REMOVE: 'Including critical REMOVE moves alongside ADD moves',
+  NODE_STATE_CHANGE: 'Node state change detected',
   EXECUTE_MOVE: 'Executing rebalancing move',
   SKIP_UNREADY_NODE: 'Skipping move for unready node',
   MOVE_FAILED: 'Failed to execute move',

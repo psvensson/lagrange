@@ -98,9 +98,15 @@ class RPCClient extends EventEmitter {
           });
 
           this.emit(TRANSPORT_EVENT.TIMEOUT, {correlationId, target, timeoutMs});
-          reject(new Error(RPC_ERROR_MSG.TIMEOUT(timeoutMs)));
+          reject(new Error(RPC_ERROR_MSG.timeout(timeoutMs)));
         }
       }, timeoutMs);
+
+      // Unref the timeout so it doesn't keep the process alive
+      // This allows tests to exit cleanly even if there are pending RPC requests
+      if (timeoutHandle.unref) {
+        timeoutHandle.unref();
+      }
 
       // Track pending request
       this.pendingRequests.set(correlationId, {
@@ -230,7 +236,7 @@ class RPCClient extends EventEmitter {
       reason,
     });
 
-    pending.reject(new Error(RPC_ERROR_MSG.CANCELLED(reason)));
+    pending.reject(new Error(RPC_ERROR_MSG.cancelled(reason)));
     return true;
   }
 

@@ -6,7 +6,16 @@ import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM, STATE, STRING, TYPEOF, WORKFLOW_STEP} from '../constants/index.js';
+import {
+  COLUMN,
+  ENDPOINT_STATUS,
+  NUM,
+  STATE,
+  STRING,
+  TRANSPORT_TYPE,
+  TYPEOF,
+  WORKFLOW_STEP,
+} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   ControlPlaneMessageType,
@@ -20,6 +29,7 @@ import {
   DEFAULT_READY_LEASE_MS,
   DEFAULT_HEARTBEAT_INTERVAL_MS,
   DEFAULT_LEASE_SWEEP_INTERVAL_MS,
+  HEARTBEAT_FAILURE_WARN_THRESHOLD,
 } from './control-plane-constants.js';
 
 class ControlPlaneService extends EventEmitter {
@@ -60,6 +70,7 @@ class ControlPlaneService extends EventEmitter {
 
     this.leaseSweepTimer = null;
     this.localHeartbeatTimer = null;
+    this.heartbeatConsecutiveFailures = 0;
     this.initialized = false;
 
     const loggingService = LoggingService.getInstance();
@@ -123,6 +134,13 @@ class ControlPlaneService extends EventEmitter {
       diskUsagePercent: stats.diskUsagePercent,
       status: STATE.ACTIVE,
     });
+
+    // Register WebSocket endpoint in node_endpoints table
+    // Requirements: 8.2 - Node registration creates endpoint
+    await this.upsertEndpointState({
+      nodeId: this.nodeId,
+      nodeAddress: options.nodeAddress || this.nodeAddress,
+    });
   }
 
   /**
@@ -181,6 +199,8 @@ class ControlPlaneService extends EventEmitter {
         });
       });
     }, this.config.leaseSweepIntervalMs);
+    // Unref to allow process exit when this is the only timer
+    this.leaseSweepTimer.unref();
   }
 
   /**
@@ -217,11 +237,7 @@ class ControlPlaneService extends EventEmitter {
         try {
           stats = await options.getStats();
         } catch (error) {
-          this.logger.debug(CONTROL_PLANE_LOG_MSG.LOCAL_HEARTBEAT_FAILED, {
-            nodeId: this.nodeId,
-            stage: 'stats',
-            error: error.message,
-          });
+          this.recordHeartbeatFailure('stats', error.message);
           return;
         }
       }
@@ -232,12 +248,16 @@ class ControlPlaneService extends EventEmitter {
           capabilities: options.capabilities,
           stats,
         });
+        // Reset failure counter on success
+        if (this.heartbeatConsecutiveFailures > 0) {
+          this.logger.info(CONTROL_PLANE_LOG_MSG.LOCAL_HEARTBEAT_RECOVERED, {
+            nodeId: this.nodeId,
+            previousFailures: this.heartbeatConsecutiveFailures,
+          });
+          this.heartbeatConsecutiveFailures = 0;
+        }
       } catch (error) {
-        this.logger.debug(CONTROL_PLANE_LOG_MSG.LOCAL_HEARTBEAT_FAILED, {
-          nodeId: this.nodeId,
-          stage: 'register',
-          error: error.message,
-        });
+        this.recordHeartbeatFailure('register', error.message);
       }
     };
 
@@ -245,7 +265,34 @@ class ControlPlaneService extends EventEmitter {
       sendHeartbeat,
       this.config.heartbeatIntervalMs,
     );
+    // Unref to allow process exit when this is the only timer
+    this.localHeartbeatTimer.unref();
     sendHeartbeat();
+  }
+
+  /**
+   * Record a heartbeat failure and log appropriately.
+   * @param {string} stage - The stage where failure occurred.
+   * @param {string} errorMessage - The error message.
+   * @private
+   */
+  recordHeartbeatFailure(stage, errorMessage) {
+    this.heartbeatConsecutiveFailures++;
+
+    const logData = {
+      nodeId: this.nodeId,
+      stage,
+      error: errorMessage,
+      consecutiveFailures: this.heartbeatConsecutiveFailures,
+    };
+
+    if (this.heartbeatConsecutiveFailures >= HEARTBEAT_FAILURE_WARN_THRESHOLD) {
+      // Log at warn level after threshold - this makes the issue visible
+      this.logger.warn(CONTROL_PLANE_LOG_MSG.LOCAL_HEARTBEAT_CONSECUTIVE_FAILURES, logData);
+    } else {
+      // Log at debug level for occasional failures
+      this.logger.debug(CONTROL_PLANE_LOG_MSG.LOCAL_HEARTBEAT_FAILED, logData);
+    }
   }
 
   /**
@@ -348,7 +395,8 @@ class ControlPlaneService extends EventEmitter {
       return;
     }
 
-    const operation = this.buildOperationFromRow(row);
+    // Build operation to validate row structure (unused but validates data)
+    this.buildOperationFromRow(row);
 
     if (row.workflow_step !== WORKFLOW_STEP.PENDING) {
       return;
@@ -612,6 +660,47 @@ class ControlPlaneService extends EventEmitter {
     await this.cdcIntegrationService.upsertSystemTableRow(
       SystemTableName.NODES,
       baseRow,
+    );
+  }
+
+  /**
+   * Update or insert an endpoint row in the node_endpoints table.
+   * Requirements: 8.2 - Node registration creates endpoint in node_endpoints table.
+   * @param {Object} options - Update options.
+   * @param {string} options.nodeId - Node ID.
+   * @param {string} options.nodeAddress - Node WebSocket address.
+   * @private
+   */
+  async upsertEndpointState(options) {
+    const {nodeId, nodeAddress} = options;
+
+    if (!nodeId || !nodeAddress) {
+      return;
+    }
+
+    const now = Date.now();
+    const endpointId = `ep-${nodeId}-ws`;
+    const cache = assertCritical(
+      this.systemTableCache,
+      CONTROL_PLANE_ERROR_MSG.MISSING_CACHE,
+    );
+    const existing = cache.get(SystemTableName.NODE_ENDPOINTS, endpointId) || null;
+
+    const endpointRow = {
+      [COLUMN.ENDPOINT_ID]: endpointId,
+      [COLUMN.NODE_ID]: nodeId,
+      [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+      [COLUMN.ADDRESS]: nodeAddress,
+      [COLUMN.PRIORITY]: NUM.ZERO,
+      [COLUMN.METADATA]: existing?.[COLUMN.METADATA] || JSON.stringify({}),
+      [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+      [COLUMN.CREATED_AT]: existing?.[COLUMN.CREATED_AT] || now,
+      [COLUMN.UPDATED_AT]: now,
+    };
+
+    await this.cdcIntegrationService.upsertSystemTableRow(
+      SystemTableName.NODE_ENDPOINTS,
+      endpointRow,
     );
   }
 

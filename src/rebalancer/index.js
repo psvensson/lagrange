@@ -49,6 +49,3 @@ export {
 
 // RebalanceCoordinator (new simplified architecture)
 export {RebalanceCoordinator} from './rebalance-coordinator.js';
-
-// State-Aware Rebalancer (respects node lifecycle states)
-export {StateAwareRebalancer} from './state-aware-rebalancer.js';

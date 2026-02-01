@@ -156,6 +156,7 @@ class ReplicaRecoveryService extends EventEmitter {
         throw error;
       }
     }, this.checkIntervalMs);
+    this.checkTimer.unref();
   }
 
   /**

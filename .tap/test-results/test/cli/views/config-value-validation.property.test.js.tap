@@ -3,81 +3,81 @@ TAP version 14
     # Subtest: valid string values are accepted
         ok 1 - valid string values are accepted
         1..1
-    ok 1 - valid string values are accepted # time=7.777ms
+    ok 1 - valid string values are accepted # time=5.56ms
     
     # Subtest: valid integer values are accepted as numbers
         ok 1 - valid integer values are accepted as numbers
         1..1
-    ok 2 - valid integer values are accepted as numbers # time=0.996ms
+    ok 2 - valid integer values are accepted as numbers # time=0.93ms
     
     # Subtest: valid float values are accepted as numbers
         ok 1 - valid float values are accepted as numbers
         1..1
-    ok 3 - valid float values are accepted as numbers # time=1.293ms
+    ok 3 - valid float values are accepted as numbers # time=1.194ms
     
     # Subtest: non-numeric strings are rejected for number type
         ok 1 - non-numeric strings are rejected for number type
         1..1
-    ok 4 - non-numeric strings are rejected for number type # time=1.35ms
+    ok 4 - non-numeric strings are rejected for number type # time=0.779ms
     
     # Subtest: boolean true values are accepted
         ok 1 - boolean true values are accepted
         1..1
-    ok 5 - boolean true values are accepted # time=0.832ms
+    ok 5 - boolean true values are accepted # time=0.565ms
     
     # Subtest: boolean false values are accepted
         ok 1 - boolean false values are accepted
         1..1
-    ok 6 - boolean false values are accepted # time=0.661ms
+    ok 6 - boolean false values are accepted # time=0.547ms
     
     # Subtest: invalid boolean strings are rejected
         ok 1 - invalid boolean strings are rejected
         1..1
-    ok 7 - invalid boolean strings are rejected # time=0.923ms
+    ok 7 - invalid boolean strings are rejected # time=0.861ms
     
     # Subtest: valid JSON objects are accepted
         ok 1 - valid JSON objects are accepted
         1..1
-    ok 8 - valid JSON objects are accepted # time=1.547ms
+    ok 8 - valid JSON objects are accepted # time=1.212ms
     
     # Subtest: valid JSON arrays are accepted
         ok 1 - valid JSON arrays are accepted
         1..1
-    ok 9 - valid JSON arrays are accepted # time=0.787ms
+    ok 9 - valid JSON arrays are accepted # time=0.578ms
     
     # Subtest: invalid JSON strings are rejected
         ok 1 - invalid JSON strings are rejected
         1..1
-    ok 10 - invalid JSON strings are rejected # time=0.695ms
+    ok 10 - invalid JSON strings are rejected # time=0.499ms
     
     # Subtest: null values are accepted for all types
         ok 1 - null values are accepted for all types
         1..1
-    ok 11 - null values are accepted for all types # time=0.521ms
+    ok 11 - null values are accepted for all types # time=0.743ms
     
     # Subtest: prepareEdit validates type correctly
         ok 1 - prepareEdit validates type correctly
         1..1
-    ok 12 - prepareEdit validates type correctly # time=1.061ms
+    ok 12 - prepareEdit validates type correctly # time=0.853ms
     
     # Subtest: validation is consistent across multiple calls
         ok 1 - validation is consistent across multiple calls
         1..1
-    ok 13 - validation is consistent across multiple calls # time=1.188ms
+    ok 13 - validation is consistent across multiple calls # time=3.461ms
     
     # Subtest: empty string handling varies by type
         ok 1 - empty string handling varies by type
         1..1
-    ok 14 - empty string handling varies by type # time=0.639ms
+    ok 14 - empty string handling varies by type # time=0.573ms
     
     # Subtest: whitespace-only strings are trimmed for string type
         ok 1 - whitespace-only strings are trimmed for string type
         1..1
-    ok 15 - whitespace-only strings are trimmed for string type # time=1.366ms
+    ok 15 - whitespace-only strings are trimmed for string type # time=0.807ms
     
     1..15
-ok 1 - Property 44: Config View Value Validation # time=33.3ms
+ok 1 - Property 44: Config View Value Validation # time=28.294ms
 
 1..1
 # { total: 15, pass: 15 }
-# time=41.327ms
+# time=46.124ms

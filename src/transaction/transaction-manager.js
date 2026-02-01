@@ -190,11 +190,11 @@ class TransactionManager extends EventEmitter {
     const transaction = this.transactions.get(transactionId);
 
     if (!transaction) {
-      throw new Error(TRANSACTION_ERROR_MSG.NOT_FOUND_WITH_ID(transactionId));
+      throw new Error(TRANSACTION_ERROR_MSG.notFoundWithId(transactionId));
     }
 
     if (!transaction.isActive()) {
-      throw new Error(TRANSACTION_ERROR_MSG.NOT_ACTIVE(transaction.state));
+      throw new Error(TRANSACTION_ERROR_MSG.notActive(transaction.state));
     }
 
     // Store Raft log index for durability tracking
@@ -319,11 +319,11 @@ class TransactionManager extends EventEmitter {
     const transaction = this.transactions.get(transactionId);
 
     if (!transaction) {
-      throw new Error(TRANSACTION_ERROR_MSG.NOT_FOUND_WITH_ID(transactionId));
+      throw new Error(TRANSACTION_ERROR_MSG.notFoundWithId(transactionId));
     }
 
     if (!transaction.isActive()) {
-      throw new Error(TRANSACTION_ERROR_MSG.RECORD_OPERATION_INACTIVE(transaction.state));
+      throw new Error(TRANSACTION_ERROR_MSG.recordOperationInactive(transaction.state));
     }
 
     transaction.addOperation(operation);
@@ -396,6 +396,7 @@ class TransactionManager extends EventEmitter {
     this.cleanupInterval = setInterval(() => {
       this.cleanupTimedOutTransactions();
     }, TRANSACTION_DEFAULT.CLEANUP_INTERVAL_MS);
+    this.cleanupInterval.unref();
   }
 
   /**

@@ -5,6 +5,7 @@
  */
 
 import {EventEmitter} from 'events';
+import {URL} from 'url';
 import {v4 as uuidv4} from 'uuid';
 import WebSocket, {WebSocketServer} from 'ws';
 import {ConfigurationManager} from '../config/configuration-manager.js';
@@ -25,6 +26,10 @@ import {
   TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
 } from '../constants/transport.js';
+import {COLUMN} from '../constants/index.js';
+
+// queueMicrotask is a global in Node.js, but ESLint doesn't know about it
+const queueMicrotaskFn = globalThis.queueMicrotask;
 
 const ConnectionState = CONNECTION_STATE;
 const RouterMessageType = ROUTER_MESSAGE_TYPE;
@@ -48,7 +53,7 @@ class InProcWebSocket extends EventEmitter {
 
   _open() {
     this.readyState = WebSocket.OPEN;
-    queueMicrotask(() => this.emit(TRANSPORT_EVENT.OPEN));
+    queueMicrotaskFn(() => this.emit(TRANSPORT_EVENT.OPEN));
   }
 
   send(data) {
@@ -56,7 +61,7 @@ class InProcWebSocket extends EventEmitter {
       return;
     }
     // Deliver asynchronously to preserve ordering without recursion.
-    queueMicrotask(() => {
+    queueMicrotaskFn(() => {
       if (this._peer.readyState === WebSocket.OPEN) {
         this._peer.emit(TRANSPORT_EVENT.MESSAGE, data);
       }
@@ -72,10 +77,10 @@ class InProcWebSocket extends EventEmitter {
       return;
     }
     this.readyState = WebSocket.CLOSED;
-    queueMicrotask(() => this.emit(TRANSPORT_EVENT.CLOSE));
+    queueMicrotaskFn(() => this.emit(TRANSPORT_EVENT.CLOSE));
     if (this._peer && this._peer.readyState !== WebSocket.CLOSED) {
       this._peer.readyState = WebSocket.CLOSED;
-      queueMicrotask(() => this._peer.emit(TRANSPORT_EVENT.CLOSE));
+      queueMicrotaskFn(() => this._peer.emit(TRANSPORT_EVENT.CLOSE));
     }
   }
 }
@@ -103,6 +108,8 @@ class MessageRouter extends EventEmitter {
    * @param {string} options.nodeAddress - Local node address (for WebSocket server).
    * @param {number} options.wsPort - WebSocket server port.
    * @param {string} options.wsHost - Optional WebSocket bind host.
+   * @param {Object} options.transportRegistry - Optional TransportRegistry for endpoint resolution.
+   * @param {Object} options.connectionPool - Optional ConnectionPool for connection management.
    */
   constructor(options = {}) {
     super();
@@ -127,6 +134,11 @@ class MessageRouter extends EventEmitter {
     // Pending messages awaiting acknowledgment
     this.pendingMessages = new Map();
     this.pendingPings = new Map();
+
+    // Optional transport abstraction layer components
+    // When set, deliver() will use TransportRegistry for endpoint resolution
+    this.transportRegistry = options.transportRegistry || null;
+    this.connectionPool = options.connectionPool || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -194,6 +206,32 @@ class MessageRouter extends EventEmitter {
   }
 
   /**
+   * Set the TransportRegistry and ConnectionPool for transport abstraction.
+   * When set, deliver() will use TransportRegistry for endpoint resolution
+   * with fallback support across multiple endpoints.
+   * @param {Object} registry - TransportRegistry instance for endpoint resolution.
+   * @param {Object} pool - ConnectionPool instance for connection management.
+   */
+  setTransportRegistry(registry, pool) {
+    this.transportRegistry = registry || null;
+    this.connectionPool = pool || null;
+
+    this.logger.info(ROUTER_LOG_MSG.TRANSPORT_REGISTRY_SET, {
+      hasRegistry: !!registry,
+      hasPool: !!pool,
+      routerId: this.routerId,
+    });
+  }
+
+  /**
+   * Check if TransportRegistry is configured.
+   * @return {boolean} True if TransportRegistry and ConnectionPool are available.
+   */
+  hasTransportRegistry() {
+    return !!(this.transportRegistry && this.connectionPool);
+  }
+
+  /**
    * Initialize the message router.
    * Starts WebSocket server and establishes self-connection for uniform routing.
    * Requirements: 2.2, 8.2
@@ -232,7 +270,7 @@ class MessageRouter extends EventEmitter {
           await new Promise((resolve) => this.server.close(resolve));
           this.server = null;
         }
-        throw new Error(ROUTER_ERROR_MSG.SELF_CONNECTION_FAILED(error.message));
+        throw new Error(ROUTER_ERROR_MSG.selfConnectionFailed(error.message));
       }
     }
 
@@ -808,7 +846,7 @@ class MessageRouter extends EventEmitter {
         messageId,
         acknowledged: true,
         noHandler: true,
-        error: ROUTER_ERROR_MSG.NO_HANDLER_FOR_ADDRESS(targetAddress),
+        error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress),
       });
     }
   }
@@ -863,7 +901,7 @@ class MessageRouter extends EventEmitter {
       }
 
       const disconnectError = new Error(
-        ROUTER_ERROR_MSG.CONNECTION_CLOSED(nodeId),
+        ROUTER_ERROR_MSG.connectionClosed(nodeId),
       );
       this.failOutboundQueue(nodeId, disconnectError);
       this.failPendingMessagesForNode(nodeId, disconnectError);
@@ -952,6 +990,8 @@ class MessageRouter extends EventEmitter {
         });
       }
     }, this.pingIntervalMs);
+    // Unref to allow process exit when this is the only timer
+    connectionInfo.pingInterval.unref();
   }
 
   /**
@@ -968,7 +1008,7 @@ class MessageRouter extends EventEmitter {
 
     // Validate address format
     if (!this.isValidAddress(address)) {
-      throw new Error(ROUTER_ERROR_MSG.INVALID_ADDRESS_FORMAT(address));
+      throw new Error(ROUTER_ERROR_MSG.invalidAddressFormat(address));
     }
 
     this.handlers.set(address, handler);
@@ -1192,13 +1232,14 @@ class MessageRouter extends EventEmitter {
   }
 
   /**
-   * Deliver a message to a target service via WebSocket.
-   * All messages go through WebSocket, including local messages via self-connection.
+   * Deliver a message to a target service.
+   * When TransportRegistry is configured, uses transport abstraction with fallback.
+   * Otherwise, uses direct WebSocket connections.
    * @param {string} targetAddress - Target service address.
    * @param {Object} message - Message to deliver.
    * @param {Object} options - Delivery options.
    * @param {string} options.targetNodeId - Target node ID (if known).
-   * @return {Promise<Object>} Delivery result.
+   * @return {Promise<Object>} Delivery result with transportUsed field when using registry.
    */
   async deliver(targetAddress, message, options = {}) {
     if (!this.initialized) {
@@ -1208,7 +1249,7 @@ class MessageRouter extends EventEmitter {
     const messageId = message.messageId || uuidv4();
     this.messageCount += TRANSPORT_NUM.ONE;
 
-    // Determine target node - always route via WebSocket
+    // Determine target node
     let targetNodeId = options.targetNodeId;
 
     // If no targetNodeId provided, try to extract from address or use resolver
@@ -1225,7 +1266,17 @@ class MessageRouter extends EventEmitter {
     }
 
     if (!targetNodeId) {
-      throw new Error(ROUTER_ERROR_MSG.INVALID_ADDRESS_FORMAT(targetAddress));
+      throw new Error(ROUTER_ERROR_MSG.invalidAddressFormat(targetAddress));
+    }
+
+    // If TransportRegistry is configured, use transport abstraction with fallback
+    if (this.hasTransportRegistry()) {
+      return this.deliverViaTransportRegistry(
+        targetAddress,
+        messageId,
+        message,
+        targetNodeId,
+      );
     }
 
     // If the target resolves to this node but we do not have a self-connection
@@ -1237,13 +1288,214 @@ class MessageRouter extends EventEmitter {
         return {
           messageId,
           acknowledged: false,
-          error: ROUTER_ERROR_MSG.NO_CONNECTION_TO_NODE(this.nodeId),
+          error: ROUTER_ERROR_MSG.noConnectionToNode(this.nodeId),
         };
       }
     }
 
-    // Deliver via WebSocket connection
+    // Deliver via WebSocket connection (legacy path)
     return this.deliverRemote(targetAddress, messageId, message, targetNodeId);
+  }
+
+  /**
+   * Deliver message via TransportRegistry with fallback support.
+   * Tries endpoints in priority order, falling back on failure.
+   * @param {string} targetAddress - Target address.
+   * @param {string} messageId - Message ID.
+   * @param {Object} payload - Message payload.
+   * @param {string} targetNodeId - Target node ID.
+   * @return {Promise<Object>} Delivery result with transportUsed or attempts array.
+   * @private
+   */
+  async deliverViaTransportRegistry(targetAddress, messageId, payload, targetNodeId) {
+    this.logger.debug(ROUTER_LOG_MSG.TRANSPORT_DELIVERY_START, {
+      messageId,
+      targetAddress,
+      targetNodeId,
+    });
+
+    // Get all endpoints for the node sorted by priority
+    const endpoints = this.transportRegistry.getEndpointsForNode(targetNodeId);
+
+    if (endpoints.length === TRANSPORT_NUM.ZERO) {
+      this.logger.warn(ROUTER_LOG_MSG.TRANSPORT_NO_ENDPOINTS, {
+        messageId,
+        targetNodeId,
+      });
+
+      return {
+        messageId,
+        acknowledged: false,
+        success: false,
+        error: ROUTER_ERROR_MSG.NO_ENDPOINTS_FOR_NODE,
+        errorMessage: ROUTER_ERROR_MSG.noEndpointsForNode(targetNodeId),
+      };
+    }
+
+    const attempts = [];
+
+    // Try each endpoint in priority order
+    for (const endpoint of endpoints) {
+      const transportType = endpoint[COLUMN.TRANSPORT_TYPE];
+      const provider = this.transportRegistry.getProvider(transportType);
+
+      if (!provider) {
+        attempts.push({
+          endpoint: {
+            endpointId: endpoint[COLUMN.ENDPOINT_ID],
+            transportType,
+            priority: endpoint[COLUMN.PRIORITY],
+          },
+          error: {
+            code: 'PROVIDER_NOT_FOUND',
+            message: `No provider for transport type: ${transportType}`,
+          },
+        });
+        continue;
+      }
+
+      if (!provider.isAvailable()) {
+        attempts.push({
+          endpoint: {
+            endpointId: endpoint[COLUMN.ENDPOINT_ID],
+            transportType,
+            priority: endpoint[COLUMN.PRIORITY],
+          },
+          error: {
+            code: 'PROVIDER_UNAVAILABLE',
+            message: `Provider not available for transport type: ${transportType}`,
+          },
+        });
+        continue;
+      }
+
+      this.logger.debug(ROUTER_LOG_MSG.TRANSPORT_ENDPOINT_SELECTED, {
+        messageId,
+        targetNodeId,
+        endpointId: endpoint[COLUMN.ENDPOINT_ID],
+        transportType,
+        priority: endpoint[COLUMN.PRIORITY],
+      });
+
+      const result = await this.deliverViaEndpoint(
+        targetAddress,
+        messageId,
+        payload,
+        targetNodeId,
+        endpoint,
+        provider,
+      );
+
+      if (result.acknowledged) {
+        this.logger.debug(ROUTER_LOG_MSG.TRANSPORT_DELIVERY_SUCCESS, {
+          messageId,
+          targetNodeId,
+          transportType,
+          endpointId: endpoint[COLUMN.ENDPOINT_ID],
+        });
+
+        return {
+          ...result,
+          success: true,
+          transportUsed: {
+            endpointId: endpoint[COLUMN.ENDPOINT_ID],
+            transportType,
+            priority: endpoint[COLUMN.PRIORITY],
+          },
+        };
+      }
+
+      // Delivery failed, record attempt and try next endpoint
+      this.logger.debug(ROUTER_LOG_MSG.TRANSPORT_DELIVERY_FAILED, {
+        messageId,
+        targetNodeId,
+        transportType,
+        endpointId: endpoint[COLUMN.ENDPOINT_ID],
+        error: result.error,
+      });
+
+      attempts.push({
+        endpoint: {
+          endpointId: endpoint[COLUMN.ENDPOINT_ID],
+          transportType,
+          priority: endpoint[COLUMN.PRIORITY],
+        },
+        error: {
+          code: 'DELIVERY_FAILED',
+          message: result.error || 'Delivery failed',
+        },
+      });
+    }
+
+    // All endpoints failed
+    this.logger.warn(ROUTER_LOG_MSG.TRANSPORT_ALL_FAILED, {
+      messageId,
+      targetNodeId,
+      attemptCount: attempts.length,
+    });
+
+    return {
+      messageId,
+      acknowledged: false,
+      success: false,
+      error: ROUTER_ERROR_MSG.ALL_TRANSPORTS_FAILED,
+      attempts,
+    };
+  }
+
+  /**
+   * Deliver message via a specific endpoint using ConnectionPool.
+   * @param {string} targetAddress - Target address.
+   * @param {string} messageId - Message ID.
+   * @param {Object} payload - Message payload.
+   * @param {string} targetNodeId - Target node ID.
+   * @param {Object} endpoint - Endpoint to use.
+   * @param {Object} provider - TransportProvider to use.
+   * @return {Promise<Object>} Delivery result.
+   * @private
+   */
+  async deliverViaEndpoint(targetAddress, messageId, payload, targetNodeId, endpoint, provider) {
+    let connection;
+    try {
+      // Get or create connection via ConnectionPool
+      connection = await this.connectionPool.getConnection(targetNodeId, endpoint, provider);
+
+      // Build the message
+      const message = {
+        type: RouterMessageType.SERVICE_MESSAGE,
+        messageId,
+        targetAddress,
+        sourceAddress: ROUTER_ADDRESS.buildSourceAddress(this.nodeId),
+        sourceNodeId: this.nodeId,
+        payload,
+        timestamp: Date.now(),
+      };
+
+      // Send via provider
+      const result = await provider.send(connection.providerConnection, message);
+
+      // Release connection (reset TTL)
+      this.connectionPool.releaseConnection(targetNodeId);
+
+      return {
+        messageId,
+        acknowledged: true,
+        ...result,
+      };
+    } catch (error) {
+      this.logger.error(ROUTER_LOG_MSG.TRANSPORT_DELIVERY_FAILED, {
+        messageId,
+        targetNodeId,
+        endpointId: endpoint[COLUMN.ENDPOINT_ID],
+        error: error.message,
+      });
+
+      return {
+        messageId,
+        acknowledged: false,
+        error: error.message,
+      };
+    }
   }
 
   /**
@@ -1273,7 +1525,7 @@ class MessageRouter extends EventEmitter {
         return {
           messageId,
           acknowledged: false,
-          error: ROUTER_ERROR_MSG.NO_CONNECTION_TO_NODE(targetNodeId),
+          error: ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId),
         };
       }
 

@@ -7,112 +7,37 @@ TAP version 14
     ok 5 - infrastructure should come before partitions
     ok 6 - WebSocket server should be running
     ok 7 - self-connection should be established
-{"level":50,"time":"2026-01-30T11:17:57.915Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-01-30T11:17:57.916Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769771874571","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
+{"level":50,"time":"2026-02-01T09:43:50.173Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-01T09:43:50.173Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769939025720","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
     1..7
-ok 1 - Bootstrap sequence - server starts before services # time=3420.315ms
+ok 1 - Bootstrap sequence - server starts before services # time=4486.96ms
 
 # Subtest: Bootstrap sequence - self-connection established before services
     ok 1 - bootstrap should succeed
     ok 2 - self-connection should be established before services are created
-{"level":50,"time":"2026-01-30T11:18:01.799Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-01-30T11:18:01.799Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769771877960","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
+{"level":50,"time":"2026-02-01T09:43:54.520Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-01T09:43:54.520Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769939030198","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
     1..2
-ok 2 - Bootstrap sequence - self-connection established before services # time=3877.38ms
+ok 2 - Bootstrap sequence - self-connection established before services # time=4344.243ms
 
 # Subtest: Bootstrap sequence - services created after self-connection
     ok 1 - bootstrap should succeed
     ok 2 - message group services should be created
     ok 3 - partition services should be created
     ok 4 - self-connection should still be active after services created
-{"level":50,"time":"2026-01-30T11:18:04.579Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-01-30T11:18:04.579Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769771881833","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
+{"level":50,"time":"2026-02-01T09:43:57.759Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-01T09:43:57.759Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769939034540","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
     1..4
-ok 3 - Bootstrap sequence - services created after self-connection # time=2778.119ms
+ok 3 - Bootstrap sequence - services created after self-connection # time=3237.017ms
 
-{"level":50,"time":"2026-01-30T11:18:07.211Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":2502,"error":"Message group mg-1 failed to establish leadership within 1000ms","stack":"Error: Message group mg-1 failed to establish leadership within 1000ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:588:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:982:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:202:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:176:20)","msg":"Bootstrap phase failed"}
-{"level":50,"time":"2026-01-30T11:18:07.211Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"failed","duration":2603,"error":"Message group mg-1 failed to establish leadership within 1000ms","stack":"Error: Message group mg-1 failed to establish leadership within 1000ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:588:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:982:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:202:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:176:20)","servicesCreated":39,"msg":"Bootstrap failed"}
-# Subtest: Bootstrap sequence - without wsPort (no server)
-    not ok 1 - bootstrap should succeed without wsPort
-      ---
-      compare: ===
-      at:
-        fileName: test/bootstrap/bootstrap-sequence.test.js
-        lineNumber: 180
-        columnNumber: 7
-        typeName: Test
-      stack: |
-        Test.<anonymous> (test/bootstrap/bootstrap-sequence.test.js:180:7)
-      source: >2
-            // Without wsPort, we do not start a WebSocket server. The system should still be able
-            // to bootstrap using in-process local delivery for intra-node communication.
-            t.equal(result.success, true, 'bootstrap should succeed without wsPort');
-        ------^
-            t.ok(result.messageRouter, 'should have messageRouter');
-            t.notOk(result.messageRouter.server, 'WebSocket server should not be running');
-      diff: |
-        --- expected
-        +++ actual
-        @@ -1,1 +1,1 @@
-        -true
-        +false
-      ...
-    
-    not ok 2 - should have messageRouter
-      ---
-      at:
-        fileName: test/bootstrap/bootstrap-sequence.test.js
-        lineNumber: 181
-        columnNumber: 7
-        typeName: Test
-      stack: |
-        Test.<anonymous> (test/bootstrap/bootstrap-sequence.test.js:181:7)
-      source: >2
-            // to bootstrap using in-process local delivery for intra-node communication.
-            t.equal(result.success, true, 'bootstrap should succeed without wsPort');
-            t.ok(result.messageRouter, 'should have messageRouter');
-        ------^
-            t.notOk(result.messageRouter.server, 'WebSocket server should not be running');
-            t.notOk(result.messageRouter.hasSelfConnection(),
-      ...
-    
-    not ok 3 - Cannot read properties of undefined (reading 'server')
-      ---
-      stack: |
-        Test.<anonymous> (test/bootstrap/bootstrap-sequence.test.js:182:34)
-      at:
-        fileName: test/bootstrap/bootstrap-sequence.test.js
-        lineNumber: 182
-        columnNumber: 34
-        typeName: Test
-        methodName: <anonymous>
-        functionName: Test.<anonymous>
-      type: TypeError
-      tapCaught: returnedPromiseRejection
-      source: >2
-            t.equal(result.success, true, 'bootstrap should succeed without wsPort');
-            t.ok(result.messageRouter, 'should have messageRouter');
-            t.notOk(result.messageRouter.server, 'WebSocket server should not be running');
-        ---------------------------------^
-            t.notOk(result.messageRouter.hasSelfConnection(),
-              'self-connection should not be required when not starting a server');
-      ...
-    
+{"level":50,"time":"2026-02-01T09:43:59.383Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":1500,"error":"Message group mg-1 failed to establish leadership within 100ms","stack":"Error: Message group mg-1 failed to establish leadership within 100ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:588:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:986:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:202:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:179:20)","msg":"Bootstrap phase failed"}
+{"level":50,"time":"2026-02-01T09:43:59.384Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"failed","duration":1603,"error":"Message group mg-1 failed to establish leadership within 100ms","stack":"Error: Message group mg-1 failed to establish leadership within 100ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:588:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:986:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:202:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:179:20)","servicesCreated":42,"msg":"Bootstrap failed"}
+# Subtest: Bootstrap sequence - without wsPort fails (no server)
+    ok 1 - bootstrap should fail without wsPort
+    ok 2 - should have error message
+    ok 3 - error should mention leadership timeout
     1..3
-not ok 4 - Bootstrap sequence - without wsPort (no server) # time=2653.138ms
-  ---
-  at:
-    fileName: test/bootstrap/bootstrap-sequence.test.js
-    lineNumber: 159
-    columnNumber: 1
-    isToplevel: true
-  source: |
-    });
-  
-    test('Bootstrap sequence - without wsPort (no server)', async (t) => {
-    ^
-      initializeTestEnvironment();
-  ...
+ok 4 - Bootstrap sequence - without wsPort fails (no server) # time=1632.011ms
 
 # Subtest: Bootstrap sequence - startWebSocketServer after bootstrap
     ok 1 - bootstrap should succeed
@@ -120,10 +45,10 @@ not ok 4 - Bootstrap sequence - without wsPort (no server) # time=2653.138ms
     ok 3 - self-connection should be established
     ok 4 - WebSocket server should still be running
     ok 5 - self-connection should still be established
-{"level":50,"time":"2026-01-30T11:18:10.296Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-01-30T11:18:10.296Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769771887253","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
+{"level":50,"time":"2026-02-01T09:44:03.607Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-01T09:44:03.607Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769939039411","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
     1..5
-ok 5 - Bootstrap sequence - startWebSocketServer after bootstrap # time=3060.707ms
+ok 5 - Bootstrap sequence - startWebSocketServer after bootstrap # time=4212.569ms
 
 # Subtest: Bootstrap sequence - epoch manager initialized with partition assignments
     ok 1 - bootstrap should succeed
@@ -145,35 +70,29 @@ ok 5 - Bootstrap sequence - startWebSocketServer after bootstrap # time=3060.707
     ok 17 - partition contexts-p1 should be assigned to seed node
     ok 18 - partition code-p1 should be assigned to seed node
     ok 19 - partition replica_operations-p1 should be assigned to seed node
-{"level":50,"time":"2026-01-30T11:18:14.120Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-01-30T11:18:14.121Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769771890318","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
-    1..19
-ok 6 - Bootstrap sequence - epoch manager initialized with partition assignments # time=3822.766ms
+    ok 20 - partition node_endpoints-p1 should be assigned to seed node
+{"level":50,"time":"2026-02-01T09:44:07.321Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-01T09:44:07.321Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769939043622","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
+    1..20
+ok 6 - Bootstrap sequence - epoch manager initialized with partition assignments # time=3713.567ms
 
 # Subtest: Bootstrap sequence - epoch manager cleaned up on shutdown
     ok 1 - bootstrap should succeed
     ok 2 - epoch manager should exist before shutdown
-{"level":50,"time":"2026-01-30T11:18:17.865Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-01-30T11:18:17.866Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769771894136","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
+{"level":50,"time":"2026-02-01T09:44:11.715Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-01T09:44:11.715Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1769939047338","error":"Router shutdown","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
     ok 3 - epoch manager should be null after shutdown
     1..3
-ok 7 - Bootstrap sequence - epoch manager cleaned up on shutdown # time=3743.624ms
+ok 7 - Bootstrap sequence - epoch manager cleaned up on shutdown # time=4392.378ms
 
-{"level":50,"time":"1970-01-01T00:00:01.010Z","nodeId":"test-bootstrap-node","pid":1330593,"subsystem":"bootstrap","totalPartitions":2,"leadersFound":0,"missingLeaders":["services-p1","nodes-p1"],"elapsedMs":10,"nodeId":"test-bootstrap-node","msg":"Some partitions still electing leaders, failing bootstrap"}
+{"level":50,"time":"1970-01-01T00:00:01.010Z","nodeId":"test-bootstrap-node","pid":1805178,"subsystem":"bootstrap","totalPartitions":2,"leadersFound":0,"missingLeaders":["services-p1","nodes-p1"],"elapsedMs":10,"nodeId":"test-bootstrap-node","msg":"Some partitions still electing leaders, failing bootstrap"}
 # Subtest: Bootstrap sequence - partition leadership wait fails when no leaders
     ok 1 - should report leadership timeout
     ok 2 - should list services partition
     ok 3 - should list nodes partition
     1..3
-ok 8 - Bootstrap sequence - partition leadership wait fails when no leaders # time=19.156ms
+ok 8 - Bootstrap sequence - partition leadership wait fails when no leaders # time=15.254ms
 
-not ok 9 - timeout!
-  ---
-  signal: SIGALRM
-  expired: TAP
-  test: TAP
-  ...
-
-1..9
-# { total: 47, pass: 43, fail: 4 }
-# time=29070.954ms
+1..8
+# { total: 47, pass: 47 }
+# time=26058.561ms

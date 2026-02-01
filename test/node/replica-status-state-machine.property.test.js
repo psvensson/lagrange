@@ -224,7 +224,7 @@ test('Property 79: Replica Status State Machine Validity', async (t) => {
           let threwError = false;
           try {
             await manager.updateReplicaStatus(replicaId, transition.to);
-          } catch (error) {
+          } catch (_error) {
             threwError = true;
           }
 

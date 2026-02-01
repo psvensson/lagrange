@@ -41,69 +41,83 @@ TAP version 14
     ok 39 - Status should be DELIVERED or PENDING, got: pending
     ok 40 - Raft log should contain entries
     1..40
-ok 1 - Property 9: Message Delivery Reliability - messages are persisted # time=3184.643ms
+ok 1 - Property 9: Message Delivery Reliability - messages are persisted # time=3155.416ms
 
 # Subtest: Property 9: Message Delivery Reliability - Raft log persistence
-    ok 1 - Log should grow by at least 3 entries
-    ok 2 - Log should grow by at least 1 entries
-    ok 3 - Log should grow by at least 2 entries
-    ok 4 - Log should grow by at least 4 entries
-    ok 5 - Log should grow by at least 4 entries
+    ok 1 - Log should grow by at least 2 entries
+    ok 2 - Log should grow by at least 5 entries
+    ok 3 - Log should grow by at least 5 entries
+    ok 4 - Log should grow by at least 2 entries
+    ok 5 - Log should grow by at least 5 entries
     ok 6 - Log should grow by at least 1 entries
-    ok 7 - Log should grow by at least 3 entries
-    ok 8 - Log should grow by at least 5 entries
-    ok 9 - Log should grow by at least 5 entries
-    ok 10 - Log should grow by at least 2 entries
+    ok 7 - Log should grow by at least 2 entries
+    ok 8 - Log should grow by at least 1 entries
+    ok 9 - Log should grow by at least 4 entries
+    ok 10 - Log should grow by at least 3 entries
     1..10
-ok 2 - Property 9: Message Delivery Reliability - Raft log persistence # time=9415.918ms
+ok 2 - Property 9: Message Delivery Reliability - Raft log persistence # time=9405.671ms
 
 # Subtest: Property 9: Message Delivery Reliability - acknowledgment tracking
-    ok 1 - Message 00000004-0012-1000-a355-e6aa0000000f should be detected as duplicate
-    ok 2 - Message 00000004-0012-1000-a355-e6aa0000000f should be marked as acknowledged
-    ok 3 - Message 57091ee8-fff7-5fff-8000-0016ffffffec should be detected as duplicate
-    ok 4 - Message 57091ee8-fff7-5fff-8000-0016ffffffec should be marked as acknowledged
-    ok 5 - Message ffffffff-b7ab-3183-bfff-fff8d62f7775 should be detected as duplicate
-    ok 6 - Message ffffffff-b7ab-3183-bfff-fff8d62f7775 should be marked as acknowledged
-    ok 7 - Message 0000000b-8887-558b-add7-37e800000018 should be detected as duplicate
-    ok 8 - Message 0000000b-8887-558b-add7-37e800000018 should be marked as acknowledged
-    ok 9 - Message deab1f4d-d6ce-1875-9877-2a02807aa5ba should be detected as duplicate
-    ok 10 - Message deab1f4d-d6ce-1875-9877-2a02807aa5ba should be marked as acknowledged
-    ok 11 - Message 216c1ccc-0f32-5cd6-b584-af1336c9da3b should be detected as duplicate
-    ok 12 - Message 216c1ccc-0f32-5cd6-b584-af1336c9da3b should be marked as acknowledged
-    ok 13 - Message 86d913d7-f555-25d2-a085-e9c37d855355 should be detected as duplicate
-    ok 14 - Message 86d913d7-f555-25d2-a085-e9c37d855355 should be marked as acknowledged
-    ok 15 - Message edf42e5d-e80b-356b-8bcf-0bcf5469989d should be detected as duplicate
-    ok 16 - Message edf42e5d-e80b-356b-8bcf-0bcf5469989d should be marked as acknowledged
-    ok 17 - Message 7faf4683-69b5-5024-8d43-bbe3ffffffe4 should be detected as duplicate
-    ok 18 - Message 7faf4683-69b5-5024-8d43-bbe3ffffffe4 should be marked as acknowledged
-    ok 19 - Message fffffff6-632e-5317-8000-000a76f2efa8 should be detected as duplicate
-    ok 20 - Message fffffff6-632e-5317-8000-000a76f2efa8 should be marked as acknowledged
-    ok 21 - Message 2e5a4433-2bfa-2339-a112-b178f023f42f should be detected as duplicate
-    ok 22 - Message 2e5a4433-2bfa-2339-a112-b178f023f42f should be marked as acknowledged
-    ok 23 - Message 5561b9c8-25d6-5e11-9dbd-267c1753a932 should be detected as duplicate
-    ok 24 - Message 5561b9c8-25d6-5e11-9dbd-267c1753a932 should be marked as acknowledged
-    ok 25 - Message 8dafbeed-c723-2e7d-9e53-915776de1616 should be detected as duplicate
-    ok 26 - Message 8dafbeed-c723-2e7d-9e53-915776de1616 should be marked as acknowledged
-    ok 27 - Message d7db6cb9-3728-4b37-87d3-44fdc3008b2b should be detected as duplicate
-    ok 28 - Message d7db6cb9-3728-4b37-87d3-44fdc3008b2b should be marked as acknowledged
-    ok 29 - Message d8d91785-31bd-5e6a-80d8-826a5c3e1f5c should be detected as duplicate
-    ok 30 - Message d8d91785-31bd-5e6a-80d8-826a5c3e1f5c should be marked as acknowledged
-    ok 31 - Message e6204b1d-ba71-1173-8e8f-8b5185e543e7 should be detected as duplicate
-    ok 32 - Message e6204b1d-ba71-1173-8e8f-8b5185e543e7 should be marked as acknowledged
-    ok 33 - Message 4a2e6b2c-0004-1000-bfff-ffff794603ea should be detected as duplicate
-    ok 34 - Message 4a2e6b2c-0004-1000-bfff-ffff794603ea should be marked as acknowledged
-    ok 35 - Message 0000001a-0008-1000-bc82-816800000001 should be detected as duplicate
-    ok 36 - Message 0000001a-0008-1000-bc82-816800000001 should be marked as acknowledged
-    ok 37 - Message 0000001a-001a-1000-8000-0001fffffff7 should be detected as duplicate
-    ok 38 - Message 0000001a-001a-1000-8000-0001fffffff7 should be marked as acknowledged
-    ok 39 - Message 00000006-d3f2-5f5c-8000-0013fffffff2 should be detected as duplicate
-    ok 40 - Message 00000006-d3f2-5f5c-8000-0013fffffff2 should be marked as acknowledged
-    ok 41 - Message c17b1f7b-61be-31e9-bf32-08a0e9bddeec should be detected as duplicate
-    ok 42 - Message c17b1f7b-61be-31e9-bf32-08a0e9bddeec should be marked as acknowledged
-    ok 43 - Message 84c2aaf9-ac55-4513-8225-c1d4e3e7e191 should be detected as duplicate
-    ok 44 - Message 84c2aaf9-ac55-4513-8225-c1d4e3e7e191 should be marked as acknowledged
-    1..44
-ok 3 - Property 9: Message Delivery Reliability - acknowledgment tracking # time=3.935ms
+    ok 1 - Message 9779d003-0014-1000-bfff-ffeb00000002 should be detected as duplicate
+    ok 2 - Message 9779d003-0014-1000-bfff-ffeb00000002 should be marked as acknowledged
+    ok 3 - Message 0000001a-001c-1000-bfff-fff04457b8d5 should be detected as duplicate
+    ok 4 - Message 0000001a-001c-1000-bfff-fff04457b8d5 should be marked as acknowledged
+    ok 5 - Message ffffffe1-ffee-5fff-bfff-fff4ffffffee should be detected as duplicate
+    ok 6 - Message ffffffe1-ffee-5fff-bfff-fff4ffffffee should be marked as acknowledged
+    ok 7 - Message 544c6cf3-e9af-3ec6-80fa-ae7f1e94442a should be detected as duplicate
+    ok 8 - Message 544c6cf3-e9af-3ec6-80fa-ae7f1e94442a should be marked as acknowledged
+    ok 9 - Message a99e63d6-0f82-3b53-b8b9-38d10bc92062 should be detected as duplicate
+    ok 10 - Message a99e63d6-0f82-3b53-b8b9-38d10bc92062 should be marked as acknowledged
+    ok 11 - Message 965c7176-8615-3c49-b937-82d68ad8e31a should be detected as duplicate
+    ok 12 - Message 965c7176-8615-3c49-b937-82d68ad8e31a should be marked as acknowledged
+    ok 13 - Message 24325d83-86b4-189b-8e4a-4ee0a11b9210 should be detected as duplicate
+    ok 14 - Message 24325d83-86b4-189b-8e4a-4ee0a11b9210 should be marked as acknowledged
+    ok 15 - Message 09699275-0d66-563b-b070-875d36869745 should be detected as duplicate
+    ok 16 - Message 09699275-0d66-563b-b070-875d36869745 should be marked as acknowledged
+    ok 17 - Message 593ea51e-1909-3554-a542-faac132eb914 should be detected as duplicate
+    ok 18 - Message 593ea51e-1909-3554-a542-faac132eb914 should be marked as acknowledged
+    ok 19 - Message 1323d050-f5a5-25e0-8cd1-a6b95ec3c19a should be detected as duplicate
+    ok 20 - Message 1323d050-f5a5-25e0-8cd1-a6b95ec3c19a should be marked as acknowledged
+    ok 21 - Message 1d825c8c-39fe-5b24-9187-3ccd7577cb6c should be detected as duplicate
+    ok 22 - Message 1d825c8c-39fe-5b24-9187-3ccd7577cb6c should be marked as acknowledged
+    ok 23 - Message c468eb36-ea7f-50e3-94de-1139c8c60321 should be detected as duplicate
+    ok 24 - Message c468eb36-ea7f-50e3-94de-1139c8c60321 should be marked as acknowledged
+    ok 25 - Message d9b4054c-61a9-2a58-baa9-1f600764f1d0 should be detected as duplicate
+    ok 26 - Message d9b4054c-61a9-2a58-baa9-1f600764f1d0 should be marked as acknowledged
+    ok 27 - Message 044e49f1-b954-397e-82a6-a5ffe7d6cbd6 should be detected as duplicate
+    ok 28 - Message 044e49f1-b954-397e-82a6-a5ffe7d6cbd6 should be marked as acknowledged
+    ok 29 - Message ed49a226-fb94-5175-8201-46f95a9cd4fe should be detected as duplicate
+    ok 30 - Message ed49a226-fb94-5175-8201-46f95a9cd4fe should be marked as acknowledged
+    ok 31 - Message de3bdd96-0013-1000-b2e4-c9935a9da6eb should be detected as duplicate
+    ok 32 - Message de3bdd96-0013-1000-b2e4-c9935a9da6eb should be marked as acknowledged
+    ok 33 - Message 00000017-18a9-3acb-ab8d-559900000004 should be detected as duplicate
+    ok 34 - Message 00000017-18a9-3acb-ab8d-559900000004 should be marked as acknowledged
+    ok 35 - Message 0000001b-6860-4f59-b77e-86c600000009 should be detected as duplicate
+    ok 36 - Message 0000001b-6860-4f59-b77e-86c600000009 should be marked as acknowledged
+    ok 37 - Message ffffffe4-4658-1823-8000-000a72007ffa should be detected as duplicate
+    ok 38 - Message ffffffe4-4658-1823-8000-000a72007ffa should be marked as acknowledged
+    ok 39 - Message df04f212-d0b7-56c4-8000-000e9ae2e058 should be detected as duplicate
+    ok 40 - Message df04f212-d0b7-56c4-8000-000e9ae2e058 should be marked as acknowledged
+    ok 41 - Message 00000012-001c-1000-89f2-697300000006 should be detected as duplicate
+    ok 42 - Message 00000012-001c-1000-89f2-697300000006 should be marked as acknowledged
+    ok 43 - Message cea8343a-fffa-5fff-bdef-d29554c04ed8 should be detected as duplicate
+    ok 44 - Message cea8343a-fffa-5fff-bdef-d29554c04ed8 should be marked as acknowledged
+    ok 45 - Message 704fa04a-61c2-48bf-8000-000268ab1c0b should be detected as duplicate
+    ok 46 - Message 704fa04a-61c2-48bf-8000-000268ab1c0b should be marked as acknowledged
+    ok 47 - Message 0000000a-a28a-3fd6-902d-d87bffffffff should be detected as duplicate
+    ok 48 - Message 0000000a-a28a-3fd6-902d-d87bffffffff should be marked as acknowledged
+    ok 49 - Message 00000004-edde-3612-a246-28e200000013 should be detected as duplicate
+    ok 50 - Message 00000004-edde-3612-a246-28e200000013 should be marked as acknowledged
+    ok 51 - Message 00000012-0002-1000-8000-0019c8baab64 should be detected as duplicate
+    ok 52 - Message 00000012-0002-1000-8000-0019c8baab64 should be marked as acknowledged
+    ok 53 - Message 52a953ad-fea2-21f4-961d-427acf81cced should be detected as duplicate
+    ok 54 - Message 52a953ad-fea2-21f4-961d-427acf81cced should be marked as acknowledged
+    ok 55 - Message 8e5f32ee-f92f-5180-bc23-3b847ff66e0c should be detected as duplicate
+    ok 56 - Message 8e5f32ee-f92f-5180-bc23-3b847ff66e0c should be marked as acknowledged
+    ok 57 - Message 57a321b4-9806-2451-84b8-087947662464 should be detected as duplicate
+    ok 58 - Message 57a321b4-9806-2451-84b8-087947662464 should be marked as acknowledged
+    1..58
+ok 3 - Property 9: Message Delivery Reliability - acknowledgment tracking # time=5.407ms
 
 # Subtest: Property 9: Message Delivery Reliability - transport delivery
     ok 1 - Message should be delivered via transport
@@ -117,7 +131,7 @@ ok 3 - Property 9: Message Delivery Reliability - acknowledgment tracking # time
     ok 9 - Message should be delivered via transport
     ok 10 - Message should be delivered via transport
     1..10
-ok 4 - Property 9: Message Delivery Reliability - transport delivery # time=3144.087ms
+ok 4 - Property 9: Message Delivery Reliability - transport delivery # time=3150.794ms
 
 # Subtest: Property 9: Message Delivery Reliability - simultaneous pattern
     ok 1 - Each message should have an ID
@@ -127,29 +141,29 @@ ok 4 - Property 9: Message Delivery Reliability - transport delivery # time=3144
     ok 5 - All message IDs should be unique
     ok 6 - Each message should have an ID
     ok 7 - Each message should be delivered or pending
-    ok 8 - All message IDs should be unique
-    ok 9 - Each message should have an ID
-    ok 10 - Each message should be delivered or pending
-    ok 11 - All message IDs should be unique
-    ok 12 - Each message should have an ID
-    ok 13 - Each message should be delivered or pending
-    ok 14 - Each message should have an ID
-    ok 15 - Each message should be delivered or pending
-    ok 16 - All message IDs should be unique
-    ok 17 - Each message should have an ID
-    ok 18 - Each message should be delivered or pending
-    ok 19 - All message IDs should be unique
+    ok 8 - Each message should have an ID
+    ok 9 - Each message should be delivered or pending
+    ok 10 - All message IDs should be unique
+    ok 11 - Each message should have an ID
+    ok 12 - Each message should be delivered or pending
+    ok 13 - Each message should have an ID
+    ok 14 - Each message should be delivered or pending
+    ok 15 - Each message should have an ID
+    ok 16 - Each message should be delivered or pending
+    ok 17 - All message IDs should be unique
+    ok 18 - Each message should have an ID
+    ok 19 - Each message should be delivered or pending
     ok 20 - Each message should have an ID
     ok 21 - Each message should be delivered or pending
     ok 22 - Each message should have an ID
     ok 23 - Each message should be delivered or pending
-    ok 24 - Each message should have an ID
-    ok 25 - Each message should be delivered or pending
-    ok 26 - All message IDs should be unique
-    ok 27 - Each message should have an ID
-    ok 28 - Each message should be delivered or pending
-    ok 29 - Each message should have an ID
-    ok 30 - Each message should be delivered or pending
+    ok 24 - All message IDs should be unique
+    ok 25 - Each message should have an ID
+    ok 26 - Each message should be delivered or pending
+    ok 27 - All message IDs should be unique
+    ok 28 - Each message should have an ID
+    ok 29 - Each message should be delivered or pending
+    ok 30 - All message IDs should be unique
     ok 31 - Each message should have an ID
     ok 32 - Each message should be delivered or pending
     ok 33 - All message IDs should be unique
@@ -162,15 +176,19 @@ ok 4 - Property 9: Message Delivery Reliability - transport delivery # time=3144
     ok 40 - All message IDs should be unique
     ok 41 - Each message should have an ID
     ok 42 - Each message should be delivered or pending
-    ok 43 - All message IDs should be unique
-    ok 44 - Each message should have an ID
-    ok 45 - Each message should be delivered or pending
+    ok 43 - Each message should have an ID
+    ok 44 - Each message should be delivered or pending
+    ok 45 - All message IDs should be unique
     ok 46 - Each message should have an ID
     ok 47 - Each message should be delivered or pending
-    ok 48 - All message IDs should be unique
-    1..48
-ok 5 - Property 9: Message Delivery Reliability - simultaneous pattern # time=3153.943ms
+    ok 48 - Each message should have an ID
+    ok 49 - Each message should be delivered or pending
+    ok 50 - Each message should have an ID
+    ok 51 - Each message should be delivered or pending
+    ok 52 - All message IDs should be unique
+    1..52
+ok 5 - Property 9: Message Delivery Reliability - simultaneous pattern # time=3198.357ms
 
 1..5
-# { total: 152, pass: 152 }
-# time=19049.53ms
+# { total: 170, pass: 170 }
+# time=19140.049ms

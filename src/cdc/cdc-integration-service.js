@@ -21,7 +21,11 @@
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
-import {CDC_OPERATION, COLUMN, ERRORS, NUM, SQL, STATE, STRING, TYPEOF} from '../constants/index.js';
+import {
+  CDC_OPERATION, COLUMN, ERRORS, NUM, SQL, STATE, STRING, TYPEOF,
+  ADDRESS, PROTOCOL,
+} from '../constants/index.js';
+import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {
@@ -113,6 +117,9 @@ class CDCIntegrationService extends EventEmitter {
 
     // Rebalancer reference for node state change handling
     this.rebalancer = null;
+
+    // Message router reference for mesh connectivity on node join
+    this.messageRouter = null;
 
     // Track previous node states for detecting changes
     this._nodeStates = new Map();
@@ -297,9 +304,13 @@ class CDCIntegrationService extends EventEmitter {
     // Skip the wait loop if we have candidates - they're ready to use.
     const initializedCandidates = candidates.length > NUM.ZERO ? candidates : [];
     if (initializedCandidates.length === NUM.ZERO) {
+      const partitionIds = candidates
+        .map((service) => service?.partitionId)
+        .filter(Boolean)
+        .join(', ');
       throw new Error(
         `Partition services not initialized for table: ${tableName}. ` +
-        `Partitions: ${candidates.map((service) => service?.partitionId).filter(Boolean).join(', ')}`,
+        `Partitions: ${partitionIds}`,
       );
     }
 
@@ -1182,6 +1193,7 @@ class CDCIntegrationService extends EventEmitter {
       [SystemTableName.CONTEXTS]: COLUMN.CONTEXT_ID,
       [SystemTableName.CODE]: COLUMN.FUNCTION_ID,
       [SystemTableName.REPLICA_OPERATIONS]: COLUMN.OPERATION_ID,
+      [SystemTableName.NODE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
     };
 
     return primaryKeyMap[tableName] || CDC_PRIMARY_KEY.FALLBACK;
@@ -1343,7 +1355,7 @@ class CDCIntegrationService extends EventEmitter {
 
   /**
    * Set the rebalancer reference for node state change handling.
-   * @param {StateAwareRebalancer} rebalancer - The rebalancer instance.
+   * @param {Object} rebalancer - The rebalancer instance (must have onNodeStateChange method).
    */
   setRebalancer(rebalancer) {
     if (!rebalancer) {
@@ -1477,6 +1489,227 @@ class CDCIntegrationService extends EventEmitter {
       newState,
       stateChanged: true,
     };
+  }
+
+  /**
+   * Set the message router reference for mesh connectivity.
+   * When set, the CDC service will establish connections to new nodes
+   * when they are added to the nodes table via CDC events.
+   * @param {Object} messageRouter - The message router instance.
+   */
+  setMessageRouter(messageRouter) {
+    if (!messageRouter) {
+      throw new Error(CDC_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
+    }
+    this.messageRouter = messageRouter;
+
+    this.logger.debug(CDC_LOG_MSG.MESSAGE_ROUTER_SET, {
+      nodeId: this.nodeId,
+    });
+  }
+
+  /**
+   * Handle node joined CDC event for mesh connectivity.
+   * When a new node is added to the nodes table, this method establishes
+   * an outbound WebSocket connection to that node, ensuring full mesh
+   * connectivity across the cluster.
+   *
+   * All nodes are equal peers - no special treatment for any node.
+   *
+   * @param {Object} cdcEvent - The CDC event object.
+   * @param {string} cdcEvent.tableName - The table name (should be nodes).
+   * @param {string} cdcEvent.operation - The operation type (INSERT).
+   * @param {Object} cdcEvent.data - The event data.
+   * @param {string} cdcEvent.data.node_id - The node ID.
+   * @param {string} cdcEvent.data.node_address - The node address.
+   * @return {Promise<{processed: boolean, nodeId?: string, connected?: boolean,
+   *   error?: string}>} Result object indicating if connection was established.
+   */
+  async handleNodeJoinedCDC(cdcEvent) {
+    // Validate cdcEvent
+    if (!cdcEvent || typeof cdcEvent !== TYPEOF.OBJECT) {
+      return {
+        processed: false,
+        error: CDC_ERROR_MSG.INVALID_EVENT,
+      };
+    }
+
+    // Check if this is a nodes table INSERT event
+    const tableName = cdcEvent.tableName;
+    if (tableName !== SystemTableName.NODES) {
+      return {
+        processed: false,
+        error: `${CDC_ERROR_MSG.NOT_NODES_TABLE_PREFIX}'${tableName}'`,
+      };
+    }
+
+    // Only process INSERT operations (new nodes joining)
+    const operation = cdcEvent.operation;
+    if (operation !== CDC_OPERATION.INSERT) {
+      return {
+        processed: false,
+        error: 'Not an INSERT operation',
+      };
+    }
+
+    // Extract node data
+    const targetNodeId = cdcEvent.data?.[COLUMN.NODE_ID];
+    const nodeAddress = cdcEvent.data?.[COLUMN.NODE_ADDRESS];
+
+    if (!targetNodeId) {
+      return {
+        processed: false,
+        error: CDC_ERROR_MSG.NODE_ID_MISSING,
+      };
+    }
+
+    // Skip if this is our own node
+    if (targetNodeId === this.nodeId) {
+      this.logger.debug(CDC_LOG_MSG.NEW_NODE_SKIP_SELF, {
+        nodeId: this.nodeId,
+        targetNodeId,
+      });
+      return {
+        processed: true,
+        nodeId: targetNodeId,
+        connected: false,
+        skipped: true,
+        reason: 'self',
+      };
+    }
+
+    // Skip if no message router is set
+    if (!this.messageRouter) {
+      return {
+        processed: false,
+        error: 'Message router not set',
+      };
+    }
+
+    // Skip if already connected
+    if (this.messageRouter.nodeConnections?.has(targetNodeId)) {
+      this.logger.debug(CDC_LOG_MSG.NEW_NODE_SKIP_CONNECTED, {
+        nodeId: this.nodeId,
+        targetNodeId,
+      });
+      return {
+        processed: true,
+        nodeId: targetNodeId,
+        connected: false,
+        skipped: true,
+        reason: 'already_connected',
+      };
+    }
+
+    // Check if we have a node address to connect to
+    if (!nodeAddress) {
+      this.logger.warn(CDC_LOG_MSG.NEW_NODE_MISSING_ADDRESS, {
+        nodeId: this.nodeId,
+        targetNodeId,
+      });
+      return {
+        processed: false,
+        nodeId: targetNodeId,
+        error: 'Missing node_address',
+      };
+    }
+
+    // Derive WebSocket address from node address
+    const wsAddress = this.deriveWsAddressFromNodeAddress(nodeAddress);
+    if (!wsAddress) {
+      this.logger.warn(CDC_LOG_MSG.NEW_NODE_CONNECT_FAILED, {
+        nodeId: this.nodeId,
+        targetNodeId,
+        nodeAddress,
+        error: 'Could not derive WebSocket address',
+      });
+      return {
+        processed: false,
+        nodeId: targetNodeId,
+        error: 'Could not derive WebSocket address',
+      };
+    }
+
+    this.logger.info(CDC_LOG_MSG.NEW_NODE_DETECTED, {
+      nodeId: this.nodeId,
+      targetNodeId,
+      wsAddress,
+    });
+
+    // Establish connection to the new node
+    try {
+      await this.messageRouter.connectToNode(targetNodeId, wsAddress);
+      this.logger.info(CDC_LOG_MSG.NEW_NODE_CONNECTED, {
+        nodeId: this.nodeId,
+        targetNodeId,
+        wsAddress,
+      });
+
+      // Emit nodeJoined event
+      this.emit(CDC_EVENT.NODE_JOINED, {
+        nodeId: targetNodeId,
+        nodeAddress,
+        wsAddress,
+        timestamp: Date.now(),
+        source: CDC_SOURCE.CDC,
+      });
+
+      return {
+        processed: true,
+        nodeId: targetNodeId,
+        connected: true,
+        wsAddress,
+      };
+    } catch (connectError) {
+      // Log but don't fail - the node might be temporarily unavailable
+      // Raft will handle retries and leader election
+      this.logger.warn(CDC_LOG_MSG.NEW_NODE_CONNECT_FAILED, {
+        nodeId: this.nodeId,
+        targetNodeId,
+        wsAddress,
+        error: connectError.message,
+      });
+      return {
+        processed: false,
+        nodeId: targetNodeId,
+        error: connectError.message,
+      };
+    }
+  }
+
+  /**
+   * Derive WebSocket address from node REST address.
+   * @param {string} nodeAddress - Node address in format "hostname:port".
+   * @return {string|null} WebSocket address or null if cannot derive.
+   * @private
+   */
+  deriveWsAddressFromNodeAddress(nodeAddress) {
+    if (!nodeAddress || typeof nodeAddress !== TYPEOF.STRING) {
+      return null;
+    }
+
+    // Parse hostname:port format
+    const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
+    if (colonIndex === NUM.NEGATIVE_ONE || colonIndex === NUM.ZERO) {
+      // No colon found or colon at start (empty hostname)
+      return null;
+    }
+
+    const hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
+    if (!hostname || hostname.length === NUM.ZERO) {
+      return null;
+    }
+
+    const portStr = nodeAddress.substring(colonIndex + NUM.ONE);
+    const restPort = parseInt(portStr, NUM.TEN);
+
+    if (!Number.isFinite(restPort) || restPort <= NUM.ZERO) {
+      return null;
+    }
+
+    // WebSocket port = REST port + WS_PORT_OFFSET
+    const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
+    return `${PROTOCOL.WS}${hostname}${ADDRESS.PORT_SEPARATOR}${wsPort}`;
   }
 }
 

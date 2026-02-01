@@ -6,7 +6,6 @@
 
 import {Piscina} from 'piscina';
 import {EventEmitter} from 'events';
-import os from 'os';
 import path from 'path';
 import {fileURLToPath} from 'url';
 import {ConfigurationManager} from '../config/configuration-manager.js';
@@ -167,7 +166,7 @@ class ServiceThreadManager extends EventEmitter {
     }
 
     if (this.services.has(serviceId)) {
-      throw new Error(THREADING_ERROR_MSG.SERVICE_ALREADY_REGISTERED(serviceId));
+      throw new Error(THREADING_ERROR_MSG.serviceAlreadyRegistered(serviceId));
     }
 
     const serviceInfo = {
@@ -213,7 +212,7 @@ class ServiceThreadManager extends EventEmitter {
 
     const serviceInfo = this.services.get(serviceId);
     if (!serviceInfo) {
-      throw new Error(THREADING_ERROR_MSG.SERVICE_NOT_FOUND(serviceId));
+      throw new Error(THREADING_ERROR_MSG.serviceNotFound(serviceId));
     }
 
     serviceInfo.status = SERVICE_STATUS.STOPPING;
@@ -268,7 +267,7 @@ class ServiceThreadManager extends EventEmitter {
 
     const serviceInfo = this.services.get(serviceId);
     if (!serviceInfo) {
-      throw new Error(THREADING_ERROR_MSG.SERVICE_NOT_FOUND(serviceId));
+      throw new Error(THREADING_ERROR_MSG.serviceNotFound(serviceId));
     }
 
     try {

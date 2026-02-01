@@ -38,6 +38,7 @@ function initEnv() {
 async function cleanEnv() {
   await NodeService.getInstance().shutdown().catch(() => {});
   await ServiceThreadManager.getInstance().shutdown().catch(() => {});
+  await LoggingService.getInstance().shutdown().catch(() => {});
   NodeService.resetInstance();
   ServiceThreadManager.resetInstance();
   ConfigurationManager.resetInstance();

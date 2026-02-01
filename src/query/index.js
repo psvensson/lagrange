@@ -4,7 +4,7 @@
  *               26.11
  */
 
-export {SQLParser, SQLTokenizer, TokenType} from './sql-parser.js';
+export {SQLParser, AST_TYPE, EXPR_TYPE} from './sql-parser.js';
 export {SQLQueryEngine} from './sql-query-engine.js';
 export {PartitionResolver} from './partition-resolver.js';
 export {QueryExecutor} from './query-executor.js';

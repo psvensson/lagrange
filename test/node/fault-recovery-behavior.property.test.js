@@ -516,7 +516,7 @@ test('Property 7: Recovery State Handling', async (t) => {
           let threw = false;
           try {
             await stateMachine.handleNodeRecovery({nodeId});
-          } catch (error) {
+          } catch (_error) {
             threw = true;
           }
 

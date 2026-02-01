@@ -1,5 +1,4 @@
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {STRING} from '../constants/index.js';
 
 const INDEX_SUBSYSTEM = Object.freeze({
   INDEX_SERVICE: 'index-service',

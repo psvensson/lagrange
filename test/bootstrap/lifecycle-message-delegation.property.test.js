@@ -303,7 +303,7 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
 
           // Track ACK event emission
           let ackEmitted = false;
-          messageGroupService.once('REMOVE_REPLICA_ACK', (ack) => {
+          messageGroupService.once('REMOVE_REPLICA_ACK', (_ack) => {
             ackEmitted = true;
           });
 

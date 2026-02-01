@@ -590,6 +590,7 @@ class WebSocketTransport extends EventEmitter {
         });
       }
     }, this.pingIntervalMs);
+    connectionInfo.pingInterval.unref();
   }
 
   /**
@@ -772,21 +773,41 @@ class WebSocketTransport extends EventEmitter {
       transportId: this.transportId,
     });
 
-    // Close all connections
+    // Close all connections - use terminate() for immediate cleanup
     for (const [, connection] of this.connections) {
       if (connection.pingInterval) {
         clearInterval(connection.pingInterval);
       }
       if (connection.ws) {
-        connection.ws.close();
+        connection.ws.terminate();
       }
     }
 
-    // Close server
+    // Close server and underlying HTTP server
     if (this.server) {
+      // Terminate all connected clients first
+      for (const client of this.server.clients || []) {
+        client.terminate();
+      }
+
+      const httpServer = this.server._server || null;
+
       await new Promise((resolve) => {
         this.server.close(resolve);
       });
+
+      // Also close the underlying HTTP server if present
+      if (httpServer) {
+        if (typeof httpServer.closeAllConnections === TRANSPORT_TYPEOF.FUNCTION) {
+          httpServer.closeAllConnections();
+        }
+        await new Promise((resolve) => {
+          httpServer.close(resolve);
+        });
+        if (typeof httpServer.unref === TRANSPORT_TYPEOF.FUNCTION) {
+          httpServer.unref();
+        }
+      }
     }
 
     // Clear pending messages

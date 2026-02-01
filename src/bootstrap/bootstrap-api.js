@@ -274,6 +274,13 @@ class BootstrapAPI {
       // Get ready nodes for pull-based assignment
       const readyNodes = this.getReadyNodes();
 
+      this.logger.info(BOOTSTRAP_API_LOG_MSG.READY_NODES_FOR_BOOTSTRAP, {
+        nodeId,
+        readyNodesCount: readyNodes.length,
+        readyNodes,
+        seedNodeId: this.seedNodeId,
+      });
+
       // Get table policies for assignment validation
       const tablePolicies = this.getTablePolicies();
 
@@ -668,51 +675,17 @@ class BootstrapAPI {
 
   /**
    * Get all message groups from system cache.
-   * Prefer live message group services when available to avoid cache races.
+   * Uses the system cache (fed by CDC) as the single source of truth.
    * @return {Array<Object>} Message groups.
    */
   getMessageGroups() {
-    if (this.messageGroupServices && this.messageGroupServices.size > NUM.ZERO) {
-      const groups = new Map();
-      for (const service of this.messageGroupServices.values()) {
-        const groupId = service.groupId;
-        const replicaId = service.replicaId;
-        if (!groupId || !replicaId) {
-          continue;
-        }
-
-        const nodeId = service.nodeId || this.seedNodeId;
-        const address = service.unifiedAddress ||
-          `${nodeId}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
-          `${ADDRESS.SEPARATOR}${replicaId}`;
-
-        if (!groups.has(groupId)) {
-          groups.set(groupId, {
-            group_id: groupId,
-            replicas: [],
-            replica_count: NUM.ZERO,
-          });
-        }
-
-        const group = groups.get(groupId);
-        group.replicas.push({
-          replica_id: replicaId,
-          node_id: nodeId,
-          address,
-        });
-        group.replica_count = group.replicas.length;
-      }
-
-      return Array.from(groups.values());
-    }
-
     const systemTableCache = assertCritical(
       this.systemTableCache,
       BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
     );
 
-    // Get message group services from services table
-    // This is the primary source for MOVE_REPLICA assignment
+    // Get message group services from services table in system cache
+    // The system cache is the single source of truth (fed by CDC)
     const services = systemTableCache.getAll(TABLES.SERVICES) || [];
     const messageGroupServices = services.filter((service) =>
       service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP,
@@ -1042,6 +1015,7 @@ class BootstrapAPI {
 
   /**
    * Get the list of ready node IDs from the system cache.
+   * Always includes the seed node since it's responding to the bootstrap request.
    * Uses ONLY the system cache - no fallbacks.
    * @return {string[]} Ready node IDs.
    */
@@ -1050,7 +1024,16 @@ class BootstrapAPI {
       this.systemTableCache,
       BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
     );
-    return systemTableCache.getReadyNodes();
+    const readyNodes = systemTableCache.getReadyNodes();
+
+    // Always include seed node - it's responding to this request so it's available
+    // The seed node's heartbeat may have failed to update its lease, but it's clearly
+    // operational if it's processing this bootstrap request
+    if (this.seedNodeId && !readyNodes.includes(this.seedNodeId)) {
+      readyNodes.push(this.seedNodeId);
+    }
+
+    return readyNodes;
   }
 
   /**

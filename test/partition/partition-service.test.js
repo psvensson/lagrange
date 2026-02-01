@@ -24,6 +24,7 @@ import {
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -890,3 +891,492 @@ test('PartitionService - setCdcIntegrationService sets service on partition and 
 
     await partition.shutdown();
   });
+
+test('PartitionService - learner promotion deferred for even voter count', async (t) => {
+  // Create a mock system table cache with 3 active voters
+  const mockCache = {
+    get: () => null, // Not used for voter counting
+    filter: (tableName, predicate) => {
+      if (tableName === TABLES.SERVICES) {
+        // Return 3 active partition replicas (odd count)
+        const services = [
+          {
+            service_id: 'replica-1',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'leader',
+          },
+          {
+            service_id: 'replica-2',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'follower',
+          },
+          {
+            service_id: 'replica-3',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'follower',
+          },
+        ];
+        return services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  // Create partition without initializing to test checkLearnerPromotion directly
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-4', // New replica joining
+    replicaIds: ['replica-4'], // Only self in replicaIds to avoid peer lookup
+    nodeId: 'node-2',
+    dbPath: ':memory:',
+    isJoiningExistingGroup: true, // Start as learner
+    systemTableCache: mockCache,
+  });
+
+  // Manually set role to learner (simulating post-initialization state)
+  partition.role = RaftRole.LEARNER;
+
+  // Manually trigger learner promotion check
+  partition.checkLearnerPromotion();
+
+  // Should still be learner because promoting would cause 4 voters (even)
+  t.equal(partition.role, RaftRole.LEARNER, 'Should remain learner to avoid even voter count');
+
+  // Verify promotion timer was rescheduled
+  t.ok(partition.learnerPromotionTimer, 'Should reschedule promotion check');
+
+  // Clean up timer
+  if (partition.learnerPromotionTimer) {
+    clearTimeout(partition.learnerPromotionTimer);
+    partition.learnerPromotionTimer = null;
+  }
+});
+
+test('PartitionService - learner promotes when voter count would be odd', async (t) => {
+  // Create a mock system table cache with 2 active voters (one was removed)
+  const mockCache = {
+    get: () => null, // Not used for voter counting
+    filter: (tableName, predicate) => {
+      if (tableName === TABLES.SERVICES) {
+        // Return 2 active partition replicas (one was removed)
+        const services = [
+          {
+            service_id: 'replica-1',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'leader',
+          },
+          {
+            service_id: 'replica-2',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'follower',
+          },
+        ];
+        return services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  // Create partition without initializing to test checkLearnerPromotion directly
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-3', // New replica joining
+    replicaIds: ['replica-3'], // Only self in replicaIds to avoid peer lookup
+    nodeId: 'node-2',
+    dbPath: ':memory:',
+    isJoiningExistingGroup: true, // Start as learner
+    systemTableCache: mockCache,
+  });
+
+  // Manually set role to learner (simulating post-initialization state)
+  partition.role = RaftRole.LEARNER;
+
+  // Manually trigger learner promotion check
+  partition.checkLearnerPromotion();
+
+  // Should promote because 2 + 1 = 3 voters (odd)
+  t.equal(partition.role, RaftRole.FOLLOWER, 'Should promote to follower for odd voter count');
+
+  // Clean up any timers
+  if (partition.learnerPromotionTimer) {
+    clearTimeout(partition.learnerPromotionTimer);
+    partition.learnerPromotionTimer = null;
+  }
+});
+
+test('PartitionService - learner promotes when multiple learners reach odd count', async (t) => {
+  // Create a mock system table cache with 3 active voters and 2 learners
+  // 3 voters + 2 learners = 5 (odd) - should allow promotion
+  const mockCache = {
+    get: () => null,
+    filter: (tableName, predicate) => {
+      if (tableName === TABLES.SERVICES) {
+        const services = [
+          {
+            service_id: 'replica-1',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'leader',
+          },
+          {
+            service_id: 'replica-2',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'follower',
+          },
+          {
+            service_id: 'replica-3',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'follower',
+          },
+          // Two learners waiting to promote
+          {
+            service_id: 'replica-4',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'learner',
+          },
+          {
+            service_id: 'replica-5',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'learner',
+          },
+        ];
+        return services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  // Create partition as one of the learners
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-4',
+    replicaIds: ['replica-4'],
+    nodeId: 'node-2',
+    dbPath: ':memory:',
+    isJoiningExistingGroup: true,
+    systemTableCache: mockCache,
+  });
+
+  // Manually set role to learner
+  partition.role = RaftRole.LEARNER;
+
+  // Manually trigger learner promotion check
+  partition.checkLearnerPromotion();
+
+  // Should promote because 3 voters + 2 learners = 5 (odd)
+  // Even though 3 + 1 = 4 (even), all learners promoting gives odd count
+  t.equal(partition.role, RaftRole.FOLLOWER,
+    'Should promote when all learners would reach odd count');
+
+  // Clean up any timers
+  if (partition.learnerPromotionTimer) {
+    clearTimeout(partition.learnerPromotionTimer);
+    partition.learnerPromotionTimer = null;
+  }
+});
+
+test('PartitionService - learner deferred when all learners would still be even', async (t) => {
+  // Create a mock system table cache with 3 active voters and 1 learner
+  // 3 voters + 1 learner = 4 (even) - should defer promotion
+  const mockCache = {
+    get: () => null,
+    filter: (tableName, predicate) => {
+      if (tableName === TABLES.SERVICES) {
+        const services = [
+          {
+            service_id: 'replica-1',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'leader',
+          },
+          {
+            service_id: 'replica-2',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'follower',
+          },
+          {
+            service_id: 'replica-3',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'follower',
+          },
+          // Only one learner
+          {
+            service_id: 'replica-4',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'learner',
+          },
+        ];
+        return services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  // Create partition as the learner
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-4',
+    replicaIds: ['replica-4'],
+    nodeId: 'node-2',
+    dbPath: ':memory:',
+    isJoiningExistingGroup: true,
+    systemTableCache: mockCache,
+  });
+
+  // Manually set role to learner
+  partition.role = RaftRole.LEARNER;
+
+  // Manually trigger learner promotion check
+  partition.checkLearnerPromotion();
+
+  // Should remain learner because 3 + 1 = 4 (even)
+  t.equal(partition.role, RaftRole.LEARNER,
+    'Should remain learner when all learners would still be even');
+
+  // Verify promotion timer was rescheduled
+  t.ok(partition.learnerPromotionTimer, 'Should reschedule promotion check');
+
+  // Clean up timer
+  if (partition.learnerPromotionTimer) {
+    clearTimeout(partition.learnerPromotionTimer);
+    partition.learnerPromotionTimer = null;
+  }
+});
+
+test('PartitionService - countPendingLearners counts learner replicas', async (t) => {
+  const mockCache = {
+    get: () => null,
+    filter: (tableName, predicate) => {
+      if (tableName === TABLES.SERVICES) {
+        const services = [
+          {
+            service_id: 'replica-1',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'leader',
+          },
+          {
+            service_id: 'replica-2',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'learner',
+          },
+          {
+            service_id: 'replica-3',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'learner',
+          },
+          {
+            service_id: 'replica-4',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: ReplicaStatus.FAILED, // Should be excluded
+            raft_role: 'learner',
+          },
+        ];
+        return services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-5',
+    replicaIds: ['replica-5'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+    systemTableCache: mockCache,
+  });
+
+  // Count pending learners - should count replica-2 and replica-3 (not failed replica-4)
+  const learnerCount = partition.countPendingLearners();
+  t.equal(learnerCount, 2, 'Should count only active learner replicas');
+});
+
+test('PartitionService - countActiveVoters excludes learners and failed replicas', async (t) => {
+  const mockCache = {
+    get: () => null, // Not used for voter counting
+    filter: (tableName, predicate) => {
+      if (tableName === TABLES.SERVICES) {
+        const services = [
+          {
+            service_id: 'replica-1',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'leader',
+          },
+          {
+            service_id: 'replica-2',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'follower',
+          },
+          {
+            service_id: 'replica-3',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'learner', // Should be excluded
+          },
+          {
+            service_id: 'replica-4',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: ReplicaStatus.FAILED, // Should be excluded
+            raft_role: 'follower',
+          },
+          {
+            service_id: 'replica-5',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: ReplicaStatus.REMOVING, // Should be excluded
+            raft_role: 'follower',
+          },
+        ];
+        return services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-6',
+    replicaIds: ['replica-6'], // Only self in replicaIds to avoid peer lookup
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+    systemTableCache: mockCache,
+  });
+
+  // Count active voters - should only count replica-1 and replica-2
+  const voterCount = partition.countActiveVoters();
+  t.equal(voterCount, 2, 'Should count only active non-learner replicas');
+});
+
+test('PartitionService - handleRemoteQuery returns redirect for writes on follower', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+
+  // Set role to follower and set a known leader
+  partition.role = 'follower';
+  partition.leaderId = 'leader-replica';
+
+  // Mock resolveLeaderAddress to return a known address
+  partition.resolveLeaderAddress = () => 'leader-node/partition/test-partition';
+
+  // Call handleRemoteQuery with a write query
+  const result = await partition.handleRemoteQuery({
+    sql: 'INSERT INTO test_table (id, name) VALUES (1, \'test\')',
+    params: [],
+  });
+
+  t.equal(result.acknowledged, true, 'should acknowledge the request');
+  t.equal(result.success, false, 'should not succeed (redirect instead)');
+  t.equal(result.redirect, 'LEADER_REDIRECT', 'should return redirect type');
+  t.equal(result.leaderAddress, 'leader-node/partition/test-partition',
+    'should include leader address');
+
+  partition.shutdown();
+});
+
+test('PartitionService - handleRemoteQuery executes reads on follower', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+
+  // Create a test table
+  partition.db.exec('CREATE TABLE test_data (id INTEGER PRIMARY KEY, name TEXT)');
+  partition.db.exec('INSERT INTO test_data (id, name) VALUES (1, \'Alice\')');
+
+  // Set role to follower
+  partition.role = 'follower';
+
+  // Call handleRemoteQuery with a read query - should execute locally
+  const result = await partition.handleRemoteQuery({
+    sql: 'SELECT * FROM test_data',
+    params: [],
+  });
+
+  t.equal(result.acknowledged, true, 'should acknowledge the request');
+  t.equal(result.success, true, 'should succeed for reads');
+  t.equal(result.rows.length, 1, 'should return data');
+  t.equal(result.rows[0].name, 'Alice', 'should return correct data');
+
+  partition.shutdown();
+});
+
+test('PartitionService - isWriteQuery detects write operations', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+
+  t.equal(partition.isWriteQuery('INSERT INTO t VALUES (1)'), true, 'INSERT is write');
+  t.equal(partition.isWriteQuery('UPDATE t SET x = 1'), true, 'UPDATE is write');
+  t.equal(partition.isWriteQuery('DELETE FROM t'), true, 'DELETE is write');
+  t.equal(partition.isWriteQuery('CREATE TABLE t (id INT)'), true, 'CREATE is write');
+  t.equal(partition.isWriteQuery('DROP TABLE t'), true, 'DROP is write');
+  t.equal(partition.isWriteQuery('ALTER TABLE t ADD col INT'), true, 'ALTER is write');
+  t.equal(partition.isWriteQuery('SELECT * FROM t'), false, 'SELECT is not write');
+  t.equal(partition.isWriteQuery('  select * from t'), false, 'lowercase SELECT is not write');
+  t.equal(partition.isWriteQuery(null), false, 'null is not write');
+  t.equal(partition.isWriteQuery(''), false, 'empty string is not write');
+});

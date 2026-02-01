@@ -156,7 +156,7 @@ test('Bootstrap sequence - services created after self-connection', async (t) =>
   }
 });
 
-test('Bootstrap sequence - without wsPort (no server)', async (t) => {
+test('Bootstrap sequence - without wsPort fails (no server)', async (t) => {
   initializeTestEnvironment();
 
   const nodeId = `test-node-${Date.now()}`;
@@ -165,8 +165,11 @@ test('Bootstrap sequence - without wsPort (no server)', async (t) => {
     nodeId,
     nodeAddress: 'ws://localhost:8080',
     // No wsPort - server won't start, leadership can't be established
+    // System requires WebSocket-based communication for all messages (even local)
+    // per system guidelines: "All nodes will have at least one replica of a message
+    // group (liferaft) which will always be used for any communication (even local)"
     config: {
-      leadershipWaitTimeoutMs: 1000, // Short timeout since it will fail
+      leadershipWaitTimeoutMs: 100, // Short timeout since it will fail
       leadershipWaitInitialDelayMs: 10,
       partitionDbPath: ':memory:',
     },
@@ -175,14 +178,11 @@ test('Bootstrap sequence - without wsPort (no server)', async (t) => {
   try {
     const result = await bootstrap.bootstrap();
 
-    // Without wsPort, we do not start a WebSocket server. The system should still be able
-    // to bootstrap using in-process local delivery for intra-node communication.
-    t.equal(result.success, true, 'bootstrap should succeed without wsPort');
-    t.ok(result.messageRouter, 'should have messageRouter');
-    t.notOk(result.messageRouter.server, 'WebSocket server should not be running');
-    t.notOk(result.messageRouter.hasSelfConnection(),
-      'self-connection should not be required when not starting a server');
-    t.ok(result.messageGroupServices.size > 0, 'message group services should be created');
+    // Without wsPort, bootstrap should fail because Raft elections require
+    // WebSocket communication between replicas, even on the same node.
+    t.equal(result.success, false, 'bootstrap should fail without wsPort');
+    t.ok(result.error, 'should have error message');
+    t.match(result.error, /leadership/i, 'error should mention leadership timeout');
   } finally {
     await bootstrap.shutdown();
   }

@@ -3,51 +3,51 @@ TAP version 14
     # Subtest: currentTerm round-trip preserves value
         ok 1 - currentTerm round-trip preserves value
         1..1
-    ok 1 - currentTerm round-trip preserves value # time=11.723ms
+    ok 1 - currentTerm round-trip preserves value # time=14.585ms
     
     # Subtest: votedFor round-trip preserves value
         ok 1 - votedFor round-trip preserves value
         1..1
-    ok 2 - votedFor round-trip preserves value # time=3.498ms
+    ok 2 - votedFor round-trip preserves value # time=8.037ms
     
     # Subtest: log entries round-trip preserves entries
         ok 1 - log entries round-trip preserves entries
         1..1
-    ok 3 - log entries round-trip preserves entries # time=3.964ms
+    ok 3 - log entries round-trip preserves entries # time=8.862ms
     
     # Subtest: state persists after simulated restart
         ok 1 - state persists after simulated restart
         1..1
-    ok 4 - state persists after simulated restart # time=133.273ms
+    ok 4 - state persists after simulated restart # time=132.243ms
     
     # Subtest: log entries persist after simulated restart
         ok 1 - log entries persist after simulated restart
         1..1
-    ok 5 - log entries persist after simulated restart # time=71.533ms
+    ok 5 - log entries persist after simulated restart # time=61.694ms
     
     # Subtest: getLastEntry returns the last appended entry
         ok 1 - getLastEntry returns the last appended entry
         1..1
-    ok 6 - getLastEntry returns the last appended entry # time=6.045ms
+    ok 6 - getLastEntry returns the last appended entry # time=4.15ms
     
     # Subtest: getLastEntry returns null for empty log
         ok 1 - getLastEntry returns null for empty log
         1..1
-    ok 7 - getLastEntry returns null for empty log # time=0.885ms
+    ok 7 - getLastEntry returns null for empty log # time=0.812ms
     
     # Subtest: getLength returns correct count after appends
         ok 1 - getLength returns correct count after appends
         1..1
-    ok 8 - getLength returns correct count after appends # time=5.313ms
+    ok 8 - getLength returns correct count after appends # time=2.335ms
     
     # Subtest: commitIndex round-trip preserves value
         ok 1 - commitIndex round-trip preserves value
         1..1
-    ok 9 - commitIndex round-trip preserves value # time=2.55ms
+    ok 9 - commitIndex round-trip preserves value # time=1.546ms
     
     1..9
-ok 1 - Property 2: SQLite Storage Round-Trip and Restart Recovery # time=244.302ms
+ok 1 - Property 2: SQLite Storage Round-Trip and Restart Recovery # time=239.927ms
 
 1..1
 # { total: 9, pass: 9 }
-# time=253.457ms
+# time=257.371ms

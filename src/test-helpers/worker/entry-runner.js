@@ -100,7 +100,8 @@ async function run() {
   } catch (err) {
     if (err && (err.name === 'ExitError' || err instanceof ExitError)) {
       exitCode = err.code ?? 0;
-    } else if (err && err.code !== undefined && String(err.message || '').startsWith('process.exit(')) {
+    } else if (err && err.code !== undefined &&
+        String(err.message || '').startsWith('process.exit(')) {
       // Defensive: handle a serialized ExitError.
       exitCode = err.code ?? 0;
     } else {

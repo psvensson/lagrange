@@ -23,7 +23,10 @@ const projectRoot = join(__dirname, '../..');
 
 const cliEntry = join(projectRoot, 'src/cli/bin/ddb-admin.js');
 const mainEntry = join(projectRoot, 'src/index.js');
-const adminCliDirectWorker = join(projectRoot, 'src/test-helpers/worker/admin-cli-direct-runner.js');
+const adminCliDirectWorker = join(
+  projectRoot,
+  'src/test-helpers/worker/admin-cli-direct-runner.js',
+);
 
 function runWorkerScript(workerPath, workerData, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
@@ -119,8 +122,14 @@ test('Single Executable Behavioral Equivalence - Property Test', async (t) => {
     const directResult = await runWorkerScript(adminCliDirectWorker, {args: [flag]}, 15000);
     t.ok(entryResult.stdout.length > 0, `cli entry output non-empty for ${flag}`);
     t.ok(directResult.stdout.length > 0, `cli direct output non-empty for ${flag}`);
-    t.ok(/^[\x20-\x7E\n\r\t]+$/.test(entryResult.stdout), `cli entry output is text for ${flag}`);
-    t.ok(/^[\x20-\x7E\n\r\t]+$/.test(normalizeOutput(directResult.stdout)), `cli direct output is text for ${flag}`);
+    t.ok(
+      /^[\x20-\x7E\n\r\t]+$/.test(entryResult.stdout),
+      `cli entry output is text for ${flag}`,
+    );
+    t.ok(
+      /^[\x20-\x7E\n\r\t]+$/.test(normalizeOutput(directResult.stdout)),
+      `cli direct output is text for ${flag}`,
+    );
   }
   t.pass('Output format is consistent');
 
@@ -131,10 +140,16 @@ test('Single Executable Behavioral Equivalence - Property Test', async (t) => {
     const out = normalizeOutput(res.stdout);
     t.ok(out.length > 0, `main entry output non-empty for ${flag}`);
     if (flag === '--version' || flag === '-v') {
-      t.ok(out.includes('distributed-database-system'), `main version output includes name for ${flag}`);
+      t.ok(
+        out.includes('distributed-database-system'),
+        `main version output includes name for ${flag}`,
+      );
       t.ok(/\d+\.\d+\.\d+/.test(out), `main version output includes semver for ${flag}`);
     } else {
-      t.ok(out.includes('Usage: distributed-db'), `main help output includes Usage for ${flag}`);
+      t.ok(
+        out.includes('Usage: distributed-db'),
+        `main help output includes Usage for ${flag}`,
+      );
       t.ok(out.includes('Options'), `main help output includes Options for ${flag}`);
     }
   }

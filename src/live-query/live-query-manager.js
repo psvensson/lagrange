@@ -1046,6 +1046,7 @@ class LiveQueryManager extends EventEmitter {
     this.cleanupInterval = setInterval(() => {
       this.cleanupExpiredSubscriptions();
     }, this.cleanupIntervalMs);
+    this.cleanupInterval.unref();
   }
 
   /**

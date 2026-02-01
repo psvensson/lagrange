@@ -730,6 +730,11 @@ class NodeService extends EventEmitter {
       this.lifecycleStateMachine.removeAllListeners();
     }
 
+    // Shutdown thread manager
+    if (this.threadManager) {
+      await this.threadManager.shutdown();
+    }
+
     // Clear system table cache references
     this._systemTableCache = null;
     this._readOnlyCache = null;

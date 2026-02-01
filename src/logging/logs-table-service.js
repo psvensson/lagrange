@@ -121,7 +121,7 @@ class LogsTableService extends EventEmitter {
       (entry) => this.writeLogEntry(entry),
     );
 
-    this.logger.log(LOGGING_LOG_MSG.CONNECTED_LOGGING_SERVICE(flushedCount));
+    this.logger.log(LOGGING_LOG_MSG.connectedLoggingService(flushedCount));
     this.emit('connected', {flushedCount});
 
     return flushedCount;

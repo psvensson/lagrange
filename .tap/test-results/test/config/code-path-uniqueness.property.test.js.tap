@@ -3,31 +3,81 @@ TAP version 14
     # Subtest: each class has exactly one implementation
         ok 1 - No unexpected duplicate class implementations should exist. Found: []
         1..1
-    ok 1 - each class has exactly one implementation # time=5.652ms
+    ok 1 - each class has exactly one implementation # time=7.763ms
     
     # Subtest: no feature flags for core functionality
         ok 1 - No files should have core feature flags. Found: []
         1..1
-    ok 2 - no feature flags for core functionality # time=18.661ms
+    ok 2 - no feature flags for core functionality # time=23.099ms
     
     # Subtest: no conditional compilation patterns
         ok 1 - No files should have conditional compilation. Found: []
         1..1
-    ok 3 - no conditional compilation patterns # time=14.063ms
+    ok 3 - no conditional compilation patterns # time=15.998ms
     
     # Subtest: consistent service implementation patterns
         ok 1 - all service classes have consistent implementation patterns
         1..1
-    ok 4 - consistent service implementation patterns # time=1.256ms
+    ok 4 - consistent service implementation patterns # time=5.906ms
     
     # Subtest: transport implementations serve distinct purposes
-        ok 1 - transport implementations match expected distinct purposes
+        not ok 1 - Property failed after 1 tests { seed: 788113842, path: "0:0", endOnFailure: true } Counterexample: ["connection-pool.js"] Shrunk 1 time(s) Got error: Property failed by returning false  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            throwIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:138:11)
+            reportRunDetails (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:151:16)
+            Module.assert (node_modules/fast-check/lib/esm/check/runner/Runner.js:69:9)
+            Test.<anonymous> (test/config/code-path-uniqueness.property.test.js:352:8)
+          at:
+            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
         1..1
-    ok 5 - transport implementations serve distinct purposes # time=1.642ms
+    not ok 5 - transport implementations serve distinct purposes # time=19.019ms
+      ---
+      at:
+        fileName: test/config/code-path-uniqueness.property.test.js
+        lineNumber: 339
+        columnNumber: 5
+        typeName: Test
+      source: |2
+           * a distinct purpose (no redundant transports).
+           */
+          t.test('transport implementations serve distinct purposes', async (t) => {
+        ----^
+            const transportDir = path.join(srcDir, 'transport');
+            const transportFiles = fs.readdirSync(transportDir)
+      ...
     
     1..5
-ok 1 - Property 14: Code Path Uniqueness # time=45.754ms
+not ok 1 - Property 14: Code Path Uniqueness # time=78.865ms
+  ---
+  at:
+    fileName: test/config/code-path-uniqueness.property.test.js
+    lineNumber: 179
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    const CLASS_NAMES = Array.from(CLASS_REGISTRY.keys());
+  
+    test('Property 14: Code Path Uniqueness', async (t) => {
+    ^
+      /**
+       * Property: For any class in the system, there should be exactly one
+  ...
 
 1..1
-# { total: 5, pass: 5 }
-# time=57.738ms
+# { total: 5, pass: 4, fail: 1 }
+# time=95.242ms

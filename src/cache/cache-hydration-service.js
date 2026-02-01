@@ -138,7 +138,7 @@ class CacheHydrationService {
     const result = await this.queryEngine.executeQuery(sql);
 
     if (!result.success) {
-      throw new Error(result.error || CACHE_HYDRATION_ERROR_MSG.QUERY_FAILED(tableName));
+      throw new Error(result.error || CACHE_HYDRATION_ERROR_MSG.queryFailed(tableName));
     }
 
     const rows = result.rows || [];

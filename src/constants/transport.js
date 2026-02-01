@@ -42,6 +42,8 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
   PING_INTERVAL_MS: 'transport.pingIntervalMs',
   RECONNECT_BACKOFF_MULTIPLIER: 'transport.reconnectBackoffMultiplier',
   OUTBOUND_QUEUE_MAX_CONCURRENT: 'transport.outboundQueueMaxConcurrent',
+  CONNECTION_POOL_TTL_MS: 'transport.connectionPoolTtlMs',
+  CONNECTION_POOL_CLEANUP_INTERVAL_MS: 'transport.connectionPoolCleanupIntervalMs',
 });
 
 const TRANSPORT_DEFAULT = Object.freeze({
@@ -59,6 +61,8 @@ const TRANSPORT_DEFAULT = Object.freeze({
   SHUTDOWN_WAIT_MS: 100,
   RPC_TIMEOUT_MS: 30000,
   EMPTY: STRING.EMPTY,
+  CONNECTION_POOL_TTL_MS: 300000, // 5 minutes
+  CONNECTION_POOL_CLEANUP_INTERVAL_MS: 60000, // 1 minute
 });
 
 const TRANSPORT_FORMAT = Object.freeze({
@@ -157,18 +161,29 @@ const ROUTER_LOG_MSG = Object.freeze({
   HANDLER_UNREGISTERED: 'Unregistered handler',
   NO_TARGET_CONNECTION: 'No connection to target node for message delivery',
   SHUTTING_DOWN: 'Shutting down MessageRouter',
+  TRANSPORT_REGISTRY_SET: 'TransportRegistry configured for MessageRouter',
+  TRANSPORT_DELIVERY_START: 'Starting transport-based delivery',
+  TRANSPORT_ENDPOINT_SELECTED: 'Selected endpoint for delivery',
+  TRANSPORT_DELIVERY_SUCCESS: 'Transport delivery succeeded',
+  TRANSPORT_DELIVERY_FAILED: 'Transport delivery failed, trying fallback',
+  TRANSPORT_ALL_FAILED: 'All transport endpoints failed',
+  TRANSPORT_NO_ENDPOINTS: 'No endpoints available for node',
+  TRANSPORT_FALLBACK_WS: 'Falling back to WebSocket delivery',
 });
 
 const ROUTER_ERROR_MSG = Object.freeze({
-  INVALID_ADDRESS_FORMAT: (address) =>
+  invalidAddressFormat: (address) =>
     `Invalid address format: ${address}. ` +
-    `Expected format: nodeId/entityType/entityId where entityType is one of: ` +
+    'Expected format: nodeId/entityType/entityId where entityType is one of: ' +
     `${ROUTER_EXPECTED_ENTITY_TYPES.join(', ')}`,
-  NO_CONNECTION_TO_NODE: (nodeId) => `No connection to node ${nodeId}`,
-  CONNECTION_CLOSED: (nodeId) => `Connection to node ${nodeId} closed`,
-  SELF_CONNECTION_FAILED: (message) => `Self-connection failed: ${message}`,
-  NO_HANDLER_FOR_ADDRESS: (address) => `No handler registered for address ${address}`,
+  noConnectionToNode: (nodeId) => `No connection to node ${nodeId}`,
+  connectionClosed: (nodeId) => `Connection to node ${nodeId} closed`,
+  selfConnectionFailed: (message) => `Self-connection failed: ${message}`,
+  noHandlerForAddress: (address) => `No handler registered for address ${address}`,
   SHUTDOWN: 'Router shutdown',
+  ALL_TRANSPORTS_FAILED: 'All transport endpoints failed',
+  NO_ENDPOINTS_FOR_NODE: 'No endpoints available for node',
+  noEndpointsForNode: (nodeId) => `No endpoints available for node ${nodeId}`,
 });
 
 const WS_LOG_MSG = Object.freeze({
@@ -212,8 +227,8 @@ const RPC_LOG_MSG = Object.freeze({
 
 const RPC_ERROR_MSG = Object.freeze({
   NO_MESSAGE_GROUP: 'RPCClient: No message group service configured',
-  TIMEOUT: (timeoutMs) => `RPC timeout after ${timeoutMs}ms`,
-  CANCELLED: (reason) => `RPC cancelled: ${reason}`,
+  timeout: (timeoutMs) => `RPC timeout after ${timeoutMs}ms`,
+  cancelled: (reason) => `RPC cancelled: ${reason}`,
   SHUTDOWN: 'RPC client shutdown',
 });
 

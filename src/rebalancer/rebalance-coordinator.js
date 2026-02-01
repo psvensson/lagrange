@@ -192,6 +192,8 @@ class RebalanceCoordinator extends EventEmitter {
         });
       });
     }, this.timeoutCheckIntervalMs);
+    // Unref to allow process exit when this is the only timer
+    this.timeoutCheckInterval.unref();
   }
 
   /**

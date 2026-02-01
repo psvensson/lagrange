@@ -92,7 +92,7 @@ test('Property 4: Routing Correctness', async (t) => {
                    receivedMessages[0].address === targetAddress &&
                    receivedMessages[0].payload.type === messagePayload.type &&
                    receivedMessages[0].payload.data === messagePayload.data;
-          } catch (error) {
+          } catch (_error) {
             await router.shutdown();
             return false;
           }
@@ -162,7 +162,7 @@ test('Property 4: Routing Correctness', async (t) => {
                    result.handler === 'handler1' &&
                    handler1Calls.length === 1 &&
                    handler2Calls.length === 0;
-          } catch (error) {
+          } catch (_error) {
             await router.shutdown();
             return false;
           }
@@ -223,7 +223,7 @@ test('Property 4: Routing Correctness', async (t) => {
             return result.acknowledged === true &&
                    result.data === responseData.responseData &&
                    result.code === responseData.responseCode;
-          } catch (error) {
+          } catch (_error) {
             await router.shutdown();
             return false;
           }
@@ -270,7 +270,7 @@ test('Property 4: Routing Correctness', async (t) => {
 
             // Should be acknowledged but with noHandler flag
             return result.acknowledged === true && result.noHandler === true;
-          } catch (error) {
+          } catch (_error) {
             await router.shutdown();
             return false;
           }
@@ -322,10 +322,10 @@ test('Property 4: Routing Correctness', async (t) => {
             // Should not be acknowledged and should have error
             return result.acknowledged === false &&
                    result.error === errorMessage;
-          } catch (error) {
+          } catch (_error) {
             await router.shutdown();
             // The deliver itself might throw if the error propagates
-            return error.message === errorMessage;
+            return _error.message === errorMessage;
           }
         },
       ),
@@ -376,7 +376,7 @@ test('Property 4: Routing Correctness', async (t) => {
             // Verify async result is returned
             return result.acknowledged === true &&
                    result.asyncResult === asyncData;
-          } catch (error) {
+          } catch (_error) {
             await router.shutdown();
             return false;
           }

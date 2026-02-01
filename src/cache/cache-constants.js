@@ -15,6 +15,7 @@ const CACHE_LOG_MSG = Object.freeze({
   APPLIED_CDC_EVENT: 'Applied CDC event to cache',
   CACHE_CLEARED: 'Cache cleared',
   READ_ONLY_WRITE_ATTEMPT: 'Attempted to write to read-only cache',
+  GET_READY_NODES_DEBUG: 'getReadyNodes debug info',
 });
 
 const CACHE_ERROR_MSG = Object.freeze({
@@ -22,15 +23,15 @@ const CACHE_ERROR_MSG = Object.freeze({
   EPOCH_MISSING_NUMBER: 'Epoch must have a numeric epoch field',
   EPOCH_MISSING_ASSIGNMENTS: 'Epoch must have an assignments object',
   LISTENER_REQUIRED: 'Listener must be a function',
-  PRIMARY_KEY_MISSING: (pkField) =>
+  primaryKeyMissing: (pkField) =>
     `CDC data must include primary key field "${pkField}" or "id"`,
-  INVALID_TABLE_NAME: (tableName, tables) =>
+  invalidTableName: (tableName, tables) =>
     `Invalid system table name: ${tableName}. Valid tables are: ${tables.join(', ')}`,
-  INVALID_CDC_OPERATION: (operation, operations) =>
+  invalidCdcOperation: (operation, operations) =>
     `Invalid CDC operation: ${operation}. Valid operations are: ${operations.join(', ')}`,
   READ_ONLY_CACHE_REQUIRED: 'ReadOnlySystemTableCache requires an underlying cache',
   READ_ONLY_HINT: 'Use CDCIntegrationService for writes',
-  READ_ONLY_METHOD_BLOCKED: (prop) =>
+  readOnlyMethodBlocked: (prop) =>
     `Cache write violation: "${prop}" is not available on read-only cache. ` +
     'Use CDCIntegrationService for writes.',
   READ_ONLY_DIRECT_ACCESS:
@@ -61,6 +62,7 @@ const CACHE_SYSTEM_TABLES = Object.freeze([
   TABLES.CONFIG,
   TABLES.LOGS,
   TABLES.LIVE_QUERIES,
+  TABLES.NODE_ENDPOINTS,
 ]);
 
 const CACHE_PRIMARY_KEY_FIELDS = Object.freeze({
@@ -76,6 +78,7 @@ const CACHE_PRIMARY_KEY_FIELDS = Object.freeze({
   [TABLES.LIVE_QUERIES]: COLUMN.QUERY_ID,
   [TABLES.CONTEXTS]: COLUMN.CONTEXT_ID,
   [TABLES.CODE]: COLUMN.FUNCTION_ID,
+  [TABLES.NODE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
 });
 
 const CACHE_CDC_OPERATIONS = CDC_OPERATION;
@@ -93,6 +96,7 @@ const CACHE_HYDRATION_TABLES = Object.freeze([
   TABLES.LIVE_QUERIES,
   TABLES.CONTEXTS,
   TABLES.CODE,
+  TABLES.NODE_ENDPOINTS,
 ]);
 
 const CACHE_HYDRATION_LOG_MSG = Object.freeze({
@@ -103,7 +107,7 @@ const CACHE_HYDRATION_LOG_MSG = Object.freeze({
 });
 
 const CACHE_HYDRATION_ERROR_MSG = Object.freeze({
-  QUERY_FAILED: (tableName) => `Failed to query ${tableName}`,
+  queryFailed: (tableName) => `Failed to query ${tableName}`,
 });
 
 const CACHE_READ_ONLY = Object.freeze({

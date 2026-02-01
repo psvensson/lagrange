@@ -185,7 +185,7 @@ class TablePolicyService extends EventEmitter {
       if (policy[field] !== undefined) {
         const actualType = typeof policy[field];
         if (actualType !== expectedType) {
-          errors.push(POLICY_ERROR_MSG.FIELD_TYPE_MISMATCH(field, expectedType, actualType));
+          errors.push(POLICY_ERROR_MSG.fieldTypeMismatch(field, expectedType, actualType));
         }
       }
     }
@@ -286,7 +286,7 @@ class TablePolicyService extends EventEmitter {
     const mergedValidation = this.validatePolicy(newPolicy);
     if (!mergedValidation.valid) {
       throw new Error(
-        `${POLICY_ERROR_MSG.INVALID_MERGED_POLICY_PREFIX}${mergedValidation.errors.join(', ')}`
+        `${POLICY_ERROR_MSG.INVALID_MERGED_POLICY_PREFIX}${mergedValidation.errors.join(', ')}`,
       );
     }
 

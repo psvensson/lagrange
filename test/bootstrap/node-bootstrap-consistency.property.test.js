@@ -5,70 +5,78 @@
  * it should successfully receive system partition leader addresses and be able to
  * query the cluster state directly.
  *
+ * These tests validate the full node joining flow including WebSocket connections.
+ *
  * Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import fc from 'fast-check';
 import {v4 as uuidv4, validate as uuidValidate} from 'uuid';
+import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {
-  NodeJoiningService,
-  JoiningPhase,
-} from '../../src/bootstrap/node-joining-service.js';
+import {NodeJoiningService, JoiningPhase} from '../../src/bootstrap/node-joining-service.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../../src/bootstrap/message-group-assignment.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {AddressManager} from '../../src/address/address-manager.js';
+import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
+import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {URL} from 'url';
 
-// Fast config for tests - reduces Raft election and leadership wait times
-const FAST_TEST_CONFIG = {
-  httpTimeoutMs: 2000,
-  leadershipWaitTimeoutMs: 5000,
-  leadershipWaitInitialDelayMs: 10,
-  leadershipWaitMaxDelayMs: 100,
-};
+// Port counter for unique ports - use high random base to avoid conflicts
+let portCounter = 40000 + Math.floor(Math.random() * 10000);
 
-// Get a random port for WebSocket server
-function getRandomWsPort() {
-  return 20000 + Math.floor(Math.random() * 10000);
+function getUniquePort() {
+  return portCounter++;
 }
 
-// Initialize test environment
+// Initialize test environment with fast Raft elections
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  if (!config.isInitialized()) {
-    config.initialize({
-      node: {id: 'test-node'},
-      logging: {level: 'error'},
-    });
-  }
+  LoggingService.resetInstance();
+  NodeService.resetInstance();
+  AddressManager.resetInstance();
+  ServiceThreadManager.resetInstance();
 
-  // Override raft config after initialization for faster tests
-  config.config.raft = {
-    ...config.config.raft,
-    electionTimeoutMinMs: 25,
-    electionTimeoutMaxMs: 50,
-    heartbeatIntervalMs: 10,
-  };
+  const config = ConfigurationManager.getInstance();
+  config.initialize({
+    node: {id: 'test-node'},
+    logging: {level: 'error'},
+    transport: {wsHost: '127.0.0.1'},
+    raft: {
+      electionTimeoutMinMs: 100,
+      electionTimeoutMaxMs: 200,
+      heartbeatIntervalMs: 50,
+    },
+  });
 
   const logging = LoggingService.getInstance();
-  if (!logging.isInitialized()) {
-    logging.initialize({level: 'error'});
-  }
-
-  NodeService.resetInstance();
+  logging.initialize({level: 'error'});
 }
 
-// Custom arbitrary for valid node addresses with random ports
-const nodeAddressArb = fc.integer({min: 30000, max: 40000})
-  .map((port) => `ws://localhost:${port}`);
+// Clean up test environment
+async function cleanupTestEnvironment() {
+  try {
+    await NodeService.getInstance().shutdown().catch(() => {});
+  } catch {
+    // Ignore
+  }
+  try {
+    await ServiceThreadManager.getInstance().shutdown().catch(() => {});
+  } catch {
+    // Ignore
+  }
+  NodeService.resetInstance();
+  ServiceThreadManager.resetInstance();
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  AddressManager.resetInstance();
+}
 
+// Create in-process HTTP POST function
 function createInProcHttpPost(seedApi) {
   return async (url, body) => {
     const {pathname} = new URL(url);
@@ -84,319 +92,368 @@ function createInProcHttpPost(seedApi) {
   };
 }
 
-test('Property 11: Node Bootstrap Consistency', async (t) => {
-  await t.test('new node with UUID receives bootstrap response from seed', async (t) => {
-    initializeTestEnvironment();
+// Fast bootstrap config
+const FAST_BOOTSTRAP_CONFIG = {
+  leadershipWaitTimeoutMs: 2000,
+  leadershipWaitInitialDelayMs: 10,
+  leadershipWaitMaxDelayMs: 50,
+  replicaStaggerDelayMs: 10,
+};
 
+// Fast joining config
+const FAST_JOINING_CONFIG = {
+  httpTimeoutMs: 2000,
+  leadershipWaitTimeoutMs: 2000,
+  leadershipWaitInitialDelayMs: 10,
+  leadershipWaitMaxDelayMs: 50,
+  replicaStaggerDelayMs: 10,
+};
+
+test('Property 11: Node Bootstrap Consistency', {timeout: 30000}, async (t) => {
+  await t.test('new node with UUID receives bootstrap response from seed', async (t) => {
+    // This test validates that any new node with a valid UUID can successfully
+    // contact the seed node and receive a valid bootstrap response.
+    // We run this as a single iteration since it involves full infrastructure.
+
+    let bootstrapService = null;
     let seedApi = null;
-    let service = null;
+    let joiningService = null;
 
     try {
-      await fc.assert(
-        fc.asyncProperty(
-          nodeAddressArb,
-          async (nodeAddress) => {
-            // Requirement 7.1: Generate unique node ID using UUID v4
-            const nodeId = uuidv4();
+      initializeTestEnvironment();
 
-            // Verify UUID is valid
-            if (!uuidValidate(nodeId)) {
-              return false;
-            }
+      // Requirement 7.1: Generate unique node ID using UUID v4
+      const joiningNodeId = uuidv4();
+      t.ok(uuidValidate(joiningNodeId), 'joining node ID should be valid UUID');
 
-            // Start seed node API
-            seedApi = new BootstrapAPI({
-              seedNodeId: 'seed-node-1',
-              seedNodeAddress: 'ws://localhost:8080',
-              messageGroupServices: new Map(),
-              systemTableCache: new SystemTableCache(),
-            });
+      // Start seed node with WebSocket server
+      const seedNodeId = uuidv4();
+      const seedWsPort = getUniquePort();
 
-            await seedApi.initialize(0, {listen: false});
+      bootstrapService = new BootstrapService({
+        nodeId: seedNodeId,
+        nodeAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: seedWsPort,
+        config: FAST_BOOTSTRAP_CONFIG,
+      });
 
-            // Get wsPort from nodeAddress
-            const wsPort = 0;
+      const bootstrapResult = await bootstrapService.bootstrap();
+      t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
 
-            // Requirement 7.2: Contact seed node's REST API with self-generated node ID
-            service = new NodeJoiningService({
-              nodeId,
-              nodeAddress,
-              seedNodeAddress: 'http://localhost:0',
-              wsPort,
-              config: FAST_TEST_CONFIG,
-              httpPost: createInProcHttpPost(seedApi),
-            });
+      // Start Bootstrap API
+      seedApi = new BootstrapAPI({
+        seedNodeId,
+        seedNodeAddress: `ws://localhost:${seedWsPort}`,
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        messageGroupServices: bootstrapResult.messageGroupServices,
+        partitionServices: bootstrapResult.partitionServices,
+        systemTableCache: NodeService.getInstance().getSystemTableCache(),
+        messageRouter: bootstrapResult.messageRouter,
+        epochManager: bootstrapResult.epochManager,
+        bootstrapService,
+      });
 
-            const result = await service.join();
+      await seedApi.initialize(0, {listen: false});
+      const sqlQueryEngine = new SQLQueryEngine({
+        systemCache: NodeService.getInstance().getSystemTableCache(),
+        messageRouter: bootstrapResult.messageRouter,
+        nodeId: seedNodeId,
+      });
+      seedApi.setSqlQueryEngine(sqlQueryEngine);
+      const httpPost = createInProcHttpPost(seedApi);
 
-            // Requirement 7.3: Seed node validates and registers new node
-            // Requirement 7.4: Seed node determines message group assignment
-            // Requirement 7.5: Seed node assigns to existing or creates new message group
-            const isSuccess = result.success === true;
-            const hasBootstrapResponse = result.bootstrapResponse !== undefined;
-            const hasAssignment = hasBootstrapResponse &&
-              result.bootstrapResponse.messageGroupAssignment !== undefined;
-            const hasValidStrategy = hasAssignment && (
-              result.bootstrapResponse.messageGroupAssignment.strategy ===
-                AssignmentStrategy.CREATE_SELF_HOSTED ||
-              result.bootstrapResponse.messageGroupAssignment.strategy ===
-                AssignmentStrategy.MOVE_REPLICA
-            );
+      // Requirement 7.2: Contact seed node's REST API with self-generated node ID
+      const joiningWsPort = getUniquePort();
+      joiningService = new NodeJoiningService({
+        nodeId: joiningNodeId,
+        nodeAddress: `ws://localhost:${joiningWsPort}`,
+        seedNodeAddress: 'http://localhost:0',
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: joiningWsPort,
+        config: FAST_JOINING_CONFIG,
+        httpPost,
+      });
 
-            // Cleanup
-            await service.cleanup();
-            service = null;
-            await seedApi.shutdown();
-            seedApi = null;
+      const joinResult = await joiningService.join();
 
-            return isSuccess && hasBootstrapResponse && hasAssignment && hasValidStrategy;
-          },
-        ),
-        {numRuns: 10},
+      // Requirement 7.3: Seed node validates and registers new node
+      t.equal(joinResult.success, true, 'join should succeed');
+      t.ok(joinResult.bootstrapResponse, 'should have bootstrap response');
+
+      // Requirement 7.4: Seed node determines message group assignment
+      // Requirement 7.5: Seed node assigns to existing or creates new message group
+      const assignment = joinResult.bootstrapResponse.messageGroupAssignment;
+      t.ok(assignment, 'should have message group assignment');
+      t.ok(
+        assignment.strategy === AssignmentStrategy.CREATE_SELF_HOSTED ||
+        assignment.strategy === AssignmentStrategy.MOVE_REPLICA,
+        'should have valid assignment strategy',
       );
-
-      t.pass('All nodes with valid UUIDs successfully bootstrap');
     } finally {
-      if (service) {
-        await service.cleanup();
+      if (joiningService) {
+        await joiningService.cleanup().catch(() => {});
       }
       if (seedApi) {
-        await seedApi.shutdown();
+        await seedApi.shutdown().catch(() => {});
       }
+      if (bootstrapService) {
+        await bootstrapService.shutdown().catch(() => {});
+      }
+      await cleanupTestEnvironment();
     }
   });
 
-  await t.test('bootstrap response contains partition leaders', async (t) => {
-    initializeTestEnvironment();
-
+  await t.test('bootstrap response contains system table snapshots', async (t) => {
+    let bootstrapService = null;
     let seedApi = null;
-    let service = null;
+    let joiningService = null;
 
     try {
-      await fc.assert(
-        fc.asyncProperty(
-          fc.constant(null), // No random input needed
-          async () => {
-            const nodeId = uuidv4();
-            const wsPort = getRandomWsPort();
-            const nodeAddress = `ws://localhost:${wsPort}`;
+      initializeTestEnvironment();
 
-            seedApi = new BootstrapAPI({
-              seedNodeId: 'seed-node-1',
-              seedNodeAddress: 'ws://localhost:8080',
-              messageGroupServices: new Map(),
-              systemTableCache: new SystemTableCache(),
-            });
+      const seedNodeId = uuidv4();
+      const seedWsPort = getUniquePort();
 
-            await seedApi.initialize(0, {listen: false});
+      bootstrapService = new BootstrapService({
+        nodeId: seedNodeId,
+        nodeAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: seedWsPort,
+        config: FAST_BOOTSTRAP_CONFIG,
+      });
 
-            service = new NodeJoiningService({
-              nodeId,
-              nodeAddress,
-              seedNodeAddress: 'http://localhost:0',
-              wsPort: 0,
-              config: FAST_TEST_CONFIG,
-              httpPost: createInProcHttpPost(seedApi),
-            });
+      const bootstrapResult = await bootstrapService.bootstrap();
+      t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
 
-            const result = await service.join();
+      seedApi = new BootstrapAPI({
+        seedNodeId,
+        seedNodeAddress: `ws://localhost:${seedWsPort}`,
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        messageGroupServices: bootstrapResult.messageGroupServices,
+        partitionServices: bootstrapResult.partitionServices,
+        systemTableCache: NodeService.getInstance().getSystemTableCache(),
+        messageRouter: bootstrapResult.messageRouter,
+        epochManager: bootstrapResult.epochManager,
+        bootstrapService,
+      });
 
-            // Verify bootstrap response contains system table snapshots
-            const hasSystemTableSnapshots = result.bootstrapResponse &&
-              result.bootstrapResponse.systemTableSnapshots !== undefined;
+      await seedApi.initialize(0, {listen: false});
+      const sqlQueryEngine = new SQLQueryEngine({
+        systemCache: NodeService.getInstance().getSystemTableCache(),
+        messageRouter: bootstrapResult.messageRouter,
+        nodeId: seedNodeId,
+      });
+      seedApi.setSqlQueryEngine(sqlQueryEngine);
+      const httpPost = createInProcHttpPost(seedApi);
 
-            // Cleanup
-            await service.cleanup();
-            service = null;
-            await seedApi.shutdown();
-            seedApi = null;
+      const joiningNodeId = uuidv4();
+      const joiningWsPort = getUniquePort();
 
-            return result.success && hasSystemTableSnapshots;
-          },
-        ),
-        {numRuns: 10},
+      joiningService = new NodeJoiningService({
+        nodeId: joiningNodeId,
+        nodeAddress: `ws://localhost:${joiningWsPort}`,
+        seedNodeAddress: 'http://localhost:0',
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: joiningWsPort,
+        config: FAST_JOINING_CONFIG,
+        httpPost,
+      });
+
+      const joinResult = await joiningService.join();
+
+      t.equal(joinResult.success, true, 'join should succeed');
+      t.ok(joinResult.bootstrapResponse, 'should have bootstrap response');
+      t.ok(
+        joinResult.bootstrapResponse.systemTableSnapshots !== undefined,
+        'should have system table snapshots',
       );
-
-      t.pass('Bootstrap response contains system table snapshots');
     } finally {
-      if (service) {
-        await service.cleanup();
+      if (joiningService) {
+        await joiningService.cleanup().catch(() => {});
       }
       if (seedApi) {
-        await seedApi.shutdown();
+        await seedApi.shutdown().catch(() => {});
       }
+      if (bootstrapService) {
+        await bootstrapService.shutdown().catch(() => {});
+      }
+      await cleanupTestEnvironment();
     }
   });
 
   await t.test('new node establishes message group leadership', async (t) => {
-    initializeTestEnvironment();
-
+    let bootstrapService = null;
     let seedApi = null;
-    let service = null;
+    let joiningService = null;
 
     try {
-      await fc.assert(
-        fc.asyncProperty(
-          fc.constant(null),
-          async () => {
-            const nodeId = uuidv4();
-            const wsPort = getRandomWsPort();
-            const nodeAddress = `ws://localhost:${wsPort}`;
+      initializeTestEnvironment();
 
-            seedApi = new BootstrapAPI({
-              seedNodeId: 'seed-node-1',
-              seedNodeAddress: 'ws://localhost:8080',
-              messageGroupServices: new Map(),
-              systemTableCache: new SystemTableCache(),
-            });
+      const seedNodeId = uuidv4();
+      const seedWsPort = getUniquePort();
 
-            await seedApi.initialize(0, {listen: false});
+      bootstrapService = new BootstrapService({
+        nodeId: seedNodeId,
+        nodeAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: seedWsPort,
+        config: FAST_BOOTSTRAP_CONFIG,
+      });
 
-            service = new NodeJoiningService({
-              nodeId,
-              nodeAddress,
-              seedNodeAddress: 'http://localhost:0',
-              wsPort: 0,
-              config: FAST_TEST_CONFIG,
-              httpPost: createInProcHttpPost(seedApi),
-            });
+      const bootstrapResult = await bootstrapService.bootstrap();
+      t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
 
-            const result = await service.join();
+      seedApi = new BootstrapAPI({
+        seedNodeId,
+        seedNodeAddress: `ws://localhost:${seedWsPort}`,
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        messageGroupServices: bootstrapResult.messageGroupServices,
+        partitionServices: bootstrapResult.partitionServices,
+        systemTableCache: NodeService.getInstance().getSystemTableCache(),
+        messageRouter: bootstrapResult.messageRouter,
+        epochManager: bootstrapResult.epochManager,
+        bootstrapService,
+      });
 
-            // Requirement 7.10: Wait for leadership establishment
-            // Requirement 7.14: Bootstrap completes with operational message group
-            const hasMessageGroups = result.messageGroupServices &&
-              result.messageGroupServices.size > 0;
-            const hasOperationalGroup = service.hasOperationalMessageGroup();
-            const phaseComplete = service.getPhase() === JoiningPhase.COMPLETE;
+      await seedApi.initialize(0, {listen: false});
+      const sqlQueryEngine = new SQLQueryEngine({
+        systemCache: NodeService.getInstance().getSystemTableCache(),
+        messageRouter: bootstrapResult.messageRouter,
+        nodeId: seedNodeId,
+      });
+      seedApi.setSqlQueryEngine(sqlQueryEngine);
+      const httpPost = createInProcHttpPost(seedApi);
 
-            // Cleanup
-            await service.cleanup();
-            service = null;
-            await seedApi.shutdown();
-            seedApi = null;
+      const joiningNodeId = uuidv4();
+      const joiningWsPort = getUniquePort();
 
-            return result.success && hasMessageGroups && hasOperationalGroup && phaseComplete;
-          },
-        ),
-        {numRuns: 10},
+      joiningService = new NodeJoiningService({
+        nodeId: joiningNodeId,
+        nodeAddress: `ws://localhost:${joiningWsPort}`,
+        seedNodeAddress: 'http://localhost:0',
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: joiningWsPort,
+        config: FAST_JOINING_CONFIG,
+        httpPost,
+      });
+
+      const joinResult = await joiningService.join();
+
+      t.equal(joinResult.success, true, 'join should succeed');
+
+      // Requirement 7.10: Wait for leadership establishment
+      // Requirement 7.14: Bootstrap completes with operational message group
+      t.ok(
+        joinResult.messageGroupServices && joinResult.messageGroupServices.size > 0,
+        'should have message group services',
       );
-
-      t.pass('New node establishes message group leadership');
+      t.ok(joiningService.hasOperationalMessageGroup(), 'should have operational message group');
+      t.equal(joiningService.getPhase(), JoiningPhase.COMPLETE, 'phase should be complete');
     } finally {
-      if (service) {
-        await service.cleanup();
+      if (joiningService) {
+        await joiningService.cleanup().catch(() => {});
       }
       if (seedApi) {
-        await seedApi.shutdown();
+        await seedApi.shutdown().catch(() => {});
       }
+      if (bootstrapService) {
+        await bootstrapService.shutdown().catch(() => {});
+      }
+      await cleanupTestEnvironment();
     }
   });
 
   await t.test('duplicate node ID is rejected', async (t) => {
-    initializeTestEnvironment();
-
+    let bootstrapService = null;
     let seedApi = null;
-    let service1 = null;
-    let service2 = null;
+    let joiningService1 = null;
+    let joiningService2 = null;
 
     try {
-      await fc.assert(
-        fc.asyncProperty(
-          fc.constant(null),
-          async () => {
-            const nodeId = uuidv4();
+      initializeTestEnvironment();
 
-            // Create a fresh mock system table cache for each iteration
-            // In production, nodes are registered via CDC to the nodes system table
-            const registeredNodes = new Map();
-            const mockSystemTableCache = {
-              get(tableName, key) {
-                if (tableName === 'nodes') {
-                  return registeredNodes.get(key) || null;
-                }
-                return null;
-              },
-              getAll(tableName) {
-                if (tableName === 'nodes') {
-                  return Array.from(registeredNodes.values());
-                }
-                return [];
-              },
-            };
+      const seedNodeId = uuidv4();
+      const seedWsPort = getUniquePort();
 
-            seedApi = new BootstrapAPI({
-              seedNodeId: 'seed-node-1',
-              seedNodeAddress: 'ws://localhost:8080',
-              messageGroupServices: new Map(),
-              systemTableCache: new SystemTableCache(),
-              systemTableCache: mockSystemTableCache,
-            });
+      bootstrapService = new BootstrapService({
+        nodeId: seedNodeId,
+        nodeAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: seedWsPort,
+        config: FAST_BOOTSTRAP_CONFIG,
+      });
 
-            await seedApi.initialize(0, {listen: false});
+      const bootstrapResult = await bootstrapService.bootstrap();
+      t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
 
-            // First node joins successfully
-            const wsPort1 = getRandomWsPort();
-            service1 = new NodeJoiningService({
-              nodeId,
-              nodeAddress: `ws://localhost:${wsPort1}`,
-              seedNodeAddress: 'http://localhost:0',
-              wsPort: 0,
-              config: FAST_TEST_CONFIG,
-              httpPost: createInProcHttpPost(seedApi),
-            });
+      seedApi = new BootstrapAPI({
+        seedNodeId,
+        seedNodeAddress: `ws://localhost:${seedWsPort}`,
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        messageGroupServices: bootstrapResult.messageGroupServices,
+        partitionServices: bootstrapResult.partitionServices,
+        systemTableCache: NodeService.getInstance().getSystemTableCache(),
+        messageRouter: bootstrapResult.messageRouter,
+        epochManager: bootstrapResult.epochManager,
+        bootstrapService,
+      });
 
-            const result1 = await service1.join();
-            const firstJoinSuccess = result1.success;
+      await seedApi.initialize(0, {listen: false});
+      const sqlQueryEngine = new SQLQueryEngine({
+        systemCache: NodeService.getInstance().getSystemTableCache(),
+        messageRouter: bootstrapResult.messageRouter,
+        nodeId: seedNodeId,
+      });
+      seedApi.setSqlQueryEngine(sqlQueryEngine);
+      const httpPost = createInProcHttpPost(seedApi);
 
-            // Simulate the node being registered via CDC (in production this happens
-            // when the node registers itself in the nodes system table)
-            if (firstJoinSuccess) {
-              registeredNodes.set(nodeId, {
-                node_id: nodeId,
-                node_address: `ws://localhost:${wsPort1}`,
-              });
-            }
+      // First node joins successfully
+      const duplicateNodeId = uuidv4();
+      const joiningWsPort1 = getUniquePort();
 
-            // Second node with same ID should fail
-            const wsPort2 = getRandomWsPort();
-            service2 = new NodeJoiningService({
-              nodeId, // Same node ID
-              nodeAddress: `ws://localhost:${wsPort2}`,
-              seedNodeAddress: 'http://localhost:0',
-              wsPort: 0,
-              config: FAST_TEST_CONFIG,
-              httpPost: createInProcHttpPost(seedApi),
-            });
+      joiningService1 = new NodeJoiningService({
+        nodeId: duplicateNodeId,
+        nodeAddress: `ws://localhost:${joiningWsPort1}`,
+        seedNodeAddress: 'http://localhost:0',
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: joiningWsPort1,
+        config: FAST_JOINING_CONFIG,
+        httpPost,
+      });
 
-            const result2 = await service2.join();
-            const secondJoinFails = !result2.success;
+      const joinResult1 = await joiningService1.join();
+      t.equal(joinResult1.success, true, 'first join should succeed');
 
-            // Cleanup
-            await service1.cleanup();
-            service1 = null;
-            await service2.cleanup();
-            service2 = null;
-            await seedApi.shutdown();
-            seedApi = null;
+      // Second node with same ID should fail
+      const joiningWsPort2 = getUniquePort();
 
-            return firstJoinSuccess && secondJoinFails;
-          },
-        ),
-        {numRuns: 10},
+      joiningService2 = new NodeJoiningService({
+        nodeId: duplicateNodeId, // Same node ID
+        nodeAddress: `ws://localhost:${joiningWsPort2}`,
+        seedNodeAddress: 'http://localhost:0',
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: joiningWsPort2,
+        config: FAST_JOINING_CONFIG,
+        httpPost,
+      });
+
+      const joinResult2 = await joiningService2.join();
+      t.equal(joinResult2.success, false, 'second join with same ID should fail');
+      t.ok(
+        joinResult2.error && joinResult2.error.includes('already registered'),
+        'error should mention already registered',
       );
-
-      t.pass('Duplicate node IDs are rejected');
     } finally {
-      if (service1) {
-        await service1.cleanup();
+      if (joiningService2) {
+        await joiningService2.cleanup().catch(() => {});
       }
-      if (service2) {
-        await service2.cleanup();
+      if (joiningService1) {
+        await joiningService1.cleanup().catch(() => {});
       }
       if (seedApi) {
-        await seedApi.shutdown();
+        await seedApi.shutdown().catch(() => {});
       }
+      if (bootstrapService) {
+        await bootstrapService.shutdown().catch(() => {});
+      }
+      await cleanupTestEnvironment();
     }
   });
 });

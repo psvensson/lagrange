@@ -148,7 +148,8 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         // Generate unified address components
-        fc.string({minLength: 1, maxLength: 15}).filter((s) => !s.includes('/') && s !== 'local-node'),
+        fc.string({minLength: 1, maxLength: 15})
+          .filter((s) => !s.includes('/') && s !== 'local-node'),
         fc.constantFrom('message-group', 'partition', 'lifecycle', 'service'),
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message

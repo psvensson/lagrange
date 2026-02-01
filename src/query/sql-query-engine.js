@@ -27,7 +27,7 @@ import {QueryExecutor} from './query-executor.js';
 import {TableCreationService} from './table-creation-service.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {LOG_MSG, TABLES} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {
   QUERY_AST_NODE,
   QUERY_AST_TYPE,

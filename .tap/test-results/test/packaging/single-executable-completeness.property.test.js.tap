@@ -14,179 +14,21 @@ TAP version 14
     ok 12 - cli entry version includes 1.0.0 for -v
     ok 13 - CLI responds correctly to help/version flags
     ok 14 - main entry exitCode is 0 for --help
-    not ok 15 - main entry produces output for --help
-      ---
-      at:
-        fileName: test/packaging/single-executable-completeness.property.test.js
-        lineNumber: 54
-        columnNumber: 7
-        typeName: Test
-      stack: >
-        Test.<anonymous>
-        (test/packaging/single-executable-completeness.property.test.js:54:7)
-      source: >2
-            const result = await runEntrypoint(mainEntry, {args: [flag], timeoutMs: 15000});
-            t.equal(result.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
-            t.ok(result.stdout.length > 0, `main entry produces output for ${flag}`);
-        ------^
-            if (flag === '--version' || flag === '-v') {
-              t.ok(result.stdout.includes('1.0.0'), `main entry version includes 1.0.0 for ${flag}`);
-      ...
-    
-    not ok 16 - main entry help includes usage/options for --help
-      ---
-      at:
-        fileName: test/packaging/single-executable-completeness.property.test.js
-        lineNumber: 58
-        columnNumber: 9
-        typeName: Test
-      stack: >
-        Test.<anonymous>
-        (test/packaging/single-executable-completeness.property.test.js:58:9)
-      source: >2
-              t.ok(result.stdout.includes('1.0.0'), `main entry version includes 1.0.0 for ${flag}`);
-            } else {
-              t.ok(result.stdout.includes('Usage') || result.stdout.includes('Options'), `main entry help includes usage/options for ${flag}`);
-        --------^
-            }
-          }
-      ...
-    
+    ok 15 - main entry produces output for --help
+    ok 16 - main entry help includes usage/options for --help
     ok 17 - main entry exitCode is 0 for -h
-    not ok 18 - main entry produces output for -h
-      ---
-      at:
-        fileName: test/packaging/single-executable-completeness.property.test.js
-        lineNumber: 54
-        columnNumber: 7
-        typeName: Test
-      stack: >
-        Test.<anonymous>
-        (test/packaging/single-executable-completeness.property.test.js:54:7)
-      source: >2
-            const result = await runEntrypoint(mainEntry, {args: [flag], timeoutMs: 15000});
-            t.equal(result.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
-            t.ok(result.stdout.length > 0, `main entry produces output for ${flag}`);
-        ------^
-            if (flag === '--version' || flag === '-v') {
-              t.ok(result.stdout.includes('1.0.0'), `main entry version includes 1.0.0 for ${flag}`);
-      ...
-    
-    not ok 19 - main entry help includes usage/options for -h
-      ---
-      at:
-        fileName: test/packaging/single-executable-completeness.property.test.js
-        lineNumber: 58
-        columnNumber: 9
-        typeName: Test
-      stack: >
-        Test.<anonymous>
-        (test/packaging/single-executable-completeness.property.test.js:58:9)
-      source: >2
-              t.ok(result.stdout.includes('1.0.0'), `main entry version includes 1.0.0 for ${flag}`);
-            } else {
-              t.ok(result.stdout.includes('Usage') || result.stdout.includes('Options'), `main entry help includes usage/options for ${flag}`);
-        --------^
-            }
-          }
-      ...
-    
+    ok 18 - main entry produces output for -h
+    ok 19 - main entry help includes usage/options for -h
     ok 20 - main entry exitCode is 0 for --version
-    not ok 21 - main entry produces output for --version
-      ---
-      at:
-        fileName: test/packaging/single-executable-completeness.property.test.js
-        lineNumber: 54
-        columnNumber: 7
-        typeName: Test
-      stack: >
-        Test.<anonymous>
-        (test/packaging/single-executable-completeness.property.test.js:54:7)
-      source: >2
-            const result = await runEntrypoint(mainEntry, {args: [flag], timeoutMs: 15000});
-            t.equal(result.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
-            t.ok(result.stdout.length > 0, `main entry produces output for ${flag}`);
-        ------^
-            if (flag === '--version' || flag === '-v') {
-              t.ok(result.stdout.includes('1.0.0'), `main entry version includes 1.0.0 for ${flag}`);
-      ...
-    
-    not ok 22 - main entry version includes 1.0.0 for --version
-      ---
-      at:
-        fileName: test/packaging/single-executable-completeness.property.test.js
-        lineNumber: 56
-        columnNumber: 9
-        typeName: Test
-      stack: >
-        Test.<anonymous>
-        (test/packaging/single-executable-completeness.property.test.js:56:9)
-      source: >2
-            t.ok(result.stdout.length > 0, `main entry produces output for ${flag}`);
-            if (flag === '--version' || flag === '-v') {
-              t.ok(result.stdout.includes('1.0.0'), `main entry version includes 1.0.0 for ${flag}`);
-        --------^
-            } else {
-              t.ok(result.stdout.includes('Usage') || result.stdout.includes('Options'), `main entry help includes usage/options for ${flag}`);
-      ...
-    
+    ok 21 - main entry produces output for --version
+    ok 22 - main entry version includes 1.0.0 for --version
     ok 23 - main entry exitCode is 0 for -v
-    not ok 24 - main entry produces output for -v
-      ---
-      at:
-        fileName: test/packaging/single-executable-completeness.property.test.js
-        lineNumber: 54
-        columnNumber: 7
-        typeName: Test
-      stack: >
-        Test.<anonymous>
-        (test/packaging/single-executable-completeness.property.test.js:54:7)
-      source: >2
-            const result = await runEntrypoint(mainEntry, {args: [flag], timeoutMs: 15000});
-            t.equal(result.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
-            t.ok(result.stdout.length > 0, `main entry produces output for ${flag}`);
-        ------^
-            if (flag === '--version' || flag === '-v') {
-              t.ok(result.stdout.includes('1.0.0'), `main entry version includes 1.0.0 for ${flag}`);
-      ...
-    
-    not ok 25 - main entry version includes 1.0.0 for -v
-      ---
-      at:
-        fileName: test/packaging/single-executable-completeness.property.test.js
-        lineNumber: 56
-        columnNumber: 9
-        typeName: Test
-      stack: >
-        Test.<anonymous>
-        (test/packaging/single-executable-completeness.property.test.js:56:9)
-      source: >2
-            t.ok(result.stdout.length > 0, `main entry produces output for ${flag}`);
-            if (flag === '--version' || flag === '-v') {
-              t.ok(result.stdout.includes('1.0.0'), `main entry version includes 1.0.0 for ${flag}`);
-        --------^
-            } else {
-              t.ok(result.stdout.includes('Usage') || result.stdout.includes('Options'), `main entry help includes usage/options for ${flag}`);
-      ...
-    
+    ok 24 - main entry produces output for -v
+    ok 25 - main entry version includes 1.0.0 for -v
     ok 26 - Main system responds correctly to help/version flags
     1..26
-not ok 1 - Single Executable Completeness - Property Test # time=5396.601ms
-  ---
-  at:
-    fileName: test/packaging/single-executable-completeness.property.test.js
-    lineNumber: 27
-    columnNumber: 1
-    isToplevel: true
-  source: |
-    const mainEntry = join(projectRoot, 'src/index.js');
-  
-    test('Single Executable Completeness - Property Test', async (t) => {
-    ^
-      // This test previously executed built SEA binaries with `PATH=""` to ensure
-      // Node.js wasn't required. In CI environments where spawning is blocked and
-  ...
+ok 1 - Single Executable Completeness - Property Test # time=7440.708ms
 
 1..1
-# { total: 26, pass: 18, fail: 8 }
-# time=5412.086ms
+# { total: 26, pass: 26 }
+# time=7461.124ms

@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: visible events are always within bounds
         ok 1 - Visible events are always within bounds
         1..1
-    ok 1 - visible events are always within bounds # time=4.634ms
+    ok 1 - visible events are always within bounds # time=6.723ms
     
     # Subtest: scroll position stays within valid range
         ok 1 - Scroll position stays within valid range
         1..1
-    ok 2 - scroll position stays within valid range # time=1.313ms
+    ok 2 - scroll position stays within valid range # time=1.404ms
     
     # Subtest: scrollToTop and scrollToBottom reach extremes
         ok 1 - scrollToTop and scrollToBottom reach extremes
         1..1
-    ok 3 - scrollToTop and scrollToBottom reach extremes # time=1.001ms
+    ok 3 - scrollToTop and scrollToBottom reach extremes # time=1.059ms
     
     # Subtest: visible events count is correct
         ok 1 - Visible events count is correct
         1..1
-    ok 4 - visible events count is correct # time=0.633ms
+    ok 4 - visible events count is correct # time=0.733ms
     
     # Subtest: scrolling preserves event order
         ok 1 - Scrolling preserves event order
         1..1
-    ok 5 - scrolling preserves event order # time=0.766ms
+    ok 5 - scrolling preserves event order # time=1.165ms
     
     # Subtest: empty panel handles scrolling gracefully
         ok 1 - Empty panel handles scrolling gracefully
         1..1
-    ok 6 - empty panel handles scrolling gracefully # time=0.707ms
+    ok 6 - empty panel handles scrolling gracefully # time=1.25ms
     
     1..6
-ok 1 - Property 52: Live Stream Panel Scrolling Bounds # time=13.429ms
+ok 1 - Property 52: Live Stream Panel Scrolling Bounds # time=18.832ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=19.885ms
+# time=26.618ms

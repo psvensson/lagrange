@@ -52,7 +52,7 @@ class EmptyComponentError extends Error {
    * @param {string} address - The address with the empty component.
    */
   constructor(component, address) {
-    super(ADDRESS_ERROR_MSG.COMPONENT_EMPTY(component));
+    super(ADDRESS_ERROR_MSG.componentEmpty(component));
     this.name = ADDRESS_ERROR_NAME.EMPTY_COMPONENT;
     this.component = component;
     this.address = address;
@@ -328,7 +328,7 @@ class AddressManager {
 
     if (parts.length !== ADDRESS_VALIDATE.COMPONENT_COUNT) {
       throw new MalformedAddressError(
-        ADDRESS_ERROR_MSG.MUST_HAVE_COMPONENTS(parts.length),
+        ADDRESS_ERROR_MSG.mustHaveComponents(parts.length),
         address,
       );
     }
@@ -385,7 +385,7 @@ class AddressManager {
     if (parts.length !== ADDRESS_VALIDATE.COMPONENT_COUNT) {
       return {
         valid: false,
-        error: ADDRESS_ERROR_MSG.MUST_HAVE_COMPONENTS(parts.length),
+        error: ADDRESS_ERROR_MSG.mustHaveComponents(parts.length),
       };
     }
 
@@ -394,7 +394,7 @@ class AddressManager {
     if (!nodeId) {
       return {
         valid: false,
-        error: ADDRESS_ERROR_MSG.COMPONENT_CANNOT_BE_EMPTY(
+        error: ADDRESS_ERROR_MSG.componentCannotBeEmpty(
           ADDRESS_COMPONENT.NODE_ID,
         ),
       };
@@ -402,7 +402,7 @@ class AddressManager {
     if (!serviceType) {
       return {
         valid: false,
-        error: ADDRESS_ERROR_MSG.COMPONENT_CANNOT_BE_EMPTY(
+        error: ADDRESS_ERROR_MSG.componentCannotBeEmpty(
           ADDRESS_COMPONENT.SERVICE_TYPE,
         ),
       };
@@ -410,7 +410,7 @@ class AddressManager {
     if (!serviceId) {
       return {
         valid: false,
-        error: ADDRESS_ERROR_MSG.COMPONENT_CANNOT_BE_EMPTY(
+        error: ADDRESS_ERROR_MSG.componentCannotBeEmpty(
           ADDRESS_COMPONENT.SERVICE_ID,
         ),
       };

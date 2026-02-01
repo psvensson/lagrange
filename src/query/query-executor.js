@@ -29,6 +29,7 @@ import {
   QUERY_MESSAGE_TYPE,
   QUERY_OPERATOR,
   QUERY_AST_NODE,
+  QUERY_RESPONSE_TYPE,
   QUERY_SQL,
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
@@ -632,6 +633,34 @@ class QueryExecutor {
               rows: response.rows || [],
               changes: response.changes,
             };
+          }
+
+          // Handle leader redirect response - immediately retry with provided address
+          if (response.redirect === QUERY_RESPONSE_TYPE.LEADER_REDIRECT &&
+              response.leaderAddress) {
+            this.logger.debug(QUERY_LOG_MSG.FOLLOWING_LEADER_REDIRECT, {
+              partitionId,
+              fromAddress: address,
+              leaderAddress: response.leaderAddress,
+            });
+
+            const redirectResponse = await this.messageRouter.deliver(
+              response.leaderAddress,
+              {type: QUERY_MESSAGE_TYPE.QUERY, sql, params},
+            );
+
+            if (redirectResponse.acknowledged && redirectResponse.success) {
+              return {
+                partitionId,
+                success: true,
+                rows: redirectResponse.rows || [],
+                changes: redirectResponse.changes,
+              };
+            }
+
+            // Redirect target also failed - continue to next candidate
+            lastError = redirectResponse.error || ERRORS.QUERY_FAILED;
+            continue;
           }
 
           if (response.noHandler) {

@@ -232,7 +232,7 @@ class ReplicaLifecycleManager extends EventEmitter {
         nodeId: this.nodeId,
       });
       throw new Error(
-        REPLICA_LIFECYCLE_ERROR_MSG.INVALID_TRANSITION(currentStatus, newStatus),
+        REPLICA_LIFECYCLE_ERROR_MSG.invalidTransition(currentStatus, newStatus),
       );
     }
 
@@ -269,7 +269,7 @@ class ReplicaLifecycleManager extends EventEmitter {
           newStatus,
           error: result.error,
         });
-        throw new Error(REPLICA_LIFECYCLE_ERROR_MSG.STATUS_UPDATE_FAILED(result.error));
+        throw new Error(REPLICA_LIFECYCLE_ERROR_MSG.statusUpdateFailed(result.error));
       }
     }
 
@@ -293,20 +293,20 @@ class ReplicaLifecycleManager extends EventEmitter {
    */
   async handleCreateReplica(message) {
     const {
-      request_id,
-      partition_id,
-      table_name,
-      replica_id,
-      leader_address,
-      key_range,
-      schema,
+      request_id: requestId,
+      partition_id: partitionId,
+      table_name: tableName,
+      replica_id: replicaId,
+      leader_address: _leaderAddress,
+      key_range: _keyRange,
+      schema: _schema,
     } = message;
 
     this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.CREATE_REQUEST, {
-      requestId: request_id,
-      partitionId: partition_id,
-      replicaId: replica_id,
-      tableName: table_name,
+      requestId,
+      partitionId,
+      replicaId,
+      tableName,
       nodeId: this.nodeId,
       usingReplicaHandler: !!this.replicaHandler,
     });
@@ -324,30 +324,30 @@ class ReplicaLifecycleManager extends EventEmitter {
    */
   async delegateCreateToHandler(message) {
     const {
-      request_id,
-      partition_id,
-      replica_id,
-      table_name,
-      table_id,
+      request_id: requestId,
+      partition_id: partitionId,
+      replica_id: replicaId,
+      table_name: tableName,
+      table_id: tableId,
       schema,
-      key_range,
-      leader_address,
-      replica_ids,
-      peer_addresses,
+      key_range: keyRange,
+      leader_address: leaderAddress,
+      replica_ids: replicaIds,
+      peer_addresses: peerAddresses,
     } = message;
 
     // Convert message format for handler
     const handlerRequest = {
-      operationId: request_id,
-      partitionId: partition_id,
-      replicaId: replica_id,
-      tableName: table_name,
-      tableId: table_id,
+      operationId: requestId,
+      partitionId,
+      replicaId,
+      tableName,
+      tableId,
       schema,
-      keyRange: key_range,
-      leaderAddress: leader_address,
-      replicaIds: replica_ids,
-      peerAddresses: peer_addresses || [],
+      keyRange,
+      leaderAddress,
+      replicaIds,
+      peerAddresses: peerAddresses || [],
     };
 
     const response = await this.replicaHandler.handleCreateReplica(handlerRequest);
@@ -355,7 +355,7 @@ class ReplicaLifecycleManager extends EventEmitter {
     // Convert response format for lifecycle acknowledgments
     return {
       type: MessageType.CREATE_REPLICA_ACK,
-      request_id,
+      request_id: requestId,
       status: response.status,
       replica_id: response.replicaId,
       node_id: this.nodeId,
@@ -371,12 +371,17 @@ class ReplicaLifecycleManager extends EventEmitter {
    * @return {Promise<Object>} ACK response.
    */
   async handleRemoveReplica(message) {
-    const {request_id, partition_id, replica_id, reason} = message;
+    const {
+      request_id: requestId,
+      partition_id: partitionId,
+      replica_id: replicaId,
+      reason,
+    } = message;
 
     this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.REMOVE_REQUEST, {
-      requestId: request_id,
-      partitionId: partition_id,
-      replicaId: replica_id,
+      requestId,
+      partitionId,
+      replicaId,
       reason,
       nodeId: this.nodeId,
       usingReplicaHandler: !!this.replicaHandler,
@@ -394,13 +399,18 @@ class ReplicaLifecycleManager extends EventEmitter {
    * @private
    */
   async delegateRemoveToHandler(message) {
-    const {request_id, partition_id, replica_id, reason} = message;
+    const {
+      request_id: requestId,
+      partition_id: partitionId,
+      replica_id: replicaId,
+      reason,
+    } = message;
 
     // Convert message format for handler
     const handlerRequest = {
-      operationId: request_id,
-      partitionId: partition_id,
-      replicaId: replica_id,
+      operationId: requestId,
+      partitionId,
+      replicaId,
       reason,
     };
 
@@ -409,7 +419,7 @@ class ReplicaLifecycleManager extends EventEmitter {
     // Convert response format for lifecycle acknowledgments
     return {
       type: MessageType.REMOVE_REPLICA_ACK,
-      request_id,
+      request_id: requestId,
       status: response.status,
       replica_id: response.replicaId,
       node_id: this.nodeId,
@@ -432,7 +442,7 @@ class ReplicaLifecycleManager extends EventEmitter {
 
     const replica = this.localReplicas.get(replicaId);
     if (!replica || !replica.service) {
-      throw new Error(REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_SERVICE_MISSING(replicaId));
+      throw new Error(REPLICA_LIFECYCLE_ERROR_MSG.replicaServiceMissing(replicaId));
     }
 
     // The actual sync is handled by the Raft implementation
@@ -559,11 +569,11 @@ class ReplicaLifecycleManager extends EventEmitter {
     });
 
     for (const service of services) {
-      const {service_id, partition_id, status} = service;
+      const {service_id: serviceId, partition_id: partitionId, status} = service;
 
       this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_PROCESSING, {
-        replicaId: service_id,
-        partitionId: partition_id,
+        replicaId: serviceId,
+        partitionId,
         status,
         nodeId: this.nodeId,
       });
@@ -573,7 +583,7 @@ class ReplicaLifecycleManager extends EventEmitter {
           // Mark 'starting'/'syncing' replicas as 'failed'
           await this.cdcIntegrationService.updateSystemTableRow(
             SystemTableName.SERVICES,
-            {service_id},
+            {service_id: serviceId},
             {
               status: ReplicaStatus.FAILED,
               error_message: REPLICA_LIFECYCLE_ERROR_MSG.RECOVERY_CLEANUP_ERROR,
@@ -581,10 +591,10 @@ class ReplicaLifecycleManager extends EventEmitter {
           );
 
           // Clean up local resources
-          await this.cleanupReplicaResources(partition_id, service_id);
+          await this.cleanupReplicaResources(partitionId, serviceId);
 
           this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_MARKED_FAILED, {
-            replicaId: service_id,
+            replicaId: serviceId,
             previousStatus: status,
             nodeId: this.nodeId,
           });
@@ -592,26 +602,26 @@ class ReplicaLifecycleManager extends EventEmitter {
           // Complete removal for 'stopping' replicas
           await this.cdcIntegrationService.updateSystemTableRow(
             SystemTableName.SERVICES,
-            {service_id},
+            {service_id: serviceId},
             {status: ReplicaStatus.STOPPED},
           );
 
           await this.cdcIntegrationService.deleteSystemTableRow(
             SystemTableName.SERVICES,
-            {service_id},
+            {service_id: serviceId},
           );
 
           // Clean up local resources
-          await this.cleanupReplicaResources(partition_id, service_id);
+          await this.cleanupReplicaResources(partitionId, serviceId);
 
           this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_COMPLETED_REMOVAL, {
-            replicaId: service_id,
+            replicaId: serviceId,
             nodeId: this.nodeId,
           });
         }
       } catch (error) {
         this.logger.error(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_FAILED, {
-          replicaId: service_id,
+          replicaId: serviceId,
           status,
           error: error.message,
           nodeId: this.nodeId,

@@ -27,7 +27,7 @@ const LOGGING_LOG_MSG = Object.freeze({
   LOGS_TABLE_READY: 'Logs table ready, flushing buffer',
   LOGS_TABLE_SERVICE_INITIALIZED: 'LogsTableService initialized',
   LOGS_TABLE_SERVICE_SHUTDOWN: 'LogsTableService shutdown',
-  CONNECTED_LOGGING_SERVICE: (count) =>
+  connectedLoggingService: (count) =>
     `Connected to LoggingService, flushed ${count} buffered entries`,
 });
 
@@ -60,8 +60,8 @@ const LOG_QUERY_LOG_MSG = Object.freeze({
 
 const LOG_QUERY_ERROR_MSG = Object.freeze({
   ENGINE_NOT_AVAILABLE: 'SQL query engine not available',
-  INVALID_ORDER_BY: (orderBy) => `Invalid orderBy column: ${orderBy}`,
-  INVALID_ORDER_DIR: (orderDir) => `Invalid orderDir value: ${orderDir}`,
+  invalidOrderBy: (orderBy) => `Invalid orderBy column: ${orderBy}`,
+  invalidOrderDir: (orderDir) => `Invalid orderDir value: ${orderDir}`,
 });
 
 const LOG_QUERY_ERROR_CODE = Object.freeze({

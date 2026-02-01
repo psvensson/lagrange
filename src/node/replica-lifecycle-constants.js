@@ -99,10 +99,10 @@ const REPLICA_LIFECYCLE_LOG_MSG = Object.freeze({
 });
 
 const REPLICA_LIFECYCLE_ERROR_MSG = Object.freeze({
-  INVALID_TRANSITION: (currentStatus, newStatus) =>
+  invalidTransition: (currentStatus, newStatus) =>
     `Invalid status transition: ${currentStatus} -> ${newStatus}`,
-  STATUS_UPDATE_FAILED: (error) => `Failed to update replica status: ${error}`,
-  REPLICA_SERVICE_MISSING: (replicaId) => `Replica service not found: ${replicaId}`,
+  statusUpdateFailed: (error) => `Failed to update replica status: ${error}`,
+  replicaServiceMissing: (replicaId) => `Replica service not found: ${replicaId}`,
   RECOVERY_CLEANUP_ERROR: 'Node recovery cleanup',
   MISSING_SYSTEM_TABLE_CACHE: 'ReplicaLifecycleManager requires systemTableCache',
   REPLICA_HANDLER_REQUIRED:

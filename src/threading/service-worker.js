@@ -86,11 +86,11 @@ async function executeOperation(task) {
     // Delegate to service handler
     const handler = getServiceHandler(serviceId);
     if (!handler) {
-      throw new Error(THREADING_ERROR_MSG.NO_HANDLER_REGISTERED(serviceId));
+      throw new Error(THREADING_ERROR_MSG.noHandlerRegistered(serviceId));
     }
 
     if (typeof handler[operation] !== 'function') {
-      throw new Error(THREADING_ERROR_MSG.UNKNOWN_OPERATION(operation, serviceId));
+      throw new Error(THREADING_ERROR_MSG.unknownOperation(operation, serviceId));
     }
 
     return await handler[operation](data);

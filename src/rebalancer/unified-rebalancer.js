@@ -247,7 +247,6 @@ class UnifiedRebalancer extends EventEmitter {
       entityType: this.entityType,
       hasCoordinator: !!coordinator,
     });
-
   }
 
   /**
@@ -1025,32 +1024,40 @@ class UnifiedRebalancer extends EventEmitter {
     // Add the ADD moves to the moves array
     moves.push(...addMoves);
 
-    // CRITICAL: If there are any ADD moves, do NOT include REMOVE moves
-    // (except for failed replica cleanup). This ensures ADD operations
-    // complete and replicas become active BEFORE any REMOVE operations start.
-    // The rebalancer will generate REMOVE moves in a subsequent cycle after
-    // the ADDs have stabilized.
+    // CRITICAL: If there are any ADD moves, only include critical REMOVE moves.
+    // Critical REMOVE moves are:
+    // 1. Failed replicas (reason: 'replica_failed')
+    // 2. Replicas on nodes not in target placement (reason: 'node_not_in_target')
     //
-    // This prevents the race condition where:
-    // 1. ADD move is initiated (async, returns immediately)
-    // 2. REMOVE move executes before ADD completes
-    // 3. System loses replicas and queries fail
+    // The 'node_not_in_target' case is critical because it means the node has
+    // replicas that should be redistributed to other nodes. Without removing
+    // these, the system accumulates excess replicas as nodes join.
+    //
+    // Non-critical REMOVE moves (reason: 'spread_replicas') are deferred until
+    // ADD moves complete to prevent data loss during rebalancing.
     if (addMoves.length > 0) {
-      // Filter out non-critical REMOVE moves when we have ADDs pending
+      // Include critical REMOVE moves: failed replicas AND replicas on wrong nodes
       const criticalRemoves = moves.filter(
-        (m) => m.type === MoveType.REMOVE && m.reason === 'replica_failed',
+        (m) => m.type === MoveType.REMOVE &&
+          (m.reason === 'replica_failed' || m.reason === 'node_not_in_target'),
       );
-      // Return only ADD moves and critical removes (failed replicas)
+      // Return ADD moves and critical removes
       const filteredMoves = [...addMoves, ...criticalRemoves];
 
-      this.logger.info(REBALANCER_LOG_MSG.DEFER_REMOVE, {
-        entityId: this.entityId,
-        addMoveCount: addMoves.length,
-        deferredRemoveCount: moves.filter(
-          (m) => m.type === MoveType.REMOVE && m.reason !== 'replica_failed',
-        ).length,
-        criticalRemoveCount: criticalRemoves.length,
-      });
+      const deferredCount = moves.filter(
+        (m) => m.type === MoveType.REMOVE &&
+          m.reason !== 'replica_failed' &&
+          m.reason !== 'node_not_in_target',
+      ).length;
+
+      if (criticalRemoves.length > 0 || deferredCount > 0) {
+        this.logger.info(REBALANCER_LOG_MSG.INCLUDE_CRITICAL_REMOVE, {
+          entityId: this.entityId,
+          addMoveCount: addMoves.length,
+          criticalRemoveCount: criticalRemoves.length,
+          deferredRemoveCount: deferredCount,
+        });
+      }
 
       return filteredMoves;
     }
@@ -1242,12 +1249,8 @@ class UnifiedRebalancer extends EventEmitter {
 
       for (let i = 0; i < nodeMoves.length; i += batchSize) {
         const batch = nodeMoves.slice(i, i + batchSize);
-        const batchResults = await Promise.all(batch.map(async (move) => {
-          try {
-            return await this.executeMove(move);
-          } catch (error) {
-            throw error;
-          }
+        const batchResults = await Promise.all(batch.map((move) => {
+          return this.executeMove(move);
         }));
 
         results.push(...batchResults);
@@ -1627,6 +1630,71 @@ class UnifiedRebalancer extends EventEmitter {
     this.scheduledCheck = setTimeout(() => {
       this.checkRebalance();
     }, this.criticalCheckDelayMs);
+  }
+
+  /**
+   * Handle node state change notification from CDC.
+   * Called by CDCIntegrationService when a node's state changes.
+   * Emits 'nodeStateChange' event and optionally 'rebalanceNeeded' event.
+   * @param {string} nodeId - The node ID.
+   * @param {string} oldState - The previous state.
+   * @param {string} newState - The new state.
+   */
+  onNodeStateChange(nodeId, oldState, newState) {
+    // Always emit nodeStateChange event for observability
+    this.emit(REBALANCER_EVENT.NODE_STATE_CHANGE, {
+      nodeId,
+      oldState,
+      newState,
+      timestamp: Date.now(),
+    });
+
+    // Non-leaders still emit events but don't trigger rebalancing
+    if (!this.isLeader) {
+      return;
+    }
+
+    this.logger.debug(REBALANCER_LOG_MSG.NODE_STATE_CHANGE, {
+      entityId: this.entityId,
+      nodeId,
+      oldState,
+      newState,
+    });
+
+    // Determine if rebalancing is needed based on state transition
+    let rebalanceNeeded = false;
+    let reason = null;
+
+    // Node became ready - may need to rebalance to use this node
+    if (newState === NodeStatus.ACTIVE && oldState !== NodeStatus.ACTIVE) {
+      rebalanceNeeded = true;
+      reason = 'node_became_ready';
+    }
+
+    // Node left active state - may need to relocate replicas
+    if (oldState === NodeStatus.ACTIVE && newState !== NodeStatus.ACTIVE) {
+      rebalanceNeeded = true;
+      reason = 'node_left_ready';
+    }
+
+    // Node failed - critical, need immediate action
+    if (newState === NodeStatus.FAILED) {
+      rebalanceNeeded = true;
+      reason = 'node_failed';
+    }
+
+    if (rebalanceNeeded) {
+      // Emit rebalanceNeeded event for observability
+      this.emit(REBALANCER_EVENT.REBALANCE_NEEDED, {
+        nodeId,
+        oldState,
+        newState,
+        reason,
+        timestamp: Date.now(),
+      });
+
+      this.triggerImmediateCheck(reason);
+    }
   }
 
   /**

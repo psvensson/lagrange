@@ -35,15 +35,19 @@ const PARTITION_SERVICE_SQL = Object.freeze({
       )
     `,
   SELECT_RAFT_STATE_VALUE: 'SELECT value FROM _raft_state WHERE key = ?',
-  SELECT_RAFT_LOGS: 'SELECT log_index, term, command, timestamp FROM _raft_log ORDER BY log_index',
+  SELECT_RAFT_LOGS:
+    'SELECT log_index, term, command, timestamp FROM _raft_log ORDER BY log_index',
   UPSERT_RAFT_STATE: 'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
-  UPSERT_RAFT_LOG: 'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)',
+  UPSERT_RAFT_LOG:
+    'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) ' +
+    'VALUES (?, ?, ?, ?)',
   DELETE_RAFT_LOG_FROM: 'DELETE FROM _raft_log WHERE log_index >= ?',
   BEGIN_IMMEDIATE: 'BEGIN IMMEDIATE',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
   UPDATE_SERVICE_RAFT_ROLE:
-    `UPDATE ${TABLES.SERVICES} SET raft_role = ?, updated_at = ? WHERE (service_id = ?)`,
+    `UPDATE ${TABLES.SERVICES} SET raft_role = ?, updated_at = ? ` +
+    'WHERE (service_id = ?)',
 });
 
 const PARTITION_SERVICE_SQL_FRAGMENT = Object.freeze({
@@ -55,7 +59,7 @@ const PARTITION_SERVICE_SQL_FRAGMENT = Object.freeze({
   OPEN_PAREN: '(',
   CLOSE_PAREN: ')',
   COMMA: ',',
-  SINGLE_QUOTE: "'",
+  SINGLE_QUOTE: '\'',
   DOUBLE_QUOTE: '"',
   NULL_VALUE: 'NULL',
 });
@@ -69,6 +73,10 @@ const PARTITION_SERVICE_MESSAGE_TYPE = Object.freeze({
   FORWARD_WRITE: 'FORWARD_WRITE',
   SYSTEM_TABLE_WRITE: 'SYSTEM_TABLE_WRITE',
   QUERY: 'QUERY',
+});
+
+const PARTITION_SERVICE_RESPONSE = Object.freeze({
+  LEADER_REDIRECT: 'LEADER_REDIRECT',
 });
 
 const PARTITION_SERVICE_OPERATION = Object.freeze({
@@ -130,9 +138,9 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
 
 const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
   ADD_WS_CONNECTION_STATE:
-    "ADD COLUMN ws_connection_state TEXT DEFAULT 'disconnected'",
+    'ADD COLUMN ws_connection_state TEXT DEFAULT \'disconnected\'',
   ADD_CAPABILITIES:
-    "ADD COLUMN capabilities TEXT DEFAULT '[]'",
+    'ADD COLUMN capabilities TEXT DEFAULT \'[]\'',
   ADD_READY_LEASE_EXPIRES_AT:
     'ADD COLUMN ready_lease_expires_at INTEGER',
   ADD_LEADER_NODE_ID:
@@ -165,6 +173,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   LEARNER_PROMOTION_SCHEDULED: 'Learner promotion check scheduled',
   LEARNER_PROMOTED_TO_FOLLOWER: 'Learner promoted to follower - now participating in elections',
   LEARNER_PROMOTION_CHECK: 'Checking learner promotion eligibility',
+  LEARNER_PROMOTION_DEFERRED: 'Learner promotion deferred - would cause even voter count',
+  LEARNER_PROMOTION_ALLOWED_MULTI: 'Learner promotion allowed - multiple learners will reach odd',
   CLEARED_LIFERAFT_TIMERS: 'Cleared liferaft timers for deferred election',
   BECAME_LEADER: 'Became leader (liferaft)',
   LEADER_CHANGED: 'Leader changed',
@@ -188,6 +198,7 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   UNKNOWN_MESSAGE_TYPE: 'Unknown application message type',
   HANDLING_SYSTEM_TABLE_WRITE: 'Handling system table write from remote node',
   HANDLING_REMOTE_QUERY: 'Handling remote query',
+  REDIRECTING_WRITE_TO_LEADER: 'Redirecting write to leader',
   APPLYING_COMMITTED_ENTRY: 'Applying committed entry',
   TRANSACTION_COMMIT_APPLIED: 'Transaction commit entry applied',
   BEGINNING_TRANSACTION: 'Beginning transaction',
@@ -227,9 +238,9 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   REQUIRE_REPLICA_ID: 'PartitionService requires replicaId',
   INVALID_MESSAGE: 'Invalid message',
   INVALID_FORWARD_WRITE: 'Invalid FORWARD_WRITE message',
-  UNKNOWN_MESSAGE: (type) => `Unknown message type: ${type}`,
-  UNKNOWN_OPERATION: (operation) => `Unknown operation: ${operation}`,
-  FORWARD_WRITE_FAILED: (message) =>
+  unknownMessage: (type) => `Unknown message type: ${type}`,
+  unknownOperation: (operation) => `Unknown operation: ${operation}`,
+  forwardWriteFailed: (message) =>
     `Failed to forward write to leader: ${message}`,
   SYSTEM_TABLE_WRITE_FAILED: 'System table write failed',
   MISSING_SQL_QUERY: 'Missing SQL query',
@@ -328,6 +339,7 @@ export {
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,
   PARTITION_SERVICE_REASON,
+  PARTITION_SERVICE_RESPONSE,
   PARTITION_SERVICE_ROLE,
   PARTITION_SERVICE_SQL,
   PARTITION_SERVICE_SQL_FRAGMENT,

@@ -21,11 +21,11 @@ const VERSION = ENTRYPOINT_VERSION;
 function checkVersionFlag() {
   const args = process.argv.slice(2);
   if (args.includes(ENTRYPOINT_FLAG.VERSION_LONG) || args.includes(ENTRYPOINT_FLAG.VERSION_SHORT)) {
-    console.log(ENTRYPOINT_TEXT.VERSION_LINE(VERSION));
+    console.log(ENTRYPOINT_TEXT.versionLine(VERSION));
     return true;
   }
   if (args.includes(ENTRYPOINT_FLAG.HELP_LONG) || args.includes(ENTRYPOINT_FLAG.HELP_SHORT)) {
-    console.log(ENTRYPOINT_TEXT.HEADER_LINE(VERSION));
+    console.log(ENTRYPOINT_TEXT.headerLine(VERSION));
     console.log('');
     console.log(ENTRYPOINT_TEXT.USAGE_LINE);
     console.log('');

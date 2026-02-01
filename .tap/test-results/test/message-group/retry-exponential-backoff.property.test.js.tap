@@ -1,221 +1,221 @@
 TAP version 14
 # Subtest: Property 24: Exponential backoff delays increase exponentially
     ok 1 - First attempt should have no delay
-    ok 2 - Delay should increase or be capped: 11 -> 21
-    ok 3 - Delay should increase or be capped: 21 -> 40
-    ok 4 - Delay should increase or be capped: 40 -> 77
-    ok 5 - Delay should increase or be capped: 77 -> 146
-    ok 6 - Delay 0 should not exceed max 504
-    ok 7 - Delay 11 should not exceed max 504
-    ok 8 - Delay 21 should not exceed max 504
-    ok 9 - Delay 40 should not exceed max 504
-    ok 10 - Delay 77 should not exceed max 504
-    ok 11 - Delay 146 should not exceed max 504
+    ok 2 - Delay should increase or be capped: 12 -> 29
+    ok 3 - Delay should increase or be capped: 29 -> 73
+    ok 4 - Delay should increase or be capped: 73 -> 178
+    ok 5 - Delay should increase or be capped: 178 -> 438
+    ok 6 - Delay 0 should not exceed max 1772
+    ok 7 - Delay 12 should not exceed max 1772
+    ok 8 - Delay 29 should not exceed max 1772
+    ok 9 - Delay 73 should not exceed max 1772
+    ok 10 - Delay 178 should not exceed max 1772
+    ok 11 - Delay 438 should not exceed max 1772
     ok 12 - First attempt should have no delay
-    ok 13 - Delay should increase or be capped: 12 -> 18
-    ok 14 - Delay should increase or be capped: 18 -> 27
-    ok 15 - Delay should increase or be capped: 27 -> 41
-    ok 16 - Delay should increase or be capped: 41 -> 61
-    ok 17 - Delay 0 should not exceed max 818
-    ok 18 - Delay 12 should not exceed max 818
-    ok 19 - Delay 18 should not exceed max 818
-    ok 20 - Delay 27 should not exceed max 818
-    ok 21 - Delay 41 should not exceed max 818
-    ok 22 - Delay 61 should not exceed max 818
+    ok 13 - Delay should increase or be capped: 37 -> 56
+    ok 14 - Delay should increase or be capped: 56 -> 83
+    ok 15 - Delay should increase or be capped: 83 -> 125
+    ok 16 - Delay should increase or be capped: 125 -> 187
+    ok 17 - Delay 0 should not exceed max 945
+    ok 18 - Delay 37 should not exceed max 945
+    ok 19 - Delay 56 should not exceed max 945
+    ok 20 - Delay 83 should not exceed max 945
+    ok 21 - Delay 125 should not exceed max 945
+    ok 22 - Delay 187 should not exceed max 945
     ok 23 - First attempt should have no delay
-    ok 24 - Delay should increase or be capped: 86 -> 248
-    ok 25 - Delay should increase or be capped: 248 -> 504
-    ok 26 - Delay should increase or be capped: 504 -> 504
-    ok 27 - Delay should increase or be capped: 504 -> 504
-    ok 28 - Delay 0 should not exceed max 504
-    ok 29 - Delay 86 should not exceed max 504
-    ok 30 - Delay 248 should not exceed max 504
-    ok 31 - Delay 504 should not exceed max 504
-    ok 32 - Delay 504 should not exceed max 504
-    ok 33 - Delay 504 should not exceed max 504
+    ok 24 - Delay should increase or be capped: 12 -> 36
+    ok 25 - Delay should increase or be capped: 36 -> 108
+    ok 26 - Delay should increase or be capped: 108 -> 324
+    ok 27 - Delay should increase or be capped: 324 -> 972
+    ok 28 - Delay 0 should not exceed max 2000
+    ok 29 - Delay 12 should not exceed max 2000
+    ok 30 - Delay 36 should not exceed max 2000
+    ok 31 - Delay 108 should not exceed max 2000
+    ok 32 - Delay 324 should not exceed max 2000
+    ok 33 - Delay 972 should not exceed max 2000
     ok 34 - First attempt should have no delay
-    ok 35 - Delay should increase or be capped: 61 -> 118
-    ok 36 - Delay should increase or be capped: 118 -> 228
-    ok 37 - Delay should increase or be capped: 228 -> 440
-    ok 38 - Delay should increase or be capped: 440 -> 501
-    ok 39 - Delay 0 should not exceed max 501
-    ok 40 - Delay 61 should not exceed max 501
-    ok 41 - Delay 118 should not exceed max 501
-    ok 42 - Delay 228 should not exceed max 501
-    ok 43 - Delay 440 should not exceed max 501
-    ok 44 - Delay 501 should not exceed max 501
+    ok 35 - Delay should increase or be capped: 12 -> 36
+    ok 36 - Delay should increase or be capped: 36 -> 108
+    ok 37 - Delay should increase or be capped: 108 -> 324
+    ok 38 - Delay should increase or be capped: 324 -> 972
+    ok 39 - Delay 0 should not exceed max 1502
+    ok 40 - Delay 12 should not exceed max 1502
+    ok 41 - Delay 36 should not exceed max 1502
+    ok 42 - Delay 108 should not exceed max 1502
+    ok 43 - Delay 324 should not exceed max 1502
+    ok 44 - Delay 972 should not exceed max 1502
     ok 45 - First attempt should have no delay
-    ok 46 - Delay should increase or be capped: 13 -> 27
-    ok 47 - Delay should increase or be capped: 27 -> 57
-    ok 48 - Delay should increase or be capped: 57 -> 120
-    ok 49 - Delay should increase or be capped: 120 -> 251
-    ok 50 - Delay 0 should not exceed max 500
-    ok 51 - Delay 13 should not exceed max 500
-    ok 52 - Delay 27 should not exceed max 500
-    ok 53 - Delay 57 should not exceed max 500
-    ok 54 - Delay 120 should not exceed max 500
-    ok 55 - Delay 251 should not exceed max 500
+    ok 46 - Delay should increase or be capped: 12 -> 33
+    ok 47 - Delay should increase or be capped: 33 -> 89
+    ok 48 - Delay should increase or be capped: 89 -> 243
+    ok 49 - Delay should increase or be capped: 243 -> 502
+    ok 50 - Delay 0 should not exceed max 502
+    ok 51 - Delay 12 should not exceed max 502
+    ok 52 - Delay 33 should not exceed max 502
+    ok 53 - Delay 89 should not exceed max 502
+    ok 54 - Delay 243 should not exceed max 502
+    ok 55 - Delay 502 should not exceed max 502
     ok 56 - First attempt should have no delay
-    ok 57 - Delay should increase or be capped: 15 -> 24
-    ok 58 - Delay should increase or be capped: 24 -> 37
-    ok 59 - Delay should increase or be capped: 37 -> 59
-    ok 60 - Delay should increase or be capped: 59 -> 92
-    ok 61 - Delay 0 should not exceed max 1391
-    ok 62 - Delay 15 should not exceed max 1391
-    ok 63 - Delay 24 should not exceed max 1391
-    ok 64 - Delay 37 should not exceed max 1391
-    ok 65 - Delay 59 should not exceed max 1391
-    ok 66 - Delay 92 should not exceed max 1391
+    ok 57 - Delay should increase or be capped: 79 -> 119
+    ok 58 - Delay should increase or be capped: 119 -> 178
+    ok 59 - Delay should increase or be capped: 178 -> 267
+    ok 60 - Delay should increase or be capped: 267 -> 400
+    ok 61 - Delay 0 should not exceed max 1121
+    ok 62 - Delay 79 should not exceed max 1121
+    ok 63 - Delay 119 should not exceed max 1121
+    ok 64 - Delay 178 should not exceed max 1121
+    ok 65 - Delay 267 should not exceed max 1121
+    ok 66 - Delay 400 should not exceed max 1121
     ok 67 - First attempt should have no delay
-    ok 68 - Delay should increase or be capped: 17 -> 51
-    ok 69 - Delay should increase or be capped: 51 -> 153
-    ok 70 - Delay should increase or be capped: 153 -> 459
-    ok 71 - Delay should increase or be capped: 459 -> 1377
-    ok 72 - Delay 0 should not exceed max 1644
-    ok 73 - Delay 17 should not exceed max 1644
-    ok 74 - Delay 51 should not exceed max 1644
-    ok 75 - Delay 153 should not exceed max 1644
-    ok 76 - Delay 459 should not exceed max 1644
-    ok 77 - Delay 1377 should not exceed max 1644
+    ok 68 - Delay should increase or be capped: 42 -> 108
+    ok 69 - Delay should increase or be capped: 108 -> 279
+    ok 70 - Delay should increase or be capped: 279 -> 719
+    ok 71 - Delay should increase or be capped: 719 -> 1853
+    ok 72 - Delay 0 should not exceed max 1997
+    ok 73 - Delay 42 should not exceed max 1997
+    ok 74 - Delay 108 should not exceed max 1997
+    ok 75 - Delay 279 should not exceed max 1997
+    ok 76 - Delay 719 should not exceed max 1997
+    ok 77 - Delay 1853 should not exceed max 1997
     ok 78 - First attempt should have no delay
-    ok 79 - Delay should increase or be capped: 15 -> 45
-    ok 80 - Delay should increase or be capped: 45 -> 135
-    ok 81 - Delay should increase or be capped: 135 -> 405
-    ok 82 - Delay should increase or be capped: 405 -> 506
-    ok 83 - Delay 0 should not exceed max 506
-    ok 84 - Delay 15 should not exceed max 506
-    ok 85 - Delay 45 should not exceed max 506
-    ok 86 - Delay 135 should not exceed max 506
-    ok 87 - Delay 405 should not exceed max 506
-    ok 88 - Delay 506 should not exceed max 506
+    ok 79 - Delay should increase or be capped: 45 -> 83
+    ok 80 - Delay should increase or be capped: 83 -> 152
+    ok 81 - Delay should increase or be capped: 152 -> 279
+    ok 82 - Delay should increase or be capped: 279 -> 512
+    ok 83 - Delay 0 should not exceed max 1392
+    ok 84 - Delay 45 should not exceed max 1392
+    ok 85 - Delay 83 should not exceed max 1392
+    ok 86 - Delay 152 should not exceed max 1392
+    ok 87 - Delay 279 should not exceed max 1392
+    ok 88 - Delay 512 should not exceed max 1392
     ok 89 - First attempt should have no delay
-    ok 90 - Delay should increase or be capped: 99 -> 232
-    ok 91 - Delay should increase or be capped: 232 -> 504
-    ok 92 - Delay should increase or be capped: 504 -> 504
-    ok 93 - Delay should increase or be capped: 504 -> 504
-    ok 94 - Delay 0 should not exceed max 504
-    ok 95 - Delay 99 should not exceed max 504
-    ok 96 - Delay 232 should not exceed max 504
-    ok 97 - Delay 504 should not exceed max 504
-    ok 98 - Delay 504 should not exceed max 504
-    ok 99 - Delay 504 should not exceed max 504
+    ok 90 - Delay should increase or be capped: 16 -> 24
+    ok 91 - Delay should increase or be capped: 24 -> 36
+    ok 92 - Delay should increase or be capped: 36 -> 54
+    ok 93 - Delay should increase or be capped: 54 -> 81
+    ok 94 - Delay 0 should not exceed max 1421
+    ok 95 - Delay 16 should not exceed max 1421
+    ok 96 - Delay 24 should not exceed max 1421
+    ok 97 - Delay 36 should not exceed max 1421
+    ok 98 - Delay 54 should not exceed max 1421
+    ok 99 - Delay 81 should not exceed max 1421
     ok 100 - First attempt should have no delay
-    ok 101 - Delay should increase or be capped: 97 -> 255
-    ok 102 - Delay should increase or be capped: 255 -> 670
-    ok 103 - Delay should increase or be capped: 670 -> 1762
-    ok 104 - Delay should increase or be capped: 1762 -> 1992
-    ok 105 - Delay 0 should not exceed max 1992
-    ok 106 - Delay 97 should not exceed max 1992
-    ok 107 - Delay 255 should not exceed max 1992
-    ok 108 - Delay 670 should not exceed max 1992
-    ok 109 - Delay 1762 should not exceed max 1992
-    ok 110 - Delay 1992 should not exceed max 1992
+    ok 101 - Delay should increase or be capped: 16 -> 24
+    ok 102 - Delay should increase or be capped: 24 -> 36
+    ok 103 - Delay should increase or be capped: 36 -> 54
+    ok 104 - Delay should increase or be capped: 54 -> 81
+    ok 105 - Delay 0 should not exceed max 507
+    ok 106 - Delay 16 should not exceed max 507
+    ok 107 - Delay 24 should not exceed max 507
+    ok 108 - Delay 36 should not exceed max 507
+    ok 109 - Delay 54 should not exceed max 507
+    ok 110 - Delay 81 should not exceed max 507
     1..110
-ok 1 - Property 24: Exponential backoff delays increase exponentially # time=9.735ms
+ok 1 - Property 24: Exponential backoff delays increase exponentially # time=9.97ms
 
 # Subtest: Property 24: Jitter adds bounded randomness to delays
-    ok 1 - Delay 181 should be within jitter bounds [176.66378837716468, 223.33621162283532]
-    ok 2 - Delay 201 should be within jitter bounds [176.66378837716468, 223.33621162283532]
-    ok 3 - Delay 218 should be within jitter bounds [176.66378837716468, 223.33621162283532]
-    ok 4 - Delay 212 should be within jitter bounds [176.66378837716468, 223.33621162283532]
-    ok 5 - Delay 214 should be within jitter bounds [176.66378837716468, 223.33621162283532]
-    ok 6 - Delay 192 should be within jitter bounds [176.66378837716468, 223.33621162283532]
-    ok 7 - Delay 196 should be within jitter bounds [176.66378837716468, 223.33621162283532]
-    ok 8 - Delay 217 should be within jitter bounds [176.66378837716468, 223.33621162283532]
-    ok 9 - Delay 208 should be within jitter bounds [176.66378837716468, 223.33621162283532]
-    ok 10 - Delay 210 should be within jitter bounds [176.66378837716468, 223.33621162283532]
-    ok 11 - Delay 194 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 12 - Delay 195 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 13 - Delay 207 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 14 - Delay 199 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 15 - Delay 207 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 16 - Delay 199 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 17 - Delay 195 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 18 - Delay 196 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 19 - Delay 196 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 20 - Delay 194 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 21 - Delay 236 should be within jitter bounds [100.00000000000013, 299.9999999999999]
-    ok 22 - Delay 160 should be within jitter bounds [100.00000000000013, 299.9999999999999]
-    ok 23 - Delay 222 should be within jitter bounds [100.00000000000013, 299.9999999999999]
-    ok 24 - Delay 249 should be within jitter bounds [100.00000000000013, 299.9999999999999]
-    ok 25 - Delay 284 should be within jitter bounds [100.00000000000013, 299.9999999999999]
-    ok 26 - Delay 240 should be within jitter bounds [100.00000000000013, 299.9999999999999]
-    ok 27 - Delay 243 should be within jitter bounds [100.00000000000013, 299.9999999999999]
-    ok 28 - Delay 185 should be within jitter bounds [100.00000000000013, 299.9999999999999]
-    ok 29 - Delay 166 should be within jitter bounds [100.00000000000013, 299.9999999999999]
-    ok 30 - Delay 259 should be within jitter bounds [100.00000000000013, 299.9999999999999]
-    ok 31 - Delay 246 should be within jitter bounds [100.00000000000007, 299.9999999999999]
-    ok 32 - Delay 263 should be within jitter bounds [100.00000000000007, 299.9999999999999]
-    ok 33 - Delay 192 should be within jitter bounds [100.00000000000007, 299.9999999999999]
-    ok 34 - Delay 144 should be within jitter bounds [100.00000000000007, 299.9999999999999]
-    ok 35 - Delay 137 should be within jitter bounds [100.00000000000007, 299.9999999999999]
-    ok 36 - Delay 116 should be within jitter bounds [100.00000000000007, 299.9999999999999]
-    ok 37 - Delay 163 should be within jitter bounds [100.00000000000007, 299.9999999999999]
-    ok 38 - Delay 189 should be within jitter bounds [100.00000000000007, 299.9999999999999]
-    ok 39 - Delay 238 should be within jitter bounds [100.00000000000007, 299.9999999999999]
-    ok 40 - Delay 106 should be within jitter bounds [100.00000000000007, 299.9999999999999]
-    ok 41 - Delay 236 should be within jitter bounds [156.40894025320858, 243.59105974679142]
-    ok 42 - Delay 236 should be within jitter bounds [156.40894025320858, 243.59105974679142]
-    ok 43 - Delay 163 should be within jitter bounds [156.40894025320858, 243.59105974679142]
-    ok 44 - Delay 187 should be within jitter bounds [156.40894025320858, 243.59105974679142]
-    ok 45 - Delay 207 should be within jitter bounds [156.40894025320858, 243.59105974679142]
-    ok 46 - Delay 243 should be within jitter bounds [156.40894025320858, 243.59105974679142]
-    ok 47 - Delay 169 should be within jitter bounds [156.40894025320858, 243.59105974679142]
-    ok 48 - Delay 158 should be within jitter bounds [156.40894025320858, 243.59105974679142]
-    ok 49 - Delay 186 should be within jitter bounds [156.40894025320858, 243.59105974679142]
-    ok 50 - Delay 180 should be within jitter bounds [156.40894025320858, 243.59105974679142]
-    ok 51 - Delay 163 should be within jitter bounds [158.75357265803146, 241.24642734196854]
-    ok 52 - Delay 240 should be within jitter bounds [158.75357265803146, 241.24642734196854]
-    ok 53 - Delay 229 should be within jitter bounds [158.75357265803146, 241.24642734196854]
-    ok 54 - Delay 232 should be within jitter bounds [158.75357265803146, 241.24642734196854]
-    ok 55 - Delay 164 should be within jitter bounds [158.75357265803146, 241.24642734196854]
-    ok 56 - Delay 168 should be within jitter bounds [158.75357265803146, 241.24642734196854]
-    ok 57 - Delay 231 should be within jitter bounds [158.75357265803146, 241.24642734196854]
-    ok 58 - Delay 199 should be within jitter bounds [158.75357265803146, 241.24642734196854]
-    ok 59 - Delay 165 should be within jitter bounds [158.75357265803146, 241.24642734196854]
-    ok 60 - Delay 207 should be within jitter bounds [158.75357265803146, 241.24642734196854]
-    ok 61 - Delay 212 should be within jitter bounds [177.42499042197613, 222.57500957802387]
-    ok 62 - Delay 210 should be within jitter bounds [177.42499042197613, 222.57500957802387]
-    ok 63 - Delay 187 should be within jitter bounds [177.42499042197613, 222.57500957802387]
-    ok 64 - Delay 178 should be within jitter bounds [177.42499042197613, 222.57500957802387]
-    ok 65 - Delay 205 should be within jitter bounds [177.42499042197613, 222.57500957802387]
-    ok 66 - Delay 200 should be within jitter bounds [177.42499042197613, 222.57500957802387]
-    ok 67 - Delay 178 should be within jitter bounds [177.42499042197613, 222.57500957802387]
-    ok 68 - Delay 198 should be within jitter bounds [177.42499042197613, 222.57500957802387]
-    ok 69 - Delay 222 should be within jitter bounds [177.42499042197613, 222.57500957802387]
-    ok 70 - Delay 210 should be within jitter bounds [177.42499042197613, 222.57500957802387]
-    ok 71 - Delay 192 should be within jitter bounds [189.99999999999994, 210.00000000000006]
-    ok 72 - Delay 197 should be within jitter bounds [189.99999999999994, 210.00000000000006]
-    ok 73 - Delay 204 should be within jitter bounds [189.99999999999994, 210.00000000000006]
-    ok 74 - Delay 194 should be within jitter bounds [189.99999999999994, 210.00000000000006]
-    ok 75 - Delay 195 should be within jitter bounds [189.99999999999994, 210.00000000000006]
-    ok 76 - Delay 193 should be within jitter bounds [189.99999999999994, 210.00000000000006]
-    ok 77 - Delay 200 should be within jitter bounds [189.99999999999994, 210.00000000000006]
-    ok 78 - Delay 205 should be within jitter bounds [189.99999999999994, 210.00000000000006]
-    ok 79 - Delay 208 should be within jitter bounds [189.99999999999994, 210.00000000000006]
-    ok 80 - Delay 195 should be within jitter bounds [189.99999999999994, 210.00000000000006]
-    ok 81 - Delay 207 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 82 - Delay 207 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 83 - Delay 209 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 84 - Delay 205 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 85 - Delay 199 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 86 - Delay 198 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 87 - Delay 193 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 88 - Delay 195 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 89 - Delay 199 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 90 - Delay 206 should be within jitter bounds [189.99999999999997, 210.00000000000006]
-    ok 91 - Delay 206 should be within jitter bounds [169.3777456412827, 230.6222543587173]
-    ok 92 - Delay 224 should be within jitter bounds [169.3777456412827, 230.6222543587173]
-    ok 93 - Delay 195 should be within jitter bounds [169.3777456412827, 230.6222543587173]
-    ok 94 - Delay 198 should be within jitter bounds [169.3777456412827, 230.6222543587173]
-    ok 95 - Delay 178 should be within jitter bounds [169.3777456412827, 230.6222543587173]
-    ok 96 - Delay 188 should be within jitter bounds [169.3777456412827, 230.6222543587173]
-    ok 97 - Delay 196 should be within jitter bounds [169.3777456412827, 230.6222543587173]
-    ok 98 - Delay 218 should be within jitter bounds [169.3777456412827, 230.6222543587173]
-    ok 99 - Delay 186 should be within jitter bounds [169.3777456412827, 230.6222543587173]
-    ok 100 - Delay 187 should be within jitter bounds [169.3777456412827, 230.6222543587173]
+    ok 1 - Delay 224 should be within jitter bounds [154.17879631414212, 245.82120368585788]
+    ok 2 - Delay 209 should be within jitter bounds [154.17879631414212, 245.82120368585788]
+    ok 3 - Delay 223 should be within jitter bounds [154.17879631414212, 245.82120368585788]
+    ok 4 - Delay 173 should be within jitter bounds [154.17879631414212, 245.82120368585788]
+    ok 5 - Delay 226 should be within jitter bounds [154.17879631414212, 245.82120368585788]
+    ok 6 - Delay 215 should be within jitter bounds [154.17879631414212, 245.82120368585788]
+    ok 7 - Delay 205 should be within jitter bounds [154.17879631414212, 245.82120368585788]
+    ok 8 - Delay 201 should be within jitter bounds [154.17879631414212, 245.82120368585788]
+    ok 9 - Delay 203 should be within jitter bounds [154.17879631414212, 245.82120368585788]
+    ok 10 - Delay 227 should be within jitter bounds [154.17879631414212, 245.82120368585788]
+    ok 11 - Delay 275 should be within jitter bounds [100.00000000000031, 299.9999999999997]
+    ok 12 - Delay 259 should be within jitter bounds [100.00000000000031, 299.9999999999997]
+    ok 13 - Delay 217 should be within jitter bounds [100.00000000000031, 299.9999999999997]
+    ok 14 - Delay 198 should be within jitter bounds [100.00000000000031, 299.9999999999997]
+    ok 15 - Delay 146 should be within jitter bounds [100.00000000000031, 299.9999999999997]
+    ok 16 - Delay 300 should be within jitter bounds [100.00000000000031, 299.9999999999997]
+    ok 17 - Delay 258 should be within jitter bounds [100.00000000000031, 299.9999999999997]
+    ok 18 - Delay 179 should be within jitter bounds [100.00000000000031, 299.9999999999997]
+    ok 19 - Delay 283 should be within jitter bounds [100.00000000000031, 299.9999999999997]
+    ok 20 - Delay 233 should be within jitter bounds [100.00000000000031, 299.9999999999997]
+    ok 21 - Delay 119 should be within jitter bounds [105.93207427642626, 294.06792572357375]
+    ok 22 - Delay 214 should be within jitter bounds [105.93207427642626, 294.06792572357375]
+    ok 23 - Delay 294 should be within jitter bounds [105.93207427642626, 294.06792572357375]
+    ok 24 - Delay 260 should be within jitter bounds [105.93207427642626, 294.06792572357375]
+    ok 25 - Delay 290 should be within jitter bounds [105.93207427642626, 294.06792572357375]
+    ok 26 - Delay 153 should be within jitter bounds [105.93207427642626, 294.06792572357375]
+    ok 27 - Delay 109 should be within jitter bounds [105.93207427642626, 294.06792572357375]
+    ok 28 - Delay 285 should be within jitter bounds [105.93207427642626, 294.06792572357375]
+    ok 29 - Delay 127 should be within jitter bounds [105.93207427642626, 294.06792572357375]
+    ok 30 - Delay 179 should be within jitter bounds [105.93207427642626, 294.06792572357375]
+    ok 31 - Delay 197 should be within jitter bounds [179.35245295797048, 220.6475470420295]
+    ok 32 - Delay 212 should be within jitter bounds [179.35245295797048, 220.6475470420295]
+    ok 33 - Delay 203 should be within jitter bounds [179.35245295797048, 220.6475470420295]
+    ok 34 - Delay 181 should be within jitter bounds [179.35245295797048, 220.6475470420295]
+    ok 35 - Delay 215 should be within jitter bounds [179.35245295797048, 220.6475470420295]
+    ok 36 - Delay 180 should be within jitter bounds [179.35245295797048, 220.6475470420295]
+    ok 37 - Delay 183 should be within jitter bounds [179.35245295797048, 220.6475470420295]
+    ok 38 - Delay 220 should be within jitter bounds [179.35245295797048, 220.6475470420295]
+    ok 39 - Delay 194 should be within jitter bounds [179.35245295797048, 220.6475470420295]
+    ok 40 - Delay 185 should be within jitter bounds [179.35245295797048, 220.6475470420295]
+    ok 41 - Delay 193 should be within jitter bounds [189.99999999999994, 210.00000000000006]
+    ok 42 - Delay 206 should be within jitter bounds [189.99999999999994, 210.00000000000006]
+    ok 43 - Delay 203 should be within jitter bounds [189.99999999999994, 210.00000000000006]
+    ok 44 - Delay 206 should be within jitter bounds [189.99999999999994, 210.00000000000006]
+    ok 45 - Delay 205 should be within jitter bounds [189.99999999999994, 210.00000000000006]
+    ok 46 - Delay 209 should be within jitter bounds [189.99999999999994, 210.00000000000006]
+    ok 47 - Delay 204 should be within jitter bounds [189.99999999999994, 210.00000000000006]
+    ok 48 - Delay 199 should be within jitter bounds [189.99999999999994, 210.00000000000006]
+    ok 49 - Delay 196 should be within jitter bounds [189.99999999999994, 210.00000000000006]
+    ok 50 - Delay 202 should be within jitter bounds [189.99999999999994, 210.00000000000006]
+    ok 51 - Delay 239 should be within jitter bounds [106.36162306390898, 293.63837693609105]
+    ok 52 - Delay 181 should be within jitter bounds [106.36162306390898, 293.63837693609105]
+    ok 53 - Delay 174 should be within jitter bounds [106.36162306390898, 293.63837693609105]
+    ok 54 - Delay 230 should be within jitter bounds [106.36162306390898, 293.63837693609105]
+    ok 55 - Delay 138 should be within jitter bounds [106.36162306390898, 293.63837693609105]
+    ok 56 - Delay 274 should be within jitter bounds [106.36162306390898, 293.63837693609105]
+    ok 57 - Delay 234 should be within jitter bounds [106.36162306390898, 293.63837693609105]
+    ok 58 - Delay 227 should be within jitter bounds [106.36162306390898, 293.63837693609105]
+    ok 59 - Delay 128 should be within jitter bounds [106.36162306390898, 293.63837693609105]
+    ok 60 - Delay 283 should be within jitter bounds [106.36162306390898, 293.63837693609105]
+    ok 61 - Delay 247 should be within jitter bounds [146.07511475197458, 253.92488524802542]
+    ok 62 - Delay 210 should be within jitter bounds [146.07511475197458, 253.92488524802542]
+    ok 63 - Delay 170 should be within jitter bounds [146.07511475197458, 253.92488524802542]
+    ok 64 - Delay 248 should be within jitter bounds [146.07511475197458, 253.92488524802542]
+    ok 65 - Delay 220 should be within jitter bounds [146.07511475197458, 253.92488524802542]
+    ok 66 - Delay 210 should be within jitter bounds [146.07511475197458, 253.92488524802542]
+    ok 67 - Delay 212 should be within jitter bounds [146.07511475197458, 253.92488524802542]
+    ok 68 - Delay 182 should be within jitter bounds [146.07511475197458, 253.92488524802542]
+    ok 69 - Delay 252 should be within jitter bounds [146.07511475197458, 253.92488524802542]
+    ok 70 - Delay 175 should be within jitter bounds [146.07511475197458, 253.92488524802542]
+    ok 71 - Delay 210 should be within jitter bounds [189.99999999999997, 210.00000000000006]
+    ok 72 - Delay 192 should be within jitter bounds [189.99999999999997, 210.00000000000006]
+    ok 73 - Delay 198 should be within jitter bounds [189.99999999999997, 210.00000000000006]
+    ok 74 - Delay 193 should be within jitter bounds [189.99999999999997, 210.00000000000006]
+    ok 75 - Delay 207 should be within jitter bounds [189.99999999999997, 210.00000000000006]
+    ok 76 - Delay 198 should be within jitter bounds [189.99999999999997, 210.00000000000006]
+    ok 77 - Delay 209 should be within jitter bounds [189.99999999999997, 210.00000000000006]
+    ok 78 - Delay 191 should be within jitter bounds [189.99999999999997, 210.00000000000006]
+    ok 79 - Delay 192 should be within jitter bounds [189.99999999999997, 210.00000000000006]
+    ok 80 - Delay 209 should be within jitter bounds [189.99999999999997, 210.00000000000006]
+    ok 81 - Delay 290 should be within jitter bounds [100.00000000000043, 299.99999999999955]
+    ok 82 - Delay 285 should be within jitter bounds [100.00000000000043, 299.99999999999955]
+    ok 83 - Delay 138 should be within jitter bounds [100.00000000000043, 299.99999999999955]
+    ok 84 - Delay 293 should be within jitter bounds [100.00000000000043, 299.99999999999955]
+    ok 85 - Delay 285 should be within jitter bounds [100.00000000000043, 299.99999999999955]
+    ok 86 - Delay 204 should be within jitter bounds [100.00000000000043, 299.99999999999955]
+    ok 87 - Delay 213 should be within jitter bounds [100.00000000000043, 299.99999999999955]
+    ok 88 - Delay 284 should be within jitter bounds [100.00000000000043, 299.99999999999955]
+    ok 89 - Delay 225 should be within jitter bounds [100.00000000000043, 299.99999999999955]
+    ok 90 - Delay 106 should be within jitter bounds [100.00000000000043, 299.99999999999955]
+    ok 91 - Delay 124 should be within jitter bounds [100.00000000000036, 299.99999999999966]
+    ok 92 - Delay 254 should be within jitter bounds [100.00000000000036, 299.99999999999966]
+    ok 93 - Delay 265 should be within jitter bounds [100.00000000000036, 299.99999999999966]
+    ok 94 - Delay 196 should be within jitter bounds [100.00000000000036, 299.99999999999966]
+    ok 95 - Delay 116 should be within jitter bounds [100.00000000000036, 299.99999999999966]
+    ok 96 - Delay 161 should be within jitter bounds [100.00000000000036, 299.99999999999966]
+    ok 97 - Delay 185 should be within jitter bounds [100.00000000000036, 299.99999999999966]
+    ok 98 - Delay 236 should be within jitter bounds [100.00000000000036, 299.99999999999966]
+    ok 99 - Delay 194 should be within jitter bounds [100.00000000000036, 299.99999999999966]
+    ok 100 - Delay 205 should be within jitter bounds [100.00000000000036, 299.99999999999966]
     1..100
-ok 2 - Property 24: Jitter adds bounded randomness to delays # time=4.362ms
+ok 2 - Property 24: Jitter adds bounded randomness to delays # time=5.082ms
 
 # Subtest: Property 24: Successful first attempt has no retries
     ok 1 - Should succeed
@@ -259,7 +259,7 @@ ok 2 - Property 24: Jitter adds bounded randomness to delays # time=4.362ms
     ok 39 - Should be attempt 0
     ok 40 - No retries should be performed
     1..40
-ok 3 - Property 24: Successful first attempt has no retries # time=4.34ms
+ok 3 - Property 24: Successful first attempt has no retries # time=5.223ms
 
 # Subtest: Property 24: Failed attempts trigger retries with backoff
     ok 1 - Should eventually succeed
@@ -293,48 +293,50 @@ ok 3 - Property 24: Successful first attempt has no retries # time=4.34ms
     ok 29 - Should retry correct number of times
     ok 30 - Should have correct attempt history length
     1..30
-ok 4 - Property 24: Failed attempts trigger retries with backoff # time=33.551ms
+ok 4 - Property 24: Failed attempts trigger retries with backoff # time=31.437ms
 
 # Subtest: Property 24: Alternative replicas are tried on failure
     ok 1 - Should try primary first
-    ok 2 - Should try alternative [^r4-imEI`J@\\@z;=
-    ok 3 - Should track alternative replica usage
-    ok 4 - Should try primary first
-    ok 5 - Should try alternative ;5|gxBbH}|(@7k)Vg:
-    ok 6 - Should track alternative replica usage
-    ok 7 - Should try primary first
-    ok 8 - Should try alternative q114i$j;\\/7Qy%)$qC
-    ok 9 - Should track alternative replica usage
-    ok 10 - Should try primary first
-    ok 11 - Should try alternative $M\#"?\#\#&
-    ok 12 - Should track alternative replica usage
-    ok 13 - Should try primary first
-    ok 14 - Should try alternative argumen
-    ok 15 - Should try alternative 7<v|;K[6
-    ok 16 - Should track alternative replica usage
-    ok 17 - Should try primary first
-    ok 18 - Should try alternative <2F"M&J@fu6N3&6\\ih
-    ok 19 - Should try alternative ka7C= $7%\#kz%!&~i
-    ok 20 - Should track alternative replica usage
-    ok 21 - Should try primary first
-    ok 22 - Should try alternative K|ih]2M`yil)g4b^\\y1d
-    ok 23 - Should try alternative Rs{Y=
-    ok 24 - Should track alternative replica usage
-    ok 25 - Should try primary first
-    ok 26 - Should try alternative c]9`{Gu(E]{9u[&eK
-    ok 27 - Should try alternative trisProt
-    ok 28 - Should try alternative A(7$Yy3
-    ok 29 - Should track alternative replica usage
-    ok 30 - Should try primary first
-    ok 31 - Should try alternative 6|p__lookupGetter
+    ok 2 - Should try alternative CjW7zm
+    ok 3 - Should try alternative |hnP+.%;@A5?\#7%KaEll
+    ok 4 - Should track alternative replica usage
+    ok 5 - Should try primary first
+    ok 6 - Should try alternative hasOwnPropertyt
+    ok 7 - Should try alternative 0zQ$l,y,zP
+    ok 8 - Should track alternative replica usage
+    ok 9 - Should try primary first
+    ok 10 - Should try alternative ~tn/:4g0Z:
+    ok 11 - Should track alternative replica usage
+    ok 12 - Should try primary first
+    ok 13 - Should try alternative q\\~RSXO[nK7'
+    ok 14 - Should track alternative replica usage
+    ok 15 - Should try primary first
+    ok 16 - Should try alternative EXk>[@*,?5 hVDm=+
+    ok 17 - Should try alternative Qz@lCu|
+    ok 18 - Should track alternative replica usage
+    ok 19 - Should try primary first
+    ok 20 - Should try alternative apply
+    ok 21 - Should try alternative T!E,|{-! }VZ!
+    ok 22 - Should track alternative replica usage
+    ok 23 - Should try primary first
+    ok 24 - Should try alternative c`tx"Yiw6[_sAmR\#ic
+    ok 25 - Should try alternative CKeC<]JW,v8BB
+    ok 26 - Should try alternative mc{}H|sp[Fj@mi
+    ok 27 - Should track alternative replica usage
+    ok 28 - Should try primary first
+    ok 29 - Should try alternative '$|asOwn
+    ok 30 - Should try alternative  \#&to
+    ok 31 - Should try alternative |]yc@$
     ok 32 - Should track alternative replica usage
     ok 33 - Should try primary first
-    ok 34 - Should try alternative W&bhVfX>I@~`u
-    ok 35 - Should try alternative ovyT<PS-wcSdiPV@uT}
-    ok 36 - Should try alternative _@8hZ%/rnb(R
-    ok 37 - Should track alternative replica usage
-    1..37
-ok 5 - Property 24: Alternative replicas are tried on failure # time=33.721ms
+    ok 34 - Should try alternative v"+>%9
+    ok 35 - Should try alternative  bXV,\#t9aC'm
+    ok 36 - Should track alternative replica usage
+    ok 37 - Should try primary first
+    ok 38 - Should try alternative .F.=,ip!<@,
+    ok 39 - Should track alternative replica usage
+    1..39
+ok 5 - Property 24: Alternative replicas are tried on failure # time=41.843ms
 
 # Subtest: Property 24: Attempt history is accurate
     ok 1 - History should have correct length
@@ -342,16 +344,16 @@ ok 5 - Property 24: Alternative replicas are tried on failure # time=33.721ms
     ok 3 - Attempt 0 should have target
     ok 4 - Attempt 0 should have timestamp
     ok 5 - Attempt 0 should have status
-    ok 6 - Last attempt should be success
-    ok 7 - History should have correct length
-    ok 8 - Attempt 0 should have correct index
-    ok 9 - Attempt 0 should have target
-    ok 10 - Attempt 0 should have timestamp
-    ok 11 - Attempt 0 should have status
-    ok 12 - Attempt 1 should have correct index
-    ok 13 - Attempt 1 should have target
-    ok 14 - Attempt 1 should have timestamp
-    ok 15 - Attempt 1 should have status
+    ok 6 - Attempt 1 should have correct index
+    ok 7 - Attempt 1 should have target
+    ok 8 - Attempt 1 should have timestamp
+    ok 9 - Attempt 1 should have status
+    ok 10 - Last attempt should be success
+    ok 11 - History should have correct length
+    ok 12 - Attempt 0 should have correct index
+    ok 13 - Attempt 0 should have target
+    ok 14 - Attempt 0 should have timestamp
+    ok 15 - Attempt 0 should have status
     ok 16 - Last attempt should be success
     ok 17 - History should have correct length
     ok 18 - Attempt 0 should have correct index
@@ -362,46 +364,46 @@ ok 5 - Property 24: Alternative replicas are tried on failure # time=33.721ms
     ok 23 - Attempt 1 should have target
     ok 24 - Attempt 1 should have timestamp
     ok 25 - Attempt 1 should have status
-    ok 26 - Attempt 2 should have correct index
-    ok 27 - Attempt 2 should have target
-    ok 28 - Attempt 2 should have timestamp
-    ok 29 - Attempt 2 should have status
-    ok 30 - Attempt 3 should have correct index
-    ok 31 - Attempt 3 should have target
-    ok 32 - Attempt 3 should have timestamp
-    ok 33 - Attempt 3 should have status
-    ok 34 - Last attempt should be success
-    ok 35 - History should have correct length
-    ok 36 - Attempt 0 should have correct index
-    ok 37 - Attempt 0 should have target
-    ok 38 - Attempt 0 should have timestamp
-    ok 39 - Attempt 0 should have status
-    ok 40 - Attempt 1 should have correct index
-    ok 41 - Attempt 1 should have target
-    ok 42 - Attempt 1 should have timestamp
-    ok 43 - Attempt 1 should have status
-    ok 44 - Attempt 2 should have correct index
-    ok 45 - Attempt 2 should have target
-    ok 46 - Attempt 2 should have timestamp
-    ok 47 - Attempt 2 should have status
-    ok 48 - Attempt 3 should have correct index
-    ok 49 - Attempt 3 should have target
-    ok 50 - Attempt 3 should have timestamp
-    ok 51 - Attempt 3 should have status
-    ok 52 - Last attempt should be success
-    ok 53 - History should have correct length
-    ok 54 - Attempt 0 should have correct index
-    ok 55 - Attempt 0 should have target
-    ok 56 - Attempt 0 should have timestamp
-    ok 57 - Attempt 0 should have status
-    ok 58 - Attempt 1 should have correct index
-    ok 59 - Attempt 1 should have target
-    ok 60 - Attempt 1 should have timestamp
-    ok 61 - Attempt 1 should have status
-    ok 62 - Attempt 2 should have correct index
-    ok 63 - Attempt 2 should have target
-    ok 64 - Attempt 2 should have timestamp
-    ok 65 - Attempt 2 should have status
+    ok 26 - Last attempt should be success
+    ok 27 - History should have correct length
+    ok 28 - Attempt 0 should have correct index
+    ok 29 - Attempt 0 should have target
+    ok 30 - Attempt 0 should have timestamp
+    ok 31 - Attempt 0 should have status
+    ok 32 - Attempt 1 should have correct index
+    ok 33 - Attempt 1 should have target
+    ok 34 - Attempt 1 should have timestamp
+    ok 35 - Attempt 1 should have status
+    ok 36 - Last attempt should be success
+    ok 37 - History should have correct length
+    ok 38 - Attempt 0 should have correct index
+    ok 39 - Attempt 0 should have target
+    ok 40 - Attempt 0 should have timestamp
+    ok 41 - Attempt 0 should have status
+    ok 42 - Attempt 1 should have correct index
+    ok 43 - Attempt 1 should have target
+    ok 44 - Attempt 1 should have timestamp
+    ok 45 - Attempt 1 should have status
+    ok 46 - Last attempt should be success
+    ok 47 - History should have correct length
+    ok 48 - Attempt 0 should have correct index
+    ok 49 - Attempt 0 should have target
+    ok 50 - Attempt 0 should have timestamp
+    ok 51 - Attempt 0 should have status
+    ok 52 - Attempt 1 should have correct index
+    ok 53 - Attempt 1 should have target
+    ok 54 - Attempt 1 should have timestamp
+    ok 55 - Attempt 1 should have status
+    ok 56 - Last attempt should be success
+    ok 57 - History should have correct length
+    ok 58 - Attempt 0 should have correct index
+    ok 59 - Attempt 0 should have target
+    ok 60 - Attempt 0 should have timestamp
+    ok 61 - Attempt 0 should have status
+    ok 62 - Attempt 1 should have correct index
+    ok 63 - Attempt 1 should have target
+    ok 64 - Attempt 1 should have timestamp
+    ok 65 - Attempt 1 should have status
     ok 66 - Last attempt should be success
     ok 67 - History should have correct length
     ok 68 - Attempt 0 should have correct index
@@ -416,62 +418,46 @@ ok 5 - Property 24: Alternative replicas are tried on failure # time=33.721ms
     ok 77 - Attempt 2 should have target
     ok 78 - Attempt 2 should have timestamp
     ok 79 - Attempt 2 should have status
-    ok 80 - Attempt 3 should have correct index
-    ok 81 - Attempt 3 should have target
-    ok 82 - Attempt 3 should have timestamp
-    ok 83 - Attempt 3 should have status
-    ok 84 - Last attempt should be success
-    ok 85 - History should have correct length
-    ok 86 - Attempt 0 should have correct index
-    ok 87 - Attempt 0 should have target
-    ok 88 - Attempt 0 should have timestamp
-    ok 89 - Attempt 0 should have status
-    ok 90 - Attempt 1 should have correct index
-    ok 91 - Attempt 1 should have target
-    ok 92 - Attempt 1 should have timestamp
-    ok 93 - Attempt 1 should have status
-    ok 94 - Attempt 2 should have correct index
-    ok 95 - Attempt 2 should have target
-    ok 96 - Attempt 2 should have timestamp
-    ok 97 - Attempt 2 should have status
+    ok 80 - Last attempt should be success
+    ok 81 - History should have correct length
+    ok 82 - Attempt 0 should have correct index
+    ok 83 - Attempt 0 should have target
+    ok 84 - Attempt 0 should have timestamp
+    ok 85 - Attempt 0 should have status
+    ok 86 - Attempt 1 should have correct index
+    ok 87 - Attempt 1 should have target
+    ok 88 - Attempt 1 should have timestamp
+    ok 89 - Attempt 1 should have status
+    ok 90 - Attempt 2 should have correct index
+    ok 91 - Attempt 2 should have target
+    ok 92 - Attempt 2 should have timestamp
+    ok 93 - Attempt 2 should have status
+    ok 94 - Attempt 3 should have correct index
+    ok 95 - Attempt 3 should have target
+    ok 96 - Attempt 3 should have timestamp
+    ok 97 - Attempt 3 should have status
     ok 98 - Last attempt should be success
     ok 99 - History should have correct length
     ok 100 - Attempt 0 should have correct index
     ok 101 - Attempt 0 should have target
     ok 102 - Attempt 0 should have timestamp
     ok 103 - Attempt 0 should have status
-    ok 104 - Last attempt should be success
-    ok 105 - History should have correct length
-    ok 106 - Attempt 0 should have correct index
-    ok 107 - Attempt 0 should have target
-    ok 108 - Attempt 0 should have timestamp
-    ok 109 - Attempt 0 should have status
-    ok 110 - Attempt 1 should have correct index
-    ok 111 - Attempt 1 should have target
-    ok 112 - Attempt 1 should have timestamp
-    ok 113 - Attempt 1 should have status
-    ok 114 - Last attempt should be success
-    ok 115 - History should have correct length
-    ok 116 - Attempt 0 should have correct index
-    ok 117 - Attempt 0 should have target
-    ok 118 - Attempt 0 should have timestamp
-    ok 119 - Attempt 0 should have status
-    ok 120 - Attempt 1 should have correct index
-    ok 121 - Attempt 1 should have target
-    ok 122 - Attempt 1 should have timestamp
-    ok 123 - Attempt 1 should have status
-    ok 124 - Attempt 2 should have correct index
-    ok 125 - Attempt 2 should have target
-    ok 126 - Attempt 2 should have timestamp
-    ok 127 - Attempt 2 should have status
-    ok 128 - Attempt 3 should have correct index
-    ok 129 - Attempt 3 should have target
-    ok 130 - Attempt 3 should have timestamp
-    ok 131 - Attempt 3 should have status
-    ok 132 - Last attempt should be success
-    1..132
-ok 6 - Property 24: Attempt history is accurate # time=45.863ms
+    ok 104 - Attempt 1 should have correct index
+    ok 105 - Attempt 1 should have target
+    ok 106 - Attempt 1 should have timestamp
+    ok 107 - Attempt 1 should have status
+    ok 108 - Attempt 2 should have correct index
+    ok 109 - Attempt 2 should have target
+    ok 110 - Attempt 2 should have timestamp
+    ok 111 - Attempt 2 should have status
+    ok 112 - Attempt 3 should have correct index
+    ok 113 - Attempt 3 should have target
+    ok 114 - Attempt 3 should have timestamp
+    ok 115 - Attempt 3 should have status
+    ok 116 - Last attempt should be success
+    1..116
+ok 6 - Property 24: Attempt history is accurate # time=31.71ms
 
 1..6
-# { total: 449, pass: 449 }
-# time=234.953ms
+# { total: 435, pass: 435 }
+# time=252.658ms

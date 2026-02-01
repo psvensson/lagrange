@@ -12,7 +12,7 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {ERRNO, HOST, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {ERRNO, NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {TRANSPORT_EVENT} from '../constants/transport.js';
 import {
   ADMIN_CACHE_DUMP,
@@ -415,7 +415,7 @@ class AdminWebSocketAPI {
     try {
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
-          reject(new Error(ADMIN_ERROR_MESSAGE.QUERY_TIMEOUT(this.queryTimeoutMs)));
+          reject(new Error(ADMIN_ERROR_MESSAGE.queryTimeout(this.queryTimeoutMs)));
         }, this.queryTimeoutMs);
       });
 
@@ -646,7 +646,29 @@ class AdminWebSocketAPI {
     this.clients.clear();
 
     if (this.fastify) {
+      const server = this.fastify.server;
+      // Close all active connections immediately
+      if (server && typeof server.closeAllConnections === TYPEOF.FUNCTION) {
+        server.closeAllConnections();
+      }
       await this.fastify.close();
+      // Ensure underlying HTTP server is fully closed
+      if (server && typeof server.close === TYPEOF.FUNCTION) {
+        await new Promise((resolve) => {
+          server.close((error) => {
+            if (error && error.code !== ERRNO.NOT_RUNNING) {
+              this.logger.warn(ADMIN_LOG_MSG.SERVER_CLOSE_ERROR, {
+                error: error.message,
+              });
+            }
+            resolve();
+          });
+        });
+      }
+      // Unref the server to allow process exit
+      if (server && typeof server.unref === TYPEOF.FUNCTION) {
+        server.unref();
+      }
       this.fastify = null;
     }
 
