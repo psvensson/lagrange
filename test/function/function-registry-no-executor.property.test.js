@@ -29,21 +29,35 @@ afterEach(() => {
 });
 
 /**
- * Create a mock system table cache with code table.
- * @return {Object} Mock cache with helper methods.
+ * Create a mock SQL query engine backed by an in-memory store.
+ * @return {Object} Mock engine with helper methods.
  */
-function createMockCache() {
+function createMockSqlEngine() {
   const functions = new Map();
   return {
-    get: (tableName, key) => {
-      if (tableName !== 'code') return undefined;
-      return functions.get(key);
+    executeQuery: async (sql, params) => {
+      const allRows = Array.from(functions.values());
+      if (sql.includes('WHERE code_id = ?')) {
+        const rows = allRows.filter((r) => r.code_id === params[0]);
+        return {rows};
+      }
+      if (sql.includes('WHERE function_id = ?')) {
+        const rows = allRows.filter((r) =>
+          r.function_id === params[0],
+        );
+        return {rows};
+      }
+      if (sql.includes('WHERE function_name = ?')) {
+        const rows = allRows.filter((r) =>
+          r.function_name === params[0],
+        );
+        return {rows};
+      }
+      return {rows: allRows};
     },
-    find: (tableName, predicate) => {
-      if (tableName !== 'code') return undefined;
-      return Array.from(functions.values()).find(predicate);
+    _addFunction: (func) => {
+      functions.set(func.function_id, func);
     },
-    _addFunction: (func) => functions.set(func.function_id, func),
     _clear: () => functions.clear(),
   };
 }
@@ -63,10 +77,11 @@ function createMockExecutor(name = 'mock-executor') {
 }
 
 /**
- * Arbitrary for valid executor types (strings that could be executor types).
+ * Arbitrary for valid executor types.
  */
 const executorTypeArbitrary = fc.string({minLength: 1, maxLength: 30})
-  .filter((s) => s.trim().length > 0 && /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(s));
+  .filter((s) => s.trim().length > 0 &&
+    /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(s));
 
 /**
  * Arbitrary for function IDs.
@@ -86,7 +101,7 @@ const functionDefinitionArbitrary = fc.record({
   function_id: functionIdArbitrary,
   function_name: functionNameArbitrary,
   executor_type: executorTypeArbitrary,
-  code_blob: fc.string({maxLength: 100}),
+  code_blob: fc.constant('code'),
   signature: fc.constant('{}'),
 });
 
@@ -103,27 +118,27 @@ test('Property 37: invoke returns error when no executor registered', async (t) 
     fc.asyncProperty(
       functionDefinitionArbitrary,
       async (funcDef) => {
-        const cache = createMockCache();
-        const registry = new FunctionRegistry({systemTableCache: cache});
+        const sqlEngine = createMockSqlEngine();
+        const registry = new FunctionRegistry({
+          sqlQueryEngine: sqlEngine,
+        });
 
-        // Add function to cache but do NOT register any executor
-        cache._addFunction(funcDef);
+        // Add function with code_id matching function_id
+        sqlEngine._addFunction({
+          ...funcDef,
+          code_id: funcDef.function_id,
+        });
 
-        // Attempt to invoke the function
+        // Attempt to invoke the function (no executor registered)
         try {
           await registry.invoke(funcDef.function_id);
-          // Should not reach here - invoke should throw
           return false;
         } catch (error) {
-          // Verify error message indicates no executor available
           const hasNoExecutorMessage =
             error.message.includes('No executor registered') ||
             error.message.includes('no executor');
-
           const mentionsExecutorType =
             error.message.includes(funcDef.executor_type);
-
-          // Error should indicate no executor and mention the type
           return hasNoExecutorMessage && mentionsExecutorType;
         }
       },
@@ -135,7 +150,7 @@ test('Property 37: invoke returns error when no executor registered', async (t) 
 });
 
 /**
- * Property: Error message lists available executor types when none match.
+ * Property: Error message lists available executor types.
  */
 test('Property 37: error message lists available executor types', async (t) => {
   await fc.assert(
@@ -143,35 +158,37 @@ test('Property 37: error message lists available executor types', async (t) => {
       functionDefinitionArbitrary,
       fc.array(executorTypeArbitrary, {minLength: 1, maxLength: 5}),
       async (funcDef, registeredTypes) => {
-        // Ensure the function's executor_type is NOT in registeredTypes
         const uniqueRegisteredTypes = [...new Set(registeredTypes)]
-          .filter((t) => t !== funcDef.executor_type);
+          .filter((rt) => rt !== funcDef.executor_type);
 
         if (uniqueRegisteredTypes.length === 0) {
-          // Skip if we can't create a mismatch scenario
           return true;
         }
 
-        const cache = createMockCache();
-        const registry = new FunctionRegistry({systemTableCache: cache});
+        const sqlEngine = createMockSqlEngine();
+        const registry = new FunctionRegistry({
+          sqlQueryEngine: sqlEngine,
+        });
 
-        // Register executors for types that don't match the function
         for (const execType of uniqueRegisteredTypes) {
-          registry.registerExecutor(execType, createMockExecutor(execType));
+          registry.registerExecutor(
+            execType, createMockExecutor(execType),
+          );
         }
 
-        // Add function with a different executor_type
-        cache._addFunction(funcDef);
+        sqlEngine._addFunction({
+          ...funcDef,
+          code_id: funcDef.function_id,
+        });
 
         try {
           await registry.invoke(funcDef.function_id);
           return false;
         } catch (error) {
-          // Error should mention available types
-          const mentionsAvailable = error.message.includes('Available types');
+          const mentionsAvailable =
+            error.message.includes('Available types');
           const hasNoExecutorMessage =
             error.message.includes('No executor registered');
-
           return hasNoExecutorMessage && mentionsAvailable;
         }
       },
@@ -183,18 +200,22 @@ test('Property 37: error message lists available executor types', async (t) => {
 });
 
 /**
- * Property: invokeByName also returns error when no executor registered.
+ * Property: invokeByName also returns error when no executor.
  */
 test('Property 37: invokeByName returns error when no executor', async (t) => {
   await fc.assert(
     fc.asyncProperty(
       functionDefinitionArbitrary,
       async (funcDef) => {
-        const cache = createMockCache();
-        const registry = new FunctionRegistry({systemTableCache: cache});
+        const sqlEngine = createMockSqlEngine();
+        const registry = new FunctionRegistry({
+          sqlQueryEngine: sqlEngine,
+        });
 
-        // Add function to cache but do NOT register any executor
-        cache._addFunction(funcDef);
+        sqlEngine._addFunction({
+          ...funcDef,
+          code_id: funcDef.function_id,
+        });
 
         try {
           await registry.invokeByName(funcDef.function_name);
@@ -203,7 +224,6 @@ test('Property 37: invokeByName returns error when no executor', async (t) => {
           const hasNoExecutorMessage =
             error.message.includes('No executor registered') ||
             error.message.includes('no executor');
-
           return hasNoExecutorMessage;
         }
       },
@@ -222,11 +242,15 @@ test('Property 37: unregister executor causes invoke to fail', async (t) => {
     fc.asyncProperty(
       functionDefinitionArbitrary,
       async (funcDef) => {
-        const cache = createMockCache();
-        const registry = new FunctionRegistry({systemTableCache: cache});
+        const sqlEngine = createMockSqlEngine();
+        const registry = new FunctionRegistry({
+          sqlQueryEngine: sqlEngine,
+        });
 
-        // Add function and register matching executor
-        cache._addFunction(funcDef);
+        sqlEngine._addFunction({
+          ...funcDef,
+          code_id: funcDef.function_id,
+        });
         registry.registerExecutor(
           funcDef.executor_type,
           createMockExecutor(funcDef.executor_type),
@@ -236,13 +260,13 @@ test('Property 37: unregister executor causes invoke to fail', async (t) => {
         try {
           await registry.invoke(funcDef.function_id);
         } catch {
-          return false; // Should not fail
+          return false;
         }
 
         // Unregister the executor
         registry.unregisterExecutor(funcDef.executor_type);
 
-        // Second invoke should fail with no executor error
+        // Second invoke should fail
         try {
           await registry.invoke(funcDef.function_id);
           return false;
@@ -258,28 +282,30 @@ test('Property 37: unregister executor causes invoke to fail', async (t) => {
 });
 
 /**
- * Property: Error indicates 'none' when no executors are registered at all.
+ * Property: Error indicates 'none' when no executors registered.
  */
 test('Property 37: error shows none when no executors registered', async (t) => {
   await fc.assert(
     fc.asyncProperty(
       functionDefinitionArbitrary,
       async (funcDef) => {
-        const cache = createMockCache();
-        const registry = new FunctionRegistry({systemTableCache: cache});
+        const sqlEngine = createMockSqlEngine();
+        const registry = new FunctionRegistry({
+          sqlQueryEngine: sqlEngine,
+        });
 
-        // Add function but register NO executors at all
-        cache._addFunction(funcDef);
+        sqlEngine._addFunction({
+          ...funcDef,
+          code_id: funcDef.function_id,
+        });
 
         try {
           await registry.invoke(funcDef.function_id);
           return false;
         } catch (error) {
-          // When no executors are registered, message should indicate 'none'
           const hasNoExecutorMessage =
             error.message.includes('No executor registered');
           const indicatesNone = error.message.includes('none');
-
           return hasNoExecutorMessage && indicatesNone;
         }
       },

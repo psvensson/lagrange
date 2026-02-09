@@ -170,6 +170,28 @@ test('SQLParser - parses INSERT with multiple rows', async (t) => {
   t.equal(ast.values.length, 2);
 });
 
+test('SQLParser - preserves INSERT OR REPLACE modifier', async (t) => {
+  const parser = new SQLParser(
+    'INSERT OR REPLACE INTO users (id, name) VALUES (\'a\', \'Alice\')',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'INSERT');
+  t.equal(ast.orReplace, true);
+  t.equal(ast.orIgnore, false);
+});
+
+test('SQLParser - preserves INSERT OR IGNORE modifier', async (t) => {
+  const parser = new SQLParser(
+    'INSERT OR IGNORE INTO users (id, name) VALUES (\'a\', \'Alice\')',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'INSERT');
+  t.equal(ast.orIgnore, true);
+  t.equal(ast.orReplace, false);
+});
+
 test('SQLParser - parses UPDATE statement', async (t) => {
   const parser = new SQLParser(
     'UPDATE users SET name = \'Jane\' WHERE id = \'user-1\'',

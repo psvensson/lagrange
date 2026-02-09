@@ -12,7 +12,7 @@
  */
 
 import Fastify from 'fastify';
-import {validate as uuidValidate} from 'uuid';
+import {v4 as uuidv4, validate as uuidValidate} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {assertCritical} from '../utils/assert.js';
@@ -30,9 +30,13 @@ import {
   STRING,
   TABLES,
   TYPEOF,
+  WORKFLOW_STEP,
 } from '../constants/index.js';
 import {CACHE_SYSTEM_TABLES} from '../cache/cache-constants.js';
-import {getMissingSystemServiceLeaders} from '../cache/leader-readiness-gate.js';
+import {
+  getMissingSystemServiceLeaders,
+  getMissingSystemServiceLeaderCount,
+} from '../cache/leader-readiness-gate.js';
 import {
   BOOTSTRAP_ASSIGNMENT_STRATEGY,
   BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT,
@@ -48,12 +52,15 @@ import {
   BOOTSTRAP_API_CLOSE_ERROR_CODE,
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_HEALTH_STATUS,
+  BOOTSTRAP_API_HANDOFF_OPERATION,
+  BOOTSTRAP_API_HANDOFF_PHASE,
+  BOOTSTRAP_API_HANDOFF_STATUS,
   BOOTSTRAP_API_LOG_MSG,
-  BOOTSTRAP_API_MESSAGE_GROUP_PREFIX,
   BOOTSTRAP_API_ROUTE,
   BOOTSTRAP_API_SQL,
   BOOTSTRAP_API_SUBSYSTEM,
 } from './bootstrap-api-constants.js';
+import {MessageGroupAssignment} from './message-group-assignment.js';
 
 /**
  * Bootstrap response strategies.
@@ -389,12 +396,34 @@ class BootstrapAPI {
       return {success: false, error: BOOTSTRAP_API_ERROR.SERVICE_NODE_ID_REQUIRED};
     }
 
+    let handoffContext = null;
     try {
       // Use SQL query engine to insert/update the service
       if (!this.sqlQueryEngine) {
         this.logger.error(BOOTSTRAP_API_LOG_MSG.SQL_ENGINE_MISSING);
         reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
         return {success: false, error: BOOTSTRAP_API_ERROR.SQL_ENGINE_UNAVAILABLE};
+      }
+
+      handoffContext = await this.startMoveReplicaHandoff(serviceData);
+
+      if (handoffContext) {
+        await this.executeMoveReplicaHandoffPhase(
+          handoffContext,
+          BOOTSTRAP_API_HANDOFF_PHASE.VERIFY_TARGET,
+          WORKFLOW_STEP.SYNCING,
+          BOOTSTRAP_API_HANDOFF_STATUS.VERIFYING,
+          () => this.verifyMoveReplicaHandoffTarget(handoffContext, serviceData),
+        );
+        await this.executeMoveReplicaHandoffPhase(
+          handoffContext,
+          BOOTSTRAP_API_HANDOFF_PHASE.REMOVE_SOURCE,
+          WORKFLOW_STEP.STOPPING,
+          BOOTSTRAP_API_HANDOFF_STATUS.REMOVING,
+          () => this.removeLocalSourceReplicaForMoveReplica(serviceData),
+        );
+      } else {
+        await this.removeLocalSourceReplicaForMoveReplica(serviceData);
       }
 
       // Use INSERT OR REPLACE to handle both new and existing services
@@ -420,21 +449,380 @@ class BootstrapAPI {
         throw new Error(result.error || BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_FAILED);
       }
 
+      if (handoffContext) {
+        await this.completeMoveReplicaHandoff(handoffContext);
+      }
+
       this.logger.info(BOOTSTRAP_API_LOG_MSG.SERVICE_REGISTERED, {
         serviceId: serviceData[COLUMN.SERVICE_ID],
         serviceType: serviceData[COLUMN.SERVICE_TYPE],
         nodeId: serviceData[COLUMN.NODE_ID],
         groupId: serviceData[COLUMN.GROUP_ID],
+        operationId: handoffContext?.operationId || null,
       });
 
-      return {success: true, serviceId: serviceData[COLUMN.SERVICE_ID]};
+      return {
+        success: true,
+        serviceId: serviceData[COLUMN.SERVICE_ID],
+        operationId: handoffContext?.operationId || null,
+      };
     } catch (error) {
+      if (handoffContext) {
+        await this.failMoveReplicaHandoff(handoffContext, error);
+      }
       this.logger.error(BOOTSTRAP_API_LOG_MSG.REGISTER_SERVICE_FAILED, {
         serviceId: serviceData[COLUMN.SERVICE_ID],
         error: error.message,
         stack: error.stack,
       });
       reply.code(HTTP_STATUS.INTERNAL_SERVER_ERROR);
+      throw error;
+    }
+  }
+
+  /**
+   * Determine whether this register-service request is a MOVE_REPLICA handoff.
+   * @param {Object} serviceData - Incoming register-service payload.
+   * @return {boolean} True when handoff tracking should be enabled.
+   * @private
+   */
+  isMoveReplicaHandoffRequest(serviceData) {
+    const serviceId = serviceData?.[COLUMN.SERVICE_ID];
+    const serviceType = serviceData?.[COLUMN.SERVICE_TYPE];
+    const targetNodeId = serviceData?.[COLUMN.NODE_ID];
+
+    if (!serviceId || !targetNodeId) {
+      return false;
+    }
+    if (serviceType !== SERVICE_TYPE.MESSAGE_GROUP) {
+      return false;
+    }
+    if (targetNodeId === this.seedNodeId) {
+      return false;
+    }
+    return this.messageGroupServices.has(serviceId);
+  }
+
+  /**
+   * Build operation context for MOVE_REPLICA handoff tracking.
+   * @param {Object} serviceData - Incoming register-service payload.
+   * @return {Object} Handoff context.
+   * @private
+   */
+  buildMoveReplicaHandoffContext(serviceData) {
+    const serviceId = serviceData[COLUMN.SERVICE_ID];
+    const existing = this.systemTableCache?.get(TABLES.SERVICES, serviceId) || {};
+    const now = Date.now();
+    const groupId = serviceData[COLUMN.GROUP_ID] || existing[COLUMN.GROUP_ID] || serviceId;
+    const sourceNodeId = existing[COLUMN.NODE_ID] || this.seedNodeId;
+    const targetNodeId = serviceData[COLUMN.NODE_ID];
+
+    return {
+      operationId: uuidv4(),
+      type: BOOTSTRAP_API_HANDOFF_OPERATION.TYPE,
+      partitionId: groupId,
+      entityType: SERVICE_TYPE.MESSAGE_GROUP,
+      entityId: groupId,
+      replicaId: serviceId,
+      sourceNodeId,
+      targetNodeId,
+      status: BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+      workflowStep: WORKFLOW_STEP.CREATING,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: null,
+      errorMessage: null,
+      stepsHistory: [],
+    };
+  }
+
+  /**
+   * Record handoff phase transition in the operation context.
+   * @param {Object} handoffContext - Operation context.
+   * @param {string} phase - Handoff phase identifier.
+   * @param {string} workflowStep - Workflow step value.
+   * @param {string} status - Replica operation status.
+   * @private
+   */
+  recordMoveReplicaHandoffPhase(handoffContext, phase, workflowStep, status) {
+    const now = Date.now();
+    handoffContext.workflowStep = workflowStep;
+    handoffContext.status = status;
+    handoffContext.updatedAt = now;
+    handoffContext.stepsHistory.push({
+      phase,
+      step: workflowStep,
+      status,
+      timestamp: now,
+    });
+  }
+
+  /**
+   * Persist a new MOVE_REPLICA handoff operation row.
+   * @param {Object} handoffContext - Operation context.
+   * @return {Promise<void>}
+   * @private
+   */
+  async insertMoveReplicaHandoffOperation(handoffContext) {
+    const params = [
+      handoffContext.operationId,
+      handoffContext.type,
+      handoffContext.partitionId,
+      handoffContext.replicaId,
+      handoffContext.sourceNodeId,
+      handoffContext.targetNodeId,
+      handoffContext.status,
+      handoffContext.workflowStep,
+      handoffContext.createdAt,
+      handoffContext.updatedAt,
+      handoffContext.completedAt,
+      handoffContext.errorMessage,
+      JSON.stringify(handoffContext.stepsHistory),
+      handoffContext.entityType,
+      handoffContext.entityId,
+    ];
+
+    const result = await this.sqlQueryEngine.executeQuery(
+      BOOTSTRAP_API_SQL.INSERT_REPLICA_OPERATION,
+      params,
+    );
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to persist MOVE_REPLICA handoff operation');
+    }
+  }
+
+  /**
+   * Persist updates to an existing MOVE_REPLICA handoff operation row.
+   * @param {Object} handoffContext - Operation context.
+   * @return {Promise<void>}
+   * @private
+   */
+  async updateMoveReplicaHandoffOperation(handoffContext) {
+    const params = [
+      handoffContext.status,
+      handoffContext.workflowStep,
+      handoffContext.updatedAt,
+      handoffContext.completedAt,
+      handoffContext.errorMessage,
+      JSON.stringify(handoffContext.stepsHistory),
+      handoffContext.operationId,
+    ];
+
+    const result = await this.sqlQueryEngine.executeQuery(
+      BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
+      params,
+    );
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to update MOVE_REPLICA handoff operation');
+    }
+  }
+
+  /**
+   * Start MOVE_REPLICA handoff tracking when applicable.
+   * @param {Object} serviceData - Incoming register-service payload.
+   * @return {Promise<Object|null>} Handoff context or null.
+   * @private
+   */
+  async startMoveReplicaHandoff(serviceData) {
+    if (!this.isMoveReplicaHandoffRequest(serviceData)) {
+      return null;
+    }
+
+    const handoffContext = this.buildMoveReplicaHandoffContext(serviceData);
+    this.recordMoveReplicaHandoffPhase(
+      handoffContext,
+      BOOTSTRAP_API_HANDOFF_PHASE.PREPARE_TARGET,
+      WORKFLOW_STEP.CREATING,
+      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+    );
+    await this.insertMoveReplicaHandoffOperation(handoffContext);
+
+    this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_STARTED, {
+      operationId: handoffContext.operationId,
+      serviceId: handoffContext.replicaId,
+      sourceNodeId: handoffContext.sourceNodeId,
+      targetNodeId: handoffContext.targetNodeId,
+    });
+
+    return handoffContext;
+  }
+
+  /**
+   * Execute and persist a MOVE_REPLICA handoff phase.
+   * @param {Object} handoffContext - Operation context.
+   * @param {string} phase - Handoff phase identifier.
+   * @param {string} workflowStep - Workflow step value.
+   * @param {string} status - Replica operation status.
+   * @param {Function} executor - Phase action.
+   * @return {Promise<void>}
+   * @private
+   */
+  async executeMoveReplicaHandoffPhase(
+    handoffContext,
+    phase,
+    workflowStep,
+    status,
+    executor,
+  ) {
+    this.recordMoveReplicaHandoffPhase(handoffContext, phase, workflowStep, status);
+    await this.updateMoveReplicaHandoffOperation(handoffContext);
+    await executor();
+
+    this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_PHASE_APPLIED, {
+      operationId: handoffContext.operationId,
+      phase,
+      workflowStep,
+      status,
+      serviceId: handoffContext.replicaId,
+    });
+  }
+
+  /**
+   * Verify the MOVE_REPLICA target metadata before source removal.
+   * @param {Object} handoffContext - Operation context.
+   * @param {Object} serviceData - Incoming register-service payload.
+   * @return {void}
+   * @private
+   */
+  verifyMoveReplicaHandoffTarget(handoffContext, serviceData) {
+    if (handoffContext.sourceNodeId === handoffContext.targetNodeId) {
+      throw new Error('MOVE_REPLICA target node must differ from source node');
+    }
+
+    const expectedAddress = `${handoffContext.targetNodeId}${ADDRESS.SEPARATOR}` +
+      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${handoffContext.replicaId}`;
+    const suppliedAddress = serviceData[COLUMN.ADDRESS];
+    if (suppliedAddress && suppliedAddress !== expectedAddress) {
+      throw new Error('MOVE_REPLICA target address mismatch');
+    }
+  }
+
+  /**
+   * Mark MOVE_REPLICA handoff as committed.
+   * @param {Object} handoffContext - Operation context.
+   * @return {Promise<void>}
+   * @private
+   */
+  async completeMoveReplicaHandoff(handoffContext) {
+    this.recordMoveReplicaHandoffPhase(
+      handoffContext,
+      BOOTSTRAP_API_HANDOFF_PHASE.COMMIT_METADATA,
+      WORKFLOW_STEP.ACTIVE,
+      BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
+    );
+    handoffContext.completedAt = handoffContext.updatedAt;
+    handoffContext.errorMessage = null;
+    await this.updateMoveReplicaHandoffOperation(handoffContext);
+
+    this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_COMPLETED, {
+      operationId: handoffContext.operationId,
+      serviceId: handoffContext.replicaId,
+      sourceNodeId: handoffContext.sourceNodeId,
+      targetNodeId: handoffContext.targetNodeId,
+    });
+  }
+
+  /**
+   * Mark MOVE_REPLICA handoff as failed.
+   * @param {Object} handoffContext - Operation context.
+   * @param {Error} error - Failure reason.
+   * @return {Promise<void>}
+   * @private
+   */
+  async failMoveReplicaHandoff(handoffContext, error) {
+    try {
+      this.recordMoveReplicaHandoffPhase(
+        handoffContext,
+        BOOTSTRAP_API_HANDOFF_PHASE.FAILED,
+        WORKFLOW_STEP.FAILED,
+        BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
+      );
+      handoffContext.completedAt = handoffContext.updatedAt;
+      handoffContext.errorMessage = error?.message || 'unknown MOVE_REPLICA handoff failure';
+      await this.updateMoveReplicaHandoffOperation(handoffContext);
+    } catch (persistError) {
+      this.logger.error(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_FAILED, {
+        operationId: handoffContext.operationId,
+        serviceId: handoffContext.replicaId,
+        error: persistError.message,
+      });
+      return;
+    }
+
+    this.logger.error(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_FAILED, {
+      operationId: handoffContext.operationId,
+      serviceId: handoffContext.replicaId,
+      sourceNodeId: handoffContext.sourceNodeId,
+      targetNodeId: handoffContext.targetNodeId,
+      error: error?.message || null,
+    });
+  }
+
+  /**
+   * Remove a local message-group source replica before committing MOVE_REPLICA
+   * ownership metadata to another node.
+   * @param {Object} serviceData - Incoming register-service payload.
+   * @return {Promise<void>}
+   * @private
+   */
+  async removeLocalSourceReplicaForMoveReplica(serviceData) {
+    const serviceId = serviceData?.[COLUMN.SERVICE_ID];
+    const serviceType = serviceData?.[COLUMN.SERVICE_TYPE];
+    const targetNodeId = serviceData?.[COLUMN.NODE_ID];
+
+    if (!serviceId || !targetNodeId) {
+      return;
+    }
+
+    if (serviceType !== SERVICE_TYPE.MESSAGE_GROUP) {
+      return;
+    }
+
+    if (targetNodeId === this.seedNodeId) {
+      return;
+    }
+
+    const localService = this.messageGroupServices.get(serviceId);
+    if (!localService) {
+      return;
+    }
+
+    const existingService = this.systemTableCache?.get(TABLES.SERVICES, serviceId);
+    const localAddress = existingService?.[COLUMN.ADDRESS] ||
+      `${this.seedNodeId}${ADDRESS.SEPARATOR}` +
+      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${serviceId}`;
+
+    this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_SOURCE_REMOVAL_START, {
+      serviceId,
+      sourceNodeId: this.seedNodeId,
+      targetNodeId,
+      localAddress,
+    });
+
+    try {
+      if (typeof localService.shutdown === TYPEOF.FUNCTION) {
+        await localService.shutdown();
+      }
+      this.messageGroupServices.delete(serviceId);
+
+      const messageRouter = this.messageRouter || this.bootstrapService?.messageRouter;
+      if (messageRouter && typeof messageRouter.unregister === TYPEOF.FUNCTION) {
+        messageRouter.unregister(localAddress);
+      }
+
+      this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_SOURCE_REMOVED, {
+        serviceId,
+        sourceNodeId: this.seedNodeId,
+        targetNodeId,
+        localAddress,
+      });
+    } catch (error) {
+      this.logger.error(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_SOURCE_REMOVAL_FAILED, {
+        serviceId,
+        sourceNodeId: this.seedNodeId,
+        targetNodeId,
+        error: error.message,
+      });
       throw error;
     }
   }
@@ -553,6 +941,8 @@ class BootstrapAPI {
 
   /**
    * Determine message group assignment for a new node.
+   * Delegates strategy selection to MessageGroupAssignment (single owner)
+   * and augments the result with peer addresses for Raft communication.
    * @param {string} newNodeId - New node ID.
    * @return {Object} Assignment instructions.
    */
@@ -574,58 +964,71 @@ class BootstrapAPI {
       })),
     });
 
-    // Strategy 1: Find a message group with 2+ replicas on the same node
-    const movableReplica = this.findMessageGroupWithMovableReplica(messageGroups);
+    // Delegate strategy selection to MessageGroupAssignment (single owner)
+    const mgAssignment = new MessageGroupAssignment({
+      seedNodeAddress: this.seedNodeAddress,
+    });
+    const assignment = mgAssignment.determineAssignment(newNodeId, messageGroups);
 
-    if (movableReplica) {
+    // Augment with peer addresses for Raft communication
+    return this.augmentAssignmentWithPeerAddresses(assignment, messageGroups);
+  }
+
+  /**
+   * Augment a MessageGroupAssignment result with peer addresses
+   * needed for Raft communication during bootstrap.
+   * @param {Object} assignment - Base assignment from MessageGroupAssignment.
+   * @param {Array<Object>} messageGroups - Existing message groups.
+   * @return {Object} Assignment with peer addresses added.
+   * @private
+   */
+  augmentAssignmentWithPeerAddresses(assignment, messageGroups) {
+    if (assignment.strategy === BootstrapStrategy.MOVE_REPLICA) {
+      // Find the group to extract peer addresses
+      const group = messageGroups.find(
+        (g) => g.group_id === assignment.groupId,
+      );
+      const replicas = group?.replicas || [];
+      const peerAddresses = replicas.map((r) =>
+        `${r.node_id}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
+        `${ADDRESS.SEPARATOR}${r.replica_id}`,
+      );
+
       this.logger.info(BOOTSTRAP_API_LOG_MSG.JOIN_MOVABLE_REPLICA, {
-        newNodeId,
-        groupId: movableReplica.groupId,
-        sourceNodeId: movableReplica.sourceNodeId,
-        replicaToMove: movableReplica.replicaId,
-        peerIds: movableReplica.peerIds,
-        peerAddresses: movableReplica.peerAddresses,
-        replicaAddresses: movableReplica.replicaAddresses,
+        groupId: assignment.groupId,
+        sourceNodeId: assignment.sourceNodeId,
+        replicaToMove: assignment.replicaToMove,
+        peerIds: assignment.existingPeerIds,
+        peerAddresses,
+        replicaAddresses: assignment.replicaAddresses,
       });
 
       return {
-        strategy: BootstrapStrategy.MOVE_REPLICA,
-        groupId: movableReplica.groupId,
-        sourceNodeId: movableReplica.sourceNodeId,
-        replicaToMove: movableReplica.replicaId,
-        replicaAddresses: movableReplica.replicaAddresses,
-        existingPeerIds: movableReplica.peerIds,
-        peerAddresses: movableReplica.peerAddresses,
+        ...assignment,
+        peerAddresses,
       };
     }
 
-    // Strategy 2: Create self-hosted message group
-    const newGroupId = `${BOOTSTRAP_API_MESSAGE_GROUP_PREFIX}` +
-      `${newNodeId.substring(NUM.ZERO, BOOTSTRAP_API_DEFAULT.MG_ID_LENGTH)}`;
-
-    const assignment = {
-      strategy: BootstrapStrategy.CREATE_SELF_HOSTED,
-      groupId: newGroupId,
-      replicaCount: NUM.THREE,
-    };
-
-    // If message groups exist but no movable replicas are available,
-    // include peer addresses so the joining node can reach the control plane.
+    // CREATE_SELF_HOSTED: include peer addresses from an existing group
+    // so the joining node can reach the control plane.
     const fallbackGroup = messageGroups.find((group) =>
       Array.isArray(group.replicas) && group.replicas.length > NUM.ZERO,
     ) || messageGroups[NUM.ZERO];
 
     if (fallbackGroup && Array.isArray(fallbackGroup.replicas)) {
       const replicas = fallbackGroup.replicas;
-      assignment.existingPeerIds = replicas.map((r) => r.replica_id);
-      assignment.replicaAddresses = replicas.map((r) => r.address);
-      assignment.peerAddresses = replicas.map((r) =>
-        `${r.node_id}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
-        `${ADDRESS.SEPARATOR}${r.replica_id}`,
-      );
-      assignment.replicaNodeMap = Object.fromEntries(
-        replicas.map((r) => [r.replica_id, r.node_id]),
-      );
+      return {
+        ...assignment,
+        existingPeerIds: replicas.map((r) => r.replica_id),
+        replicaAddresses: replicas.map((r) => r.address),
+        peerAddresses: replicas.map((r) =>
+          `${r.node_id}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
+          `${ADDRESS.SEPARATOR}${r.replica_id}`,
+        ),
+        replicaNodeMap: Object.fromEntries(
+          replicas.map((r) => [r.replica_id, r.node_id]),
+        ),
+      };
     }
 
     return assignment;
@@ -740,55 +1143,6 @@ class BootstrapAPI {
         replicas,
       };
     });
-  }
-
-  /**
-   * Find a message group with 2+ replicas on the same node.
-   * @param {Array<Object>} messageGroups - Message groups to search.
-   * @return {Object|null} Movable replica info or null.
-   */
-  findMessageGroupWithMovableReplica(messageGroups) {
-    for (const group of messageGroups) {
-      const replicas = group.replicas || [];
-      const replicasByNode = new Map();
-
-      // Count replicas per node
-      for (const replica of replicas) {
-        const nodeId = replica.node_id;
-        const count = replicasByNode.get(nodeId) || NUM.ZERO;
-        replicasByNode.set(nodeId, count + NUM.ONE);
-      }
-
-      // Find node with 2+ replicas
-      for (const [nodeId, count] of replicasByNode) {
-        if (count >= NUM.TWO) {
-          // Found a movable replica
-          const replicaToMove = replicas.find((r) => r.node_id === nodeId);
-
-          // Build unified peer addresses for Raft communication
-          // Format: ${nodeId}/message-group/${replicaId}
-          const peerAddresses = replicas.map((r) =>
-            `${r.node_id}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
-            `${ADDRESS.SEPARATOR}${r.replica_id}`);
-
-          return {
-            groupId: group.group_id,
-            sourceNodeId: nodeId,
-            replicaId: replicaToMove.replica_id,
-            replicaAddresses: replicas.map((r) => r.address),
-            peerIds: replicas.map((r) => r.replica_id),
-            // Include unified peer addresses for Raft communication
-            peerAddresses: peerAddresses,
-            // Include replica to node mapping for address resolution
-            replicaNodeMap: Object.fromEntries(
-              replicas.map((r) => [r.replica_id, r.node_id]),
-            ),
-          };
-        }
-      }
-    }
-
-    return null;
   }
 
   /**
@@ -922,12 +1276,7 @@ class BootstrapAPI {
    * @private
    */
   countMissingLeaderInfo(missing) {
-    return (missing.missingPartitionLeaders?.length || NUM.ZERO) +
-      (missing.missingMessageGroupLeaders?.length || NUM.ZERO) +
-      (missing.missingPartitionLeaderNodes?.length || NUM.ZERO) +
-      (missing.missingMessageGroupLeaderNodes?.length || NUM.ZERO) +
-      (missing.missingPartitionLeaderAddresses?.length || NUM.ZERO) +
-      (missing.missingMessageGroupLeaderAddresses?.length || NUM.ZERO);
+    return getMissingSystemServiceLeaderCount(missing);
   }
 
   /**

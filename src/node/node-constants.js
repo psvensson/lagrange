@@ -1,10 +1,11 @@
-import {NUM, STATE, STRING, TIME_MS} from '../constants/index.js';
+import {NODE_STATE, NUM, STRING, TIME_MS} from '../constants/index.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 
 const NODE_LIFECYCLE_SUBSYSTEM = 'node-lifecycle-state-machine';
 
 const NODE_LIFECYCLE_EVENT = Object.freeze({
   STATE_CHANGE: 'stateChange',
+  SUB_PHASE_CHANGE: 'subPhaseChange',
 });
 
 const NODE_SERVICE_SUBSYSTEM = 'node-service';
@@ -77,15 +78,7 @@ const NODE_LIFECYCLE_SERVICE_ERROR_MSG = Object.freeze({
   INVALID_NODES_CACHE: 'NodeLifecycleService requires a valid nodes cache array',
 });
 
-const NODE_STATUS = Object.freeze({
-  INITIALIZING: 'initializing',
-  ACTIVE: STATE.ACTIVE,
-  SUSPECTED: 'suspected',
-  FAILED: 'failed',
-  RECOVERING: 'recovering',
-  SHUTTING_DOWN: 'shutting_down',
-  STOPPED: STATE.STOPPED,
-});
+const NODE_STATUS = NODE_STATE;
 
 const NODE_SERVICE_ERROR_MSG = Object.freeze({
   NOT_INITIALIZED: 'NodeService not initialized',
@@ -191,8 +184,15 @@ const FAILURE_DETECTOR_ACTION = Object.freeze({
 const FAILURE_DETECTOR_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'FailureDetector requires nodeId',
   MISSING_SYSTEM_TABLE_CACHE: 'FailureDetector requires systemTableCache',
+  MISSING_SQL_QUERY_ENGINE: 'FailureDetector requires sqlQueryEngine',
   MISSING_CDC_SERVICE: 'FailureDetector requires cdcIntegrationService',
   NOT_INITIALIZED: 'FailureDetector not initialized',
+});
+
+const FAILURE_DETECTOR_SQL = Object.freeze({
+  SELECT_ALL_NODES: 'SELECT * FROM nodes',
+  SELECT_SERVICES_BY_NODE_AND_TYPE:
+    'SELECT * FROM services WHERE node_id = ? AND service_type = ?',
 });
 
 const FAILURE_DETECTOR_DEFAULT = Object.freeze({
@@ -261,6 +261,23 @@ const NODE_REINTEGRATION_DEFAULT = Object.freeze({
   CLEANUP_DELAY_MS: TIME_MS.MINUTE,
 });
 
+const BOOTSTRAP_SUB_PHASE = Object.freeze({
+  INFRASTRUCTURE: 'INFRASTRUCTURE',
+  MESSAGE_GROUPS: 'MESSAGE_GROUPS',
+  PARTITIONS: 'PARTITIONS',
+  REGISTRATION: 'REGISTRATION',
+  CACHE_HYDRATION: 'CACHE_HYDRATION',
+});
+
+const JOINING_SUB_PHASE = Object.freeze({
+  CONTACTING_SEED: 'CONTACTING_SEED',
+  CONNECTING_WEBSOCKET: 'CONNECTING_WEBSOCKET',
+  CREATING_MESSAGE_GROUP: 'CREATING_MESSAGE_GROUP',
+  JOINING_MESSAGE_GROUP: 'JOINING_MESSAGE_GROUP',
+  WAITING_LEADERSHIP: 'WAITING_LEADERSHIP',
+  QUERYING_STATE: 'QUERYING_STATE',
+});
+
 export {
   NODE_LIFECYCLE_SUBSYSTEM,
   NODE_LIFECYCLE_EVENT,
@@ -288,6 +305,7 @@ export {
   FAILURE_DETECTOR_LOG_MSG,
   FAILURE_DETECTOR_ACTION,
   FAILURE_DETECTOR_ERROR_MSG,
+  FAILURE_DETECTOR_SQL,
   FAILURE_DETECTOR_DEFAULT,
   NODE_REINTEGRATION_SUBSYSTEM,
   NODE_REINTEGRATION_STATUS,
@@ -296,4 +314,6 @@ export {
   NODE_REINTEGRATION_LOG_MSG,
   NODE_REINTEGRATION_ERROR_MSG,
   NODE_REINTEGRATION_DEFAULT,
+  BOOTSTRAP_SUB_PHASE,
+  JOINING_SUB_PHASE,
 };

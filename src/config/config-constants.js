@@ -375,6 +375,13 @@ const CONFIG_SCHEMA = {
       },
       additionalProperties: false,
     },
+    replicaHandler: {
+      type: 'object',
+      properties: {
+        syncTimeoutMs: {type: 'number', minimum: 100},
+      },
+      additionalProperties: false,
+    },
     queryCoordinator: {
       type: 'object',
       properties: {
@@ -426,8 +433,9 @@ const DEFAULT_CONFIG = {
     seedNodeAddress: STRING.EMPTY,
   },
   raft: {
-    electionTimeoutMinMs: 150,
-    electionTimeoutMaxMs: 1000,
+    // Wider election window reduces split-vote churn in small/developing clusters.
+    electionTimeoutMinMs: 1000,
+    electionTimeoutMaxMs: 3000,
     heartbeatIntervalMs: 50,
     snapshotThreshold: 10000,
     maxLogEntriesPerAppend: 100,
@@ -499,15 +507,18 @@ const DEFAULT_CONFIG = {
     syncOnStartup: true,
   },
   rebalancer: {
-    periodicCheckIntervalMs: 10000, // 10 seconds - fast checks for small clusters
-    periodicCheckJitterMs: 2000, // ±2 seconds
-    criticalCheckDelayMs: 1000, // 1 second delay for critical events
+    periodicCheckIntervalMs: 60000, // 60 seconds for calmer steady-state polling
+    periodicCheckJitterMs: 10000, // ±10 seconds
+    criticalCheckDelayMs: 5000, // 5 second delay for critical events
     maxConcurrentMoves: 5, // Max concurrent replica moves
     moveTimeoutMs: 300000, // 5 minutes timeout per move
     nodeCpuThreshold: 0.8, // 80% CPU threshold
     nodeMemoryThreshold: 0.8, // 80% memory threshold
     nodeDiskThreshold: 0.9, // 90% disk threshold
-    stabilizationPeriodMs: 1000, // 1 second stabilization period (Req 2.1)
+    stabilizationPeriodMs: 10000, // 10 second stabilization period (Req 2.1)
+  },
+  replicaHandler: {
+    syncTimeoutMs: 60000, // 60 seconds to wait for voter-ready activation
   },
   queryCoordinator: {
     maxParallelPartitions: 1000, // Max partitions per query (Req 26.2)
@@ -544,6 +555,8 @@ const ENV_MAPPINGS = {
   RAFT_ELECTION_TIMEOUT_MIN_MS: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS,
   RAFT_ELECTION_TIMEOUT_MAX_MS: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS,
   RAFT_HEARTBEAT_INTERVAL_MS: CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS,
+  REBALANCER_PERIODIC_CHECK_INTERVAL_MS: CONFIG_KEY.REBALANCER_PERIODIC_CHECK_INTERVAL_MS,
+  REBALANCER_MAX_CONCURRENT_MOVES: CONFIG_KEY.REBALANCER_MAX_CONCURRENT_MOVES,
   MESSAGE_GROUP_REPLICA_COUNT: CONFIG_KEY.MESSAGE_GROUP_REPLICA_COUNT,
   PARTITION_DEFAULT_REPLICA_COUNT: CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT,
   WORKER_MIN_THREADS: CONFIG_KEY.WORKER_MIN_THREADS,

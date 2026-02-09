@@ -2,13 +2,13 @@ TAP version 14
 # Subtest: setup
     ok 1 - configuration initialized
     1..1
-ok 1 - setup # time=52.381ms
+ok 1 - setup # time=68.499ms
 
 # Subtest: LogsTableService singleton
     ok 1 - should return the same instance
 LogsTableService shutdown
     1..1
-ok 2 - LogsTableService singleton # time=0.855ms
+ok 2 - LogsTableService singleton # time=1.248ms
 
 # Subtest: LogsTableService initialization
     ok 1 - should not be initialized before initialize()
@@ -19,7 +19,7 @@ LogsTableService initialized
     ok 5 - should have zero error count
 LogsTableService shutdown
     1..5
-ok 3 - LogsTableService initialization # time=1.016ms
+ok 3 - LogsTableService initialization # time=1.166ms
 
 # Subtest: LogsTableService default config
     ok 1 - should have default batch size
@@ -27,13 +27,13 @@ ok 3 - LogsTableService initialization # time=1.016ms
     ok 3 - should have default max retries
     ok 4 - should have default retry delay
     1..4
-ok 4 - LogsTableService default config # time=0.39ms
+ok 4 - LogsTableService default config # time=0.483ms
 
 LogsTableService initialized
 # Subtest: LogsTableService writeLogEntry queues entries
     ok 1 - should queue the entry
     1..1
-ok 5 - LogsTableService writeLogEntry queues entries # time=0.734ms
+ok 5 - LogsTableService writeLogEntry queues entries # time=0.893ms
 
 LogsTableService initialized
 # Subtest: LogsTableService flush with mock CDC service
@@ -48,55 +48,15 @@ LogsTableService initialized
     ok 9 - should update write count
 LogsTableService shutdown
     1..9
-ok 6 - LogsTableService flush with mock CDC service # time=1.298ms
+ok 6 - LogsTableService flush with mock CDC service # time=1.368ms
 
 LogsTableService initialized
 # Subtest: LogsTableService handles write errors
-    not ok 1 - Write failed
-      ---
-      stack: >
-        Object.insertSystemTableRow (test/logging/logs-table-service.test.js:140:13)
-      
-        LogsTableService.writeEntryToTable (src/logging/logs-table-service.js:232:40)
-      
-        LogsTableService.writeEntryWithRetry
-        (src/logging/logs-table-service.js:196:20)
-      
-        async LogsTableService.flush (src/logging/logs-table-service.js:166:25)
-      
-        async Test.<anonymous> (test/logging/logs-table-service.test.js:161:3)
-      at:
-        fileName: test/logging/logs-table-service.test.js
-        lineNumber: 140
-        columnNumber: 13
-        typeName: Object
-        methodName: insertSystemTableRow
-        functionName: Object.insertSystemTableRow
-      tapCaught: returnedPromiseRejection
-      source: |2
-            insertSystemTableRow: async () => {
-              callCount++;
-              throw new Error('Write failed');
-        ------------^
-            },
-          };
-      ...
-    
-    1..1
-not ok 7 - LogsTableService handles write errors # time=22.991ms
-  ---
-  at:
-    fileName: test/logging/logs-table-service.test.js
-    lineNumber: 133
-    columnNumber: 1
-    isToplevel: true
-  source: |
-    });
-  
-    test('LogsTableService handles write errors', async (t) => {
-    ^
-      LogsTableService.resetInstance();
-  ...
+    ok 1 - should retry the configured number of times
+    ok 2 - should increment error count
+LogsTableService shutdown
+    1..2
+ok 7 - LogsTableService handles write errors # time=11.226ms
 
 LogsTableService initialized
 # Subtest: LogsTableService batch flush on size threshold
@@ -104,14 +64,14 @@ LogsTableService initialized
     ok 2 - should have no pending writes
 LogsTableService shutdown
     1..2
-ok 8 - LogsTableService batch flush on size threshold # time=0.695ms
+ok 8 - LogsTableService batch flush on size threshold # time=0.89ms
 
-{"level":30,"time":"2026-02-01T09:38:26.449Z","nodeId":"test-node","pid":1801257,"nodeId":"test-node","msg":"Buffered message 1"}
-{"level":30,"time":"2026-02-01T09:38:26.449Z","nodeId":"test-node","pid":1801257,"nodeId":"test-node","msg":"Buffered message 2"}
+{"level":30,"time":"2026-02-09T10:22:52.291Z","nodeId":"test-node","pid":201747,"nodeId":"test-node","msg":"Buffered message 1"}
+{"level":30,"time":"2026-02-09T10:22:52.291Z","nodeId":"test-node","pid":201747,"nodeId":"test-node","msg":"Buffered message 2"}
 # Subtest: LogsTableService connectToLoggingService flushes buffer
     ok 1 - should have buffered entries
 LogsTableService initialized
-{"level":30,"time":"2026-02-01T09:38:26.449Z","nodeId":"test-node","pid":1801257,"bufferedEntries":2,"nodeId":"test-node","msg":"Logs table ready, flushing buffer"}
+{"level":30,"time":"2026-02-09T10:22:52.292Z","nodeId":"test-node","pid":201747,"bufferedEntries":2,"nodeId":"test-node","msg":"Logs table ready, flushing buffer"}
 Connected to LoggingService, flushed 2 buffered entries
     ok 2 - should return flushed count
     ok 3 - logs table should be marked ready
@@ -121,7 +81,7 @@ Connected to LoggingService, flushed 2 buffered entries
 LogsTableService shutdown
 LogsTableService shutdown
     1..6
-ok 9 - LogsTableService connectToLoggingService flushes buffer # time=2.536ms
+ok 9 - LogsTableService connectToLoggingService flushes buffer # time=3.401ms
 
 LogsTableService initialized
 # Subtest: LogsTableService shutdown flushes pending
@@ -131,48 +91,21 @@ LogsTableService shutdown
     ok 3 - should not be initialized after shutdown
 LogsTableService shutdown
     1..3
-ok 10 - LogsTableService shutdown flushes pending # time=0.656ms
+ok 10 - LogsTableService shutdown flushes pending # time=0.526ms
 
 LogsTableService initialized
 # Subtest: LogsTableService handles null entry
     ok 1 - should not queue null entry
 LogsTableService shutdown
     1..1
-ok 11 - LogsTableService handles null entry # time=0.393ms
+ok 11 - LogsTableService handles null entry # time=0.302ms
 
 # Subtest: cleanup
     ok 1 - cleanup complete
     1..1
-ok 12 - cleanup # time=0.156ms
+ok 12 - cleanup # time=0.164ms
 
-not ok 13 - No write mechanism available for logs table
-  ---
-  stack: >
-    LogsTableService.writeEntryToTable (src/logging/logs-table-service.js:245:11)
-  
-    LogsTableService.writeEntryWithRetry
-    (src/logging/logs-table-service.js:196:20)
-  
-    async LogsTableService.flush (src/logging/logs-table-service.js:166:25)
-  
-    async LogsTableService.shutdown (src/logging/logs-table-service.js:312:7)
-  at:
-    fileName: src/logging/logs-table-service.js
-    lineNumber: 245
-    columnNumber: 11
-    typeName: LogsTableService
-    methodName: writeEntryToTable
-    functionName: LogsTableService.writeEntryToTable
-  tapCaught: unhandledRejection
-  test: TAP
-  source: |2
-        }
-  
-        throw new Error(LOGGING_ERROR_MSG.NO_WRITE_MECHANISM);
-    ----------^
-      }
-  ...
-
-1..13
-# { total: 36, pass: 34, fail: 2 }
-# time=3066.254ms
+LogsTableService shutdown
+1..12
+# { total: 36, pass: 36 }
+# time=3083.191ms

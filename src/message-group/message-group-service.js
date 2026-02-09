@@ -27,8 +27,12 @@ import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {InMemoryLogAdapter} from '../raft/in-memory-log-adapter.js';
 import {isRaftPacket, RAFT_PACKET_TYPES} from '../raft/raft-packet-utils.js';
-import {RAFT_EVENT} from '../raft/constants.js';
+import {RAFT_ELECTION_TIMING, RAFT_EVENT} from '../raft/constants.js';
 import {AddressManager} from '../address/address-manager.js';
+import {
+  UnifiedRebalancer,
+  EntityType as RebalancerEntityType,
+} from '../rebalancer/unified-rebalancer.js';
 import {
   MESSAGE_GROUP_SUBSYSTEM,
   MESSAGE_STATUS as MessageStatus,
@@ -184,6 +188,7 @@ class MessageGroupService extends EventEmitter {
     // Map of replicaId -> unified address (e.g., 'nodeId/message-group/replicaId')
     // Used when joining an existing message group on a different node
     this.peerAddresses = options.peerAddresses || [];
+    this.bootstrapHintFallbackLogged = new Set();
 
     // Get AddressManager instance for unified address operations
     // Requirements: 1.4
@@ -226,6 +231,9 @@ class MessageGroupService extends EventEmitter {
     this.persistedLeaderNodeId = null;
     this.leaderNodeUpdateInFlight = false;
     this.leaderNodeUpdateRetryTimer = null;
+    this.tablePolicyService = options.tablePolicyService || null;
+    this.rebalanceCoordinator = options.rebalanceCoordinator || null;
+    this.rebalancer = null;
 
     // Message tracking
     this.pendingMessages = new Map();
@@ -321,6 +329,14 @@ class MessageGroupService extends EventEmitter {
       throw new Error(`Peer address must be unified: ${peerId}`);
     }
 
+    // Prefer cache-backed topology first so handoff/move metadata wins over
+    // bootstrap-time peer hints.
+    const cachedAddress = this.resolvePeerAddressFromCache(peerId);
+    if (cachedAddress) {
+      this.bootstrapHintFallbackLogged.delete(peerId);
+      return cachedAddress;
+    }
+
     // Check peerAddresses array (provided during cross-node joining)
     // Format: ['nodeId/message-group/replicaId', ...]
     if (this.peerAddresses && this.peerAddresses.length > 0) {
@@ -338,6 +354,7 @@ class MessageGroupService extends EventEmitter {
         try {
           const parsed = this.addressManager.parse(addr);
           if (parsed.serviceId === peerId) {
+            this.logBootstrapHintFallback(peerId, addr);
             return addr;
           }
         } catch (_e) {
@@ -346,19 +363,61 @@ class MessageGroupService extends EventEmitter {
       }
     }
 
-    // Try to look up nodeId from system table cache
-    if (this.systemTableCache) {
-      const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
-      if (service && service.node_id) {
-        return this.addressManager.format(
-          service.node_id,
-          ENTITY_TYPE.MESSAGE_GROUP,
-          peerId,
-        );
+    throw new Error(`Unable to resolve unified peer address for ${peerId}`);
+  }
+
+  /**
+   * Resolve peer address from the services cache.
+   * @param {string} peerId - Peer replica ID.
+   * @return {string|null} Unified address from cache, otherwise null.
+   * @private
+   */
+  resolvePeerAddressFromCache(peerId) {
+    if (!this.systemTableCache) {
+      return null;
+    }
+
+    const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
+    if (!service) {
+      return null;
+    }
+
+    if (service.address) {
+      const validation = this.addressManager.validate(service.address);
+      if (validation.valid) {
+        return service.address;
       }
     }
 
-    throw new Error(`Unable to resolve unified peer address for ${peerId}`);
+    if (service.node_id) {
+      return this.addressManager.format(
+        service.node_id,
+        ENTITY_TYPE.MESSAGE_GROUP,
+        peerId,
+      );
+    }
+
+    return null;
+  }
+
+  /**
+   * Emit a structured warning when bootstrap peer hints are used as fallback.
+   * @param {string} peerId - Peer replica ID.
+   * @param {string} address - Resolved bootstrap hint address.
+   * @private
+   */
+  logBootstrapHintFallback(peerId, address) {
+    if (this.bootstrapHintFallbackLogged.has(peerId)) {
+      return;
+    }
+    this.bootstrapHintFallbackLogged.add(peerId);
+    this.logger.warn('Using bootstrap peer hint because services cache has no peer location', {
+      groupId: this.groupId,
+      replicaId: this.replicaId,
+      peerId,
+      address,
+      resolutionSource: 'bootstrap_hint',
+    });
   }
 
 
@@ -405,7 +464,7 @@ class MessageGroupService extends EventEmitter {
       // Add offset to ensure new replicas have higher jitter than existing ones
       replicaIndex = this.replicaIds.length + (hashCode % NUM.TEN);
     }
-    const jitterMs = replicaIndex * TIME_MS.HALF_SECOND; // 500ms per replica index
+    const jitterMs = replicaIndex * RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS;
     const electionMinMs = baseElectionMinMs + jitterMs;
     const electionMaxMs = baseElectionMaxMs + jitterMs;
 
@@ -490,14 +549,56 @@ class MessageGroupService extends EventEmitter {
       });
     }
 
-    // Wire up liferaft events
-    // Requirements: 5.1, 5.2, 5.3, 5.4
+    // Wrap post-raft-creation setup so that if peer resolution or any
+    // subsequent step throws, we clean up the raft instance and its
+    // timers. Without this, a failed initialize() leaks liferaft timers
+    // that keep the Node.js process alive indefinitely.
+    try {
+      this.wireRaftEvents();
+      this.joinPeerNodes();
+      this.promoteIfSingleReplica();
+    } catch (error) {
+      this.logger.error('Failed during initialize, cleaning up raft', {
+        groupId: this.groupId,
+        replicaId: this.replicaId,
+        error: error.message,
+      });
+      if (this.raft) {
+        if (this.raft.timers) {
+          this.raft.timers.clear();
+        }
+        this.raft.end();
+        this.raft = null;
+      }
+      throw error;
+    }
+
+    this.initialized = true;
+    this.maybeInitializeRebalancer();
+
+    this.logger.info('Message group service initialized', {
+      groupId: this.groupId,
+      replicaId: this.replicaId,
+      role: this.role,
+    });
+
+    this.emit('initialized', {groupId: this.groupId, replicaId: this.replicaId});
+  }
+
+  /**
+   * Wire up liferaft event handlers for role changes, commits, etc.
+   * Extracted from initialize() for clarity and safe cleanup on failure.
+   * Requirements: 5.1, 5.2, 5.3, 5.4
+   * @private
+   */
+  wireRaftEvents() {
     this.raft.on(RAFT_EVENT.LEADER, () => {
       this.role = RaftRole.LEADER;
       this.isLeader = true;
       this.leaderId = this.replicaId;
       this.queueRoleUpdate(this.role);
       this.queueLeaderNodeUpdate(this.nodeId);
+      this.updateRebalancerLeadership();
       this.storage.currentTerm = this.raft.term;
 
       this.logger.info('Became leader', {
@@ -519,6 +620,7 @@ class MessageGroupService extends EventEmitter {
       this.queueRoleUpdate(this.role);
       this.pendingLeaderNodeUpdate = null;
       this.persistedLeaderNodeId = null;
+      this.updateRebalancerLeadership();
       if (this.leaderNodeUpdateRetryTimer) {
         clearTimeout(this.leaderNodeUpdateRetryTimer);
         this.leaderNodeUpdateRetryTimer = null;
@@ -532,13 +634,13 @@ class MessageGroupService extends EventEmitter {
       this.queueRoleUpdate(this.role);
       this.pendingLeaderNodeUpdate = null;
       this.persistedLeaderNodeId = null;
+      this.updateRebalancerLeadership();
       if (this.leaderNodeUpdateRetryTimer) {
         clearTimeout(this.leaderNodeUpdateRetryTimer);
         this.leaderNodeUpdateRetryTimer = null;
       }
       this.storage.currentTerm = this.raft.term;
     });
-
 
     // Handle committed entries
     // Requirements: 6.1, 6.2, 6.4, 6.5
@@ -557,24 +659,35 @@ class MessageGroupService extends EventEmitter {
     this.raft.on(RAFT_EVENT.TERM_CHANGE, (term) => {
       this.storage.currentTerm = term;
     });
+  }
 
-    // Join peer nodes
+  /**
+   * Join peer nodes in the Raft group.
+   * Resolves peer addresses and joins them via liferaft.
+   * @private
+   */
+  joinPeerNodes() {
     for (const peerId of this.replicaIds) {
       if (peerId !== this.replicaId) {
         const peerAddress = this.buildPeerAddress(peerId);
         this.raft.join(peerAddress);
       }
     }
+  }
 
-    // For single-replica groups, become leader immediately
-    // This avoids the election timer delay during bootstrap
+  /**
+   * For single-replica groups, promote to leader immediately.
+   * This avoids the election timer delay during bootstrap.
+   * @private
+   */
+  promoteIfSingleReplica() {
     if (this.replicaIds.length === 1) {
-      // Manually promote to leader for single-node case
       this.role = RaftRole.LEADER;
       this.isLeader = true;
       this.leaderId = this.replicaId;
       this.queueRoleUpdate(this.role);
       this.queueLeaderNodeUpdate(this.nodeId);
+      this.updateRebalancerLeadership();
 
       this.logger.info('Single replica - becoming leader immediately', {
         replicaId: this.replicaId,
@@ -587,16 +700,6 @@ class MessageGroupService extends EventEmitter {
         groupId: this.groupId,
       });
     }
-
-    this.initialized = true;
-
-    this.logger.info('Message group service initialized', {
-      groupId: this.groupId,
-      replicaId: this.replicaId,
-      role: this.role,
-    });
-
-    this.emit('initialized', {groupId: this.groupId, replicaId: this.replicaId});
   }
 
   /**
@@ -1163,6 +1266,7 @@ class MessageGroupService extends EventEmitter {
    */
   setCdcIntegrationService(cdcIntegrationService) {
     this.cdcIntegrationService = cdcIntegrationService;
+    this.maybeInitializeRebalancer();
     this.flushRoleUpdate().catch((error) => {
       this.logger.warn('Failed to persist role update after CDC service set', {
         groupId: this.groupId,
@@ -1177,6 +1281,79 @@ class MessageGroupService extends EventEmitter {
         error: error.message,
       });
     });
+  }
+
+  /**
+   * Set table policy service for message-group rebalancing.
+   * @param {Object} tablePolicyService - Table policy service.
+   */
+  setTablePolicyService(tablePolicyService) {
+    this.tablePolicyService = tablePolicyService;
+    this.maybeInitializeRebalancer();
+  }
+
+  /**
+   * Set rebalance coordinator for message-group rebalancing.
+   * @param {Object} rebalanceCoordinator - Rebalance coordinator.
+   */
+  setRebalanceCoordinator(rebalanceCoordinator) {
+    this.rebalanceCoordinator = rebalanceCoordinator;
+    this.maybeInitializeRebalancer();
+  }
+
+  /**
+   * Initialize message-group rebalancer when leader and dependencies are ready.
+   * @private
+   */
+  maybeInitializeRebalancer() {
+    if (this.rebalancer) {
+      this.rebalancer.systemTableCache = this.systemTableCache;
+      this.rebalancer.cdcIntegrationService = this.cdcIntegrationService;
+      this.rebalancer.tablePolicyService = this.tablePolicyService;
+      this.rebalancer.rebalanceCoordinator = this.rebalanceCoordinator;
+      this.rebalancer.messageRouter = this.transport;
+      this.rebalancer.sqlQueryEngine = this.cdcIntegrationService?.sqlQueryEngine || null;
+      this.rebalancer.setLeader(this.isLeaderReplica());
+      return;
+    }
+
+    if (!this.initialized || !this.isLeaderReplica()) {
+      return;
+    }
+
+    if (!this.systemTableCache ||
+        !this.cdcIntegrationService ||
+        !this.tablePolicyService ||
+        !this.rebalanceCoordinator ||
+        !this.transport) {
+      return;
+    }
+
+    this.rebalancer = new UnifiedRebalancer({
+      entityId: this.groupId,
+      entityType: RebalancerEntityType.MESSAGE_GROUP,
+      systemTableCache: this.systemTableCache,
+      cdcIntegrationService: this.cdcIntegrationService,
+      tablePolicyService: this.tablePolicyService,
+      nodeId: this.nodeId,
+      messageRouter: this.transport,
+      sqlQueryEngine: this.cdcIntegrationService.sqlQueryEngine,
+      rebalanceCoordinator: this.rebalanceCoordinator,
+    });
+    this.rebalancer.initialize();
+    this.rebalancer.setLeader(true);
+  }
+
+  /**
+   * Update rebalancer leadership when raft role changes.
+   * @private
+   */
+  updateRebalancerLeadership() {
+    if (this.rebalancer) {
+      this.rebalancer.setLeader(this.isLeaderReplica());
+      return;
+    }
+    this.maybeInitializeRebalancer();
   }
 
   /**
@@ -1467,6 +1644,18 @@ class MessageGroupService extends EventEmitter {
   }
 
   /**
+   * Stop message-group rebalancing activity.
+   * @return {Promise<void>}
+   */
+  async quiesceRebalancing() {
+    if (this.rebalancer) {
+      this.rebalancer.setLeader(false);
+      this.rebalancer.shutdown();
+      this.rebalancer = null;
+    }
+  }
+
+  /**
    * Shutdown the message group service.
    * @return {Promise<void>}
    */
@@ -1493,6 +1682,7 @@ class MessageGroupService extends EventEmitter {
       clearTimeout(this.leaderNodeUpdateRetryTimer);
       this.leaderNodeUpdateRetryTimer = null;
     }
+    await this.quiesceRebalancing();
 
     this.initialized = false;
     this.pendingMessages.clear();

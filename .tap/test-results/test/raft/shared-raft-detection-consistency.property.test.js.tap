@@ -4,39 +4,45 @@ TAP version 14
     ok 2 - Type 'vote' exists in both modules
     ok 3 - Type 'voted' exists in both modules
     ok 4 - Type 'append' exists in both modules
-    ok 5 - Type 'appended' exists in both modules
-    ok 6 - Type 'error' exists in both modules
-    ok 7 - Type 'vote' exists in both modules
-    ok 8 - Type 'voted' exists in both modules
-    ok 9 - Type 'append' exists in both modules
-    ok 10 - Type 'appended' exists in both modules
-    ok 11 - Type 'error' exists in both modules
-    ok 12 - RAFT_PACKET_TYPES is identical between modules
-    1..12
-ok 1 - Property 5: RAFT_PACKET_TYPES is identical between modules # time=3.01ms
+    ok 5 - Type 'append ack' exists in both modules
+    ok 6 - Type 'append fail' exists in both modules
+    ok 7 - Type 'exec' exists in both modules
+    ok 8 - Type 'appended' exists in both modules
+    ok 9 - Type 'error' exists in both modules
+    ok 10 - Type 'vote' exists in both modules
+    ok 11 - Type 'voted' exists in both modules
+    ok 12 - Type 'append' exists in both modules
+    ok 13 - Type 'append ack' exists in both modules
+    ok 14 - Type 'append fail' exists in both modules
+    ok 15 - Type 'exec' exists in both modules
+    ok 16 - Type 'appended' exists in both modules
+    ok 17 - Type 'error' exists in both modules
+    ok 18 - RAFT_PACKET_TYPES is identical between modules
+    1..18
+ok 1 - Property 5: RAFT_PACKET_TYPES is identical between modules # time=5.885ms
 
 # Subtest: Property 5: Valid Raft packets detected consistently
     ok 1 - Valid Raft packets detected consistently across modules
     1..1
-ok 2 - Property 5: Valid Raft packets detected consistently # time=3.88ms
+ok 2 - Property 5: Valid Raft packets detected consistently # time=6.091ms
 
 # Subtest: Property 5: Non-Raft payloads rejected consistently
     ok 1 - Non-Raft payloads rejected consistently across modules
     1..1
-ok 3 - Property 5: Non-Raft payloads rejected consistently # time=4.225ms
+ok 3 - Property 5: Non-Raft payloads rejected consistently # time=6.132ms
 
 # Subtest: Property 5: Arbitrary payloads handled consistently
     ok 1 - Arbitrary payloads handled consistently across modules
     1..1
-ok 4 - Property 5: Arbitrary payloads handled consistently # time=1.237ms
+ok 4 - Property 5: Arbitrary payloads handled consistently # time=3.028ms
 
 # Subtest: Property 5: Functions are referentially equal
     ok 1 - isRaftPacket is the same function reference
     ok 2 - RAFT_PACKET_TYPES is the same Set reference
     ok 3 - Functions are referentially equal
     1..3
-ok 5 - Property 5: Functions are referentially equal # time=0.274ms
+ok 5 - Property 5: Functions are referentially equal # time=0.516ms
 
 1..5
-# { total: 18, pass: 18 }
-# time=31.995ms
+# { total: 24, pass: 24 }
+# time=29.763ms

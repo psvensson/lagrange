@@ -15,6 +15,7 @@ import {
   DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
 } from '../../src/rebalancer/unified-rebalancer.js';
+import {REBALANCER_LOG_MSG} from '../../src/rebalancer/rebalancer-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -113,6 +114,7 @@ function createMockMessageRouter(connectionState = 'connected') {
 // Create mock rebalance coordinator
 function createMockCoordinator() {
   return {
+    getMoveSafetyError: () => null,
     createOperation: async (move) => ({
       operationId: 'op-' + Date.now(),
       type: move.type,
@@ -227,7 +229,7 @@ test('UnifiedRebalancer - Policy Management', async (t) => {
       nodeId: 'node-1',
     });
 
-    const policy = rebalancer.getPolicy();
+    const policy = await rebalancer.getPolicy();
 
     t.equal(policy.replicaCount, DEFAULT_TABLE_POLICY.replicaCount);
     t.equal(policy.minReplicaCount, DEFAULT_TABLE_POLICY.minReplicaCount);
@@ -241,7 +243,7 @@ test('UnifiedRebalancer - Policy Management', async (t) => {
       nodeId: 'node-1',
     });
 
-    const policy = rebalancer.getPolicy();
+    const policy = await rebalancer.getPolicy();
 
     t.equal(policy.targetReplicaCount, DEFAULT_MESSAGE_GROUP_POLICY.targetReplicaCount);
     t.equal(policy.ensureLocalAccess, DEFAULT_MESSAGE_GROUP_POLICY.ensureLocalAccess);
@@ -259,7 +261,7 @@ test('UnifiedRebalancer - Policy Management', async (t) => {
       }],
     });
 
-    const policy = rebalancer.getPolicy();
+    const policy = await rebalancer.getPolicy();
 
     t.equal(policy.replicaCount, 5);
     t.equal(policy.minReplicaCount, 3);
@@ -480,11 +482,9 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
     t.equal(removeMoves[0].reason, 'replica_failed');
   });
 
-  await t.test('includes node_not_in_target removes with add moves', async (t) => {
-    // When there's a node not in target (node-4) AND a node missing (node-3),
-    // the rebalancer should generate both ADD and REMOVE moves.
-    // The 'node_not_in_target' REMOVE is critical to prevent replica accumulation
-    // as nodes join the cluster.
+  await t.test('converts node_not_in_target + add into REPLACE move', async (t) => {
+    // When there's a node not in target (node-4) and a node missing (node-3),
+    // planner should emit REPLACE to avoid add-only growth.
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
@@ -504,22 +504,106 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
 
     const moves = rebalancer.calculateMoves(currentReplicas, targetState);
 
-    // Should have ADD move for node-3
     const addMoves = moves.filter((m) => m.type === MoveType.ADD);
-    t.equal(addMoves.length, 1, 'should have one ADD move');
-    t.equal(addMoves[0].nodeId, 'node-3', 'ADD should be for node-3');
+    t.equal(addMoves.length, 0, 'should not emit standalone ADD');
 
-    // REMOVE move for node_not_in_target should be included (critical)
     const removeMoves = moves.filter((m) => m.type === MoveType.REMOVE);
-    t.equal(removeMoves.length, 1, 'should have one REMOVE move');
-    t.equal(removeMoves[0].nodeId, 'node-4', 'REMOVE should be for node-4');
-    t.equal(removeMoves[0].reason, 'node_not_in_target', 'reason should be node_not_in_target');
+    t.equal(removeMoves.length, 0, 'should not emit standalone REMOVE');
+
+    const replaceMoves = moves.filter((m) => m.type === MoveType.REPLACE);
+    t.equal(replaceMoves.length, 1, 'should emit one REPLACE move');
+    t.equal(replaceMoves[0].nodeId, 'node-3', 'REPLACE should target node-3');
+    t.equal(replaceMoves[0].sourceNodeId, 'node-4', 'REPLACE should remove from node-4');
+    t.equal(replaceMoves[0].replicaId, 'r3', 'REPLACE should remove replica r3');
   });
 
-  await t.test('defers spread_replicas removes when add moves pending', async (t) => {
-    // When a node has excess replicas (spread_replicas reason) AND there are
-    // ADD moves pending, the spread_replicas REMOVE should be deferred.
-    // Only node_not_in_target and replica_failed REMOVEs are critical.
+  await t.test('uses REPLACE moves when target is degraded but spread can improve', async (t) => {
+    // In degraded topology (insufficient ready nodes), when policy target is already
+    // satisfied we should avoid ADD-only growth and use paired REPLACE moves.
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    const currentReplicas = [
+      {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+      {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+      {replica_id: 'r3', node_id: 'node-4', status: ReplicaStatus.ACTIVE},
+    ];
+
+    const targetState = {
+      targetReplicaCount: 3,
+      targetNodes: ['node-1', 'node-3'],
+      degraded: true,
+      degradedReason: 'insufficient_nodes',
+      availableNodeCount: 2,
+    };
+
+    const moves = rebalancer.calculateMoves(currentReplicas, targetState);
+
+    const addMoves = moves.filter((m) => m.type === MoveType.ADD);
+    t.equal(
+      addMoves.length,
+      0,
+      'should not emit standalone ADD moves when degraded and already at target',
+    );
+
+    const removeMoves = moves.filter((m) => m.type === MoveType.REMOVE);
+    t.equal(
+      removeMoves.length,
+      0,
+      'should not emit standalone non-failed REMOVE moves while degraded',
+    );
+
+    const replaceMoves = moves.filter((m) => m.type === MoveType.REPLACE);
+    t.equal(
+      replaceMoves.length,
+      1,
+      'should emit one REPLACE move to improve spread under degraded topology',
+    );
+    t.equal(
+      replaceMoves[0].nodeId,
+      'node-3',
+      'replacement target should be the underrepresented ready node',
+    );
+    t.equal(
+      replaceMoves[0].replicaId,
+      'r2',
+      'replacement source should come from overrepresented node',
+    );
+  });
+
+  await t.test('keeps ADD move in degraded topology when below policy target', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    const currentReplicas = [
+      {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+      {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+    ];
+
+    const targetState = {
+      targetReplicaCount: 3,
+      targetNodes: ['node-1', 'node-3'],
+      degraded: true,
+      degradedReason: 'insufficient_nodes',
+      availableNodeCount: 2,
+    };
+
+    const moves = rebalancer.calculateMoves(currentReplicas, targetState);
+    const addMoves = moves.filter((m) => m.type === MoveType.ADD);
+
+    t.equal(addMoves.length, 1, 'should keep ADD while below policy target');
+    t.equal(addMoves[0].nodeId, 'node-3', 'ADD should target missing node');
+  });
+
+  await t.test('converts spread_replicas + add into REPLACE move', async (t) => {
+    // When a node has excess replicas and there is a missing target node,
+    // planner should emit REPLACE to keep replica count bounded.
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
@@ -540,14 +624,16 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
 
     const moves = rebalancer.calculateMoves(currentReplicas, targetState);
 
-    // Should have ADD move for node-3
     const addMoves = moves.filter((m) => m.type === MoveType.ADD);
-    t.equal(addMoves.length, 1, 'should have one ADD move');
-    t.equal(addMoves[0].nodeId, 'node-3', 'ADD should be for node-3');
+    t.equal(addMoves.length, 0, 'should not emit standalone ADD');
 
-    // spread_replicas REMOVE should be deferred (node-1 is in target, just has excess)
     const removeMoves = moves.filter((m) => m.type === MoveType.REMOVE);
-    t.equal(removeMoves.length, 0, 'spread_replicas REMOVE should be deferred');
+    t.equal(removeMoves.length, 0, 'should not emit standalone spread REMOVE');
+
+    const replaceMoves = moves.filter((m) => m.type === MoveType.REPLACE);
+    t.equal(replaceMoves.length, 1, 'should emit one REPLACE move');
+    t.equal(replaceMoves[0].nodeId, 'node-3', 'REPLACE should target node-3');
+    t.equal(replaceMoves[0].sourceNodeId, 'node-1', 'REPLACE should remove from overrepresented node');
   });
 
   await t.test('calculates remove moves when no add moves needed', async (t) => {
@@ -586,11 +672,124 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
 test('UnifiedRebalancer - State Evaluation', async (t) => {
   initializeTestEnvironment();
 
+  await t.test('logs degraded target once until topology signal changes', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+      ],
+      services: [
+        {
+          service_id: 's1',
+          partition_id: 'partition-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          service_id: 's2',
+          partition_id: 'partition-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          service_id: 's3',
+          partition_id: 'partition-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+      ],
+    });
+
+    const degradedLogs = [];
+    rebalancer.logger = {
+      ...rebalancer.logger,
+      info: (message, payload) => {
+        if (message === REBALANCER_LOG_MSG.DEGRADED_TARGET) {
+          degradedLogs.push(payload);
+        }
+      },
+    };
+
+    await rebalancer.evaluateState();
+    await rebalancer.evaluateState();
+
+    t.equal(
+      degradedLogs.length,
+      1,
+      'degraded target should not spam on unchanged state',
+    );
+  });
+
+  await t.test('logs suboptimal state once until topology signal changes', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ],
+      services: [
+        {
+          service_id: 's1',
+          partition_id: 'partition-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          service_id: 's2',
+          partition_id: 'partition-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          service_id: 's3',
+          partition_id: 'partition-1',
+          node_id: 'node-2',
+          service_type: 'partition',
+          status: ReplicaStatus.ACTIVE,
+        },
+      ],
+    });
+
+    const suboptimalLogs = [];
+    rebalancer.logger = {
+      ...rebalancer.logger,
+      info: (message, payload) => {
+        if (message === REBALANCER_LOG_MSG.SUBOPTIMAL_STATE) {
+          suboptimalLogs.push(payload);
+        }
+      },
+    };
+
+    await rebalancer.evaluateState();
+    await rebalancer.evaluateState();
+
+    t.equal(
+      suboptimalLogs.length,
+      1,
+      'suboptimal state should not spam on unchanged topology',
+    );
+  });
+
   await t.test('detects critical state when below minimum replicas', async (t) => {
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ],
     });
 
     const replicas = [
@@ -602,6 +801,40 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
 
     t.equal(rebalancer.isCriticalState(replicas, policy), true);
   });
+
+  await t.test('does not treat below-min as critical when ready-node capacity is constrained',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        ],
+      });
+
+      const replicas = [
+        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+        {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+      ];
+
+      const policy = {
+        minReplicaCount: 3,
+        targetReplicaCount: 3,
+      };
+
+      t.equal(
+        rebalancer.isCriticalState(replicas, policy),
+        false,
+        'insufficient ready nodes should be treated as degraded, not critical',
+      );
+      t.equal(
+        rebalancer.isSuboptimalState(replicas, policy),
+        false,
+        'at actionable target under degraded capacity should not be repeatedly rebalanced',
+      );
+    });
 
   await t.test('detects suboptimal state when not at target count', async (t) => {
     const rebalancer = createTestRebalancer({
@@ -1199,6 +1432,66 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     // Interval should be reset to base after rebalancing
     t.equal(rebalancer.currentInterval, baseInterval);
   });
+
+  await t.test('checkRebalance backs off when no actionable moves were executed', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    rebalancer.initialize();
+    rebalancer.isLeader = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.evaluateState = async () => true;
+    rebalancer.rebalance = async () => ({
+      success: true,
+      moves: [
+        {success: false, skipped: true, reason: 'safety_blocked'},
+      ],
+    });
+    rebalancer.scheduleNextCheck = () => {};
+
+    const baseInterval = rebalancer.periodicCheckIntervalMs;
+    rebalancer.currentInterval = baseInterval;
+
+    await rebalancer.checkRebalance();
+
+    t.ok(
+      rebalancer.currentInterval > baseInterval,
+      'interval should back off when all moves are skipped',
+    );
+  });
+
+  await t.test('checkRebalance resets interval when actionable moves are executed', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+    });
+
+    rebalancer.initialize();
+    rebalancer.isLeader = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.evaluateState = async () => true;
+    rebalancer.rebalance = async () => ({
+      success: true,
+      moves: [
+        {success: true, skipped: false, operation: 'add'},
+      ],
+    });
+    rebalancer.scheduleNextCheck = () => {};
+
+    rebalancer.currentInterval = rebalancer.maxInterval;
+
+    await rebalancer.checkRebalance();
+
+    t.equal(
+      rebalancer.currentInterval,
+      rebalancer.periodicCheckIntervalMs,
+      'interval should reset when actionable moves execute',
+    );
+  });
 });
 
 
@@ -1223,6 +1516,55 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
 
     t.equal(healthy.length, 2);
     t.ok(healthy.every((r) => r.status === ReplicaStatus.ACTIVE));
+  });
+
+  await t.test('uses voter-ready filtering for critical system partitions', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'nodes-p1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE, ws_connection_state: 'disconnected'},
+      ],
+    });
+
+    const replicas = [
+      {
+        replica_id: 'r1',
+        node_id: 'node-1',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: 'leader',
+        address: 'node-1/partition/nodes-p1-r1',
+      },
+      {
+        replica_id: 'r2',
+        node_id: 'node-2',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: 'learner',
+        address: 'node-2/partition/nodes-p1-r2',
+      },
+      {
+        replica_id: 'r3',
+        node_id: 'node-3',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: 'follower',
+        address: 'node-3/partition/nodes-p1-r3',
+      },
+      {
+        replica_id: 'r4',
+        node_id: 'node-2',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: 'follower',
+        address: null,
+      },
+    ];
+
+    const healthy = rebalancer.getHealthyReplicas(replicas);
+
+    t.equal(healthy.length, 1, 'only routable non-learner replicas on ready nodes should count');
+    t.equal(healthy[0].replica_id, 'r1', 'leader on ready node should remain healthy');
   });
 
   await t.test('generates remove moves for failed replicas', async (t) => {

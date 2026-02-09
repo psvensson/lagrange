@@ -1,14 +1,37 @@
 /**
- * Assignment Epoch Manager - Manages immutable assignment epochs with CAS coordination.
- * Provides compare-and-swap epoch transitions and CDC-based epoch updates.
- * Requirements: 3.2, 3.6, 3.7, 3.8
+ * Assignment Epoch Manager — Single Epoch Authority.
+ *
+ * This module is the **sole coordinator** for assignment epoch
+ * transitions in the cluster. No other component may propose,
+ * apply, or independently track epoch state.
+ *
+ * Epoch ownership boundaries:
+ * - **AssignmentEpochManager** owns the in-memory epoch and all
+ *   transitions (propose via CAS, apply via CDC).
+ * - **config.current_epoch** (config table) is the durable,
+ *   cluster-wide single source of truth for the persisted epoch.
+ * - **CDC** is the sole propagation mechanism: epoch writes go to
+ *   the config table partition leader, which generates a CDC event
+ *   that every node's CDCEventHandler routes to its local
+ *   AssignmentEpochManager via {@link applyEpoch}.
+ * - **SystemTableCache.currentEpoch** is a read-only cache of the
+ *   epoch *number* used only for stale-update rejection inside the
+ *   cache layer. It is not an independent coordinator.
+ * - Other components (BootstrapService, BootstrapAPI,
+ *   CDCIntegrationService) hold *references* to this manager but
+ *   do not maintain independent epoch state.
+ *
+ * Requirements: 3.2, 3.6, 3.7, 3.8, 5.1, 5.2, 5.3, 5.4
+ *
+ * @module rebalancer/assignment-epoch-manager
  */
 
 import {EventEmitter} from 'events';
 import {AssignmentEpoch} from './assignment-epoch.js';
 
 /**
- * Error thrown when a compare-and-swap operation fails due to epoch mismatch.
+ * Error thrown when a compare-and-swap operation fails due to
+ * epoch mismatch.
  */
 class EpochMismatchError extends Error {
   /**
@@ -57,14 +80,31 @@ const DEFAULT_RETRY_CONFIG = {
 };
 
 /**
- * AssignmentEpochManager manages immutable assignment epochs with
- * compare-and-swap coordination for epoch transitions.
+ * AssignmentEpochManager is the **single epoch authority** for the
+ * cluster. It manages immutable {@link AssignmentEpoch} instances
+ * with compare-and-swap (CAS) coordination.
+ *
+ * Ownership contract (Requirements 5.1–5.4):
+ * - This class is the sole coordinator for assignment epoch
+ *   transitions. No other component may propose or apply epochs
+ *   independently.
+ * - Epoch reads: components obtain the current epoch from this
+ *   manager or from `config.current_epoch` via CDC.
+ * - Epoch writes: only this manager's {@link proposeEpoch} and
+ *   {@link applyEpoch} methods mutate epoch state.
+ * - Epoch propagation: CDC is the single propagation mechanism.
+ *   Proposed epochs are persisted to `config.current_epoch` in the
+ *   config table; the resulting CDC event is delivered to every
+ *   node's CDCEventHandler, which calls {@link applyEpoch}.
  *
  * Key behaviors:
- * - proposeEpoch uses CAS: only succeeds if current epoch matches expectedEpoch
- * - applyEpoch rejects epochs older than or equal to current
+ * - {@link proposeEpoch} uses CAS: only succeeds if current epoch
+ *   matches expectedEpoch
+ * - {@link applyEpoch} rejects epochs older than or equal to
+ *   current
  * - New epoch number must be exactly one greater than previous
- * - proposeEpochWithRetry handles CAS failures with exponential backoff
+ * - {@link proposeEpochWithRetry} handles CAS failures with
+ *   exponential backoff
  *
  * @extends EventEmitter
  */
@@ -149,13 +189,21 @@ class AssignmentEpochManager extends EventEmitter {
   }
 
   /**
-   * Propose a new epoch with updated assignments.
-   * Uses compare-and-swap: only succeeds if current epoch matches expected.
+   * Propose a new epoch with updated assignments (CAS).
    *
-   * @param {number} expectedEpoch - The epoch number we expect to be current.
+   * This is the **only** mechanism for creating a new epoch
+   * locally. The caller must persist the resulting epoch to
+   * `config.current_epoch` so that CDC propagates it cluster-wide.
+   *
+   * Uses compare-and-swap: only succeeds if current epoch matches
+   * expected.
+   *
+   * @param {number} expectedEpoch - The epoch number we expect to
+   *   be current.
    * @param {Object} newAssignments - The new partition assignments.
-   * @return {{success: boolean, epoch?: AssignmentEpoch, error?: string}}
-   *   Result object with success status and either the new epoch or error message.
+   * @return {{success: boolean, epoch?: AssignmentEpoch,
+   *   error?: string}} Result object with success status and
+   *   either the new epoch or error message.
    */
   proposeEpoch(expectedEpoch, newAssignments) {
     if (!this._currentEpoch) {
@@ -306,11 +354,17 @@ class AssignmentEpochManager extends EventEmitter {
   }
 
   /**
-   * Apply an epoch received via CDC.
+   * Apply an epoch received via CDC — the sole propagation path.
+   *
+   * CDC events from `config.current_epoch` are the **only**
+   * mechanism by which remote epoch proposals reach this manager.
+   * CDCEventHandler parses the event and calls this method.
+   *
    * Only applies if the incoming epoch is newer than current.
    *
    * @param {AssignmentEpoch} epoch - The epoch to apply.
-   * @return {boolean} True if applied (newer than current), false otherwise.
+   * @return {boolean} True if applied (newer than current), false
+   *   otherwise.
    */
   applyEpoch(epoch) {
     if (!(epoch instanceof AssignmentEpoch)) {

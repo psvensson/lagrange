@@ -172,7 +172,8 @@ test('FunctionQueryExecutor - executeQueryThenInvoke calls function', async (t) 
   t.equal(invocations[0].context.extra, 'context', 'Should pass extra context');
 });
 
-test('FunctionQueryExecutor - executeQueryThenInvoke throws on function error', async (t) => {
+test('FunctionQueryExecutor - executeQueryThenInvoke returns failure on function error',
+  async (t) => {
   const engine = createMockSqlEngine([{id: 1}]);
   const registry = createMockFunctionRegistry();
   const executor = new FunctionQueryExecutor({
@@ -180,16 +181,18 @@ test('FunctionQueryExecutor - executeQueryThenInvoke throws on function error', 
     functionRegistry: registry,
   });
 
-  await t.rejects(
-    executor.executeQueryThenInvoke(
-      'SELECT * FROM test',
-      [],
-      'error-func',
-      {},
-    ),
-    /Function error/,
-    'Should throw on function error',
+  const result = await executor.executeQueryThenInvoke(
+    'SELECT * FROM test',
+    [],
+    'error-func',
+    {},
   );
+
+  t.equal(result.success, false, 'Should return failure');
+  t.equal(result.functionInvoked, false, 'Should report function not invoked');
+  t.match(result.error, /Function error/, 'Should include function error');
+  t.ok(result.queryResult, 'Should preserve query result');
+  t.equal(result.queryResult.rows.length, 1, 'Should preserve query rows');
 });
 
 test('FunctionQueryExecutor - executeQueryThenInvoke throws without registry', async (t) => {

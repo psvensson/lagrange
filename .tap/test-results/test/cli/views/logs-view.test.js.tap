@@ -10,7 +10,7 @@ TAP version 14
         ok 7 - should be equal
         ok 8 - should be equal
         1..8
-    ok 1 - constructor initializes with default state # time=11.963ms
+    ok 1 - constructor initializes with default state # time=12.585ms
     
     # Subtest: getColumns returns correct column definitions
         ok 1 - should be equal
@@ -21,7 +21,7 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 2 - getColumns returns correct column definitions # time=0.967ms
+    ok 2 - getColumns returns correct column definitions # time=0.57ms
     
     # Subtest: formatRow formats log data correctly
         ok 1 - should be equal
@@ -30,7 +30,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 3 - formatRow formats log data correctly # time=0.905ms
+    ok 3 - formatRow formats log data correctly # time=0.614ms
     
     # Subtest: formatRow handles missing values
         ok 1 - should be equal
@@ -39,7 +39,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 4 - formatRow handles missing values # time=0.431ms
+    ok 4 - formatRow handles missing values # time=0.433ms
     
     # Subtest: formatTimestamp handles various formats
         ok 1 - should be equal
@@ -48,7 +48,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 5 - formatTimestamp handles various formats # time=0.459ms
+    ok 5 - formatTimestamp handles various formats # time=0.417ms
     
     # Subtest: truncateMessage truncates long messages
         ok 1 - should be equal
@@ -58,29 +58,29 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 6 - truncateMessage truncates long messages # time=0.639ms
+    ok 6 - truncateMessage truncates long messages # time=0.528ms
     
     # Subtest: getRowStatus returns ERROR for ERROR level
         ok 1 - should be equal
         1..1
-    ok 7 - getRowStatus returns ERROR for ERROR level # time=0.384ms
+    ok 7 - getRowStatus returns ERROR for ERROR level # time=0.214ms
     
     # Subtest: getRowStatus returns WARNING for WARN level
         ok 1 - should be equal
         1..1
-    ok 8 - getRowStatus returns WARNING for WARN level # time=0.295ms
+    ok 8 - getRowStatus returns WARNING for WARN level # time=0.19ms
     
     # Subtest: getRowStatus returns NORMAL for INFO level
         ok 1 - should be equal
         1..1
-    ok 9 - getRowStatus returns NORMAL for INFO level # time=0.197ms
+    ok 9 - getRowStatus returns NORMAL for INFO level # time=0.182ms
     
     # Subtest: getRowStatus handles case insensitivity
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 10 - getRowStatus handles case insensitivity # time=0.358ms
+    ok 10 - getRowStatus handles case insensitivity # time=0.499ms
     
     # Subtest: getLevelColor returns correct colors
         ok 1 - should be equal
@@ -90,38 +90,38 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 11 - getLevelColor returns correct colors # time=0.623ms
+    ok 11 - getLevelColor returns correct colors # time=0.716ms
     
     # Subtest: getItemKey returns log_id
         ok 1 - should be equal
         1..1
-    ok 12 - getItemKey returns log_id # time=0.289ms
+    ok 12 - getItemKey returns log_id # time=0.298ms
     
     # Subtest: setLevelFilter filters by level
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 13 - setLevelFilter filters by level # time=0.623ms
+    ok 13 - setLevelFilter filters by level # time=0.776ms
     
     # Subtest: setNodeFilter filters by node_id
         ok 1 - should be equal
         1..1
-    ok 14 - setNodeFilter filters by node_id # time=0.329ms
+    ok 14 - setNodeFilter filters by node_id # time=0.324ms
     
     # Subtest: setServiceFilter filters by service_id
         ok 1 - should be equal
         1..1
-    ok 15 - setServiceFilter filters by service_id # time=0.333ms
+    ok 15 - setServiceFilter filters by service_id # time=0.26ms
     
     # Subtest: setTimeRangeFilter filters by time range
         ok 1 - should be equal
         1..1
-    ok 16 - setTimeRangeFilter filters by time range # time=0.42ms
+    ok 16 - setTimeRangeFilter filters by time range # time=0.341ms
     
     # Subtest: setMessageFilter filters by message content
         ok 1 - should be equal
         1..1
-    ok 17 - setMessageFilter filters by message content # time=0.551ms
+    ok 17 - setMessageFilter filters by message content # time=0.371ms
     
     # Subtest: clearAllFilters clears all filters
         ok 1 - should be equal
@@ -131,21 +131,21 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 18 - clearAllFilters clears all filters # time=0.712ms
+    ok 18 - clearAllFilters clears all filters # time=0.588ms
     
     # Subtest: applySort sorts by timestamp descending by default
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 19 - applySort sorts by timestamp descending by default # time=4.829ms
+    ok 19 - applySort sorts by timestamp descending by default # time=0.362ms
     
     # Subtest: applySort sorts by timestamp ascending
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 20 - applySort sorts by timestamp ascending # time=0.66ms
+    ok 20 - applySort sorts by timestamp ascending # time=0.376ms
     
     # Subtest: handleDrillDown returns detail action
         ok 1 - should be equal
@@ -153,12 +153,12 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 21 - handleDrillDown returns detail action # time=0.499ms
+    ok 21 - handleDrillDown returns detail action # time=0.521ms
     
     # Subtest: handleDrillDown returns null when no selection
         ok 1 - should be equal
         1..1
-    ok 22 - handleDrillDown returns null when no selection # time=0.229ms
+    ok 22 - handleDrillDown returns null when no selection # time=0.228ms
     
     # Subtest: getSelectedDetails returns log details
         ok 1 - should be equal
@@ -167,12 +167,12 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 23 - getSelectedDetails returns log details # time=0.655ms
+    ok 23 - getSelectedDetails returns log details # time=0.517ms
     
     # Subtest: getSelectedDetails returns null when no selection
         ok 1 - should be equal
         1..1
-    ok 24 - getSelectedDetails returns null when no selection # time=0.284ms
+    ok 24 - getSelectedDetails returns null when no selection # time=0.213ms
     
     # Subtest: getSelectedDetails includes all log fields
         ok 1 - should be equal
@@ -181,72 +181,72 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 25 - getSelectedDetails includes all log fields # time=0.474ms
+    ok 25 - getSelectedDetails includes all log fields # time=0.473ms
     
     # Subtest: getSelectedDetails handles nested metadata
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 26 - getSelectedDetails handles nested metadata # time=0.348ms
+    ok 26 - getSelectedDetails handles nested metadata # time=0.381ms
     
     # Subtest: streaming is enabled by default
         ok 1 - should be equal
         1..1
-    ok 27 - streaming is enabled by default # time=0.205ms
+    ok 27 - streaming is enabled by default # time=0.248ms
     
     # Subtest: setStreamingEnabled toggles streaming
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 28 - setStreamingEnabled toggles streaming # time=0.234ms
+    ok 28 - setStreamingEnabled toggles streaming # time=0.288ms
     
     # Subtest: getTimeRange returns correct range
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 29 - getTimeRange returns correct range # time=0.334ms
+    ok 29 - getTimeRange returns correct range # time=0.41ms
     
     # Subtest: getTimeRange returns null for empty data
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 30 - getTimeRange returns null for empty data # time=0.281ms
+    ok 30 - getTimeRange returns null for empty data # time=0.284ms
     
     # Subtest: getStatusBarInfo returns correct info
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 31 - getStatusBarInfo returns correct info # time=0.313ms
+    ok 31 - getStatusBarInfo returns correct info # time=0.374ms
     
     # Subtest: render includes status bar info
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 32 - render includes status bar info # time=0.352ms
+    ok 32 - render includes status bar info # time=0.441ms
     
     # Subtest: multiple filters combine correctly
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 33 - multiple filters combine correctly # time=0.244ms
+    ok 33 - multiple filters combine correctly # time=0.31ms
     
     # Subtest: exportLogs exports as JSON by default
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 34 - exportLogs exports as JSON by default # time=0.263ms
+    ok 34 - exportLogs exports as JSON by default # time=0.331ms
     
     # Subtest: exportLogs exports as CSV
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 35 - exportLogs exports as CSV # time=0.445ms
+    ok 35 - exportLogs exports as CSV # time=0.439ms
     
     # Subtest: exportLogs CSV escapes special characters
         ok 1 - should be equal
         1..1
-    ok 36 - exportLogs CSV escapes special characters # time=0.189ms
+    ok 36 - exportLogs CSV escapes special characters # time=0.251ms
     
     # Subtest: exportLogs exports as text
         ok 1 - should be equal
@@ -254,29 +254,29 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 37 - exportLogs exports as text # time=0.367ms
+    ok 37 - exportLogs exports as text # time=0.413ms
     
     # Subtest: exportLogs handles empty data
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 38 - exportLogs handles empty data # time=0.568ms
+    ok 38 - exportLogs handles empty data # time=0.478ms
     
     # Subtest: getExportMetadata returns correct metadata
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 39 - getExportMetadata returns correct metadata # time=0.54ms
+    ok 39 - getExportMetadata returns correct metadata # time=0.508ms
     
     1..39
-ok 1 - LogsView # time=41.897ms
+ok 1 - LogsView # time=37.364ms
 
 # Subtest: LOG_LEVELS constant
     ok 1 - should be equivalent
     1..1
-ok 2 - LOG_LEVELS constant # time=0.835ms
+ok 2 - LOG_LEVELS constant # time=1.046ms
 
 # Subtest: LOG_LEVEL_COLORS constant
     ok 1 - should be equal
@@ -285,8 +285,8 @@ ok 2 - LOG_LEVELS constant # time=0.835ms
     ok 4 - should be equal
     ok 5 - should be equal
     1..5
-ok 3 - LOG_LEVEL_COLORS constant # time=0.285ms
+ok 3 - LOG_LEVEL_COLORS constant # time=0.322ms
 
 1..3
 # { total: 120, pass: 120 }
-# time=48.123ms
+# time=51.748ms

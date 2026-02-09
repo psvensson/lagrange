@@ -7,7 +7,11 @@ import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {ControlPlaneService} from '../../src/control-plane/control-plane-service.js';
+import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
+import {LeaseService} from '../../src/control-plane/lease-service.js';
+import {EndpointService} from '../../src/control-plane/endpoint-service.js';
+import {ReplicaDispatchService} from
+  '../../src/control-plane/replica-dispatch-service.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   UnifiedRebalancer,
@@ -448,20 +452,46 @@ test('Node joining rebalancing integration', async (t) => {
       });
       rebalanceCoordinator.initialize();
 
-      // Create real ControlPlaneService
-      const controlPlane = new ControlPlaneService({
+      // Create decomposed control-plane services
+      const heartbeatSvc = new HeartbeatService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
-        systemTableCache,
         cdcIntegrationService,
-        messageRouter: bootstrapResult.messageRouter,
-        rebalanceCoordinator,
+        systemTableCache,
       });
-      controlPlane.initialize();
+      heartbeatSvc.initialize();
+
+      const leaseSvc = new LeaseService({
+        nodeId: seedNodeId,
+        cdcIntegrationService,
+        systemTableCache,
+        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      });
+      leaseSvc.initialize();
+
+      const endpointSvc = new EndpointService({
+        nodeId: seedNodeId,
+        cdcIntegrationService,
+        systemTableCache,
+        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      });
+      endpointSvc.initialize();
+
+      const dispatchSvc = new ReplicaDispatchService({
+        nodeId: seedNodeId,
+        messageRouter: bootstrapResult.messageRouter,
+        cdcIntegrationService,
+        systemTableCache,
+        rebalanceCoordinator,
+        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      });
+      dispatchSvc.initialize();
 
       // Attach message group services to control plane
-      for (const mgService of bootstrapResult.messageGroupServices.values()) {
-        controlPlane.attachMessageGroupService(mgService);
+      for (const mgService of
+        bootstrapResult.messageGroupServices.values()) {
+        dispatchSvc.attachMessageGroupService(mgService);
+        leaseSvc.messageGroupServices.add(mgService);
       }
 
       // Add a second node to the cache (simulating a node that has joined and is ready)
@@ -536,7 +566,10 @@ test('Node joining rebalancing integration', async (t) => {
       // Cleanup
       rebalancer.shutdown();
       await rebalanceCoordinator.shutdown();
-      controlPlane.shutdown();
+      heartbeatSvc.stop();
+      leaseSvc.stop();
+      endpointSvc.stop();
+      dispatchSvc.stop();
     } finally {
       if (bootstrapService) {
         await bootstrapService.shutdown().catch(() => {});

@@ -19,6 +19,7 @@ import {
   OperationType,
   ADD_WORKFLOW_STEPS,
   REMOVE_WORKFLOW_STEPS,
+  REPLACE_WORKFLOW_STEPS,
   getWorkflowSteps,
   isValidWorkflowStep,
   getNextWorkflowStep,
@@ -148,6 +149,31 @@ test('Property: ReplicaStatus enum contains all required values', async (t) => {
     }
   });
 
+  await t.test('REPLACE workflow steps are complete and ordered', async (t) => {
+    const expectedSteps = [
+      'PENDING',
+      'SENDING',
+      'CREATING',
+      'SYNCING',
+      'ACTIVE',
+      'STOPPING',
+      'REMOVED',
+    ];
+
+    t.same(
+      REPLACE_WORKFLOW_STEPS,
+      expectedSteps,
+      'REPLACE workflow steps should match expected order',
+    );
+
+    for (const step of REPLACE_WORKFLOW_STEPS) {
+      t.ok(
+        WORKFLOW_STEP_TO_STATUS[step] !== undefined,
+        `REPLACE step '${step}' should have a status mapping`,
+      );
+    }
+  });
+
   await t.test('getWorkflowSteps returns correct steps for operation types',
     async (t) => {
       t.same(
@@ -160,6 +186,12 @@ test('Property: ReplicaStatus enum contains all required values', async (t) => {
         getWorkflowSteps(OperationType.REMOVE),
         REMOVE_WORKFLOW_STEPS,
         'REMOVE operation should return REMOVE workflow steps',
+      );
+
+      t.same(
+        getWorkflowSteps(OperationType.REPLACE),
+        REPLACE_WORKFLOW_STEPS,
+        'REPLACE operation should return REPLACE workflow steps',
       );
 
       t.same(
@@ -190,6 +222,16 @@ test('Property: ReplicaStatus enum contains all required values', async (t) => {
       {numRuns: 10},
     );
 
+    await fc.assert(
+      fc.property(
+        fc.constantFrom(...REPLACE_WORKFLOW_STEPS),
+        (step) => {
+          return isValidWorkflowStep(OperationType.REPLACE, step) === true;
+        },
+      ),
+      {numRuns: 10},
+    );
+
     t.pass('Valid workflow steps are correctly identified');
   });
 
@@ -206,6 +248,15 @@ test('Property: ReplicaStatus enum contains all required values', async (t) => {
     t.equal(getNextWorkflowStep(OperationType.REMOVE, 'SENDING'), 'STOPPING');
     t.equal(getNextWorkflowStep(OperationType.REMOVE, 'STOPPING'), 'REMOVED');
     t.equal(getNextWorkflowStep(OperationType.REMOVE, 'REMOVED'), null);
+
+    // Test REPLACE workflow progression
+    t.equal(getNextWorkflowStep(OperationType.REPLACE, 'PENDING'), 'SENDING');
+    t.equal(getNextWorkflowStep(OperationType.REPLACE, 'SENDING'), 'CREATING');
+    t.equal(getNextWorkflowStep(OperationType.REPLACE, 'CREATING'), 'SYNCING');
+    t.equal(getNextWorkflowStep(OperationType.REPLACE, 'SYNCING'), 'ACTIVE');
+    t.equal(getNextWorkflowStep(OperationType.REPLACE, 'ACTIVE'), 'STOPPING');
+    t.equal(getNextWorkflowStep(OperationType.REPLACE, 'STOPPING'), 'REMOVED');
+    t.equal(getNextWorkflowStep(OperationType.REPLACE, 'REMOVED'), null);
   });
 
   await t.test('isTerminalStep identifies terminal steps correctly', async (t) => {
@@ -224,6 +275,12 @@ test('Property: ReplicaStatus enum contains all required values', async (t) => {
     t.ok(isTerminalStep(OperationType.ADD, 'FAILED'), 'FAILED is terminal for ADD');
     t.ok(isTerminalStep(OperationType.REMOVE, 'FAILED'),
       'FAILED is terminal for REMOVE');
+    t.ok(isTerminalStep(OperationType.REPLACE, 'FAILED'),
+      'FAILED is terminal for REPLACE');
+    t.ok(isTerminalStep(OperationType.REPLACE, 'REMOVED'),
+      'REMOVED is terminal for REPLACE');
+    t.notOk(isTerminalStep(OperationType.REPLACE, 'ACTIVE'),
+      'ACTIVE is not terminal for REPLACE');
   });
 
   await t.test('createOperation creates valid operation objects', async (t) => {
@@ -231,7 +288,7 @@ test('Property: ReplicaStatus enum contains all required values', async (t) => {
       fc.property(
         fc.record({
           operationId: fc.uuid(),
-          type: fc.constantFrom(OperationType.ADD, OperationType.REMOVE),
+          type: fc.constantFrom(OperationType.ADD, OperationType.REMOVE, OperationType.REPLACE),
           partitionId: fc.uuid(),
           sourceNodeId: fc.uuid(),
           targetNodeId: fc.uuid(),
@@ -268,5 +325,6 @@ test('Property: ReplicaStatus enum contains all required values', async (t) => {
   await t.test('Operation type enum has correct values', async (t) => {
     t.equal(OperationType.ADD, 'ADD', 'ADD operation type should be ADD');
     t.equal(OperationType.REMOVE, 'REMOVE', 'REMOVE operation type should be REMOVE');
+    t.equal(OperationType.REPLACE, 'REPLACE', 'REPLACE operation type should be REPLACE');
   });
 });

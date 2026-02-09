@@ -8,6 +8,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
+import {NodeService} from '../../src/node/node-service.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -353,6 +354,32 @@ test('QueryExecutor - executes INSERT on partition', async (t) => {
   mockPartitionData.clear();
 });
 
+test('QueryExecutor - preserves INSERT OR REPLACE when rebuilding SQL', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const ast = parseSQL(
+    'INSERT OR REPLACE INTO users (id, name) VALUES (1, \'Alice\')',
+  );
+  const sql = executor.buildInsertSQL(ast);
+
+  t.match(sql, /^INSERT OR REPLACE INTO/i);
+});
+
+test('QueryExecutor - preserves INSERT OR IGNORE when rebuilding SQL', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const ast = parseSQL(
+    'INSERT OR IGNORE INTO users (id, name) VALUES (1, \'Alice\')',
+  );
+  const sql = executor.buildInsertSQL(ast);
+
+  t.match(sql, /^INSERT OR IGNORE INTO/i);
+});
+
 test('QueryExecutor - executes UPDATE on partitions', async (t) => {
   mockPartitionData.set('p1', [{id: 1}]);
   mockPartitionData.set('p2', [{id: 2}]);
@@ -446,6 +473,46 @@ test('QueryExecutor - builds correct SELECT SQL', async (t) => {
   t.ok(sql.includes('WHERE'));
   t.ok(sql.includes('ORDER BY'));
   t.ok(sql.includes('LIMIT 10'));
+});
+
+test('QueryExecutor - preserves NOT IN when rebuilding SQL', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache([]),
+  });
+
+  const ast = parseSQL(
+    'SELECT * FROM users WHERE status NOT IN (\'deleted\', \'banned\')',
+  );
+  const sql = executor.buildSelectSQL(ast);
+
+  t.match(sql, /NOT IN/i);
+});
+
+test('QueryExecutor - preserves IS NULL when rebuilding SQL', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache([]),
+  });
+
+  const ast = parseSQL('SELECT * FROM users WHERE deleted_at IS NULL');
+  const sql = executor.buildSelectSQL(ast);
+
+  t.match(sql, /IS NULL/i);
+  t.notMatch(sql, /IS NULL\s+NULL/i);
+});
+
+test('QueryExecutor - preserves IS NOT NULL when rebuilding SQL', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache([]),
+  });
+
+  const ast = parseSQL('SELECT * FROM users WHERE email IS NOT NULL');
+  const sql = executor.buildSelectSQL(ast);
+
+  t.match(sql, /IS NOT NULL/i);
+  t.notMatch(sql, /IS NOT NULL\s+NULL/i);
 });
 
 test('QueryExecutor - handles partition query errors', async (t) => {
@@ -599,6 +666,55 @@ test('QueryExecutor - findPartitionLeaderAddress filters by active status', (t) 
   const address = executor.findPartitionLeaderAddress('p1');
 
   t.equal(address, 'node2/partition/p1');
+  t.end();
+});
+
+test('QueryExecutor - read candidates ignore NodeService leader hints', (t) => {
+  const originalGetInstance = NodeService.getInstance;
+  NodeService.getInstance = () => ({
+    getPartitionLeader: () => ({
+      address: 'stale-node/partition/p1',
+      nodeId: 'stale-node',
+      replicaId: 'stale-r1',
+    }),
+  });
+
+  try {
+    const systemCache = {
+      services: [
+        {
+          service_id: 'p1-leader',
+          service_type: 'partition',
+          partition_id: 'p1',
+          node_id: 'fresh-node',
+          raft_role: 'leader',
+          address: 'fresh-node/partition/p1',
+          status: 'active',
+        },
+      ],
+      filter: function(type, predicate) {
+        if (type === 'services') {
+          return this.services.filter(predicate);
+        }
+        return [];
+      },
+    };
+
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache,
+    });
+
+    const candidates = executor.getPartitionServiceCandidates('p1', true, true);
+
+    t.equal(
+      candidates[0]?.address,
+      'fresh-node/partition/p1',
+      'read routing must use services table leader, not NodeService hint',
+    );
+  } finally {
+    NodeService.getInstance = originalGetInstance;
+  }
   t.end();
 });
 

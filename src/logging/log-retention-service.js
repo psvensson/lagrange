@@ -179,7 +179,7 @@ class LogRetentionService extends EventEmitter {
 
     try {
       // Get retention period from table policy if available
-      const retentionPeriodMs = this.getRetentionPeriod();
+      const retentionPeriodMs = await this.getRetentionPeriod();
       const cutoffTime = Date.now() - retentionPeriodMs;
 
       this.logger.log(
@@ -266,13 +266,16 @@ class LogRetentionService extends EventEmitter {
 
   /**
    * Get the retention period from table policy or default.
-   * @return {number} Retention period in milliseconds.
+   * @return {Promise<number>} Retention period in milliseconds.
    * @private
    */
-  getRetentionPeriod() {
+  async getRetentionPeriod() {
     if (this.tablePolicyService) {
       try {
-        const policy = this.tablePolicyService.getTablePolicy(SystemTableName.LOGS);
+        const policy =
+          await this.tablePolicyService.getTablePolicy(
+            SystemTableName.LOGS,
+          );
         if (policy && policy.retentionPeriodMs) {
           return policy.retentionPeriodMs;
         }

@@ -6,7 +6,6 @@
  */
 
 import {NUM} from '../constants/index.js';
-import {RAFT_ERROR_NAME} from './constants.js';
 
 /**
  * In-memory log adapter for liferaft.
@@ -99,16 +98,10 @@ class InMemoryLogAdapter {
   /**
    * Get an entry at index.
    * @param {number} index - Index to get
-   * @return {Promise<Object>} Entry at index
+   * @return {Promise<Object|null>} Entry at index or null if missing
    */
   async get(index) {
-    const entry = this.entries.get(index);
-    if (!entry) {
-      const error = new Error(RAFT_ERROR_NAME.NOT_FOUND);
-      error.notFound = true;
-      throw error;
-    }
-    return entry;
+    return this.entries.get(index) || null;
   }
 
   /**
@@ -153,10 +146,8 @@ class InMemoryLogAdapter {
    * @return {Promise<Object>} Updated entry
    */
   async commandAck(index, address) {
-    let entry;
-    try {
-      entry = await this.get(index);
-    } catch (_err) {
+    const entry = await this.get(index);
+    if (!entry) {
       return {responses: []};
     }
 
@@ -232,6 +223,13 @@ class InMemoryLogAdapter {
    */
   async commit(index) {
     const entry = await this.get(index);
+    if (!entry) {
+      return {
+        index,
+        term: this.node ? this.node.term : NUM.ZERO,
+        committed: false,
+      };
+    }
     entry.committed = true;
     this.committedIndex = index;
     this.entries.set(index, entry);

@@ -29,6 +29,19 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
   REGISTER_NODE_UNSUPPORTED: 'register-node endpoint is not supported',
   RECEIVED_REGISTER_SERVICE: 'Received register-service request',
   SQL_ENGINE_MISSING: 'SQL query engine not available for service registration',
+  MOVE_REPLICA_SOURCE_REMOVAL_START:
+    'Removing local source replica before MOVE_REPLICA ownership commit',
+  MOVE_REPLICA_SOURCE_REMOVED: 'Removed local source replica for MOVE_REPLICA handoff',
+  MOVE_REPLICA_SOURCE_REMOVAL_FAILED:
+    'Failed to remove local source replica during MOVE_REPLICA handoff',
+  MOVE_REPLICA_HANDOFF_STARTED:
+    'Started MOVE_REPLICA handoff operation tracking',
+  MOVE_REPLICA_HANDOFF_PHASE_APPLIED:
+    'Applied MOVE_REPLICA handoff phase',
+  MOVE_REPLICA_HANDOFF_COMPLETED:
+    'Completed MOVE_REPLICA handoff operation',
+  MOVE_REPLICA_HANDOFF_FAILED:
+    'MOVE_REPLICA handoff operation failed',
   SERVICE_REGISTERED: 'Service registered in services table',
   REGISTER_SERVICE_FAILED: 'Failed to register service',
   CACHE_UNAVAILABLE_LEADER: 'System table cache not available for leader lookup',
@@ -75,6 +88,35 @@ const BOOTSTRAP_API_SQL = Object.freeze({
         service_id, service_type, node_id, partition_id, group_id,
         replica_id, raft_role, status, address, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  INSERT_REPLICA_OPERATION: `INSERT INTO replica_operations (
+        operation_id, type, partition_id, replica_id, source_node_id, target_node_id,
+        status, workflow_step, created_at, updated_at, completed_at, error_message,
+        steps_history, entity_type, entity_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  UPDATE_REPLICA_OPERATION: `UPDATE replica_operations SET
+        status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
+        error_message = ?, steps_history = ?
+      WHERE operation_id = ?`,
+});
+
+const BOOTSTRAP_API_HANDOFF_PHASE = Object.freeze({
+  PREPARE_TARGET: 'prepare_target',
+  VERIFY_TARGET: 'verify_target',
+  REMOVE_SOURCE: 'remove_source',
+  COMMIT_METADATA: 'commit_metadata',
+  FAILED: 'failed',
+});
+
+const BOOTSTRAP_API_HANDOFF_STATUS = Object.freeze({
+  PREPARING: 'creating',
+  VERIFYING: 'syncing',
+  REMOVING: 'removing',
+  COMMITTED: 'active',
+  FAILED: 'failed',
+});
+
+const BOOTSTRAP_API_HANDOFF_OPERATION = Object.freeze({
+  TYPE: 'ADD',
 });
 
 const BOOTSTRAP_API_CLOSE_ERROR_CODE = 'ERR_SERVER_NOT_RUNNING';
@@ -90,6 +132,9 @@ export {
   BOOTSTRAP_API_CLOSE_ERROR_CODE,
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_HEALTH_STATUS,
+  BOOTSTRAP_API_HANDOFF_PHASE,
+  BOOTSTRAP_API_HANDOFF_OPERATION,
+  BOOTSTRAP_API_HANDOFF_STATUS,
   BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_MESSAGE_GROUP_PREFIX,
   BOOTSTRAP_API_ROUTE,

@@ -4,7 +4,7 @@ TAP version 14
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 1 - constructor initializes with default state # time=12.561ms
+    ok 1 - constructor initializes with default state # time=13.119ms
     
     # Subtest: getColumns returns correct column definitions
         ok 1 - should be equal
@@ -14,7 +14,7 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 2 - getColumns returns correct column definitions # time=1.103ms
+    ok 2 - getColumns returns correct column definitions # time=0.968ms
     
     # Subtest: formatRow formats table data correctly
         ok 1 - should be equal
@@ -23,7 +23,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 3 - formatRow formats table data correctly # time=1.109ms
+    ok 3 - formatRow formats table data correctly # time=0.966ms
     
     # Subtest: formatRow handles missing values
         ok 1 - should be equal
@@ -32,7 +32,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 4 - formatRow handles missing values # time=0.643ms
+    ok 4 - formatRow handles missing values # time=0.748ms
     
     # Subtest: formatSize formats sizes correctly
         ok 1 - should be equal
@@ -44,117 +44,117 @@ TAP version 14
         ok 7 - should be equal
         ok 8 - should be equal
         1..8
-    ok 5 - formatSize formats sizes correctly # time=0.892ms
+    ok 5 - formatSize formats sizes correctly # time=1.015ms
     
     # Subtest: formatPolicySummary returns Default for no policies
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 6 - formatPolicySummary returns Default for no policies # time=0.695ms
+    ok 6 - formatPolicySummary returns Default for no policies # time=0.556ms
     
     # Subtest: formatPolicySummary includes placement_policy
         ok 1 - should be equal
         1..1
-    ok 7 - formatPolicySummary includes placement_policy # time=0.459ms
+    ok 7 - formatPolicySummary includes placement_policy # time=0.442ms
     
     # Subtest: formatPolicySummary includes replication_policy
         ok 1 - should be equal
         1..1
-    ok 8 - formatPolicySummary includes replication_policy # time=0.275ms
+    ok 8 - formatPolicySummary includes replication_policy # time=0.357ms
     
     # Subtest: formatPolicySummary includes consistency_level
         ok 1 - should be equal
         1..1
-    ok 9 - formatPolicySummary includes consistency_level # time=0.348ms
+    ok 9 - formatPolicySummary includes consistency_level # time=0.364ms
     
     # Subtest: formatPolicySummary includes durability
         ok 1 - should be equal
         1..1
-    ok 10 - formatPolicySummary includes durability # time=0.427ms
+    ok 10 - formatPolicySummary includes durability # time=0.36ms
     
     # Subtest: formatPolicySummary includes compression
         ok 1 - should be equal
         1..1
-    ok 11 - formatPolicySummary includes compression # time=0.336ms
+    ok 11 - formatPolicySummary includes compression # time=0.353ms
     
     # Subtest: formatPolicySummary truncates long summaries
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 12 - formatPolicySummary truncates long summaries # time=0.443ms
+    ok 12 - formatPolicySummary truncates long summaries # time=0.462ms
     
     # Subtest: formatPolicySummary handles malformed JSON
         ok 1 - should be equal
         1..1
-    ok 13 - formatPolicySummary handles malformed JSON # time=0.333ms
+    ok 13 - formatPolicySummary handles malformed JSON # time=0.416ms
     
     # Subtest: formatPolicySummary handles object policies
         ok 1 - should be equal
         1..1
-    ok 14 - formatPolicySummary handles object policies # time=0.231ms
+    ok 14 - formatPolicySummary handles object policies # time=0.342ms
     
     # Subtest: getRowStatus returns WARNING for zero partitions
         ok 1 - should be equal
         1..1
-    ok 15 - getRowStatus returns WARNING for zero partitions # time=0.281ms
+    ok 15 - getRowStatus returns WARNING for zero partitions # time=0.382ms
     
     # Subtest: getRowStatus returns NORMAL for tables with partitions
         ok 1 - should be equal
         1..1
-    ok 16 - getRowStatus returns NORMAL for tables with partitions # time=0.282ms
+    ok 16 - getRowStatus returns NORMAL for tables with partitions # time=0.463ms
     
     # Subtest: getItemKey returns table_id
         ok 1 - should be equal
         1..1
-    ok 17 - getItemKey returns table_id # time=0.315ms
+    ok 17 - getItemKey returns table_id # time=0.402ms
     
     # Subtest: getItemKey falls back to table_name
         ok 1 - should be equal
         1..1
-    ok 18 - getItemKey falls back to table_name # time=0.289ms
+    ok 18 - getItemKey falls back to table_name # time=0.405ms
     
     # Subtest: handleDrillDown returns navigation action
         ok 1 - should be equivalent
         1..1
-    ok 19 - handleDrillDown returns navigation action # time=1.236ms
+    ok 19 - handleDrillDown returns navigation action # time=2.08ms
     
     # Subtest: handleDrillDown returns null when no selection
         ok 1 - should be equal
         1..1
-    ok 20 - handleDrillDown returns null when no selection # time=0.257ms
+    ok 20 - handleDrillDown returns null when no selection # time=0.367ms
     
     # Subtest: getSelectedDetails returns table details
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 21 - getSelectedDetails returns table details # time=0.508ms
+    ok 21 - getSelectedDetails returns table details # time=2.651ms
     
     # Subtest: getSelectedDetails includes schema when available
         ok 1 - should be equal
         1..1
-    ok 22 - getSelectedDetails includes schema when available # time=0.299ms
+    ok 22 - getSelectedDetails includes schema when available # time=0.481ms
     
     # Subtest: getSelectedDetails includes policy fields
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 23 - getSelectedDetails includes policy fields # time=0.363ms
+    ok 23 - getSelectedDetails includes policy fields # time=0.533ms
     
     # Subtest: SIZE_UNITS constant is correct
         ok 1 - should be equivalent
         1..1
-    ok 24 - SIZE_UNITS constant is correct # time=0.463ms
+    ok 24 - SIZE_UNITS constant is correct # time=0.687ms
     
     # Subtest: POLICY_SUMMARY_MAX_LENGTH constant is correct
         ok 1 - should be equal
         1..1
-    ok 25 - POLICY_SUMMARY_MAX_LENGTH constant is correct # time=0.196ms
+    ok 25 - POLICY_SUMMARY_MAX_LENGTH constant is correct # time=0.325ms
     
     1..25
-ok 1 - TablesView # time=32.637ms
+ok 1 - TablesView # time=38.261ms
 
 1..1
 # { total: 52, pass: 52 }
-# time=37.398ms
+# time=44.153ms

@@ -50,6 +50,7 @@ function createMockSystemCache(tables, partitions) {
     node_id: 'test-node',
     address: `test-node/partition/${p.partition_id}`,
     status: 'active',
+    raft_role: 'leader',
   }));
 
   return {

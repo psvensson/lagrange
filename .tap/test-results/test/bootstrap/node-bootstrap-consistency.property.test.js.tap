@@ -1,8 +1,43 @@
 TAP version 14
 # Subtest: Property 11: Node Bootstrap Consistency
-    # Subtest: new node with UUID receives bootstrap response from seed
+    # Subtest: new node with UUID receives valid bootstrap response
         ok 1 - joining node ID should be valid UUID
-        ok 2 - seed node bootstrap should succeed
-{"level":50,"time":"2026-02-01T10:02:14.180Z","nodeId":"test-node","pid":1810632,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Query failed","nodeId":"test-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-02-01T10:02:14.180Z","nodeId":"test-node","pid":1810632,"subsystem":"cdc-integration","tableName":"nodes","id":"b78b258d-934f-48ef-aacb-d28f5a17bee1","error":"Query failed","nodeId":"test-node","msg":"Failed to upsert system table row"}
-{"level":50,"time":"2026-02-01T10:02:14.180Z","nodeId":"test-node","pid":1810632,"subsystem":"control-plane","error":"Query failed","groupId":"mg-1","nodeId":"test-node","msg":"Control plane message handling failed"}
+        ok 2 - seed bootstrap should succeed
+        ok 3 - should have bootstrap response
+        ok 4 - should have seed node ID
+        ok 5 - should have message group assignment
+        ok 6 - should have valid assignment strategy
+        ok 7 - should have system table snapshots
+{"level":50,"time":"2026-02-09T10:18:40.726Z","nodeId":"test-node","pid":197441,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-09T10:18:40.727Z","nodeId":"test-node","pid":197441,"subsystem":"cdc-integration","tableName":"nodes","id":"7a1cab39-2a60-4f27-827d-1126551d0d45","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
+        1..7
+    ok 1 - new node with UUID receives valid bootstrap response # time=1030.23ms
+    
+    # Subtest: duplicate node ID is rejected
+        ok 1 - seed bootstrap should succeed
+        ok 2 - first registration should succeed
+        ok 3 - idempotent second registration should return a response
+        ok 4 - response should target same seed
+{"level":50,"time":"2026-02-09T10:18:41.756Z","nodeId":"test-node","pid":197441,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-09T10:18:41.756Z","nodeId":"test-node","pid":197441,"subsystem":"cdc-integration","tableName":"nodes","id":"15b66d11-3778-4054-8d42-27264c6ee0bd","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
+        1..4
+    ok 2 - duplicate node ID is rejected # time=992.951ms
+    
+    # Subtest: bootstrap response contains required fields
+        ok 1 - seed bootstrap should succeed
+        ok 2 - should have seedNodeId
+        ok 3 - should have seedNodeWsAddress
+        ok 4 - should have messageGroupAssignment
+        ok 5 - should have systemTableSnapshots
+        ok 6 - should have currentEpoch
+{"level":50,"time":"2026-02-09T10:18:42.700Z","nodeId":"test-node","pid":197441,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-09T10:18:42.700Z","nodeId":"test-node","pid":197441,"subsystem":"cdc-integration","tableName":"nodes","id":"c73dc2f6-0e5f-465b-aee4-9e54592b9be0","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
+        1..6
+    ok 3 - bootstrap response contains required fields # time=908.993ms
+    
+    1..3
+ok 1 - Property 11: Node Bootstrap Consistency # time=3048.968ms
+
+1..1
+# { total: 17, pass: 17 }
+# time=3053.718ms

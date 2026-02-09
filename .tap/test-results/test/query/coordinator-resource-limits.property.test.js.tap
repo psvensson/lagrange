@@ -1,73 +1,73 @@
 TAP version 14
 # Subtest: Property 71: Coordinator Resource Limits
-Starting parallel query execution { queryId: 'q-1-1769938721906', partitionCount: 3, originalCount: 11 }
-Starting parallel query execution { queryId: 'q-1-1769938721908', partitionCount: 3, originalCount: 8 }
-Starting parallel query execution { queryId: 'q-1-1769938721908', partitionCount: 4, originalCount: 19 }
-Starting parallel query execution { queryId: 'q-1-1769938721908', partitionCount: 3, originalCount: 18 }
-Starting parallel query execution { queryId: 'q-1-1769938721909', partitionCount: 3, originalCount: 8 }
-Starting parallel query execution { queryId: 'q-1-1769938721909', partitionCount: 4, originalCount: 20 }
-Starting parallel query execution { queryId: 'q-1-1769938721909', partitionCount: 3, originalCount: 6 }
-Starting parallel query execution { queryId: 'q-1-1769938721909', partitionCount: 3, originalCount: 17 }
-Starting parallel query execution { queryId: 'q-1-1769938721910', partitionCount: 3, originalCount: 13 }
-Starting parallel query execution { queryId: 'q-1-1769938721910', partitionCount: 3, originalCount: 16 }
+Starting parallel query execution { queryId: 'q-1-1770632595361', partitionCount: 4, originalCount: 18 }
+Starting parallel query execution { queryId: 'q-1-1770632595362', partitionCount: 3, originalCount: 19 }
+Starting parallel query execution { queryId: 'q-1-1770632595363', partitionCount: 4, originalCount: 8 }
+Starting parallel query execution { queryId: 'q-1-1770632595363', partitionCount: 3, originalCount: 8 }
+Starting parallel query execution { queryId: 'q-1-1770632595364', partitionCount: 4, originalCount: 16 }
+Starting parallel query execution { queryId: 'q-1-1770632595364', partitionCount: 4, originalCount: 12 }
+Starting parallel query execution { queryId: 'q-1-1770632595364', partitionCount: 4, originalCount: 8 }
+Starting parallel query execution { queryId: 'q-1-1770632595365', partitionCount: 4, originalCount: 7 }
+Starting parallel query execution { queryId: 'q-1-1770632595365', partitionCount: 3, originalCount: 6 }
+Starting parallel query execution { queryId: 'q-1-1770632595366', partitionCount: 4, originalCount: 9 }
     # Subtest: enforces max parallel partitions limit
         ok 1 - Enforces max parallel partitions limit
         1..1
-    ok 1 - enforces max parallel partitions limit # time=7.916ms
+    ok 1 - enforces max parallel partitions limit # time=8.863ms
     
     # Subtest: tracks resource usage correctly
         ok 1 - Tracks resource usage correctly
         1..1
-    ok 2 - tracks resource usage correctly # time=1.183ms
+    ok 2 - tracks resource usage correctly # time=1.172ms
     
-Starting parallel query execution { queryId: 'q-1-1769938721917', partitionCount: 2, originalCount: 2 }
-Starting parallel query execution { queryId: 'q-1-1769938721917', partitionCount: 1, originalCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1769938721918', partitionCount: 3, originalCount: 3 }
-Starting parallel query execution { queryId: 'q-1-1769938721918', partitionCount: 1, originalCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1769938721918', partitionCount: 1, originalCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1769938721919', partitionCount: 3, originalCount: 3 }
-Starting parallel query execution { queryId: 'q-1-1769938721919', partitionCount: 3, originalCount: 3 }
-Starting parallel query execution { queryId: 'q-1-1769938721919', partitionCount: 2, originalCount: 2 }
-Starting parallel query execution { queryId: 'q-1-1769938721919', partitionCount: 3, originalCount: 3 }
-Starting parallel query execution { queryId: 'q-1-1769938721920', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1770632595373', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1770632595373', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1770632595373', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1770632595374', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1770632595374', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1770632595374', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: 'q-1-1770632595375', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1770632595375', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1770632595375', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1770632595376', partitionCount: 1, originalCount: 1 }
     # Subtest: metrics include total bytes estimate
         ok 1 - Metrics include total bytes estimate
         1..1
-    ok 3 - metrics include total bytes estimate # time=5.756ms
+    ok 3 - metrics include total bytes estimate # time=5.407ms
     
-Starting parallel query execution { queryId: 'q-1-1769938721922', partitionCount: 5, originalCount: 5 }
-Starting parallel query execution { queryId: 'q-1-1769938721922', partitionCount: 5, originalCount: 5 }
-Starting parallel query execution { queryId: 'q-1-1769938721923', partitionCount: 4, originalCount: 4 }
-Starting parallel query execution { queryId: 'q-1-1769938721923', partitionCount: 4, originalCount: 4 }
-Starting parallel query execution { queryId: 'q-1-1769938721923', partitionCount: 3, originalCount: 3 }
-Starting parallel query execution { queryId: 'q-1-1769938721924', partitionCount: 4, originalCount: 4 }
-Starting parallel query execution { queryId: 'q-1-1769938721924', partitionCount: 2, originalCount: 2 }
-Starting parallel query execution { queryId: 'q-1-1769938721924', partitionCount: 2, originalCount: 2 }
-Starting parallel query execution { queryId: 'q-1-1769938721924', partitionCount: 3, originalCount: 3 }
-Starting parallel query execution { queryId: 'q-1-1769938721924', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: 'q-1-1770632595377', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: 'q-1-1770632595377', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1770632595378', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: 'q-1-1770632595378', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1770632595378', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1770632595379', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1770632595379', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: 'q-1-1770632595379', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1770632595379', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: 'q-1-1770632595382', partitionCount: 5, originalCount: 5 }
     # Subtest: respects max concurrent connections
         ok 1 - Respects max concurrent connections
         1..1
-    ok 4 - respects max concurrent connections # time=3.184ms
+    ok 4 - respects max concurrent connections # time=5.746ms
     
-Starting parallel query execution { queryId: 'q-1-1769938721925', partitionCount: 5, originalCount: 20 }
-Starting parallel query execution { queryId: 'q-1-1769938721926', partitionCount: 5, originalCount: 11 }
-Starting parallel query execution { queryId: 'q-1-1769938721926', partitionCount: 5, originalCount: 13 }
-Starting parallel query execution { queryId: 'q-1-1769938721926', partitionCount: 5, originalCount: 16 }
-Starting parallel query execution { queryId: 'q-1-1769938721927', partitionCount: 5, originalCount: 20 }
-Starting parallel query execution { queryId: 'q-1-1769938721927', partitionCount: 5, originalCount: 12 }
-Starting parallel query execution { queryId: 'q-1-1769938721927', partitionCount: 5, originalCount: 19 }
-Starting parallel query execution { queryId: 'q-1-1769938721927', partitionCount: 5, originalCount: 17 }
-Starting parallel query execution { queryId: 'q-1-1769938721928', partitionCount: 5, originalCount: 20 }
-Starting parallel query execution { queryId: 'q-1-1769938721928', partitionCount: 5, originalCount: 13 }
+Starting parallel query execution { queryId: 'q-1-1770632595383', partitionCount: 5, originalCount: 19 }
+Starting parallel query execution { queryId: 'q-1-1770632595384', partitionCount: 5, originalCount: 15 }
+Starting parallel query execution { queryId: 'q-1-1770632595384', partitionCount: 5, originalCount: 20 }
+Starting parallel query execution { queryId: 'q-1-1770632595384', partitionCount: 5, originalCount: 19 }
+Starting parallel query execution { queryId: 'q-1-1770632595385', partitionCount: 5, originalCount: 17 }
+Starting parallel query execution { queryId: 'q-1-1770632595385', partitionCount: 5, originalCount: 16 }
+Starting parallel query execution { queryId: 'q-1-1770632595385', partitionCount: 5, originalCount: 17 }
+Starting parallel query execution { queryId: 'q-1-1770632595385', partitionCount: 5, originalCount: 16 }
+Starting parallel query execution { queryId: 'q-1-1770632595386', partitionCount: 5, originalCount: 10 }
+Starting parallel query execution { queryId: 'q-1-1770632595386', partitionCount: 5, originalCount: 10 }
     # Subtest: partition limit truncates correctly
         ok 1 - Partition limit truncates correctly
         1..1
-    ok 5 - partition limit truncates correctly # time=3.089ms
+    ok 5 - partition limit truncates correctly # time=3.258ms
     
     1..5
-ok 1 - Property 71: Coordinator Resource Limits # time=26.481ms
+ok 1 - Property 71: Coordinator Resource Limits # time=28.793ms
 
 1..1
 # { total: 5, pass: 5 }
-# time=74.878ms
+# time=69.058ms

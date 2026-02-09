@@ -139,6 +139,7 @@ class SQLParser {
     const tableName = ast.table[0].table;
     const columns = ast.columns || null;
     const values = [];
+    const insertMode = this.getInsertMode(ast);
 
     // node-sql-parser wraps values in {type: 'values', values: [...]}
     const valueRows = ast.values?.values || [];
@@ -156,8 +157,34 @@ class SQLParser {
       table: tableName,
       columns,
       values,
-      orReplace: ast.prefix === 'or replace',
+      orReplace: insertMode === 'replace',
+      orIgnore: insertMode === 'ignore',
     };
+  }
+
+  /**
+   * Detect INSERT modifier mode from parser AST.
+   * Supports node-sql-parser's `ast.or` shape and legacy `ast.prefix`.
+   * @param {Object} ast - Raw insert AST.
+   * @return {string|null} One of 'replace', 'ignore', or null.
+   * @private
+   */
+  getInsertMode(ast) {
+    if (Array.isArray(ast.or) && ast.or.length >= 2) {
+      const mode = String(ast.or[1]?.value || '').toLowerCase();
+      if (mode === 'replace' || mode === 'ignore') {
+        return mode;
+      }
+    }
+
+    const prefix = String(ast.prefix || '').toLowerCase();
+    if (prefix === 'or replace') {
+      return 'replace';
+    }
+    if (prefix === 'or ignore') {
+      return 'ignore';
+    }
+    return null;
   }
 
   convertUpdate(ast) {

@@ -1,34 +1,190 @@
 ---
 inclusion: always
 ---
-<!------------------------------------------------------------------------------------
-   Add rules to this file or a short description and have Kiro refine them for you.
-   
-   Learn about inclusion modes: https://kiro.dev/docs/steering/#inclusion-modes
--------------------------------------------------------------------------------------> 
-All information in the system must be stored as tables.
-The system topology and critical functions are stored in system tables
-A table is implemented as partitions
-A partition is implemented as a raft group (liferaft)
-Changes to table partitions will be streamed to all nodes using CDC
-All nodes will have a system cache updated by CDC messages from system tables so that any system infroamtion is eventually available, like which replicas to route a sql query to.
-All nodes will have at least one replica of a message group (liferaft) which will aways be used for any communication (even local).
-Most nodes in the system may not have partition replicas on them, but will still have a systems cache and be able to both read and write to and from system tables using the system cache lookup.
-There must be no other caches of system information beside the system cache that is fed by CDC changes from table partitions
-When the seed node boots, it must be able to bypass the rule of writing to partitions so it can create the first system cache entires, otherwise it will not know how to update tables. But after the seed node boots, this must be removed.
-There must be only one way to write system information to a table (to the leader replica of the correct partition(s))
-Reading system information must always try the local cache first, then fall back to read from any replica of the correct partition(s) of the table
-Accessing system information must only use the in-build SQL angine, which whill use the system cache to find the address of the replicas of the partition needed to address the query to (unless the information was already in the system cache (for reading))
 
-Do not use naked scalars in the code. Always use shared enums and constants instead.
-Do not use try/catch for conditionals or comunication
-Try/catch errors MUST NOT be swalllowed, instead either re-thrown or clearly logged
-Always write code according to Google's JS lint standard.
-NEVER EVER write eslint exception comments!!!
-NEVER EVER modify the eslint rules
+# System Guidelines — Mandatory Rules for All Code Generation
 
-When changes are made to the system, ensure that architecture.md is kept up to date.
-Prefer small files which focus on one thing and break out logic into smaller files/functions as much as relevant
+These rules are non-negotiable. Every rule applies to every code change, every
+new file, and every refactor. When in doubt, the rule wins.
 
+---
 
+## 1. ZERO DUPLICATION CONTRACT (highest priority)
 
+This is the single most important rule in the entire system. Violations of this
+rule have caused real production bugs. Read every sub-rule carefully.
+
+### 1.1 One Owner Per Concern
+
+Every piece of logic, every state transition, every data transformation, every
+decision MUST have exactly ONE owning component. No exceptions.
+
+Before writing ANY new function, method, class, or code block, you MUST:
+
+1. Search the codebase for existing code that does the same thing or overlaps.
+2. If it exists, use it. Do not create a second version.
+3. If it exists but needs modification, modify the original. Do not fork it.
+4. If you are unsure whether something already exists, search first. Do not guess.
+
+### 1.2 No Parallel Implementations
+
+It is FORBIDDEN to:
+
+- Create a new function that does what an existing function already does.
+- Add a field/property that carries the same semantic meaning as an existing one
+  (e.g., `m.type` and `m.operation` meaning the same thing).
+- Introduce a "helper" or "utility" that reimplements logic from another module.
+- Create a "wrapper" that silently duplicates the behavior of the thing it wraps.
+- Add a second code path "just in case" or "as a fallback."
+
+### 1.3 No Fallback Code Paths
+
+There must be exactly ONE code path for any given operation. Specifically:
+
+- No "if new way fails, try old way" patterns.
+- No feature flags that keep two implementations alive simultaneously.
+- No "legacy" code sitting alongside "new" code.
+- When something changes, it changes completely. Remove the old path.
+
+### 1.4 Single Source of Truth for State
+
+Each piece of state (node status, replica role, epoch, etc.) is owned by exactly
+one component. Other components that need that state MUST read it from the owner.
+They must NOT maintain their own copy, shadow, or derived version of that state.
+
+Concrete ownership assignments (see architecture.md for full list):
+
+- Node state → `NodeLifecycleStateMachine`
+- Replica state → `ReplicaStateMachine`
+- Epoch → `config.current_epoch` via CDC
+- Placement planning → `MovePlanner` (only)
+- Operation lifecycle → `RebalanceCoordinator` + `replica_operations`
+- Dispatch → `ReplicaDispatchService`
+- Failure detection → `FailureDetector` (single instance, no duplicates)
+- System cache → `SystemTableCache` (one per node, fed only by CDC)
+
+### 1.5 Verification Checklist (run this before writing code)
+
+Before generating or modifying code, answer these questions:
+
+1. Does a component already own this responsibility? → Use it.
+2. Does a function already exist that does this? → Call it.
+3. Does a constant/enum already exist for this value? → Import it.
+4. Am I adding a second way to do something that already has one way? → Stop.
+5. Am I adding state that another component already tracks? → Read from owner.
+6. Am I adding a field that means the same thing as an existing field? → Reuse.
+
+If the answer to any of 4/5/6 is yes, you are violating this contract.
+
+---
+
+## 2. Data Architecture
+
+### 2.1 Tables Are the Universal Storage Model
+
+- ALL persistent information is stored in tables.
+- System topology and metadata live in system tables.
+- A table is implemented as partitions.
+- A partition is implemented as a Raft group (liferaft).
+
+### 2.2 System Cache
+
+- Every node uses exactly ONE system cache instance (`SystemTableCache`) on a selected Messaeg Group.
+- All nodes must have at least one Message Group replica, but can host more to let sparse message groups form quorum.
+- The system cache on each Message Group is updated ONLY by CDC events from table partitions.
+- There must be NO other caches of system information. None. Zero.
+- Do not create ad-hoc Maps, Sets, or objects that cache system data outside
+  the system cache. If you need system data, read it from the cache or SQL.
+
+### 2.3 Reads and Writes
+
+- Writing system information: route to the leader replica of the correct
+  partition(s). There is exactly one write path.
+- Reading system information: try the local system cache first, then fall back
+  to reading from any replica of the correct partition(s).
+- All system information access MUST go through the SQL engine, which uses the
+  system cache for routing. No direct partition reads outside cache/query
+  internals.
+
+### 2.4 Bootstrap Exception
+
+- The seed node may bypass the normal write path during bootstrap to create
+  initial system cache entries (it cannot route writes before the cache exists).
+- This bypass MUST be removed immediately after bootstrap completes.
+- This is the ONLY exception to the single write path rule.
+
+---
+
+## 3. Communication
+
+- All nodes have at least one message group replica (liferaft).
+- ALL communication (including local) goes through the MessageRouter.
+- Do not create direct function calls between services that bypass the router
+  for operations that should be messages.
+
+---
+
+## 4. Code Quality
+
+### 4.1 Constants, Not Literals
+
+- NEVER use string or number literals directly in code ("magic values").
+- ALL scalars must be defined as named constants in dedicated constants files
+  and imported where needed.
+- If a constant does not exist yet, create it in the appropriate constants file.
+- Before creating a new constant, search for an existing one with the same value
+  or meaning.
+
+### 4.2 Single Naming
+
+- Each concept gets ONE name. Do not introduce synonyms.
+- If the codebase calls it `type`, do not also call it `operation` or `kind`.
+- If the codebase calls it `nodeId`, do not also accept `node_id` or `id`.
+- When accessing a property, there must be exactly one way to get it.
+
+### 4.3 Error Handling
+
+- Do NOT use try/catch for control flow or conditional logic.
+- Caught errors MUST be either re-thrown or clearly logged. Never swallowed.
+- Transient errors (no leader, cache unavailable) trigger retries with backoff.
+
+### 4.4 Style
+
+- Follow Google's JavaScript style guide (enforced by ESLint).
+- NEVER add eslint-disable comments. Not inline, not file-level. Never.
+- NEVER modify the ESLint configuration.
+- 2-space indentation, single quotes, semicolons, max 100 chars per line.
+- Prefix unused parameters with underscore (e.g., `_unused`).
+
+### 4.5 File Organization
+
+- Prefer small files that focus on one thing.
+- Break logic into smaller files/functions when it improves clarity.
+- Each file should have a clear, single responsibility.
+
+---
+
+## 5. Architecture Documentation
+
+- When changes are made to the system, update `architecture.md` to reflect them.
+- The architecture doc is the canonical reference for component ownership and
+  data flow. Keep it accurate.
+
+---
+
+## 6. Summary of What NOT to Do
+
+This section exists because LLMs tend to generate these patterns. Do not:
+
+- Add a `nodeStatus` field when `nodeState` already exists.
+- Create `getLeaderAddress()` in a new file when `SystemCacheProxy` already does it.
+- Build a `ReplicaTracker` when `ReplicaStateMachine` already tracks replicas.
+- Add an in-memory Map of partition assignments when the system cache has them.
+- Write a second CDC handler for the same event type.
+- Create a "convenience" re-export that subtly changes behavior.
+- Add a `utils/` function that reimplements logic from a domain module.
+- Introduce `async retryWithBackoff()` when one already exists elsewhere.
+- Store derived state (like "is this node ready?") when it can be computed from
+  the single source of truth on demand.
+
+When you catch yourself about to do any of these: stop, search, reuse.

@@ -1,16 +1,8 @@
 TAP version 14
 # Subtest: Property 49: Distributed Query Parallelism
 Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1769938722632-0-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Executing distributed SELECT {
   partitionCount: 4,
-  timestamp: '1769938722684-1-query-executor',
+  timestamp: '1770632596250-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -20,15 +12,35 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
 Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1769938722736-0-query-executor',
+  timestamp: '1770632596304-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1770632596355-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1770632596407-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
 Executing distributed SELECT {
   partitionCount: 3,
-  timestamp: '1769938722787-1-query-executor',
+  timestamp: '1770632596459-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -37,7 +49,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1769938722839-1-query-executor',
+  timestamp: '1770632596510-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -45,28 +57,7 @@ Routing query to partition service { partitionId: 'p0', address: 'test-node/part
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Executing distributed SELECT {
   partitionCount: 5,
-  timestamp: '1769938722891-0-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
-Executing distributed SELECT {
-  partitionCount: 4,
-  timestamp: '1769938722942-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1769938722993-1-query-executor',
+  timestamp: '1770632596561-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -77,15 +68,15 @@ Routing query to partition service { partitionId: 'p3', address: 'test-node/part
 Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1769938723045-0-query-executor',
+  timestamp: '1770632596612-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Executing distributed SELECT {
-  partitionCount: 4,
-  timestamp: '1769938723096-1-query-executor',
+  partitionCount: 5,
+  timestamp: '1770632596663-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -93,14 +84,86 @@ Routing query to partition service { partitionId: 'p0', address: 'test-node/part
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1770632596714-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
     # Subtest: queries execute on all partitions in parallel
         ok 1 - Queries execute on all partitions in parallel
         1..1
-    ok 1 - queries execute on all partitions in parallel # time=526.141ms
+    ok 1 - queries execute on all partitions in parallel # time=524.198ms
     
 Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1770632596771-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1770632596772-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1770632596773-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1770632596774-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1770632596775-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1770632596776-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1770632596777-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Executing distributed SELECT {
   partitionCount: 5,
-  timestamp: '1769938723152-1-query-executor',
+  timestamp: '1770632596778-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -111,7 +174,7 @@ Routing query to partition service { partitionId: 'p3', address: 'test-node/part
 Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
 Executing distributed SELECT {
   partitionCount: 4,
-  timestamp: '1769938723154-1-query-executor',
+  timestamp: '1770632596779-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -121,133 +184,48 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
 Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
 Executing distributed SELECT {
   partitionCount: 3,
-  timestamp: '1769938723155-1-query-executor',
+  timestamp: '1770632596780-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1769938723156-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1769938723157-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Executing distributed SELECT {
-  partitionCount: 4,
-  timestamp: '1769938723158-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-Executing distributed SELECT {
-  partitionCount: 4,
-  timestamp: '1769938723159-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1769938723160-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1769938723161-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1769938723161-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
     # Subtest: all partition results are combined
         ok 1 - All partition results are combined correctly
         1..1
-    ok 2 - all partition results are combined # time=10.799ms
+    ok 2 - all partition results are combined # time=11.141ms
     
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1769938723163-1-query-executor',
+  timestamp: '1770632596783-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1769938723164-0-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Executing distributed SELECT {
-  partitionCount: 1,
-  timestamp: '1769938723164-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1769938723164-1-query-executor',
+  partitionCount: 4,
+  timestamp: '1770632596783-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
 Executing distributed SELECT {
-  partitionCount: 1,
-  timestamp: '1769938723165-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1769938723165-1-query-executor',
+  partitionCount: 4,
+  timestamp: '1770632596784-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
 Executing distributed SELECT {
   partitionCount: 3,
-  timestamp: '1769938723166-0-query-executor',
+  timestamp: '1770632596785-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -256,7 +234,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1769938723166-1-query-executor',
+  timestamp: '1770632596786-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -264,7 +242,7 @@ Routing query to partition service { partitionId: 'p0', address: 'test-node/part
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Executing distributed SELECT {
   partitionCount: 5,
-  timestamp: '1769938723166-1-query-executor',
+  timestamp: '1770632596787-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -274,8 +252,32 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
 Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
 Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
 Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1770632596788-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Executing distributed SELECT {
   partitionCount: 4,
-  timestamp: '1769938723167-1-query-executor',
+  timestamp: '1770632596788-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1770632596789-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1770632596790-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -286,11 +288,11 @@ Routing query to partition service { partitionId: 'p3', address: 'test-node/part
     # Subtest: partition count is tracked in result
         ok 1 - Partition count is tracked in result
         1..1
-    ok 3 - partition count is tracked in result # time=4.875ms
+    ok 3 - partition count is tracked in result # time=8.935ms
     
     1..3
-ok 1 - Property 49: Distributed Query Parallelism # time=545.436ms
+ok 1 - Property 49: Distributed Query Parallelism # time=549.914ms
 
 1..1
 # { total: 3, pass: 3 }
-# time=591.97ms
+# time=598.794ms

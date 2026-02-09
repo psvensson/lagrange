@@ -98,6 +98,26 @@ Tests must never be skipped. Every test that exists must run and pass.
 - If a test is failing, fix the code or the test - do not skip it
 - If a test is no longer relevant, remove it entirely rather than skipping
 
+## Fix Failing Tests Immediately
+
+**All test failures and timeouts must be fixed when discovered, even if pre-existing.**
+
+When you discover failing or timing-out tests:
+
+1. **DO NOT IGNORE** - Failing tests indicate broken functionality
+2. **DO NOT DEFER** - Fix the issue immediately, even if it appears to be pre-existing
+3. **INVESTIGATE** - Determine the root cause:
+   - Is the test incorrect?
+   - Is the implementation broken?
+   - Is there a race condition or timing issue?
+4. **FIX** - Resolve the issue:
+   - Update the test if it's testing the wrong behavior
+   - Fix the implementation if it's broken
+   - Fix timing issues or clean up resources properly
+5. **VERIFY** - Re-run the test to confirm it passes
+
+**Rationale:** Broken tests erode confidence in the test suite. If tests are allowed to fail, developers stop trusting test results and the suite becomes worthless. Every test must pass, every time.
+
 ## Test Execution Strategy
 
 When running tests during task execution:
@@ -107,12 +127,93 @@ When running tests during task execution:
 3. **Run failing tests first** - When fixing issues, run only the specific failing test(s)
 4. **Use test filtering** - Use patterns like `npm test -- --grep "pattern"` or similar to filter tests
 
+## Node Join Convergence SLO Strategy
+
+All cluster join changes must include or update a convergence SLO integration
+test. The purpose is to prove the system settles after topology change and does
+not enter sustained churn.
+
+### Required Assertions
+
+After a node joins:
+
+1. **Settle within fixed window** - Cluster must settle before a strict timeout
+2. **Bounded leadership churn** - Leader-election events must stay below a
+   partition-count-scaled cap
+3. **No sustained over-target voters** - Any partition with voter count above
+   target must return within a bounded duration
+4. **Final state converged** - No partition may remain above target voter count
+   at the end of the test
+
+### Measurement Rules
+
+1. Track leadership changes by subscribing to partition `LEADER_ELECTED` events
+2. Sample voter counts at fixed interval from `services` system-table rows
+3. Count only voter-ready partition replicas:
+   - `service_type === 'partition'`
+   - `status === ACTIVE`
+   - explicit `raft_role` exists and is not `learner`
+   - `address` is present
+4. Record max continuous over-target duration per partition and assert it stays
+   below threshold
+5. Require a quiet window (no leader changes) before declaring settled
+
+### Baseline Thresholds
+
+Use these defaults unless a test has a justified reason to differ:
+
+- `targetVoterCount = 3`
+- `settleTimeoutMs = 20000`
+- `quietWindowMs = 5000`
+- `maxSustainedOverTargetMs = 2000`
+- `sampleIntervalMs = 250`
+- `maxLeaderChanges = partitionCount * 4`
+
+### Required Coverage
+
+For any change affecting rebalancing, learner promotion, leader election, or
+node join flow:
+
+1. Add or update convergence assertions in
+   `test/integration/node-join-convergence-slo.integration.test.js`
+2. Run the targeted test:
+   `npm test -- test/integration/node-join-convergence-slo.integration.test.js`
+3. If the test fails, treat it as a correctness regression, not just a timing
+   issue
+
 ## When to Run Full Test Suite
 
 Only run the complete test suite (`npm test`) at:
 - Checkpoint tasks explicitly marked in the task list
 - Final integration verification
 - When explicitly requested by the user
+
+## Full Test Suite Execution
+
+The full test suite can take a very long time to run. Follow these guidelines:
+
+1. **Use adequate timeout** - Set timeout to at least 150 seconds (150000ms)
+2. **Dump output to file** - Save test output to a temporary file for analysis
+3. **Analyze from file** - Perform multiple operations on the saved output instead of re-running tests
+
+**Example workflow:**
+```bash
+# Run full suite once, save output to temp file
+npm test 2>&1 > /tmp/test-output.txt
+
+# Analyze the output multiple times without re-running
+grep "# fail" /tmp/test-output.txt
+grep "Error:" /tmp/test-output.txt
+tail -50 /tmp/test-output.txt
+
+# Clean up when done
+rm /tmp/test-output.txt
+```
+
+**DO NOT:**
+- Run the full test suite multiple times in a row
+- Run the full suite without adequate timeout
+- Try to parse output in real-time if it times out
 
 ## Test Output Management
 

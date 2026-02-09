@@ -1,6 +1,6 @@
 const STATE = Object.freeze({
   ACTIVE: 'active',
-  NORMAL: 'NORMAL',
+  NORMAL: 'normal',
   READY: 'ready',
   CONNECTED: 'connected',
   DISCONNECTED: 'disconnected',

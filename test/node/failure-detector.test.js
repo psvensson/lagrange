@@ -6,6 +6,7 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {FailureDetector} from '../../src/node/failure-detector.js';
 import {NODE_STATUS as NodeStatus} from '../../src/node/node-constants.js';
+import {FAILURE_DETECTOR_SQL} from '../../src/node/node-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -54,27 +55,30 @@ function createMockCDCService() {
 }
 
 /**
- * Create a mock system table cache for testing.
+ * Create a mock system table cache as a SQL query engine for testing.
  * @param {Object} data - Initial cache data.
- * @return {Object} Mock system table cache.
+ * @return {Object} Mock SQL query engine.
  */
-function createMockCache(data = {}) {
+function createMockSqlEngine(data = {}) {
   const cache = {
     nodes: data.nodes || [],
     services: data.services || [],
   };
 
   return {
-    getAll(tableName) {
-      return cache[tableName] || [];
-    },
-    filter(tableName, predicate) {
-      const items = cache[tableName] || [];
-      return items.filter(predicate);
-    },
-    get(tableName, id) {
-      const items = cache[tableName] || [];
-      return items.find((item) => item.id === id || item.node_id === id);
+    async executeQuery(sql, params = []) {
+      if (sql === FAILURE_DETECTOR_SQL.SELECT_ALL_NODES) {
+        return {rows: cache.nodes, success: true};
+      }
+      if (sql === FAILURE_DETECTOR_SQL.SELECT_SERVICES_BY_NODE_AND_TYPE) {
+        const nodeId = params[0];
+        const serviceType = params[1];
+        const filtered = cache.services.filter(
+          (s) => s.node_id === nodeId && s.service_type === serviceType,
+        );
+        return {rows: filtered, success: true};
+      }
+      return {rows: [], success: true};
     },
     // Allow tests to update cache
     setNodes(nodes) {
@@ -99,10 +103,10 @@ test('FailureDetector - constructor', async (t) => {
 
 test('FailureDetector - initialize', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
   });
 
@@ -126,10 +130,10 @@ test('FailureDetector - initialize requires nodeId', async (t) => {
 
 test('FailureDetector - start and stop', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();
@@ -160,7 +164,7 @@ test('FailureDetector - detects node suspicion', async (t) => {
   const mockCDC = createMockCDCService();
   const now = Date.now();
 
-  const mockCache = createMockCache({
+  const mockEngine = createMockSqlEngine({
     nodes: [
       {
         node_id: 'node-1',
@@ -172,7 +176,7 @@ test('FailureDetector - detects node suspicion', async (t) => {
 
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();
@@ -194,7 +198,7 @@ test('FailureDetector - detects node failure', async (t) => {
   const mockCDC = createMockCDCService();
   const now = Date.now();
 
-  const mockCache = createMockCache({
+  const mockEngine = createMockSqlEngine({
     nodes: [
       {
         node_id: 'node-1',
@@ -207,7 +211,7 @@ test('FailureDetector - detects node failure', async (t) => {
 
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();
@@ -229,7 +233,7 @@ test('FailureDetector - marks replicas as failed on node failure', async (t) => 
   const mockCDC = createMockCDCService();
   const now = Date.now();
 
-  const mockCache = createMockCache({
+  const mockEngine = createMockSqlEngine({
     nodes: [
       {
         node_id: 'node-1',
@@ -264,7 +268,7 @@ test('FailureDetector - marks replicas as failed on node failure', async (t) => 
 
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();
@@ -293,7 +297,7 @@ test('FailureDetector - detects node recovery', async (t) => {
   const mockCDC = createMockCDCService();
   const now = Date.now();
 
-  const mockCache = createMockCache({
+  const mockEngine = createMockSqlEngine({
     nodes: [
       {
         node_id: 'node-1',
@@ -306,7 +310,7 @@ test('FailureDetector - detects node recovery', async (t) => {
 
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();
@@ -328,7 +332,7 @@ test('FailureDetector - skips self node', async (t) => {
   const mockCDC = createMockCDCService();
   const now = Date.now();
 
-  const mockCache = createMockCache({
+  const mockEngine = createMockSqlEngine({
     nodes: [
       {
         node_id: 'test-node', // Same as detector's nodeId
@@ -340,7 +344,7 @@ test('FailureDetector - skips self node', async (t) => {
 
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();
@@ -355,7 +359,7 @@ test('FailureDetector - skips already failed nodes', async (t) => {
   const mockCDC = createMockCDCService();
   const now = Date.now();
 
-  const mockCache = createMockCache({
+  const mockEngine = createMockSqlEngine({
     nodes: [
       {
         node_id: 'node-1',
@@ -367,7 +371,7 @@ test('FailureDetector - skips already failed nodes', async (t) => {
 
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();
@@ -382,7 +386,7 @@ test('FailureDetector - healthy nodes are not affected', async (t) => {
   const mockCDC = createMockCDCService();
   const now = Date.now();
 
-  const mockCache = createMockCache({
+  const mockEngine = createMockSqlEngine({
     nodes: [
       {
         node_id: 'node-1',
@@ -394,7 +398,7 @@ test('FailureDetector - healthy nodes are not affected', async (t) => {
 
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();
@@ -407,10 +411,10 @@ test('FailureDetector - healthy nodes are not affected', async (t) => {
 
 test('FailureDetector - getStats', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();
@@ -427,10 +431,10 @@ test('FailureDetector - getStats', async (t) => {
 
 test('FailureDetector - shutdown', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();

@@ -5,21 +5,21 @@ TAP version 14
         ok 2 - should not have data column in fresh database
         ok 3 - command column should be NOT NULL
         1..3
-    ok 1 - fresh database creates correct schema # time=5.474ms
+    ok 1 - fresh database creates correct schema # time=9.247ms
     
     # Subtest: legacy schema with data column is rejected
         ok 1 - should reject legacy schema with data column
         1..1
-    ok 2 - legacy schema with data column is rejected # time=1.048ms
+    ok 2 - legacy schema with data column is rejected # time=1.66ms
     
     # Subtest: legacy schema missing command column is rejected
         ok 1 - should reject schema without command column
         1..1
-    ok 3 - legacy schema missing command column is rejected # time=0.452ms
+    ok 3 - legacy schema missing command column is rejected # time=0.717ms
     
     1..3
-ok 1 - SQLite Schema Migration # time=9.387ms
+ok 1 - SQLite Schema Migration # time=14.985ms
 
 1..1
 # { total: 5, pass: 5 }
-# time=13.608ms
+# time=29.43ms

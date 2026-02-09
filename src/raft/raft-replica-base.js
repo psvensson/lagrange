@@ -441,6 +441,10 @@ class RaftReplicaBase extends EventEmitter {
       const senderAddress = payload.address;
       const write = (responsePacket) => {
         if (responsePacket) {
+          const validation = this.addressManager.validate(senderAddress);
+          if (!validation.valid) {
+            return;
+          }
           this.logger.trace(RAFT_REPLICA_BASE_LOG_MSG.SENDING_RAFT_RESPONSE, {
             type: responsePacket.type,
             term: responsePacket.term,

@@ -55,16 +55,6 @@ class RaftTransportAdapter {
     const destinationId = packet.destination || packet.address;
     const peerAddress = this.buildPeerAddress(destinationId);
 
-    // Debug logging for Raft message delivery
-
-    console.log(RAFT_TRANSPORT_LOG_MSG.WRITE, {
-      type: packet.type,
-      destination: destinationId,
-      peerAddress,
-      sender: packet.address,
-      term: packet.term,
-    });
-
     try {
       // Build the message to send - include all liferaft packet fields
       // The receiver needs: type, term, address, state, leader, last, data
@@ -81,7 +71,6 @@ class RaftTransportAdapter {
       const result = await this.messageRouter.deliver(peerAddress, message);
       callback(null, result);
     } catch (error) {
-      console.log(RAFT_TRANSPORT_LOG_MSG.WRITE_ERROR, error.message);
       callback(error);
     }
   }

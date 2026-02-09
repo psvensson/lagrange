@@ -163,11 +163,15 @@ class LogsTableService extends EventEmitter {
 
     try {
       for (const entry of entriesToWrite) {
-        const success = await this.writeEntryWithRetry(entry);
-        if (success) {
-          writtenCount++;
-          this.writeCount++;
-        } else {
+        try {
+          const success = await this.writeEntryWithRetry(entry);
+          if (success) {
+            writtenCount++;
+            this.writeCount++;
+          } else {
+            this.errorCount++;
+          }
+        } catch (_writeError) {
           this.errorCount++;
         }
       }

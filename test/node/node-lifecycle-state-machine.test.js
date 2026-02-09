@@ -10,6 +10,7 @@ import {
   VALID_TRANSITIONS,
   InvalidTransitionError,
 } from '../../src/node/node-lifecycle-state-machine.js';
+import {NODE_STATE} from '../../src/constants/node-state.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -43,6 +44,14 @@ test('NodeState enum - has all required states', async (t) => {
   t.end();
 });
 
+test('NodeState enum - uses canonical runtime NODE_STATE source', async (t) => {
+  t.equal(NodeState, NODE_STATE, 'NodeState should reference canonical NODE_STATE enum');
+  t.equal(NodeState.ACTIVE, 'active', 'should include ACTIVE state used by runtime services');
+  t.equal(NodeState.INITIALIZING, 'initializing', 'should include INITIALIZING state');
+  t.equal(NodeState.FAILED, 'failed', 'should include FAILED state');
+  t.end();
+});
+
 test('VALID_TRANSITIONS - defines correct transitions', async (t) => {
   t.same(
     VALID_TRANSITIONS[NodeState.STARTING],
@@ -61,8 +70,8 @@ test('VALID_TRANSITIONS - defines correct transitions', async (t) => {
   );
   t.same(
     VALID_TRANSITIONS[NodeState.JOINING],
-    [NodeState.SYNCING, NodeState.STOPPED],
-    'JOINING can go to SYNCING or STOPPED',
+    [NodeState.SYNCING, NodeState.READY, NodeState.STOPPED],
+    'JOINING can go to SYNCING, READY, or STOPPED',
   );
   t.same(
     VALID_TRANSITIONS[NodeState.SYNCING],
@@ -204,6 +213,35 @@ test('NodeLifecycleStateMachine - full lifecycle transition', async (t) => {
   t.equal(sm.transition(NodeState.STOPPED), true, 'DRAINING -> STOPPED');
 
   t.equal(sm.getState(), NodeState.STOPPED, 'should end in STOPPED');
+  t.end();
+});
+
+test('NodeLifecycleStateMachine - JOINING to READY direct transition', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  sm.transition(NodeState.CONNECTING);
+  sm.transition(NodeState.DISCOVERING);
+  sm.transition(NodeState.JOINING);
+
+  t.equal(
+    sm.transition(NodeState.READY),
+    true,
+    'JOINING -> READY should succeed (skip SYNCING)',
+  );
+  t.equal(sm.getState(), NodeState.READY, 'should be in READY state');
+  t.end();
+});
+
+test('NodeLifecycleStateMachine - JOINING to SYNCING to READY still works', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  sm.transition(NodeState.CONNECTING);
+  sm.transition(NodeState.DISCOVERING);
+  sm.transition(NodeState.JOINING);
+
+  t.equal(sm.transition(NodeState.SYNCING), true, 'JOINING -> SYNCING');
+  t.equal(sm.transition(NodeState.READY), true, 'SYNCING -> READY');
+  t.equal(sm.getState(), NodeState.READY, 'should be in READY state');
   t.end();
 });
 
@@ -456,6 +494,190 @@ test('InvalidTransitionError - with no valid transitions', async (t) => {
   t.ok(
     error.message.includes('none'),
     'message should indicate no valid transitions',
+  );
+  t.end();
+});
+
+import {
+  BOOTSTRAP_SUB_PHASE,
+  JOINING_SUB_PHASE,
+} from '../../src/node/node-constants.js';
+
+test('NLSM - getSubPhaseDuration null for unknown sub-phase', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  t.equal(
+    sm.getSubPhaseDuration('NONEXISTENT'),
+    null,
+    'should return null for unknown sub-phase',
+  );
+  t.end();
+});
+
+test('NLSM - getSubPhaseDuration null before transitions', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  t.equal(
+    sm.getSubPhaseDuration(BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE),
+    null,
+    'should return null for sub-phase that has not completed',
+  );
+  t.end();
+});
+
+test('NLSM - records duration between sub-phases', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.MESSAGE_GROUPS);
+
+  const duration = sm.getSubPhaseDuration(
+    BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE,
+  );
+  t.ok(
+    typeof duration === 'number',
+    'should return a number for completed sub-phase',
+  );
+  t.ok(duration >= 0, 'duration should be non-negative');
+  t.end();
+});
+
+test('NodeLifecycleStateMachine - records duration for terminal sub-phase', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.MESSAGE_GROUPS);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.PARTITIONS);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.REGISTRATION);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.CACHE_HYDRATION);
+
+  const duration = sm.getSubPhaseDuration(
+    BOOTSTRAP_SUB_PHASE.CACHE_HYDRATION,
+  );
+  t.ok(
+    typeof duration === 'number',
+    'terminal sub-phase should have a recorded duration',
+  );
+  t.ok(duration >= 0, 'duration should be non-negative');
+  t.end();
+});
+
+test('NLSM - getAllSubPhaseDurations empty initially', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  const durations = sm.getAllSubPhaseDurations();
+  t.same(durations, {}, 'should return empty object before any transitions');
+  t.end();
+});
+
+test('NLSM - getAllSubPhaseDurations completed durations', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.MESSAGE_GROUPS);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.PARTITIONS);
+
+  const durations = sm.getAllSubPhaseDurations();
+  t.ok(
+    BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE in durations,
+    'should include INFRASTRUCTURE duration',
+  );
+  t.ok(
+    BOOTSTRAP_SUB_PHASE.MESSAGE_GROUPS in durations,
+    'should include MESSAGE_GROUPS duration',
+  );
+  t.ok(
+    !(BOOTSTRAP_SUB_PHASE.PARTITIONS in durations),
+    'should not include current (non-completed) sub-phase',
+  );
+  t.end();
+});
+
+test('NodeLifecycleStateMachine - getAllSubPhaseDurations returns a copy', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.MESSAGE_GROUPS);
+
+  const durations1 = sm.getAllSubPhaseDurations();
+  const durations2 = sm.getAllSubPhaseDurations();
+  t.not(durations1, durations2, 'should return a new object each call');
+  t.end();
+});
+
+test('NodeLifecycleStateMachine - full bootstrap sub-phase durations', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.MESSAGE_GROUPS);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.PARTITIONS);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.REGISTRATION);
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.CACHE_HYDRATION);
+
+  const durations = sm.getAllSubPhaseDurations();
+  const phases = Object.keys(durations);
+  t.equal(phases.length, 5, 'should have durations for all 5 sub-phases');
+  t.ok(
+    BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE in durations,
+    'should include INFRASTRUCTURE',
+  );
+  t.ok(
+    BOOTSTRAP_SUB_PHASE.MESSAGE_GROUPS in durations,
+    'should include MESSAGE_GROUPS',
+  );
+  t.ok(
+    BOOTSTRAP_SUB_PHASE.PARTITIONS in durations,
+    'should include PARTITIONS',
+  );
+  t.ok(
+    BOOTSTRAP_SUB_PHASE.REGISTRATION in durations,
+    'should include REGISTRATION',
+  );
+  t.ok(
+    BOOTSTRAP_SUB_PHASE.CACHE_HYDRATION in durations,
+    'should include CACHE_HYDRATION',
+  );
+
+  for (const [phase, duration] of Object.entries(durations)) {
+    t.ok(
+      typeof duration === 'number' && duration >= 0,
+      `${phase} duration should be a non-negative number`,
+    );
+  }
+  t.end();
+});
+
+test('NodeLifecycleStateMachine - joining sub-phase duration tracking', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  // Advance to JOINING state
+  sm.transition(NodeState.CONNECTING);
+  sm.transition(NodeState.DISCOVERING);
+  sm.transition(NodeState.JOINING);
+
+  sm.transitionSubPhase(JOINING_SUB_PHASE.CONTACTING_SEED);
+  sm.transitionSubPhase(JOINING_SUB_PHASE.CONNECTING_WEBSOCKET);
+
+  const duration = sm.getSubPhaseDuration(
+    JOINING_SUB_PHASE.CONTACTING_SEED,
+  );
+  t.ok(
+    typeof duration === 'number',
+    'should record duration for joining sub-phases',
+  );
+  t.ok(duration >= 0, 'duration should be non-negative');
+  t.end();
+});
+
+test('NLSM - getSubPhaseDuration null for in-progress', async (t) => {
+  const sm = new NodeLifecycleStateMachine();
+
+  sm.transitionSubPhase(BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE);
+
+  t.equal(
+    sm.getSubPhaseDuration(BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE),
+    null,
+    'should return null for sub-phase that is still in progress',
   );
   t.end();
 });

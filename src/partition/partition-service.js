@@ -25,7 +25,6 @@ import {
   SystemTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {AddressManager} from '../address/address-manager.js';
-import {NodeService as nodeServiceClass} from '../node/node-service.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {
   COLUMN,
@@ -62,8 +61,6 @@ import {
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
 } from './partition-service-constants.js';
-
-const getNodeService = () => nodeServiceClass.getInstance();
 
 /**
  * Partition state enumeration.
@@ -356,6 +353,10 @@ class PartitionService extends EventEmitter {
 
     // CDC subscribers
     this.cdcSubscribers = new Set();
+    // Recently-applied write keys for idempotent Raft replay handling.
+    this.recentlyAppliedEntryKeys = new Set();
+    this.recentlyAppliedEntryOrder = [];
+    this.maxTrackedAppliedEntries = 5000;
 
     // HLC clock for ordering
     this.hlcClock = new HLCClockService(this.replicaId);
@@ -718,13 +719,6 @@ class PartitionService extends EventEmitter {
       this.isLeader = true;
       this.leaderId = this.replicaId;
       this.storage.currentTerm = this.raft.term;
-      const nodeService = getNodeService();
-      nodeService.setPartitionLeader({
-        partitionId: this.partitionId,
-        replicaId: this.replicaId,
-        nodeId: this.nodeId,
-        address: this.unifiedAddress,
-      });
       this.queueRoleUpdate(this.role);
       this.queueLeaderNodeUpdate(this.nodeId);
 
@@ -758,8 +752,6 @@ class PartitionService extends EventEmitter {
       this.role = RaftRole.FOLLOWER;
       this.isLeader = false;
       this.storage.currentTerm = this.raft.term;
-      const nodeService = getNodeService();
-      nodeService.clearPartitionLeader(this.partitionId);
       this.queueRoleUpdate(this.role);
       this.pendingLeaderNodeUpdate = null;
       this.persistedLeaderNodeId = null;
@@ -783,8 +775,6 @@ class PartitionService extends EventEmitter {
       this.role = RaftRole.CANDIDATE;
       this.isLeader = false;
       this.storage.currentTerm = this.raft.term;
-      const nodeService = getNodeService();
-      nodeService.clearPartitionLeader(this.partitionId);
       this.queueRoleUpdate(this.role);
       this.pendingLeaderNodeUpdate = null;
       this.persistedLeaderNodeId = null;
@@ -844,13 +834,6 @@ class PartitionService extends EventEmitter {
       this.role = RaftRole.LEADER;
       this.isLeader = true;
       this.leaderId = this.replicaId;
-      const nodeService = getNodeService();
-      nodeService.setPartitionLeader({
-        partitionId: this.partitionId,
-        replicaId: this.replicaId,
-        nodeId: this.nodeId,
-        address: this.unifiedAddress,
-      });
       this.queueRoleUpdate(this.role);
       this.queueLeaderNodeUpdate(this.nodeId);
 
@@ -1348,22 +1331,44 @@ class PartitionService extends EventEmitter {
         command.type === PARTITION_SERVICE_OPERATION.QUERY) {
       // Apply SQL write operation
       if (command.sql) {
+        const entryKey = this.getCommittedEntryKey(command);
+        if (entryKey && this.recentlyAppliedEntryKeys.has(entryKey)) {
+          this.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
+            partitionId: this.partitionId,
+            commandType: command.type,
+            skippedReplay: true,
+          });
+          this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
+            partitionId: this.partitionId,
+            command,
+          });
+          return;
+        }
         try {
           const stmt = this.db.prepare(command.sql);
           stmt.run(...(command.params || []));
+          this.trackAppliedEntryKey(entryKey);
 
-          // Generate CDC event
-          this.generateCDCEvent(command).catch((err) => {
-            this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED, {
-              partitionId: this.partitionId,
-              error: err.message,
+          // Generate CDC event only on the leader.
+          // The leader already emits CDC in applyWrite(); followers
+          // must not duplicate those events.
+          if (this.isLeader) {
+            this.generateCDCEvent(command).catch((err) => {
+              this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED, {
+                partitionId: this.partitionId,
+                error: err.message,
+              });
+              throw err;
             });
-            throw err;
-          });
+          }
         } catch (error) {
           this.logger.error(PARTITION_SERVICE_ERROR_MSG.APPLY_COMMITTED_FAILED, {
             partitionId: this.partitionId,
             error: error.message,
+            sql: command.sql ?
+              command.sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.CDC_REDACTION_LIMIT) :
+              null,
+            params: command.params || [],
           });
           throw error;
         }
@@ -1960,6 +1965,8 @@ class PartitionService extends EventEmitter {
     // Requirements: 11.9
     const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
     if (isLiferaftLeader) {
+      const entryKey = this.getCommittedEntryKey(entry);
+      this.trackAppliedEntryKey(entryKey);
       this.raft.command(entry, (err) => {
         if (err) {
           this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
@@ -2002,7 +2009,9 @@ class PartitionService extends EventEmitter {
     // For raw SQL queries, determine operation type from SQL
     if (entryType === PARTITION_SERVICE_OPERATION.QUERY && entry.sql) {
       const sqlUpper = entry.sql.trim().toUpperCase();
-      if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.INSERT)) {
+      if (sqlUpper.startsWith(SQL.INSERT_OR_REPLACE_INTO.toUpperCase())) {
+        entryType = PARTITION_SERVICE_OPERATION.UPSERT;
+      } else if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.INSERT)) {
         entryType = PARTITION_SERVICE_OPERATION.INSERT;
       } else if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.UPDATE)) {
         entryType = PARTITION_SERVICE_OPERATION.UPDATE;
@@ -2023,8 +2032,7 @@ class PartitionService extends EventEmitter {
       operation = CDCOperation.UPDATE;
       break;
     case PARTITION_SERVICE_OPERATION.UPSERT:
-      // UPSERT is INSERT OR REPLACE - treat as INSERT for CDC purposes
-      operation = CDCOperation.INSERT;
+      operation = CDCOperation.UPSERT;
       break;
     case PARTITION_SERVICE_OPERATION.DELETE:
       operation = CDCOperation.DELETE;
@@ -2054,7 +2062,7 @@ class PartitionService extends EventEmitter {
     if (entry.type === PARTITION_SERVICE_OPERATION.QUERY && entry.sql) {
       // Extract table name from SQL
       const tableMatch = entry.sql.match(
-        /(?:UPDATE|INSERT\s+(?:OR\s+REPLACE\s+)?INTO|DELETE\s+FROM)\s+(\w+)/i,
+        /(?:UPDATE|INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO|DELETE\s+FROM)\s+(\w+)/i,
       );
       if (tableMatch) {
         tableName = tableMatch[NUM.ONE];
@@ -2140,6 +2148,48 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Build a stable key for identifying a committed write entry replay.
+   * @param {Object} command - Write command.
+   * @return {string|null} Stable key or null when unavailable.
+   * @private
+   */
+  getCommittedEntryKey(command) {
+    if (!command || !command.sql) {
+      return null;
+    }
+    const params = Array.isArray(command.params) ?
+      JSON.stringify(command.params) :
+      STRING.EMPTY;
+    return [
+      command.proposedBy || STRING.EMPTY,
+      String(command.proposedAt || NUM.ZERO),
+      command.timestamp || STRING.EMPTY,
+      command.sql,
+      params,
+    ].join('|');
+  }
+
+  /**
+   * Track an applied write key with bounded history for replay dedupe.
+   * @param {string|null} entryKey - Stable write key.
+   * @private
+   */
+  trackAppliedEntryKey(entryKey) {
+    if (!entryKey || this.recentlyAppliedEntryKeys.has(entryKey)) {
+      return;
+    }
+    this.recentlyAppliedEntryKeys.add(entryKey);
+    this.recentlyAppliedEntryOrder.push(entryKey);
+
+    if (this.recentlyAppliedEntryOrder.length > this.maxTrackedAppliedEntries) {
+      const oldestKey = this.recentlyAppliedEntryOrder.shift();
+      if (oldestKey) {
+        this.recentlyAppliedEntryKeys.delete(oldestKey);
+      }
+    }
+  }
+
+  /**
    * Extract data from INSERT SQL by querying the inserted row.
    * @param {string} sql - INSERT SQL statement.
    * @param {string} tableName - Table name.
@@ -2148,9 +2198,9 @@ class PartitionService extends EventEmitter {
    */
   extractInsertDataFromSQL(sql, tableName) {
     // Parse INSERT INTO table (col1, col2) VALUES ('val1', 'val2')
-    // or INSERT OR REPLACE INTO table (col1, col2) VALUES ('val1', 'val2')
+    // or INSERT OR REPLACE/IGNORE INTO table (col1, col2) VALUES ('val1', 'val2')
     const columnsMatch = sql.match(
-      /INSERT\s+(?:OR\s+REPLACE\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
+      /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
     );
     const valuesMatch = sql.match(/VALUES\s*\(([^)]+)\)/i);
 
@@ -2308,7 +2358,7 @@ class PartitionService extends EventEmitter {
       operationType === PARTITION_SERVICE_OPERATION.UPSERT) {
       // Parse INSERT INTO table (col1, col2, ...) VALUES (?, ?, ...)
       const columnsMatch = sql.match(
-        /INSERT\s+(?:OR\s+REPLACE\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
+        /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
       );
       if (!columnsMatch) {
         this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {
@@ -3319,7 +3369,7 @@ class PartitionService extends EventEmitter {
    * Check if learner can be promoted to follower.
    * Promotion happens when:
    * 1. Minimum delay has passed (already satisfied by timer)
-   * 2. We have received at least one heartbeat from the leader
+   * 2. A leader has been discovered for the group
    * 3. Promoting would not result in an even number of voters (prevents split votes)
    *    OR promoting all pending learners would result in an odd count
    * @private
@@ -3329,6 +3379,18 @@ class PartitionService extends EventEmitter {
 
     // Only promote if still in learner role
     if (this.role !== RaftRole.LEARNER) {
+      return;
+    }
+
+    // Do not promote until we know who the current leader is.
+    // Promoting without an observed leader can trigger election storms.
+    if (!this.leaderId) {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
+        replicaId: this.replicaId,
+        partitionId: this.partitionId,
+        reason: 'leader_not_discovered',
+      });
+      this.scheduleLearnerPromotion();
       return;
     }
 
@@ -3366,7 +3428,11 @@ class PartitionService extends EventEmitter {
     // Allow promotion if:
     // 1. Promoting this learner alone would result in odd count, OR
     // 2. There are multiple learners and promoting ALL would result in odd count
-    if (wouldBeEven && activeVoterCount >= NUM.THREE && !allLearnersWouldBeOdd) {
+    if (
+      wouldBeEven &&
+      activeVoterCount >= NUM.THREE &&
+      !allLearnersWouldBeOdd
+    ) {
       // Defer promotion - reschedule check after a shorter interval
       // The old replica should be removed soon, which will make the count odd again
       this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
@@ -3494,6 +3560,33 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Stop all rebalancing activity for this partition.
+   * @return {Promise<void>}
+   */
+  async quiesceRebalancing() {
+    if (this.rebalancer) {
+      this.rebalancer.setLeader(false);
+      this.rebalancer.shutdown();
+      this.rebalancer = null;
+    }
+    if (this.rebalanceCoordinator) {
+      try {
+        await this.rebalanceCoordinator.shutdown();
+      } catch (error) {
+        this.logger.warn(
+          PARTITION_SERVICE_ERROR_MSG.REBALANCE_COORDINATOR_SHUTDOWN_FAILED,
+          {
+            partitionId: this.partitionId,
+            replicaId: this.replicaId,
+            error: error.message,
+          },
+        );
+      }
+      this.rebalanceCoordinator = null;
+    }
+  }
+
+  /**
    * Shutdown the partition service.
    * @return {Promise<void>}
    */
@@ -3541,11 +3634,7 @@ class PartitionService extends EventEmitter {
       this.pendingRequestTracker.clear();
     }
 
-    // Shutdown rebalancer
-    if (this.rebalancer) {
-      this.rebalancer.shutdown();
-      this.rebalancer = null;
-    }
+    await this.quiesceRebalancing();
 
     // Unregister from transport
     if (this.transport) {
@@ -3560,6 +3649,8 @@ class PartitionService extends EventEmitter {
 
     this.initialized = false;
     this.cdcSubscribers.clear();
+    this.recentlyAppliedEntryKeys.clear();
+    this.recentlyAppliedEntryOrder = [];
 
     this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN, {
       partitionId: this.partitionId,

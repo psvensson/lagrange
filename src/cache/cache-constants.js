@@ -9,6 +9,7 @@ const CACHE_LOG_MSG = Object.freeze({
   INSERT_ON_EXISTING_KEY_TREAT_UPDATE: 'INSERT on existing key, treating as UPDATE',
   UPDATE_ON_MISSING_KEY_TREAT_INSERT: 'UPDATE on non-existing key, treating as INSERT',
   DELETE_ON_MISSING_KEY_IGNORED: 'DELETE on non-existing key, ignoring',
+  STALE_EVENT_IGNORED: 'Ignoring stale CDC event for existing key',
   REJECTED_STALE_EPOCH: 'Rejected stale epoch update',
   UPDATED_EPOCH: 'Updated cache epoch',
   CACHE_LISTENER_ERROR: 'Cache listener error',

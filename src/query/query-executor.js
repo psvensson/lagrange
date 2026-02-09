@@ -8,7 +8,6 @@
 import {LoggingService} from '../logging/logging-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {NodeService as nodeServiceClass} from '../node/node-service.js';
 import {
   ERRORS,
   LOG_MSG,
@@ -33,8 +32,6 @@ import {
   QUERY_SQL,
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
-
-const getNodeService = () => nodeServiceClass.getInstance();
 
 /**
  * QueryExecutor handles parallel query execution across partitions
@@ -588,20 +585,47 @@ class QueryExecutor {
       };
     }
 
-    const maxAttempts = forRead ? 1 : this.leaderRetryAttempts;
+    const maxAttempts = forRead ? NUM.ONE : this.getWriteRetryAttemptLimit();
     let lastError = null;
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
       const serviceCandidates = this.getPartitionServiceCandidates(
         partitionId,
         forRead,
         preferLeader,
       );
       if (serviceCandidates.length === 0) {
-        if (!forRead && attempt < maxAttempts) {
-          lastError = ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE;
-          await this.delay(this.leaderRetryDelayMs);
-          continue;
+        const hasActiveService = this.hasActivePartitionService(partitionId);
+
+        if (!forRead) {
+          if (hasActiveService && attempt < maxAttempts) {
+            lastError = ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE;
+            await this.delay(this.leaderRetryDelayMs);
+            continue;
+          }
+
+          if (hasActiveService) {
+            this.logger.warn(QUERY_LOG_MSG.NO_LEADER_SERVICE_FOR_PARTITION, {
+              partitionId,
+              attempts: attempt,
+            });
+            return {
+              partitionId,
+              success: false,
+              error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+              rows: [],
+            };
+          }
+
+          if (!hasActiveService) {
+            this.logger.warn(QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION, {partitionId});
+            return {
+              partitionId,
+              success: false,
+              error: QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
+              rows: [],
+            };
+          }
         }
         this.logger.warn(QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION, {partitionId});
         return {
@@ -718,6 +742,19 @@ class QueryExecutor {
   }
 
   /**
+   * Get write retry attempt limit for transient leader-election gaps.
+   * @return {number} Maximum attempts.
+   * @private
+   */
+  getWriteRetryAttemptLimit() {
+    const maxRecoveryAttempts = NUM.TEN * NUM.TWO;
+    const retryDelayMs = Math.max(this.leaderRetryDelayMs || NUM.ZERO, NUM.ONE);
+    const timeoutBoundAttempts = Math.ceil(this.queryTimeoutMs / retryDelayMs);
+    const boundedAttempts = Math.min(timeoutBoundAttempts, maxRecoveryAttempts);
+    return Math.max(this.leaderRetryAttempts, boundedAttempts);
+  }
+
+  /**
    * Check if an error indicates missing partition leadership.
    * @param {string} errorMessage - Error message.
    * @return {boolean} True if leader is unavailable.
@@ -752,16 +789,9 @@ class QueryExecutor {
    * @private
    */
   getPartitionServiceCandidates(partitionId, forRead = false, preferLeader = false) {
-    const leaderCandidate = this.getPartitionLeaderCandidate(partitionId);
     const prioritizeLeader = preferLeader || !forRead;
 
     if (!this.systemCache) {
-      if (leaderCandidate && prioritizeLeader) {
-        return [leaderCandidate];
-      }
-      if (leaderCandidate) {
-        return [leaderCandidate];
-      }
       this.logger.warn(LOG_MSG.SYSTEM_CACHE_PARTITION_LOOKUP_UNAVAILABLE, {partitionId});
       return [];
     }
@@ -771,17 +801,9 @@ class QueryExecutor {
       return [];
     }
 
-    const services = this.systemCache.filter(TABLES.SERVICES, (s) =>
-      s.partition_id === partitionId &&
-      s.service_type === SERVICE_TYPE.PARTITION &&
-      s.status === STATE.ACTIVE,
-    ) || [];
+    const services = this.getActivePartitionServices(partitionId);
 
     if (services.length === 0) {
-      if (leaderCandidate) {
-        return [leaderCandidate];
-      }
-
       this.logger.warn(QUERY_LOG_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION, {partitionId});
       return [];
     }
@@ -804,17 +826,15 @@ class QueryExecutor {
       });
     };
 
-    if (leaderCandidate) {
-      addService(leaderCandidate);
-    }
     const leaders = services.filter((service) => service.raft_role === RAFT_ROLE.LEADER);
+
+    if (!forRead) {
+      leaders.forEach(addService);
+      return candidates;
+    }
 
     if (prioritizeLeader) {
       leaders.forEach(addService);
-
-      if (!forRead && leaders.length === 0) {
-        this.logger.warn(QUERY_LOG_MSG.NO_LEADER_SERVICE_FOR_PARTITION, {partitionId});
-      }
 
       services
         .filter((service) => service.node_id === this.nodeId)
@@ -827,22 +847,31 @@ class QueryExecutor {
   }
 
   /**
-   * Get a cached leader candidate for a partition.
+   * Get active partition services from system cache.
    * @param {string} partitionId - Partition ID.
-   * @return {Object|null} Leader service info or null.
+   * @return {Array<Object>} Active services for the partition.
    * @private
    */
-  getPartitionLeaderCandidate(partitionId) {
-    const nodeService = getNodeService();
-    const leader = nodeService.getPartitionLeader(partitionId);
-    if (!leader || !leader.address) {
-      return null;
+  getActivePartitionServices(partitionId) {
+    if (!this.systemCache || typeof this.systemCache.filter !== 'function') {
+      return [];
     }
-    return {
-      address: leader.address,
-      nodeId: leader.nodeId,
-      replicaId: leader.replicaId,
-    };
+
+    return this.systemCache.filter(TABLES.SERVICES, (service) =>
+      service.partition_id === partitionId &&
+      service.service_type === SERVICE_TYPE.PARTITION &&
+      service.status === STATE.ACTIVE,
+    ) || [];
+  }
+
+  /**
+   * Check whether a partition has active services in the system cache.
+   * @param {string} partitionId - Partition ID.
+   * @return {boolean} True when active services exist.
+   * @private
+   */
+  hasActivePartitionService(partitionId) {
+    return this.getActivePartitionServices(partitionId).length > NUM.ZERO;
   }
 
   /**
@@ -1183,6 +1212,14 @@ class QueryExecutor {
     switch (expr.type) {
     case 'binary':
       return this.evaluateBinary(row, expr);
+    case 'unary':
+      return this.evaluateUnary(row, expr);
+    case 'in':
+      return this.evaluateIn(row, expr);
+    case 'between':
+      return this.evaluateBetween(row, expr);
+    case 'like':
+      return this.evaluateLike(row, expr);
     case 'literal':
       return expr.value;
     case 'column_ref':
@@ -1218,8 +1255,87 @@ class QueryExecutor {
     case '<=': return left <= right;
     case '>': return left > right;
     case '>=': return left >= right;
+    case 'IS NULL': return left === null || left === undefined;
+    case 'IS NOT NULL': return left !== null && left !== undefined;
     default: return true;
     }
+  }
+
+  /**
+   * Evaluate a unary expression.
+   * @param {Object} row - Data row.
+   * @param {Object} expr - Unary expression.
+   * @return {*} Expression result.
+   * @private
+   */
+  evaluateUnary(row, expr) {
+    const operand = this.evaluateExpression(row, expr.operand);
+
+    switch (expr.operator) {
+    case 'NOT': return !operand;
+    case '+': return +operand;
+    case '-': return -operand;
+    default: return operand;
+    }
+  }
+
+  /**
+   * Evaluate an IN/NOT IN expression.
+   * @param {Object} row - Data row.
+   * @param {Object} expr - IN expression AST.
+   * @return {boolean} Expression result.
+   * @private
+   */
+  evaluateIn(row, expr) {
+    const value = this.evaluateExpression(row, expr.expression);
+    const set = expr.values.map((v) => this.evaluateExpression(row, v));
+    const matches = set.some((candidate) => candidate === value);
+    return expr.negated ? !matches : matches;
+  }
+
+  /**
+   * Evaluate a BETWEEN expression.
+   * @param {Object} row - Data row.
+   * @param {Object} expr - BETWEEN expression AST.
+   * @return {boolean} Expression result.
+   * @private
+   */
+  evaluateBetween(row, expr) {
+    const value = this.evaluateExpression(row, expr.expression);
+    const low = this.evaluateExpression(row, expr.low);
+    const high = this.evaluateExpression(row, expr.high);
+    return value >= low && value <= high;
+  }
+
+  /**
+   * Evaluate a LIKE/NOT LIKE expression.
+   * @param {Object} row - Data row.
+   * @param {Object} expr - LIKE expression AST.
+   * @return {boolean} Expression result.
+   * @private
+   */
+  evaluateLike(row, expr) {
+    const value = this.evaluateExpression(row, expr.expression);
+    const pattern = this.evaluateExpression(row, expr.pattern);
+    if (value === null || value === undefined || pattern === null || pattern === undefined) {
+      return false;
+    }
+
+    const regex = this.buildLikeRegex(String(pattern));
+    const matches = regex.test(String(value));
+    return expr.negated ? !matches : matches;
+  }
+
+  /**
+   * Build regex for SQL LIKE semantics.
+   * @param {string} pattern - SQL LIKE pattern.
+   * @return {RegExp} Regex matcher.
+   * @private
+   */
+  buildLikeRegex(pattern) {
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regexPattern = escaped.replace(/%/g, '.*').replace(/_/g, '.');
+    return new RegExp(`^${regexPattern}$`);
   }
 
   /**
@@ -1373,6 +1489,9 @@ class QueryExecutor {
       return expr.column;
 
     case 'binary':
+      if (expr.operator === 'IS NULL' || expr.operator === 'IS NOT NULL') {
+        return `(${this.buildExpressionSQL(expr.left)} ${expr.operator})`;
+      }
       return `(${this.buildExpressionSQL(expr.left)} ` +
              `${expr.operator} ${this.buildExpressionSQL(expr.right)})`;
 
@@ -1387,7 +1506,8 @@ class QueryExecutor {
 
     case 'in': {
       const inVals = expr.values.map((v) => this.buildExpressionSQL(v));
-      return `${this.buildExpressionSQL(expr.expression)} IN (${inVals.join(', ')})`;
+      const operator = expr.negated ? 'NOT IN' : 'IN';
+      return `${this.buildExpressionSQL(expr.expression)} ${operator} (${inVals.join(', ')})`;
     }
 
     case 'between':
@@ -1396,7 +1516,7 @@ class QueryExecutor {
              `${this.buildExpressionSQL(expr.high)}`;
 
     case 'like':
-      return `${this.buildExpressionSQL(expr.expression)} LIKE ` +
+      return `${this.buildExpressionSQL(expr.expression)} ${expr.negated ? 'NOT LIKE' : 'LIKE'} ` +
              `${this.buildExpressionSQL(expr.pattern)}`;
 
     case 'parameter':
@@ -1446,9 +1566,14 @@ class QueryExecutor {
    * @private
    */
   buildInsertSQL(ast) {
-    let sql = ast.orReplace ?
-      `${SQL.INSERT_OR_REPLACE_INTO} ` :
-      `${SQL.INSERT_INTO} `;
+    let sql;
+    if (ast.orReplace) {
+      sql = `${SQL.INSERT_OR_REPLACE_INTO} `;
+    } else if (ast.orIgnore) {
+      sql = `${SQL.INSERT_OR_IGNORE_INTO} `;
+    } else {
+      sql = `${SQL.INSERT_INTO} `;
+    }
     sql += ast.table;
 
     if (ast.columns) {

@@ -1,6 +1,10 @@
 /**
  * Node Lifecycle Service - Manages node lifecycle events via CDC.
  * Ensures all node state changes go through system table partitions.
+ *
+ * This service is a write-only helper for node registration, heartbeat,
+ * and removal. Failure detection is owned solely by FailureDetector.
+ *
  * Requirements: 5.6, 5.7, 5.8
  */
 
@@ -12,7 +16,6 @@ import {NUM} from '../constants/index.js';
 import {
   NODE_CONFIG_KEY,
   NODE_LIFECYCLE_DEFAULT,
-  NODE_LIFECYCLE_REASON,
   NODE_LIFECYCLE_SERVICE_ERROR_MSG,
   NODE_LIFECYCLE_SERVICE_EVENT,
   NODE_LIFECYCLE_SERVICE_LOG_MSG,
@@ -26,6 +29,11 @@ const NodeLifecycleStatus = NODE_STATUS;
  * NodeLifecycleService manages node lifecycle events via CDC.
  * All node state changes go through the CDCIntegrationService to ensure
  * cache consistency across all nodes.
+ *
+ * This service handles write-only operations: registration, heartbeat
+ * updates, and node removal. Failure detection (heartbeat timeout
+ * checking, suspicion, failure marking) is the sole responsibility
+ * of FailureDetector.
  */
 class NodeLifecycleService extends EventEmitter {
   /**
@@ -45,12 +53,6 @@ class NodeLifecycleService extends EventEmitter {
     this.heartbeatIntervalMs =
       config.get(NODE_CONFIG_KEY.HEARTBEAT_INTERVAL_MS) ||
       NODE_LIFECYCLE_DEFAULT.HEARTBEAT_INTERVAL_MS;
-    this.heartbeatTimeoutMs =
-      config.get(NODE_CONFIG_KEY.HEARTBEAT_TIMEOUT_MS) ||
-      NODE_LIFECYCLE_DEFAULT.HEARTBEAT_TIMEOUT_MS;
-    this.failureDetectionIntervalMs =
-      config.get(NODE_CONFIG_KEY.FAILURE_DETECTION_INTERVAL_MS) ||
-      NODE_LIFECYCLE_DEFAULT.FAILURE_DETECTION_INTERVAL_MS;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -59,10 +61,6 @@ class NodeLifecycleService extends EventEmitter {
 
     // Heartbeat timer
     this.heartbeatTimer = null;
-    this.failureDetectionTimer = null;
-
-    // Track known nodes for failure detection
-    this.knownNodes = new Map();
 
     this.initialized = false;
   }
@@ -141,12 +139,6 @@ class NodeLifecycleService extends EventEmitter {
         data,
       );
 
-      // Track the node locally
-      this.knownNodes.set(data.node_id, {
-        ...data,
-        lastHeartbeat: now,
-      });
-
       this.emit(NODE_LIFECYCLE_SERVICE_EVENT.NODE_REGISTERED, {
         nodeId: data.node_id,
         nodeAddress: data.node_address,
@@ -201,13 +193,6 @@ class NodeLifecycleService extends EventEmitter {
         updateData,
       );
 
-      // Update local tracking
-      const knownNode = this.knownNodes.get(nodeId);
-      if (knownNode) {
-        knownNode.lastHeartbeat = now;
-        Object.assign(knownNode, updateData);
-      }
-
       this.emit(NODE_LIFECYCLE_SERVICE_EVENT.HEARTBEAT_UPDATED, {
         nodeId,
         timestamp: now,
@@ -216,136 +201,6 @@ class NodeLifecycleService extends EventEmitter {
       return result;
     } catch (error) {
       this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.UPDATE_HEARTBEAT_FAILED, {
-        nodeId,
-        error: error.message,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Mark a node as failed via CDC.
-   * This updates the node status in the nodes system table.
-   *
-   * @param {string} nodeId - Node ID to mark as failed.
-   * @param {string} reason - Reason for failure.
-   * @return {Promise<Object>} Update result.
-   */
-  async markNodeFailed(nodeId, reason = NODE_LIFECYCLE_REASON.HEARTBEAT_TIMEOUT) {
-    this.validateInitialized();
-
-    this.logger.warn(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARKING_NODE_FAILED, {
-      nodeId,
-      reason,
-    });
-
-    try {
-      const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.NODES,
-        {node_id: nodeId},
-        {status: NodeLifecycleStatus.FAILED},
-      );
-
-      // Update local tracking
-      const knownNode = this.knownNodes.get(nodeId);
-      if (knownNode) {
-        knownNode.status = NodeLifecycleStatus.FAILED;
-      }
-
-      this.emit(NODE_LIFECYCLE_SERVICE_EVENT.NODE_FAILED, {
-        nodeId,
-        reason,
-      });
-
-      return result;
-    } catch (error) {
-      this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARK_NODE_FAILED_FAILED, {
-        nodeId,
-        error: error.message,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Mark a node as suspected via CDC.
-   * This is an intermediate state before marking as failed.
-   *
-   * @param {string} nodeId - Node ID to mark as suspected.
-   * @return {Promise<Object>} Update result.
-   */
-  async markNodeSuspected(nodeId) {
-    this.validateInitialized();
-
-    this.logger.warn(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARKING_NODE_SUSPECTED, {
-      nodeId,
-    });
-
-    try {
-      const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.NODES,
-        {node_id: nodeId},
-        {status: NodeLifecycleStatus.SUSPECTED},
-      );
-
-      // Update local tracking
-      const knownNode = this.knownNodes.get(nodeId);
-      if (knownNode) {
-        knownNode.status = NodeLifecycleStatus.SUSPECTED;
-      }
-
-      this.emit(NODE_LIFECYCLE_SERVICE_EVENT.NODE_SUSPECTED, {
-        nodeId,
-      });
-
-      return result;
-    } catch (error) {
-      this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARK_NODE_SUSPECTED_FAILED, {
-        nodeId,
-        error: error.message,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Mark a node as active via CDC.
-   * Used when a suspected node recovers.
-   *
-   * @param {string} nodeId - Node ID to mark as active.
-   * @return {Promise<Object>} Update result.
-   */
-  async markNodeActive(nodeId) {
-    this.validateInitialized();
-
-    this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARKING_NODE_ACTIVE, {
-      nodeId,
-    });
-
-    try {
-      const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.NODES,
-        {node_id: nodeId},
-        {
-          status: NodeLifecycleStatus.ACTIVE,
-          last_heartbeat: Date.now(),
-        },
-      );
-
-      // Update local tracking
-      const knownNode = this.knownNodes.get(nodeId);
-      if (knownNode) {
-        knownNode.status = NodeLifecycleStatus.ACTIVE;
-        knownNode.lastHeartbeat = Date.now();
-      }
-
-      this.emit(NODE_LIFECYCLE_SERVICE_EVENT.NODE_ACTIVE, {
-        nodeId,
-      });
-
-      return result;
-    } catch (error) {
-      this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARK_NODE_ACTIVE_FAILED, {
         nodeId,
         error: error.message,
       });
@@ -371,9 +226,6 @@ class NodeLifecycleService extends EventEmitter {
         SystemTableName.NODES,
         {node_id: nodeId},
       );
-
-      // Remove from local tracking
-      this.knownNodes.delete(nodeId);
 
       this.emit(NODE_LIFECYCLE_SERVICE_EVENT.NODE_REMOVED, {
         nodeId,
@@ -433,117 +285,6 @@ class NodeLifecycleService extends EventEmitter {
   }
 
   /**
-   * Start failure detection for known nodes.
-   * @param {Function} getNodesFromCache - Function to get nodes from cache.
-   */
-  startFailureDetection(getNodesFromCache) {
-    this.validateInitialized();
-
-    if (this.failureDetectionTimer) {
-      return;
-    }
-
-    this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.STARTING_FAILURE_DETECTION, {
-      nodeId: this.nodeId,
-      intervalMs: this.failureDetectionIntervalMs,
-      timeoutMs: this.heartbeatTimeoutMs,
-    });
-
-    this.failureDetectionTimer = setInterval(async () => {
-      await this.detectFailedNodes(getNodesFromCache);
-    }, this.failureDetectionIntervalMs);
-    this.failureDetectionTimer.unref();
-  }
-
-  /**
-   * Stop failure detection.
-   */
-  stopFailureDetection() {
-    if (this.failureDetectionTimer) {
-      clearInterval(this.failureDetectionTimer);
-      this.failureDetectionTimer = null;
-
-      this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.STOPPED_FAILURE_DETECTION, {
-        nodeId: this.nodeId,
-      });
-    }
-  }
-
-  /**
-   * Detect failed nodes based on heartbeat timeout.
-   * @param {Function} getNodesFromCache - Function to get nodes from cache.
-   * @return {Promise<void>}
-   * @private
-   */
-  async detectFailedNodes(getNodesFromCache) {
-    const now = Date.now();
-    let nodes = [];
-
-    // Get nodes from cache if function provided
-    if (getNodesFromCache) {
-      nodes = getNodesFromCache();
-    } else {
-      nodes = Array.from(this.knownNodes.values());
-    }
-    if (!Array.isArray(nodes)) {
-      throw new Error(NODE_LIFECYCLE_SERVICE_ERROR_MSG.INVALID_NODES_CACHE);
-    }
-
-    for (const node of nodes) {
-      // Skip this node
-      if (node.node_id === this.nodeId) {
-        continue;
-      }
-
-      // Skip already failed nodes
-      if (node.status === NodeLifecycleStatus.FAILED) {
-        continue;
-      }
-
-      const lastHeartbeat = node.last_heartbeat || node.lastHeartbeat || NUM.ZERO;
-      const timeSinceHeartbeat = now - lastHeartbeat;
-
-      if (timeSinceHeartbeat > this.heartbeatTimeoutMs) {
-        if (node.status === NodeLifecycleStatus.SUSPECTED) {
-          // Already suspected, now mark as failed
-          this.logger.warn(NODE_LIFECYCLE_SERVICE_LOG_MSG.HEARTBEAT_TIMEOUT_FAILED, {
-            nodeId: node.node_id,
-            timeSinceHeartbeat,
-            timeoutMs: this.heartbeatTimeoutMs,
-          });
-
-          try {
-            await this.markNodeFailed(node.node_id, NODE_LIFECYCLE_REASON.HEARTBEAT_TIMEOUT);
-          } catch (error) {
-            this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARK_NODE_FAILED_FAILED, {
-              nodeId: node.node_id,
-              error: error.message,
-            });
-            throw error;
-          }
-        } else if (node.status === NodeLifecycleStatus.ACTIVE) {
-          // First timeout, mark as suspected
-          this.logger.warn(NODE_LIFECYCLE_SERVICE_LOG_MSG.HEARTBEAT_DELAYED_SUSPECTED, {
-            nodeId: node.node_id,
-            timeSinceHeartbeat,
-            timeoutMs: this.heartbeatTimeoutMs,
-          });
-
-          try {
-            await this.markNodeSuspected(node.node_id);
-          } catch (error) {
-            this.logger.error(NODE_LIFECYCLE_SERVICE_LOG_MSG.MARK_NODE_SUSPECTED_FAILED, {
-              nodeId: node.node_id,
-              error: error.message,
-            });
-            throw error;
-          }
-        }
-      }
-    }
-  }
-
-  /**
    * Validate that the service is initialized.
    * @throws {Error} If not initialized.
    * @private
@@ -563,20 +304,10 @@ class NodeLifecycleService extends EventEmitter {
   }
 
   /**
-   * Get known nodes.
-   * @return {Map} Known nodes map.
-   */
-  getKnownNodes() {
-    return new Map(this.knownNodes);
-  }
-
-  /**
    * Shutdown the service.
    */
   shutdown() {
     this.stopHeartbeat();
-    this.stopFailureDetection();
-    this.knownNodes.clear();
     this.initialized = false;
 
     this.logger.info(NODE_LIFECYCLE_SERVICE_LOG_MSG.SHUTDOWN, {

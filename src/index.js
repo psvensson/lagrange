@@ -244,18 +244,37 @@ async function main() {
     });
 
     // Keep the process running
-    process.on('SIGINT', async () => {
-      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN);
-      await nodeJoiningService.cleanup();
-      await adminAPI.shutdown();
-      process.exit(0);
+    let shutdownSignalCount = 0;
+    const handleShutdownSignal = async (signal) => {
+      shutdownSignalCount++;
+      if (shutdownSignalCount > 1) {
+        mainLogger.warn('Shutdown already in progress, forcing process exit', {
+          signal,
+        });
+        process.exit(1);
+        return;
+      }
+
+      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
+      try {
+        await nodeJoiningService.cleanup();
+        await adminAPI.shutdown();
+        process.exit(0);
+      } catch (error) {
+        mainLogger.error('Failed to shutdown joining node cleanly', {
+          signal,
+          error: error.message,
+        });
+        process.exit(1);
+      }
+    };
+
+    process.on('SIGINT', () => {
+      void handleShutdownSignal('SIGINT');
     });
 
-    process.on('SIGTERM', async () => {
-      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN);
-      await nodeJoiningService.cleanup();
-      await adminAPI.shutdown();
-      process.exit(0);
+    process.on('SIGTERM', () => {
+      void handleShutdownSignal('SIGTERM');
     });
   } else {
     // Start as seed node - bootstrap the system
@@ -351,20 +370,38 @@ async function main() {
     });
 
     // Keep the process running
-    process.on('SIGINT', async () => {
-      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN);
-      await bootstrapService.shutdown();
-      await bootstrapAPI.shutdown();
-      await adminAPI.shutdown();
-      process.exit(0);
+    let shutdownSignalCount = 0;
+    const handleShutdownSignal = async (signal) => {
+      shutdownSignalCount++;
+      if (shutdownSignalCount > 1) {
+        mainLogger.warn('Shutdown already in progress, forcing process exit', {
+          signal,
+        });
+        process.exit(1);
+        return;
+      }
+
+      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
+      try {
+        await bootstrapService.shutdown();
+        await bootstrapAPI.shutdown();
+        await adminAPI.shutdown();
+        process.exit(0);
+      } catch (error) {
+        mainLogger.error('Failed to shutdown seed node cleanly', {
+          signal,
+          error: error.message,
+        });
+        process.exit(1);
+      }
+    };
+
+    process.on('SIGINT', () => {
+      void handleShutdownSignal('SIGINT');
     });
 
-    process.on('SIGTERM', async () => {
-      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN);
-      await bootstrapService.shutdown();
-      await bootstrapAPI.shutdown();
-      await adminAPI.shutdown();
-      process.exit(0);
+    process.on('SIGTERM', () => {
+      void handleShutdownSignal('SIGTERM');
     });
   }
 }

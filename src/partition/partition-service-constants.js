@@ -2,6 +2,7 @@ import {NUM} from '../constants/numbers.js';
 import {STRING} from '../constants/strings.js';
 import {TABLES} from '../constants/tables.js';
 import {TIME_MS} from '../constants/time.js';
+import {RAFT_ELECTION_TIMING} from '../raft/constants.js';
 
 const PARTITION_SERVICE_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
@@ -294,6 +295,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   REBALANCER_ROUTER_REQUIRED: 'PartitionService requires messageRouter for rebalancer',
   REBALANCER_SQL_ENGINE_REQUIRED:
     'PartitionService requires sqlQueryEngine for rebalancer',
+  REBALANCE_COORDINATOR_SHUTDOWN_FAILED:
+    'Failed to shutdown rebalance coordinator',
   DELIVERY_NOT_ACK: 'Delivery not acknowledged',
   NESTED_ACK_UNSUPPORTED: 'Nested ACK responses are not supported',
   MESSAGE_DELIVERY_FAILED: 'Message delivery failed',
@@ -311,12 +314,15 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
   // Election timeout should be 5-10x heartbeat to avoid unnecessary elections
   // On single-node clusters, all replicas are on same node so network is fast
   // but we still need stable leadership to avoid oscillation
-  LIFERAFT_HEARTBEAT_DEFAULT_MS: 150,
-  LIFERAFT_ELECTION_MIN_DEFAULT_MS: 1000,
-  LIFERAFT_ELECTION_MAX_DEFAULT_MS: 3000,
-  // Jitter added per replica index to stagger election timeouts
-  // r1 gets base timeout, r2 gets base + 500ms, r3 gets base + 1000ms, etc.
-  ELECTION_JITTER_PER_REPLICA_MS: 500,
+  LIFERAFT_HEARTBEAT_DEFAULT_MS: RAFT_ELECTION_TIMING.HEARTBEAT_DEFAULT_MS,
+  LIFERAFT_ELECTION_MIN_DEFAULT_MS: RAFT_ELECTION_TIMING.ELECTION_MIN_DEFAULT_MS,
+  LIFERAFT_ELECTION_MAX_DEFAULT_MS: RAFT_ELECTION_TIMING.ELECTION_MAX_DEFAULT_MS,
+  // Jitter added per replica index to stagger election timeouts.
+  // Must be >= (LIFERAFT_ELECTION_MAX - LIFERAFT_ELECTION_MIN) so that
+  // replica N's max timeout is always less than replica N+1's min timeout.
+  // This guarantees r1 always fires first, preventing re-elections.
+  // r1: [1000,3000], r2: [3500,5500], r3: [6000,8000], etc.
+  ELECTION_JITTER_PER_REPLICA_MS: RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,
   CDC_WHERE_LIMIT: NUM.HUNDRED,
   CDC_PARSE_LIMIT: NUM.HUNDRED,
   CDC_REDACTION_LIMIT: NUM.HUNDRED,

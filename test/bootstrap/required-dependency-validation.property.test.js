@@ -35,10 +35,14 @@ function createMockServiceClass(serviceName, requiredDeps) {
 
       // Validate all required dependencies
       for (const depName of requiredDeps) {
-        if (options[depName] === null || options[depName] === undefined) {
+        const hasOwnDependency = Object.hasOwn(options, depName);
+        const dependencyValue = hasOwnDependency ? options[depName] : undefined;
+        if (!hasOwnDependency ||
+          dependencyValue === null ||
+          dependencyValue === undefined) {
           throw new DependencyError(serviceName, depName);
         }
-        this[depName] = options[depName];
+        this[depName] = dependencyValue;
       }
     }
   };
@@ -592,4 +596,3 @@ test('BootstrapPartitionWriter-like dependency validation pattern', async (t) =>
     t.pass('valid partitionServices allows construction');
   });
 });
-

@@ -24,10 +24,39 @@ import {LoggingService} from '../../src/logging/logging-service.js';
  * @return {Object} Mock system table cache.
  */
 function createMockSystemTableCache() {
+  const tables = new Map();
   return {
-    filter: (_tableName, _predicate) => [],
-    get: (_tableName, _key) => null,
-    set: (_tableName, _key, _value) => {},
+    filter: (tableName, predicate) => {
+      const table = tables.get(tableName) || new Map();
+      return Array.from(table.values()).filter(predicate);
+    },
+    get: (tableName, key) => {
+      const table = tables.get(tableName) || new Map();
+      return table.get(key) || null;
+    },
+    set: (tableName, key, value) => {
+      if (!tables.has(tableName)) {
+        tables.set(tableName, new Map());
+      }
+      tables.get(tableName).set(key, value);
+    },
+    applySystemTableChange: (tableName, operation, data) => {
+      if (!tables.has(tableName)) {
+        tables.set(tableName, new Map());
+      }
+      const table = tables.get(tableName);
+      if (operation === 'INSERT' || operation === 'UPDATE') {
+        const key = data.service_id || data.partition_id || data.table_id || data.node_id;
+        if (key) {
+          table.set(key, data);
+        }
+      } else if (operation === 'DELETE') {
+        const key = data.service_id || data.partition_id || data.table_id || data.node_id;
+        if (key) {
+          table.delete(key);
+        }
+      }
+    },
   };
 }
 
@@ -45,6 +74,10 @@ function createMockCDCService() {
     },
     async updateSystemTableRow(_tableName, _whereClause, _data) {
       operations.push({type: 'update'});
+      return {success: true};
+    },
+    async upsertSystemTableRow(_tableName, _data) {
+      operations.push({type: 'upsert'});
       return {success: true};
     },
     async deleteSystemTableRow(_tableName, _whereClause) {
@@ -221,7 +254,20 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
           });
           manager.initialize();
 
-          // First register the replica so it exists
+          // First seed the cache with the replica so it exists
+          mockCache.applySystemTableChange('services', 'INSERT', {
+            service_id: replicaId,
+            service_type: 'partition',
+            partition_id: partitionId,
+            node_id: nodeId,
+            raft_role: 'follower',
+            status: 'active',
+            address: `${nodeId}/partition/${replicaId}`,
+            created_at: Date.now(),
+            updated_at: Date.now(),
+          });
+
+          // Then register the replica with the manager
           manager.registerExistingReplica({
             replicaId,
             partitionId,

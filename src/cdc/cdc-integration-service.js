@@ -33,7 +33,7 @@ import {
   INITIAL_PARTITION_IDS,
   getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
-import {AssignmentEpoch} from '../rebalancer/assignment-epoch.js';
+import {CDCEventHandler} from './cdc-event-handler.js';
 import {
   CDC_CONFIG_KEY,
   CDC_DEFAULTS,
@@ -121,8 +121,7 @@ class CDCIntegrationService extends EventEmitter {
     // Message router reference for mesh connectivity on node join
     this.messageRouter = null;
 
-    // Track previous node states for detecting changes
-    this._nodeStates = new Map();
+    this.cdcEventHandler = null;
 
     // Statistics
     this.stats = {...CDC_STATS_DEFAULT};
@@ -136,6 +135,50 @@ class CDCIntegrationService extends EventEmitter {
    */
   setSystemTableCache(cache) {
     this.systemTableCache = cache;
+  }
+
+  /**
+   * Build context object for CDCEventHandler with live references.
+   * @return {Object} Event handler context.
+   * @private
+   */
+  createEventHandlerContext() {
+    return {
+      get epochManager() {
+        return this._service.epochManager;
+      },
+      get rebalancer() {
+        return this._service.rebalancer;
+      },
+      get messageRouter() {
+        return this._service.messageRouter;
+      },
+      emit: (eventName, data) => {
+        this.emit(eventName, data);
+      },
+      incrementEpochChanges: () => {
+        this.stats.epochChanges++;
+      },
+      incrementNodeStateChanges: () => {
+        this.stats.nodeStateChanges++;
+      },
+      _service: this,
+    };
+  }
+
+  /**
+   * Ensure CDCEventHandler is instantiated for runtime CDC processing.
+   * @return {CDCEventHandler} Active CDC event handler.
+   * @private
+   */
+  ensureEventHandler() {
+    if (!this.cdcEventHandler) {
+      this.cdcEventHandler = new CDCEventHandler({
+        nodeId: this.nodeId,
+        eventContext: this.createEventHandlerContext(),
+      });
+    }
+    return this.cdcEventHandler;
   }
 
   /**
@@ -154,6 +197,7 @@ class CDCIntegrationService extends EventEmitter {
     }
 
     this.initialized = true;
+    this.ensureEventHandler();
 
     this.logger.info(CDC_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
@@ -496,10 +540,13 @@ class CDCIntegrationService extends EventEmitter {
       return false;
     }
     return message.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+      message === ERRORS.QUERY_FAILED ||
       message.includes(ERRORS.SYSTEM_CACHE_NOT_AVAILABLE) ||
       message.includes(ERRORS.SYSTEM_CACHE_PARTITION_LOOKUP_UNAVAILABLE) ||
       message.includes(ERRORS.NO_HANDLER_FOR_ADDRESS) ||
-      message.includes('No connection to node');
+      message.includes('No connection to node') ||
+      message.includes('Failed to forward write to leader') ||
+      message.includes('Message timeout');
   }
 
   /**
@@ -710,8 +757,8 @@ class CDCIntegrationService extends EventEmitter {
       return;
     }
 
-    if (!rowData[COLUMN.NODE_ADDRESS] && rowData[COLUMN.NODE_ID]) {
-      rowData[COLUMN.NODE_ADDRESS] = rowData[COLUMN.NODE_ID];
+    if (!rowData[COLUMN.NODE_ADDRESS]) {
+      rowData[COLUMN.NODE_ADDRESS] = 'unknown';
     }
     if (rowData.cpu_cores == null) {
       rowData.cpu_cores = NUM.ZERO;
@@ -1255,102 +1302,7 @@ class CDCIntegrationService extends EventEmitter {
    *   Result object indicating if epoch was applied.
    */
   handleEpochChangeCDC(cdcEvent) {
-    // Validate cdcEvent
-    if (!cdcEvent || typeof cdcEvent !== TYPEOF.OBJECT) {
-      return {
-        applied: false,
-        error: CDC_ERROR_MSG.INVALID_EVENT,
-      };
-    }
-
-    // Check if this is an epoch change event
-    const configKey = cdcEvent.data?.[COLUMN.CONFIG_KEY];
-    if (configKey !== EPOCH_CONFIG_KEY) {
-      return {
-        applied: false,
-        error: `${CDC_ERROR_MSG.NOT_EPOCH_CHANGE_PREFIX}'${configKey}'`,
-      };
-    }
-
-    // Check if epoch manager is set
-    if (!this.epochManager) {
-      this.logger.warn(CDC_LOG_MSG.EPOCH_MANAGER_MISSING, {
-        nodeId: this.nodeId,
-      });
-      return {
-        applied: false,
-        error: CDC_ERROR_MSG.EPOCH_MANAGER_NOT_SET,
-      };
-    }
-
-    // Parse the epoch data from config_value
-    let epochData;
-    try {
-      const configValue = cdcEvent.data?.[COLUMN.CONFIG_VALUE];
-      if (typeof configValue === TYPEOF.STRING) {
-        epochData = JSON.parse(configValue);
-      } else if (typeof configValue === TYPEOF.OBJECT && configValue !== null) {
-        epochData = configValue;
-      } else {
-        throw new Error(CDC_ERROR_MSG.EPOCH_DATA_INVALID);
-      }
-    } catch (parseError) {
-      this.logger.error(CDC_LOG_MSG.EPOCH_PARSE_FAILED, {
-        nodeId: this.nodeId,
-        error: parseError.message,
-      });
-      throw parseError;
-    }
-
-    // Create AssignmentEpoch from the parsed data
-    let epoch;
-    try {
-      epoch = AssignmentEpoch.fromObject(epochData);
-    } catch (epochError) {
-      this.logger.error(CDC_LOG_MSG.EPOCH_CREATE_FAILED, {
-        nodeId: this.nodeId,
-        error: epochError.message,
-      });
-      throw epochError;
-    }
-
-    // Apply the epoch to the epoch manager
-    const applied = this.epochManager.applyEpoch(epoch);
-
-    if (applied) {
-      this.stats.epochChanges++;
-
-      this.logger.info(CDC_LOG_MSG.EPOCH_APPLIED, {
-        nodeId: this.nodeId,
-        epoch: epoch.epoch,
-        proposedBy: epoch.proposedBy,
-      });
-
-      // Emit epochChange event
-      this.emit(CDC_EVENT.EPOCH_CHANGE, {
-        epoch: epoch.epoch,
-        assignments: epoch.assignments,
-        timestamp: epoch.timestamp,
-        proposedBy: epoch.proposedBy,
-        source: CDC_SOURCE.CDC,
-      });
-
-      return {
-        applied: true,
-        epoch: epoch.epoch,
-      };
-    } else {
-      this.logger.debug(CDC_LOG_MSG.EPOCH_SKIPPED, {
-        nodeId: this.nodeId,
-        incomingEpoch: epoch.epoch,
-      });
-
-      return {
-        applied: false,
-        error: CDC_ERROR_MSG.EPOCH_NOT_APPLIED,
-        epoch: epoch.epoch,
-      };
-    }
+    return this.ensureEventHandler().handleEpochChangeCDC(cdcEvent);
   }
 
   /**
@@ -1384,111 +1336,7 @@ class CDCIntegrationService extends EventEmitter {
    *   Result object indicating if the event was processed.
    */
   handleNodeStateCDC(cdcEvent) {
-    // Validate cdcEvent
-    if (!cdcEvent || typeof cdcEvent !== TYPEOF.OBJECT) {
-      return {
-        processed: false,
-        error: CDC_ERROR_MSG.INVALID_EVENT,
-      };
-    }
-
-    // Check if this is a nodes table event
-    const tableName = cdcEvent.tableName;
-    if (tableName !== SystemTableName.NODES) {
-      return {
-        processed: false,
-        error: `${CDC_ERROR_MSG.NOT_NODES_TABLE_PREFIX}'${tableName}'`,
-      };
-    }
-
-    // Extract node data
-    const nodeId = cdcEvent.data?.[COLUMN.NODE_ID];
-    const newState = cdcEvent.data?.[COLUMN.STATUS];
-
-    if (!nodeId) {
-      return {
-        processed: false,
-        error: CDC_ERROR_MSG.NODE_ID_MISSING,
-      };
-    }
-
-    if (!newState) {
-      return {
-        processed: false,
-        error: CDC_ERROR_MSG.NODE_STATUS_MISSING,
-      };
-    }
-
-    // Get the previous state for this node
-    const oldState = this._nodeStates.get(nodeId) || null;
-
-    // Update tracked state
-    this._nodeStates.set(nodeId, newState);
-
-    // Check if state actually changed
-    if (oldState === newState) {
-      this.logger.debug(CDC_LOG_MSG.NODE_STATE_UNCHANGED, {
-        nodeId,
-        state: newState,
-      });
-      return {
-        processed: true,
-        nodeId,
-        oldState,
-        newState,
-        stateChanged: false,
-      };
-    }
-
-    // Increment stats
-    this.stats.nodeStateChanges++;
-
-    this.logger.info(CDC_LOG_MSG.NODE_STATE_DETECTED, {
-      nodeId,
-      oldState,
-      newState,
-    });
-
-    // Emit nodeStateChange event
-    this.emit(CDC_EVENT.NODE_STATE_CHANGE, {
-      nodeId,
-      oldState,
-      newState,
-      timestamp: Date.now(),
-      source: CDC_SOURCE.CDC,
-    });
-
-    // Trigger rebalancer if set
-    if (this.rebalancer) {
-      try {
-        this.rebalancer.onNodeStateChange(nodeId, oldState, newState);
-        this.logger.debug(CDC_LOG_MSG.REBALANCER_NOTIFIED, {
-          nodeId,
-          oldState,
-          newState,
-        });
-      } catch (rebalancerError) {
-        this.logger.error(CDC_LOG_MSG.REBALANCER_NOTIFY_FAILED, {
-          nodeId,
-          oldState,
-          newState,
-          error: rebalancerError.message,
-        });
-        throw rebalancerError;
-      }
-    } else {
-      this.logger.debug(CDC_LOG_MSG.REBALANCER_NOT_SET, {
-        nodeId,
-      });
-    }
-
-    return {
-      processed: true,
-      nodeId,
-      oldState,
-      newState,
-      stateChanged: true,
-    };
+    return this.ensureEventHandler().handleNodeStateCDC(cdcEvent);
   }
 
   /**

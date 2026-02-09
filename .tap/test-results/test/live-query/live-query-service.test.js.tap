@@ -3,57 +3,57 @@ TAP version 14
     ok 1 - should detect LIVE prefix
     ok 2 - should extract SELECT
     1..2
-ok 1 - parseLiveSelect - parses LIVE SELECT statements # time=10.641ms
+ok 1 - parseLiveSelect - parses LIVE SELECT statements # time=7.445ms
 
 # Subtest: parseLiveSelect - handles regular SELECT
     ok 1 - should not be live
     ok 2 - should preserve SQL
     1..2
-ok 2 - parseLiveSelect - handles regular SELECT # time=0.653ms
+ok 2 - parseLiveSelect - handles regular SELECT # time=0.456ms
 
 # Subtest: parseLiveSelect - throws on invalid LIVE statement
     ok 1 - expected to throw
     1..1
-ok 3 - parseLiveSelect - throws on invalid LIVE statement # time=1.91ms
+ok 3 - parseLiveSelect - throws on invalid LIVE statement # time=1.233ms
 
 # Subtest: compilePredicate - returns true for null WHERE
     ok 1 - should match all rows
     ok 2 - should match any row
     1..2
-ok 4 - compilePredicate - returns true for null WHERE # time=0.639ms
+ok 4 - compilePredicate - returns true for null WHERE # time=0.382ms
 
 # Subtest: compilePredicate - handles equality
     ok 1 - should match
     ok 2 - should not match
     1..2
-ok 5 - compilePredicate - handles equality # time=0.717ms
+ok 5 - compilePredicate - handles equality # time=0.484ms
 
 # Subtest: compilePredicate - handles AND
     ok 1 - both true
     ok 2 - second false
     ok 3 - first false
     1..3
-ok 6 - compilePredicate - handles AND # time=0.914ms
+ok 6 - compilePredicate - handles AND # time=0.446ms
 
 # Subtest: compilePredicate - handles OR
     ok 1 - first matches
     ok 2 - second matches
     ok 3 - neither matches
     1..3
-ok 7 - compilePredicate - handles OR # time=1.223ms
+ok 7 - compilePredicate - handles OR # time=0.428ms
 
 # Subtest: compilePredicate - handles NOT
     ok 1 - NOT true = false
     ok 2 - NOT false = true
     1..2
-ok 8 - compilePredicate - handles NOT # time=0.965ms
+ok 8 - compilePredicate - handles NOT # time=0.366ms
 
 # Subtest: compilePredicate - handles IN
     ok 1 - in list
     ok 2 - in list
     ok 3 - not in list
     1..3
-ok 9 - compilePredicate - handles IN # time=1.176ms
+ok 9 - compilePredicate - handles IN # time=0.455ms
 
 # Subtest: compilePredicate - handles BETWEEN
     ok 1 - in range
@@ -62,61 +62,61 @@ ok 9 - compilePredicate - handles IN # time=1.176ms
     ok 4 - below range
     ok 5 - above range
     1..5
-ok 10 - compilePredicate - handles BETWEEN # time=0.839ms
+ok 10 - compilePredicate - handles BETWEEN # time=0.571ms
 
 # Subtest: compilePredicate - handles LIKE
     ok 1 - exact prefix
     ok 2 - prefix match
     ok 3 - no match
     1..3
-ok 11 - compilePredicate - handles LIKE # time=1.295ms
+ok 11 - compilePredicate - handles LIKE # time=0.554ms
 
 # Subtest: compilePredicate - handles IS NULL
     ok 1 - is null
     ok 2 - not null
     1..2
-ok 12 - compilePredicate - handles IS NULL # time=0.843ms
+ok 12 - compilePredicate - handles IS NULL # time=0.34ms
 
 # Subtest: extractPartitionKeyValue - extracts equality value
     ok 1 - should extract value
     1..1
-ok 13 - extractPartitionKeyValue - extracts equality value # time=0.747ms
+ok 13 - extractPartitionKeyValue - extracts equality value # time=0.46ms
 
 # Subtest: extractPartitionKeyValue - extracts from AND
     ok 1 - should extract from AND
     1..1
-ok 14 - extractPartitionKeyValue - extracts from AND # time=0.325ms
+ok 14 - extractPartitionKeyValue - extracts from AND # time=0.271ms
 
 # Subtest: extractPartitionKeyValue - extracts IN values
     ok 1 - should extract IN values
     1..1
-ok 15 - extractPartitionKeyValue - extracts IN values # time=1.389ms
+ok 15 - extractPartitionKeyValue - extracts IN values # time=1.017ms
 
 # Subtest: extractPartitionKeyValue - returns null for non-key column
     ok 1 - should return null
     1..1
-ok 16 - extractPartitionKeyValue - returns null for non-key column # time=0.382ms
+ok 16 - extractPartitionKeyValue - returns null for non-key column # time=0.279ms
 
 # Subtest: canonicalizePredicate - produces consistent output
     ok 1 - should produce same signature
     1..1
-ok 17 - canonicalizePredicate - produces consistent output # time=0.854ms
+ok 17 - canonicalizePredicate - produces consistent output # time=0.411ms
 
 # Subtest: LiveQueryService - creates with parsed query
     ok 1 - should have queryId
     ok 2 - should extract table
     ok 3 - should have predicate
     1..3
-ok 18 - LiveQueryService - creates with parsed query # time=78ms
+ok 18 - LiveQueryService - creates with parsed query # time=61.65ms
 
 # Subtest: LiveQueryService - evaluates predicate
     ok 1 - matches
     ok 2 - does not match
     1..2
-ok 19 - LiveQueryService - evaluates predicate # time=0.452ms
+ok 19 - LiveQueryService - evaluates predicate # time=0.265ms
 
 Live query renewed {
-  queryId: '79f913ca-ef61-4516-b61b-8b24fd3bd455',
+  queryId: '9fbfb785-2e38-4ad4-b7bf-3ab69f0f9560',
   cursor: 'cursor-123'
 }
 # Subtest: LiveQueryService - renews subscription
@@ -124,19 +124,19 @@ Live query renewed {
     ok 2 - should update cursor
     ok 3 - should have future expiry
     1..3
-ok 20 - LiveQueryService - renews subscription # time=11.779ms
+ok 20 - LiveQueryService - renews subscription # time=11.628ms
 
 # Subtest: LiveQueryService - detects expiration
     ok 1 - should be expired
     1..1
-ok 21 - LiveQueryService - detects expiration # time=0.465ms
+ok 21 - LiveQueryService - detects expiration # time=0.401ms
 
 # Subtest: LiveQueryService - gets query signature
     ok 1 - should include table
     ok 2 - should have predicate hash
     1..2
-ok 22 - LiveQueryService - gets query signature # time=0.845ms
+ok 22 - LiveQueryService - gets query signature # time=0.448ms
 
 1..22
 # { total: 46, pass: 46 }
-# time=133.709ms
+# time=100.417ms

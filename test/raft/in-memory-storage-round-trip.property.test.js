@@ -164,18 +164,14 @@ test('Property 1: In-Memory Storage Round-Trip', async (t) => {
   });
 
   /**
-   * Property: get throws for non-existent entries.
+   * Property: get returns null for non-existent entries.
    */
-  t.test('get throws for non-existent entries', async (t) => {
+  t.test('get returns null for non-existent entries', async (t) => {
     const node = createMockNode('test-node', 1);
     const adapter = new InMemoryLogAdapter(node);
 
-    try {
-      await adapter.get(999);
-      t.fail('should have thrown');
-    } catch (error) {
-      t.ok(error.notFound, 'error should have notFound flag');
-    }
+    const entry = await adapter.get(999);
+    t.equal(entry, null, 'missing entries should return null');
   });
 
   /**

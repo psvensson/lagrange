@@ -1,5 +1,10 @@
 /**
  * Tests for NodeLifecycleService.
+ *
+ * NodeLifecycleService is a write-only helper for node registration,
+ * heartbeat updates, and node removal. Failure detection is owned
+ * solely by FailureDetector.
+ *
  * Requirements: 5.6, 5.7, 5.8
  */
 
@@ -186,69 +191,6 @@ test('NodeLifecycleService - updateHeartbeat', async (t) => {
   t.end();
 });
 
-test('NodeLifecycleService - markNodeFailed', async (t) => {
-  const mockCDC = createMockCDCService();
-  const service = new NodeLifecycleService({
-    nodeId: 'test-node',
-    cdcIntegrationService: mockCDC,
-  });
-  service.initialize();
-
-  const result = await service.markNodeFailed('node-1', 'heartbeat_timeout');
-
-  t.equal(result.success, true, 'should succeed');
-  t.equal(mockCDC.operations.length, 1, 'should have one operation');
-  t.equal(mockCDC.operations[0].type, 'update', 'should be update');
-  t.equal(
-    mockCDC.operations[0].data.status,
-    NodeLifecycleStatus.FAILED,
-    'should set status to failed',
-  );
-  t.end();
-});
-
-test('NodeLifecycleService - markNodeSuspected', async (t) => {
-  const mockCDC = createMockCDCService();
-  const service = new NodeLifecycleService({
-    nodeId: 'test-node',
-    cdcIntegrationService: mockCDC,
-  });
-  service.initialize();
-
-  const result = await service.markNodeSuspected('node-1');
-
-  t.equal(result.success, true, 'should succeed');
-  t.equal(
-    mockCDC.operations[0].data.status,
-    NodeLifecycleStatus.SUSPECTED,
-    'should set status to suspected',
-  );
-  t.end();
-});
-
-test('NodeLifecycleService - markNodeActive', async (t) => {
-  const mockCDC = createMockCDCService();
-  const service = new NodeLifecycleService({
-    nodeId: 'test-node',
-    cdcIntegrationService: mockCDC,
-  });
-  service.initialize();
-
-  const result = await service.markNodeActive('node-1');
-
-  t.equal(result.success, true, 'should succeed');
-  t.equal(
-    mockCDC.operations[0].data.status,
-    NodeLifecycleStatus.ACTIVE,
-    'should set status to active',
-  );
-  t.ok(
-    mockCDC.operations[0].data.last_heartbeat,
-    'should update last_heartbeat',
-  );
-  t.end();
-});
-
 test('NodeLifecycleService - removeNode', async (t) => {
   const mockCDC = createMockCDCService();
   const service = new NodeLifecycleService({
@@ -270,7 +212,7 @@ test('NodeLifecycleService - removeNode', async (t) => {
   t.end();
 });
 
-test('NodeLifecycleService - emits events', async (t) => {
+test('NodeLifecycleService - emits events for write operations', async (t) => {
   const mockCDC = createMockCDCService();
   const service = new NodeLifecycleService({
     nodeId: 'test-node',
@@ -281,48 +223,16 @@ test('NodeLifecycleService - emits events', async (t) => {
   const events = [];
   service.on('nodeRegistered', (e) => events.push({type: 'registered', ...e}));
   service.on('heartbeatUpdated', (e) => events.push({type: 'heartbeat', ...e}));
-  service.on('nodeFailed', (e) => events.push({type: 'failed', ...e}));
-  service.on('nodeSuspected', (e) => events.push({type: 'suspected', ...e}));
-  service.on('nodeActive', (e) => events.push({type: 'active', ...e}));
   service.on('nodeRemoved', (e) => events.push({type: 'removed', ...e}));
 
   await service.registerNode({node_id: 'n1', node_address: 'addr1'});
   await service.updateHeartbeat('n1');
-  await service.markNodeSuspected('n1');
-  await service.markNodeFailed('n1');
-  await service.markNodeActive('n1');
   await service.removeNode('n1');
 
-  t.equal(events.length, 6, 'should emit 6 events');
+  t.equal(events.length, 3, 'should emit 3 events');
   t.equal(events[0].type, 'registered', 'should emit registered');
   t.equal(events[1].type, 'heartbeat', 'should emit heartbeat');
-  t.equal(events[2].type, 'suspected', 'should emit suspected');
-  t.equal(events[3].type, 'failed', 'should emit failed');
-  t.equal(events[4].type, 'active', 'should emit active');
-  t.equal(events[5].type, 'removed', 'should emit removed');
-  t.end();
-});
-
-test('NodeLifecycleService - tracks known nodes', async (t) => {
-  const mockCDC = createMockCDCService();
-  const service = new NodeLifecycleService({
-    nodeId: 'test-node',
-    cdcIntegrationService: mockCDC,
-  });
-  service.initialize();
-
-  await service.registerNode({node_id: 'n1', node_address: 'addr1'});
-  await service.registerNode({node_id: 'n2', node_address: 'addr2'});
-
-  const knownNodes = service.getKnownNodes();
-  t.equal(knownNodes.size, 2, 'should track 2 nodes');
-  t.ok(knownNodes.has('n1'), 'should have n1');
-  t.ok(knownNodes.has('n2'), 'should have n2');
-
-  await service.removeNode('n1');
-  const updatedNodes = service.getKnownNodes();
-  t.equal(updatedNodes.size, 1, 'should have 1 node after removal');
-  t.notOk(updatedNodes.has('n1'), 'should not have n1');
+  t.equal(events[2].type, 'removed', 'should emit removed');
   t.end();
 });
 
@@ -348,13 +258,9 @@ test('NodeLifecycleService - shutdown', async (t) => {
   });
   service.initialize();
 
-  await service.registerNode({node_id: 'n1', node_address: 'addr1'});
-  t.equal(service.getKnownNodes().size, 1, 'should have 1 node');
-
   service.shutdown();
 
   t.equal(service.isInitialized(), false, 'should not be initialized');
-  t.equal(service.getKnownNodes().size, 0, 'should clear known nodes');
   t.end();
 });
 
@@ -362,7 +268,80 @@ test('NodeLifecycleService - NodeLifecycleStatus values', async (t) => {
   t.equal(NodeLifecycleStatus.ACTIVE, 'active', 'should have active');
   t.equal(NodeLifecycleStatus.SUSPECTED, 'suspected', 'should have suspected');
   t.equal(NodeLifecycleStatus.FAILED, 'failed', 'should have failed');
-  t.equal(NodeLifecycleStatus.SHUTTING_DOWN, 'shutting_down', 'should have shutting_down');
+  t.equal(
+    NodeLifecycleStatus.SHUTTING_DOWN,
+    'shutting_down',
+    'should have shutting_down',
+  );
   t.equal(NodeLifecycleStatus.STOPPED, 'stopped', 'should have stopped');
+  t.end();
+});
+
+test('NodeLifecycleService - does not have failure detection methods', async (t) => {
+  const mockCDC = createMockCDCService();
+  const service = new NodeLifecycleService({
+    nodeId: 'test-node',
+    cdcIntegrationService: mockCDC,
+  });
+
+  t.equal(
+    typeof service.detectFailedNodes,
+    'undefined',
+    'should not have detectFailedNodes',
+  );
+  t.equal(
+    typeof service.startFailureDetection,
+    'undefined',
+    'should not have startFailureDetection',
+  );
+  t.equal(
+    typeof service.stopFailureDetection,
+    'undefined',
+    'should not have stopFailureDetection',
+  );
+  t.equal(
+    typeof service.markNodeFailed,
+    'undefined',
+    'should not have markNodeFailed',
+  );
+  t.equal(
+    typeof service.markNodeSuspected,
+    'undefined',
+    'should not have markNodeSuspected',
+  );
+  t.equal(
+    typeof service.markNodeActive,
+    'undefined',
+    'should not have markNodeActive',
+  );
+  t.equal(
+    typeof service.getKnownNodes,
+    'undefined',
+    'should not have getKnownNodes',
+  );
+  t.end();
+});
+
+test('NodeLifecycleService - does not have failure detection fields', async (t) => {
+  const service = new NodeLifecycleService({
+    nodeId: 'test-node',
+  });
+
+  t.equal(service.knownNodes, undefined, 'should not have knownNodes');
+  t.equal(
+    service.failureDetectionTimer,
+    undefined,
+    'should not have failureDetectionTimer',
+  );
+  t.equal(
+    service.heartbeatTimeoutMs,
+    undefined,
+    'should not have heartbeatTimeoutMs',
+  );
+  t.equal(
+    service.failureDetectionIntervalMs,
+    undefined,
+    'should not have failureDetectionIntervalMs',
+  );
   t.end();
 });

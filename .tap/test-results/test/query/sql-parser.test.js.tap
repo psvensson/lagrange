@@ -5,7 +5,7 @@ TAP version 14
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 1 - SQLParser - parses simple SELECT # time=11.084ms
+ok 1 - SQLParser - parses simple SELECT # time=8.118ms
 
 # Subtest: SQLParser - parses SELECT with columns
     ok 1 - should be equal
@@ -14,7 +14,7 @@ ok 1 - SQLParser - parses simple SELECT # time=11.084ms
     ok 4 - should be equal
     ok 5 - should be equal
     1..5
-ok 2 - SQLParser - parses SELECT with columns # time=3.624ms
+ok 2 - SQLParser - parses SELECT with columns # time=2.749ms
 
 # Subtest: SQLParser - parses SELECT with WHERE
     ok 1 - should be equal
@@ -24,7 +24,7 @@ ok 2 - SQLParser - parses SELECT with columns # time=3.624ms
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 3 - SQLParser - parses SELECT with WHERE # time=1.086ms
+ok 3 - SQLParser - parses SELECT with WHERE # time=0.983ms
 
 # Subtest: SQLParser - parses SELECT with ORDER BY
     ok 1 - should be equal
@@ -35,7 +35,7 @@ ok 3 - SQLParser - parses SELECT with WHERE # time=1.086ms
     ok 6 - should be equal
     ok 7 - should be equal
     1..7
-ok 4 - SQLParser - parses SELECT with ORDER BY # time=1.145ms
+ok 4 - SQLParser - parses SELECT with ORDER BY # time=0.814ms
 
 # Subtest: SQLParser - parses SELECT with LIMIT
     ok 1 - should be equal
@@ -43,7 +43,7 @@ ok 4 - SQLParser - parses SELECT with ORDER BY # time=1.145ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 5 - SQLParser - parses SELECT with LIMIT # time=1.228ms
+ok 5 - SQLParser - parses SELECT with LIMIT # time=0.787ms
 
 # Subtest: SQLParser - parses SELECT with GROUP BY
     ok 1 - should be equal
@@ -51,7 +51,7 @@ ok 5 - SQLParser - parses SELECT with LIMIT # time=1.228ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 6 - SQLParser - parses SELECT with GROUP BY # time=1.713ms
+ok 6 - SQLParser - parses SELECT with GROUP BY # time=1.53ms
 
 # Subtest: SQLParser - parses SELECT with aggregate functions
     ok 1 - should be equal
@@ -61,7 +61,7 @@ ok 6 - SQLParser - parses SELECT with GROUP BY # time=1.713ms
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 7 - SQLParser - parses SELECT with aggregate functions # time=1.392ms
+ok 7 - SQLParser - parses SELECT with aggregate functions # time=0.948ms
 
 # Subtest: SQLParser - parses SELECT with JOIN
     ok 1 - should be equal
@@ -70,33 +70,33 @@ ok 7 - SQLParser - parses SELECT with aggregate functions # time=1.392ms
     ok 4 - should be equal
     ok 5 - should be equal
     1..5
-ok 8 - SQLParser - parses SELECT with JOIN # time=1.489ms
+ok 8 - SQLParser - parses SELECT with JOIN # time=0.907ms
 
 # Subtest: SQLParser - parses SELECT with LEFT JOIN
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 9 - SQLParser - parses SELECT with LEFT JOIN # time=0.847ms
+ok 9 - SQLParser - parses SELECT with LEFT JOIN # time=2.984ms
 
 # Subtest: SQLParser - parses SELECT with IN clause
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 10 - SQLParser - parses SELECT with IN clause # time=0.77ms
+ok 10 - SQLParser - parses SELECT with IN clause # time=0.913ms
 
 # Subtest: SQLParser - parses SELECT with NOT IN clause
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 11 - SQLParser - parses SELECT with NOT IN clause # time=0.563ms
+ok 11 - SQLParser - parses SELECT with NOT IN clause # time=0.787ms
 
 # Subtest: SQLParser - parses SELECT with BETWEEN
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 12 - SQLParser - parses SELECT with BETWEEN # time=0.589ms
+ok 12 - SQLParser - parses SELECT with BETWEEN # time=0.801ms
 
 # Subtest: SQLParser - parses INSERT statement
     ok 1 - should be equal
@@ -106,13 +106,27 @@ ok 12 - SQLParser - parses SELECT with BETWEEN # time=0.589ms
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 13 - SQLParser - parses INSERT statement # time=2.621ms
+ok 13 - SQLParser - parses INSERT statement # time=3.096ms
 
 # Subtest: SQLParser - parses INSERT with multiple rows
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 14 - SQLParser - parses INSERT with multiple rows # time=0.573ms
+ok 14 - SQLParser - parses INSERT with multiple rows # time=0.807ms
+
+# Subtest: SQLParser - preserves INSERT OR REPLACE modifier
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 15 - SQLParser - preserves INSERT OR REPLACE modifier # time=0.711ms
+
+# Subtest: SQLParser - preserves INSERT OR IGNORE modifier
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 16 - SQLParser - preserves INSERT OR IGNORE modifier # time=0.595ms
 
 # Subtest: SQLParser - parses UPDATE statement
     ok 1 - should be equal
@@ -122,124 +136,124 @@ ok 14 - SQLParser - parses INSERT with multiple rows # time=0.573ms
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 15 - SQLParser - parses UPDATE statement # time=0.923ms
+ok 17 - SQLParser - parses UPDATE statement # time=1.406ms
 
 # Subtest: SQLParser - parses UPDATE with multiple assignments
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 16 - SQLParser - parses UPDATE with multiple assignments # time=0.466ms
+ok 18 - SQLParser - parses UPDATE with multiple assignments # time=0.744ms
 
 # Subtest: SQLParser - parses DELETE statement
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 17 - SQLParser - parses DELETE statement # time=0.812ms
+ok 19 - SQLParser - parses DELETE statement # time=1.181ms
 
 # Subtest: SQLParser - parses DELETE without WHERE
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 18 - SQLParser - parses DELETE without WHERE # time=0.347ms
+ok 20 - SQLParser - parses DELETE without WHERE # time=0.513ms
 
 # Subtest: SQLParser - parses complex WHERE with AND/OR
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 19 - SQLParser - parses complex WHERE with AND/OR # time=0.579ms
+ok 21 - SQLParser - parses complex WHERE with AND/OR # time=0.944ms
 
 # Subtest: SQLParser - parses IS NULL
     ok 1 - should be equal
     1..1
-ok 20 - SQLParser - parses IS NULL # time=0.343ms
+ok 22 - SQLParser - parses IS NULL # time=0.535ms
 
 # Subtest: SQLParser - parses IS NOT NULL
     ok 1 - should be equal
     1..1
-ok 21 - SQLParser - parses IS NOT NULL # time=0.558ms
+ok 23 - SQLParser - parses IS NOT NULL # time=0.623ms
 
 # Subtest: SQLParser - parses DISTINCT
     ok 1 - should be equal
     1..1
-ok 22 - SQLParser - parses DISTINCT # time=0.29ms
+ok 24 - SQLParser - parses DISTINCT # time=0.454ms
 
 # Subtest: SQLParser - parses column aliases
     ok 1 - should be equal
     1..1
-ok 23 - SQLParser - parses column aliases # time=0.349ms
+ok 25 - SQLParser - parses column aliases # time=0.613ms
 
 # Subtest: SQLParser - parses table aliases
     ok 1 - should be equal
     1..1
-ok 24 - SQLParser - parses table aliases # time=0.284ms
+ok 26 - SQLParser - parses table aliases # time=0.548ms
 
 # Subtest: SQLParser - parses qualified column names
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 25 - SQLParser - parses qualified column names # time=0.313ms
+ok 27 - SQLParser - parses qualified column names # time=0.567ms
 
 # Subtest: SQLParser - parses BEGIN TRANSACTION
     ok 1 - should be equal
     1..1
-ok 26 - SQLParser - parses BEGIN TRANSACTION # time=0.158ms
+ok 28 - SQLParser - parses BEGIN TRANSACTION # time=0.27ms
 
 # Subtest: SQLParser - parses COMMIT
     ok 1 - should be equal
     1..1
-ok 27 - SQLParser - parses COMMIT # time=0.176ms
+ok 29 - SQLParser - parses COMMIT # time=0.252ms
 
 # Subtest: SQLParser - parses ROLLBACK
     ok 1 - should be equal
     1..1
-ok 28 - SQLParser - parses ROLLBACK # time=0.155ms
+ok 30 - SQLParser - parses ROLLBACK # time=0.308ms
 
 # Subtest: SQLParser - handles semicolon at end
     ok 1 - should be equal
     1..1
-ok 29 - SQLParser - handles semicolon at end # time=1.268ms
+ok 31 - SQLParser - handles semicolon at end # time=2.196ms
 
 # Subtest: SQLParser - throws on invalid SQL
     ok 1 - expected to throw
     1..1
-ok 30 - SQLParser - throws on invalid SQL # time=1.253ms
+ok 32 - SQLParser - throws on invalid SQL # time=1.928ms
 
 # Subtest: SQLParser - parses HAVING clause
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 31 - SQLParser - parses HAVING clause # time=0.626ms
+ok 33 - SQLParser - parses HAVING clause # time=0.926ms
 
 # Subtest: SQLParser - parses LIKE clause
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 32 - SQLParser - parses LIKE clause # time=0.424ms
+ok 34 - SQLParser - parses LIKE clause # time=0.609ms
 
 # Subtest: SQLParser - parses negative numbers
     ok 1 - should be equal
     1..1
-ok 33 - SQLParser - parses negative numbers # time=0.326ms
+ok 35 - SQLParser - parses negative numbers # time=0.5ms
 
 # Subtest: SQLParser - parses boolean values
     ok 1 - should be equal
     1..1
-ok 34 - SQLParser - parses boolean values # time=2.75ms
+ok 36 - SQLParser - parses boolean values # time=0.466ms
 
 # Subtest: SQLParser - parses NULL values
     ok 1 - should be equal
     1..1
-ok 35 - SQLParser - parses NULL values # time=0.525ms
+ok 37 - SQLParser - parses NULL values # time=0.517ms
 
 # Subtest: SQLParser - parses parameter placeholders
     ok 1 - should be equal
     1..1
-ok 36 - SQLParser - parses parameter placeholders # time=0.496ms
+ok 38 - SQLParser - parses parameter placeholders # time=0.491ms
 
-1..36
-# { total: 97, pass: 97 }
-# time=132.594ms
+1..38
+# { total: 103, pass: 103 }
+# time=107.372ms

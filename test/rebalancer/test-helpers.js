@@ -161,6 +161,7 @@ function createMockSqlQueryEngine(options = {}) {
  */
 function createMockCoordinator() {
   return {
+    getMoveSafetyError: () => null,
     createOperation: async (move) => ({
       operationId: 'op-' + Date.now(),
       type: move.type,

@@ -9,7 +9,6 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {TABLES} from '../constants/index.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {assertCritical} from '../utils/assert.js';
 import {
   DEFAULT_TABLE_POLICY,
   POLICY_DEFAULT,
@@ -38,6 +37,7 @@ class TablePolicyService extends EventEmitter {
 
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.sqlQueryEngine = options.sqlQueryEngine || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -80,9 +80,9 @@ class TablePolicyService extends EventEmitter {
   /**
    * Get the policy for a specific table.
    * @param {string} tableId - Table ID.
-   * @return {Object} Table policy (merged with defaults).
+   * @return {Promise<Object>} Table policy (merged with defaults).
    */
-  getTablePolicy(tableId) {
+  async getTablePolicy(tableId) {
     if (!tableId) {
       return this.getDefaultPolicy();
     }
@@ -93,14 +93,19 @@ class TablePolicyService extends EventEmitter {
       return cached.policy;
     }
 
-    // Get from system table cache
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      POLICY_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const table = systemTableCache.get(TABLES.TABLES, tableId);
+    // Get from SQL engine
+    let table = null;
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM tables WHERE table_id = ?',
+        [tableId],
+      );
+      table = result.rows?.[0] || null;
+    }
     if (!table) {
-      this.logger.debug(POLICY_LOG_MSG.TABLE_NOT_FOUND_DEFAULT, {tableId});
+      this.logger.debug(
+        POLICY_LOG_MSG.TABLE_NOT_FOUND_DEFAULT, {tableId},
+      );
       return this.getDefaultPolicy();
     }
 
@@ -134,16 +139,22 @@ class TablePolicyService extends EventEmitter {
   /**
    * Get the policy for a partition by looking up its table.
    * @param {string} partitionId - Partition ID.
-   * @return {Object} Table policy for the partition's table.
+   * @return {Promise<Object>} Table policy for the partition's table.
    */
-  getPolicyForPartition(partitionId) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      POLICY_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const partition = systemTableCache.get(TABLES.PARTITIONS, partitionId);
+  async getPolicyForPartition(partitionId) {
+    let partition = null;
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM partitions WHERE partition_id = ?',
+        [partitionId],
+      );
+      partition = result.rows?.[0] || null;
+    }
     if (!partition) {
-      this.logger.debug(POLICY_LOG_MSG.PARTITION_NOT_FOUND_DEFAULT, {partitionId});
+      this.logger.debug(
+        POLICY_LOG_MSG.PARTITION_NOT_FOUND_DEFAULT,
+        {partitionId},
+      );
       return this.getDefaultPolicy();
     }
 
@@ -274,7 +285,7 @@ class TablePolicyService extends EventEmitter {
     }
 
     // Get current policy
-    const currentPolicy = this.getTablePolicy(tableId);
+    const currentPolicy = await this.getTablePolicy(tableId);
 
     // Merge updates with current policy
     const newPolicy = this.mergeWithDefaults({
@@ -351,10 +362,10 @@ class TablePolicyService extends EventEmitter {
   /**
    * Get split thresholds for a table.
    * @param {string} tableId - Table ID.
-   * @return {Object} Split thresholds {storageThreshold, trafficThreshold}.
+   * @return {Promise<Object>} Split thresholds.
    */
-  getSplitThresholds(tableId) {
-    const policy = this.getTablePolicy(tableId);
+  async getSplitThresholds(tableId) {
+    const policy = await this.getTablePolicy(tableId);
     return {
       storageThreshold: policy.splitStorageThreshold,
       trafficThreshold: policy.splitTrafficThreshold,
@@ -364,10 +375,10 @@ class TablePolicyService extends EventEmitter {
   /**
    * Get merge thresholds for a table.
    * @param {string} tableId - Table ID.
-   * @return {Object} Merge thresholds {storageThreshold, trafficThreshold}.
+   * @return {Promise<Object>} Merge thresholds.
    */
-  getMergeThresholds(tableId) {
-    const policy = this.getTablePolicy(tableId);
+  async getMergeThresholds(tableId) {
+    const policy = await this.getTablePolicy(tableId);
     return {
       storageThreshold: policy.mergeStorageThreshold,
       trafficThreshold: policy.mergeTrafficThreshold,
@@ -377,10 +388,10 @@ class TablePolicyService extends EventEmitter {
   /**
    * Get replication settings for a table.
    * @param {string} tableId - Table ID.
-   * @return {Object} Replication settings {replicaCount, minReplicaCount, maxReplicaCount}.
+   * @return {Promise<Object>} Replication settings.
    */
-  getReplicationSettings(tableId) {
-    const policy = this.getTablePolicy(tableId);
+  async getReplicationSettings(tableId) {
+    const policy = await this.getTablePolicy(tableId);
     return {
       replicaCount: policy.replicaCount,
       minReplicaCount: policy.minReplicaCount,
@@ -391,21 +402,21 @@ class TablePolicyService extends EventEmitter {
   /**
    * Get placement constraints for a table.
    * @param {string} tableId - Table ID.
-   * @return {Object} Placement constraints.
+   * @return {Promise<Object>} Placement constraints.
    */
-  getPlacementConstraints(tableId) {
-    const policy = this.getTablePolicy(tableId);
+  async getPlacementConstraints(tableId) {
+    const policy = await this.getTablePolicy(tableId);
     return {...policy.placementConstraints};
   }
 
   /**
    * Check if a partition should be split based on its table's policy.
    * @param {string} partitionId - Partition ID.
-   * @param {Object} metrics - Partition metrics {sizeBytes, queriesPerMinute}.
-   * @return {boolean} True if partition should be split.
+   * @param {Object} metrics - Partition metrics.
+   * @return {Promise<boolean>} True if partition should be split.
    */
-  shouldSplitPartition(partitionId, metrics) {
-    const policy = this.getPolicyForPartition(partitionId);
+  async shouldSplitPartition(partitionId, metrics) {
+    const policy = await this.getPolicyForPartition(partitionId);
     const sizeBytes = metrics.sizeBytes || 0;
     const queriesPerMinute = metrics.queriesPerMinute || 0;
 
@@ -415,18 +426,24 @@ class TablePolicyService extends EventEmitter {
   }
 
   /**
-   * Check if two partitions should be merged based on their table's policy.
+   * Check if two partitions should be merged.
    * @param {string} leftPartitionId - Left partition ID.
    * @param {string} rightPartitionId - Right partition ID.
    * @param {Object} leftMetrics - Left partition metrics.
    * @param {Object} rightMetrics - Right partition metrics.
-   * @return {boolean} True if partitions should be merged.
+   * @return {Promise<boolean>} True if partitions should be merged.
    */
-  shouldMergePartitions(leftPartitionId, rightPartitionId, leftMetrics, rightMetrics) {
-    const policy = this.getPolicyForPartition(leftPartitionId);
-    const combinedStorage = (leftMetrics.sizeBytes || 0) + (rightMetrics.sizeBytes || 0);
-    const combinedTraffic = (leftMetrics.queriesPerMinute || 0) +
-                            (rightMetrics.queriesPerMinute || 0);
+  async shouldMergePartitions(
+    leftPartitionId, rightPartitionId, leftMetrics, rightMetrics,
+  ) {
+    const policy =
+      await this.getPolicyForPartition(leftPartitionId);
+    const combinedStorage =
+      (leftMetrics.sizeBytes || 0) +
+      (rightMetrics.sizeBytes || 0);
+    const combinedTraffic =
+      (leftMetrics.queriesPerMinute || 0) +
+      (rightMetrics.queriesPerMinute || 0);
 
     // Merge if BOTH thresholds are satisfied
     return combinedStorage <= policy.mergeStorageThreshold &&

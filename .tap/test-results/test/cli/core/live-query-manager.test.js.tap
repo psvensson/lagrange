@@ -5,12 +5,12 @@ TAP version 14
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - constructor initializes with defaults # time=3.316ms
+    ok 1 - constructor initializes with defaults # time=3.079ms
     
     # Subtest: constructor accepts custom options
         ok 1 - should be equal
         1..1
-    ok 2 - constructor accepts custom options # time=0.469ms
+    ok 2 - constructor accepts custom options # time=0.399ms
     
     # Subtest: subscribe creates a new subscription
         ok 1 - should be equal
@@ -22,41 +22,41 @@ TAP version 14
         ok 7 - should be equal
         ok 8 - should be equivalent
         1..8
-    ok 3 - subscribe creates a new subscription # time=2.266ms
+    ok 3 - subscribe creates a new subscription # time=2.263ms
     
     # Subtest: subscribe throws when at capacity
         ok 1 - expected to throw
         1..1
-    ok 4 - subscribe throws when at capacity # time=0.926ms
+    ok 4 - subscribe throws when at capacity # time=0.871ms
     
     # Subtest: subscribe emits event
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 5 - subscribe emits event # time=0.758ms
+    ok 5 - subscribe emits event # time=0.701ms
     
     # Subtest: pause pauses an active subscription
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 6 - pause pauses an active subscription # time=0.629ms
+    ok 6 - pause pauses an active subscription # time=0.595ms
     
     # Subtest: pause returns false for non-existent subscription
         ok 1 - should be equal
         1..1
-    ok 7 - pause returns false for non-existent subscription # time=0.359ms
+    ok 7 - pause returns false for non-existent subscription # time=0.356ms
     
     # Subtest: resume resumes a paused subscription
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 8 - resume resumes a paused subscription # time=0.525ms
+    ok 8 - resume resumes a paused subscription # time=0.566ms
     
     # Subtest: resume returns false for non-paused subscription
         ok 1 - should be equal
         1..1
-    ok 9 - resume returns false for non-paused subscription # time=0.371ms
+    ok 9 - resume returns false for non-paused subscription # time=0.356ms
     
     # Subtest: cancel removes subscription
         ok 1 - should be equal
@@ -64,24 +64,24 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 10 - cancel removes subscription # time=0.733ms
+    ok 10 - cancel removes subscription # time=0.707ms
     
     # Subtest: cancel returns false for non-existent subscription
         ok 1 - should be equal
         1..1
-    ok 11 - cancel returns false for non-existent subscription # time=0.371ms
+    ok 11 - cancel returns false for non-existent subscription # time=0.348ms
     
     # Subtest: renew renews an expired subscription
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 12 - renew renews an expired subscription # time=0.631ms
+    ok 12 - renew renews an expired subscription # time=0.642ms
     
     # Subtest: renew returns false for non-expired subscription
         ok 1 - should be equal
         1..1
-    ok 13 - renew returns false for non-expired subscription # time=0.361ms
+    ok 13 - renew returns false for non-expired subscription # time=0.362ms
     
     # Subtest: handleLiveQueryEvent processes initial results
         ok 1 - should be equal
@@ -89,45 +89,45 @@ TAP version 14
         ok 3 - should be equivalent
         ok 4 - should be equal
         1..4
-    ok 14 - handleLiveQueryEvent processes initial results # time=1.081ms
+    ok 14 - handleLiveQueryEvent processes initial results # time=1.363ms
     
     # Subtest: handleLiveQueryEvent adds events when not paused
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 15 - handleLiveQueryEvent adds events when not paused # time=0.727ms
+    ok 15 - handleLiveQueryEvent adds events when not paused # time=0.791ms
     
     # Subtest: handleLiveQueryEvent ignores events when paused
         ok 1 - should be equal
         1..1
-    ok 16 - handleLiveQueryEvent ignores events when paused # time=0.435ms
+    ok 16 - handleLiveQueryEvent ignores events when paused # time=0.392ms
     
     # Subtest: getAllSubscriptions returns all subscriptions
         ok 1 - should be equal
         1..1
-    ok 17 - getAllSubscriptions returns all subscriptions # time=0.374ms
+    ok 17 - getAllSubscriptions returns all subscriptions # time=0.42ms
     
     # Subtest: getActiveCount returns count of active subscriptions
         ok 1 - should be equal
         1..1
-    ok 18 - getActiveCount returns count of active subscriptions # time=0.394ms
+    ok 18 - getActiveCount returns count of active subscriptions # time=0.431ms
     
     # Subtest: destroy cancels all subscriptions
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 19 - destroy cancels all subscriptions # time=0.461ms
+    ok 19 - destroy cancels all subscriptions # time=0.541ms
     
     # Subtest: event rate is calculated correctly
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 20 - event rate is calculated correctly # time=0.513ms
+    ok 20 - event rate is calculated correctly # time=0.511ms
     
     1..20
-ok 1 - LiveQueryManager # time=29.786ms
+ok 1 - LiveQueryManager # time=28.705ms
 
 1..1
 # { total: 45, pass: 45 }
-# time=49.651ms
+# time=36.922ms

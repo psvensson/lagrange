@@ -2,22 +2,22 @@ TAP version 14
 # Subtest: MessageGroupService - constructor requires groupId
     ok 1 - Should throw without groupId
     1..1
-ok 1 - MessageGroupService - constructor requires groupId # time=18.01ms
+ok 1 - MessageGroupService - constructor requires groupId # time=18.186ms
 
 # Subtest: MessageGroupService - constructor requires replicaId
     ok 1 - Should throw without replicaId
     1..1
-ok 2 - MessageGroupService - constructor requires replicaId # time=2.145ms
+ok 2 - MessageGroupService - constructor requires replicaId # time=1.725ms
 
 # Subtest: MessageGroupService - constructor requires transport
     ok 1 - Should throw without transport
     1..1
-ok 3 - MessageGroupService - constructor requires transport # time=0.641ms
+ok 3 - MessageGroupService - constructor requires transport # time=0.569ms
 
 # Subtest: MessageGroupService - constructor requires WebSocket-based transport
     ok 1 - Should throw with non-WebSocket transport
     1..1
-ok 4 - MessageGroupService - constructor requires WebSocket-based transport # time=0.637ms
+ok 4 - MessageGroupService - constructor requires WebSocket-based transport # time=0.379ms
 
 # Subtest: MessageGroupService - constructor initializes correctly
     ok 1 - Should set groupId
@@ -26,29 +26,43 @@ ok 4 - MessageGroupService - constructor requires WebSocket-based transport # ti
     ok 4 - Should set replicaIds
     ok 5 - Should not be initialized
     1..5
-ok 5 - MessageGroupService - constructor initializes correctly # time=2.808ms
+ok 5 - MessageGroupService - constructor initializes correctly # time=2.573ms
 
 # Subtest: MessageGroupService - initialize becomes leader for single replica
     ok 1 - Should be initialized
     ok 2 - Should become leader for single replica
     1..2
-ok 6 - MessageGroupService - initialize becomes leader for single replica # time=4.598ms
+ok 6 - MessageGroupService - initialize becomes leader for single replica # time=2.677ms
+
+# Subtest: MessageGroupService - buildPeerAddress follows cache updates after relocation
+    ok 1 - should resolve initial location from services cache
+    ok 2 - should resolve relocated address from refreshed cache entry
+    1..2
+ok 7 - MessageGroupService - buildPeerAddress follows cache updates after relocation # time=2.025ms
+
+# Subtest: MessageGroupService - buildPeerAddress logs structured diagnostics on hint fallback
+    ok 1 - should use bootstrap hint when cache location is missing
+    ok 2 - repeated fallback should still resolve via bootstrap hint
+    ok 3 - should emit fallback diagnostics only once per peer
+    ok 4 - fallback diagnostics should identify bootstrap hint source
+    1..4
+ok 8 - MessageGroupService - buildPeerAddress logs structured diagnostics on hint fallback # time=1.679ms
 
 # Subtest: MessageGroupService - persists raft role updates to services table
     ok 1 - raft role update should be persisted via CDC
     1..1
-ok 7 - MessageGroupService - persists raft role updates to services table # time=2.373ms
+ok 9 - MessageGroupService - persists raft role updates to services table # time=2.066ms
 
 # Subtest: MessageGroupService - persists leader node updates to message groups table
     ok 1 - leader node update should be persisted via CDC
     1..1
-ok 8 - MessageGroupService - persists leader node updates to message groups table # time=1.861ms
+ok 10 - MessageGroupService - persists leader node updates to message groups table # time=1.806ms
 
 # Subtest: MessageGroupService - sendMessage creates message envelope
     ok 1 - Should return messageId
     ok 2 - Should return status
     1..2
-ok 9 - MessageGroupService - sendMessage creates message envelope # time=320.025ms
+ok 11 - MessageGroupService - sendMessage creates message envelope # time=310.221ms
 
 # Subtest: MessageGroupService - receiveMessage processes message
     ok 1 - Should return messageId
@@ -56,13 +70,13 @@ ok 9 - MessageGroupService - sendMessage creates message envelope # time=320.025
     ok 3 - Should emit messageReceived event
     ok 4 - Event should have messageId
     1..4
-ok 10 - MessageGroupService - receiveMessage processes message # time=3.445ms
+ok 12 - MessageGroupService - receiveMessage processes message # time=2.031ms
 
 # Subtest: MessageGroupService - receiveMessage detects duplicates
     ok 1 - Should detect duplicate
     ok 2 - Should indicate already acknowledged
     1..2
-ok 11 - MessageGroupService - receiveMessage detects duplicates # time=3.019ms
+ok 13 - MessageGroupService - receiveMessage detects duplicates # time=2.929ms
 
 # Subtest: MessageGroupService - acknowledgeMessage marks message
     ok 1 - Should return messageId
@@ -70,13 +84,13 @@ ok 11 - MessageGroupService - receiveMessage detects duplicates # time=3.019ms
     ok 3 - Should have log index
     ok 4 - Should emit messageAcknowledged event
     1..4
-ok 12 - MessageGroupService - acknowledgeMessage marks message # time=2.913ms
+ok 14 - MessageGroupService - acknowledgeMessage marks message # time=1.839ms
 
 # Subtest: MessageGroupService - subscribeToCDC adds subscription
     ok 1 - Should subscribe to nodes
     ok 2 - Should subscribe to partitions
     1..2
-ok 13 - MessageGroupService - subscribeToCDC adds subscription # time=2.583ms
+ok 15 - MessageGroupService - subscribeToCDC adds subscription # time=1.695ms
 
 # Subtest: MessageGroupService - applyCDCEvent updates cache
     ok 1 - Should emit cdcApplied event
@@ -85,7 +99,7 @@ ok 13 - MessageGroupService - subscribeToCDC adds subscription # time=2.583ms
     ok 4 - Should find record in cache
     ok 5 - Should have correct address
     1..5
-ok 14 - MessageGroupService - applyCDCEvent updates cache # time=3.535ms
+ok 16 - MessageGroupService - applyCDCEvent updates cache # time=1.995ms
 
 # Subtest: MessageGroupService - querySystemCache returns data
     ok 1 - Should find by key
@@ -93,21 +107,21 @@ ok 14 - MessageGroupService - applyCDCEvent updates cache # time=3.535ms
     ok 3 - Should filter correctly
     ok 4 - Should return all records
     1..4
-ok 15 - MessageGroupService - querySystemCache returns data # time=4.932ms
+ok 17 - MessageGroupService - querySystemCache returns data # time=2.454ms
 
 # Subtest: MessageGroupService - getReadOnlyCache returns wrapper
     ok 1 - Should return cache
-{"level":50,"time":"2026-02-01T09:38:28.483Z","nodeId":"test-node","pid":1801362,"subsystem":"cache","operation":"applySystemTableChange","attemptedMethod":"applySystemTableChange","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
+{"level":50,"time":"2026-02-09T10:22:54.121Z","nodeId":"test-node","pid":201878,"subsystem":"cache","operation":"applySystemTableChange","attemptedMethod":"applySystemTableChange","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
     ok 2 - Should block write operations
     1..2
-ok 16 - MessageGroupService - getReadOnlyCache returns wrapper # time=3.499ms
+ok 18 - MessageGroupService - getReadOnlyCache returns wrapper # time=2.026ms
 
 # Subtest: MessageGroupService - single replica becomes leader
     ok 1 - Should become leader
     ok 2 - Should be own leader
     ok 3 - Should emit leaderElected event
     1..3
-ok 17 - MessageGroupService - single replica becomes leader # time=2.727ms
+ok 19 - MessageGroupService - single replica becomes leader # time=2.283ms
 
 # Subtest: MessageGroupService - getStatus returns complete status
     ok 1 - Should have groupId
@@ -118,41 +132,41 @@ ok 17 - MessageGroupService - single replica becomes leader # time=2.727ms
     ok 6 - Should have logLength
     ok 7 - Should be initialized
     1..7
-ok 18 - MessageGroupService - getStatus returns complete status # time=1.695ms
+ok 20 - MessageGroupService - getStatus returns complete status # time=1.696ms
 
 # Subtest: MessageGroupService - shutdown cleans up
     ok 1 - Should not be initialized
     ok 2 - Should emit shutdown event
     ok 3 - Event should have groupId
     1..3
-ok 19 - MessageGroupService - shutdown cleans up # time=1.531ms
+ok 21 - MessageGroupService - shutdown cleans up # time=2.074ms
 
 # Subtest: InMemoryRaftStorage - appendEntry adds entries
     ok 1 - First entry should have index 1
     ok 2 - Second entry should have index 2
     ok 3 - Should have 2 entries
     1..3
-ok 20 - InMemoryRaftStorage - appendEntry adds entries # time=0.377ms
+ok 22 - InMemoryRaftStorage - appendEntry adds entries # time=0.377ms
 
 # Subtest: InMemoryRaftStorage - getEntriesFrom returns entries
     ok 1 - Should return all entries from start
     ok 2 - Should return entries from index 2
     ok 3 - First should be test2
     1..3
-ok 21 - InMemoryRaftStorage - getEntriesFrom returns entries # time=0.384ms
+ok 23 - InMemoryRaftStorage - getEntriesFrom returns entries # time=0.405ms
 
 # Subtest: InMemoryRaftStorage - getLastEntry returns last
     ok 1 - Should return null when empty
     ok 2 - Should return last entry
     1..2
-ok 22 - InMemoryRaftStorage - getLastEntry returns last # time=0.379ms
+ok 24 - InMemoryRaftStorage - getLastEntry returns last # time=0.391ms
 
 # Subtest: InMemoryRaftStorage - truncateFrom removes entries
     ok 1 - Should have 1 entry after truncate
     ok 2 - Should keep first entry
     1..2
-ok 23 - InMemoryRaftStorage - truncateFrom removes entries # time=0.345ms
+ok 25 - InMemoryRaftStorage - truncateFrom removes entries # time=0.349ms
 
-1..23
-# { total: 61, pass: 61 }
-# time=743.432ms
+1..25
+# { total: 67, pass: 67 }
+# time=691.155ms

@@ -46,57 +46,55 @@ function createMockCDCService() {
 }
 
 /**
- * Create a mock system table cache.
+ * Create a mock SQL query engine.
  * @param {Array} indices - Index records.
- * @param {Array} partitions - Partition records or actual partition services.
- * @return {Object} Mock system table cache.
+ * @param {Array} partitions - Partition records or services.
+ * @return {Object} Mock SQL query engine.
  */
-function createMockSystemTableCache(indices = [], partitions = []) {
+function createMockSqlEngine(indices = [], partitions = []) {
   return {
-    getAll(tableName) {
-      if (tableName === 'indices') return indices;
-      if (tableName === 'partitions') {
-        // Return metadata-like objects for filter operations
-        return partitions.map((p) => ({
-          partition_id: p.partition_id || p.partitionId,
-          table_id: p.table_id || p.tableId,
-        }));
+    executeQuery: async (sql, params) => {
+      if (sql.includes('FROM indices')) {
+        return {rows: indices};
       }
-      return [];
-    },
-    get(tableName, id) {
-      if (tableName === 'partitions') {
-        // Return the actual partition service for executeQuery calls
-        return partitions.find((p) =>
-          (p.partition_id || p.partitionId) === id,
-        ) || null;
+      if (sql.includes('FROM partitions WHERE table_id = ?')) {
+        const rows = partitions
+          .map((p) => ({
+            partition_id: p.partition_id || p.partitionId,
+            table_id: p.table_id || p.tableId,
+          }))
+          .filter((p) => p.table_id === params[0]);
+        return {rows};
       }
-      if (tableName === 'indices') {
-        return indices.find((i) => i.index_id === id) || null;
+      if (sql.includes('FROM partitions WHERE partition_id = ?')) {
+        const found = partitions.find((p) =>
+          (p.partition_id || p.partitionId) === params[0],
+        );
+        return {rows: found ? [found] : []};
       }
-      return null;
-    },
-    filter(tableName, predicate) {
-      const data = this.getAll(tableName);
-      return data.filter(predicate);
+      return {rows: []};
     },
   };
 }
 
 test('IndexService - initialization', async (t) => {
   const indexService = new IndexService({
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
 
   await indexService.initialize();
 
   t.ok(indexService.initialized, 'Service should be initialized');
-  t.equal(indexService.getTotalIndexCount(), 0, 'Should have no indices initially');
+  t.equal(
+    indexService.getTotalIndexCount(), 0,
+    'Should have no indices initially',
+  );
 
   await indexService.shutdown();
 });
 
-test('IndexService - loads indices from cache on initialization', async (t) => {
+test('IndexService - loads indices from cache on init', async (t) => {
   const existingIndices = [
     {
       index_id: 'idx-1',
@@ -116,23 +114,36 @@ test('IndexService - loads indices from cache on initialization', async (t) => {
     },
   ];
 
-  const cache = createMockSystemTableCache(existingIndices);
-  const indexService = new IndexService({systemTableCache: cache});
+  const sqlEngine = createMockSqlEngine(existingIndices);
+  const indexService = new IndexService({
+    systemTableCache: {},
+    sqlQueryEngine: sqlEngine,
+  });
 
   await indexService.initialize();
 
-  t.equal(indexService.getTotalIndexCount(), 2, 'Should load 2 indices from cache');
-  t.ok(indexService.indexExists('table-1', 'idx_name'), 'idx_name should exist');
-  t.ok(indexService.indexExists('table-1', 'idx_value'), 'idx_value should exist');
+  t.equal(
+    indexService.getTotalIndexCount(), 2,
+    'Should load 2 indices from cache',
+  );
+  t.ok(
+    indexService.indexExists('table-1', 'idx_name'),
+    'idx_name should exist',
+  );
+  t.ok(
+    indexService.indexExists('table-1', 'idx_value'),
+    'idx_value should exist',
+  );
 
   await indexService.shutdown();
 });
 
-test('IndexService - createIndex stores metadata in indices table', async (t) => {
+test('IndexService - createIndex stores metadata', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
 
   await indexService.initialize();
@@ -146,14 +157,27 @@ test('IndexService - createIndex stores metadata in indices table', async (t) =>
   });
 
   t.ok(result.indexId, 'Should return index ID');
-  t.equal(result.tableId, 'users-table', 'Should have correct table ID');
-  t.equal(result.indexName, 'idx_users_email', 'Should have correct index name');
-  t.same(result.columnNames, ['email'], 'Should have correct column names');
+  t.equal(
+    result.tableId, 'users-table', 'Should have correct table ID',
+  );
+  t.equal(
+    result.indexName, 'idx_users_email',
+    'Should have correct index name',
+  );
+  t.same(
+    result.columnNames, ['email'],
+    'Should have correct column names',
+  );
   t.equal(result.indexType, 'btree', 'Should have correct index type');
 
   // Verify CDC service was called
-  t.equal(cdcService.insertedRows.length, 1, 'Should insert one row');
-  t.equal(cdcService.insertedRows[0].tableName, 'indices', 'Should insert into indices table');
+  t.equal(
+    cdcService.insertedRows.length, 1, 'Should insert one row',
+  );
+  t.equal(
+    cdcService.insertedRows[0].tableName, 'indices',
+    'Should insert into indices table',
+  );
   t.equal(
     cdcService.insertedRows[0].data.index_name,
     'idx_users_email',
@@ -167,7 +191,8 @@ test('IndexService - createIndex with multiple columns', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
 
   await indexService.initialize();
@@ -180,7 +205,10 @@ test('IndexService - createIndex with multiple columns', async (t) => {
     indexType: IndexType.BTREE,
   });
 
-  t.same(result.columnNames, ['customer_id', 'order_date'], 'Should have multiple columns');
+  t.same(
+    result.columnNames, ['customer_id', 'order_date'],
+    'Should have multiple columns',
+  );
 
   const insertedData = cdcService.insertedRows[0].data;
   t.equal(
@@ -192,11 +220,12 @@ test('IndexService - createIndex with multiple columns', async (t) => {
   await indexService.shutdown();
 });
 
-test('IndexService - createIndex prevents duplicate index names', async (t) => {
+test('IndexService - createIndex prevents duplicates', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
 
   await indexService.initialize();
@@ -217,15 +246,19 @@ test('IndexService - createIndex prevents duplicate index names', async (t) => {
     });
     t.fail('Should throw error for duplicate index');
   } catch (error) {
-    t.match(error.message, /already exists/, 'Should indicate index already exists');
+    t.match(
+      error.message, /already exists/,
+      'Should indicate index already exists',
+    );
   }
 
   await indexService.shutdown();
 });
 
-test('IndexService - createIndex validates required parameters', async (t) => {
+test('IndexService - createIndex validates required params', async (t) => {
   const indexService = new IndexService({
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
   await indexService.initialize();
 
@@ -233,21 +266,31 @@ test('IndexService - createIndex validates required parameters', async (t) => {
     await indexService.createIndex({});
     t.fail('Should throw error for missing tableId');
   } catch (error) {
-    t.match(error.message, /tableId/, 'Should indicate tableId is required');
+    t.match(
+      error.message, /tableId/, 'Should indicate tableId is required',
+    );
   }
 
   try {
     await indexService.createIndex({tableId: 'test'});
     t.fail('Should throw error for missing indexName');
   } catch (error) {
-    t.match(error.message, /indexName/, 'Should indicate indexName is required');
+    t.match(
+      error.message, /indexName/,
+      'Should indicate indexName is required',
+    );
   }
 
   try {
-    await indexService.createIndex({tableId: 'test', indexName: 'idx'});
+    await indexService.createIndex({
+      tableId: 'test', indexName: 'idx',
+    });
     t.fail('Should throw error for missing columnNames');
   } catch (error) {
-    t.match(error.message, /columnNames/, 'Should indicate columnNames is required');
+    t.match(
+      error.message, /columnNames/,
+      'Should indicate columnNames is required',
+    );
   }
 
   await indexService.shutdown();
@@ -257,7 +300,8 @@ test('IndexService - dropIndex removes index metadata', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
 
   await indexService.initialize();
@@ -270,42 +314,61 @@ test('IndexService - dropIndex removes index metadata', async (t) => {
     columnNames: ['email'],
   });
 
-  t.ok(indexService.indexExists('users-table', 'idx_users_email'), 'Index should exist');
+  t.ok(
+    indexService.indexExists('users-table', 'idx_users_email'),
+    'Index should exist',
+  );
 
   // Drop the index
-  const result = await indexService.dropIndex('users-table', 'idx_users_email');
+  const result = await indexService.dropIndex(
+    'users-table', 'idx_users_email',
+  );
 
   t.ok(result, 'Should return true on successful drop');
-  t.notOk(indexService.indexExists('users-table', 'idx_users_email'), 'Index should not exist');
+  t.notOk(
+    indexService.indexExists('users-table', 'idx_users_email'),
+    'Index should not exist',
+  );
 
   // Verify CDC service was called for delete
-  t.equal(cdcService.deletedRows.length, 1, 'Should delete one row');
-  t.equal(cdcService.deletedRows[0].tableName, 'indices', 'Should delete from indices table');
+  t.equal(
+    cdcService.deletedRows.length, 1, 'Should delete one row',
+  );
+  t.equal(
+    cdcService.deletedRows[0].tableName, 'indices',
+    'Should delete from indices table',
+  );
 
   await indexService.shutdown();
 });
 
-test('IndexService - dropIndex throws for non-existent index', async (t) => {
+test('IndexService - dropIndex throws for non-existent', async (t) => {
   const indexService = new IndexService({
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
   await indexService.initialize();
 
   try {
-    await indexService.dropIndex('users-table', 'non_existent_index');
+    await indexService.dropIndex(
+      'users-table', 'non_existent_index',
+    );
     t.fail('Should throw error for non-existent index');
   } catch (error) {
-    t.match(error.message, /not found/, 'Should indicate index not found');
+    t.match(
+      error.message, /not found/, 'Should indicate index not found',
+    );
   }
 
   await indexService.shutdown();
 });
 
-test('IndexService - getIndicesForTable returns all indices for a table', async (t) => {
+test('IndexService - getIndicesForTable returns all', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
 
   await indexService.initialize();
@@ -332,10 +395,14 @@ test('IndexService - getIndicesForTable returns all indices for a table', async 
   });
 
   const userIndices = indexService.getIndicesForTable('users-table');
-  t.equal(userIndices.length, 2, 'Should have 2 indices for users table');
+  t.equal(
+    userIndices.length, 2, 'Should have 2 indices for users table',
+  );
 
   const orderIndices = indexService.getIndicesForTable('orders-table');
-  t.equal(orderIndices.length, 1, 'Should have 1 index for orders table');
+  t.equal(
+    orderIndices.length, 1, 'Should have 1 index for orders table',
+  );
 
   await indexService.shutdown();
 });
@@ -344,7 +411,8 @@ test('IndexService - getAllIndices returns all indices', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
 
   await indexService.initialize();
@@ -369,9 +437,10 @@ test('IndexService - getAllIndices returns all indices', async (t) => {
   await indexService.shutdown();
 });
 
-test('IndexService - handleCDCEvent updates cache on INSERT', async (t) => {
+test('IndexService - handleCDCEvent updates on INSERT', async (t) => {
   const indexService = new IndexService({
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
   await indexService.initialize();
 
@@ -388,16 +457,20 @@ test('IndexService - handleCDCEvent updates cache on INSERT', async (t) => {
     },
   });
 
-  t.ok(indexService.indexExists('table-1', 'idx_new_index'), 'Index should exist after CDC event');
+  t.ok(
+    indexService.indexExists('table-1', 'idx_new_index'),
+    'Index should exist after CDC event',
+  );
 
   await indexService.shutdown();
 });
 
-test('IndexService - handleCDCEvent updates cache on DELETE', async (t) => {
+test('IndexService - handleCDCEvent updates on DELETE', async (t) => {
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
 
   await indexService.initialize();
@@ -410,7 +483,10 @@ test('IndexService - handleCDCEvent updates cache on DELETE', async (t) => {
     columnNames: ['col1'],
   });
 
-  t.ok(indexService.indexExists('table-1', 'idx_to_delete'), 'Index should exist');
+  t.ok(
+    indexService.indexExists('table-1', 'idx_to_delete'),
+    'Index should exist',
+  );
 
   // Simulate CDC DELETE event
   await indexService.handleCDCEvent({
@@ -423,7 +499,10 @@ test('IndexService - handleCDCEvent updates cache on DELETE', async (t) => {
     },
   });
 
-  t.notOk(indexService.indexExists('table-1', 'idx_to_delete'), 'Index should not exist');
+  t.notOk(
+    indexService.indexExists('table-1', 'idx_to_delete'),
+    'Index should not exist',
+  );
 
   await indexService.shutdown();
 });
@@ -449,15 +528,12 @@ test('IndexService - creates SQLite index on partitions', async (t) => {
   partition.role = 'leader';
   partition.isLeader = true;
 
-  // Cache returns the actual partition service for getPartition() calls
-  const cache = createMockSystemTableCache([], [
-    partition, // Pass the actual partition service
-  ]);
-
+  const sqlEngine = createMockSqlEngine([], [partition]);
   const cdcService = createMockCDCService();
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    systemTableCache: cache,
+    systemTableCache: {},
+    sqlQueryEngine: sqlEngine,
   });
 
   await indexService.initialize();
@@ -469,21 +545,25 @@ test('IndexService - creates SQLite index on partitions', async (t) => {
     columnNames: ['email'],
   });
 
-  // Verify the index was created in SQLite by querying sqlite_master
+  // Verify the index was created in SQLite
   const result = await partition.executeQuery(
-    'SELECT name FROM sqlite_master WHERE type = \'index\' AND name = ?',
+    'SELECT name FROM sqlite_master WHERE type = \'index\'' +
+    ' AND name = ?',
     ['idx_users_email'],
   );
 
   t.equal(result.rows.length, 1, 'SQLite index should be created');
-  t.equal(result.rows[0].name, 'idx_users_email', 'Index name should match');
+  t.equal(
+    result.rows[0].name, 'idx_users_email',
+    'Index name should match',
+  );
 
   await indexService.shutdown();
   await partition.shutdown();
 });
 
 
-test('IndexService - creates indices on new partition via CDC event', async (t) => {
+test('IndexService - creates indices on new partition via CDC', async (t) => {
   const cdcService = createMockCDCService();
 
   // Create a partition that will be added later
@@ -507,17 +587,16 @@ test('IndexService - creates indices on new partition via CDC event', async (t) 
   newPartition.role = 'leader';
   newPartition.isLeader = true;
 
-  // Pass the actual partition service so getPartition() returns it
-  const cache = createMockSystemTableCache([], [newPartition]);
-
+  const sqlEngine = createMockSqlEngine([], [newPartition]);
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    systemTableCache: cache,
+    systemTableCache: {},
+    sqlQueryEngine: sqlEngine,
   });
 
   await indexService.initialize();
 
-  // Create an index first (without partitions - cache is empty initially for filter)
+  // Create an index first (no partitions matched for filter)
   await indexService.createIndex({
     tableId: 'users-table',
     tableName: 'users',
@@ -537,17 +616,21 @@ test('IndexService - creates indices on new partition via CDC event', async (t) 
 
   // Verify the index was created on the new partition
   const result = await newPartition.executeQuery(
-    'SELECT name FROM sqlite_master WHERE type = \'index\' AND name = ?',
+    'SELECT name FROM sqlite_master WHERE type = \'index\'' +
+    ' AND name = ?',
     ['idx_users_email'],
   );
 
-  t.equal(result.rows.length, 1, 'Index should be created on new partition');
+  t.equal(
+    result.rows.length, 1,
+    'Index should be created on new partition',
+  );
 
   await indexService.shutdown();
   await newPartition.shutdown();
 });
 
-test('IndexService - ensureIndicesOnPartition creates all indices', async (t) => {
+test('IndexService - ensureIndicesOnPartition creates all', async (t) => {
   const cdcService = createMockCDCService();
 
   const partition = new PartitionService({
@@ -571,18 +654,16 @@ test('IndexService - ensureIndicesOnPartition creates all indices', async (t) =>
   partition.role = 'leader';
   partition.isLeader = true;
 
-  // Pass the actual partition service so getPartition() returns it
-  const cache = createMockSystemTableCache([], [partition]);
-
+  const sqlEngine = createMockSqlEngine([], [partition]);
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    systemTableCache: cache,
+    systemTableCache: {},
+    sqlQueryEngine: sqlEngine,
   });
 
   await indexService.initialize();
 
-  // Create multiple indices (without creating them on partitions)
-  // Manually add to cache to simulate indices existing before partition
+  // Manually add to cache to simulate indices existing
   indexService.indexCache.set('users-table', new Map([
     ['idx_users_email', {
       indexId: 'idx-1',
@@ -610,17 +691,20 @@ test('IndexService - ensureIndicesOnPartition creates all indices', async (t) =>
 
   // Verify indices exist in SQLite
   const result = await partition.executeQuery(
-    'SELECT name FROM sqlite_master WHERE type = \'index\' AND name LIKE \'idx_users_%\'',
+    'SELECT name FROM sqlite_master WHERE type = \'index\'' +
+    ' AND name LIKE \'idx_users_%\'',
     [],
   );
 
-  t.equal(result.rows.length, 2, 'Both indices should exist in SQLite');
+  t.equal(
+    result.rows.length, 2, 'Both indices should exist in SQLite',
+  );
 
   await indexService.shutdown();
   await partition.shutdown();
 });
 
-test('IndexService - rebuildIndex recreates index on all partitions', async (t) => {
+test('IndexService - rebuildIndex recreates on partitions', async (t) => {
   const cdcService = createMockCDCService();
 
   const partition = new PartitionService({
@@ -642,12 +726,11 @@ test('IndexService - rebuildIndex recreates index on all partitions', async (t) 
   partition.role = 'leader';
   partition.isLeader = true;
 
-  // Pass the actual partition service so getPartition() returns it
-  const cache = createMockSystemTableCache([], [partition]);
-
+  const sqlEngine = createMockSqlEngine([], [partition]);
   const indexService = new IndexService({
     cdcIntegrationService: cdcService,
-    systemTableCache: cache,
+    systemTableCache: {},
+    sqlQueryEngine: sqlEngine,
   });
 
   await indexService.initialize();
@@ -661,26 +744,32 @@ test('IndexService - rebuildIndex recreates index on all partitions', async (t) 
   });
 
   // Rebuild the index
-  const result = await indexService.rebuildIndex('users-table', 'idx_users_email');
+  const result = await indexService.rebuildIndex(
+    'users-table', 'idx_users_email',
+  );
 
   t.equal(result.successCount, 1, 'Should rebuild on 1 partition');
   t.equal(result.failCount, 0, 'Should have no failures');
 
   // Verify index still exists
   const sqlResult = await partition.executeQuery(
-    'SELECT name FROM sqlite_master WHERE type = \'index\' AND name = ?',
+    'SELECT name FROM sqlite_master WHERE type = \'index\'' +
+    ' AND name = ?',
     ['idx_users_email'],
   );
 
-  t.equal(sqlResult.rows.length, 1, 'Index should exist after rebuild');
+  t.equal(
+    sqlResult.rows.length, 1, 'Index should exist after rebuild',
+  );
 
   await indexService.shutdown();
   await partition.shutdown();
 });
 
-test('IndexService - ignores non-INSERT partition CDC events', async (t) => {
+test('IndexService - ignores non-INSERT partition CDC', async (t) => {
   const indexService = new IndexService({
-    systemTableCache: createMockSystemTableCache(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
   });
   await indexService.initialize();
 

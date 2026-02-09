@@ -13,6 +13,8 @@ const COLUMN = Object.freeze({
   TABLE_ID: 'table_id',
   SERVICE_ID: 'service_id',
   OPERATION_ID: 'operation_id',
+  ENTITY_TYPE: 'entity_type',
+  ENTITY_ID: 'entity_id',
   GROUP_ID: 'group_id',
   INDEX_ID: 'index_id',
   LOG_ID: 'log_id',

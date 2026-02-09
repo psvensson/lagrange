@@ -10,7 +10,7 @@ TAP version 14
         ok 7 - ReplicaStatus should contain 'failed'
         ok 8 - ReplicaStatus should have exactly the required number of values
         1..8
-    ok 1 - ReplicaStatus contains all required values # time=3.626ms
+    ok 1 - ReplicaStatus contains all required values # time=1.905ms
     
     # Subtest: ReplicaStatus enum keys match values
         ok 1 - PENDING should map to pending
@@ -21,17 +21,17 @@ TAP version 14
         ok 6 - REMOVED should map to removed
         ok 7 - FAILED should map to failed
         1..7
-    ok 2 - ReplicaStatus enum keys match values # time=0.935ms
+    ok 2 - ReplicaStatus enum keys match values # time=0.499ms
     
     # Subtest: isValidStatus correctly validates status values
         ok 1 - All required status values are valid
         1..1
-    ok 3 - isValidStatus correctly validates status values # time=3.123ms
+    ok 3 - isValidStatus correctly validates status values # time=1.508ms
     
     # Subtest: isValidStatus rejects invalid status values
         ok 1 - Invalid status values are rejected
         1..1
-    ok 4 - isValidStatus rejects invalid status values # time=3.924ms
+    ok 4 - isValidStatus rejects invalid status values # time=1.851ms
     
     # Subtest: WORKFLOW_STEP_TO_STATUS maps all steps to valid statuses
         ok 1 - Step 'PENDING' should map to valid status 'pending'
@@ -42,7 +42,7 @@ TAP version 14
         ok 6 - Step 'STOPPING' should map to valid status 'removing'
         ok 7 - Step 'REMOVED' should map to valid status 'removed'
         1..7
-    ok 5 - WORKFLOW_STEP_TO_STATUS maps all steps to valid statuses # time=0.926ms
+    ok 5 - WORKFLOW_STEP_TO_STATUS maps all steps to valid statuses # time=0.482ms
     
     # Subtest: ADD workflow steps are complete and ordered
         ok 1 - ADD workflow steps should match expected order
@@ -52,7 +52,7 @@ TAP version 14
         ok 5 - ADD step 'SYNCING' should have a status mapping
         ok 6 - ADD step 'ACTIVE' should have a status mapping
         1..6
-    ok 6 - ADD workflow steps are complete and ordered # time=1.883ms
+    ok 6 - ADD workflow steps are complete and ordered # time=1.027ms
     
     # Subtest: REMOVE workflow steps are complete and ordered
         ok 1 - REMOVE workflow steps should match expected order
@@ -61,19 +61,32 @@ TAP version 14
         ok 4 - REMOVE step 'STOPPING' should have a status mapping
         ok 5 - REMOVE step 'REMOVED' should have a status mapping
         1..5
-    ok 7 - REMOVE workflow steps are complete and ordered # time=0.772ms
+    ok 7 - REMOVE workflow steps are complete and ordered # time=1.562ms
+    
+    # Subtest: REPLACE workflow steps are complete and ordered
+        ok 1 - REPLACE workflow steps should match expected order
+        ok 2 - REPLACE step 'PENDING' should have a status mapping
+        ok 3 - REPLACE step 'SENDING' should have a status mapping
+        ok 4 - REPLACE step 'CREATING' should have a status mapping
+        ok 5 - REPLACE step 'SYNCING' should have a status mapping
+        ok 6 - REPLACE step 'ACTIVE' should have a status mapping
+        ok 7 - REPLACE step 'STOPPING' should have a status mapping
+        ok 8 - REPLACE step 'REMOVED' should have a status mapping
+        1..8
+    ok 8 - REPLACE workflow steps are complete and ordered # time=0.606ms
     
     # Subtest: getWorkflowSteps returns correct steps for operation types
         ok 1 - ADD operation should return ADD workflow steps
         ok 2 - REMOVE operation should return REMOVE workflow steps
-        ok 3 - Invalid operation type should return empty array
-        1..3
-    ok 8 - getWorkflowSteps returns correct steps for operation types # time=0.707ms
+        ok 3 - REPLACE operation should return REPLACE workflow steps
+        ok 4 - Invalid operation type should return empty array
+        1..4
+    ok 9 - getWorkflowSteps returns correct steps for operation types # time=0.478ms
     
     # Subtest: isValidWorkflowStep validates steps correctly
         ok 1 - Valid workflow steps are correctly identified
         1..1
-    ok 9 - isValidWorkflowStep validates steps correctly # time=1.191ms
+    ok 10 - isValidWorkflowStep validates steps correctly # time=0.916ms
     
     # Subtest: getNextWorkflowStep returns correct next step
         ok 1 - should be equal
@@ -85,8 +98,15 @@ TAP version 14
         ok 7 - should be equal
         ok 8 - should be equal
         ok 9 - should be equal
-        1..9
-    ok 10 - getNextWorkflowStep returns correct next step # time=1.082ms
+        ok 10 - should be equal
+        ok 11 - should be equal
+        ok 12 - should be equal
+        ok 13 - should be equal
+        ok 14 - should be equal
+        ok 15 - should be equal
+        ok 16 - should be equal
+        1..16
+    ok 11 - getNextWorkflowStep returns correct next step # time=1.161ms
     
     # Subtest: isTerminalStep identifies terminal steps correctly
         ok 1 - ACTIVE is terminal for ADD
@@ -96,23 +116,27 @@ TAP version 14
         ok 5 - STOPPING is not terminal
         ok 6 - FAILED is terminal for ADD
         ok 7 - FAILED is terminal for REMOVE
-        1..7
-    ok 11 - isTerminalStep identifies terminal steps correctly # time=1.155ms
+        ok 8 - FAILED is terminal for REPLACE
+        ok 9 - REMOVED is terminal for REPLACE
+        ok 10 - ACTIVE is not terminal for REPLACE
+        1..10
+    ok 12 - isTerminalStep identifies terminal steps correctly # time=0.803ms
     
     # Subtest: createOperation creates valid operation objects
         ok 1 - createOperation creates valid operation objects with all required fields
         1..1
-    ok 12 - createOperation creates valid operation objects # time=3.177ms
+    ok 13 - createOperation creates valid operation objects # time=1.397ms
     
     # Subtest: Operation type enum has correct values
         ok 1 - ADD operation type should be ADD
         ok 2 - REMOVE operation type should be REMOVE
-        1..2
-    ok 13 - Operation type enum has correct values # time=0.591ms
+        ok 3 - REPLACE operation type should be REPLACE
+        1..3
+    ok 14 - Operation type enum has correct values # time=0.306ms
     
-    1..13
-ok 1 - Property: ReplicaStatus enum contains all required values # time=33.434ms
+    1..14
+ok 1 - Property: ReplicaStatus enum contains all required values # time=20.166ms
 
 1..1
-# { total: 58, pass: 58 }
-# time=43.696ms
+# { total: 78, pass: 78 }
+# time=24.563ms

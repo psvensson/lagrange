@@ -2,6 +2,7 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {NUM, TIME_MS} from '../constants/index.js';
 
 const QUERY_SUBSYSTEM = Object.freeze({
+  QUERY_ROUTER: 'query-router',
   SQL_QUERY_ENGINE: 'sql-query-engine',
   QUERY_EXECUTOR: 'query-executor',
   PARALLEL_QUERY_COORDINATOR: 'parallel-query-coordinator',
@@ -108,6 +109,17 @@ const QUERY_ERROR_MSG = Object.freeze({
   TABLE_EXISTS_SUFFIX: '\' already exists',
 });
 
+const QUERY_ROUTER_ERROR_MSG = Object.freeze({
+  SYSTEM_CACHE_REQUIRED: 'QueryRouter requires systemCache',
+  MESSAGE_ROUTER_REQUIRED: 'QueryRouter requires messageRouter',
+  noServiceCandidates: (partitionId) =>
+    `No service candidates found for partition: ${partitionId}`,
+  routingTimeout: (partitionId, timeoutMs) =>
+    `Routing timed out for partition ${partitionId} after ${timeoutMs}ms`,
+  routingFailed: (partitionId, retryAttempts) =>
+    `Failed to route query to partition ${partitionId} after ${retryAttempts} attempts`,
+});
+
 const QUERY_LOG_MSG = Object.freeze({
   EXECUTING_DISTRIBUTED_SELECT: 'Executing distributed SELECT',
   EXECUTING_CROSS_PARTITION_JOIN: 'Executing cross-partition JOIN',
@@ -147,6 +159,16 @@ const QUERY_LOG_MSG = Object.freeze({
   TABLE_EXISTS_SKIP: 'Table already exists, skipping creation',
   TABLE_CREATED_SUCCESS: 'Table created successfully',
   FOLLOWING_LEADER_REDIRECT: 'Following leader redirect',
+});
+
+const QUERY_ROUTER_LOG_MSG = Object.freeze({
+  ROUTING_TO_PARTITION: 'Routing query to partition',
+  TIMEOUT_EXCEEDED: 'Routing timeout exceeded',
+  NO_CANDIDATES: 'No service candidates available for partition',
+  ROUTE_SUCCESS: 'Route to partition succeeded',
+  FOLLOWING_REDIRECT: 'Following leader redirect',
+  RETRY_ATTEMPT: 'Retrying partition route',
+  ROUTE_FAILED: 'Route to partition failed',
 });
 
 const QUERY_SQL = Object.freeze({
@@ -285,6 +307,8 @@ export {
   QUERY_OPERATION,
   QUERY_OPERATOR,
   QUERY_RESPONSE_TYPE,
+  QUERY_ROUTER_ERROR_MSG,
+  QUERY_ROUTER_LOG_MSG,
   QUERY_SESSION,
   QUERY_SQL,
   QUERY_SQL_FRAGMENT,

@@ -1,2 +1,8 @@
 timeout: 5000
 allow-incomplete-coverage: true
+jobs: 8
+node-arg:
+  - --max-old-space-size=512
+serial:
+  - test/integration
+  - test/bootstrap

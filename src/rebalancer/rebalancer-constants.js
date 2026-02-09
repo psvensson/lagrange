@@ -23,6 +23,7 @@ const REBALANCER_TRIGGER = Object.freeze({
 const REBALANCER_MOVE_TYPE = Object.freeze({
   ADD: 'add',
   REMOVE: 'remove',
+  REPLACE: 'replace',
 });
 
 const REBALANCER_NODE_STATUS = Object.freeze({
@@ -45,6 +46,7 @@ const REBALANCER_CONFIG_KEY = Object.freeze({
   MOVE_TIMEOUT_MS: 'rebalancer.moveTimeoutMs',
   MOVE_BATCH_SIZE: 'rebalancer.moveBatchSize',
   INTER_BATCH_DELAY_MS: 'rebalancer.interBatchDelayMs',
+  REBALANCE_BUDGET: 'rebalancer.rebalanceBudget',
   NODE_CPU_THRESHOLD: 'rebalancer.nodeCpuThreshold',
   NODE_MEMORY_THRESHOLD: 'rebalancer.nodeMemoryThreshold',
   NODE_DISK_THRESHOLD: 'rebalancer.nodeDiskThreshold',
@@ -72,6 +74,8 @@ const REBALANCER_DEFAULT = Object.freeze({
     MOVE_TIMEOUT_MS: 300000,
     MOVE_BATCH_SIZE: NUM.TWO,
     INTER_BATCH_DELAY_MS: 100,
+    REBALANCE_BUDGET: 10,
+    CRITICAL_BUDGET_MULTIPLIER: 2,
     NODE_CPU_THRESHOLD: 0.8,
     NODE_MEMORY_THRESHOLD: 0.8,
     NODE_DISK_THRESHOLD: 0.9,
@@ -122,12 +126,15 @@ const REBALANCER_LOG_MSG = Object.freeze({
   SKIP_PENDING: 'Pending moves exist, skipping move calculation',
   SKIP_REMOVE_REMOVING: 'Skipping REMOVE for replica already in removing state',
   SKIP_ADD_TRANSITIONAL: 'Skipping ADD for node with transitional replica',
+  DEFER_ADD_DEGRADED:
+    'Deferring ADD moves while degraded placement is already at target replica count',
   DEFER_REMOVE_DETAIL: 'Deferring REMOVE until ADDs complete',
   DEFER_REMOVE: 'Deferring REMOVE moves until ADD moves complete',
   INCLUDE_CRITICAL_REMOVE: 'Including critical REMOVE moves alongside ADD moves',
   NODE_STATE_CHANGE: 'Node state change detected',
   EXECUTE_MOVE: 'Executing rebalancing move',
   SKIP_UNREADY_NODE: 'Skipping move for unready node',
+  MOVE_BLOCKED_BY_SAFETY_POLICY: 'Skipping move blocked by safety policy',
   MOVE_FAILED: 'Failed to execute move',
   SKIP_BATCH_UNREADY: 'Skipping moves for unready node',
   NODE_DISCONNECTED_BATCH: 'Node disconnected during batch execution',
@@ -142,6 +149,7 @@ const REBALANCER_LOG_MSG = Object.freeze({
   EVALUATING_STATE: 'Evaluating rebalancing state',
   CRITICAL_STATE: 'Critical rebalancing state detected',
   SUBOPTIMAL_STATE: 'Suboptimal rebalancing state detected',
+  DEGRADED_TARGET: 'Replica target is constrained by available ready nodes',
   IMMEDIATE_TRIGGER: 'Immediate rebalancing check triggered',
   SHUTDOWN: 'Rebalancer shutdown',
 });
@@ -163,6 +171,7 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   STEP_CHANGED: 'Operation step changed',
   OPERATION_COMPLETED: 'Operation completed',
   OPERATION_FAILED: 'Operation failed',
+  OPERATION_BLOCKED_BY_SAFETY_POLICY: 'Operation blocked by safety policy',
   OPERATION_TIMED_OUT: 'Operation timed out',
   SKIP_PERSIST_NO_CDC: 'CDC integration service not available, skipping persistence',
   PERSIST_FAILED: 'Failed to persist operation',
@@ -208,9 +217,24 @@ const REBALANCER_ERROR_MSG = Object.freeze({
   SQL_ENGINE_REQUIRED: 'UnifiedRebalancer requires sqlQueryEngine',
 });
 
-const PULL_ASSIGNER_ERROR_MSG = Object.freeze({
-  REPLICA_HANDLER_REQUIRED: 'ReplicaHandler is required for replica creation',
-  RPC_CLIENT_REQUIRED: 'RPCClient is required for replica sync',
+const STABILIZATION_RESET_TRIGGER = Object.freeze({
+  NODE_JOINED: 'node_joined',
+  NODE_LEFT: 'node_left',
+  NODE_FAILED: 'node_failed',
+  REPLICA_FAILED: 'replica_failed',
+  POLICY_CHANGED: 'policy_changed',
+});
+
+const REBALANCER_SKIP_REASON = Object.freeze({
+  BUDGET_EXCEEDED: 'budget_exceeded',
+  BUDGET_QUERY_FAILED: 'budget_query_failed',
+  NOT_LEADER: 'not_leader',
+  STABILIZING: 'stabilizing',
+  NO_NODES: 'no_nodes',
+  CACHE_UNAVAILABLE: 'cache_unavailable',
+  SAFETY_BLOCKED: 'safety_blocked',
+  OPERATION_ALREADY_EXECUTING: 'operation_already_executing',
+  AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',
 });
 
 export {
@@ -224,9 +248,10 @@ export {
   REBALANCER_DEFAULT_POLICY,
   REBALANCER_EVENT,
   REBALANCER_LOG_MSG,
+  REBALANCER_SKIP_REASON,
+  STABILIZATION_RESET_TRIGGER,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCER_ERROR_MSG,
-  PULL_ASSIGNER_ERROR_MSG,
 };

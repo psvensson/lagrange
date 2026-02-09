@@ -320,6 +320,8 @@ const REPLICA_OPERATIONS_SCHEMA = {
     {name: 'operation_id', type: ColumnType.TEXT, primaryKey: true},
     {name: 'type', type: ColumnType.TEXT, notNull: true}, // 'ADD' or 'REMOVE'
     {name: 'partition_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'entity_type', type: ColumnType.TEXT, notNull: true},
+    {name: 'entity_id', type: ColumnType.TEXT, notNull: true},
     {name: 'replica_id', type: ColumnType.TEXT},
     {name: 'source_node_id', type: ColumnType.TEXT, notNull: true},
     {name: 'target_node_id', type: ColumnType.TEXT, notNull: true},
@@ -334,6 +336,7 @@ const REPLICA_OPERATIONS_SCHEMA = {
   indices: [
     {name: 'idx_replica_ops_status', columns: ['status']},
     {name: 'idx_replica_ops_partition', columns: ['partition_id']},
+    {name: 'idx_replica_ops_entity', columns: ['entity_type', 'entity_id']},
     {name: 'idx_replica_ops_created', columns: ['created_at']},
   ],
 };

@@ -12,6 +12,8 @@ const FIELD = Object.freeze({
   TARGET_NODE_ID: 'targetNodeId',
   FORWARDED_BY: 'forwardedBy',
   SOURCE_NODE_ID: 'sourceNodeId',
+  ENTITY_TYPE: 'entityType',
+  ENTITY_ID: 'entityId',
   REASON: 'reason',
 });
 

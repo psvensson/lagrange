@@ -40,6 +40,13 @@ import {
   REPLICA_HANDLER_WORKFLOW,
 } from './replica-handler-constants.js';
 
+const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
+  Object.values(SystemTableName).map((tableName) => `${tableName}-p1`),
+);
+
+const LEARNER_ROLE = 'learner';
+const VOTER_READY_CHECK_INTERVAL_MS = 250;
+
 /**
  * ReplicaHandler handles replica creation and removal requests on target nodes.
  * Returns immediately with status, then performs async work.
@@ -76,8 +83,8 @@ class ReplicaHandler extends EventEmitter {
       REPLICA_HANDLER_ERROR_MSG.CREATE_PARTITION_SERVICE_REQUIRED,
     );
 
-    // Track local replicas by replica_id for idempotency checks
-    this.localReplicas = new Map();
+    // Track live service references by replica_id (needed for shutdown, voter-readiness)
+    this.localServices = new Map();
 
     // Track in-progress operations by operationId
     this.inProgressOperations = new Map();
@@ -230,15 +237,6 @@ class ReplicaHandler extends EventEmitter {
       startedAt: Date.now(),
     });
 
-    // Track local replica
-    this.localReplicas.set(replicaId, {
-      replicaId,
-      partitionId,
-      tableName: null,
-      status: ReplicaStatus.CREATING,
-      service: null,
-    });
-
     // Start async creation after ACK has returned.
     setImmediate(() => {
       this.createReplicaAsync({
@@ -288,11 +286,6 @@ class ReplicaHandler extends EventEmitter {
         peerAddresses,
       } = context;
 
-      const replica = this.localReplicas.get(replicaId);
-      if (replica) {
-        replica.tableName = tableName;
-      }
-
       // Generate database path
       const dbPath = this.getPartitionDbPath(partitionId, replicaId);
 
@@ -316,11 +309,8 @@ class ReplicaHandler extends EventEmitter {
         isJoiningExistingGroup, // Start as learner if joining existing group
       });
 
-      // Update local tracking
-      const createdReplica = this.localReplicas.get(replicaId);
-      if (createdReplica) {
-        createdReplica.service = partitionService;
-      }
+      // Store service reference in localServices
+      this.localServices.set(replicaId, partitionService);
 
       // Update status to syncing (via CDC - coordinator will see this)
       await this.updateOperationStep(operationId, WORKFLOW_STEP.SYNCING, {
@@ -331,14 +321,19 @@ class ReplicaHandler extends EventEmitter {
       });
 
       // Sync from leader if address provided
-      const replicaForSync = this.localReplicas.get(replicaId);
-      if (replicaForSync) {
-        replicaForSync.status = ReplicaStatus.SYNCING;
-      }
-      if (replicaForSync?.service && leaderAddress) {
-        if (typeof replicaForSync.service.syncFromLeader === REPLICA_HANDLER_TYPEOF.FUNCTION) {
-          await replicaForSync.service.syncFromLeader(leaderAddress);
+      const service = this.localServices.get(replicaId);
+      if (service && leaderAddress) {
+        if (typeof service.syncFromLeader === REPLICA_HANDLER_TYPEOF.FUNCTION) {
+          await service.syncFromLeader(leaderAddress);
         }
+      }
+
+      if (this.shouldGateActivationOnVoterReadiness(
+        partitionId,
+        operationId,
+        isJoiningExistingGroup,
+      )) {
+        await this.waitForVoterReadyActivation(replicaId, partitionId);
       }
 
       // Update status to active
@@ -348,11 +343,6 @@ class ReplicaHandler extends EventEmitter {
       await this.updateReplicaStatus(replicaId, ReplicaStatus.ACTIVE, {
         partitionId,
       });
-
-      // Update local tracking
-      if (replicaForSync) {
-        replicaForSync.status = ReplicaStatus.ACTIVE;
-      }
 
       // Clean up in-progress tracking
       if (operationId) {
@@ -390,12 +380,6 @@ class ReplicaHandler extends EventEmitter {
         partitionId,
         errorMessage: error.message,
       });
-
-      // Update local tracking
-      const replica = this.localReplicas.get(replicaId);
-      if (replica) {
-        replica.status = ReplicaStatus.FAILED;
-      }
 
       // Clean up in-progress tracking
       if (operationId) {
@@ -510,9 +494,6 @@ class ReplicaHandler extends EventEmitter {
       startedAt: Date.now(),
     });
 
-    // Update local status
-    replica.status = ReplicaStatus.REMOVING;
-
     // Start async removal after ACK has returned.
     setImmediate(() => {
       this.removeReplicaAsync({
@@ -554,8 +535,7 @@ class ReplicaHandler extends EventEmitter {
       });
 
       // Get the replica service
-      const replica = this.localReplicas.get(replicaId);
-      const service = replica?.service;
+      const service = this.localServices.get(replicaId);
 
       // Graceful shutdown of service
       if (service && typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
@@ -591,13 +571,8 @@ class ReplicaHandler extends EventEmitter {
         throw deleteError;
       }
 
-      // Update local tracking
-      if (replica) {
-        replica.status = ReplicaStatus.REMOVED;
-      }
-
-      // Remove from local tracking
-      this.localReplicas.delete(replicaId);
+      // Remove from local service tracking
+      this.localServices.delete(replicaId);
 
       // Clean up in-progress tracking
       if (operationId) {
@@ -637,12 +612,6 @@ class ReplicaHandler extends EventEmitter {
         partitionId,
         errorMessage: error.message,
       });
-
-      // Update local tracking
-      const replica = this.localReplicas.get(replicaId);
-      if (replica) {
-        replica.status = ReplicaStatus.FAILED;
-      }
 
       // Clean up in-progress tracking
       if (operationId) {
@@ -719,6 +688,166 @@ class ReplicaHandler extends EventEmitter {
   }
 
   /**
+   * Determine whether activation should be gated on voter readiness.
+   * Critical partitions gate activation for explicit ADD operations. When ADD
+   * metadata is not yet visible, we only gate if there is an in-flight paired
+   * REMOVE for the same partition.
+   * @param {string} partitionId - Partition ID.
+   * @param {string} operationId - Replica operation ID.
+   * @param {boolean} [isJoiningExistingGroup=false] - Whether this replica is
+   * joining an existing Raft group.
+   * @return {boolean} True when voter-ready activation is required.
+   * @private
+   */
+  shouldGateActivationOnVoterReadiness(
+    partitionId,
+    operationId,
+    isJoiningExistingGroup = false,
+  ) {
+    if (typeof partitionId !== REPLICA_HANDLER_TYPEOF.STRING ||
+        !CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId)) {
+      return false;
+    }
+
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.get !== REPLICA_HANDLER_TYPEOF.FUNCTION) {
+      return false;
+    }
+
+    if (!operationId) {
+      return isJoiningExistingGroup && this.hasInFlightCriticalRemove(partitionId);
+    }
+
+    const operationRow = this.systemTableCache.get(
+      SystemTableName.REPLICA_OPERATIONS,
+      operationId,
+    );
+
+    if (!operationRow) {
+      return isJoiningExistingGroup && this.hasInFlightCriticalRemove(partitionId);
+    }
+
+    const operationType = typeof operationRow.type === REPLICA_HANDLER_TYPEOF.STRING ?
+      operationRow.type.toUpperCase() :
+      null;
+
+    if (!operationType) {
+      return false;
+    }
+
+    return operationType === 'ADD';
+  }
+
+  /**
+   * Check whether a critical partition has an in-flight REMOVE operation.
+   * @param {string} partitionId - Partition ID.
+   * @return {boolean} True when a non-terminal REMOVE exists.
+   * @private
+   */
+  hasInFlightCriticalRemove(partitionId) {
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.filter !== REPLICA_HANDLER_TYPEOF.FUNCTION) {
+      return false;
+    }
+
+    const removeOperations = this.systemTableCache.filter(
+      SystemTableName.REPLICA_OPERATIONS,
+      (row) => row?.partition_id === partitionId &&
+        typeof row?.type === REPLICA_HANDLER_TYPEOF.STRING &&
+        row.type.toUpperCase() === 'REMOVE',
+    );
+
+    return removeOperations.some((row) => {
+      const status = typeof row?.status === REPLICA_HANDLER_TYPEOF.STRING ?
+        row.status.toLowerCase() :
+        null;
+      return status !== ReplicaStatus.ACTIVE &&
+        status !== ReplicaStatus.REMOVED &&
+        status !== ReplicaStatus.FAILED;
+    });
+  }
+
+  /**
+   * Wait for replica to become non-learner and routable.
+   * @param {string} replicaId - Replica ID.
+   * @param {string} partitionId - Partition ID.
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForVoterReadyActivation(replicaId, partitionId) {
+    this.logger.info(REPLICA_HANDLER_LOG_MSG.WAITING_VOTER_READY, {
+      replicaId,
+      partitionId,
+      timeoutMs: this.syncTimeoutMs,
+      nodeId: this.nodeId,
+    });
+
+    const deadline = Date.now() + this.syncTimeoutMs;
+    while (Date.now() <= deadline) {
+      if (this.isReplicaVoterReady(replicaId)) {
+        this.logger.info(REPLICA_HANDLER_LOG_MSG.VOTER_READY_ACTIVATED, {
+          replicaId,
+          partitionId,
+          nodeId: this.nodeId,
+        });
+        return;
+      }
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, VOTER_READY_CHECK_INTERVAL_MS);
+      });
+    }
+
+    this.logger.warn(REPLICA_HANDLER_LOG_MSG.VOTER_READY_TIMEOUT, {
+      replicaId,
+      partitionId,
+      timeoutMs: this.syncTimeoutMs,
+      nodeId: this.nodeId,
+    });
+
+    throw new Error(
+      `Replica ${replicaId} did not become voter-ready within ${this.syncTimeoutMs}ms`,
+    );
+  }
+
+  /**
+   * Check if a local replica is voter-ready and routable.
+   * @param {string} replicaId - Replica ID.
+   * @return {boolean} True when replica is non-learner with routable address.
+   * @private
+   */
+  isReplicaVoterReady(replicaId) {
+    const service = this.localServices.get(replicaId);
+    if (!service) {
+      return false;
+    }
+
+    const role = typeof service.getRole === REPLICA_HANDLER_TYPEOF.FUNCTION ?
+      service.getRole() :
+      service.role;
+    const normalizedRole = typeof role === REPLICA_HANDLER_TYPEOF.STRING ?
+      role.toLowerCase() :
+      null;
+
+    if (!normalizedRole || normalizedRole === LEARNER_ROLE) {
+      return false;
+    }
+
+    const serviceRow = this.systemTableCache.get(SystemTableName.SERVICES, replicaId);
+    if (!serviceRow || !serviceRow.address) {
+      return false;
+    }
+
+    if (serviceRow.status === ReplicaStatus.FAILED ||
+        serviceRow.status === ReplicaStatus.REMOVING ||
+        serviceRow.status === ReplicaStatus.REMOVED) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
    * Update replica operation workflow step via CDC.
    * @param {string} operationId - Operation ID.
    * @param {string} workflowStep - Workflow step name.
@@ -790,20 +919,13 @@ class ReplicaHandler extends EventEmitter {
 
     try {
       if (!existing) {
-        await this.cdcIntegrationService.upsertSystemTableRow(
+        // Avoid creating partial replica_operations rows when cache lag causes
+        // the operation row to be temporarily missing. A partial upsert can
+        // violate NOT NULL constraints (e.g., type/source/target columns).
+        await this.cdcIntegrationService.updateSystemTableRow(
           SystemTableName.REPLICA_OPERATIONS,
-          {
-            operation_id: operationId,
-            replica_id: options.replicaId,
-            partition_id: options.partitionId || null,
-            workflow_step: updateData.workflow_step,
-            status: updateData.status,
-            steps_history: updateData.steps_history,
-            error_message: updateData.error_message || null,
-            created_at: now,
-            updated_at: now,
-            completed_at: updateData.completed_at || null,
-          },
+          {operation_id: operationId},
+          updateData,
         );
         return;
       }
@@ -1013,23 +1135,59 @@ class ReplicaHandler extends EventEmitter {
 
   /**
    * Get local replica by ID.
+   * Reads from System_Table_Cache and merges with local service reference.
    * @param {string} replicaId - Replica ID.
    * @return {Object|null} Local replica info or null.
    */
   getLocalReplica(replicaId) {
-    return this.localReplicas.get(replicaId) || null;
+    // Read from cache (single source of truth for replica state)
+    const cacheEntry = this.systemTableCache.get(SystemTableName.SERVICES, replicaId);
+    
+    // Check if this replica belongs to this node
+    if (!cacheEntry || cacheEntry.node_id !== this.nodeId) {
+      return null;
+    }
+
+    // Merge cache state with local service reference
+    const service = this.localServices.get(replicaId);
+    
+    return {
+      replicaId: cacheEntry.service_id || cacheEntry.replica_id,
+      partitionId: cacheEntry.partition_id,
+      tableName: null, // Not stored in services table
+      status: cacheEntry.status,
+      service: service || null,
+    };
   }
 
   /**
    * Get all local replicas.
+   * Reads from System_Table_Cache filtered by node_id.
    * @return {Array<Object>} Array of local replica info.
    */
   getAllLocalReplicas() {
-    return Array.from(this.localReplicas.values());
+    const localServices = this.systemTableCache.filter(
+      SystemTableName.SERVICES,
+      (row) => row.node_id === this.nodeId,
+    );
+
+    return localServices.map((cacheEntry) => {
+      const replicaId = cacheEntry.service_id || cacheEntry.replica_id;
+      const service = this.localServices.get(replicaId);
+      
+      return {
+        replicaId,
+        partitionId: cacheEntry.partition_id,
+        tableName: null, // Not stored in services table
+        status: cacheEntry.status,
+        service: service || null,
+      };
+    });
   }
 
   /**
    * Register an existing replica (created during bootstrap).
+   * Stores only the service reference in localServices.
    * This method is idempotent - duplicate registrations are ignored.
    * @param {Object} replicaInfo - Replica information.
    * @param {string} replicaInfo.replicaId - Unique replica identifier.
@@ -1039,10 +1197,10 @@ class ReplicaHandler extends EventEmitter {
    * @param {Object} [replicaInfo.service] - Partition service instance.
    */
   registerExistingReplica(replicaInfo) {
-    const {replicaId, partitionId, tableName, status, service} = replicaInfo;
+    const {replicaId, service} = replicaInfo;
 
     // Idempotent: no error on duplicate registration
-    if (this.localReplicas.has(replicaId)) {
+    if (this.localServices.has(replicaId)) {
       this.logger.debug(REPLICA_HANDLER_LOG_MSG.ALREADY_REGISTERED, {
         replicaId,
         nodeId: this.nodeId,
@@ -1050,18 +1208,15 @@ class ReplicaHandler extends EventEmitter {
       return;
     }
 
-    this.localReplicas.set(replicaId, {
-      replicaId,
-      partitionId,
-      tableName,
-      status: status || ReplicaStatus.ACTIVE,
-      service: service || null,
-    });
+    // Store only the service reference (status is in cache)
+    if (service) {
+      this.localServices.set(replicaId, service);
+    }
 
     this.logger.info(REPLICA_HANDLER_LOG_MSG.REGISTERED_REPLICA, {
       replicaId,
-      partitionId,
-      tableName,
+      partitionId: replicaInfo.partitionId,
+      tableName: replicaInfo.tableName,
       nodeId: this.nodeId,
     });
   }
@@ -1074,7 +1229,7 @@ class ReplicaHandler extends EventEmitter {
     return {
       nodeId: this.nodeId,
       initialized: this.initialized,
-      localReplicaCount: this.localReplicas.size,
+      localReplicaCount: this.localServices.size,
       inProgressOperationCount: this.inProgressOperations.size,
     };
   }
@@ -1150,7 +1305,7 @@ class ReplicaHandler extends EventEmitter {
     });
 
     this.inProgressOperations.clear();
-    this.localReplicas.clear();
+    this.localServices.clear();
     this.initialized = false;
 
     this.emit(REPLICA_HANDLER_EVENT.SHUTDOWN, {nodeId: this.nodeId});

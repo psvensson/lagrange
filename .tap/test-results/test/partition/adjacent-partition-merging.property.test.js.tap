@@ -2,38 +2,38 @@ TAP version 14
 # Subtest: Property 43: Merged partition has combined key range
     ok 1 - Merged partition has combined key range
     1..1
-ok 1 - Property 43: Merged partition has combined key range # time=6.031ms
+ok 1 - Property 43: Merged partition has combined key range # time=9.05ms
 
-{"level":50,"time":"2026-02-01T09:38:36.311Z","nodeId":"test-node","pid":1801878,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (99) != partition-3 start (169)","nodeId":"test-node","msg":"Partition merge failed"}
-{"level":50,"time":"2026-02-01T09:38:36.311Z","nodeId":"test-node","pid":1801878,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (100) != partition-3 start (153)","nodeId":"test-node","msg":"Partition merge failed"}
-{"level":50,"time":"2026-02-01T09:38:36.312Z","nodeId":"test-node","pid":1801878,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (11) != partition-3 start (180)","nodeId":"test-node","msg":"Partition merge failed"}
-{"level":50,"time":"2026-02-01T09:38:36.312Z","nodeId":"test-node","pid":1801878,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (12) != partition-3 start (104)","nodeId":"test-node","msg":"Partition merge failed"}
-{"level":50,"time":"2026-02-01T09:38:36.312Z","nodeId":"test-node","pid":1801878,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (15) != partition-3 start (101)","nodeId":"test-node","msg":"Partition merge failed"}
-{"level":50,"time":"2026-02-01T09:38:36.312Z","nodeId":"test-node","pid":1801878,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (13) != partition-3 start (155)","nodeId":"test-node","msg":"Partition merge failed"}
-{"level":50,"time":"2026-02-01T09:38:36.312Z","nodeId":"test-node","pid":1801878,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (81) != partition-3 start (144)","nodeId":"test-node","msg":"Partition merge failed"}
-{"level":50,"time":"2026-02-01T09:38:36.312Z","nodeId":"test-node","pid":1801878,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (60) != partition-3 start (106)","nodeId":"test-node","msg":"Partition merge failed"}
-{"level":50,"time":"2026-02-01T09:38:36.313Z","nodeId":"test-node","pid":1801878,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (90) != partition-3 start (101)","nodeId":"test-node","msg":"Partition merge failed"}
-{"level":50,"time":"2026-02-01T09:38:36.313Z","nodeId":"test-node","pid":1801878,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (17) != partition-3 start (132)","nodeId":"test-node","msg":"Partition merge failed"}
+{"level":50,"time":"2026-02-09T10:23:07.091Z","nodeId":"test-node","pid":202698,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (36) != partition-3 start (125)","nodeId":"test-node","msg":"Partition merge failed"}
+{"level":50,"time":"2026-02-09T10:23:07.092Z","nodeId":"test-node","pid":202698,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (13) != partition-3 start (109)","nodeId":"test-node","msg":"Partition merge failed"}
+{"level":50,"time":"2026-02-09T10:23:07.092Z","nodeId":"test-node","pid":202698,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (46) != partition-3 start (199)","nodeId":"test-node","msg":"Partition merge failed"}
+{"level":50,"time":"2026-02-09T10:23:07.092Z","nodeId":"test-node","pid":202698,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (16) != partition-3 start (106)","nodeId":"test-node","msg":"Partition merge failed"}
+{"level":50,"time":"2026-02-09T10:23:07.092Z","nodeId":"test-node","pid":202698,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (10) != partition-3 start (102)","nodeId":"test-node","msg":"Partition merge failed"}
+{"level":50,"time":"2026-02-09T10:23:07.092Z","nodeId":"test-node","pid":202698,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (98) != partition-3 start (159)","nodeId":"test-node","msg":"Partition merge failed"}
+{"level":50,"time":"2026-02-09T10:23:07.092Z","nodeId":"test-node","pid":202698,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (23) != partition-3 start (179)","nodeId":"test-node","msg":"Partition merge failed"}
+{"level":50,"time":"2026-02-09T10:23:07.093Z","nodeId":"test-node","pid":202698,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (49) != partition-3 start (196)","nodeId":"test-node","msg":"Partition merge failed"}
+{"level":50,"time":"2026-02-09T10:23:07.093Z","nodeId":"test-node","pid":202698,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (91) != partition-3 start (130)","nodeId":"test-node","msg":"Partition merge failed"}
+{"level":50,"time":"2026-02-09T10:23:07.093Z","nodeId":"test-node","pid":202698,"subsystem":"partition-split-merge","leftPartitionId":"partition-1","rightPartitionId":"partition-3","error":"Partitions are not adjacent: partition-1 end (84) != partition-3 start (193)","nodeId":"test-node","msg":"Partition merge failed"}
 # Subtest: Property 43: Non-adjacent partitions cannot be merged
     ok 1 - Non-adjacent partitions cannot be merged
     1..1
-ok 2 - Property 43: Non-adjacent partitions cannot be merged # time=2.595ms
+ok 2 - Property 43: Non-adjacent partitions cannot be merged # time=2.508ms
 
 # Subtest: Property 43: Merge criteria is AND - both conditions required
     ok 1 - Merge criteria is AND - both conditions required
     1..1
-ok 3 - Property 43: Merge criteria is AND - both conditions required # time=1.982ms
+ok 3 - Property 43: Merge criteria is AND - both conditions required # time=1.351ms
 
 # Subtest: Property 43: Merge removes original partitions
     ok 1 - Merge removes original partitions
     1..1
-ok 4 - Property 43: Merge removes original partitions # time=1.243ms
+ok 4 - Property 43: Merge removes original partitions # time=1.354ms
 
 # Subtest: Property 43: Merge preserves key space coverage
     ok 1 - Merge preserves key space coverage
     1..1
-ok 5 - Property 43: Merge preserves key space coverage # time=1.295ms
+ok 5 - Property 43: Merge preserves key space coverage # time=2.057ms
 
 1..5
 # { total: 5, pass: 5 }
-# time=164.441ms
+# time=166.122ms

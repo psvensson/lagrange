@@ -14,10 +14,16 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {isNodeRecordReady} from '../node/node-readiness-policy.js';
 import {WORKFLOW_STEP, NUM} from '../constants/index.js';
+import {SERVICE_TYPE} from '../constants/service.js';
 import {assertCritical} from '../utils/assert.js';
 import {
+  OPERATION_METADATA_KEY,
   ReplicaStatus,
+  TERMINAL_STATUSES,
+  TERMINAL_STATUS_SQL_CLAUSE,
   WORKFLOW_STEP_TO_STATUS,
   OperationType,
   isTerminalStep,
@@ -34,6 +40,7 @@ import {
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_CONFIG_KEY,
   REBALANCER_DEFAULT,
+  REBALANCER_SKIP_REASON,
   REBALANCER_SUBSYSTEM,
 } from './rebalancer-constants.js';
 
@@ -44,17 +51,27 @@ import {
 const SQL = Object.freeze({
   SELECT_OPERATION_BY_ID: 'SELECT * FROM replica_operations WHERE operation_id = ?',
   SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations 
-    WHERE status NOT IN ('active', 'removed', 'failed')`,
+    WHERE status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`,
   SELECT_OPERATIONS_BY_PARTITION: 'SELECT * FROM replica_operations WHERE partition_id = ?',
-  SELECT_IN_FLIGHT_FOR_PARTITION_NODE: `SELECT * FROM replica_operations 
-    WHERE partition_id = ? AND target_node_id = ? 
-    AND status NOT IN ('active', 'removed', 'failed')`,
+  SELECT_OPERATIONS_BY_ENTITY: `SELECT * FROM replica_operations
+    WHERE (
+      (entity_type = ? AND entity_id = ?)
+      OR ((entity_type IS NULL OR entity_type = '') AND partition_id = ?)
+    )`,
+  SELECT_IN_FLIGHT_FOR_ENTITY_NODE: `SELECT * FROM replica_operations
+    WHERE partition_id = ? AND target_node_id = ?
+    AND status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})
+    AND (
+      (entity_type = ? AND entity_id = ?)
+      OR (entity_type IS NULL OR entity_type = '')
+    )`,
   SELECT_IN_FLIGHT_BY_TYPE: `SELECT * FROM replica_operations 
-    WHERE type = ? AND status NOT IN ('active', 'removed', 'failed')`,
+    WHERE type = ? AND status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`,
   INSERT_OPERATION: `INSERT INTO replica_operations (
     operation_id, type, partition_id, replica_id, source_node_id, target_node_id,
-    status, workflow_step, created_at, updated_at, completed_at, error_message, steps_history
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    status, workflow_step, created_at, updated_at, completed_at, error_message, steps_history,
+    entity_type, entity_id
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   UPDATE_OPERATION: `UPDATE replica_operations SET 
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?, 
     error_message = ?, steps_history = ?, replica_id = ?
@@ -62,6 +79,26 @@ const SQL = Object.freeze({
   SELECT_REPLICA_STATUS: 'SELECT status FROM services WHERE service_id = ?',
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT status FROM services 
     WHERE partition_id = ? AND node_id = ?`,
+});
+
+const RECENT_INTENT_TTL_MS = 15000;
+
+const OPERATION_HANDLER = Object.freeze({
+  [SERVICE_TYPE.PARTITION]: 'replica-handler',
+  [SERVICE_TYPE.MESSAGE_GROUP]: 'message-group-handler',
+});
+
+const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
+  Object.values(SystemTableName).map((tableName) => `${tableName}-p1`),
+);
+
+const LEARNER_ROLE = 'learner';
+const DEFAULT_MIN_REPLICA_COUNT = NUM.THREE;
+const REPLICA_ID_SEPARATOR = '-r';
+const REPLICA_ID_START_INDEX = NUM.ONE;
+const FAILURE_LOG_LEVEL = Object.freeze({
+  ERROR: 'error',
+  WARN: 'warn',
 });
 
 /**
@@ -151,6 +188,13 @@ class RebalanceCoordinator extends EventEmitter {
       operationsTimedOut: NUM.ZERO,
     };
 
+    // In-memory dedupe guard for concurrent createOperation() calls.
+    // This is an ephemeral lock (not an operation-state cache).
+    this.operationsInCreation = new Map();
+    this.operationsInExecution = new Map();
+    this.recentOperationIntents = new Map();
+
+    this.isShuttingDown = false;
     this.initialized = false;
   }
 
@@ -162,6 +206,7 @@ class RebalanceCoordinator extends EventEmitter {
       return;
     }
 
+    this.isShuttingDown = false;
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
       config: this.config,
@@ -250,24 +295,35 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
-   * Check for existing in-flight operation for partition/node combination.
+   * Check for existing in-flight operation for entity/node combination.
    * Prevents duplicate operations (deduplication).
-   * @param {string} partitionId - Partition ID.
+   * @param {string} partitionId - Partition ID compatibility key.
    * @param {string} targetNodeId - Target node ID.
+   * @param {string} entityType - Entity type (partition/message_group).
+   * @param {string} entityId - Entity ID.
    * @return {Promise<Object|null>} Existing operation or null.
    * @private
    */
-  async queryExistingInFlightOperation(partitionId, targetNodeId) {
+  async queryExistingInFlightOperation(
+    partitionId,
+    targetNodeId,
+    entityType,
+    entityId,
+    move,
+  ) {
     const result = await this.sqlQueryEngine.executeQuery(
-      SQL.SELECT_IN_FLIGHT_FOR_PARTITION_NODE,
-      [partitionId, targetNodeId],
+      SQL.SELECT_IN_FLIGHT_FOR_ENTITY_NODE,
+      [partitionId, targetNodeId, entityType, entityId],
     );
 
     if (!result.success || !result.rows || result.rows.length === NUM.ZERO) {
       return null;
     }
 
-    return this.rowToOperation(result.rows[NUM.ZERO]);
+    const operations = result.rows.map((row) => this.rowToOperation(row));
+    return operations.find((operation) => {
+      return this.operationMatchesMoveIntent(operation, move, entityType, entityId);
+    }) || null;
   }
 
   /**
@@ -290,10 +346,12 @@ class RebalanceCoordinator extends EventEmitter {
       }
     }
 
-    return {
+    const operation = {
       operationId: row.operation_id,
       type: row.type,
       partitionId: row.partition_id,
+      entityType: row.entity_type || SERVICE_TYPE.PARTITION,
+      entityId: row.entity_id || row.partition_id,
       replicaId: row.replica_id,
       sourceNodeId: row.source_node_id,
       targetNodeId: row.target_node_id,
@@ -305,6 +363,290 @@ class RebalanceCoordinator extends EventEmitter {
       errorMessage: row.error_message,
       stepsHistory,
     };
+
+    operation.sourceReplicaId = this.getReplaceSourceReplicaId(operation);
+    return operation;
+  }
+
+  /**
+   * Resolve source replica ID for REPLACE operations.
+   * @param {Object} operation - Operation payload.
+   * @return {string|null} Source replica ID or null.
+   * @private
+   */
+  getReplaceSourceReplicaId(operation) {
+    if (!operation || operation.type !== OperationType.REPLACE) {
+      return null;
+    }
+
+    if (operation.sourceReplicaId) {
+      return operation.sourceReplicaId;
+    }
+
+    if (!Array.isArray(operation.stepsHistory)) {
+      return null;
+    }
+
+    for (const stepEntry of operation.stepsHistory) {
+      const sourceReplicaId = stepEntry?.[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID];
+      if (typeof sourceReplicaId === 'string' && sourceReplicaId.length > 0) {
+        return sourceReplicaId;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Check whether a REPLACE operation is in source-removal phase.
+   * @param {Object} operation - Operation payload.
+   * @return {boolean} True when REPLACE should remove the source replica.
+   * @private
+   */
+  isReplaceRemovePhase(operation) {
+    return operation?.type === OperationType.REPLACE &&
+      operation?.workflowStep === WORKFLOW_STEP.ACTIVE;
+  }
+
+  /**
+   * Resolve target replica ID for REPLACE operations.
+   * @param {Object} operation - Operation record.
+   * @return {string|null} Target replacement replica ID.
+   * @private
+   */
+  getReplaceTargetReplicaId(operation) {
+    if (operation?.type !== OperationType.REPLACE) {
+      return null;
+    }
+    const sourceReplicaId = this.getReplaceSourceReplicaId(operation);
+    if (typeof operation?.replicaId !== 'string' || operation.replicaId.length === 0) {
+      return null;
+    }
+    if (operation.replicaId === sourceReplicaId) {
+      return null;
+    }
+    return operation.replicaId;
+  }
+
+  /**
+   * Get service rows for an entity.
+   * @param {Object} params - Lookup parameters.
+   * @param {string} params.partitionId - Partition ID.
+   * @param {string} params.entityType - Entity type.
+   * @param {string} params.entityId - Entity ID.
+   * @return {Array<Object>} Matching services rows.
+   * @private
+   */
+  getEntityServiceRows({partitionId, entityType, entityId}) {
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.filter !== 'function') {
+      return [];
+    }
+
+    return this.systemTableCache.filter(SystemTableName.SERVICES, (row) => {
+      if (!row || row.service_type !== entityType) {
+        return false;
+      }
+
+      if (entityType === SERVICE_TYPE.MESSAGE_GROUP) {
+        return row.group_id === entityId;
+      }
+
+      return row.partition_id === partitionId;
+    }) || [];
+  }
+
+  /**
+   * Get in-flight operation rows for an entity.
+   * @param {Object} params - Lookup parameters.
+   * @param {string} params.entityType - Entity type.
+   * @param {string} params.entityId - Entity ID.
+   * @return {Array<Object>} Matching in-flight operations.
+   * @private
+   */
+  getEntityInFlightOperationRows({entityType, entityId}) {
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.filter !== 'function') {
+      return [];
+    }
+
+    return this.systemTableCache.filter(
+      SystemTableName.REPLICA_OPERATIONS,
+      (row) => {
+        if (!row || TERMINAL_STATUSES.includes(row.status)) {
+          return false;
+        }
+        const rowEntityType = row.entity_type || SERVICE_TYPE.PARTITION;
+        const rowEntityId = row.entity_id || row.partition_id;
+        return rowEntityType === entityType && rowEntityId === entityId;
+      },
+    ) || [];
+  }
+
+  /**
+   * Allocate canonical replica ID for ADD/REPLACE create phase.
+   * Canonical format mirrors bootstrap replicas: `${entityId}-rN`.
+   * @param {Object} params - Allocation parameters.
+   * @param {string} params.partitionId - Partition ID.
+   * @param {string} params.entityType - Entity type.
+   * @param {string} params.entityId - Entity ID.
+   * @param {Array<string>} [params.excludeReplicaIds] - IDs that cannot be
+   *   selected (e.g., REPLACE source replica during create phase).
+   * @return {string} Allocated canonical replica ID.
+   * @private
+   */
+  allocateCanonicalReplicaId({
+    partitionId,
+    entityType,
+    entityId,
+    excludeReplicaIds = [],
+  }) {
+    const usedReplicaIds = new Set();
+    const serviceRows = this.getEntityServiceRows({
+      partitionId,
+      entityType,
+      entityId,
+    });
+    const inFlightRows = this.getEntityInFlightOperationRows({
+      partitionId,
+      entityType,
+      entityId,
+    });
+
+    for (const row of serviceRows) {
+      const replicaId = row?.service_id || row?.replica_id;
+      if (typeof replicaId === 'string' && replicaId.length > 0) {
+        usedReplicaIds.add(replicaId);
+      }
+    }
+
+    for (const row of inFlightRows) {
+      const replicaId = row?.replica_id;
+      if (typeof replicaId === 'string' && replicaId.length > 0) {
+        usedReplicaIds.add(replicaId);
+      }
+    }
+
+    for (const replicaId of excludeReplicaIds) {
+      if (typeof replicaId === 'string' && replicaId.length > 0) {
+        usedReplicaIds.add(replicaId);
+      }
+    }
+
+    const canonicalPrefix = `${entityId}${REPLICA_ID_SEPARATOR}`;
+    let candidateIndex = REPLICA_ID_START_INDEX;
+    while (true) {
+      const candidateReplicaId = `${canonicalPrefix}${candidateIndex}`;
+      if (!usedReplicaIds.has(candidateReplicaId)) {
+        return candidateReplicaId;
+      }
+      candidateIndex++;
+    }
+  }
+
+  /**
+   * Build a stable in-memory idempotency key for a move intent.
+   * @param {Object} move - Move specification.
+   * @param {string} entityType - Canonical entity type.
+   * @param {string} entityId - Canonical entity ID.
+   * @return {string} Intent key.
+   * @private
+   */
+  buildOperationIntentKey(move, entityType, entityId) {
+    const normalizedType = (move?.type || '').toUpperCase();
+    const targetNodeId = move?.nodeId || '';
+    const replicaIntent = normalizedType === OperationType.REMOVE ||
+      normalizedType === OperationType.REPLACE ?
+      (move?.replicaId || '') :
+      '';
+    return `${entityType}:${entityId}:${normalizedType}:${targetNodeId}:${replicaIntent}`;
+  }
+
+  /**
+   * Determine whether an in-flight operation matches a new move intent.
+   * @param {Object} operation - Existing operation.
+   * @param {Object} move - New move request.
+   * @param {string} entityType - Canonical entity type.
+   * @param {string} entityId - Canonical entity ID.
+   * @return {boolean} True when intents match.
+   * @private
+   */
+  operationMatchesMoveIntent(operation, move, entityType, entityId) {
+    if (!operation || !move) {
+      return false;
+    }
+
+    const operationType = (operation.type || '').toUpperCase();
+    const moveType = (move.type || '').toUpperCase();
+    if (operationType !== moveType) {
+      return false;
+    }
+
+    if (operation.targetNodeId !== move.nodeId) {
+      return false;
+    }
+
+    if ((operation.entityType || SERVICE_TYPE.PARTITION) !== entityType) {
+      return false;
+    }
+
+    if ((operation.entityId || operation.partitionId) !== entityId) {
+      return false;
+    }
+
+    if (moveType === OperationType.REMOVE) {
+      return operation.replicaId === move.replicaId;
+    }
+
+    if (moveType === OperationType.REPLACE) {
+      return this.getReplaceSourceReplicaId(operation) === move.replicaId;
+    }
+
+    return true;
+  }
+
+  /**
+   * Get a recently remembered operation intent.
+   * @param {string} dedupeKey - Intent key.
+   * @return {Object|null} Cached operation or null.
+   * @private
+   */
+  getRecentOperationIntent(dedupeKey) {
+    const cached = this.recentOperationIntents.get(dedupeKey);
+    if (!cached) {
+      return null;
+    }
+    if (cached.expiresAt <= Date.now()) {
+      this.recentOperationIntents.delete(dedupeKey);
+      return null;
+    }
+    return cached.operation;
+  }
+
+  /**
+   * Remember a recently created/reused operation intent.
+   * @param {string} dedupeKey - Intent key.
+   * @param {Object} operation - Operation payload.
+   * @private
+   */
+  rememberOperationIntent(dedupeKey, operation) {
+    this.recentOperationIntents.set(dedupeKey, {
+      operation,
+      expiresAt: Date.now() + RECENT_INTENT_TTL_MS,
+    });
+  }
+
+  /**
+   * Prune expired recent operation intents.
+   * @private
+   */
+  pruneExpiredOperationIntents() {
+    const now = Date.now();
+    for (const [key, entry] of this.recentOperationIntents.entries()) {
+      if (!entry || entry.expiresAt <= now) {
+        this.recentOperationIntents.delete(key);
+      }
+    }
   }
 
 
@@ -314,52 +656,135 @@ class RebalanceCoordinator extends EventEmitter {
    * Requirements: 2.2, 2.3
    *
    * @param {Object} move - Move specification.
-   * @param {string} move.type - Operation type: 'ADD' or 'REMOVE'.
+   * @param {string} move.type - Operation type: 'ADD', 'REMOVE', or 'REPLACE'.
    * @param {string} move.partitionId - Target partition ID.
+   * @param {string} [move.entityType] - Entity type for canonical operations.
+   * @param {string} [move.entityId] - Entity ID for canonical operations.
    * @param {string} move.nodeId - Target node ID.
    * @param {string} [move.replicaId] - Replica ID (for REMOVE operations).
    * @return {Promise<Object>} Created or existing operation record.
    */
   async createOperation(move) {
+    if (this.isShuttingDown || !this.initialized) {
+      throw new Error('RebalanceCoordinator is shutting down');
+    }
+
+    const entityType = move.entityType || SERVICE_TYPE.PARTITION;
+    const entityId = move.entityId || move.partitionId;
+    const dedupeKey = this.buildOperationIntentKey(move, entityType, entityId);
+    this.pruneExpiredOperationIntents();
+
+    const recentOperation = this.getRecentOperationIntent(dedupeKey);
+    if (recentOperation) {
+      return recentOperation;
+    }
+
+    const existingPromise = this.operationsInCreation.get(dedupeKey);
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const creationPromise = this.createOperationInternal(move);
+    this.operationsInCreation.set(dedupeKey, creationPromise);
+
+    try {
+      return await creationPromise;
+    } finally {
+      this.operationsInCreation.delete(dedupeKey);
+    }
+  }
+
+  /**
+   * Create an operation record after in-memory dedupe lock acquisition.
+   * @param {Object} move - Move specification.
+   * @return {Promise<Object>} Created or existing operation record.
+   * @private
+   */
+  async createOperationInternal(move) {
+    const entityType = move.entityType || SERVICE_TYPE.PARTITION;
+    const entityId = move.entityId || move.partitionId;
+    const partitionId = move.partitionId || entityId;
+    const dedupeKey = this.buildOperationIntentKey(move, entityType, entityId);
+
     // Deduplication: check for existing in-flight operation
     const existing = await this.queryExistingInFlightOperation(
-      move.partitionId,
+      partitionId,
       move.nodeId,
+      entityType,
+      entityId,
+      move,
     );
 
     if (existing) {
+      this.rememberOperationIntent(dedupeKey, existing);
       this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.DUPLICATE_OPERATION, {
         existingOperationId: existing.operationId,
-        partitionId: move.partitionId,
+        partitionId: partitionId,
         targetNodeId: move.nodeId,
         type: move.type,
+        entityType: entityType,
+        entityId: entityId,
       });
       return existing;
     }
 
     const operationId = uuidv4();
+    const sourceNodeId = move.type === OperationType.REPLACE ?
+      (move.sourceNodeId || this.nodeId) :
+      this.nodeId;
+    const sourceReplicaId = move.type === OperationType.REPLACE ?
+      (move.replicaId || null) :
+      null;
+    let operationReplicaId = move.replicaId || null;
+
+    if (move.type === OperationType.ADD && !operationReplicaId) {
+      operationReplicaId = this.allocateCanonicalReplicaId({
+        partitionId,
+        entityType,
+        entityId,
+      });
+    }
 
     // Create operation using the helper from replica-status.js
     const operation = createOperationRecord({
       operationId,
       type: move.type,
-      partitionId: move.partitionId,
-      sourceNodeId: this.nodeId,
+      partitionId: partitionId,
+      sourceNodeId,
       targetNodeId: move.nodeId,
-      replicaId: move.replicaId,
+      replicaId: operationReplicaId,
+      sourceReplicaId,
     });
+    operation.entityType = entityType;
+    operation.entityId = entityId;
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.CREATE_OPERATION, {
       operationId,
       type: move.type,
-      partitionId: move.partitionId,
+      partitionId: partitionId,
       targetNodeId: move.nodeId,
+      entityType: entityType,
+      entityId: entityId,
     });
 
     // Persist via SQL engine (writes to partition leader)
-    await this.persistNewOperation(operation);
+    const inserted = await this.persistNewOperation(operation);
+    if (!inserted) {
+      const existingAfterInsert = await this.queryExistingInFlightOperation(
+        partitionId,
+        move.nodeId,
+        entityType,
+        entityId,
+        move,
+      );
+      if (existingAfterInsert) {
+        this.rememberOperationIntent(dedupeKey, existingAfterInsert);
+        return existingAfterInsert;
+      }
+    }
 
     this.stats.operationsCreated++;
+    this.rememberOperationIntent(dedupeKey, operation);
 
     this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
 
@@ -369,7 +794,7 @@ class RebalanceCoordinator extends EventEmitter {
   /**
    * Persist a new operation via SQL engine.
    * @param {Object} operation - Operation to persist.
-   * @return {Promise<void>}
+   * @return {Promise<boolean>} True when row inserted, false when ignored.
    * @private
    */
   async persistNewOperation(operation) {
@@ -389,6 +814,8 @@ class RebalanceCoordinator extends EventEmitter {
         operation.completedAt,
         operation.errorMessage,
         JSON.stringify(operation.stepsHistory),
+        operation.entityType,
+        operation.entityId,
       ],
     );
 
@@ -399,6 +826,12 @@ class RebalanceCoordinator extends EventEmitter {
       });
       throw new Error(result.error);
     }
+
+    if (typeof result.changes === 'number') {
+      return result.changes > 0;
+    }
+
+    return true;
   }
 
   /**
@@ -440,39 +873,152 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<Object>} Execution result.
    */
   async executeOperation(operation) {
+    if (this.isShuttingDown || !this.initialized) {
+      return {
+        success: false,
+        skipped: true,
+        reason: 'shutdown_in_progress',
+        operationId: operation?.operationId,
+      };
+    }
+
+    const operationId = operation?.operationId;
+    if (operationId && this.operationsInExecution.has(operationId)) {
+      return {
+        success: false,
+        skipped: true,
+        reason: REBALANCER_SKIP_REASON.OPERATION_ALREADY_EXECUTING,
+        operationId,
+      };
+    }
+
+    const executionPromise = this.executeOperationInternal(operation);
+    if (operationId) {
+      this.operationsInExecution.set(operationId, executionPromise);
+    }
+    try {
+      return await executionPromise;
+    } finally {
+      if (operationId) {
+        this.operationsInExecution.delete(operationId);
+      }
+    }
+  }
+
+  /**
+   * Execute operation body once per operation ID.
+   * @param {Object} operation - Operation to execute.
+   * @return {Promise<Object>} Execution result.
+   * @private
+   */
+  async executeOperationInternal(operation) {
     if (!this.messageRouter) {
       throw new Error(REBALANCE_COORDINATOR_ERROR_MSG.ROUTER_MISSING);
     }
 
-    // Update to SENDING step
-    await this.updateStep(operation, WORKFLOW_STEP.SENDING);
+    const replaceRemovePhase = this.isReplaceRemovePhase(operation);
+    const replaceSourceReplicaId = this.getReplaceSourceReplicaId(operation);
 
-    const target = `${operation.targetNodeId}/service/replica-handler`;
-    const messageType = operation.type === OperationType.ADD ?
-      ReplicaOperationMessageType.CREATE_REPLICA :
-      ReplicaOperationMessageType.REMOVE_REPLICA;
+    // Initial dispatch transitions to SENDING. REPLACE remove phase keeps ACTIVE
+    // until the source remove request is acknowledged.
+    if (!replaceRemovePhase) {
+      await this.updateStep(operation, WORKFLOW_STEP.SENDING);
+    }
+
+    const removeSafetyError =
+      await this.getRemoveSafetyError(operation);
+    if (removeSafetyError) {
+      await this.failOperation(operation, removeSafetyError, {
+        logLevel: FAILURE_LOG_LEVEL.WARN,
+        logMessage: REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY,
+      });
+      return {
+        success: false,
+        operationId: operation.operationId,
+        error: removeSafetyError,
+      };
+    }
+
+    const entityType = operation.entityType || SERVICE_TYPE.PARTITION;
+    const entityId = operation.entityId || operation.partitionId;
+    const handlerType = OPERATION_HANDLER[entityType] ||
+      OPERATION_HANDLER[SERVICE_TYPE.PARTITION];
+    let dispatchNodeId = operation.targetNodeId;
+    let messageType = ReplicaOperationMessageType.CREATE_REPLICA;
+    let requestReplicaId = operation.replicaId;
+    let requestReason = null;
+
+    if (operation.type === OperationType.REMOVE) {
+      messageType = ReplicaOperationMessageType.REMOVE_REPLICA;
+    } else if (operation.type === OperationType.REPLACE) {
+      if (replaceRemovePhase) {
+        dispatchNodeId = operation.sourceNodeId;
+        messageType = ReplicaOperationMessageType.REMOVE_REPLICA;
+        requestReplicaId = replaceSourceReplicaId;
+        requestReason = 'replace_source_removal';
+      } else {
+        messageType = ReplicaOperationMessageType.CREATE_REPLICA;
+        if (!operation.replicaId || operation.replicaId === replaceSourceReplicaId) {
+          operation.replicaId = this.allocateCanonicalReplicaId({
+            partitionId: operation.partitionId,
+            entityType,
+            entityId,
+            excludeReplicaIds: replaceSourceReplicaId ?
+              [replaceSourceReplicaId] :
+              [],
+          });
+        }
+        requestReplicaId = operation.replicaId;
+      }
+    }
+
+    if (operation.type === OperationType.REPLACE &&
+        replaceRemovePhase &&
+        !requestReplicaId) {
+      const replaceSourceMissing =
+        `Missing source replica for REPLACE operation ${operation.operationId}`;
+      await this.failOperation(operation, replaceSourceMissing);
+      return {
+        success: false,
+        operationId: operation.operationId,
+        error: replaceSourceMissing,
+      };
+    }
+
+    const target = `${dispatchNodeId}/service/${handlerType}`;
     const request = {
       [ReplicaOperationField.TYPE]: messageType,
       [ReplicaOperationField.OPERATION_ID]: operation.operationId,
       [ReplicaOperationField.PARTITION_ID]: operation.partitionId,
-      [ReplicaOperationField.REPLICA_ID]: operation.replicaId,
+      [ReplicaOperationField.REPLICA_ID]: requestReplicaId,
       [ReplicaOperationField.SOURCE_NODE_ID]: operation.sourceNodeId,
+      [ReplicaOperationField.ENTITY_TYPE]: entityType,
+      [ReplicaOperationField.ENTITY_ID]: entityId,
     };
+    if (requestReason) {
+      request[ReplicaOperationField.REASON] = requestReason;
+    }
 
     this.logger.debug(REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {
       operationId: operation.operationId,
       target,
       type: messageType,
+      entityType,
+      entityId,
+      replaceRemovePhase,
     });
 
     const response = await this.messageRouter.deliver(
       target,
       request,
-      {targetNodeId: operation.targetNodeId},
+      {targetNodeId: dispatchNodeId},
     );
 
     if (!response.acknowledged) {
-      const errorMsg = response.error || REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED;
+      const errorMsg = this.normalizeErrorMessage(
+        response.error,
+        REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
+      );
       await this.failOperation(operation, errorMsg);
       return {
         success: false,
@@ -483,10 +1029,11 @@ class RebalanceCoordinator extends EventEmitter {
 
     if (response.status === ReplicaOperationResponseStatus.INITIATED ||
         response.status === ReplicaOperationResponseStatus.IN_PROGRESS) {
-      // Update to CREATING or STOPPING step based on operation type
-      const nextStep = operation.type === OperationType.ADD ?
-        WORKFLOW_STEP.CREATING :
-        WORKFLOW_STEP.STOPPING;
+      let nextStep = WORKFLOW_STEP.CREATING;
+      if (operation.type === OperationType.REMOVE ||
+          (operation.type === OperationType.REPLACE && replaceRemovePhase)) {
+        nextStep = WORKFLOW_STEP.STOPPING;
+      }
       await this.updateStep(operation, nextStep);
 
       return {
@@ -495,7 +1042,15 @@ class RebalanceCoordinator extends EventEmitter {
         status: 'in_progress',
       };
     } else if (response.status === ReplicaOperationResponseStatus.ALREADY_EXISTS) {
-      // Replica already exists - mark as complete
+      if (operation.type === OperationType.REPLACE && !replaceRemovePhase) {
+        await this.updateStep(operation, WORKFLOW_STEP.ACTIVE);
+        return {
+          success: true,
+          operationId: operation.operationId,
+          status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
+        };
+      }
+
       await this.completeOperation(operation);
       return {
         success: true,
@@ -503,16 +1058,34 @@ class RebalanceCoordinator extends EventEmitter {
         status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
       };
     } else if (response.status === ReplicaOperationResponseStatus.COMPLETED) {
-      // Operation completed immediately
+      if (operation.type === OperationType.REPLACE && !replaceRemovePhase) {
+        await this.updateStep(operation, WORKFLOW_STEP.ACTIVE);
+        return {
+          success: true,
+          operationId: operation.operationId,
+          status: ReplicaOperationResponseStatus.COMPLETED,
+        };
+      }
+
       await this.completeOperation(operation);
       return {
         success: true,
         operationId: operation.operationId,
         status: ReplicaOperationResponseStatus.COMPLETED,
       };
+    } else if (response.status === ReplicaOperationResponseStatus.NOT_FOUND &&
+        operation.type === OperationType.REPLACE &&
+        replaceRemovePhase) {
+      // Source replica already removed - complete idempotently.
+      await this.completeOperation(operation);
+      return {
+        success: true,
+        operationId: operation.operationId,
+        status: ReplicaOperationResponseStatus.NOT_FOUND,
+      };
     } else {
       // Error response
-      const errorMsg = response.error || 'Unknown error';
+      const errorMsg = this.normalizeErrorMessage(response.error, 'Unknown error');
       await this.failOperation(operation, errorMsg);
       return {
         success: false,
@@ -532,6 +1105,9 @@ class RebalanceCoordinator extends EventEmitter {
    */
   async updateStep(operation, step) {
     const previousStep = operation.workflowStep;
+    if (previousStep === step) {
+      return;
+    }
     const now = Date.now();
 
     operation.workflowStep = step;
@@ -592,36 +1168,332 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Get safety validation error for REMOVE operations, if any.
+   * Critical system partition removes are blocked until a replacement
+   * replica is voter-ready and routable.
+   * @param {Object} operation - Operation to validate.
+   * @return {Promise<string|null>} Error message or null when safe.
+   * @private
+   */
+  async getRemoveSafetyError(operation) {
+    if (!operation) {
+      return null;
+    }
+
+    const isRemoveOperation = operation.type === OperationType.REMOVE;
+    const isReplaceRemovePhase = this.isReplaceRemovePhase(operation);
+    if (!isRemoveOperation && !isReplaceRemovePhase) {
+      return null;
+    }
+
+    if (!this.isCriticalSystemPartition(operation.partitionId)) {
+      return null;
+    }
+
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.filter !== 'function') {
+      return `Critical partition ${operation.partitionId} safety check unavailable`;
+    }
+
+    const criticalReplicaRows = this.systemTableCache.filter(
+      SystemTableName.SERVICES,
+      (row) =>
+        row.partition_id === operation.partitionId &&
+        row.service_type === SERVICE_TYPE.PARTITION,
+    ) || [];
+
+    const currentVoterReadyRows = criticalReplicaRows.filter(
+      (row) => this.isVoterReadyRoutableReplica(row),
+    );
+
+    const operationReplicaId = operation.type === OperationType.REPLACE ?
+      this.getReplaceSourceReplicaId(operation) :
+      operation.replicaId;
+
+    if (!operationReplicaId) {
+      return `Critical partition ${operation.partitionId} safety check unavailable`;
+    }
+
+    const removingVoterReady = currentVoterReadyRows.some(
+      (row) => this.isOperationReplicaRow(row, {
+        ...operation,
+        replicaId: operationReplicaId,
+      }),
+    );
+
+    // Removing a non-voter replica cannot reduce quorum.
+    if (!removingVoterReady) {
+      return null;
+    }
+
+    if (isReplaceRemovePhase) {
+      const replacementReplicaId = this.getReplaceTargetReplicaId(operation);
+      if (!replacementReplicaId) {
+        return `Critical partition ${operation.partitionId} replacement replica is unavailable`;
+      }
+      const replacementReplica = criticalReplicaRows.find((row) => {
+        return row?.service_id === replacementReplicaId ||
+          row?.replica_id === replacementReplicaId;
+      });
+      if (!this.isVoterReadyRoutableReplica(replacementReplica)) {
+        return `Critical partition ${operation.partitionId} replacement replica ` +
+          `${replacementReplicaId} is not voter-ready`;
+      }
+    }
+
+    const minReplicaCount =
+      await this.getCriticalMinReplicaCount(
+        operation.partitionId,
+      );
+    const projectedVoterReadyCount = Math.max(NUM.ZERO, currentVoterReadyRows.length - NUM.ONE);
+    if (projectedVoterReadyCount >= minReplicaCount) {
+      return null;
+    }
+
+    return `Critical partition ${operation.partitionId} would drop voter-ready replicas ` +
+      `below minimum (${projectedVoterReadyCount}/${minReplicaCount})`;
+  }
+
+  /**
+   * Evaluate safety error for a move intent before operation creation.
+   * @param {Object} move - Move intent.
+   * @return {Promise<string|null>} Safety error when move is blocked.
+   */
+  async getMoveSafetyError(move) {
+    if (!move) {
+      return null;
+    }
+
+    const normalizedType = typeof move.type === 'string' ?
+      move.type.toUpperCase() :
+      move.type;
+    const operation = {
+      type: normalizedType,
+      partitionId: move.partitionId || move.entityId,
+      replicaId: move.replicaId,
+      targetNodeId: move.nodeId,
+    };
+
+    return this.getRemoveSafetyError(operation);
+  }
+
+  /**
+   * Check whether a partition is a critical system partition.
+   * @param {string} partitionId - Partition ID.
+   * @return {boolean} True for critical system partitions.
+   * @private
+   */
+  isCriticalSystemPartition(partitionId) {
+    return typeof partitionId === 'string' &&
+      CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId);
+  }
+
+  /**
+   * Check whether a replica row is voter-ready and routable.
+   * @param {Object} replicaRow - services row.
+   * @return {boolean} True when replica is non-learner ACTIVE with routeability.
+   * @private
+   */
+  isVoterReadyRoutableReplica(replicaRow) {
+    if (!replicaRow) {
+      return false;
+    }
+
+    if (replicaRow.status !== ReplicaStatus.ACTIVE) {
+      return false;
+    }
+
+    if (!replicaRow.address) {
+      return false;
+    }
+
+    const raftRole = typeof replicaRow.raft_role === 'string' ?
+      replicaRow.raft_role.toLowerCase() :
+      null;
+
+    if (!raftRole || raftRole === LEARNER_ROLE) {
+      return false;
+    }
+
+    return this.isNodeReadyForRouting(replicaRow.node_id);
+  }
+
+  /**
+   * Determine whether a services row is the replica referenced by an operation.
+   * @param {Object} replicaRow - services row.
+   * @param {Object} operation - operation payload.
+   * @return {boolean} True when row matches operation target replica.
+   * @private
+   */
+  isOperationReplicaRow(replicaRow, operation) {
+    if (!replicaRow || !operation) {
+      return false;
+    }
+    if (!operation.replicaId) {
+      return false;
+    }
+    return replicaRow.service_id === operation.replicaId ||
+      replicaRow.replica_id === operation.replicaId;
+  }
+
+  /**
+   * Resolve minimum voter-ready replica count for a critical partition.
+   * @param {string} partitionId - Partition ID.
+   * @return {Promise<number>} Minimum replica count.
+   * @private
+   */
+  async getCriticalMinReplicaCount(partitionId) {
+    if (!this.tablePolicyService ||
+        typeof this.tablePolicyService.getPolicyForPartition !==
+        'function') {
+      return DEFAULT_MIN_REPLICA_COUNT;
+    }
+
+    try {
+      const policy =
+        await this.tablePolicyService.getPolicyForPartition(
+          partitionId,
+        );
+      const minReplicaCount = Number(policy?.minReplicaCount);
+      if (Number.isFinite(minReplicaCount) &&
+          minReplicaCount > NUM.ZERO) {
+        return Math.floor(minReplicaCount);
+      }
+    } catch (error) {
+      this.logger.warn(
+        'Failed to resolve minReplicaCount for critical' +
+        ' partition safety check', {
+          partitionId,
+          error: error.message,
+        });
+    }
+
+    return DEFAULT_MIN_REPLICA_COUNT;
+  }
+
+  /**
+   * Check whether a node is currently routable for replica traffic.
+   * @param {string} nodeId - Node ID.
+   * @return {boolean} True when node is READY with valid lease.
+   * @private
+   */
+  isNodeReadyForRouting(nodeId) {
+    if (!nodeId || !this.systemTableCache ||
+        typeof this.systemTableCache.get !== 'function') {
+      return false;
+    }
+
+    const nodeRow = this.systemTableCache.get(SystemTableName.NODES, nodeId);
+    if (!nodeRow) {
+      return false;
+    }
+
+    return isNodeRecordReady(nodeRow, {
+      requireActiveStatus: true,
+    });
+  }
+
+  /**
    * Fail an operation.
    * Requirements: 6.2
    *
    * @param {Object} operation - Operation to fail.
    * @param {string} errorMessage - Error message.
+   * @param {Object} [options] - Failure logging options.
+   * @param {string} [options.logLevel] - Log level for failure event.
+   * @param {string} [options.logMessage] - Log message override.
    * @return {Promise<void>}
    */
-  async failOperation(operation, errorMessage) {
+  async failOperation(operation, errorMessage, options = {}) {
     const now = Date.now();
+    const normalizedError = this.normalizeErrorMessage(errorMessage, 'Unknown error');
+    const isSafetyBlocked = this.isSafetyPolicyFailure(normalizedError);
+    const logLevel = options.logLevel ||
+      (isSafetyBlocked ? FAILURE_LOG_LEVEL.WARN : FAILURE_LOG_LEVEL.ERROR);
+    const logMessage = options.logMessage ||
+      (isSafetyBlocked ?
+        REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY :
+        REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILED);
 
     operation.workflowStep = WORKFLOW_STEP.FAILED;
     operation.status = ReplicaStatus.FAILED;
     operation.updatedAt = now;
     operation.completedAt = now;
-    operation.errorMessage = errorMessage;
+    operation.errorMessage = normalizedError;
     operation.stepsHistory.push({step: WORKFLOW_STEP.FAILED, timestamp: now});
 
     await this.persistOperationUpdate(operation);
 
     this.stats.operationsFailed++;
 
-    this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILED, {
+    const logPayload = {
       operationId: operation.operationId,
       type: operation.type,
       partitionId: operation.partitionId,
       targetNodeId: operation.targetNodeId,
-      errorMessage,
-    });
+      errorMessage: normalizedError,
+    };
 
-    this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED, {operation, errorMessage});
+    const logMethod = logLevel === FAILURE_LOG_LEVEL.WARN &&
+      typeof this.logger.warn === 'function' ?
+      this.logger.warn.bind(this.logger) :
+      this.logger.error.bind(this.logger);
+
+    logMethod(logMessage, logPayload);
+
+    this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED, {
+      operation,
+      errorMessage: normalizedError,
+    });
+  }
+
+  /**
+   * Check if an operation error corresponds to expected safety blocking.
+   * @param {string} errorMessage - Operation error text.
+   * @return {boolean} True when error is an expected safety policy block.
+   * @private
+   */
+  isSafetyPolicyFailure(errorMessage) {
+    if (typeof errorMessage !== 'string' || !errorMessage) {
+      return false;
+    }
+    const normalized = errorMessage.toLowerCase();
+    return normalized.includes('would drop voter-ready replicas below minimum') ||
+      normalized.includes('safety check unavailable');
+  }
+
+  /**
+   * Normalize arbitrary error payloads to a message string.
+   * @param {*} errorLike - Error payload.
+   * @param {string} fallbackMessage - Fallback when no message is available.
+   * @return {string} Normalized error message.
+   * @private
+   */
+  normalizeErrorMessage(errorLike, fallbackMessage) {
+    if (typeof errorLike === 'string' && errorLike.trim()) {
+      return errorLike;
+    }
+
+    if (!errorLike || typeof errorLike !== 'object') {
+      return fallbackMessage;
+    }
+
+    const candidateValues = [
+      errorLike.message,
+      errorLike.errorMessage,
+      errorLike.error?.message,
+      errorLike.error?.errorMessage,
+      errorLike.details?.message,
+      errorLike.details?.errorMessage,
+    ];
+
+    for (const candidate of candidateValues) {
+      if (typeof candidate === 'string' && candidate.trim()) {
+        return candidate;
+      }
+    }
+
+    return fallbackMessage;
   }
 
 
@@ -632,6 +1504,10 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async checkTimeouts() {
+    if (this.isShuttingDown || !this.initialized) {
+      return;
+    }
+
     const now = Date.now();
 
     // Query incomplete operations via SQL engine
@@ -640,6 +1516,14 @@ class RebalanceCoordinator extends EventEmitter {
     for (const operation of incompleteOps) {
       // Skip completed or failed operations
       if (isTerminalStep(operation.type, operation.workflowStep)) {
+        continue;
+      }
+
+      // REPLACE operations transition from ACTIVE to STOPPING by dispatching
+      // source removal once replacement activation is observed.
+      if (operation.type === OperationType.REPLACE &&
+          operation.workflowStep === WORKFLOW_STEP.ACTIVE) {
+        await this.executeOperation(operation);
         continue;
       }
 
@@ -900,9 +1784,20 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<Array<Object>>} Array of operations for the partition.
    */
   async getOperationsByPartition(partitionId) {
+    return this.getOperationsByEntity(SERVICE_TYPE.PARTITION, partitionId);
+  }
+
+  /**
+   * Get operations by canonical entity identity via SQL engine.
+   *
+   * @param {string} entityType - Entity type.
+   * @param {string} entityId - Entity ID.
+   * @return {Promise<Array<Object>>} Array of operations for the entity.
+   */
+  async getOperationsByEntity(entityType, entityId) {
     const result = await this.sqlQueryEngine.executeQuery(
-      SQL.SELECT_OPERATIONS_BY_PARTITION,
-      [partitionId],
+      SQL.SELECT_OPERATIONS_BY_ENTITY,
+      [entityType, entityId, entityId],
     );
 
     if (!result.success || !result.rows) {
@@ -927,16 +1822,11 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<number>} Count of concurrent ADD operations.
    */
   async getConcurrentAddCount() {
-    const result = await this.sqlQueryEngine.executeQuery(
-      SQL.SELECT_IN_FLIGHT_BY_TYPE,
-      [OperationType.ADD],
-    );
-
-    if (!result.success || !result.rows) {
-      return NUM.ZERO;
-    }
-
-    return result.rows.length;
+    const inFlight = await this.queryIncompleteOperations();
+    return inFlight.filter((operation) => {
+      return operation.type === OperationType.ADD ||
+        operation.type === OperationType.REPLACE;
+    }).length;
   }
 
   /**
@@ -999,14 +1889,36 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<void>}
    */
   async shutdown() {
-    const inFlightOps = await this.getInFlightOperations();
+    if (this.isShuttingDown) {
+      return;
+    }
+
+    this.isShuttingDown = true;
+    this.initialized = false;
+    this.stopTimeoutChecking();
+
+    let inFlightOperationCount = NUM.ZERO;
+    try {
+      const inFlightOps = await this.getInFlightOperations();
+      inFlightOperationCount = inFlightOps.length;
+    } catch (error) {
+      this.logger.debug(
+        'Skipping in-flight operation count during coordinator shutdown',
+        {
+          nodeId: this.nodeId,
+          error: error.message,
+        },
+      );
+    }
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.SHUTDOWN, {
       nodeId: this.nodeId,
-      inFlightOperations: inFlightOps.length,
+      inFlightOperations: inFlightOperationCount,
     });
 
-    this.stopTimeoutChecking();
+    this.operationsInCreation.clear();
+    this.operationsInExecution.clear();
+    this.recentOperationIntents.clear();
 
     this.emit(REBALANCE_COORDINATOR_EVENT.SHUTDOWN);
   }

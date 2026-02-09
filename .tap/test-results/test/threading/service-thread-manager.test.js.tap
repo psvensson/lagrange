@@ -4,30 +4,30 @@ TAP version 14
         ok 1 - should return same instance
         ok 2 - should be ServiceThreadManager
         1..2
-    ok 1 - singleton pattern # time=7.6ms
+    ok 1 - singleton pattern # time=9.721ms
     
     # Subtest: initialization
         ok 1 - should not be initialized initially
         ok 2 - should be initialized after init
         1..2
-    ok 2 - initialization # time=2.858ms
+    ok 2 - initialization # time=3.595ms
     
     # Subtest: double initialization is idempotent
         ok 1 - should remain initialized
         1..1
-    ok 3 - double initialization is idempotent # time=1.532ms
+    ok 3 - double initialization is idempotent # time=1.487ms
     
     # Subtest: execute operation without initialization throws
         ok 1 - should throw not initialized error
         1..1
-    ok 4 - execute operation without initialization throws # time=0.949ms
+    ok 4 - execute operation without initialization throws # time=1.655ms
     
     # Subtest: execute ping operation
         ok 1 - should return ok status
         ok 2 - should return service ID
         ok 3 - should include timestamp
         1..3
-    ok 5 - execute ping operation # time=649.737ms
+    ok 5 - execute ping operation # time=634.889ms
     
     # Subtest: register and unregister service
         ok 1 - should register successfully
@@ -36,24 +36,24 @@ TAP version 14
         ok 4 - should unregister successfully
         ok 5 - should not find service after unregister
         1..5
-    ok 6 - register and unregister service # time=699.705ms
+    ok 6 - register and unregister service # time=678.126ms
     
     # Subtest: duplicate registration throws
         ok 1 - should throw already registered
         1..1
-    ok 7 - duplicate registration throws # time=634.904ms
+    ok 7 - duplicate registration throws # time=665.591ms
     
     # Subtest: unregister non-existent service throws
         ok 1 - should throw not found error
         1..1
-    ok 8 - unregister non-existent service throws # time=1.035ms
+    ok 8 - unregister non-existent service throws # time=1.511ms
     
     # Subtest: get all services
         ok 1 - should have 2 services
         ok 2 - should include service-1
         ok 3 - should include service-2
         1..3
-    ok 9 - get all services # time=595.801ms
+    ok 9 - get all services # time=661.463ms
     
     # Subtest: get service count
         ok 1 - should start with 0 services
@@ -61,49 +61,49 @@ TAP version 14
         ok 3 - should have 2 services
         ok 4 - should have 1 service after unregister
         1..4
-    ok 10 - get service count # time=531.053ms
+    ok 10 - get service count # time=616.914ms
     
     # Subtest: check service health
         ok 1 - should return service ID
         ok 2 - should be healthy
         ok 3 - should include timestamp
         1..3
-    ok 11 - check service health # time=464.226ms
+    ok 11 - check service health # time=654.369ms
     
     # Subtest: health check for non-existent service throws
         ok 1 - should throw not found error
         1..1
-    ok 12 - health check for non-existent service throws # time=0.695ms
+    ok 12 - health check for non-existent service throws # time=0.796ms
     
     # Subtest: get pool stats
         ok 1 - should return stats object
         ok 2 - should have threads count
         ok 3 - should have completed count
         1..3
-    ok 13 - get pool stats # time=1.61ms
+    ok 13 - get pool stats # time=2.17ms
     
     # Subtest: pool stats returns null when not initialized
         ok 1 - should return null when not initialized
         1..1
-    ok 14 - pool stats returns null when not initialized # time=0.343ms
+    ok 14 - pool stats returns null when not initialized # time=0.596ms
     
     # Subtest: shutdown cleans up resources
         ok 1 - should have 1 service
         ok 2 - should not be initialized
         ok 3 - should have 0 services
         1..3
-    ok 15 - shutdown cleans up resources # time=423.11ms
+    ok 15 - shutdown cleans up resources # time=766.802ms
     
     # Subtest: emits events on service lifecycle
         ok 1 - should emit 2 events
         ok 2 - should be equivalent
         ok 3 - should be equivalent
         1..3
-    ok 16 - emits events on service lifecycle # time=432.398ms
+    ok 16 - emits events on service lifecycle # time=588.048ms
     
     1..16
-ok 1 - ServiceThreadManager # time=4834.547ms
+ok 1 - ServiceThreadManager # time=5785.524ms
 
 1..1
 # { total: 37, pass: 37 }
-# time=4839.667ms
+# time=5791.337ms

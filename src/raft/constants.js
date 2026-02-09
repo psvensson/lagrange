@@ -2,6 +2,9 @@ const RAFT_PACKET_TYPE = Object.freeze({
   VOTE: 'vote',
   VOTED: 'voted',
   APPEND: 'append',
+  APPEND_ACK: 'append ack',
+  APPEND_FAIL: 'append fail',
+  EXEC: 'exec',
   APPENDED: 'appended',
   ERROR: 'error',
 });
@@ -50,12 +53,25 @@ const RAFT_TRANSPORT_ERROR_MSG = Object.freeze({
   NODE_ID_REQUIRED: 'nodeId is required',
 });
 
+const RAFT_ELECTION_TIMING = Object.freeze({
+  HEARTBEAT_DEFAULT_MS: 150,
+  ELECTION_MIN_DEFAULT_MS: 1000,
+  ELECTION_MAX_DEFAULT_MS: 3000,
+  // Jitter added per replica index to stagger election timeouts.
+  // Must be >= (ELECTION_MAX - ELECTION_MIN) so that replica N's max
+  // timeout is always less than replica N+1's min timeout.
+  // This guarantees lower-indexed replicas always fire first,
+  // preventing re-elections and leadership instability.
+  JITTER_PER_REPLICA_MS: 2500,
+});
+
 const RAFT_TRANSPORT_LOG_MSG = Object.freeze({
   WRITE: '[RaftTransportAdapter] write:',
   WRITE_ERROR: '[RaftTransportAdapter] write error:',
 });
 
 export {
+  RAFT_ELECTION_TIMING,
   RAFT_PACKET_MESSAGE_TYPE,
   RAFT_PACKET_TYPE,
   RAFT_PACKET_TYPES,

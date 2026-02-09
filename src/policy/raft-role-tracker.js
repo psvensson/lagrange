@@ -7,7 +7,6 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {TABLES} from '../constants/index.js';
-import {assertCritical} from '../utils/assert.js';
 import {
   POLICY_ERROR_MSG,
   POLICY_EVENT,
@@ -39,6 +38,7 @@ class RaftRoleTracker extends EventEmitter {
 
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
+    this.sqlQueryEngine = options.sqlQueryEngine || null;
 
     // Track registered services
     this.trackedServices = new Map();
@@ -210,23 +210,25 @@ class RaftRoleTracker extends EventEmitter {
   /**
    * Get the current role for a service.
    * @param {string} serviceId - Service ID.
-   * @return {string|null} Current role or null if not tracked.
+   * @return {Promise<string|null>} Current role or null.
    */
-  getServiceRole(serviceId) {
+  async getServiceRole(serviceId) {
     // First check tracked services
     const tracked = this.trackedServices.get(serviceId);
     if (tracked && tracked.currentRole) {
       return tracked.currentRole;
     }
 
-    // Fall back to system table cache
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      POLICY_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const service = systemTableCache.get(TABLES.SERVICES, serviceId);
-    if (service && service.raft_role) {
-      return service.raft_role;
+    // Fall back to SQL engine
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT raft_role FROM services WHERE service_id = ?',
+        [serviceId],
+      );
+      const service = result.rows?.[0];
+      if (service && service.raft_role) {
+        return service.raft_role;
+      }
     }
 
     return null;
@@ -235,31 +237,32 @@ class RaftRoleTracker extends EventEmitter {
   /**
    * Get all services with a specific role.
    * @param {string} role - Raft role to filter by.
-   * @return {Array<Object>} Services with the specified role.
+   * @return {Promise<Array<Object>>} Services with the specified role.
    */
-  getServicesByRole(role) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      POLICY_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    return systemTableCache.filter(TABLES.SERVICES, (service) => {
-      return service.raft_role === role;
-    });
+  async getServicesByRole(role) {
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM services WHERE raft_role = ?',
+        [role],
+      );
+      return result.rows || [];
+    }
+    return [];
   }
 
   /**
    * Get all leader services.
-   * @return {Array<Object>} Services that are leaders.
+   * @return {Promise<Array<Object>>} Services that are leaders.
    */
-  getLeaders() {
+  async getLeaders() {
     return this.getServicesByRole(RaftRole.LEADER);
   }
 
   /**
    * Get all follower services.
-   * @return {Array<Object>} Services that are followers.
+   * @return {Promise<Array<Object>>} Services that are followers.
    */
-  getFollowers() {
+  async getFollowers() {
     return this.getServicesByRole(RaftRole.FOLLOWER);
   }
 

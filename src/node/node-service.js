@@ -70,7 +70,6 @@ class NodeService extends EventEmitter {
     // System table cache - singleton per node, created once
     this._systemTableCache = null;
     this._readOnlyCache = null;
-    this._partitionLeaderDirectory = new Map();
   }
 
   /**
@@ -129,11 +128,14 @@ class NodeService extends EventEmitter {
       this.threadManager.initialize();
     }
 
-    // Initialize lifecycle state machine
-    this.lifecycleStateMachine = new NodeLifecycleStateMachine({
-      nodeId: this.nodeId,
-      initialState: NodeState.STARTING,
-    });
+    const providedLifecycleStateMachine = options.lifecycleStateMachine;
+    const autoTransitionLifecycle = options.autoTransitionLifecycle !== false;
+    // Initialize lifecycle state machine (or use externally managed one)
+    this.lifecycleStateMachine = providedLifecycleStateMachine ||
+      new NodeLifecycleStateMachine({
+        nodeId: this.nodeId,
+        initialState: NodeState.STARTING,
+      });
 
     // Forward state change events from the state machine
     this.lifecycleStateMachine.on(NODE_LIFECYCLE_EVENT.STATE_CHANGE, (event) => {
@@ -142,14 +144,16 @@ class NodeService extends EventEmitter {
 
     this.startTime = Date.now();
 
-    // Transition through initial states: STARTING -> CONNECTING -> READY
-    // For a simple initialization, we go directly to READY state
-    // In a full cluster setup, this would go through CONNECTING, DISCOVERING, etc.
-    this.lifecycleStateMachine.transition(NodeState.CONNECTING);
-    this.lifecycleStateMachine.transition(NodeState.DISCOVERING);
-    this.lifecycleStateMachine.transition(NodeState.JOINING);
-    this.lifecycleStateMachine.transition(NodeState.SYNCING);
-    this.lifecycleStateMachine.transition(NodeState.READY);
+    // Default node-service initialization owns lifecycle transitions.
+    // Join/bootstrap flows can pass autoTransitionLifecycle=false and provide
+    // an external lifecycle state machine to keep one lifecycle authority.
+    if (autoTransitionLifecycle) {
+      this.lifecycleStateMachine.transition(NodeState.CONNECTING);
+      this.lifecycleStateMachine.transition(NodeState.DISCOVERING);
+      this.lifecycleStateMachine.transition(NodeState.JOINING);
+      this.lifecycleStateMachine.transition(NodeState.SYNCING);
+      this.lifecycleStateMachine.transition(NodeState.READY);
+    }
 
     this.status = NODE_STATUS.ACTIVE;
     this.initialized = true;
@@ -554,6 +558,17 @@ class NodeService extends EventEmitter {
   }
 
   /**
+   * Set the system cache proxy/cache instance for this node.
+   * This preserves backward compatibility for tests and bootstrap wiring
+   * that inject a pre-built cache/proxy instance.
+   * @param {Object} cacheProxy - Cache or proxy instance.
+   */
+  setSystemCacheProxy(cacheProxy) {
+    this._systemTableCache = cacheProxy;
+    this._readOnlyCache = cacheProxy;
+  }
+
+  /**
    * Get the read-only view of the system table cache.
    * Creates the cache on first access if not already created.
    * @return {Object} Read-only proxy to the system table cache.
@@ -564,48 +579,6 @@ class NodeService extends EventEmitter {
       this.getSystemTableCache();
     }
     return this._readOnlyCache;
-  }
-
-  /**
-   * Record the current leader for a partition.
-   * @param {Object} options
-   * @param {string} options.partitionId
-   * @param {string} options.replicaId
-   * @param {string} options.nodeId
-   * @param {string} [options.address]
-   */
-  setPartitionLeader(options = {}) {
-    const {partitionId, replicaId, nodeId, address} = options;
-    if (!partitionId || !replicaId) {
-      return;
-    }
-    this._partitionLeaderDirectory.set(partitionId, {
-      partitionId,
-      replicaId,
-      nodeId: nodeId || this.nodeId,
-      address: address || null,
-      updatedAt: Date.now(),
-    });
-  }
-
-  /**
-   * Clear the cached leader for a partition.
-   * @param {string} partitionId
-   */
-  clearPartitionLeader(partitionId) {
-    if (!partitionId) {
-      return;
-    }
-    this._partitionLeaderDirectory.delete(partitionId);
-  }
-
-  /**
-   * Get cached leader info for a partition.
-   * @param {string} partitionId
-   * @return {Object|null}
-   */
-  getPartitionLeader(partitionId) {
-    return this._partitionLeaderDirectory.get(partitionId) || null;
   }
 
   /**
@@ -738,7 +711,6 @@ class NodeService extends EventEmitter {
     // Clear system table cache references
     this._systemTableCache = null;
     this._readOnlyCache = null;
-    this._partitionLeaderDirectory = new Map();
 
     this.status = NODE_STATUS.STOPPED;
     this.initialized = false;

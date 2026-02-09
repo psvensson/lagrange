@@ -40,18 +40,18 @@ TAP version 14
     ok 38 - System table node_endpoints query succeeded
     ok 39 - System table node_endpoints exists in SQLite
     1..39
-ok 1 - Property 32: System tables use same PartitionService as user tables # time=3945.176ms
+ok 1 - Property 32: System tables use same PartitionService as user tables # time=3951.056ms
 
 # Subtest: Property 32: User tables use same PartitionService as system tables
     ok 1 - User tables use same PartitionService infrastructure as system tables
     1..1
-ok 2 - Property 32: User tables use same PartitionService as system tables # time=3027.214ms
+ok 2 - Property 32: User tables use same PartitionService as system tables # time=3037.872ms
 
 # Subtest: Property 32: No infrastructure distinction between system and user tables
     ok 1 - No infrastructure distinction between system and user tables
     1..1
-ok 3 - Property 32: No infrastructure distinction between system and user tables # time=3035.549ms
+ok 3 - Property 32: No infrastructure distinction between system and user tables # time=3047.669ms
 
 1..3
 # { total: 41, pass: 41 }
-# time=10097.19ms
+# time=10135.416ms

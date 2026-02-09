@@ -1,92 +1,17 @@
 TAP version 14
 # Subtest: Failure scenario integration tests
-{"level":50,"time":"2026-02-01T09:38:22.018Z","nodeId":"test-node","pid":1800977,"subsystem":"message-router","error":"listen EADDRINUSE: address already in use 127.0.0.1:18000","routerId":"c19b9006-a53a-425d-a936-9cd698868a1e","nodeId":"test-node","msg":"MessageRouter WebSocket server error"}
-{"level":50,"time":"2026-02-01T09:38:22.019Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","wsPort":18000,"error":"listen EADDRINUSE: address already in use 127.0.0.1:18000","stack":"Error: listen EADDRINUSE: address already in use 127.0.0.1:18000\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at node:net:2206:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","msg":"MessageRouter initialization failed"}
-{"level":50,"time":"2026-02-01T09:38:22.019Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","phase":"infrastructure","duration":19,"error":"MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18000","stack":"Error: MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18000\n    at BootstrapService.phaseInfrastructure (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:414:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:190:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/failure-scenarios.integration.test.js:65:25)","msg":"Bootstrap phase failed"}
-{"level":50,"time":"2026-02-01T09:38:22.019Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","phase":"failed","duration":19,"error":"MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18000","stack":"Error: MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18000\n    at BootstrapService.phaseInfrastructure (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:414:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:190:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/failure-scenarios.integration.test.js:65:25)","servicesCreated":0,"msg":"Bootstrap failed"}
     # Subtest: Req 15.1 - node failure detection marks replicas unavailable
-        not ok 1 - bootstrap should succeed
-          ---
-          compare: ===
-          at:
-            fileName: test/integration/failure-scenarios.integration.test.js
-            lineNumber: 66
-            columnNumber: 9
-            typeName: Test
-          stack: |
-            Test.<anonymous> (test/integration/failure-scenarios.integration.test.js:66:9)
-          source: |2
-                  // Bootstrap the seed node
-                  bootstrapResult = await bootstrapService.bootstrap();
-                  t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
-            --------^
-          
-                  // Get real SystemTableCache and CDCIntegrationService
-          diff: |
-            --- expected
-            +++ actual
-            @@ -1,1 +1,1 @@
-            -true
-            +false
-          ...
-        
+        ok 1 - bootstrap should succeed
         ok 2 - should have system table cache
-        not ok 3 - should have CDC integration service
-          ---
-          at:
-            fileName: test/integration/failure-scenarios.integration.test.js
-            lineNumber: 73
-            columnNumber: 9
-            typeName: Test
-          stack: |
-            Test.<anonymous> (test/integration/failure-scenarios.integration.test.js:73:9)
-          source: |2
-          
-                  t.ok(systemTableCache, 'should have system table cache');
-                  t.ok(cdcIntegrationService, 'should have CDC integration service');
-            --------^
-          
-                  const now = Date.now();
-          ...
-        
-        not ok 4 - Cannot read properties of null (reading 'insertSystemTableRow')
-          ---
-          stack: >
-            Test.<anonymous> (test/integration/failure-scenarios.integration.test.js:79:35)
-          at:
-            fileName: test/integration/failure-scenarios.integration.test.js
-            lineNumber: 79
-            columnNumber: 35
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: >2
-          
-                  // Insert a second node with old heartbeat (simulating failure) via CDC
-                  await cdcIntegrationService.insertSystemTableRow(SystemTableName.NODES, {
-            ----------------------------------^
-                    node_id: failingNodeId,
-                    node_address: 'ws://localhost:9999',
-          ...
-        
-        1..4
-    not ok 1 - Req 15.1 - node failure detection marks replicas unavailable # time=60.901ms
-      ---
-      at:
-        fileName: test/integration/failure-scenarios.integration.test.js
-        lineNumber: 44
-        columnNumber: 5
-        typeName: Test
-      source: >2
-          });
-      
-          t.test('Req 15.1 - node failure detection marks replicas unavailable', async (t) => {
-        ----^
-            // Use real BootstrapService to create a seed node
-            const seedNodeId = '550e8400-e29b-41d4-a716-446655440001';
-      ...
+        ok 3 - should have CDC integration service
+        ok 4 - cache should be updated with failing node
+{"level":50,"time":"2026-02-09T10:20:44.770Z","nodeId":"test-node","pid":200152,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T10:20:24.521Z","threshold":15000,"msg":"Node failure detected"}
+        ok 5 - should emit failure event
+        ok 6 - should identify the correct failing node
+        ok 7 - replicas should be marked as failed via CDC
+        ok 8 - node should be marked as failed
+        1..8
+    ok 1 - Req 15.1 - node failure detection marks replicas unavailable # time=1574.692ms
     
     # Subtest: Req 15.2 - rebalancer creates replacement replicas
         ok 1 - bootstrap should succeed
@@ -96,10 +21,10 @@ TAP version 14
         ok 5 - should have partitions
         ok 6 - rebalance should succeed
         ok 7 - should generate moves to handle failed replica
-{"level":50,"time":"2026-02-01T09:38:24.038Z","nodeId":"test-node","pid":1800977,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO node_endpoints (endpoint_id, node_id, transport_type, address, priority, meta","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-02-01T09:38:24.038Z","nodeId":"test-node","pid":1800977,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-550e8400-e29b-41d4-a716-446655440002-ws","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
+{"level":50,"time":"2026-02-09T10:20:46.211Z","nodeId":"test-node","pid":200152,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO node_endpoints (endpoint_id, node_id, transport_type, address, priority, meta","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-09T10:20:46.211Z","nodeId":"test-node","pid":200152,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-550e8400-e29b-41d4-a716-446655440002-ws","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
         1..7
-    ok 2 - Req 15.2 - rebalancer creates replacement replicas # time=1920.639ms
+    ok 2 - Req 15.2 - rebalancer creates replacement replicas # time=1355.089ms
     
     # Subtest: Req 15.3 - Raft maintains consistency during partition
         ok 1 - insert should succeed
@@ -107,96 +32,18 @@ TAP version 14
         ok 3 - data should be consistent
         ok 4 - leader maintains role with quorum
         1..4
-    ok 3 - Req 15.3 - Raft maintains consistency during partition # time=2.784ms
+    ok 3 - Req 15.3 - Raft maintains consistency during partition # time=1.212ms
     
-{"level":50,"time":"2026-02-01T09:38:24.138Z","nodeId":"test-node","pid":1800977,"subsystem":"message-router","error":"listen EADDRINUSE: address already in use 127.0.0.1:18002","routerId":"f652e23e-4f14-45ff-9114-fa05be3d708d","nodeId":"test-node","msg":"MessageRouter WebSocket server error"}
-{"level":50,"time":"2026-02-01T09:38:24.138Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","wsPort":18002,"error":"listen EADDRINUSE: address already in use 127.0.0.1:18002","stack":"Error: listen EADDRINUSE: address already in use 127.0.0.1:18002\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at node:net:2206:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","msg":"MessageRouter initialization failed"}
-{"level":50,"time":"2026-02-01T09:38:24.139Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","phase":"infrastructure","duration":2,"error":"MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18002","stack":"Error: MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18002\n    at BootstrapService.phaseInfrastructure (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:414:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:190:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/failure-scenarios.integration.test.js:393:25)","msg":"Bootstrap phase failed"}
-{"level":50,"time":"2026-02-01T09:38:24.139Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","phase":"failed","duration":3,"error":"MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18002","stack":"Error: MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18002\n    at BootstrapService.phaseInfrastructure (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:414:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:190:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/failure-scenarios.integration.test.js:393:25)","servicesCreated":0,"msg":"Bootstrap failed"}
     # Subtest: Req 15.4 - recovered node triggers rebalancing
-        not ok 1 - bootstrap should succeed
-          ---
-          compare: ===
-          at:
-            fileName: test/integration/failure-scenarios.integration.test.js
-            lineNumber: 394
-            columnNumber: 9
-            typeName: Test
-          stack: >
-            Test.<anonymous> (test/integration/failure-scenarios.integration.test.js:394:9)
-          source: |2
-                  // Bootstrap the seed node
-                  bootstrapResult = await bootstrapService.bootstrap();
-                  t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
-            --------^
-          
-                  // Get real SystemTableCache and CDCIntegrationService
-          diff: |
-            --- expected
-            +++ actual
-            @@ -1,1 +1,1 @@
-            -true
-            +false
-          ...
-        
+        ok 1 - bootstrap should succeed
         ok 2 - should have system table cache
-        not ok 3 - should have CDC integration service
-          ---
-          at:
-            fileName: test/integration/failure-scenarios.integration.test.js
-            lineNumber: 401
-            columnNumber: 9
-            typeName: Test
-          stack: >
-            Test.<anonymous> (test/integration/failure-scenarios.integration.test.js:401:9)
-          source: |2
-          
-                  t.ok(systemTableCache, 'should have system table cache');
-                  t.ok(cdcIntegrationService, 'should have CDC integration service');
-            --------^
-          
-                  const now = Date.now();
-          ...
-        
-        not ok 4 - Cannot read properties of null (reading 'insertSystemTableRow')
-          ---
-          stack: >
-            Test.<anonymous>
-            (test/integration/failure-scenarios.integration.test.js:407:35)
-          at:
-            fileName: test/integration/failure-scenarios.integration.test.js
-            lineNumber: 407
-            columnNumber: 35
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: >2
-          
-                  // Insert a second node with FAILED status but fresh heartbeat (simulating recovery)
-                  await cdcIntegrationService.insertSystemTableRow(SystemTableName.NODES, {
-            ----------------------------------^
-                    node_id: recoveringNodeId,
-                    node_address: 'ws://localhost:9998',
-          ...
-        
-        1..4
-    not ok 4 - Req 15.4 - recovered node triggers rebalancing # time=19.518ms
-      ---
-      at:
-        fileName: test/integration/failure-scenarios.integration.test.js
-        lineNumber: 372
-        columnNumber: 5
-        typeName: Test
-      source: |2
-          });
-      
-          t.test('Req 15.4 - recovered node triggers rebalancing', async (t) => {
-        ----^
-            // Use real BootstrapService to create a seed node
-            const seedNodeId = '550e8400-e29b-41d4-a716-446655440003';
-      ...
+        ok 3 - should have CDC integration service
+        ok 4 - cache should be updated with recovering node
+        ok 5 - should detect node recovery
+        ok 6 - should identify recovered node
+        ok 7 - should update node status to recovering via CDC
+        1..7
+    ok 4 - Req 15.4 - recovered node triggers rebalancing # time=1398.897ms
     
     # Subtest: Req 15.5 - data available with majority replicas
         ok 1 - write should succeed with majority
@@ -205,267 +52,90 @@ TAP version 14
         ok 4 - update should succeed with majority
         ok 5 - update should be visible
         1..5
-    ok 5 - Req 15.5 - data available with majority replicas # time=3.03ms
+    ok 5 - Req 15.5 - data available with majority replicas # time=1.381ms
     
-{"level":50,"time":"2026-02-01T09:38:24.240Z","nodeId":"test-node","pid":1800977,"subsystem":"message-router","error":"listen EADDRINUSE: address already in use 127.0.0.1:18003","routerId":"926e43b3-7a15-47dd-908e-04e50178ac15","nodeId":"test-node","msg":"MessageRouter WebSocket server error"}
-{"level":50,"time":"2026-02-01T09:38:24.240Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","wsPort":18003,"error":"listen EADDRINUSE: address already in use 127.0.0.1:18003","stack":"Error: listen EADDRINUSE: address already in use 127.0.0.1:18003\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at node:net:2206:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","msg":"MessageRouter initialization failed"}
-{"level":50,"time":"2026-02-01T09:38:24.240Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","phase":"infrastructure","duration":2,"error":"MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18003","stack":"Error: MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18003\n    at BootstrapService.phaseInfrastructure (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:414:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:190:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/failure-scenarios.integration.test.js:542:25)","msg":"Bootstrap phase failed"}
-{"level":50,"time":"2026-02-01T09:38:24.240Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","phase":"failed","duration":2,"error":"MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18003","stack":"Error: MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18003\n    at BootstrapService.phaseInfrastructure (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:414:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:190:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/failure-scenarios.integration.test.js:542:25)","servicesCreated":0,"msg":"Bootstrap failed"}
     # Subtest: failure detector - suspicion before failure
-        not ok 1 - bootstrap should succeed
-          ---
-          compare: ===
-          at:
-            fileName: test/integration/failure-scenarios.integration.test.js
-            lineNumber: 543
-            columnNumber: 9
-            typeName: Test
-          stack: >
-            Test.<anonymous> (test/integration/failure-scenarios.integration.test.js:543:9)
-          source: |2
-                  // Bootstrap the seed node
-                  bootstrapResult = await bootstrapService.bootstrap();
-                  t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
-            --------^
-          
-                  // Get real SystemTableCache and CDCIntegrationService
-          diff: |
-            --- expected
-            +++ actual
-            @@ -1,1 +1,1 @@
-            -true
-            +false
-          ...
-        
-        not ok 2 - Cannot read properties of null (reading 'insertSystemTableRow')
-          ---
-          stack: >
-            Test.<anonymous>
-            (test/integration/failure-scenarios.integration.test.js:554:35)
-          at:
-            fileName: test/integration/failure-scenarios.integration.test.js
-            lineNumber: 554
-            columnNumber: 35
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: >2
-                  // Insert a second node with heartbeat that triggers suspicion (>10s) but not failure (<15s)
-                  // Suspicion threshold is typically 10s, failure threshold is 15s
-                  await cdcIntegrationService.insertSystemTableRow(SystemTableName.NODES, {
-            ----------------------------------^
-                    node_id: suspectedNodeId,
-                    node_address: 'ws://localhost:9997',
-          ...
-        
-        1..2
-    not ok 6 - failure detector - suspicion before failure # time=16.242ms
-      ---
-      at:
-        fileName: test/integration/failure-scenarios.integration.test.js
-        lineNumber: 521
-        columnNumber: 5
-        typeName: Test
-      source: |2
-          });
-      
-          t.test('failure detector - suspicion before failure', async (t) => {
-        ----^
-            // Use real BootstrapService to create a seed node
-            const seedNodeId = '550e8400-e29b-41d4-a716-446655440010';
-      ...
+        ok 1 - bootstrap should succeed
+        ok 2 - cache should be updated with suspected node
+        ok 3 - should emit suspected event
+        ok 4 - should not emit failure yet
+        1..4
+    ok 6 - failure detector - suspicion before failure # time=1346.978ms
     
+{"level":"debug","message":"Executing SQL query","subsystem":"sql-query-engine","sql":"SELECT * FROM replica_operations \n    WHERE status NOT IN ('active', 'removed', 'failed')","paramCount":0,"sessionId":"default"}
+{"level":"debug","message":"No key conditions, using scatter-gather","subsystem":"partition-resolver","tableName":"replica_operations","partitionCount":1}
+{"level":"debug","message":"Resolved partitions for SELECT","subsystem":"sql-query-engine","tableName":"replica_operations","totalPartitions":1,"targetPartitions":1,"sessionId":"default"}
+{"level":"debug","message":"Executing distributed SELECT","subsystem":"query-executor","partitionCount":1,"timestamp":"1770632449304-0-550e8400-e29b-41d4-a716-446655440001","hasJoins":false,"hasAggregates":false}
+{"level":"debug","message":"Routing query to partition service","subsystem":"query-executor","partitionId":"replica_operations-p1","address":"550e8400-e29b-41d4-a716-446655440001/partition/replica_operations-p1-r1"}
+{"level":"info","message":"Initializing MessageRouter","subsystem":"message-router","routerId":"98c6083f-b929-4b9d-8b47-680fee6609db","nodeId":"550e8400-e29b-41d4-a716-446655440001","wsPort":64752,"wsHost":"127.0.0.1"}
     # Subtest: failure detector - flapping detection increases threshold
         ok 1 - bootstrap should succeed
-{"level":50,"time":"2026-02-01T09:38:25.788Z","nodeId":"test-node","pid":1800977,"subsystem":"failure-detector","nodeId":"test-node","failureCount":3,"window":30000,"action":"Increasing failure threshold adaptively","msg":"Node flapping detected"}
+{"level":50,"time":"2026-02-09T10:20:50.269Z","nodeId":"test-node","pid":200152,"subsystem":"failure-detector","nodeId":"test-node","failureCount":3,"window":30000,"action":"Increasing failure threshold adaptively","msg":"Node flapping detected"}
         ok 2 - threshold should increase after flapping
-{"level":50,"time":"2026-02-01T09:38:25.798Z","nodeId":"test-node","pid":1800977,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-02-01T09:38:25.798Z","nodeId":"test-node","pid":1800977,"subsystem":"cdc-integration","tableName":"nodes","id":"550e8400-e29b-41d4-a716-446655440011","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
+{"level":50,"time":"2026-02-09T10:20:50.272Z","nodeId":"test-node","pid":200152,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-09T10:20:50.272Z","nodeId":"test-node","pid":200152,"subsystem":"cdc-integration","tableName":"nodes","id":"550e8400-e29b-41d4-a716-446655440011","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
         1..2
-    ok 7 - failure detector - flapping detection increases threshold # time=1507.833ms
+    ok 7 - failure detector - flapping detection increases threshold # time=1188.171ms
     
-{"level":50,"time":"2026-02-01T09:38:25.846Z","nodeId":"test-node","pid":1800977,"subsystem":"message-router","error":"listen EADDRINUSE: address already in use 127.0.0.1:18005","routerId":"c5f9b429-615c-4558-93a1-5e1859ff8799","nodeId":"test-node","msg":"MessageRouter WebSocket server error"}
-{"level":50,"time":"2026-02-01T09:38:25.846Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","wsPort":18005,"error":"listen EADDRINUSE: address already in use 127.0.0.1:18005","stack":"Error: listen EADDRINUSE: address already in use 127.0.0.1:18005\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at node:net:2206:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","msg":"MessageRouter initialization failed"}
-{"level":50,"time":"2026-02-01T09:38:25.846Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","phase":"infrastructure","duration":2,"error":"MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18005","stack":"Error: MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18005\n    at BootstrapService.phaseInfrastructure (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:414:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:190:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/failure-scenarios.integration.test.js:673:25)","msg":"Bootstrap phase failed"}
-{"level":50,"time":"2026-02-01T09:38:25.846Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","phase":"failed","duration":2,"error":"MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18005","stack":"Error: MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18005\n    at BootstrapService.phaseInfrastructure (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:414:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:190:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/failure-scenarios.integration.test.js:673:25)","servicesCreated":0,"msg":"Bootstrap failed"}
+{"level":"debug","message":"Executing SQL query","subsystem":"sql-query-engine","sql":"SELECT * FROM replica_operations \n    WHERE status NOT IN ('active', 'removed', 'failed')","paramCount":0,"sessionId":"default"}
+{"level":"debug","message":"No key conditions, using scatter-gather","subsystem":"partition-resolver","tableName":"replica_operations","partitionCount":1}
+{"level":"debug","message":"Resolved partitions for SELECT","subsystem":"sql-query-engine","tableName":"replica_operations","totalPartitions":1,"targetPartitions":1,"sessionId":"default"}
+{"level":"debug","message":"Executing distributed SELECT","subsystem":"query-executor","partitionCount":1,"timestamp":"1770632450988-0-550e8400-e29b-41d4-a716-446655440002","hasJoins":false,"hasAggregates":false}
+{"level":"debug","message":"Routing query to partition service","subsystem":"query-executor","partitionId":"replica_operations-p1","address":"550e8400-e29b-41d4-a716-446655440002/partition/replica_operations-p1-r1"}
+{"level":"info","message":"Initializing MessageRouter","subsystem":"message-router","routerId":"8f0084f2-87d2-4a54-b13f-cb0f397786f7","nodeId":"550e8400-e29b-41d4-a716-446655440002","wsPort":64753,"wsHost":"127.0.0.1"}
     # Subtest: failure detector - stats reporting
-        not ok 1 - bootstrap should succeed
-          ---
-          compare: ===
-          at:
-            fileName: test/integration/failure-scenarios.integration.test.js
-            lineNumber: 674
-            columnNumber: 9
-            typeName: Test
-          stack: >
-            Test.<anonymous> (test/integration/failure-scenarios.integration.test.js:674:9)
-          source: |2
-                  // Bootstrap the seed node
-                  bootstrapResult = await bootstrapService.bootstrap();
-                  t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
-            --------^
-          
-                  // Get real SystemTableCache and CDCIntegrationService
-          diff: |
-            --- expected
-            +++ actual
-            @@ -1,1 +1,1 @@
-            -true
-            +false
-          ...
-        
-        not ok 2 - FailureDetector requires cdcIntegrationService
-          ---
-          stack: >
-            assertCritical (src/utils/assert.js:10:19)
-          
-            FailureDetector.initialize (src/node/failure-detector.js:111:34)
-          
-            Test.<anonymous>
-            (test/integration/failure-scenarios.integration.test.js:686:16)
-          at:
-            fileName: src/utils/assert.js
-            lineNumber: 10
-            columnNumber: 19
-            functionName: assertCritical
-          isCritical: true
-          tapCaught: returnedPromiseRejection
-          source: |
-            export function assertCritical(value, message) {
-              if (!value) {
-                const error = new Error(message);
-            ------------------^
-                error.isCritical = true;
-                throw error;
-          ...
-        
-        1..2
-    not ok 8 - failure detector - stats reporting # time=10.785ms
-      ---
-      at:
-        fileName: test/integration/failure-scenarios.integration.test.js
-        lineNumber: 652
-        columnNumber: 5
-        typeName: Test
-      source: |2
-          });
-      
-          t.test('failure detector - stats reporting', async (t) => {
-        ----^
-            // Use real BootstrapService to create a seed node
-            const seedNodeId = '550e8400-e29b-41d4-a716-446655440012';
-      ...
+        ok 1 - bootstrap should succeed
+        ok 2 - should report node ID
+        ok 3 - should report check interval
+        ok 4 - should report failure threshold
+        ok 5 - should report initialized
+        ok 6 - should report not running (not started)
+{"level":50,"time":"2026-02-09T10:20:51.593Z","nodeId":"test-node","pid":200152,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-09T10:20:51.593Z","nodeId":"test-node","pid":200152,"subsystem":"cdc-integration","tableName":"nodes","id":"550e8400-e29b-41d4-a716-446655440012","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
+        1..6
+    ok 8 - failure detector - stats reporting # time=1288.567ms
     
     # Subtest: Req 14.1-14.5 - complete failure and recovery cycle
         ok 1 - should suspect node-2
-{"level":50,"time":"2026-02-01T09:38:25.899Z","nodeId":"test-node","pid":1800977,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-01T09:38:05.898Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-02-09T10:20:51.623Z","nodeId":"test-node","pid":200152,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T10:20:31.621Z","threshold":15000,"msg":"Node failure detected"}
         ok 2 - should detect node-2 failure
         ok 3 - should mark replicas as failed via CDC
         ok 4 - should detect node-2 recovery
         ok 5 - should have multiple status updates
         1..5
-    ok 9 - Req 14.1-14.5 - complete failure and recovery cycle # time=2.697ms
+    ok 9 - Req 14.1-14.5 - complete failure and recovery cycle # time=3.568ms
     
     # Subtest: network partition - minority partition cannot write
         ok 1 - write should be rejected on follower
         1..1
-    ok 10 - network partition - minority partition cannot write # time=1.947ms
+    ok 10 - network partition - minority partition cannot write # time=1.015ms
     
     # Subtest: data availability - reads succeed on any replica
         ok 1 - read should succeed on follower
         ok 2 - data should be correct
         1..2
-    ok 11 - data availability - reads succeed on any replica # time=1.821ms
+    ok 11 - data availability - reads succeed on any replica # time=0.934ms
     
-{"level":50,"time":"2026-02-01T09:38:25.982Z","nodeId":"test-node","pid":1800977,"subsystem":"message-router","error":"listen EADDRINUSE: address already in use 127.0.0.1:18006","routerId":"c8aacef9-6088-4587-914e-8d9f3c8cfa2b","nodeId":"test-node","msg":"MessageRouter WebSocket server error"}
-{"level":50,"time":"2026-02-01T09:38:25.982Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","wsPort":18006,"error":"listen EADDRINUSE: address already in use 127.0.0.1:18006","stack":"Error: listen EADDRINUSE: address already in use 127.0.0.1:18006\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at node:net:2206:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","msg":"MessageRouter initialization failed"}
-{"level":50,"time":"2026-02-01T09:38:25.982Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","phase":"infrastructure","duration":2,"error":"MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18006","stack":"Error: MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18006\n    at BootstrapService.phaseInfrastructure (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:414:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:190:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/failure-scenarios.integration.test.js:952:25)","msg":"Bootstrap phase failed"}
-{"level":50,"time":"2026-02-01T09:38:25.982Z","nodeId":"test-node","pid":1800977,"subsystem":"bootstrap","nodeId":"test-node","phase":"failed","duration":2,"error":"MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18006","stack":"Error: MessageRouter initialization failed: listen EADDRINUSE: address already in use 127.0.0.1:18006\n    at BootstrapService.phaseInfrastructure (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:414:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:293:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:190:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/failure-scenarios.integration.test.js:952:25)","servicesCreated":0,"msg":"Bootstrap failed"}
+{"level":"debug","message":"Executing SQL query","subsystem":"sql-query-engine","sql":"SELECT * FROM replica_operations \n    WHERE status NOT IN ('active', 'removed', 'failed')","paramCount":0,"sessionId":"default"}
+{"level":"debug","message":"No key conditions, using scatter-gather","subsystem":"partition-resolver","tableName":"replica_operations","partitionCount":1}
+{"level":"debug","message":"Resolved partitions for SELECT","subsystem":"sql-query-engine","tableName":"replica_operations","totalPartitions":1,"targetPartitions":1,"sessionId":"default"}
+{"level":"debug","message":"Executing distributed SELECT","subsystem":"query-executor","partitionCount":1,"timestamp":"1770632452389-0-550e8400-e29b-41d4-a716-446655440003","hasJoins":false,"hasAggregates":false}
+{"level":"debug","message":"Routing query to partition service","subsystem":"query-executor","partitionId":"replica_operations-p1","address":"550e8400-e29b-41d4-a716-446655440003/partition/replica_operations-p1-r1"}
+{"level":"info","message":"Initializing MessageRouter","subsystem":"message-router","routerId":"92bc4075-1fd6-48ec-ba7e-0b588ca74a0b","nodeId":"550e8400-e29b-41d4-a716-446655440003","wsPort":64754,"wsHost":"127.0.0.1"}
     # Subtest: multiple node failures - system remains available
-        not ok 1 - bootstrap should succeed
-          ---
-          compare: ===
-          at:
-            fileName: test/integration/failure-scenarios.integration.test.js
-            lineNumber: 953
-            columnNumber: 9
-            typeName: Test
-          stack: >
-            Test.<anonymous> (test/integration/failure-scenarios.integration.test.js:953:9)
-          source: |2
-                  // Bootstrap the seed node
-                  bootstrapResult = await bootstrapService.bootstrap();
-                  t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
-            --------^
-          
-                  // Get real SystemTableCache and CDCIntegrationService
-          diff: |
-            --- expected
-            +++ actual
-            @@ -1,1 +1,1 @@
-            -true
-            +false
-          ...
-        
-        not ok 2 - Cannot read properties of null (reading 'insertSystemTableRow')
-          ---
-          stack: >
-            Test.<anonymous>
-            (test/integration/failure-scenarios.integration.test.js:971:37)
-          at:
-            fileName: test/integration/failure-scenarios.integration.test.js
-            lineNumber: 971
-            columnNumber: 37
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: >2
-          
-                  for (const nodeConfig of nodeConfigs) {
-                    await cdcIntegrationService.insertSystemTableRow(SystemTableName.NODES, {
-            ------------------------------------^
-                      ...nodeConfig,
-                      node_address: `ws://localhost:${getUniquePort()}`,
-          ...
-        
-        1..2
-    not ok 12 - multiple node failures - system remains available # time=18.349ms
-      ---
-      at:
-        fileName: test/integration/failure-scenarios.integration.test.js
-        lineNumber: 931
-        columnNumber: 5
-        typeName: Test
-      source: |2
-          });
-      
-          t.test('multiple node failures - system remains available', async (t) => {
-        ----^
-            // Use real BootstrapService to create a seed node
-            const seedNodeId = '550e8400-e29b-41d4-a716-446655440013';
-      ...
+        ok 1 - bootstrap should succeed
+        ok 2 - cache should be updated with all nodes
+{"level":50,"time":"2026-02-09T10:20:53.026Z","nodeId":"test-node","pid":200152,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T10:20:32.819Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-02-09T10:20:53.035Z","nodeId":"test-node","pid":200152,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T10:20:32.819Z","threshold":15000,"msg":"Node failure detected"}
+        ok 3 - should detect 2 node failures
+        ok 4 - should identify correct failing nodes
+        ok 5 - should have 3 healthy replicas (majority)
+        1..5
+    ok 12 - multiple node failures - system remains available # time=1382.13ms
     
     1..12
-not ok 1 - Failure scenario integration tests # time=4083.378ms
-  ---
-  at:
-    fileName: test/integration/failure-scenarios.integration.test.js
-    lineNumber: 35
-    columnNumber: 1
-    isToplevel: true
-  source: |
-    }
-  
-    test('Failure scenario integration tests', async (t) => {
-    ^
-      t.beforeEach(() => {
-        initializeTestEnvironment();
-  ...
+ok 1 - Failure scenario integration tests # time=9843.299ms
 
 1..1
-# { total: 40, pass: 28, fail: 12 }
-# time=4109.428ms
+# { total: 56, pass: 56 }
+# time=9849.118ms

@@ -107,7 +107,6 @@ class ReplicaLifecycleManager extends EventEmitter {
       });
       this.ownsReplicaHandler = true;
     }
-    this.localReplicas = this.replicaHandler.localReplicas;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -163,7 +162,6 @@ class ReplicaLifecycleManager extends EventEmitter {
   setReplicaHandler(handler) {
     assertCritical(handler, REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_HANDLER_REQUIRED);
     this.replicaHandler = handler;
-    this.localReplicas = handler.localReplicas;
     this.ownsReplicaHandler = false;
 
     this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.HANDLER_SET, {
@@ -220,7 +218,7 @@ class ReplicaLifecycleManager extends EventEmitter {
    * @return {Promise<Object>} Update result.
    */
   async updateReplicaStatus(replicaId, newStatus, additionalData = {}) {
-    const replica = this.localReplicas.get(replicaId);
+    const replica = this.replicaHandler.getLocalReplica(replicaId);
     const currentStatus = replica?.status || ReplicaStatus.STARTING;
 
     // Validate transition
@@ -440,7 +438,7 @@ class ReplicaLifecycleManager extends EventEmitter {
       nodeId: this.nodeId,
     });
 
-    const replica = this.localReplicas.get(replicaId);
+    const replica = this.replicaHandler.getLocalReplica(replicaId);
     if (!replica || !replica.service) {
       throw new Error(REPLICA_LIFECYCLE_ERROR_MSG.replicaServiceMissing(replicaId));
     }
@@ -740,7 +738,7 @@ class ReplicaLifecycleManager extends EventEmitter {
       initialized: this.initialized,
       localReplicaCount: this.replicaHandler ?
         this.replicaHandler.getAllLocalReplicas().length :
-        this.localReplicas.size,
+        0,
       pendingOperationCount: this.pendingOperations.size,
       usingReplicaHandler: !!this.replicaHandler,
     };
@@ -765,7 +763,6 @@ class ReplicaLifecycleManager extends EventEmitter {
     });
 
     this.pendingOperations.clear();
-    this.localReplicas.clear();
     this.initialized = false;
 
     this.emit(REPLICA_LIFECYCLE_EVENT.SHUTDOWN, {nodeId: this.nodeId});

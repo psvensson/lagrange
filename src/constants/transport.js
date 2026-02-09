@@ -22,6 +22,10 @@ const ROUTER_MESSAGE_TYPE = Object.freeze({
   IDENTIFY: 'identify',
   PING: 'ping',
   PONG: 'pong',
+  JOIN_REQUEST: 'join_request',
+  JOIN_RESPONSE: 'join_response',
+  JOIN_COMPLETE: 'join_complete',
+  JOIN_COMPLETE_ACK: 'join_complete_ack',
 });
 
 const WS_MESSAGE_TYPE = Object.freeze({
@@ -63,6 +67,10 @@ const TRANSPORT_DEFAULT = Object.freeze({
   EMPTY: STRING.EMPTY,
   CONNECTION_POOL_TTL_MS: 300000, // 5 minutes
   CONNECTION_POOL_CLEANUP_INTERVAL_MS: 60000, // 1 minute
+});
+
+const TRANSPORT_STRING = Object.freeze({
+  NEWLINE: '\n',
 });
 
 const TRANSPORT_FORMAT = Object.freeze({
@@ -130,6 +138,8 @@ const TRANSPORT_ERROR_MSG = Object.freeze({
 
 const ROUTER_LOG_MSG = Object.freeze({
   INITIALIZING: 'Initializing MessageRouter',
+  INVALID_ADDRESS: 'Invalid target address',
+  SENDING_MESSAGE: 'Sending message',
   SELF_CONNECTION_FAILED: 'Failed to establish self-connection',
   WS_SERVER_LISTENING: 'MessageRouter WebSocket server listening',
   WS_SERVER_ERROR: 'MessageRouter WebSocket server error',
@@ -151,9 +161,14 @@ const ROUTER_LOG_MSG = Object.freeze({
   KEEP_ORIGINAL_CONNECTION: 'Keeping incoming connection under original ID',
   SELF_CONNECTION_ALREADY_REGISTERED: 'self-connection already registered',
   SERVICE_MESSAGE_HANDLING: 'Handling service message',
+  SERVICE_RESPONSE_RECEIVED: 'Received service response',
+  SERVICE_RESPONSE_NO_PENDING: 'No pending service response request',
+  SERVICE_RESPONSE_ERROR: 'Service response indicated error',
+  SERVICE_RESPONSE_SENT: 'Service response sent',
   MESSAGE_NOT_ACKED: 'Message not acknowledged',
   CONNECTION_CLOSED: 'Connection closed',
   SELF_CONNECTION_LOST: 'Self-connection lost - fatal error',
+  NO_SELF_CONNECTION: 'No self-connection available for local delivery',
   MAX_RECONNECTS_REACHED: 'Max reconnection attempts reached',
   SCHEDULING_RECONNECT: 'Scheduling reconnection',
   RECONNECT_FAILED: 'Reconnection failed',
@@ -169,6 +184,14 @@ const ROUTER_LOG_MSG = Object.freeze({
   TRANSPORT_ALL_FAILED: 'All transport endpoints failed',
   TRANSPORT_NO_ENDPOINTS: 'No endpoints available for node',
   TRANSPORT_FALLBACK_WS: 'Falling back to WebSocket delivery',
+  JOIN_REQUEST_RECEIVED: 'Join request received',
+  JOIN_RESPONSE_SENT: 'Join response sent',
+  JOIN_REQUEST_FAILED: 'Failed to process join request',
+  JOIN_COMPLETE_RECEIVED: 'Join complete received',
+  JOIN_COMPLETE_ACK_SENT: 'Join complete acknowledgment sent',
+  JOIN_COMPLETE_FAILED: 'Failed to process join complete message',
+  RAFT_DIRECT_DELIVERY: 'Delivering raft packet directly',
+  RAFT_DIRECT_DELIVERY_FAILED: 'Failed to deliver raft packet directly',
 });
 
 const ROUTER_ERROR_MSG = Object.freeze({
@@ -180,6 +203,7 @@ const ROUTER_ERROR_MSG = Object.freeze({
   connectionClosed: (nodeId) => `Connection to node ${nodeId} closed`,
   selfConnectionFailed: (message) => `Self-connection failed: ${message}`,
   noHandlerForAddress: (address) => `No handler registered for address ${address}`,
+  PENDING_RESPONSE_TIMEOUT: 'Pending response timeout',
   SHUTDOWN: 'Router shutdown',
   ALL_TRANSPORTS_FAILED: 'All transport endpoints failed',
   NO_ENDPOINTS_FOR_NODE: 'No endpoints available for node',
@@ -248,6 +272,9 @@ const TRANSPORT_NUM = Object.freeze({
   ONE: NUM.ONE,
   TWO: NUM.TWO,
   THREE: NUM.THREE,
+  FOUR: NUM.FOUR,
+  FIVE: NUM.FIVE,
+  SIX: NUM.SIX,
 });
 
 export {
@@ -264,6 +291,7 @@ export {
   TRANSPORT_FORMAT,
   TRANSPORT_ERROR_MSG,
   TRANSPORT_NUM,
+  TRANSPORT_STRING,
   TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
   WS_LOG_MSG,

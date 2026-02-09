@@ -6,7 +6,6 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {TABLES} from '../constants/index.js';
-import {assertCritical} from '../utils/assert.js';
 import {
   FUNCTION_ERROR_MSG,
   FUNCTION_LOG_MSG,
@@ -29,6 +28,7 @@ class FunctionRegistry {
   constructor(options = {}) {
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.executors = new Map(); // executorType → executor
     this.logger = this.initLogger();
     this.initialized = false;
@@ -63,6 +63,9 @@ class FunctionRegistry {
     }
     if (options.cdcIntegrationService) {
       this.cdcIntegrationService = options.cdcIntegrationService;
+    }
+    if (options.sqlQueryEngine) {
+      this.sqlQueryEngine = options.sqlQueryEngine;
     }
 
     this.initialized = true;
@@ -185,29 +188,22 @@ class FunctionRegistry {
    * @return {Promise<Object|null>} Function definition or null.
    */
   async getFunction(functionId) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
-    try {
-      // Try direct lookup first
-      const func = systemTableCache.get(TABLES.CODE, functionId);
-      if (func) {
-        return func;
-      }
-
-      // Try find by function_id field
-      return systemTableCache.find(TABLES.CODE, (f) =>
-        f.function_id === functionId,
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM code WHERE code_id = ?',
+        [functionId],
       );
-    } catch (error) {
-      this.logger.error(FUNCTION_LOG_MSG.FUNCTION_LOOKUP_FAILED, {
-        functionId,
-        error: error.message,
-      });
-      throw error;
+      if (result.rows?.[0]) {
+        return result.rows[0];
+      }
+      // Try by function_id field
+      const byField = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM code WHERE function_id = ?',
+        [functionId],
+      );
+      return byField.rows?.[0] || null;
     }
+    return null;
   }
 
   /**
@@ -216,22 +212,14 @@ class FunctionRegistry {
    * @return {Promise<Object|null>} Function definition or null.
    */
   async getFunctionByName(functionName) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
-    try {
-      return systemTableCache.find(TABLES.CODE, (f) =>
-        f.function_name === functionName,
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM code WHERE function_name = ?',
+        [functionName],
       );
-    } catch (error) {
-      this.logger.error(FUNCTION_LOG_MSG.FUNCTION_LOOKUP_BY_NAME_FAILED, {
-        functionName,
-        error: error.message,
-      });
-      throw error;
+      return result.rows?.[0] || null;
     }
+    return null;
   }
 
   /**

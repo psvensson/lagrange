@@ -33,6 +33,38 @@ const ReplicaStatus = {
 };
 
 /**
+ * Terminal statuses represent completed or failed operations.
+ * A replica in one of these statuses has reached a final state.
+ *
+ * @type {string[]}
+ */
+const TERMINAL_STATUSES = [
+  ReplicaStatus.ACTIVE,
+  ReplicaStatus.REMOVED,
+  ReplicaStatus.FAILED,
+];
+
+/**
+ * SQL clause fragment for filtering by terminal statuses.
+ * Built programmatically from TERMINAL_STATUSES to ensure consistency.
+ * Usage: `WHERE status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`
+ *
+ * @type {string}
+ */
+const TERMINAL_STATUS_SQL_CLAUSE =
+  TERMINAL_STATUSES.map((s) => `'${s}'`).join(', ');
+
+/**
+ * Direction constants for adjustToOddCount function.
+ *
+ * @enum {string}
+ */
+const ADJUST_DIRECTION = Object.freeze({
+  UP: 'up',
+  DOWN: 'down',
+});
+
+/**
  * Workflow steps map to statuses.
  * Maps workflow step names to their corresponding ReplicaStatus values.
  *
@@ -58,6 +90,8 @@ const OperationType = {
   ADD: 'ADD',
   /** Remove an existing replica */
   REMOVE: 'REMOVE',
+  /** Replace an existing replica (create/sync/promote/remove source) */
+  REPLACE: 'REPLACE',
 };
 
 /**
@@ -88,6 +122,34 @@ const REMOVE_WORKFLOW_STEPS = [
 ];
 
 /**
+ * Workflow steps for REPLACE operations.
+ * Progress in order:
+ * PENDING → SENDING → CREATING → SYNCING → ACTIVE → STOPPING → REMOVED
+ *
+ * ACTIVE represents "replacement promoted and voter-ready".
+ *
+ * @type {string[]}
+ */
+const REPLACE_WORKFLOW_STEPS = [
+  WORKFLOW_STEP.PENDING,
+  WORKFLOW_STEP.SENDING,
+  WORKFLOW_STEP.CREATING,
+  WORKFLOW_STEP.SYNCING,
+  WORKFLOW_STEP.ACTIVE,
+  WORKFLOW_STEP.STOPPING,
+  WORKFLOW_STEP.REMOVED,
+];
+
+/**
+ * Metadata keys stored in operation stepsHistory entries.
+ *
+ * @enum {string}
+ */
+const OPERATION_METADATA_KEY = Object.freeze({
+  SOURCE_REPLICA_ID: 'sourceReplicaId',
+});
+
+/**
  * Get the workflow steps for an operation type.
  *
  * @param {string} operationType - The operation type (ADD or REMOVE).
@@ -99,6 +161,9 @@ function getWorkflowSteps(operationType) {
   }
   if (operationType === OperationType.REMOVE) {
     return [...REMOVE_WORKFLOW_STEPS];
+  }
+  if (operationType === OperationType.REPLACE) {
+    return [...REPLACE_WORKFLOW_STEPS];
   }
   return [];
 }
@@ -179,11 +244,20 @@ function isTerminalStep(operationType, step) {
  * @param {string} params.sourceNodeId - Node that initiated the operation.
  * @param {string} params.targetNodeId - Node where replica is created/removed.
  * @param {string} [params.replicaId] - Replica identifier (optional for ADD).
+ * @param {string} [params.sourceReplicaId] - Source replica ID for REPLACE
+ *   operations.
  * @return {Operation} A new Operation object.
  */
 function createOperation(params) {
   const now = Date.now();
   const initialStep = WORKFLOW_STEP.PENDING;
+  const initialHistory = {step: initialStep, timestamp: now};
+
+  if (params.type === OperationType.REPLACE &&
+      params.sourceReplicaId) {
+    initialHistory[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] =
+      params.sourceReplicaId;
+  }
 
   return {
     operationId: params.operationId,
@@ -198,7 +272,7 @@ function createOperation(params) {
     updatedAt: now,
     completedAt: null,
     errorMessage: null,
-    stepsHistory: [{step: initialStep, timestamp: now}],
+    stepsHistory: [initialHistory],
   };
 }
 
@@ -223,10 +297,15 @@ function isValidStatus(value) {
 
 export {
   ReplicaStatus,
+  TERMINAL_STATUSES,
+  TERMINAL_STATUS_SQL_CLAUSE,
+  ADJUST_DIRECTION,
   WORKFLOW_STEP_TO_STATUS,
   OperationType,
+  OPERATION_METADATA_KEY,
   ADD_WORKFLOW_STEPS,
   REMOVE_WORKFLOW_STEPS,
+  REPLACE_WORKFLOW_STEPS,
   getWorkflowSteps,
   isValidWorkflowStep,
   getNextWorkflowStep,

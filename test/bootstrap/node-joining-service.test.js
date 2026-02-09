@@ -69,6 +69,103 @@ test('NodeJoiningService - getStatus', async (t) => {
   t.equal(status.lastError, null);
 });
 
+test('NodeJoiningService - resolves control plane target from services metadata first',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-1',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.controlPlaneTargetAddress = 'stale-node/message-group/mg-1-r9';
+    service.seedNodeId = 'seed-node-1';
+    service.bootstrapResponse = {
+      seedNodeId: 'seed-node-1',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        replicaToMove: 'mg-1-r1',
+        peerAddresses: [
+          'seed-node-1/message-group/mg-1-r1',
+          'seed-node-1/message-group/mg-1-r3',
+        ],
+      },
+    };
+
+    service.messageRouter = {
+      getConnectionState: (nodeId) => {
+        return nodeId === 'seed-node-1' ? 'connected' : 'disconnected';
+      },
+    };
+
+    const nodeService = NodeService.getInstance();
+    nodeService.initialize({nodeId: 'joining-node-1'});
+    const cache = nodeService.getSystemTableCache();
+    cache.applySystemTableChange('services', 'INSERT', {
+      service_id: 'mg-1-r1',
+      group_id: 'mg-1',
+      node_id: 'joining-node-1',
+      service_type: 'message_group',
+      address: 'joining-node-1/message-group/mg-1-r1',
+      status: 'active',
+      raft_role: 'follower',
+    });
+    cache.applySystemTableChange('services', 'INSERT', {
+      service_id: 'mg-1-r2',
+      group_id: 'mg-1',
+      node_id: 'seed-node-1',
+      service_type: 'message_group',
+      address: 'seed-node-1/message-group/mg-1-r2',
+      status: 'active',
+      raft_role: 'leader',
+    });
+
+    const target = service.resolveControlPlaneTargetAddress({
+      allowBootstrapHints: false,
+    });
+
+    t.equal(
+      target,
+      'seed-node-1/message-group/mg-1-r2',
+      'should use authoritative services metadata target instead of stale cached target',
+    );
+  });
+
+test('NodeJoiningService - falls back to bootstrap hints when authoritative target missing',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-2',
+      nodeAddress: 'ws://localhost:9091',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.seedNodeId = 'seed-node-1';
+    service.bootstrapResponse = {
+      seedNodeId: 'seed-node-1',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        replicaToMove: 'mg-1-r1',
+        peerAddresses: [
+          'seed-node-1/message-group/mg-1-r1',
+          'seed-node-1/message-group/mg-1-r3',
+        ],
+      },
+    };
+
+    const target = service.resolveControlPlaneTargetAddress();
+
+    t.equal(
+      target,
+      'seed-node-1/message-group/mg-1-r3',
+      'should use non-moved bootstrap hint when metadata is unavailable',
+    );
+  });
+
 test('NodeJoiningService - fails without seed node address', async (t) => {
   initializeTestEnvironment();
 
@@ -167,12 +264,6 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
     service.signalReadyForReplicas = async function() {
       // Skip ready signal
     };
-    service.initializePullBasedAssignment = async function() {
-      // Skip pull-based assignment
-    };
-    service.syncPulledReplicas = async function() {
-      // Skip replica sync
-    };
 
     // Track phase events
     const phases = [];
@@ -258,8 +349,6 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   service.phaseWaitForLeadership = async () => {};
   service.initializeReplicaHandler = () => {};
   service.initializeControlPlaneService = async () => {};
-  service.initializePullBasedAssignment = async () => {};
-  service.syncPulledReplicas = async () => {};
   service.phaseQuerySystemState = async () => {
     order.push('query');
   };
@@ -538,8 +627,6 @@ test('NodeJoiningService - emits events', async (t) => {
     service.initializeReplicaHandler = function() {};
     service.initializeControlPlaneService = async function() {};
     service.signalReadyForReplicas = async function() {};
-    service.initializePullBasedAssignment = async function() {};
-    service.syncPulledReplicas = async function() {};
 
     const events = [];
     service.on('phaseStart', (data) => events.push({type: 'start', phase: data.phase}));

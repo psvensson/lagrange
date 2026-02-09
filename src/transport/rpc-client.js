@@ -102,12 +102,6 @@ class RPCClient extends EventEmitter {
         }
       }, timeoutMs);
 
-      // Unref the timeout so it doesn't keep the process alive
-      // This allows tests to exit cleanly even if there are pending RPC requests
-      if (timeoutHandle.unref) {
-        timeoutHandle.unref();
-      }
-
       // Track pending request
       this.pendingRequests.set(correlationId, {
         resolve,

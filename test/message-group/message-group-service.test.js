@@ -12,6 +12,7 @@ import {
 } from '../../src/message-group/message-group-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {NodeService} from '../../src/node/node-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {
   SystemTableName,
@@ -48,6 +49,7 @@ async function createTestTransport() {
 }
 
 beforeEach(() => {
+  NodeService.resetInstance();
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   const config = ConfigurationManager.getInstance();
@@ -57,6 +59,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  NodeService.resetInstance();
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
@@ -153,6 +156,101 @@ test('MessageGroupService - initialize becomes leader for single replica', async
     t.equal(service.getRole(), RaftRole.LEADER, 'Should become leader for single replica');
 
     await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
+test('MessageGroupService - buildPeerAddress follows cache updates after relocation', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  try {
+    const peerId = 'mg-1-r2';
+    const initialAddress = 'peer-node-a/message-group/mg-1-r2';
+    const relocatedAddress = 'peer-node-b/message-group/mg-1-r2';
+
+    const service = new MessageGroupService({
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r1',
+      nodeId,
+      replicaIds: ['mg-1-r1', 'mg-1-r2'],
+      peerAddresses: [`stale-node/message-group/${peerId}`],
+      transport: router,
+    });
+
+    service.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+      service_id: peerId,
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: 'peer-node-a',
+      group_id: 'mg-1',
+      replica_id: peerId,
+      status: STATE.ACTIVE,
+      address: initialAddress,
+      updated_at: Date.now(),
+    });
+
+    t.equal(
+      service.buildPeerAddress(peerId),
+      initialAddress,
+      'should resolve initial location from services cache',
+    );
+
+    service.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+      service_id: peerId,
+      node_id: 'peer-node-b',
+      address: relocatedAddress,
+      updated_at: Date.now() + 1,
+    });
+
+    t.equal(
+      service.buildPeerAddress(peerId),
+      relocatedAddress,
+      'should resolve relocated address from refreshed cache entry',
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+test('MessageGroupService - buildPeerAddress logs structured diagnostics on hint fallback', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  try {
+    const peerId = 'mg-1-r2';
+    const hintAddress = `seed-node/message-group/${peerId}`;
+    const warningLogs = [];
+
+    const service = new MessageGroupService({
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r1',
+      nodeId,
+      replicaIds: ['mg-1-r1', 'mg-1-r2'],
+      peerAddresses: [hintAddress],
+      transport: router,
+    });
+
+    const originalWarn = service.logger.warn?.bind(service.logger);
+    service.logger.warn = (msg, fields) => {
+      warningLogs.push({msg, fields});
+      if (originalWarn) {
+        return originalWarn(msg, fields);
+      }
+    };
+
+    t.equal(
+      service.buildPeerAddress(peerId),
+      hintAddress,
+      'should use bootstrap hint when cache location is missing',
+    );
+    t.equal(
+      service.buildPeerAddress(peerId),
+      hintAddress,
+      'repeated fallback should still resolve via bootstrap hint',
+    );
+    t.equal(warningLogs.length, 1, 'should emit fallback diagnostics only once per peer');
+    t.equal(
+      warningLogs[0]?.fields?.resolutionSource,
+      'bootstrap_hint',
+      'fallback diagnostics should identify bootstrap hint source',
+    );
   } finally {
     await cleanup();
   }

@@ -7,7 +7,6 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {CDC_OPERATION, NUM, STRING, TYPEOF} from '../constants/index.js';
-import {assertCritical} from '../utils/assert.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {
   CONFIG_DEFINITIONS,
@@ -49,6 +48,7 @@ class DynamicConfigService extends EventEmitter {
 
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
+    this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.nodeId = options.nodeId || STRING.UNKNOWN;
 
     // Local cache of configuration values
@@ -78,6 +78,9 @@ class DynamicConfigService extends EventEmitter {
     }
     if (options.systemTableCache) {
       this.systemTableCache = options.systemTableCache;
+    }
+    if (options.sqlQueryEngine) {
+      this.sqlQueryEngine = options.sqlQueryEngine;
     }
     if (options.nodeId) {
       this.nodeId = options.nodeId;
@@ -270,18 +273,17 @@ class DynamicConfigService extends EventEmitter {
   async getAll() {
     const result = {};
 
-    // Get all from table
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      CONFIG_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const configs = systemTableCache.getAll(SystemTableName.CONFIG);
-    if (configs) {
+    if (this.sqlQueryEngine) {
+      const queryResult = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM config', [],
+      );
+      const configs = queryResult.rows || [];
       for (const config of configs) {
-        result[config[CONFIG_TABLE_COLUMN.KEY]] = this.deserializeValue(
-          config[CONFIG_TABLE_COLUMN.VALUE],
-          config[CONFIG_TABLE_COLUMN.VALUE_TYPE],
-        );
+        result[config[CONFIG_TABLE_COLUMN.KEY]] =
+          this.deserializeValue(
+            config[CONFIG_TABLE_COLUMN.VALUE],
+            config[CONFIG_TABLE_COLUMN.VALUE_TYPE],
+          );
       }
     }
 
@@ -504,18 +506,19 @@ class DynamicConfigService extends EventEmitter {
   }
 
   /**
-   * Get configuration from system table cache.
+   * Get configuration from SQL engine.
    * @param {string} key - Configuration key.
-   * @return {Object|null} Configuration row or null.
+   * @return {Promise<Object|null>} Configuration row or null.
    * @private
    */
   async getConfigFromTable(key) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      CONFIG_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
-    return systemTableCache.get(SystemTableName.CONFIG, key);
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM config WHERE config_key = ?', [key],
+      );
+      return result.rows?.[0] || null;
+    }
+    return null;
   }
 
   /**

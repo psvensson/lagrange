@@ -3,83 +3,83 @@ TAP version 14
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 1 - ComponentRegistry - register and get singleton # time=7.209ms
+ok 1 - ComponentRegistry - register and get singleton # time=3.525ms
 
 # Subtest: ComponentRegistry - factory lifecycle creates new instances
     ok 1 - should not be equal
     1..1
-ok 2 - ComponentRegistry - factory lifecycle creates new instances # time=0.608ms
+ok 2 - ComponentRegistry - factory lifecycle creates new instances # time=0.342ms
 
 # Subtest: ComponentRegistry - resolves dependencies
     ok 1 - should be equal
     1..1
-ok 3 - ComponentRegistry - resolves dependencies # time=0.437ms
+ok 3 - ComponentRegistry - resolves dependencies # time=0.244ms
 
 # Subtest: ComponentRegistry - initializes in dependency order
     ok 1 - should be equivalent
     1..1
-ok 4 - ComponentRegistry - initializes in dependency order # time=1.553ms
+ok 4 - ComponentRegistry - initializes in dependency order # time=0.811ms
 
 # Subtest: ComponentRegistry - detects circular dependencies
     ok 1 - expected to reject
     1..1
-ok 5 - ComponentRegistry - detects circular dependencies # time=1.719ms
+ok 5 - ComponentRegistry - detects circular dependencies # time=1.022ms
 
 # Subtest: ComponentRegistry - detects self-referencing dependency
     ok 1 - expected to reject
     1..1
-ok 6 - ComponentRegistry - detects self-referencing dependency # time=0.667ms
+ok 6 - ComponentRegistry - detects self-referencing dependency # time=0.36ms
 
 # Subtest: ComponentRegistry - registerMock overrides component
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 7 - ComponentRegistry - registerMock overrides component # time=0.418ms
+ok 7 - ComponentRegistry - registerMock overrides component # time=0.234ms
 
 # Subtest: ComponentRegistry - clearMocks removes mocks
     ok 1 - should be equal
     1..1
-ok 8 - ComponentRegistry - clearMocks removes mocks # time=0.354ms
+ok 8 - ComponentRegistry - clearMocks removes mocks # time=0.183ms
 
 # Subtest: ComponentRegistry - has() checks registration
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 9 - ComponentRegistry - has() checks registration # time=0.383ms
+ok 9 - ComponentRegistry - has() checks registration # time=0.185ms
 
 # Subtest: ComponentRegistry - getComponentNames returns all names
     ok 1 - should be equivalent
     1..1
-ok 10 - ComponentRegistry - getComponentNames returns all names # time=0.375ms
+ok 10 - ComponentRegistry - getComponentNames returns all names # time=0.188ms
 
 # Subtest: ComponentRegistry - getDependencyGraph returns graph
     ok 1 - should be equivalent
     ok 2 - should be equivalent
     1..2
-ok 11 - ComponentRegistry - getDependencyGraph returns graph # time=0.525ms
+ok 11 - ComponentRegistry - getDependencyGraph returns graph # time=0.29ms
 
 # Subtest: ComponentRegistry - reset clears everything
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 12 - ComponentRegistry - reset clears everything # time=0.432ms
+ok 12 - ComponentRegistry - reset clears everything # time=0.223ms
 
 # Subtest: ComponentRegistry - cannot register after initialization
     ok 1 - expected to throw
     1..1
-ok 13 - ComponentRegistry - cannot register after initialization # time=0.633ms
+ok 13 - ComponentRegistry - cannot register after initialization # time=0.346ms
 
 # Subtest: ComponentRegistry - dispose calls dispose on instances
     ok 1 - should be equal
     1..1
-ok 14 - ComponentRegistry - dispose calls dispose on instances # time=0.456ms
+ok 14 - ComponentRegistry - dispose calls dispose on instances # time=0.382ms
 
 # Subtest: ComponentRegistry - getInitializationOrder returns correct order
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 15 - ComponentRegistry - getInitializationOrder returns correct order # time=0.427ms
+ok 15 - ComponentRegistry - getInitializationOrder returns correct order # time=0.378ms
 
 1..15
 # { total: 21, pass: 21 }
-# time=32.431ms
+# time=17.325ms

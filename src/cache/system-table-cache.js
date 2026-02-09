@@ -344,7 +344,18 @@ class SystemTableCache {
     switch (operation) {
     case CDC_OPERATIONS.INSERT:
       if (table.has(key)) {
-        this.logger.warn(CACHE_LOG_MSG.INSERT_ON_EXISTING_KEY_TREAT_UPDATE, {
+        const existing = table.get(key);
+        if (this.isStaleForExistingRecord(existing, data)) {
+          this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
+            tableName,
+            key,
+            operation,
+            existingUpdatedAt: this.getRecordTimestamp(existing),
+            incomingUpdatedAt: this.getRecordTimestamp(data),
+          });
+          break;
+        }
+        this.logger.debug(CACHE_LOG_MSG.INSERT_ON_EXISTING_KEY_TREAT_UPDATE, {
           tableName,
           key,
         });
@@ -355,13 +366,23 @@ class SystemTableCache {
 
     case CDC_OPERATIONS.UPDATE:
       if (!table.has(key)) {
-        this.logger.warn(CACHE_LOG_MSG.UPDATE_ON_MISSING_KEY_TREAT_INSERT, {
+        this.logger.debug(CACHE_LOG_MSG.UPDATE_ON_MISSING_KEY_TREAT_INSERT, {
           tableName,
           key,
         });
         table.set(key, this.deepClone(data));
       } else {
         const existing = table.get(key);
+        if (this.isStaleForExistingRecord(existing, data)) {
+          this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
+            tableName,
+            key,
+            operation,
+            existingUpdatedAt: this.getRecordTimestamp(existing),
+            incomingUpdatedAt: this.getRecordTimestamp(data),
+          });
+          break;
+        }
         table.set(key, {...existing, ...this.deepClone(data)});
       }
       recordForNotification = table.get(key);
@@ -372,6 +393,16 @@ class SystemTableCache {
         table.set(key, this.deepClone(data));
       } else {
         const existing = table.get(key);
+        if (this.isStaleForExistingRecord(existing, data)) {
+          this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
+            tableName,
+            key,
+            operation,
+            existingUpdatedAt: this.getRecordTimestamp(existing),
+            incomingUpdatedAt: this.getRecordTimestamp(data),
+          });
+          break;
+        }
         table.set(key, {...existing, ...this.deepClone(data)});
       }
       recordForNotification = table.get(key);
@@ -379,12 +410,23 @@ class SystemTableCache {
 
     case CDC_OPERATIONS.DELETE:
       if (!table.has(key)) {
-        this.logger.warn(CACHE_LOG_MSG.DELETE_ON_MISSING_KEY_IGNORED, {
+        this.logger.debug(CACHE_LOG_MSG.DELETE_ON_MISSING_KEY_IGNORED, {
           tableName,
           key,
         });
       } else {
-        recordForNotification = table.get(key);
+        const existing = table.get(key);
+        if (this.isStaleForExistingRecord(existing, data)) {
+          this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
+            tableName,
+            key,
+            operation,
+            existingUpdatedAt: this.getRecordTimestamp(existing),
+            incomingUpdatedAt: this.getRecordTimestamp(data),
+          });
+          break;
+        }
+        recordForNotification = existing;
         table.delete(key);
       }
       break;
@@ -460,6 +502,44 @@ class SystemTableCache {
    */
   deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));
+  }
+
+  /**
+   * Get a comparable timestamp from a row.
+   * Prefers updated_at, then created_at.
+   * @param {Object} record - Row record.
+   * @return {number|null} Comparable timestamp or null.
+   * @private
+   */
+  getRecordTimestamp(record) {
+    const updatedAt = Number(record?.[COLUMN.UPDATED_AT]);
+    if (Number.isFinite(updatedAt) && updatedAt > NUM.ZERO) {
+      return updatedAt;
+    }
+    const createdAt = Number(record?.[COLUMN.CREATED_AT]);
+    if (Number.isFinite(createdAt) && createdAt > NUM.ZERO) {
+      return createdAt;
+    }
+    return null;
+  }
+
+  /**
+   * Determine whether an incoming CDC row is stale versus existing cache row.
+   * @param {Object} existing - Existing cached row.
+   * @param {Object} incoming - Incoming CDC row.
+   * @return {boolean} True when incoming row is older.
+   * @private
+   */
+  isStaleForExistingRecord(existing, incoming) {
+    const existingTimestamp = this.getRecordTimestamp(existing);
+    const incomingTimestamp = this.getRecordTimestamp(incoming);
+
+    if (!Number.isFinite(existingTimestamp) ||
+        !Number.isFinite(incomingTimestamp)) {
+      return false;
+    }
+
+    return incomingTimestamp < existingTimestamp;
   }
 }
 

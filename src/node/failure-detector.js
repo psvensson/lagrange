@@ -19,6 +19,7 @@ import {
   FAILURE_DETECTOR_EVENT,
   FAILURE_DETECTOR_LOG_MSG,
   FAILURE_DETECTOR_REPLICA_TYPE,
+  FAILURE_DETECTOR_SQL,
   FAILURE_DETECTOR_SUBSYSTEM,
   NODE_STATUS,
 } from './node-constants.js';
@@ -37,13 +38,14 @@ class FailureDetector extends EventEmitter {
   /**
    * Create a new FailureDetector.
    * @param {Object} options - Configuration options.
-   * @param {Object} options.systemTableCache - Read-only system table cache.
+   * @param {Object} options.sqlQueryEngine - SQL query engine for reads.
    * @param {Object} options.cdcIntegrationService - CDC integration service for writes.
    * @param {string} options.nodeId - This node's ID.
    */
   constructor(options = {}) {
     super();
 
+    this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.nodeId = options.nodeId || null;
@@ -82,6 +84,7 @@ class FailureDetector extends EventEmitter {
     this.adaptiveResetTimer = null;
     this.recentFailures = new Map(); // nodeId -> failure timestamps
     this.currentFailureThreshold = this.failureThresholdMs;
+    this._usingCacheBackedFacade = false;
 
     this.initialized = false;
   }
@@ -91,6 +94,9 @@ class FailureDetector extends EventEmitter {
    * @param {Object} options - Initialization options.
    */
   initialize(options = {}) {
+    if (options.sqlQueryEngine) {
+      this.sqlQueryEngine = options.sqlQueryEngine;
+    }
     if (options.systemTableCache) {
       this.systemTableCache = options.systemTableCache;
     }
@@ -104,9 +110,12 @@ class FailureDetector extends EventEmitter {
     if (!this.nodeId) {
       throw new Error(FAILURE_DETECTOR_ERROR_MSG.MISSING_NODE_ID);
     }
-    this.systemTableCache = assertCritical(
-      this.systemTableCache,
-      FAILURE_DETECTOR_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+    if (!this.sqlQueryEngine && this.systemTableCache) {
+      this.sqlQueryEngine = this.createCacheBackedSqlQueryEngine();
+    }
+    this.sqlQueryEngine = assertCritical(
+      this.sqlQueryEngine,
+      FAILURE_DETECTOR_ERROR_MSG.MISSING_SQL_QUERY_ENGINE,
     );
     this.cdcIntegrationService = assertCritical(
       this.cdcIntegrationService,
@@ -121,6 +130,60 @@ class FailureDetector extends EventEmitter {
       suspicionThresholdMs: this.suspicionThresholdMs,
       failureThresholdMs: this.failureThresholdMs,
     });
+  }
+
+  /**
+   * Build a minimal SQL-query-engine facade backed by SystemTableCache.
+   * This keeps legacy tests/services working while preserving the
+   * sqlQueryEngine access pattern used by FailureDetector.
+   * @return {{executeQuery: Function}} Cache-backed executeQuery facade.
+   * @private
+   */
+  createCacheBackedSqlQueryEngine() {
+    this._usingCacheBackedFacade = true;
+    return {
+      executeQuery: async (sql, params = []) => {
+        const normalized = String(sql || '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toUpperCase();
+
+        if (normalized === FAILURE_DETECTOR_SQL.SELECT_ALL_NODES.toUpperCase()) {
+          return {
+            success: true,
+            rows: this.systemTableCache.getAll(SystemTableName.NODES) || [],
+          };
+        }
+
+        if (normalized ===
+          FAILURE_DETECTOR_SQL.SELECT_SERVICES_BY_NODE_AND_TYPE.toUpperCase()) {
+          const [nodeId, serviceType] = params;
+          const rows = (this.systemTableCache.getAll(SystemTableName.SERVICES) || [])
+            .filter((service) =>
+              service.node_id === nodeId && service.service_type === serviceType,
+            );
+          return {success: true, rows};
+        }
+
+        return {
+          success: false,
+          rows: [],
+          error: `Unsupported cache-backed query: ${sql}`,
+        };
+      },
+    };
+  }
+
+  /**
+   * Upgrade from the cache-backed SQL facade to the real SQL engine.
+   * Called once the real SQL engine becomes available after bootstrap.
+   * No-op if called with null/undefined.
+   * @param {Object} sqlQueryEngine - The real SQL query engine.
+   */
+  upgradeSqlQueryEngine(sqlQueryEngine) {
+    if (!sqlQueryEngine) return;
+    this.sqlQueryEngine = sqlQueryEngine;
+    this._usingCacheBackedFacade = false;
   }
 
   /**
@@ -185,7 +248,7 @@ class FailureDetector extends EventEmitter {
    */
   async checkNodeHealth() {
     const now = Date.now();
-    const nodes = this.getNodes();
+    const nodes = await this.getNodes();
 
     for (const node of nodes) {
       // Skip self
@@ -371,13 +434,14 @@ class FailureDetector extends EventEmitter {
    */
   async markReplicasAsFailed(nodeId, now) {
     // Mark partition replicas as failed
-    const partitionReplicas = this.getPartitionReplicasOnNode(nodeId);
+    const partitionReplicas = await this.getPartitionReplicasOnNode(nodeId);
     for (const replica of partitionReplicas) {
       await this.markReplicaAsFailed(replica, nodeId, now);
     }
 
     // Mark message group replicas as failed
-    const messageGroupReplicas = this.getMessageGroupReplicasOnNode(nodeId);
+    const messageGroupReplicas =
+      await this.getMessageGroupReplicasOnNode(nodeId);
     for (const replica of messageGroupReplicas) {
       await this.markMessageGroupReplicaAsFailed(replica, nodeId, now);
     }
@@ -548,53 +612,43 @@ class FailureDetector extends EventEmitter {
   }
 
   /**
-   * Get all nodes from cache.
-   * @return {Array<Object>} Array of node objects.
+   * Get all nodes via SQL query engine.
+   * @return {Promise<Array<Object>>} Array of node objects.
    * @private
    */
-  getNodes() {
-    assertCritical(
-      this.systemTableCache,
-      FAILURE_DETECTOR_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+  async getNodes() {
+    const result = await this.sqlQueryEngine.executeQuery(
+      FAILURE_DETECTOR_SQL.SELECT_ALL_NODES,
     );
-
-    return this.systemTableCache.getAll(SystemTableName.NODES);
+    return result.rows || [];
   }
 
   /**
-   * Get partition replicas on a specific node.
+   * Get partition replicas on a specific node via SQL query engine.
    * @param {string} nodeId - Node ID.
-   * @return {Array<Object>} Array of replica objects.
+   * @return {Promise<Array<Object>>} Array of replica objects.
    * @private
    */
-  getPartitionReplicasOnNode(nodeId) {
-    assertCritical(
-      this.systemTableCache,
-      FAILURE_DETECTOR_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+  async getPartitionReplicasOnNode(nodeId) {
+    const result = await this.sqlQueryEngine.executeQuery(
+      FAILURE_DETECTOR_SQL.SELECT_SERVICES_BY_NODE_AND_TYPE,
+      [nodeId, SERVICE_TYPE.PARTITION],
     );
-
-    return this.systemTableCache.filter(SystemTableName.SERVICES, (service) => {
-      return service.node_id === nodeId &&
-        service.service_type === SERVICE_TYPE.PARTITION;
-    });
+    return result.rows || [];
   }
 
   /**
-   * Get message group replicas on a specific node.
+   * Get message group replicas on a specific node via SQL query engine.
    * @param {string} nodeId - Node ID.
-   * @return {Array<Object>} Array of replica objects.
+   * @return {Promise<Array<Object>>} Array of replica objects.
    * @private
    */
-  getMessageGroupReplicasOnNode(nodeId) {
-    assertCritical(
-      this.systemTableCache,
-      FAILURE_DETECTOR_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
+  async getMessageGroupReplicasOnNode(nodeId) {
+    const result = await this.sqlQueryEngine.executeQuery(
+      FAILURE_DETECTOR_SQL.SELECT_SERVICES_BY_NODE_AND_TYPE,
+      [nodeId, SERVICE_TYPE.MESSAGE_GROUP_REPLICA],
     );
-
-    return this.systemTableCache.filter(SystemTableName.SERVICES, (service) => {
-      return service.node_id === nodeId &&
-        service.service_type === SERVICE_TYPE.MESSAGE_GROUP_REPLICA;
-    });
+    return result.rows || [];
   }
 
   /**

@@ -64,18 +64,6 @@ const JOINING_LOG_MSG = Object.freeze({
   STATE_QUERY_HYDRATION_COMPLETE: 'System table cache hydration complete',
   STATE_QUERY_TABLE: 'Would query system table',
   STATE_QUERY_COMPLETE: 'System state query complete',
-  PULL_ASSIGN_INIT: 'Initializing pull-based replica assignment',
-  READY_NODES_MISSING: 'No ready nodes available for pull-based assignment',
-  PULL_ASSIGN_FAILED: 'Pull-based assignment analysis failed',
-  REBALANCE_NOT_NEEDED: 'No rebalancing needed',
-  EPOCH_PROPOSAL_FAILED: 'Epoch proposal failed',
-  EPOCH_PROPOSED: 'Pull-based assignment epoch proposed',
-  LOCAL_REPLICAS_CREATED: 'Local replicas created',
-  NO_REPLICAS_TO_SYNC: 'No replicas to sync',
-  SYNCING_REPLICAS: 'Syncing pulled replicas',
-  REPLICA_SYNC_SUCCESS: 'Replica synced successfully',
-  REPLICA_SYNC_FAILED: 'Replica sync failed',
-  REPLICA_SYNC_COMPLETE: 'Replica sync phase complete',
   JOIN_FAILED: 'Node joining failed',
   CLEANUP_START: 'Cleaning up partially initialized services',
   PARTITION_CLEANED: 'Partition service cleaned up',
@@ -93,6 +81,36 @@ const JOINING_LOG_MSG = Object.freeze({
   ENDPOINT_REGISTERING: 'Registering node endpoint in cluster',
   ENDPOINT_REGISTERED: 'Node endpoint registered in cluster',
   ENDPOINT_REGISTER_FAILED: 'Failed to register node endpoint in cluster',
+  FAILED_JOIN_CLEANUP_START:
+    'Starting failed join cleanup in reverse phase order',
+  FAILED_JOIN_CLEANUP_QUERYING_STATE:
+    'Removing node and service entries during failed join cleanup',
+  FAILED_JOIN_CLEANUP_QUERYING_STATE_DONE:
+    'Node and service entries removed during failed join cleanup',
+  FAILED_JOIN_CLEANUP_QUERYING_STATE_ERROR:
+    'Error removing entries during failed join cleanup',
+  FAILED_JOIN_CLEANUP_WAITING_LEADERSHIP:
+    'Stopping message group services during failed join cleanup',
+  FAILED_JOIN_CLEANUP_WAITING_LEADERSHIP_DONE:
+    'Message group services stopped during failed join cleanup',
+  FAILED_JOIN_CLEANUP_WAITING_LEADERSHIP_ERROR:
+    'Error stopping message group services during failed join cleanup',
+  FAILED_JOIN_CLEANUP_MESSAGE_GROUP:
+    'Stopping message group replicas during failed join cleanup',
+  FAILED_JOIN_CLEANUP_MESSAGE_GROUP_DONE:
+    'Message group replicas stopped during failed join cleanup',
+  FAILED_JOIN_CLEANUP_MESSAGE_GROUP_ERROR:
+    'Error stopping message group replicas during failed join cleanup',
+  FAILED_JOIN_CLEANUP_WEBSOCKET:
+    'Disconnecting from seed and stopping router during failed join cleanup',
+  FAILED_JOIN_CLEANUP_WEBSOCKET_DONE:
+    'Disconnected from seed and router stopped during failed join cleanup',
+  FAILED_JOIN_CLEANUP_WEBSOCKET_ERROR:
+    'Error disconnecting during failed join cleanup',
+  FAILED_JOIN_CLEANUP_COMPLETE:
+    'Failed join cleanup complete',
+  FAILED_JOIN_CLEANUP_SUMMARY:
+    'Failed join cleanup summary',
 });
 
 const JOINING_ERROR_MSG = Object.freeze({
@@ -104,6 +122,7 @@ const JOINING_ERROR_MSG = Object.freeze({
   MESSAGE_ROUTER_REQUIRED: 'MessageRouter must be initialized before creating message groups',
   MOVE_REPLICA_MISSING: 'MOVE_REPLICA strategy requires replicaToMove in assignment',
   CONTROL_PLANE_TARGET_MISSING: 'No reachable control plane target address available',
+  CONTROL_PLANE_SERVICE_REQUIRED: 'Control plane service must be initialized',
   MESSAGE_GROUP_LEADER_REQUIRED: 'Message group leader is required for control plane routing',
   leadershipTimeout: (timeoutMs) =>
     `Message group failed to establish leadership within ${timeoutMs}ms`,
@@ -119,17 +138,23 @@ const JOINING_ERROR_MSG = Object.freeze({
   bootstrapNotReady: (phase) =>
     `Seed bootstrap not ready${phase ? ` (phase: ${phase})` : ''}`,
   READY_SIGNAL_NOT_ACK: 'Control plane did not acknowledge ready signal',
-  READY_NODES_REQUIRED: 'Ready node list is required for pull-based assignment',
-  pullAssignFailed: (message) => `Pull-based assignment failed: ${message}`,
-  epochProposalFailed: (message) => `Epoch proposal failed: ${message}`,
-  localReplicaCreateFailed: (details) => `Failed to create local replicas: ${details}`,
-  replicaSyncFailed: (partitionId, message) =>
-    `Replica sync failed for ${partitionId}: ${message}`,
   controlPlaneMessageFailed: (message) => `Control plane message failed: ${message}`,
   controlPlaneCdcSubscribeFailed: (tableName, message) =>
     `CDC subscription failed for ${tableName}: ${message}`,
-  RPC_CLIENT_REQUIRED: 'RPC client is required for replica sync',
   REPLICA_HANDLER_ROUTER_REQUIRED: 'MessageRouter must be initialized before ReplicaHandler',
+});
+
+const JOINING_CLEANUP_STEP = Object.freeze({
+  QUERYING_STATE: 'querying_state',
+  WAITING_LEADERSHIP: 'waiting_leadership',
+  MESSAGE_GROUP: 'message_group',
+  CONNECTING_WEBSOCKET: 'connecting_websocket',
+});
+
+const JOINING_CLEANUP_RESULT = Object.freeze({
+  SUCCESS: 'success',
+  ERROR: 'error',
+  SKIPPED: 'skipped',
 });
 
 const JOINING_ERROR_NAME = Object.freeze({
@@ -146,15 +171,12 @@ const JOINING_HTTP = Object.freeze({
   CONNECTION_CLOSE: 'close',
 });
 
-const JOINING_SEED_PROPOSER = Object.freeze({
-  DEFAULT: 'seed',
-});
-
 export {
+  JOINING_CLEANUP_RESULT,
+  JOINING_CLEANUP_STEP,
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,
   JOINING_ERROR_NAME,
   JOINING_HTTP,
   JOINING_LOG_MSG,
-  JOINING_SEED_PROPOSER,
 };

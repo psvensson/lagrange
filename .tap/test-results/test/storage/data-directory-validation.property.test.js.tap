@@ -2,23 +2,23 @@ TAP version 14
 # Subtest: Property 77: Data Directory Validation - creates non-existent dirs
     ok 1 - Property 77: All non-existent directories are created
     1..1
-ok 1 - Property 77: Data Directory Validation - creates non-existent dirs # time=232.591ms
+ok 1 - Property 77: Data Directory Validation - creates non-existent dirs # time=288.279ms
 
 # Subtest: Property 77: Data Directory Validation - validates writability
     ok 1 - Property 77: All writable directories pass validation
     1..1
-ok 2 - Property 77: Data Directory Validation - validates writability # time=260.775ms
+ok 2 - Property 77: Data Directory Validation - validates writability # time=170.559ms
 
 # Subtest: Property 77: Data Directory Validation - returns absolute path
     ok 1 - Property 77: All returned paths are absolute
     1..1
-ok 3 - Property 77: Data Directory Validation - returns absolute path # time=179.996ms
+ok 3 - Property 77: Data Directory Validation - returns absolute path # time=136.148ms
 
 # Subtest: Property 77: Data Directory Validation - nested dirs created
     ok 1 - Property 77: All nested directories are created
     1..1
-ok 4 - Property 77: Data Directory Validation - nested dirs created # time=194.476ms
+ok 4 - Property 77: Data Directory Validation - nested dirs created # time=171.211ms
 
 1..4
 # { total: 4, pass: 4 }
-# time=897.709ms
+# time=792.686ms

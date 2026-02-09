@@ -8,7 +8,6 @@ import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {STRING, TABLES} from '../constants/index.js';
-import {assertCritical} from '../utils/assert.js';
 import {
   INDEX_CONFIG_KEY,
   INDEX_DEFAULTS,
@@ -38,6 +37,7 @@ class IndexService {
   constructor(options = {}) {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
+    this.sqlQueryEngine = options.sqlQueryEngine || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -81,13 +81,14 @@ class IndexService {
    * @private
    */
   async loadIndicesFromCache() {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      INDEX_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
     try {
-      const indices = systemTableCache.getAll(TABLES.INDICES) || [];
+      let indices = [];
+      if (this.sqlQueryEngine) {
+        const result = await this.sqlQueryEngine.executeQuery(
+          'SELECT * FROM indices', [],
+        );
+        indices = result.rows || [];
+      }
 
       for (const index of indices) {
         const tableId = index.table_id;
@@ -99,12 +100,16 @@ class IndexService {
           indexId: index.index_id,
           tableId: index.table_id,
           indexName: index.index_name,
-          columnNames: JSON.parse(index.column_names || STRING.EMPTY_JSON_ARRAY),
+          columnNames: JSON.parse(
+            index.column_names || STRING.EMPTY_JSON_ARRAY,
+          ),
           indexType: index.index_type || INDEX_TYPE.BTREE,
           createdAt: index.created_at,
         };
 
-        this.indexCache.get(tableId).set(index.index_name, indexMetadata);
+        this.indexCache.get(tableId).set(
+          index.index_name, indexMetadata,
+        );
       }
 
       this.logger.debug(INDEX_LOG_MSG.INDICES_LOADED, {
@@ -221,7 +226,7 @@ class IndexService {
    */
   async createSQLiteIndex(tableId, tableName, indexName, columnNames) {
     // Get all partitions for this table
-    const partitions = this.getPartitionsForTable(tableId);
+    const partitions = await this.getPartitionsForTable(tableId);
 
     if (partitions.length === 0) {
       this.logger.warn(INDEX_LOG_MSG.NO_PARTITIONS_FOR_TABLE, {tableId, tableName});
@@ -273,24 +278,25 @@ class IndexService {
   /**
    * Get all partitions for a table.
    * @param {string} tableId - Table ID.
-   * @return {Array<Object>} Array of partition services.
+   * @return {Promise<Array<Object>>} Array of partition services.
    * @private
    */
-  getPartitionsForTable(tableId) {
+  async getPartitionsForTable(tableId) {
     const partitions = [];
 
-    // Get partition IDs from system table cache
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      INDEX_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const partitionRecords = systemTableCache.filter(
-      TABLES.PARTITIONS,
-      (p) => p.table_id === tableId,
-    ) || [];
+    let partitionRecords = [];
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM partitions WHERE table_id = ?',
+        [tableId],
+      );
+      partitionRecords = result.rows || [];
+    }
 
     for (const record of partitionRecords) {
-      const partition = this.getPartition(record.partition_id);
+      const partition = await this.getPartition(
+        record.partition_id,
+      );
       if (partition) {
         partitions.push(partition);
       }
@@ -300,17 +306,20 @@ class IndexService {
   }
 
   /**
-   * Get a partition by ID from system cache.
+   * Get a partition by ID.
    * @param {string} partitionId - Partition ID.
-   * @return {Object|null} Partition info or null.
+   * @return {Promise<Object|null>} Partition info or null.
    * @private
    */
-  getPartition(partitionId) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      INDEX_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    return systemTableCache.get(TABLES.PARTITIONS, partitionId);
+  async getPartition(partitionId) {
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM partitions WHERE partition_id = ?',
+        [partitionId],
+      );
+      return result.rows?.[0] || null;
+    }
+    return null;
   }
 
   /**
@@ -364,7 +373,7 @@ class IndexService {
    * @private
    */
   async dropSQLiteIndex(tableId, indexName) {
-    const partitions = this.getPartitionsForTable(tableId);
+    const partitions = await this.getPartitionsForTable(tableId);
     const sql = `DROP INDEX IF EXISTS ${indexName}`;
 
     const results = await Promise.allSettled(
@@ -568,7 +577,7 @@ class IndexService {
    * @private
    */
   async createIndexOnPartition(partitionId, indexMetadata) {
-    const partition = this.getPartition(partitionId);
+    const partition = await this.getPartition(partitionId);
 
     if (!partition) {
       this.logger.warn(INDEX_LOG_MSG.PARTITION_NOT_FOUND, {
@@ -652,7 +661,7 @@ class IndexService {
 
     this.logger.info(INDEX_LOG_MSG.REBUILDING_INDEX, {tableId, indexName});
 
-    const partitions = this.getPartitionsForTable(tableId);
+    const partitions = await this.getPartitionsForTable(tableId);
     let successCount = 0;
     const failCount = 0;
 

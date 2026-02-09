@@ -60,6 +60,19 @@ test('CDCIntegrationService - constructor', async (t) => {
   t.end();
 });
 
+test('CDCIntegrationService - constructor has no _nodeStates field', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+
+  t.equal(
+    Object.prototype.hasOwnProperty.call(service, '_nodeStates'),
+    false,
+    'should not have _nodeStates property (node state tracking owned by CDCEventHandler)',
+  );
+  t.end();
+});
+
 test('CDCIntegrationService - initialize', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
@@ -1268,8 +1281,10 @@ test('executeSQLDirectToLocalPartition executes on local partition', async (t) =
 
   // Mock partition service
   const mockPartitionService = {
-    partitionId: 'services-partition-1',
-    executeQuery: async (sql, params) => {
+    partitionId: 'services-p1',
+    initialized: true,
+    isLeader: true,
+    executeLocalQuery: async (sql, params) => {
       t.ok(sql.includes('INSERT INTO services'), 'should receive INSERT SQL');
       t.equal(params.length, 2, 'should receive params');
       return {success: true, affectedRows: 1};
@@ -1277,7 +1292,7 @@ test('executeSQLDirectToLocalPartition executes on local partition', async (t) =
   };
 
   const mockPartitionServices = new Map();
-  mockPartitionServices.set('services-partition-1', mockPartitionService);
+  mockPartitionServices.set('services-p1', mockPartitionService);
 
   service.setBootstrapMode(true, mockPartitionServices);
 
@@ -1317,7 +1332,12 @@ test('executeSQLDirectToLocalPartition throws when partition not found', async (
   service.initialize();
 
   const mockPartitionServices = new Map();
-  mockPartitionServices.set('nodes-partition-1', {partitionId: 'nodes-partition-1'});
+  mockPartitionServices.set('nodes-p1', {
+    partitionId: 'nodes-p1',
+    initialized: true,
+    isLeader: true,
+    executeLocalQuery: async () => ({success: true, affectedRows: 1}),
+  });
 
   service.setBootstrapMode(true, mockPartitionServices);
 
@@ -1329,6 +1349,7 @@ test('executeSQLDirectToLocalPartition throws when partition not found', async (
     t.fail('should throw error when partition not found');
   } catch (error) {
     t.ok(
+      error.message.includes('Partition services not initialized') ||
       error.message.includes('No local partition service found'),
       'should throw error about missing partition',
     );
@@ -1345,7 +1366,12 @@ test('executeSQLDirectToLocalPartition throws when SQL parsing fails', async (t)
   service.initialize();
 
   const mockPartitionServices = new Map();
-  mockPartitionServices.set('services-partition-1', {partitionId: 'services-partition-1'});
+  mockPartitionServices.set('services-p1', {
+    partitionId: 'services-p1',
+    initialized: true,
+    isLeader: true,
+    executeLocalQuery: async () => ({success: true, affectedRows: 1}),
+  });
 
   service.setBootstrapMode(true, mockPartitionServices);
 
@@ -1369,14 +1395,16 @@ test('executeSQLDirectToLocalPartition handles partition errors', async (t) => {
   service.initialize();
 
   const mockPartitionService = {
-    partitionId: 'services-partition-1',
-    executeQuery: async () => {
+    partitionId: 'services-p1',
+    initialized: true,
+    isLeader: true,
+    executeLocalQuery: async () => {
       return {success: false, error: 'Partition error'};
     },
   };
 
   const mockPartitionServices = new Map();
-  mockPartitionServices.set('services-partition-1', mockPartitionService);
+  mockPartitionServices.set('services-p1', mockPartitionService);
 
   service.setBootstrapMode(true, mockPartitionServices);
 
@@ -1402,15 +1430,17 @@ test('CDCIntegrationService - executeSQL routes to direct partition in bootstrap
 
     let directCallMade = false;
     const mockPartitionService = {
-      partitionId: 'services-partition-1',
-      executeQuery: async (_sql, _params) => {
+      partitionId: 'services-p1',
+      initialized: true,
+      isLeader: true,
+      executeLocalQuery: async (_sql, _params) => {
         directCallMade = true;
         return {success: true, affectedRows: 1};
       },
     };
 
     const mockPartitionServices = new Map();
-    mockPartitionServices.set('services-partition-1', mockPartitionService);
+    mockPartitionServices.set('services-p1', mockPartitionService);
 
     service.setBootstrapMode(true, mockPartitionServices);
 
@@ -1471,15 +1501,17 @@ test('CDCIntegrationService - executeSQL switches from bootstrap to normal mode'
 
     let directCallCount = 0;
     const mockPartitionService = {
-      partitionId: 'services-partition-1',
-      executeQuery: async (_sql, _params) => {
+      partitionId: 'services-p1',
+      initialized: true,
+      isLeader: true,
+      executeLocalQuery: async (_sql, _params) => {
         directCallCount++;
         return {success: true, affectedRows: 1};
       },
     };
 
     const mockPartitionServices = new Map();
-    mockPartitionServices.set('services-partition-1', mockPartitionService);
+    mockPartitionServices.set('services-p1', mockPartitionService);
 
     // Enable bootstrap mode
     service.setBootstrapMode(true, mockPartitionServices);
@@ -1556,14 +1588,16 @@ test('CDCIntegrationService - executeSQL single code path based on mode flag',
     service.initialize();
 
     const mockPartitionService = {
-      partitionId: 'nodes-partition-1',
-      executeQuery: async (_sql, _params) => {
+      partitionId: 'nodes-p1',
+      initialized: true,
+      isLeader: true,
+      executeLocalQuery: async (_sql, _params) => {
         return {success: true, affectedRows: 1};
       },
     };
 
     const mockPartitionServices = new Map();
-    mockPartitionServices.set('nodes-partition-1', mockPartitionService);
+    mockPartitionServices.set('nodes-p1', mockPartitionService);
 
     // Test 1: Bootstrap mode enabled - should use direct path
     service.setBootstrapMode(true, mockPartitionServices);
@@ -1589,5 +1623,34 @@ test('CDCIntegrationService - executeSQL single code path based on mode flag',
       'should use SQL engine in normal mode',
     );
 
+    t.end();
+  });
+
+test('CDCIntegrationService - transient detection includes leader-transition query failures',
+  async (t) => {
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+    });
+
+    t.equal(
+      service.isTransientCdcError('Query failed'),
+      true,
+      'generic query-failed wrapper should be treated as transient for CDC writes',
+    );
+    t.equal(
+      service.isTransientCdcError('Failed to forward write to leader'),
+      true,
+      'leader-forwarding failures should be retried',
+    );
+    t.equal(
+      service.isTransientCdcError('Message timeout'),
+      true,
+      'transport timeout during leader handoff should be retried',
+    );
+    t.equal(
+      service.isTransientCdcError('SQL syntax error near FROM'),
+      false,
+      'non-transient SQL errors should not be retried',
+    );
     t.end();
   });

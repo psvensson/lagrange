@@ -82,20 +82,32 @@ class SQLiteLogAdapter {
    * Get the last log entry info.
    * Required by liferaft for log consistency checks.
    * Requirements: 12.2
-   * @return {Object} {index, term}
+   * @return {Object} {index, term, committedIndex}
    */
   getLastInfo() {
     if (!this.isOpen()) {
-      return {index: 0, term: this.node ? this.node.term : 0};
+      return {
+        index: 0,
+        term: this.node ? this.node.term : 0,
+        committedIndex: this.getCommittedIndex(),
+      };
     }
     const row = this.db.prepare(
       'SELECT log_index, term FROM _raft_log ORDER BY log_index DESC LIMIT 1',
     ).get();
 
     if (!row) {
-      return {index: 0, term: this.node ? this.node.term : 0};
+      return {
+        index: 0,
+        term: this.node ? this.node.term : 0,
+        committedIndex: this.getCommittedIndex(),
+      };
     }
-    return {index: row.log_index, term: row.term};
+    return {
+      index: row.log_index,
+      term: row.term,
+      committedIndex: this.getCommittedIndex(),
+    };
   }
 
   /**
@@ -257,6 +269,7 @@ class SQLiteLogAdapter {
     this.db.prepare(
       'UPDATE _raft_log SET command = ? WHERE log_index = ?',
     ).run(JSON.stringify(entry), index);
+    this.setCommittedIndex(index);
 
     return entry;
   }
@@ -457,6 +470,15 @@ class SQLiteLogAdapter {
       'SELECT value FROM _raft_state WHERE key = ?',
     ).get('committedIndex');
     return row ? parseInt(row.value, 10) : 0;
+  }
+
+  /**
+   * Liferaft reads committedIndex as a property on the log adapter.
+   * Keep it synchronized with persisted raft state.
+   * @return {number} Committed index.
+   */
+  get committedIndex() {
+    return this.getCommittedIndex();
   }
 
   /**

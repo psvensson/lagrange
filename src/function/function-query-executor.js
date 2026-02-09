@@ -273,7 +273,13 @@ class FunctionQueryExecutor {
         nextFunctionId,
         error: error.message,
       });
-      throw error;
+      return {
+        invocationId,
+        queryResult: result,
+        functionInvoked: false,
+        success: false,
+        error: error.message,
+      };
     }
   }
 

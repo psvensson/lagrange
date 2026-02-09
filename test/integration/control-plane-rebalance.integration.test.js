@@ -8,7 +8,11 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
-import {ControlPlaneService} from '../../src/control-plane/control-plane-service.js';
+import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
+import {LeaseService} from '../../src/control-plane/lease-service.js';
+import {EndpointService} from '../../src/control-plane/endpoint-service.js';
+import {ReplicaDispatchService} from
+  '../../src/control-plane/replica-dispatch-service.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaOperationResponseStatus} from
@@ -132,20 +136,46 @@ test('Control plane dispatch integration', async (t) => {
       });
       rebalanceCoordinator.initialize();
 
-      // Create real ControlPlaneService
-      const controlPlane = new ControlPlaneService({
+      // Create decomposed control-plane services
+      const heartbeatSvc = new HeartbeatService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
-        systemTableCache,
         cdcIntegrationService,
-        messageRouter: realMessageRouter,
-        rebalanceCoordinator,
+        systemTableCache,
       });
-      controlPlane.initialize();
+      heartbeatSvc.initialize();
 
-      // Attach message group services to control plane for CDC event handling
-      for (const mgService of bootstrapResult.messageGroupServices.values()) {
-        controlPlane.attachMessageGroupService(mgService);
+      const leaseSvc = new LeaseService({
+        nodeId: seedNodeId,
+        cdcIntegrationService,
+        systemTableCache,
+        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      });
+      leaseSvc.initialize();
+
+      const endpointSvc = new EndpointService({
+        nodeId: seedNodeId,
+        cdcIntegrationService,
+        systemTableCache,
+        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      });
+      endpointSvc.initialize();
+
+      const dispatchSvc = new ReplicaDispatchService({
+        nodeId: seedNodeId,
+        messageRouter: realMessageRouter,
+        cdcIntegrationService,
+        systemTableCache,
+        rebalanceCoordinator,
+        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      });
+      dispatchSvc.initialize();
+
+      // Attach message group services for CDC event handling
+      for (const mgService of
+        bootstrapResult.messageGroupServices.values()) {
+        dispatchSvc.attachMessageGroupService(mgService);
+        leaseSvc.messageGroupServices.add(mgService);
       }
 
       // Add a target node to the cache (simulating a node that has joined and is ready)
@@ -173,11 +203,26 @@ test('Control plane dispatch integration', async (t) => {
       t.ok(partitions.length > 0, 'should have partitions');
       const partitionId = partitions[0].partition_id;
 
+      // Add a service entry for the target node so the handler
+      // registration check in dispatchOperationRow passes.
+      systemTableCache.applySystemTableChange(
+        SystemTableName.SERVICES, 'INSERT', {
+          service_id: `replica-${targetNodeId}-${partitionId}`,
+          node_id: targetNodeId,
+          partition_id: partitionId,
+          service_type: 'partition',
+          status: STATE.ACTIVE,
+          address: `${targetNodeId}/partition/replica-${targetNodeId}-${partitionId}`,
+          raft_role: 'follower',
+          created_at: now,
+        },
+      );
+
       // Create a replica operation using the real coordinator
       // This will trigger the real CDC flow:
       // 1. Operation is persisted via SQL engine
       // 2. CDC event is emitted when the operation is written to the partition
-      // 3. ControlPlaneService handles the CDC event (via attached message group services)
+      // 3. ReplicaDispatchService handles the CDC event (via attached MGs)
       // 4. Operation is dispatched to target node's replica-handler
       const operation = await rebalanceCoordinator.createOperation({
         type: 'ADD',
@@ -202,18 +247,31 @@ test('Control plane dispatch integration', async (t) => {
         'should target replica-handler on target node',
       );
 
-      // Verify the operation moved to CREATING state
+      // Verify the operation moves from SENDING to CREATING after dispatch ACK.
+      const movedToCreating = await waitFor(() => {
+        const current = systemTableCache.get(
+          SystemTableName.REPLICA_OPERATIONS,
+          operation.operationId,
+        );
+        return current?.workflow_step === 'CREATING';
+      }, 1500, 25);
       const updatedOperation = systemTableCache.get(
         SystemTableName.REPLICA_OPERATIONS,
         operation.operationId,
       );
-      t.equal(updatedOperation.workflow_step, 'CREATING', 'operation should move to CREATING');
+      t.ok(
+        movedToCreating,
+        `operation should move to CREATING (got ${updatedOperation?.workflow_step})`,
+      );
 
       // Restore original deliver method before cleanup
       realMessageRouter.deliver = originalDeliver;
 
       // Cleanup
-      controlPlane.shutdown();
+      heartbeatSvc.stop();
+      leaseSvc.stop();
+      endpointSvc.stop();
+      dispatchSvc.stop();
       await rebalanceCoordinator.shutdown();
     } finally {
       if (bootstrapService) {

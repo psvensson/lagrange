@@ -7,7 +7,6 @@
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {TABLES} from '../constants/index.js';
-import {assertCritical} from '../utils/assert.js';
 import {
   FUNCTION_CONTEXT_TYPE,
   FUNCTION_ERROR_MSG,
@@ -34,6 +33,7 @@ class ContextManager {
   constructor(options = {}) {
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.logger = this.initLogger();
     this.initialized = false;
   }
@@ -68,6 +68,9 @@ class ContextManager {
     if (options.cdcIntegrationService) {
       this.cdcIntegrationService = options.cdcIntegrationService;
     }
+    if (options.sqlQueryEngine) {
+      this.sqlQueryEngine = options.sqlQueryEngine;
+    }
 
     this.initialized = true;
 
@@ -94,20 +97,21 @@ class ContextManager {
    * Get a context by type and name.
    * @param {string} contextType - Type of context ('function', 'service', 'user').
    * @param {string} contextName - Name of the context.
-   * @return {Object|null} Context data or null if not found.
+   * @return {Promise<Object|null>} Context data or null if not found.
    */
-  getContext(contextType, contextName) {
+  async getContext(contextType, contextName) {
     this.validateContextType(contextType);
 
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
     try {
-      const contexts = systemTableCache.filter(TABLES.CONTEXTS, (c) =>
-        c.context_type === contextType && c.context_name === contextName,
-      );
+      let contexts = [];
+      if (this.sqlQueryEngine) {
+        const result = await this.sqlQueryEngine.executeQuery(
+          'SELECT * FROM contexts WHERE context_type = ?' +
+          ' AND context_name = ?',
+          [contextType, contextName],
+        );
+        contexts = result.rows || [];
+      }
 
       if (contexts.length === 0) {
         return null;
@@ -149,17 +153,18 @@ class ContextManager {
       throw new Error(FUNCTION_ERROR_MSG.CDC_INTEGRATION_REQUIRED);
     }
 
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
     const now = Date.now();
 
     // Check if context already exists
-    const existing = systemTableCache.find(TABLES.CONTEXTS, (c) =>
-      c.context_type === contextType && c.context_name === contextName,
-    );
+    let existing = null;
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM contexts WHERE context_type = ?' +
+        ' AND context_name = ?',
+        [contextType, contextName],
+      );
+      existing = result.rows?.[0] || null;
+    }
 
     const contextId = existing?.context_id || uuidv4();
 
@@ -223,14 +228,15 @@ class ContextManager {
       throw new Error(FUNCTION_ERROR_MSG.CDC_INTEGRATION_REQUIRED);
     }
 
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
-    const existing = systemTableCache.find(TABLES.CONTEXTS, (c) =>
-      c.context_type === contextType && c.context_name === contextName,
-    );
+    let existing = null;
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM contexts WHERE context_type = ?' +
+        ' AND context_name = ?',
+        [contextType, contextName],
+      );
+      existing = result.rows?.[0] || null;
+    }
 
     if (!existing) {
       this.logger.debug(FUNCTION_LOG_MSG.CONTEXT_DELETE_NOT_FOUND, {
@@ -256,18 +262,18 @@ class ContextManager {
   /**
    * List all contexts for an owner.
    * @param {string} ownerId - Owner ID to filter by.
-   * @return {Array} List of contexts.
+   * @return {Promise<Array>} List of contexts.
    */
-  getContextsByOwner(ownerId) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
+  async getContextsByOwner(ownerId) {
     try {
-      const contexts = systemTableCache.filter(TABLES.CONTEXTS, (c) =>
-        c.owner_id === ownerId,
-      );
+      let contexts = [];
+      if (this.sqlQueryEngine) {
+        const result = await this.sqlQueryEngine.executeQuery(
+          'SELECT * FROM contexts WHERE owner_id = ?',
+          [ownerId],
+        );
+        contexts = result.rows || [];
+      }
 
       return contexts.map((c) => ({
         contextId: c.context_id,
@@ -290,20 +296,20 @@ class ContextManager {
   /**
    * Get all contexts of a specific type.
    * @param {string} contextType - Context type to filter by.
-   * @return {Array} List of contexts.
+   * @return {Promise<Array>} List of contexts.
    */
-  getContextsByType(contextType) {
+  async getContextsByType(contextType) {
     this.validateContextType(contextType);
 
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      FUNCTION_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
     try {
-      const contexts = systemTableCache.filter(TABLES.CONTEXTS, (c) =>
-        c.context_type === contextType,
-      );
+      let contexts = [];
+      if (this.sqlQueryEngine) {
+        const result = await this.sqlQueryEngine.executeQuery(
+          'SELECT * FROM contexts WHERE context_type = ?',
+          [contextType],
+        );
+        contexts = result.rows || [];
+      }
 
       return contexts.map((c) => ({
         contextId: c.context_id,

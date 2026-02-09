@@ -3,46 +3,46 @@ TAP version 14
     # Subtest: filtered results contain only matching type
         ok 1 - filtered results contain only matching type
         1..1
-    ok 1 - filtered results contain only matching type # time=9.545ms
+    ok 1 - filtered results contain only matching type # time=9.533ms
     
     # Subtest: filtered results contain all matching contexts
         ok 1 - filtered results contain all matching contexts
         1..1
-    ok 2 - filtered results contain all matching contexts # time=5.673ms
+    ok 2 - filtered results contain all matching contexts # time=5.101ms
     
     # Subtest: clearing filter restores all contexts
         ok 1 - clearing filter restores all contexts
         1..1
-    ok 3 - clearing filter restores all contexts # time=3.291ms
+    ok 3 - clearing filter restores all contexts # time=3.493ms
     
     # Subtest: type filter is case insensitive
         ok 1 - type filter is case insensitive
         1..1
-    ok 4 - type filter is case insensitive # time=3.367ms
+    ok 4 - type filter is case insensitive # time=3.294ms
     
     # Subtest: empty filter returns all contexts
         ok 1 - empty filter returns all contexts
         1..1
-    ok 5 - empty filter returns all contexts # time=2.96ms
+    ok 5 - empty filter returns all contexts # time=4.057ms
     
     # Subtest: filter preserves context data integrity
         ok 1 - filter preserves context data integrity
         1..1
-    ok 6 - filter preserves context data integrity # time=11.184ms
+    ok 6 - filter preserves context data integrity # time=4.257ms
     
     # Subtest: non-matching type filter returns empty for single-type data
         ok 1 - non-matching type filter returns empty for single-type data
         1..1
-    ok 7 - non-matching type filter returns empty for single-type data # time=0.977ms
+    ok 7 - non-matching type filter returns empty for single-type data # time=1.8ms
     
     # Subtest: getContextCountByType reflects filtered data
         ok 1 - getContextCountByType reflects filtered data
         1..1
-    ok 8 - getContextCountByType reflects filtered data # time=1.203ms
+    ok 8 - getContextCountByType reflects filtered data # time=2.532ms
     
     1..8
-ok 1 - Property 46: Contexts View Type Filtering # time=45.857ms
+ok 1 - Property 46: Contexts View Type Filtering # time=41.903ms
 
 1..1
 # { total: 8, pass: 8 }
-# time=63.786ms
+# time=51.233ms

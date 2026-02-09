@@ -3,46 +3,46 @@ TAP version 14
     # Subtest: proposed assignments relieve at least one overloaded node
         ok 1 - proposed assignments relieve at least one overloaded node
         1..1
-    ok 1 - proposed assignments relieve at least one overloaded node # time=13.346ms
+    ok 1 - proposed assignments relieve at least one overloaded node # time=16.164ms
     
     # Subtest: joining node receives replicas in proposed assignments
         ok 1 - joining node receives replicas in proposed assignments
         1..1
-    ok 2 - joining node receives replicas in proposed assignments # time=2.794ms
+    ok 2 - joining node receives replicas in proposed assignments # time=5.211ms
     
     # Subtest: proposed assignments have no duplicate replicas per partition
         ok 1 - proposed assignments have no duplicate replicas per partition
         1..1
-    ok 3 - proposed assignments have no duplicate replicas per partition # time=2.11ms
+    ok 3 - proposed assignments have no duplicate replicas per partition # time=4.019ms
     
     # Subtest: proposed assignments respect table replication policies
         ok 1 - proposed assignments respect table replication policies
         1..1
-    ok 4 - proposed assignments respect table replication policies # time=1.913ms
+    ok 4 - proposed assignments respect table replication policies # time=2.746ms
     
     # Subtest: varying imbalance levels still relieve overloaded nodes
         ok 1 - varying imbalance levels still relieve overloaded nodes
         1..1
-    ok 5 - varying imbalance levels still relieve overloaded nodes # time=1.962ms
+    ok 5 - varying imbalance levels still relieve overloaded nodes # time=3.26ms
     
     # Subtest: single partition cluster respects placement policy
         ok 1 - single partition cluster respects placement policy
         1..1
-    ok 6 - single partition cluster respects placement policy # time=2.578ms
+    ok 6 - single partition cluster respects placement policy # time=1.846ms
     
     # Subtest: multiple replicas per partition handled correctly
         ok 1 - multiple replicas per partition handled correctly
         1..1
-    ok 7 - multiple replicas per partition handled correctly # time=2.199ms
+    ok 7 - multiple replicas per partition handled correctly # time=3.889ms
     
     # Subtest: empty table policies allow valid rebalancing
         ok 1 - empty table policies allow valid rebalancing
         1..1
-    ok 8 - empty table policies allow valid rebalancing # time=1.784ms
+    ok 8 - empty table policies allow valid rebalancing # time=5.204ms
     
     1..8
-ok 1 - Property 14: Join Assignment Relieves Overloaded Nodes # time=32.579ms
+ok 1 - Property 14: Join Assignment Relieves Overloaded Nodes # time=47.909ms
 
 1..1
 # { total: 8, pass: 8 }
-# time=46.443ms
+# time=68.806ms

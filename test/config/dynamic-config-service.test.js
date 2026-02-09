@@ -10,7 +10,6 @@ import {
   ConfigValueType,
   CONFIG_DEFINITIONS,
 } from '../../src/config/dynamic-config-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 
 /**
  * Create a mock CDC integration service.
@@ -34,27 +33,27 @@ function createMockCDCService() {
 }
 
 /**
- * Create a mock system table cache.
+ * Create a mock SQL query engine backed by a Map.
  */
-function createMockCache(initialData = {}) {
+function createMockSqlEngine(initialData = {}) {
   const cache = new Map();
 
-  // Initialize with provided data
   for (const [key, value] of Object.entries(initialData)) {
     cache.set(key, value);
   }
 
   return {
-    get(tableName, key) {
-      if (tableName !== SystemTableName.CONFIG) return null;
-      return cache.get(key) || null;
-    },
-    getAll(tableName) {
-      if (tableName !== SystemTableName.CONFIG) return [];
-      return Array.from(cache.values());
-    },
-    set(key, value) {
-      cache.set(key, value);
+    cache,
+    async executeQuery(sql, params) {
+      if (sql.includes('WHERE config_key = ?') && params?.[0]) {
+        const row = cache.get(params[0]) || null;
+        return {rows: row ? [row] : []};
+      }
+      if (sql.includes('FROM config') &&
+          !sql.includes('WHERE')) {
+        return {rows: Array.from(cache.values())};
+      }
+      return {rows: []};
     },
   };
 }
@@ -64,29 +63,31 @@ test('DynamicConfigService initialization', async (t) => {
     nodeId: 'test-node',
   });
 
-  t.notOk(service.isInitialized(), 'should not be initialized before init');
+  t.notOk(service.isInitialized(),
+    'should not be initialized before init');
 
   await service.initialize();
 
-  t.ok(service.isInitialized(), 'should be initialized after init');
+  t.ok(service.isInitialized(),
+    'should be initialized after init');
 });
 
 test('DynamicConfigService get with default value', async (t) => {
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const service = new DynamicConfigService({
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
 
-  // Get a defined key that's not in cache - should return default
   const value = await service.get('logging.level');
-  t.equal(value, 'info', 'should return default value for missing key');
+  t.equal(value, 'info',
+    'should return default value for missing key');
 });
 
 
-test('DynamicConfigService get from cache', async (t) => {
-  const mockCache = createMockCache({
+test('DynamicConfigService get from SQL engine', async (t) => {
+  const mockEngine = createMockSqlEngine({
     'logging.level': {
       config_key: 'logging.level',
       config_value: 'debug',
@@ -94,31 +95,34 @@ test('DynamicConfigService get from cache', async (t) => {
     },
   });
   const service = new DynamicConfigService({
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
 
   const value = await service.get('logging.level');
-  t.equal(value, 'debug', 'should return cached value');
+  t.equal(value, 'debug', 'should return value from SQL engine');
 });
 
 test('DynamicConfigService set value', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const service = new DynamicConfigService({
     cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
 
-  const result = await service.set('logging.level', 'warn', 'test-user');
+  const result = await service.set(
+    'logging.level', 'warn', 'test-user',
+  );
 
   t.ok(result.success, 'should succeed');
   t.equal(result.key, 'logging.level', 'should return key');
   t.equal(result.value, 'warn', 'should return value');
-  t.equal(mockCDC.insertedRows.length, 1, 'should insert row');
+  t.equal(mockCDC.insertedRows.length, 1,
+    'should insert row');
   t.equal(
     mockCDC.insertedRows[0].data.config_key,
     'logging.level',
@@ -133,7 +137,7 @@ test('DynamicConfigService set value', async (t) => {
 
 test('DynamicConfigService update existing value', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache({
+  const mockEngine = createMockSqlEngine({
     'logging.level': {
       config_key: 'logging.level',
       config_value: 'info',
@@ -142,15 +146,18 @@ test('DynamicConfigService update existing value', async (t) => {
   });
   const service = new DynamicConfigService({
     cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
 
-  const result = await service.set('logging.level', 'error', 'admin');
+  const result = await service.set(
+    'logging.level', 'error', 'admin',
+  );
 
   t.ok(result.success, 'should succeed');
-  t.equal(mockCDC.updatedRows.length, 1, 'should update row');
+  t.equal(mockCDC.updatedRows.length, 1,
+    'should update row');
   t.equal(
     mockCDC.updatedRows[0].data.updated_by,
     'admin',
@@ -158,20 +165,21 @@ test('DynamicConfigService update existing value', async (t) => {
   );
 });
 
-test('DynamicConfigService validation - invalid log level', async (t) => {
-  const mockCDC = createMockCDCService();
-  const service = new DynamicConfigService({
-    cdcIntegrationService: mockCDC,
-    nodeId: 'test-node',
-  });
-  await service.initialize();
+test('DynamicConfigService validation - invalid log level',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const service = new DynamicConfigService({
+      cdcIntegrationService: mockCDC,
+      nodeId: 'test-node',
+    });
+    await service.initialize();
 
-  await t.rejects(
-    service.set('logging.level', 'invalid-level', 'test'),
-    /Invalid log level/,
-    'should reject invalid log level',
-  );
-});
+    await t.rejects(
+      service.set('logging.level', 'invalid-level', 'test'),
+      /Invalid log level/,
+      'should reject invalid log level',
+    );
+  });
 
 test('DynamicConfigService validation - wrong type', async (t) => {
   const mockCDC = createMockCDCService();
@@ -190,10 +198,10 @@ test('DynamicConfigService validation - wrong type', async (t) => {
 
 test('DynamicConfigService watchers', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const service = new DynamicConfigService({
     cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
@@ -201,15 +209,15 @@ test('DynamicConfigService watchers', async (t) => {
   let watcherCalled = false;
   let receivedNewValue = null;
 
-  const unsubscribe = service.watch('logging.level', (newValue, _oldValue, _key) => {
-    watcherCalled = true;
-    receivedNewValue = newValue;
-  });
+  const unsubscribe = service.watch(
+    'logging.level', (newValue, _oldValue, _key) => {
+      watcherCalled = true;
+      receivedNewValue = newValue;
+    });
 
-  // Set the value (writes to system table via CDC)
   await service.set('logging.level', 'debug', 'test');
 
-  // Simulate CDC event arriving (this is how watchers get notified in production)
+  // Simulate CDC event arriving
   await service.handleCDCEvent({
     operation: 'INSERT',
     data: {
@@ -220,14 +228,14 @@ test('DynamicConfigService watchers', async (t) => {
   });
 
   t.ok(watcherCalled, 'watcher should be called');
-  t.equal(receivedNewValue, 'debug', 'should receive new value');
+  t.equal(receivedNewValue, 'debug',
+    'should receive new value');
 
   // Unsubscribe and verify no more calls
   unsubscribe();
   watcherCalled = false;
 
   await service.set('logging.level', 'info', 'test');
-  // Simulate CDC event
   await service.handleCDCEvent({
     operation: 'UPDATE',
     data: {
@@ -236,15 +244,17 @@ test('DynamicConfigService watchers', async (t) => {
       value_type: 'string',
     },
   });
-  t.notOk(watcherCalled, 'watcher should not be called after unsubscribe');
+  t.notOk(watcherCalled,
+    'watcher should not be called after unsubscribe');
 });
 
 
 test('DynamicConfigService requiresRestart', async (t) => {
-  const service = new DynamicConfigService({nodeId: 'test-node'});
+  const service = new DynamicConfigService({
+    nodeId: 'test-node',
+  });
   await service.initialize();
 
-  // Keys that require restart
   t.ok(
     service.requiresRestart('node.restApiPort'),
     'restApiPort should require restart',
@@ -254,7 +264,6 @@ test('DynamicConfigService requiresRestart', async (t) => {
     'raft election timeout should require restart',
   );
 
-  // Keys that support hot reload
   t.notOk(
     service.requiresRestart('logging.level'),
     'logging.level should not require restart',
@@ -266,13 +275,16 @@ test('DynamicConfigService requiresRestart', async (t) => {
 });
 
 test('DynamicConfigService getRestartRequiredKeys', async (t) => {
-  const service = new DynamicConfigService({nodeId: 'test-node'});
+  const service = new DynamicConfigService({
+    nodeId: 'test-node',
+  });
   await service.initialize();
 
   const restartKeys = service.getRestartRequiredKeys();
 
   t.ok(Array.isArray(restartKeys), 'should return array');
-  t.ok(restartKeys.includes('node.restApiPort'), 'should include restApiPort');
+  t.ok(restartKeys.includes('node.restApiPort'),
+    'should include restApiPort');
   t.ok(
     restartKeys.includes('raft.electionTimeoutMinMs'),
     'should include raft timeout',
@@ -284,13 +296,16 @@ test('DynamicConfigService getRestartRequiredKeys', async (t) => {
 });
 
 test('DynamicConfigService getHotReloadKeys', async (t) => {
-  const service = new DynamicConfigService({nodeId: 'test-node'});
+  const service = new DynamicConfigService({
+    nodeId: 'test-node',
+  });
   await service.initialize();
 
   const hotReloadKeys = service.getHotReloadKeys();
 
   t.ok(Array.isArray(hotReloadKeys), 'should return array');
-  t.ok(hotReloadKeys.includes('logging.level'), 'should include logging.level');
+  t.ok(hotReloadKeys.includes('logging.level'),
+    'should include logging.level');
   t.ok(
     hotReloadKeys.includes('partition.splitThresholdBytes'),
     'should include split threshold',
@@ -303,10 +318,10 @@ test('DynamicConfigService getHotReloadKeys', async (t) => {
 
 test('DynamicConfigService value types', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const service = new DynamicConfigService({
     cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
@@ -320,7 +335,9 @@ test('DynamicConfigService value types', async (t) => {
   );
 
   // Test boolean type
-  await service.set('queryCoordinator.speculativeExecutionEnabled', false, 'test');
+  await service.set(
+    'queryCoordinator.speculativeExecutionEnabled', false, 'test',
+  );
   t.equal(
     mockCDC.insertedRows[1].data.value_type,
     ConfigValueType.BOOLEAN,
@@ -337,23 +354,31 @@ test('DynamicConfigService value types', async (t) => {
 });
 
 test('DynamicConfigService getMetadata', async (t) => {
-  const service = new DynamicConfigService({nodeId: 'test-node'});
+  const service = new DynamicConfigService({
+    nodeId: 'test-node',
+  });
   await service.initialize();
 
   const metadata = service.getMetadata('logging.level');
 
   t.ok(metadata, 'should return metadata');
-  t.equal(metadata.type, ConfigValueType.STRING, 'should have correct type');
-  t.equal(metadata.requiresRestart, false, 'should have requiresRestart');
+  t.equal(metadata.type, ConfigValueType.STRING,
+    'should have correct type');
+  t.equal(metadata.requiresRestart, false,
+    'should have requiresRestart');
   t.ok(metadata.description, 'should have description');
-  t.equal(metadata.defaultValue, 'info', 'should have default value');
+  t.equal(metadata.defaultValue, 'info',
+    'should have default value');
 
   const unknown = service.getMetadata('unknown.key');
-  t.equal(unknown, null, 'should return null for unknown key');
+  t.equal(unknown, null,
+    'should return null for unknown key');
 });
 
 test('DynamicConfigService handleCDCEvent', async (t) => {
-  const service = new DynamicConfigService({nodeId: 'test-node'});
+  const service = new DynamicConfigService({
+    nodeId: 'test-node',
+  });
   await service.initialize();
 
   let watcherCalled = false;
@@ -361,7 +386,6 @@ test('DynamicConfigService handleCDCEvent', async (t) => {
     watcherCalled = true;
   });
 
-  // Simulate CDC event
   await service.handleCDCEvent({
     operation: 'UPDATE',
     data: {
@@ -371,24 +395,23 @@ test('DynamicConfigService handleCDCEvent', async (t) => {
     },
   });
 
-  t.ok(watcherCalled, 'watcher should be called on CDC event');
+  t.ok(watcherCalled,
+    'watcher should be called on CDC event');
 
-  // Verify cache was updated
   const cachedValue = await service.get('logging.level');
   t.equal(cachedValue, 'error', 'cache should be updated');
 });
 
 test('DynamicConfigService getStats', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const service = new DynamicConfigService({
     cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
 
-  // Perform some operations
   await service.get('logging.level');
   await service.set('logging.level', 'debug', 'test');
 
@@ -401,13 +424,15 @@ test('DynamicConfigService getStats', async (t) => {
 });
 
 test('CONFIG_DEFINITIONS coverage', async (t) => {
-  t.ok(Object.keys(CONFIG_DEFINITIONS).length > 0, 'should have definitions');
+  t.ok(Object.keys(CONFIG_DEFINITIONS).length > 0,
+    'should have definitions');
 
-  // Verify all definitions have required fields
   for (const [key, def] of Object.entries(CONFIG_DEFINITIONS)) {
-    t.ok(def.defaultValue !== undefined, `${key} should have defaultValue`);
+    t.ok(def.defaultValue !== undefined,
+      `${key} should have defaultValue`);
     t.ok(def.type, `${key} should have type`);
-    t.ok(typeof def.requiresRestart === 'boolean', `${key} should have requiresRestart`);
+    t.ok(typeof def.requiresRestart === 'boolean',
+      `${key} should have requiresRestart`);
     t.ok(def.description, `${key} should have description`);
   }
 });
@@ -415,10 +440,10 @@ test('CONFIG_DEFINITIONS coverage', async (t) => {
 
 test('DynamicConfigService seedConfiguration', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const service = new DynamicConfigService({
     cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
@@ -426,103 +451,108 @@ test('DynamicConfigService seedConfiguration', async (t) => {
   const result = await service.seedConfiguration('system');
 
   t.ok(result.seeded.length > 0, 'should seed some keys');
-  t.ok(Array.isArray(result.skipped), 'should return skipped array');
+  t.ok(Array.isArray(result.skipped),
+    'should return skipped array');
 
-  // Verify all defined keys were seeded
-  const definedKeyCount = Object.keys(CONFIG_DEFINITIONS).length;
+  const definedKeyCount =
+    Object.keys(CONFIG_DEFINITIONS).length;
   t.equal(
     result.seeded.length,
     definedKeyCount,
     'should seed all defined keys',
   );
 
-  // Verify inserted rows have correct structure
   const firstInsert = mockCDC.insertedRows[0];
   t.ok(firstInsert.data.config_key, 'should have config_key');
-  t.ok(firstInsert.data.config_value !== undefined, 'should have config_value');
+  t.ok(firstInsert.data.config_value !== undefined,
+    'should have config_value');
   t.ok(firstInsert.data.value_type, 'should have value_type');
   t.ok(firstInsert.data.description, 'should have description');
-  t.ok(firstInsert.data.default_value !== undefined, 'should have default_value');
-  t.equal(firstInsert.data.updated_by, 'system', 'should record updatedBy');
+  t.ok(firstInsert.data.default_value !== undefined,
+    'should have default_value');
+  t.equal(firstInsert.data.updated_by, 'system',
+    'should record updatedBy');
 });
 
-test('DynamicConfigService seedConfiguration skips existing', async (t) => {
-  const mockCDC = createMockCDCService();
-  const mockCache = createMockCache({
-    'logging.level': {
-      config_key: 'logging.level',
-      config_value: 'debug',
-      value_type: ConfigValueType.STRING,
-    },
+test('DynamicConfigService seedConfiguration skips existing',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const mockEngine = createMockSqlEngine({
+      'logging.level': {
+        config_key: 'logging.level',
+        config_value: 'debug',
+        value_type: ConfigValueType.STRING,
+      },
+    });
+    const service = new DynamicConfigService({
+      cdcIntegrationService: mockCDC,
+      sqlQueryEngine: mockEngine,
+      nodeId: 'test-node',
+    });
+    await service.initialize();
+
+    const result = await service.seedConfiguration('system');
+
+    t.ok(result.skipped.includes('logging.level'),
+      'should skip existing key');
+    t.notOk(result.seeded.includes('logging.level'),
+      'should not seed existing key');
   });
-  const service = new DynamicConfigService({
-    cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
-    nodeId: 'test-node',
+
+test('DynamicConfigService seedConfiguration from env vars',
+  async (t) => {
+    process.env.NODE_HEARTBEAT_INTERVAL_MS = '5000';
+
+    const mockCDC = createMockCDCService();
+    const mockEngine = createMockSqlEngine();
+    const service = new DynamicConfigService({
+      cdcIntegrationService: mockCDC,
+      sqlQueryEngine: mockEngine,
+      nodeId: 'test-node',
+    });
+    await service.initialize();
+
+    await service.seedConfiguration('system');
+
+    const heartbeatInsert = mockCDC.insertedRows.find(
+      (r) => r.data.config_key === 'node.heartbeatIntervalMs',
+    );
+
+    t.ok(heartbeatInsert,
+      'should insert heartbeat interval');
+    t.equal(
+      heartbeatInsert.data.config_value,
+      '5000',
+      'should use env var value',
+    );
+
+    delete process.env.NODE_HEARTBEAT_INTERVAL_MS;
   });
-  await service.initialize();
-
-  const result = await service.seedConfiguration('system');
-
-  t.ok(result.skipped.includes('logging.level'), 'should skip existing key');
-  t.notOk(result.seeded.includes('logging.level'), 'should not seed existing key');
-});
-
-test('DynamicConfigService seedConfiguration from env vars', async (t) => {
-  // Set environment variable
-  process.env.NODE_HEARTBEAT_INTERVAL_MS = '5000';
-
-  const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
-  const service = new DynamicConfigService({
-    cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
-    nodeId: 'test-node',
-  });
-  await service.initialize();
-
-  await service.seedConfiguration('system');
-
-  // Find the heartbeat interval insert
-  const heartbeatInsert = mockCDC.insertedRows.find(
-    (r) => r.data.config_key === 'node.heartbeatIntervalMs',
-  );
-
-  t.ok(heartbeatInsert, 'should insert heartbeat interval');
-  t.equal(
-    heartbeatInsert.data.config_value,
-    '5000',
-    'should use env var value',
-  );
-
-  // Clean up
-  delete process.env.NODE_HEARTBEAT_INTERVAL_MS;
-});
 
 
 test('DynamicConfigService hot reload notification', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const service = new DynamicConfigService({
     cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
 
   const changes = [];
-  service.watch('partition.splitThresholdBytes', (newValue, oldValue, key) => {
-    changes.push({newValue, oldValue, key});
-  });
+  service.watch(
+    'partition.splitThresholdBytes',
+    (newValue, oldValue, key) => {
+      changes.push({newValue, oldValue, key});
+    });
 
-  // Set a hot-reloadable config
   const result = await service.set(
     'partition.splitThresholdBytes',
     20000000000,
     'admin',
   );
 
-  // Simulate CDC event arriving
   await service.handleCDCEvent({
     operation: 'INSERT',
     data: {
@@ -532,50 +562,56 @@ test('DynamicConfigService hot reload notification', async (t) => {
     },
   });
 
-  t.notOk(result.requiresRestart, 'should not require restart');
+  t.notOk(result.requiresRestart,
+    'should not require restart');
   t.equal(changes.length, 1, 'watcher should be called');
-  t.equal(changes[0].newValue, 20000000000, 'should receive new value');
+  t.equal(changes[0].newValue, 20000000000,
+    'should receive new value');
 });
 
-test('DynamicConfigService restart-required notification', async (t) => {
-  const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
-  const service = new DynamicConfigService({
-    cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
-    nodeId: 'test-node',
+test('DynamicConfigService restart-required notification',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const mockEngine = createMockSqlEngine();
+    const service = new DynamicConfigService({
+      cdcIntegrationService: mockCDC,
+      sqlQueryEngine: mockEngine,
+      nodeId: 'test-node',
+    });
+    await service.initialize();
+
+    const changes = [];
+    service.watch('node.restApiPort',
+      (newValue, oldValue, key) => {
+        changes.push({newValue, oldValue, key});
+      });
+
+    const result = await service.set(
+      'node.restApiPort', 9090, 'admin',
+    );
+
+    await service.handleCDCEvent({
+      operation: 'INSERT',
+      data: {
+        config_key: 'node.restApiPort',
+        config_value: '9090',
+        value_type: 'number',
+      },
+    });
+
+    t.ok(result.requiresRestart, 'should require restart');
+    t.equal(changes.length, 1,
+      'watcher should still be called');
+    t.equal(changes[0].newValue, 9090,
+      'should receive new value');
   });
-  await service.initialize();
-
-  const changes = [];
-  service.watch('node.restApiPort', (newValue, oldValue, key) => {
-    changes.push({newValue, oldValue, key});
-  });
-
-  // Set a restart-required config
-  const result = await service.set('node.restApiPort', 9090, 'admin');
-
-  // Simulate CDC event arriving
-  await service.handleCDCEvent({
-    operation: 'INSERT',
-    data: {
-      config_key: 'node.restApiPort',
-      config_value: '9090',
-      value_type: 'number',
-    },
-  });
-
-  t.ok(result.requiresRestart, 'should require restart');
-  t.equal(changes.length, 1, 'watcher should still be called');
-  t.equal(changes[0].newValue, 9090, 'should receive new value');
-});
 
 test('DynamicConfigService multiple watchers', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const service = new DynamicConfigService({
     cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
@@ -592,7 +628,6 @@ test('DynamicConfigService multiple watchers', async (t) => {
 
   await service.set('logging.level', 'debug', 'test');
 
-  // Simulate CDC event arriving
   await service.handleCDCEvent({
     operation: 'INSERT',
     data: {
@@ -608,10 +643,10 @@ test('DynamicConfigService multiple watchers', async (t) => {
 
 test('DynamicConfigService event emission', async (t) => {
   const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const service = new DynamicConfigService({
     cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
@@ -619,16 +654,16 @@ test('DynamicConfigService event emission', async (t) => {
   let eventReceived = false;
   service.on('change', (event) => {
     eventReceived = true;
-    t.equal(event.key, 'logging.level', 'should have correct key');
-    t.equal(event.newValue, 'warn', 'should have new value');
+    t.equal(event.key, 'logging.level',
+      'should have correct key');
+    t.equal(event.newValue, 'warn',
+      'should have new value');
   });
 
-  // Register a watcher to trigger event emission
   service.watch('logging.level', () => {});
 
   await service.set('logging.level', 'warn', 'test');
 
-  // Simulate CDC event arriving
   await service.handleCDCEvent({
     operation: 'INSERT',
     data: {
@@ -642,147 +677,171 @@ test('DynamicConfigService event emission', async (t) => {
 });
 
 
-test('DynamicConfigService validation - negative number', async (t) => {
-  const mockCDC = createMockCDCService();
-  const service = new DynamicConfigService({
-    cdcIntegrationService: mockCDC,
-    nodeId: 'test-node',
+test('DynamicConfigService validation - negative number',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const service = new DynamicConfigService({
+      cdcIntegrationService: mockCDC,
+      nodeId: 'test-node',
+    });
+    await service.initialize();
+
+    await t.rejects(
+      service.set('node.heartbeatIntervalMs', -100, 'test'),
+      /Value must be non-negative/,
+      'should reject negative values',
+    );
   });
-  await service.initialize();
 
-  await t.rejects(
-    service.set('node.heartbeatIntervalMs', -100, 'test'),
-    /Value must be non-negative/,
-    'should reject negative values',
-  );
-});
+test('DynamicConfigService validation - boolean type',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const service = new DynamicConfigService({
+      cdcIntegrationService: mockCDC,
+      nodeId: 'test-node',
+    });
+    await service.initialize();
 
-test('DynamicConfigService validation - boolean type', async (t) => {
-  const mockCDC = createMockCDCService();
-  const service = new DynamicConfigService({
-    cdcIntegrationService: mockCDC,
-    nodeId: 'test-node',
+    await t.rejects(
+      service.set(
+        'queryCoordinator.speculativeExecutionEnabled',
+        'yes', 'test',
+      ),
+      /Expected boolean/,
+      'should reject non-boolean for boolean config',
+    );
   });
-  await service.initialize();
 
-  await t.rejects(
-    service.set('queryCoordinator.speculativeExecutionEnabled', 'yes', 'test'),
-    /Expected boolean/,
-    'should reject non-boolean for boolean config',
-  );
-});
+test('DynamicConfigService auditing - timestamp recorded',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const mockEngine = createMockSqlEngine();
+    const service = new DynamicConfigService({
+      cdcIntegrationService: mockCDC,
+      sqlQueryEngine: mockEngine,
+      nodeId: 'test-node',
+    });
+    await service.initialize();
 
-test('DynamicConfigService auditing - timestamp recorded', async (t) => {
-  const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
-  const service = new DynamicConfigService({
-    cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
-    nodeId: 'test-node',
+    const beforeTime = Date.now();
+    await service.set('logging.level', 'debug', 'admin-user');
+    const afterTime = Date.now();
+
+    const insert = mockCDC.insertedRows[0];
+    t.ok(insert.data.updated_at >= beforeTime,
+      'should have timestamp >= before');
+    t.ok(insert.data.updated_at <= afterTime,
+      'should have timestamp <= after');
+    t.ok(insert.data.created_at >= beforeTime,
+      'should have created_at');
   });
-  await service.initialize();
 
-  const beforeTime = Date.now();
-  await service.set('logging.level', 'debug', 'admin-user');
-  const afterTime = Date.now();
+test('DynamicConfigService auditing - updatedBy recorded',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const mockEngine = createMockSqlEngine();
+    const service = new DynamicConfigService({
+      cdcIntegrationService: mockCDC,
+      sqlQueryEngine: mockEngine,
+      nodeId: 'test-node',
+    });
+    await service.initialize();
 
-  const insert = mockCDC.insertedRows[0];
-  t.ok(insert.data.updated_at >= beforeTime, 'should have timestamp >= before');
-  t.ok(insert.data.updated_at <= afterTime, 'should have timestamp <= after');
-  t.ok(insert.data.created_at >= beforeTime, 'should have created_at');
-});
+    await service.set(
+      'logging.level', 'debug', 'operator@example.com',
+    );
 
-test('DynamicConfigService auditing - updatedBy recorded', async (t) => {
-  const mockCDC = createMockCDCService();
-  const mockCache = createMockCache();
-  const service = new DynamicConfigService({
-    cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
-    nodeId: 'test-node',
+    const insert = mockCDC.insertedRows[0];
+    t.equal(
+      insert.data.updated_by,
+      'operator@example.com',
+      'should record who made the change',
+    );
   });
-  await service.initialize();
 
-  await service.set('logging.level', 'debug', 'operator@example.com');
+test('DynamicConfigService auditing - update records change',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const mockEngine = createMockSqlEngine({
+      'logging.level': {
+        config_key: 'logging.level',
+        config_value: 'info',
+        value_type: ConfigValueType.STRING,
+      },
+    });
+    const service = new DynamicConfigService({
+      cdcIntegrationService: mockCDC,
+      sqlQueryEngine: mockEngine,
+      nodeId: 'test-node',
+    });
+    await service.initialize();
 
-  const insert = mockCDC.insertedRows[0];
-  t.equal(
-    insert.data.updated_by,
-    'operator@example.com',
-    'should record who made the change',
-  );
-});
+    await service.set(
+      'logging.level', 'error', 'security-admin',
+    );
 
-test('DynamicConfigService auditing - update records change', async (t) => {
-  const mockCDC = createMockCDCService();
-  const mockCache = createMockCache({
-    'logging.level': {
-      config_key: 'logging.level',
-      config_value: 'info',
-      value_type: ConfigValueType.STRING,
-    },
+    const update = mockCDC.updatedRows[0];
+    t.equal(update.data.updated_by, 'security-admin',
+      'should record updater');
+    t.ok(update.data.updated_at, 'should record update time');
   });
-  const service = new DynamicConfigService({
-    cdcIntegrationService: mockCDC,
-    systemTableCache: mockCache,
-    nodeId: 'test-node',
-  });
-  await service.initialize();
-
-  await service.set('logging.level', 'error', 'security-admin');
-
-  const update = mockCDC.updatedRows[0];
-  t.equal(update.data.updated_by, 'security-admin', 'should record updater');
-  t.ok(update.data.updated_at, 'should record update time');
-});
 
 test('DynamicConfigService validateValue method', async (t) => {
-  const service = new DynamicConfigService({nodeId: 'test-node'});
+  const service = new DynamicConfigService({
+    nodeId: 'test-node',
+  });
   await service.initialize();
 
-  // Valid string
   let result = service.validateValue('logging.level', 'debug');
   t.ok(result.valid, 'should accept valid log level');
 
-  // Invalid string type
   result = service.validateValue('logging.level', 123);
-  t.notOk(result.valid, 'should reject number for string config');
-  t.ok(result.error.includes('Expected string'), 'should have type error');
+  t.notOk(result.valid,
+    'should reject number for string config');
+  t.ok(result.error.includes('Expected string'),
+    'should have type error');
 
-  // Valid number
-  result = service.validateValue('node.heartbeatIntervalMs', 2000);
+  result = service.validateValue(
+    'node.heartbeatIntervalMs', 2000,
+  );
   t.ok(result.valid, 'should accept valid number');
 
-  // Invalid number type
-  result = service.validateValue('node.heartbeatIntervalMs', 'fast');
-  t.notOk(result.valid, 'should reject string for number config');
+  result = service.validateValue(
+    'node.heartbeatIntervalMs', 'fast',
+  );
+  t.notOk(result.valid,
+    'should reject string for number config');
 
-  // Valid boolean
-  result = service.validateValue('queryCoordinator.speculativeExecutionEnabled', true);
+  result = service.validateValue(
+    'queryCoordinator.speculativeExecutionEnabled', true,
+  );
   t.ok(result.valid, 'should accept valid boolean');
 
-  // Unknown key (should be allowed)
-  result = service.validateValue('custom.unknown.key', 'any value');
+  result = service.validateValue(
+    'custom.unknown.key', 'any value',
+  );
   t.ok(result.valid, 'should allow unknown keys');
 });
 
 test('DynamicConfigService getAll returns defaults', async (t) => {
-  const mockCache = createMockCache();
+  const mockEngine = createMockSqlEngine();
   const service = new DynamicConfigService({
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
 
   const all = await service.getAll();
 
-  // Should have all defined keys with defaults
   t.ok('logging.level' in all, 'should have logging.level');
-  t.equal(all['logging.level'], 'info', 'should have default value');
-  t.ok('node.heartbeatIntervalMs' in all, 'should have heartbeat interval');
+  t.equal(all['logging.level'], 'info',
+    'should have default value');
+  t.ok('node.heartbeatIntervalMs' in all,
+    'should have heartbeat interval');
 });
 
 test('DynamicConfigService clearCache', async (t) => {
-  const mockCache = createMockCache({
+  const mockEngine = createMockSqlEngine({
     'logging.level': {
       config_key: 'logging.level',
       config_value: 'debug',
@@ -790,18 +849,16 @@ test('DynamicConfigService clearCache', async (t) => {
     },
   });
   const service = new DynamicConfigService({
-    systemTableCache: mockCache,
+    sqlQueryEngine: mockEngine,
     nodeId: 'test-node',
   });
   await service.initialize();
 
-  // Get value to populate local cache
   await service.get('logging.level');
 
-  // Clear cache
   service.clearCache();
 
-  // Stats should show cache is empty
   const stats = service.getStats();
-  t.equal(stats.cachedKeys, 0, 'cache should be empty after clear');
+  t.equal(stats.cachedKeys, 0,
+    'cache should be empty after clear');
 });

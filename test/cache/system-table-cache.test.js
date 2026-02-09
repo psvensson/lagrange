@@ -190,6 +190,27 @@ test('SystemTableCache - applySystemTableChange UPDATE', async (t) => {
   t.equal(result.address, '127.0.0.1:8080', 'Should preserve other fields');
 });
 
+test('SystemTableCache - stale UPDATE is ignored when existing row is newer', async (t) => {
+  const cache = new SystemTableCache();
+
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-1',
+    status: 'active',
+    updated_at: 200,
+    created_at: 100,
+  });
+
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, {
+    node_id: 'node-1',
+    status: 'inactive',
+    updated_at: 150,
+  });
+
+  const result = cache.get('nodes', 'node-1');
+  t.equal(result.status, 'active', 'stale update should not override newer cache row');
+  t.equal(result.updated_at, 200, 'updated_at should remain at newer timestamp');
+});
+
 test('SystemTableCache - applySystemTableChange DELETE', async (t) => {
   const cache = new SystemTableCache();
 
@@ -205,6 +226,69 @@ test('SystemTableCache - applySystemTableChange DELETE', async (t) => {
   });
 
   t.equal(cache.has('nodes', 'node-1'), false, 'Should not exist after delete');
+});
+
+test('SystemTableCache - stale DELETE is ignored when existing row is newer', async (t) => {
+  const cache = new SystemTableCache();
+
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-1',
+    status: 'active',
+    updated_at: 300,
+    created_at: 200,
+  });
+
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.DELETE, {
+    node_id: 'node-1',
+    updated_at: 150,
+  });
+
+  t.equal(cache.has('nodes', 'node-1'), true, 'stale delete should not remove newer row');
+});
+
+test('SystemTableCache - expected CDC idempotency paths should not warn', async (t) => {
+  const cache = new SystemTableCache();
+  const warnLogs = [];
+  cache.logger = {
+    ...cache.logger,
+    warn: (...args) => warnLogs.push(args),
+  };
+
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-1',
+    status: 'active',
+    updated_at: 300,
+    created_at: 200,
+  });
+
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, {
+    node_id: 'node-1',
+    status: 'inactive',
+    updated_at: 100,
+  });
+
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-1',
+    status: 'active',
+    updated_at: 400,
+  });
+
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, {
+    node_id: 'node-2',
+    status: 'active',
+    updated_at: 500,
+  });
+
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.DELETE, {
+    node_id: 'node-3',
+    updated_at: 600,
+  });
+
+  t.equal(
+    warnLogs.length,
+    0,
+    'stale/duplicate/missing-key CDC handling should be non-warning in normal flows',
+  );
 });
 
 test('SystemTableCache - validates table name', async (t) => {

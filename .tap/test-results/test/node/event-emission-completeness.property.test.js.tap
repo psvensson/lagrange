@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: events contain all required fields
         ok 1 - events contain all required fields
         1..1
-    ok 1 - events contain all required fields # time=7.132ms
+    ok 1 - events contain all required fields # time=7.494ms
     
     # Subtest: events emitted synchronously
         ok 1 - events emitted synchronously
         1..1
-    ok 2 - events emitted synchronously # time=2.244ms
+    ok 2 - events emitted synchronously # time=1.284ms
     
     # Subtest: failed transitions include error message
         ok 1 - failed transitions include error message
         1..1
-    ok 3 - failed transitions include error message # time=2.402ms
+    ok 3 - failed transitions include error message # time=1.418ms
     
     # Subtest: multiple observers receive events
         ok 1 - multiple observers receive events
         1..1
-    ok 4 - multiple observers receive events # time=1.056ms
+    ok 4 - multiple observers receive events # time=1.093ms
     
     # Subtest: timeInPreviousState calculated correctly
         ok 1 - timeInPreviousState calculated correctly
         1..1
-    ok 5 - timeInPreviousState calculated correctly # time=2.492ms
+    ok 5 - timeInPreviousState calculated correctly # time=1.205ms
     
     # Subtest: each transition emits an event
         ok 1 - each transition emits an event
         1..1
-    ok 6 - each transition emits an event # time=1.73ms
+    ok 6 - each transition emits an event # time=1.93ms
     
     1..6
-ok 1 - Property 8: Event Emission Completeness # time=165.806ms
+ok 1 - Property 8: Event Emission Completeness # time=161.961ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=173.284ms
+# time=169.318ms

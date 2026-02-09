@@ -8,19 +8,14 @@ import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {STATE, TABLES, TRANSPORT_TYPE, ENDPOINT_STATUS} from '../../src/constants/index.js';
 
-test('registerNodeInCluster() - should execute INSERT query with correct parameters', async (t) => {
-  // Create a mock SQL query engine
-  const executedQueries = [];
-  const mockQueryEngine = {
-    executeQuery: async (sql, params) => {
-      executedQueries.push({sql, params});
+test('registerNodeInCluster() - should execute UPSERT writes with correct data', async (t) => {
+  const upsertCalls = [];
+  const mockCDCService = {
+    sqlQueryEngine: {},
+    upsertSystemTableRow: async (tableName, rowData) => {
+      upsertCalls.push({tableName, rowData});
       return {success: true};
     },
-  };
-
-  // Create a mock CDC integration service
-  const mockCDCService = {
-    sqlQueryEngine: mockQueryEngine,
   };
 
   // Create NodeJoiningService instance
@@ -36,54 +31,36 @@ test('registerNodeInCluster() - should execute INSERT query with correct paramet
   // Call registerNodeInCluster
   await service.registerNodeInCluster();
 
-  // Verify two queries were executed (nodes + node_endpoints)
-  t.equal(executedQueries.length, 2, 'should execute two queries');
+  t.equal(upsertCalls.length, 2, 'should execute two upserts');
 
-  // Verify nodes table query
-  const nodesQuery = executedQueries[0];
-  t.ok(nodesQuery.sql.includes('INSERT INTO nodes'), 'should be INSERT INTO nodes');
-  t.ok(nodesQuery.sql.includes('node_id'), 'should include node_id column');
-  t.ok(nodesQuery.sql.includes('node_address'), 'should include node_address column');
-  t.ok(nodesQuery.sql.includes('cpu_cores'), 'should include cpu_cores column');
-  t.ok(nodesQuery.sql.includes('memory_mb'), 'should include memory_mb column');
-  t.ok(nodesQuery.sql.includes('disk_gb'), 'should include disk_gb column');
-  t.ok(nodesQuery.sql.includes('status'), 'should include status column');
-  t.ok(nodesQuery.sql.includes('ws_connection_state'), 'should include ws_connection_state column');
+  const nodeCall = upsertCalls[0];
+  t.equal(nodeCall.tableName, TABLES.NODES, 'should upsert nodes table');
+  t.equal(nodeCall.rowData.node_id, 'test-node-123', 'should use correct node_id');
+  t.equal(nodeCall.rowData.node_address, 'ws://localhost:9000', 'should use correct node_address');
+  t.ok(nodeCall.rowData.cpu_cores > 0, 'should have cpu_cores > 0');
+  t.ok(nodeCall.rowData.memory_mb > 0, 'should have memory_mb > 0');
+  t.ok(nodeCall.rowData.disk_gb > 0, 'should have disk_gb > 0');
+  t.equal(nodeCall.rowData.status, STATE.ACTIVE, 'should set status to ACTIVE');
+  t.equal(nodeCall.rowData.ws_connection_state, STATE.CONNECTED,
+    'should set ws_connection_state to CONNECTED');
 
-  // Verify nodes parameters
-  t.equal(nodesQuery.params[0], 'test-node-123', 'should use correct node_id');
-  t.equal(nodesQuery.params[1], 'ws://localhost:9000', 'should use correct node_address');
-  t.ok(nodesQuery.params[2] > 0, 'should have cpu_cores > 0');
-  t.ok(nodesQuery.params[3] > 0, 'should have memory_mb > 0');
-  t.ok(nodesQuery.params[4] > 0, 'should have disk_gb > 0');
-  t.equal(nodesQuery.params[8], STATE.ACTIVE, 'should set status to ACTIVE');
-  t.equal(nodesQuery.params[9], STATE.CONNECTED, 'should set ws_connection_state to CONNECTED');
-
-  // Verify node_endpoints table query
-  const endpointQuery = executedQueries[1];
-  t.ok(
-    endpointQuery.sql.includes(`INSERT INTO ${TABLES.NODE_ENDPOINTS}`),
-    'should be INSERT INTO node_endpoints',
-  );
-  t.equal(endpointQuery.params[0], 'ep-test-node-123-ws', 'should use correct endpoint_id');
-  t.equal(endpointQuery.params[1], 'test-node-123', 'should use correct node_id');
-  t.equal(endpointQuery.params[2], TRANSPORT_TYPE.WEBSOCKET, 'should use ws transport type');
-  t.equal(endpointQuery.params[3], 'ws://localhost:9000', 'should use correct address');
-  t.equal(endpointQuery.params[4], 0, 'should use priority 0');
-  t.equal(endpointQuery.params[6], ENDPOINT_STATUS.ACTIVE, 'should set status to active');
+  const endpointCall = upsertCalls[1];
+  t.equal(endpointCall.tableName, TABLES.NODE_ENDPOINTS, 'should upsert node_endpoints table');
+  t.equal(endpointCall.rowData.endpoint_id, 'ep-test-node-123-ws', 'should use correct endpoint_id');
+  t.equal(endpointCall.rowData.node_id, 'test-node-123', 'should use correct node_id');
+  t.equal(endpointCall.rowData.transport_type, TRANSPORT_TYPE.WEBSOCKET,
+    'should use ws transport type');
+  t.equal(endpointCall.rowData.address, 'ws://localhost:9000', 'should use correct address');
+  t.equal(endpointCall.rowData.priority, 0, 'should use priority 0');
+  t.equal(endpointCall.rowData.status, ENDPOINT_STATUS.ACTIVE, 'should set status to active');
 });
 
 test('registerNodeInCluster() - should throw error if query fails', async (t) => {
-  // Create a mock SQL query engine that fails
-  const mockQueryEngine = {
-    executeQuery: async () => {
+  const mockCDCService = {
+    sqlQueryEngine: {},
+    upsertSystemTableRow: async () => {
       return {success: false, error: 'Database error'};
     },
-  };
-
-  // Create a mock CDC integration service
-  const mockCDCService = {
-    sqlQueryEngine: mockQueryEngine,
   };
 
   // Create NodeJoiningService instance

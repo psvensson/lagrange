@@ -69,6 +69,40 @@ function createMockCDCService(caches) {
 }
 
 /**
+ * Create a mock SQL query engine backed by a SystemTableCache.
+ * @param {SystemTableCache} cache - Cache to read from.
+ * @return {Object} Mock SQL query engine.
+ */
+function createSqlEngineFromCache(cache) {
+  return {
+    executeQuery: async (sql, params) => {
+      const allRows = cache.getAll('contexts') || [];
+      if (sql.includes('WHERE context_type = ?') &&
+          sql.includes('AND context_name = ?')) {
+        const rows = allRows.filter((r) =>
+          r.context_type === params[0] &&
+          r.context_name === params[1],
+        );
+        return {rows};
+      }
+      if (sql.includes('WHERE owner_id = ?')) {
+        const rows = allRows.filter((r) =>
+          r.owner_id === params[0],
+        );
+        return {rows};
+      }
+      if (sql.includes('WHERE context_type = ?')) {
+        const rows = allRows.filter((r) =>
+          r.context_type === params[0],
+        );
+        return {rows};
+      }
+      return {rows: allRows};
+    },
+  };
+}
+
+/**
  * Arbitrary for valid context types.
  */
 const contextTypeArbitrary = fc.constantFrom(
@@ -167,6 +201,7 @@ test('Property 36: setContext propagates via CDC to all caches', async (t) => {
         const contextManager = new ContextManager({
           systemTableCache: caches[0],
           cdcIntegrationService: cdcService,
+          sqlQueryEngine: createSqlEngineFromCache(caches[0]),
         });
 
         // Perform setContext operation
@@ -230,6 +265,7 @@ test('Property 36: Multiple context updates maintain CDC consistency', async (t)
         const contextManager = new ContextManager({
           systemTableCache: caches[0],
           cdcIntegrationService: cdcService,
+          sqlQueryEngine: createSqlEngineFromCache(caches[0]),
         });
 
         // Apply all operations
@@ -273,6 +309,7 @@ test('Property 36: Context updates propagate via CDC', async (t) => {
         const contextManager = new ContextManager({
           systemTableCache: caches[0],
           cdcIntegrationService: cdcService,
+          sqlQueryEngine: createSqlEngineFromCache(caches[0]),
         });
 
         // Create initial context
@@ -341,6 +378,7 @@ test('Property 36: Context deletion propagates via CDC', async (t) => {
         const contextManager = new ContextManager({
           systemTableCache: caches[0],
           cdcIntegrationService: cdcService,
+          sqlQueryEngine: createSqlEngineFromCache(caches[0]),
         });
 
         // Create context
@@ -412,6 +450,7 @@ test('Property 36: Context data retrievable from any cache', async (t) => {
         const contextManager = new ContextManager({
           systemTableCache: caches[0],
           cdcIntegrationService: cdcService,
+          sqlQueryEngine: createSqlEngineFromCache(caches[0]),
         });
 
         await contextManager.setContext(
@@ -426,9 +465,10 @@ test('Property 36: Context data retrievable from any cache', async (t) => {
           const manager = new ContextManager({
             systemTableCache: caches[i],
             cdcIntegrationService: cdcService,
+            sqlQueryEngine: createSqlEngineFromCache(caches[i]),
           });
 
-          const retrieved = manager.getContext(
+          const retrieved = await manager.getContext(
             operation.contextType,
             operation.contextName,
           );

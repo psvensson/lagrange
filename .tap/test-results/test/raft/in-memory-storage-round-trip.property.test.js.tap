@@ -3,38 +3,38 @@ TAP version 14
     # Subtest: saveCommand round-trip preserves value
         ok 1 - saveCommand round-trip preserves value
         1..1
-    ok 1 - saveCommand round-trip preserves value # time=12.641ms
+    ok 1 - saveCommand round-trip preserves value # time=11.076ms
     
     # Subtest: getLastEntry returns the last saved entry
         ok 1 - getLastEntry returns the last saved entry
         1..1
-    ok 2 - getLastEntry returns the last saved entry # time=1.789ms
+    ok 2 - getLastEntry returns the last saved entry # time=1.737ms
     
     # Subtest: getLastEntry returns default for empty log
         ok 1 - index should be 0 for empty log
         ok 2 - term should match node term
         1..2
-    ok 3 - getLastEntry returns default for empty log # time=0.662ms
+    ok 3 - getLastEntry returns default for empty log # time=0.616ms
     
     # Subtest: getLastInfo returns correct info
         ok 1 - getLastInfo returns correct info
         1..1
-    ok 4 - getLastInfo returns correct info # time=1.727ms
+    ok 4 - getLastInfo returns correct info # time=1.964ms
     
     # Subtest: has returns true for existing entries
         ok 1 - has returns true for existing entries
         1..1
-    ok 5 - has returns true for existing entries # time=1.192ms
+    ok 5 - has returns true for existing entries # time=1.427ms
     
-    # Subtest: get throws for non-existent entries
-        ok 1 - error should have notFound flag
+    # Subtest: get returns null for non-existent entries
+        ok 1 - missing entries should return null
         1..1
-    ok 6 - get throws for non-existent entries # time=0.491ms
+    ok 6 - get returns null for non-existent entries # time=0.425ms
     
     # Subtest: getEntriesAfter returns entries after index
         ok 1 - getEntriesAfter returns entries after index
         1..1
-    ok 7 - getEntriesAfter returns entries after index # time=1.73ms
+    ok 7 - getEntriesAfter returns entries after index # time=1.663ms
     
     # Subtest: commit marks entry as committed
         ok 1 - commit marks entry as committed
@@ -46,18 +46,18 @@ TAP version 14
         ok 2 - committedIndex should be 0
         ok 3 - getLastEntry should return default
         1..3
-    ok 9 - end clears all entries # time=0.651ms
+    ok 9 - end clears all entries # time=0.644ms
     
     # Subtest: commandAck adds acknowledgment
         ok 1 - should have 1 initial response
         ok 2 - should have 2 responses after ack
         ok 3 - should have ack from other-node
         1..3
-    ok 10 - commandAck adds acknowledgment # time=0.706ms
+    ok 10 - commandAck adds acknowledgment # time=0.745ms
     
     1..10
-ok 1 - Property 1: In-Memory Storage Round-Trip # time=28.24ms
+ok 1 - Property 1: In-Memory Storage Round-Trip # time=29.933ms
 
 1..1
 # { total: 15, pass: 15 }
-# time=36.011ms
+# time=35.476ms

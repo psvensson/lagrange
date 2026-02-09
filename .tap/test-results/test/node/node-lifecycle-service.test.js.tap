@@ -3,22 +3,22 @@ TAP version 14
     ok 1 - should set nodeId
     ok 2 - should not be initialized
     1..2
-ok 1 - NodeLifecycleService - constructor # time=3.672ms
+ok 1 - NodeLifecycleService - constructor # time=3.35ms
 
 # Subtest: NodeLifecycleService - initialize
     ok 1 - should be initialized
     1..1
-ok 2 - NodeLifecycleService - initialize # time=0.85ms
+ok 2 - NodeLifecycleService - initialize # time=2.053ms
 
 # Subtest: NodeLifecycleService - initialize requires cdcIntegrationService
     ok 1 - should have error message
     1..1
-ok 3 - NodeLifecycleService - initialize requires cdcIntegrationService # time=0.715ms
+ok 3 - NodeLifecycleService - initialize requires cdcIntegrationService # time=0.529ms
 
 # Subtest: NodeLifecycleService - initialize requires nodeId
     ok 1 - should have error message
     1..1
-ok 4 - NodeLifecycleService - initialize requires nodeId # time=0.791ms
+ok 4 - NodeLifecycleService - initialize requires nodeId # time=0.465ms
 
 # Subtest: NodeLifecycleService - registerNode
     ok 1 - should succeed
@@ -28,7 +28,7 @@ ok 4 - NodeLifecycleService - initialize requires nodeId # time=0.791ms
     ok 5 - should have correct node_id
     ok 6 - should have active status
     1..6
-ok 5 - NodeLifecycleService - registerNode # time=1.54ms
+ok 5 - NodeLifecycleService - registerNode # time=1.365ms
 
 # Subtest: NodeLifecycleService - updateHeartbeat
     ok 1 - should succeed
@@ -39,28 +39,7 @@ ok 5 - NodeLifecycleService - registerNode # time=1.54ms
     ok 6 - should have last_heartbeat
     ok 7 - should have cpu_usage_percent
     1..7
-ok 6 - NodeLifecycleService - updateHeartbeat # time=1.815ms
-
-# Subtest: NodeLifecycleService - markNodeFailed
-    ok 1 - should succeed
-    ok 2 - should have one operation
-    ok 3 - should be update
-    ok 4 - should set status to failed
-    1..4
-ok 7 - NodeLifecycleService - markNodeFailed # time=0.81ms
-
-# Subtest: NodeLifecycleService - markNodeSuspected
-    ok 1 - should succeed
-    ok 2 - should set status to suspected
-    1..2
-ok 8 - NodeLifecycleService - markNodeSuspected # time=0.986ms
-
-# Subtest: NodeLifecycleService - markNodeActive
-    ok 1 - should succeed
-    ok 2 - should set status to active
-    ok 3 - should update last_heartbeat
-    1..3
-ok 9 - NodeLifecycleService - markNodeActive # time=0.685ms
+ok 6 - NodeLifecycleService - updateHeartbeat # time=2.851ms
 
 # Subtest: NodeLifecycleService - removeNode
     ok 1 - should succeed
@@ -68,39 +47,25 @@ ok 9 - NodeLifecycleService - markNodeActive # time=0.685ms
     ok 3 - should be delete
     ok 4 - should have correct whereClause
     1..4
-ok 10 - NodeLifecycleService - removeNode # time=3.147ms
+ok 7 - NodeLifecycleService - removeNode # time=0.981ms
 
-# Subtest: NodeLifecycleService - emits events
-    ok 1 - should emit 6 events
+# Subtest: NodeLifecycleService - emits events for write operations
+    ok 1 - should emit 3 events
     ok 2 - should emit registered
     ok 3 - should emit heartbeat
-    ok 4 - should emit suspected
-    ok 5 - should emit failed
-    ok 6 - should emit active
-    ok 7 - should emit removed
-    1..7
-ok 11 - NodeLifecycleService - emits events # time=0.831ms
-
-# Subtest: NodeLifecycleService - tracks known nodes
-    ok 1 - should track 2 nodes
-    ok 2 - should have n1
-    ok 3 - should have n2
-    ok 4 - should have 1 node after removal
-    ok 5 - should not have n1
-    1..5
-ok 12 - NodeLifecycleService - tracks known nodes # time=0.756ms
+    ok 4 - should emit removed
+    1..4
+ok 8 - NodeLifecycleService - emits events for write operations # time=1.099ms
 
 # Subtest: NodeLifecycleService - throws when not initialized
     ok 1 - should have error message
     1..1
-ok 13 - NodeLifecycleService - throws when not initialized # time=1.037ms
+ok 9 - NodeLifecycleService - throws when not initialized # time=0.589ms
 
 # Subtest: NodeLifecycleService - shutdown
-    ok 1 - should have 1 node
-    ok 2 - should not be initialized
-    ok 3 - should clear known nodes
-    1..3
-ok 14 - NodeLifecycleService - shutdown # time=0.48ms
+    ok 1 - should not be initialized
+    1..1
+ok 10 - NodeLifecycleService - shutdown # time=0.633ms
 
 # Subtest: NodeLifecycleService - NodeLifecycleStatus values
     ok 1 - should have active
@@ -109,8 +74,27 @@ ok 14 - NodeLifecycleService - shutdown # time=0.48ms
     ok 4 - should have shutting_down
     ok 5 - should have stopped
     1..5
-ok 15 - NodeLifecycleService - NodeLifecycleStatus values # time=0.615ms
+ok 11 - NodeLifecycleService - NodeLifecycleStatus values # time=0.722ms
 
-1..15
-# { total: 52, pass: 52 }
-# time=415.379ms
+# Subtest: NodeLifecycleService - does not have failure detection methods
+    ok 1 - should not have detectFailedNodes
+    ok 2 - should not have startFailureDetection
+    ok 3 - should not have stopFailureDetection
+    ok 4 - should not have markNodeFailed
+    ok 5 - should not have markNodeSuspected
+    ok 6 - should not have markNodeActive
+    ok 7 - should not have getKnownNodes
+    1..7
+ok 12 - NodeLifecycleService - does not have failure detection methods # time=1.018ms
+
+# Subtest: NodeLifecycleService - does not have failure detection fields
+    ok 1 - should not have knownNodes
+    ok 2 - should not have failureDetectionTimer
+    ok 3 - should not have heartbeatTimeoutMs
+    ok 4 - should not have failureDetectionIntervalMs
+    1..4
+ok 13 - NodeLifecycleService - does not have failure detection fields # time=0.671ms
+
+1..13
+# { total: 44, pass: 44 }
+# time=375.823ms

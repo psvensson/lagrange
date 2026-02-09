@@ -142,6 +142,7 @@ function createMockMessageRouter() {
 function createMockRebalanceCoordinator() {
   let counter = 0;
   return {
+    getMoveSafetyError: () => null,
     async createOperation({type, partitionId, nodeId, replicaId}) {
       counter += 1;
       return {
@@ -444,11 +445,15 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         t.ok(Array.isArray(rebalanceResult.moves), 'rebalance should return moves');
 
         const addMoves = rebalanceResult.moves.filter((move) => move.operation === 'add');
-        t.ok(addMoves.length > 0, 'should have add replica moves');
-
+        const replaceMoves = rebalanceResult.moves.filter((move) => move.operation === 'replace');
+        t.equal(
+          addMoves.length,
+          0,
+          'should avoid standalone add moves when degraded topology is already at target',
+        );
         t.ok(
-          addMoves.some((move) => move.nodeId === secondNodeId),
-          'add move should target second node',
+          replaceMoves.length >= 1,
+          'should schedule REPLACE moves for spread correction under degraded topology',
         );
       } finally {
         // ========================================
@@ -569,7 +574,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
     }
   });
 
-  t.test('rebalancer only spreads when multiple nodes available', async (t) => {
+  t.test('rebalancer schedules REPLACE moves in degraded two-node topology', async (t) => {
     const nodeId = 'single-node';
     let rebalancer = null;
 
@@ -648,7 +653,16 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
       const result2 = await rebalancer.rebalance('node_join');
 
       t.equal(result2.success, true, 'rebalance should succeed');
-      t.ok(result2.moves.length > 0, 'should have moves with two nodes');
+      t.equal(
+        result2.moves.length,
+        1,
+        'should schedule one paired replacement move with two ready nodes',
+      );
+      t.equal(
+        result2.moves[0].operation,
+        'replace',
+        'scheduled degraded move should use REPLACE workflow',
+      );
     } finally {
       if (rebalancer) {
         rebalancer.cancelScheduledCheck();

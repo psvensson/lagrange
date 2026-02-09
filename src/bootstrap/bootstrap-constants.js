@@ -16,6 +16,18 @@ const BOOTSTRAP_PHASE = Object.freeze({
   FAILED: 'failed',
 });
 
+/**
+ * Cleanup steps for failed bootstrap, executed in reverse phase order.
+ * Each step corresponds to undoing the work of a bootstrap phase.
+ */
+const BOOTSTRAP_CLEANUP_STEP = Object.freeze({
+  CACHE_HYDRATION: 'cache_hydration',
+  REGISTRATION: 'registration',
+  PARTITIONS: 'partitions',
+  MESSAGE_GROUPS: 'message_groups',
+  INFRASTRUCTURE: 'infrastructure',
+});
+
 const BOOTSTRAP_PIPELINE_PHASE = Object.freeze({
   INFRA: 'infra',
   RAFT_ELECTION: 'raft_election',
@@ -43,12 +55,15 @@ const BOOTSTRAP_PIPELINE_TIMEOUT_MS = Object.freeze({
 });
 
 const JOINING_PHASE = Object.freeze({
+  NOT_STARTED: 'not_started',
   CONTACTING_SEED: 'contacting_seed',
   CONNECTING_WEBSOCKET: 'connecting_websocket',
   CREATING_MESSAGE_GROUP: 'creating_message_group',
   JOINING_MESSAGE_GROUP: 'joining_message_group',
   WAITING_LEADERSHIP: 'waiting_leadership',
   QUERYING_STATE: 'querying_state',
+  COMPLETE: 'complete',
+  FAILED: 'failed',
 });
 
 const BOOTSTRAP_SUBSYSTEM = Object.freeze({
@@ -192,6 +207,42 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
   WS_SERVER_STARTED: 'WebSocket server started for cross-node communication',
   SHUTDOWN: 'Shutting down bootstrap service',
   BOOTSTRAP_EXIT_FAILED: 'Bootstrap failed, exiting with non-zero exit code',
+  FAILED_BOOTSTRAP_CLEANUP_START:
+    'Starting failed bootstrap cleanup in reverse phase order',
+  FAILED_BOOTSTRAP_CLEANUP_CACHE:
+    'Clearing system table cache during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_CACHE_DONE:
+    'System table cache cleared during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_CACHE_ERROR:
+    'Error clearing system table cache during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_REGISTRATION:
+    'Removing partial registration entries during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_REGISTRATION_DONE:
+    'Partial registration entries removed during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_REGISTRATION_ERROR:
+    'Error removing registration entries during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_PARTITIONS:
+    'Stopping partition services during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_PARTITIONS_DONE:
+    'Partition services stopped during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_PARTITIONS_ERROR:
+    'Error stopping partition services during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_MESSAGE_GROUPS:
+    'Stopping message group services during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_MESSAGE_GROUPS_DONE:
+    'Message group services stopped during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_MESSAGE_GROUPS_ERROR:
+    'Error stopping message group services during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_INFRASTRUCTURE:
+    'Stopping message router during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_INFRASTRUCTURE_DONE:
+    'Message router stopped during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_INFRASTRUCTURE_ERROR:
+    'Error stopping message router during failed bootstrap cleanup',
+  FAILED_BOOTSTRAP_CLEANUP_COMPLETE:
+    'Failed bootstrap cleanup complete',
+  FAILED_BOOTSTRAP_CLEANUP_SUMMARY:
+    'Failed bootstrap cleanup summary',
 });
 
 const BOOTSTRAP_ERROR = Object.freeze({
@@ -227,6 +278,7 @@ const BOOTSTRAP_DEFAULT = Object.freeze({
 
 export {
   BOOTSTRAP_ASSIGNMENT_STRATEGY,
+  BOOTSTRAP_CLEANUP_STEP,
   BOOTSTRAP_DEFAULT,
   BOOTSTRAP_ERROR,
   BOOTSTRAP_EVENT,

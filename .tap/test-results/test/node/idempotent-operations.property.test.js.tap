@@ -1,28 +1,141 @@
 TAP version 14
 # Subtest: Property 13: Idempotent Operations
     # Subtest: CREATE_REPLICA for active replica returns already_exists
-        ok 1 - CREATE_REPLICA for active replica returns already_exists
+        not ok 1 - Property failed after 1 tests { seed: -1893721130, path: "0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000"," "] Shrunk 14 time(s) Got TypeError: Cannot read properties of undefined (reading 'set')     at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/idempotent-operations.property.test.js:138:33     at AsyncProperty.predicate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.js:14:59)     at AsyncProperty.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:39)     at asyncRunIt (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:36)     at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/idempotent-operations.property.test.js:111:5)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
         1..1
-    ok 1 - CREATE_REPLICA for active replica returns already_exists # time=13.818ms
+    not ok 1 - CREATE_REPLICA for active replica returns already_exists # time=17.334ms
+      ---
+      at:
+        fileName: test/node/idempotent-operations.property.test.js
+        lineNumber: 110
+        columnNumber: 5
+        typeName: Test
+      source: >2
+           * `already_exists` without changing state.
+           */
+          t.test('CREATE_REPLICA for active replica returns already_exists', async (t) => {
+        ----^
+            await fc.assert(
+              fc.asyncProperty(
+      ...
     
     # Subtest: CREATE_REPLICA for creating/syncing replica returns in_progress
-        ok 1 - CREATE_REPLICA for creating/syncing replica returns in_progress
+        not ok 1 - Property failed after 1 tests { seed: -2087128903, path: "0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000",{"localStatus":"creating","smState":"creating"}] Shrunk 13 time(s) Got TypeError: Cannot read properties of undefined (reading 'set')     at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/idempotent-operations.property.test.js:232:33     at AsyncProperty.predicate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.js:14:59)     at AsyncProperty.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:39)     at asyncRunIt (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:36)     at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/idempotent-operations.property.test.js:205:5)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
         1..1
-    ok 2 - CREATE_REPLICA for creating/syncing replica returns in_progress # time=4.458ms
+    not ok 2 - CREATE_REPLICA for creating/syncing replica returns in_progress # time=4.245ms
+      ---
+      at:
+        fileName: test/node/idempotent-operations.property.test.js
+        lineNumber: 198
+        columnNumber: 5
+        typeName: Test
+      source: >2
+           * without changing state.
+           */
+          t.test('CREATE_REPLICA for creating/syncing replica returns in_progress', async (t) => {
+        ----^
+            // Use the status values that ReplicaHandler checks for
+            const transitionalStates = [
+      ...
     
     # Subtest: REMOVE_REPLICA for non-existent replica returns not_found
         ok 1 - REMOVE_REPLICA for non-existent replica returns not_found
         1..1
-    ok 3 - REMOVE_REPLICA for non-existent replica returns not_found # time=3.631ms
+    ok 3 - REMOVE_REPLICA for non-existent replica returns not_found # time=1.975ms
     
     # Subtest: REMOVE_REPLICA for removing replica returns in_progress
-        ok 1 - REMOVE_REPLICA for removing replica returns in_progress
+        not ok 1 - Property failed after 1 tests { seed: 853347743, path: "0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000"] Shrunk 12 time(s) Got TypeError: Cannot read properties of undefined (reading 'set')     at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/idempotent-operations.property.test.js:377:33     at AsyncProperty.predicate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.js:14:59)     at AsyncProperty.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:39)     at asyncRunIt (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:36)     at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/idempotent-operations.property.test.js:351:5)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
         1..1
-    ok 4 - REMOVE_REPLICA for removing replica returns in_progress # time=2.203ms
+    not ok 4 - REMOVE_REPLICA for removing replica returns in_progress # time=3.765ms
+      ---
+      at:
+        fileName: test/node/idempotent-operations.property.test.js
+        lineNumber: 350
+        columnNumber: 5
+        typeName: Test
+      source: >2
+           * without changing state.
+           */
+          t.test('REMOVE_REPLICA for removing replica returns in_progress', async (t) => {
+        ----^
+            await fc.assert(
+              fc.asyncProperty(
+      ...
     
     1..4
-ok 1 - Property 13: Idempotent Operations # time=191.398ms
+not ok 1 - Property 13: Idempotent Operations # time=123.267ms
+  ---
+  at:
+    fileName: test/node/idempotent-operations.property.test.js
+    lineNumber: 85
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('Property 13: Idempotent Operations', async (t) => {
+    ^
+      t.beforeEach(async () => {
+        ConfigurationManager.resetInstance();
+  ...
 
 1..1
-# { total: 4, pass: 4 }
-# time=197.249ms
+# { total: 4, pass: 1, fail: 3 }
+# time=137.506ms

@@ -6,6 +6,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeService, NodeStatus, NodeState} from '../../src/node/node-service.js';
+import {NodeLifecycleStateMachine} from '../../src/node/node-lifecycle-state-machine.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -443,5 +444,44 @@ test('NodeService', async (t) => {
 
     t.equal(nodeService.isReady(), false, 'should not be ready before init');
     t.equal(nodeService.isDraining(), false, 'should not be draining before init');
+  });
+
+  t.test('initialization can use externally managed lifecycle state machine', async (t) => {
+    const nodeService = NodeService.getInstance();
+    const lifecycleEvents = [];
+
+    const externalStateMachine = new NodeLifecycleStateMachine({
+      nodeId: 'external-lifecycle-node',
+      initialState: NodeState.CONNECTING,
+    });
+
+    nodeService.on('lifecycleStateChange', (event) => {
+      lifecycleEvents.push(event);
+    });
+
+    nodeService.initialize({
+      nodeId: 'external-lifecycle-node',
+      lifecycleStateMachine: externalStateMachine,
+      autoTransitionLifecycle: false,
+    });
+
+    t.equal(
+      nodeService.getLifecycleState(),
+      NodeState.CONNECTING,
+      'should preserve externally managed initial state',
+    );
+    t.equal(
+      lifecycleEvents.length,
+      0,
+      'should not auto-transition when autoTransitionLifecycle=false',
+    );
+
+    externalStateMachine.transition(NodeState.DISCOVERING);
+    t.equal(
+      nodeService.getLifecycleState(),
+      NodeState.DISCOVERING,
+      'should reflect external lifecycle transitions',
+    );
+    t.equal(lifecycleEvents.length, 1, 'should forward external lifecycle events');
   });
 });

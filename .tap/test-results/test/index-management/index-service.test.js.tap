@@ -3,16 +3,16 @@ TAP version 14
     ok 1 - Service should be initialized
     ok 2 - Should have no indices initially
     1..2
-ok 1 - IndexService - initialization # time=5.744ms
+ok 1 - IndexService - initialization # time=4.044ms
 
-# Subtest: IndexService - loads indices from cache on initialization
+# Subtest: IndexService - loads indices from cache on init
     ok 1 - Should load 2 indices from cache
     ok 2 - idx_name should exist
     ok 3 - idx_value should exist
     1..3
-ok 2 - IndexService - loads indices from cache on initialization # time=0.619ms
+ok 2 - IndexService - loads indices from cache on init # time=0.518ms
 
-# Subtest: IndexService - createIndex stores metadata in indices table
+# Subtest: IndexService - createIndex stores metadata
     ok 1 - Should return index ID
     ok 2 - Should have correct table ID
     ok 3 - Should have correct index name
@@ -22,25 +22,25 @@ ok 2 - IndexService - loads indices from cache on initialization # time=0.619ms
     ok 7 - Should insert into indices table
     ok 8 - Should have correct index name in data
     1..8
-ok 3 - IndexService - createIndex stores metadata in indices table # time=2.283ms
+ok 3 - IndexService - createIndex stores metadata # time=1.504ms
 
 # Subtest: IndexService - createIndex with multiple columns
     ok 1 - Should have multiple columns
     ok 2 - Should store columns as JSON array
     1..2
-ok 4 - IndexService - createIndex with multiple columns # time=0.843ms
+ok 4 - IndexService - createIndex with multiple columns # time=0.457ms
 
-# Subtest: IndexService - createIndex prevents duplicate index names
+# Subtest: IndexService - createIndex prevents duplicates
     ok 1 - Should indicate index already exists
     1..1
-ok 5 - IndexService - createIndex prevents duplicate index names # time=1.038ms
+ok 5 - IndexService - createIndex prevents duplicates # time=0.585ms
 
-# Subtest: IndexService - createIndex validates required parameters
+# Subtest: IndexService - createIndex validates required params
     ok 1 - Should indicate tableId is required
     ok 2 - Should indicate indexName is required
     ok 3 - Should indicate columnNames is required
     1..3
-ok 6 - IndexService - createIndex validates required parameters # time=1.251ms
+ok 6 - IndexService - createIndex validates required params # time=0.509ms
 
 # Subtest: IndexService - dropIndex removes index metadata
     ok 1 - Index should exist
@@ -49,64 +49,64 @@ ok 6 - IndexService - createIndex validates required parameters # time=1.251ms
     ok 4 - Should delete one row
     ok 5 - Should delete from indices table
     1..5
-ok 7 - IndexService - dropIndex removes index metadata # time=1.018ms
+ok 7 - IndexService - dropIndex removes index metadata # time=0.74ms
 
-# Subtest: IndexService - dropIndex throws for non-existent index
+# Subtest: IndexService - dropIndex throws for non-existent
     ok 1 - Should indicate index not found
     1..1
-ok 8 - IndexService - dropIndex throws for non-existent index # time=0.408ms
+ok 8 - IndexService - dropIndex throws for non-existent # time=0.349ms
 
-# Subtest: IndexService - getIndicesForTable returns all indices for a table
+# Subtest: IndexService - getIndicesForTable returns all
     ok 1 - Should have 2 indices for users table
     ok 2 - Should have 1 index for orders table
     1..2
-ok 9 - IndexService - getIndicesForTable returns all indices for a table # time=0.505ms
+ok 9 - IndexService - getIndicesForTable returns all # time=0.481ms
 
 # Subtest: IndexService - getAllIndices returns all indices
     ok 1 - Should have 2 total indices
     1..1
-ok 10 - IndexService - getAllIndices returns all indices # time=0.425ms
+ok 10 - IndexService - getAllIndices returns all indices # time=0.393ms
 
-# Subtest: IndexService - handleCDCEvent updates cache on INSERT
+# Subtest: IndexService - handleCDCEvent updates on INSERT
     ok 1 - Index should exist after CDC event
     1..1
-ok 11 - IndexService - handleCDCEvent updates cache on INSERT # time=0.765ms
+ok 11 - IndexService - handleCDCEvent updates on INSERT # time=0.457ms
 
-# Subtest: IndexService - handleCDCEvent updates cache on DELETE
+# Subtest: IndexService - handleCDCEvent updates on DELETE
     ok 1 - Index should exist
     ok 2 - Index should not exist
     1..2
-ok 12 - IndexService - handleCDCEvent updates cache on DELETE # time=0.687ms
+ok 12 - IndexService - handleCDCEvent updates on DELETE # time=0.43ms
 
 # Subtest: IndexService - creates SQLite index on partitions
     ok 1 - SQLite index should be created
     ok 2 - Index name should match
     1..2
-ok 13 - IndexService - creates SQLite index on partitions # time=5.645ms
+ok 13 - IndexService - creates SQLite index on partitions # time=4.437ms
 
-# Subtest: IndexService - creates indices on new partition via CDC event
+# Subtest: IndexService - creates indices on new partition via CDC
     ok 1 - Index should be created on new partition
     1..1
-ok 14 - IndexService - creates indices on new partition via CDC event # time=2.023ms
+ok 14 - IndexService - creates indices on new partition via CDC # time=1.374ms
 
-# Subtest: IndexService - ensureIndicesOnPartition creates all indices
+# Subtest: IndexService - ensureIndicesOnPartition creates all
     ok 1 - Should create 2 indices
     ok 2 - Both indices should exist in SQLite
     1..2
-ok 15 - IndexService - ensureIndicesOnPartition creates all indices # time=1.527ms
+ok 15 - IndexService - ensureIndicesOnPartition creates all # time=1.12ms
 
-# Subtest: IndexService - rebuildIndex recreates index on all partitions
+# Subtest: IndexService - rebuildIndex recreates on partitions
     ok 1 - Should rebuild on 1 partition
     ok 2 - Should have no failures
     ok 3 - Index should exist after rebuild
     1..3
-ok 16 - IndexService - rebuildIndex recreates index on all partitions # time=2.543ms
+ok 16 - IndexService - rebuildIndex recreates on partitions # time=1.297ms
 
-# Subtest: IndexService - ignores non-INSERT partition CDC events
+# Subtest: IndexService - ignores non-INSERT partition CDC
     ok 1 - Non-INSERT partition CDC events handled gracefully
     1..1
-ok 17 - IndexService - ignores non-INSERT partition CDC events # time=0.778ms
+ok 17 - IndexService - ignores non-INSERT partition CDC # time=0.379ms
 
 1..17
 # { total: 40, pass: 40 }
-# time=346.47ms
+# time=248.36ms

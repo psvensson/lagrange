@@ -991,4 +991,85 @@ test('ReplicaHandler', async (t) => {
 
     handler.shutdown();
   });
+
+  t.test('shouldGateActivationOnVoterReadiness - critical joins gate only with paired REMOVE',
+    async (t) => {
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+
+      t.equal(
+        handler.shouldGateActivationOnVoterReadiness('nodes-p1', 'missing-op', true),
+        false,
+        'should not gate when operation metadata is missing and no REMOVE is in flight',
+      );
+
+      seedReplicaOperation(cache, 'remove-in-flight', {
+        type: 'REMOVE',
+        partitionId: 'nodes-p1',
+      });
+      t.equal(
+        handler.shouldGateActivationOnVoterReadiness('nodes-p1', 'missing-op', false),
+        false,
+        'should not infer gating outside joining flow when metadata is missing',
+      );
+      t.equal(
+        handler.shouldGateActivationOnVoterReadiness('nodes-p1', 'missing-op', true),
+        true,
+        'should gate when a paired REMOVE is in flight during join',
+      );
+      t.equal(
+        handler.shouldGateActivationOnVoterReadiness('partition-1', 'missing-op', true),
+        false,
+        'should not gate non-critical partitions',
+      );
+
+      handler.shutdown();
+    });
+
+  t.test('shouldGateActivationOnVoterReadiness - respects explicit operation type when available',
+    async (t) => {
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+      seedReplicaOperation(cache, 'add-op', {
+        type: 'ADD',
+        partitionId: 'nodes-p1',
+      });
+      seedReplicaOperation(cache, 'remove-op', {
+        type: 'REMOVE',
+        partitionId: 'nodes-p1',
+      });
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+
+      t.equal(
+        handler.shouldGateActivationOnVoterReadiness('nodes-p1', 'add-op', false),
+        true,
+        'should gate ADD operations on critical partitions',
+      );
+      t.equal(
+        handler.shouldGateActivationOnVoterReadiness('nodes-p1', 'remove-op', false),
+        false,
+        'should not gate non-ADD operations when metadata is explicit',
+      );
+
+      handler.shutdown();
+    });
 });

@@ -349,6 +349,159 @@ test('PartitionService - generates CDC events on delete', async (t) => {
   await partition.shutdown();
 });
 
+test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
+  // Bug: generateCDCEvent mapped UPSERT to CDCOperation.INSERT,
+  // causing "INSERT on existing key" warnings in the system cache.
+  // UPSERT operations must produce CDCOperation.UPSERT events so the
+  // cache uses its UPSERT handler (insert-or-merge) without warnings.
+  const schema = {
+    columns: [
+      {name: 'id', type: 'TEXT', primaryKey: true},
+      {name: 'value', type: 'INTEGER'},
+    ],
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition-upsert-cdc',
+    tableId: 'cdc_test',
+    tableName: 'cdc_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    schema,
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+  await Promise.resolve();
+
+  // Insert initial row
+  await partition.upsertData('cdc_test', {id: 'u1', value: 10});
+
+  const cdcEvents = [];
+  partition.subscribeToCDC((event) => {
+    cdcEvents.push(event);
+  });
+
+  // Upsert same key — should produce UPSERT, not INSERT
+  await partition.upsertData('cdc_test', {id: 'u1', value: 20});
+
+  t.equal(cdcEvents.length, 1);
+  t.equal(
+    cdcEvents[0].operation,
+    CDCOperation.UPSERT,
+    'UPSERT operation must produce CDCOperation.UPSERT, not INSERT',
+  );
+  t.equal(cdcEvents[0].data.id, 'u1');
+
+  await partition.shutdown();
+});
+
+test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async (t) => {
+  // Bug: When INSERT OR REPLACE SQL arrives via the QUERY path,
+  // the SQL parser detects it as INSERT (startsWith('INSERT')),
+  // producing CDCOperation.INSERT instead of UPSERT.
+  const schema = {
+    columns: [
+      {name: 'id', type: 'TEXT', primaryKey: true},
+      {name: 'value', type: 'INTEGER'},
+    ],
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition-sql-upsert',
+    tableId: 'cdc_test',
+    tableName: 'cdc_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    schema,
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+  await Promise.resolve();
+
+  // Insert initial row via raw SQL
+  await partition.executeQuery(
+    'INSERT OR REPLACE INTO cdc_test (id, value) VALUES (?, ?)',
+    ['s1', 10],
+  );
+
+  const cdcEvents = [];
+  partition.subscribeToCDC((event) => {
+    cdcEvents.push(event);
+  });
+
+  // Upsert same key via raw SQL — should produce UPSERT, not INSERT
+  await partition.executeQuery(
+    'INSERT OR REPLACE INTO cdc_test (id, value) VALUES (?, ?)',
+    ['s1', 20],
+  );
+
+  t.equal(cdcEvents.length, 1);
+  t.equal(
+    cdcEvents[0].operation,
+    CDCOperation.UPSERT,
+    'INSERT OR REPLACE SQL must produce CDCOperation.UPSERT',
+  );
+
+  await partition.shutdown();
+});
+
+test('PartitionService - follower applyCommittedEntry must not emit CDC', async (t) => {
+  // Bug: applyCommittedEntry generates CDC events on ALL replicas
+  // (leader + followers). Only the leader should emit CDC events;
+  // the leader already does so in applyWrite. Follower CDC events
+  // cause duplicate cache updates and "INSERT on existing key" warnings.
+  const schema = {
+    columns: [
+      {name: 'id', type: 'TEXT', primaryKey: true},
+      {name: 'value', type: 'INTEGER'},
+    ],
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-follower-cdc',
+    tableId: 'cdc_test',
+    tableName: 'cdc_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    schema,
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+  await Promise.resolve();
+
+  // Force to follower state to simulate a non-leader replica
+  partition.role = 'follower';
+  partition.isLeader = false;
+
+  const cdcEvents = [];
+  partition.subscribeToCDC((event) => {
+    cdcEvents.push(event);
+  });
+
+  // Directly call applyCommittedEntry as liferaft would on a follower
+  partition.applyCommittedEntry({
+    type: 'INSERT',
+    sql: 'INSERT INTO cdc_test (id, value) VALUES (?, ?)',
+    params: ['f1', 42],
+    timestamp: String(Date.now()),
+    proposedBy: 'other-replica',
+  });
+
+  // Allow any async CDC generation to complete
+  await Promise.resolve();
+
+  t.equal(
+    cdcEvents.length,
+    0,
+    'Follower must not emit CDC events from applyCommittedEntry',
+  );
+
+  await partition.shutdown();
+});
+
 test('PartitionService - calculates partition size', async (t) => {
   const schema = {
     columns: [
@@ -942,6 +1095,7 @@ test('PartitionService - learner promotion deferred for even voter count', async
 
   // Manually set role to learner (simulating post-initialization state)
   partition.role = RaftRole.LEARNER;
+  partition.leaderId = 'replica-1';
 
   // Manually trigger learner promotion check
   partition.checkLearnerPromotion();
@@ -1002,6 +1156,7 @@ test('PartitionService - learner promotes when voter count would be odd', async 
 
   // Manually set role to learner (simulating post-initialization state)
   partition.role = RaftRole.LEARNER;
+  partition.leaderId = 'replica-1';
 
   // Manually trigger learner promotion check
   partition.checkLearnerPromotion();
@@ -1010,6 +1165,132 @@ test('PartitionService - learner promotes when voter count would be odd', async 
   t.equal(partition.role, RaftRole.FOLLOWER, 'Should promote to follower for odd voter count');
 
   // Clean up any timers
+  if (partition.learnerPromotionTimer) {
+    clearTimeout(partition.learnerPromotionTimer);
+    partition.learnerPromotionTimer = null;
+  }
+});
+
+test('PartitionService - learner promotion deferred until leader is known', async (t) => {
+  const mockCache = {
+    get: () => null,
+    filter: (tableName, predicate) => {
+      if (tableName === TABLES.SERVICES) {
+        const services = [
+          {
+            service_id: 'replica-1',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'leader',
+          },
+          {
+            service_id: 'replica-2',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'follower',
+          },
+        ];
+        return services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-3',
+    replicaIds: ['replica-3'],
+    nodeId: 'node-2',
+    dbPath: ':memory:',
+    isJoiningExistingGroup: true,
+    systemTableCache: mockCache,
+  });
+
+  partition.role = RaftRole.LEARNER;
+  partition.leaderId = null;
+
+  partition.checkLearnerPromotion();
+
+  t.equal(
+    partition.role,
+    RaftRole.LEARNER,
+    'Should remain learner until a leader is discovered',
+  );
+  t.ok(partition.learnerPromotionTimer, 'Should reschedule promotion check');
+
+  if (partition.learnerPromotionTimer) {
+    clearTimeout(partition.learnerPromotionTimer);
+    partition.learnerPromotionTimer = null;
+  }
+});
+
+test('PartitionService - critical partition defers learner on even voter count', async (t) => {
+  const mockCache = {
+    get: () => null,
+    filter: (tableName, predicate) => {
+      if (tableName === TABLES.SERVICES) {
+        const services = [
+          {
+            service_id: 'replica-1',
+            partition_id: `${SystemTableName.CONFIG}-p1`,
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'leader',
+          },
+          {
+            service_id: 'replica-2',
+            partition_id: `${SystemTableName.CONFIG}-p1`,
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'follower',
+          },
+          {
+            service_id: 'replica-3',
+            partition_id: `${SystemTableName.CONFIG}-p1`,
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'follower',
+          },
+          {
+            service_id: 'replica-4',
+            partition_id: `${SystemTableName.CONFIG}-p1`,
+            service_type: SERVICE_TYPE.PARTITION,
+            status: STATE.ACTIVE,
+            raft_role: 'learner',
+          },
+        ];
+        return services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const partition = new PartitionService({
+    partitionId: `${SystemTableName.CONFIG}-p1`,
+    tableId: SystemTableName.CONFIG,
+    replicaId: 'replica-4',
+    replicaIds: ['replica-4'],
+    nodeId: 'node-2',
+    dbPath: ':memory:',
+    isJoiningExistingGroup: true,
+    systemTableCache: mockCache,
+  });
+
+  partition.role = RaftRole.LEARNER;
+  partition.leaderId = 'replica-1';
+
+  partition.checkLearnerPromotion();
+
+  t.equal(
+    partition.role,
+    RaftRole.LEARNER,
+    'Critical partitions should also defer promotion that creates even voters',
+  );
+  t.ok(partition.learnerPromotionTimer, 'Should reschedule promotion check');
+
   if (partition.learnerPromotionTimer) {
     clearTimeout(partition.learnerPromotionTimer);
     partition.learnerPromotionTimer = null;
@@ -1081,6 +1362,7 @@ test('PartitionService - learner promotes when multiple learners reach odd count
 
   // Manually set role to learner
   partition.role = RaftRole.LEARNER;
+  partition.leaderId = 'replica-1';
 
   // Manually trigger learner promotion check
   partition.checkLearnerPromotion();
@@ -1379,4 +1661,27 @@ test('PartitionService - isWriteQuery detects write operations', async (t) => {
   t.equal(partition.isWriteQuery('  select * from t'), false, 'lowercase SELECT is not write');
   t.equal(partition.isWriteQuery(null), false, 'null is not write');
   t.equal(partition.isWriteQuery(''), false, 'empty string is not write');
+});
+
+test('PartitionService - election jitter prevents timeout overlap', async (t) => {
+  // Bug: ELECTION_JITTER_PER_REPLICA_MS (500ms) is smaller than the
+  // election timeout range width (3000 - 1000 = 2000ms). This means
+  // r1 [1000,3000] and r2 [1500,3500] overlap, so r2 can fire before
+  // r1, causing unnecessary re-elections and leadership instability.
+  // The jitter must be >= (electionMax - electionMin) to guarantee
+  // that replica N always times out before replica N+1.
+  const {PARTITION_SERVICE_VALUE} = await import(
+    '../../src/partition/partition-service-constants.js'
+  );
+
+  const electionRange =
+    PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MAX_DEFAULT_MS -
+    PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MIN_DEFAULT_MS;
+  const jitter = PARTITION_SERVICE_VALUE.ELECTION_JITTER_PER_REPLICA_MS;
+
+  t.ok(
+    jitter >= electionRange,
+    `Jitter (${jitter}ms) must be >= election range width ` +
+    `(${electionRange}ms) to prevent timeout overlap between replicas`,
+  );
 });

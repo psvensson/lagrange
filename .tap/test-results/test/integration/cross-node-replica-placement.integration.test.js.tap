@@ -5,10 +5,10 @@ TAP version 14
         ok 2 - partition should become leader
         ok 3 - rebalance should succeed
         ok 4 - rebalance should return moves
-        ok 5 - should have add replica moves
-        ok 6 - add move should target second node
+        ok 5 - should avoid standalone add moves when degraded topology is already at target
+        ok 6 - should schedule REPLACE moves for spread correction under degraded topology
         1..6
-    ok 1 - full flow: seed node, second node joins, replica placed via message group # time=33.355ms
+    ok 1 - full flow: seed node, second node joins, replica placed via message group # time=26.65ms
     
     # Subtest: message group routes CREATE_REPLICA via real WebSocket
         ok 1 - should have message ID
@@ -17,16 +17,17 @@ TAP version 14
         ok 4 - should receive CREATE_REPLICA message
         ok 5 - should have correct request ID
         1..5
-    ok 2 - message group routes CREATE_REPLICA via real WebSocket # time=3.6ms
+    ok 2 - message group routes CREATE_REPLICA via real WebSocket # time=3.011ms
     
-    # Subtest: rebalancer only spreads when multiple nodes available
+    # Subtest: rebalancer schedules REPLACE moves in degraded two-node topology
         ok 1 - rebalance should succeed
         ok 2 - should have no moves with single node
         ok 3 - should have no events with single node
         ok 4 - rebalance should succeed
-        ok 5 - should have moves with two nodes
-        1..5
-    ok 3 - rebalancer only spreads when multiple nodes available # time=1.838ms
+        ok 5 - should schedule one paired replacement move with two ready nodes
+        ok 6 - scheduled degraded move should use REPLACE workflow
+        1..6
+    ok 3 - rebalancer schedules REPLACE moves in degraded two-node topology # time=1.228ms
     
     # Subtest: replica lifecycle manager handles CREATE_REPLICA idempotently
         ok 1 - first call should return initiated
@@ -34,11 +35,11 @@ TAP version 14
         ok 3 - second call should return already_exists
         ok 4 - should only create replica once
         1..4
-    ok 4 - replica lifecycle manager handles CREATE_REPLICA idempotently # time=27.436ms
+    ok 4 - replica lifecycle manager handles CREATE_REPLICA idempotently # time=26.367ms
     
     1..4
-ok 1 - Cross-node replica placement integration tests # time=200.624ms
+ok 1 - Cross-node replica placement integration tests # time=136.239ms
 
 1..1
-# { total: 20, pass: 20 }
-# time=205.539ms
+# { total: 21, pass: 21 }
+# time=139.294ms

@@ -3,21 +3,21 @@ TAP version 14
     # Subtest: handlers execute in priority order (high to low)
         ok 1 - Handlers execute in priority order
         1..1
-    ok 1 - handlers execute in priority order (high to low) # time=11.775ms
+    ok 1 - handlers execute in priority order (high to low) # time=8.92ms
     
     # Subtest: same priority handlers maintain registration order
         ok 1 - Same priority handlers all execute
         1..1
-    ok 2 - same priority handlers maintain registration order # time=2.467ms
+    ok 2 - same priority handlers maintain registration order # time=3.5ms
     
     # Subtest: priority ordering works with wildcard handlers
         ok 1 - Priority ordering works with wildcard handlers
         1..1
-    ok 3 - priority ordering works with wildcard handlers # time=2.771ms
+    ok 3 - priority ordering works with wildcard handlers # time=3.61ms
     
     1..3
-ok 1 - Property 39: Event Priority Ordering # time=21.324ms
+ok 1 - Property 39: Event Priority Ordering # time=20.615ms
 
 1..1
 # { total: 3, pass: 3 }
-# time=26.987ms
+# time=26.484ms

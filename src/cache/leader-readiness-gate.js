@@ -202,4 +202,16 @@ const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
   };
 };
 
-export {getMissingSystemServiceLeaders, isSystemTableWriteReady};
+const getMissingSystemServiceLeaderCount = (missing = {}) =>
+  (missing.missingPartitionLeaders?.length || NUM.ZERO) +
+  (missing.missingMessageGroupLeaders?.length || NUM.ZERO) +
+  (missing.missingPartitionLeaderNodes?.length || NUM.ZERO) +
+  (missing.missingMessageGroupLeaderNodes?.length || NUM.ZERO) +
+  (missing.missingPartitionLeaderAddresses?.length || NUM.ZERO) +
+  (missing.missingMessageGroupLeaderAddresses?.length || NUM.ZERO);
+
+export {
+  getMissingSystemServiceLeaders,
+  getMissingSystemServiceLeaderCount,
+  isSystemTableWriteReady,
+};
