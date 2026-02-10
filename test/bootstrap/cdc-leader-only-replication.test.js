@@ -8,7 +8,7 @@
  * to not propagate to other nodes.
  */
 
-import {test} from 'node:test';
+import {test} from '../../src/test-helpers/tap.js';
 import {strict as assert} from 'node:assert';
 import {EventEmitter} from 'events';
 

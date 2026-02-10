@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: buildPeerAddress generates unified format for simple peer IDs
         ok 1 - buildPeerAddress generates unified format for simple peer IDs
         1..1
-    ok 1 - buildPeerAddress generates unified format for simple peer IDs # time=10.831ms
+    ok 1 - buildPeerAddress generates unified format for simple peer IDs # time=7.284ms
     
     # Subtest: buildPeerAddress preserves already-unified addresses
         ok 1 - buildPeerAddress preserves already-unified addresses
         1..1
-    ok 2 - buildPeerAddress preserves already-unified addresses # time=1.037ms
+    ok 2 - buildPeerAddress preserves already-unified addresses # time=1.273ms
     
     # Subtest: buildPeerAddress uses systemTableCache when available
         ok 1 - buildPeerAddress uses systemTableCache when available
         1..1
-    ok 3 - buildPeerAddress uses systemTableCache when available # time=2.25ms
+    ok 3 - buildPeerAddress uses systemTableCache when available # time=1.886ms
     
     # Subtest: buildPeerAddress throws when cache misses
         ok 1 - buildPeerAddress throws when cache misses
         1..1
-    ok 4 - buildPeerAddress throws when cache misses # time=1.421ms
+    ok 4 - buildPeerAddress throws when cache misses # time=1.772ms
     
     # Subtest: getRaftMessageType maps liferaft types correctly
         ok 1 - getRaftMessageType maps liferaft types correctly
         1..1
-    ok 5 - getRaftMessageType maps liferaft types correctly # time=0.617ms
+    ok 5 - getRaftMessageType maps liferaft types correctly # time=0.495ms
     
     # Subtest: getRaftMessageType passes through unknown types
         ok 1 - getRaftMessageType passes through unknown types
         1..1
-    ok 6 - getRaftMessageType passes through unknown types # time=0.736ms
+    ok 6 - getRaftMessageType passes through unknown types # time=0.607ms
     
     1..6
-ok 1 - Property 5: Unified Address Format # time=19.571ms
+ok 1 - Property 5: Unified Address Format # time=15.869ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=24.076ms
+# time=19.952ms

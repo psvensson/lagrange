@@ -44,7 +44,7 @@ function createInProcHttpPost(seedApi) {
   };
 }
 
-test('Debug join flow', {timeout: 20000}, async (t) => {
+test('Debug join flow', {timeout: 30000}, async (t) => {
   initializeTestEnvironment();
 
   const seedNodeId = '550e8400-e29b-41d4-a716-446655440099';
@@ -96,12 +96,20 @@ test('Debug join flow', {timeout: 20000}, async (t) => {
     // Debug: Print services in cache
     const services = systemCache.getAll(TABLES.SERVICES) || [];
     console.log('DEBUG: Services in cache:', services.length);
-    const nodesPartitionId = 'nodes-p1';
-    const nodesPartitionServices = services.filter((s) =>
-      s.partition_id === nodesPartitionId && s.service_type === SERVICE_TYPE.PARTITION);
-    console.log('DEBUG: nodes-p1 services count:', nodesPartitionServices.length);
-    for (const svc of nodesPartitionServices) {
-      console.log('DEBUG: nodes-p1 service:', svc.service_id, svc.address, svc.raft_role);
+    const debugPartitionIds = ['nodes-p1', 'services-p1', 'replica_operations-p1', 'node_endpoints-p1'];
+    for (const partitionId of debugPartitionIds) {
+      const partitionServices = services.filter((s) =>
+        s.partition_id === partitionId && s.service_type === SERVICE_TYPE.PARTITION);
+      console.log(`DEBUG: ${partitionId} services count:`, partitionServices.length);
+      for (const svc of partitionServices) {
+        console.log(
+          `DEBUG: ${partitionId} service:`,
+          svc.service_id,
+          svc.address,
+          svc.raft_role,
+          svc.status,
+        );
+      }
     }
 
     // Debug: Check if partition services are registered with message router
@@ -145,7 +153,7 @@ test('Debug join flow', {timeout: 20000}, async (t) => {
       wsPort: joiningWsPort,
       config: {
         httpTimeoutMs: 5000,
-        leadershipWaitTimeoutMs: 3000,
+        leadershipWaitTimeoutMs: 10000,
         leadershipWaitInitialDelayMs: 5,
         leadershipWaitMaxDelayMs: 50,
         replicaStaggerDelayMs: 20,

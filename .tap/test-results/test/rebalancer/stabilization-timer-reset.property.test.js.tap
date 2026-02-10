@@ -3,45 +3,45 @@ TAP version 14
     # Subtest: recordStateChange resets lastStateChangeTime
         ok 1 - recordStateChange updates lastStateChangeTime
         1..1
-    ok 1 - recordStateChange resets lastStateChangeTime # time=302.858ms
+    ok 1 - recordStateChange resets lastStateChangeTime # time=239.695ms
     
     # Subtest: multiple state changes extend stabilization period
         ok 1 - Multiple state changes extend stabilization period
         1..1
-    ok 2 - multiple state changes extend stabilization period # time=143.66ms
+    ok 2 - multiple state changes extend stabilization period # time=145.859ms
     
     # Subtest: stabilization timer is cleared on shutdown
         ok 1 - Stabilization timer should exist after state change
         ok 2 - Stabilization timer should be null after shutdown
         ok 3 - lastStateChangeTime should be null after shutdown
         1..3
-    ok 3 - stabilization timer is cleared on shutdown # time=13.639ms
+    ok 3 - stabilization timer is cleared on shutdown # time=15.387ms
     
     # Subtest: new state change cancels previous stabilization timer
         ok 1 - New state change creates new stabilization timer
         1..1
-    ok 4 - new state change cancels previous stabilization timer # time=120.966ms
+    ok 4 - new state change cancels previous stabilization timer # time=136.186ms
     
     # Subtest: time until stabilized resets on each state change
         ok 1 - Time until stabilized should be close to full period after first change
         ok 2 - Time until stabilized should reset after second change
         1..2
-    ok 5 - time until stabilized resets on each state change # time=21.976ms
+    ok 5 - time until stabilized resets on each state change # time=23.973ms
     
     # Subtest: stabilization timer only created when leader
         ok 1 - Stabilization timer should not be created when not leader
         ok 2 - lastStateChangeTime should still be set
         1..2
-    ok 6 - stabilization timer only created when leader # time=13.942ms
+    ok 6 - stabilization timer only created when leader # time=14.292ms
     
     # Subtest: stabilization timer created when leader
         ok 1 - Stabilization timer should be created when leader
         1..1
-    ok 7 - stabilization timer created when leader # time=14.712ms
+    ok 7 - stabilization timer created when leader # time=13.535ms
     
     1..7
-ok 1 - Property 6: Stabilization Timer Reset # time=639.504ms
+ok 1 - Property 6: Stabilization Timer Reset # time=593.157ms
 
 1..1
 # { total: 11, pass: 11 }
-# time=644.949ms
+# time=596.519ms

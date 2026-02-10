@@ -5,6 +5,7 @@ const ERRORS = Object.freeze({
   SYSTEM_CACHE_PARTITION_LOOKUP_UNAVAILABLE:
     'System cache not available for partition lookup',
   NO_LEADER_AVAILABLE_FOR_WRITE: 'No leader available for write operation',
+  PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   NO_HANDLER_FOR_ADDRESS: 'No handler registered for address',
 });
 

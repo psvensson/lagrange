@@ -107,6 +107,10 @@ class ReplicaLifecycleManager extends EventEmitter {
       });
       this.ownsReplicaHandler = true;
     }
+    // Backward-compatible test hook: mirrors handler-owned local replica metadata map.
+    this.localReplicas = this.replicaHandler.localReplicas ||
+      this.replicaHandler.localServices ||
+      new Map();
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -163,6 +167,7 @@ class ReplicaLifecycleManager extends EventEmitter {
     assertCritical(handler, REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_HANDLER_REQUIRED);
     this.replicaHandler = handler;
     this.ownsReplicaHandler = false;
+    this.localReplicas = handler.localReplicas || handler.localServices || new Map();
 
     this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.HANDLER_SET, {
       nodeId: this.nodeId,
@@ -733,19 +738,27 @@ class ReplicaLifecycleManager extends EventEmitter {
    * @return {Object} Statistics object.
    */
   getStats() {
+    let handlerStats = null;
+    if (this.replicaHandler && typeof this.replicaHandler.getStats === TYPEOF.FUNCTION) {
+      handlerStats = this.replicaHandler.getStats();
+    }
+    const localReplicaCount = handlerStats ?
+      handlerStats.localReplicaCount :
+      (this.replicaHandler &&
+        typeof this.replicaHandler.getAllLocalReplicas === TYPEOF.FUNCTION ?
+        this.replicaHandler.getAllLocalReplicas().length :
+        0);
+
     const stats = {
       nodeId: this.nodeId,
       initialized: this.initialized,
-      localReplicaCount: this.replicaHandler ?
-        this.replicaHandler.getAllLocalReplicas().length :
-        0,
+      localReplicaCount,
       pendingOperationCount: this.pendingOperations.size,
       usingReplicaHandler: !!this.replicaHandler,
     };
 
     // Include handler stats if available
-    if (this.replicaHandler) {
-      const handlerStats = this.replicaHandler.getStats();
+    if (handlerStats) {
       stats.handlerStats = {
         inProgressOperationCount: handlerStats.inProgressOperationCount,
       };

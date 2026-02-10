@@ -6,7 +6,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 1 - constructor initializes with default state # time=6.078ms
+    ok 1 - constructor initializes with default state # time=7.102ms
     
     # Subtest: registerView adds view configuration
         ok 1 - should be equal
@@ -14,62 +14,62 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 2 - registerView adds view configuration # time=0.516ms
+    ok 2 - registerView adds view configuration # time=0.528ms
     
     # Subtest: registerView uses defaults for missing config
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 3 - registerView uses defaults for missing config # time=0.324ms
+    ok 3 - registerView uses defaults for missing config # time=0.372ms
     
     # Subtest: unregisterView removes view
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 4 - unregisterView removes view # time=0.339ms
+    ok 4 - unregisterView removes view # time=0.338ms
     
     # Subtest: showDetailPanel sets visibility
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 5 - showDetailPanel sets visibility # time=0.259ms
+    ok 5 - showDetailPanel sets visibility # time=0.286ms
     
     # Subtest: hideDetailPanel clears visibility
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 6 - hideDetailPanel clears visibility # time=0.253ms
+    ok 6 - hideDetailPanel clears visibility # time=0.286ms
     
     # Subtest: toggleDetailPanel toggles visibility
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 7 - toggleDetailPanel toggles visibility # time=0.283ms
+    ok 7 - toggleDetailPanel toggles visibility # time=0.33ms
     
     # Subtest: setLayout changes layout
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 8 - setLayout changes layout # time=0.318ms
+    ok 8 - setLayout changes layout # time=0.363ms
     
     # Subtest: setLayout throws on invalid layout
         ok 1 - expected to throw
         1..1
-    ok 9 - setLayout throws on invalid layout # time=0.776ms
+    ok 9 - setLayout throws on invalid layout # time=0.824ms
     
     # Subtest: updateDetailPanel stores detail data
         ok 1 - should be equivalent
         1..1
-    ok 10 - updateDetailPanel stores detail data # time=0.385ms
+    ok 10 - updateDetailPanel stores detail data # time=0.35ms
     
     # Subtest: clearDetailData clears detail data
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 11 - clearDetailData clears detail data # time=0.262ms
+    ok 11 - clearDetailData clears detail data # time=0.295ms
     
     # Subtest: getDefaultDetailData creates detail from item
         ok 1 - should be equal
@@ -78,50 +78,50 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 12 - getDefaultDetailData creates detail from item # time=0.474ms
+    ok 12 - getDefaultDetailData creates detail from item # time=0.523ms
     
     # Subtest: handleSelectionChange updates detail panel
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 13 - handleSelectionChange updates detail panel # time=0.486ms
+    ok 13 - handleSelectionChange updates detail panel # time=0.551ms
     
     # Subtest: handleSelectionChange clears on empty selection
         ok 1 - should be equal
         1..1
-    ok 14 - handleSelectionChange clears on empty selection # time=0.208ms
+    ok 14 - handleSelectionChange clears on empty selection # time=0.257ms
     
     # Subtest: handleSelectionChange uses custom getDetailData
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 15 - handleSelectionChange uses custom getDetailData # time=0.275ms
+    ok 15 - handleSelectionChange uses custom getDetailData # time=0.35ms
     
     # Subtest: handleViewSwitch updates layout from config
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 16 - handleViewSwitch updates layout from config # time=0.264ms
+    ok 16 - handleViewSwitch updates layout from config # time=0.332ms
     
     # Subtest: handleViewSwitch clears detail when not preserving
         ok 1 - should be equal
         1..1
-    ok 17 - handleViewSwitch clears detail when not preserving # time=0.193ms
+    ok 17 - handleViewSwitch clears detail when not preserving # time=0.215ms
     
     # Subtest: handleViewSwitch preserves detail when configured
         ok 1 - should be equal
         1..1
-    ok 18 - handleViewSwitch preserves detail when configured # time=0.18ms
+    ok 18 - handleViewSwitch preserves detail when configured # time=0.214ms
     
     # Subtest: handleViewSwitch hides panel for view without details
         ok 1 - should be equal
         1..1
-    ok 19 - handleViewSwitch hides panel for view without details # time=0.247ms
+    ok 19 - handleViewSwitch hides panel for view without details # time=0.281ms
     
     # Subtest: setPreserveDetailOnSwitch affects behavior
         ok 1 - should be equal
         1..1
-    ok 20 - setPreserveDetailOnSwitch affects behavior # time=0.233ms
+    ok 20 - setPreserveDetailOnSwitch affects behavior # time=0.252ms
     
     # Subtest: emits events via event bus
         ok 1 - should be equal
@@ -129,35 +129,35 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 21 - emits events via event bus # time=0.423ms
+    ok 21 - emits events via event bus # time=0.48ms
     
     # Subtest: responds to viewManager:viewSwitched events
         ok 1 - should be equal
         1..1
-    ok 22 - responds to viewManager:viewSwitched events # time=0.246ms
+    ok 22 - responds to viewManager:viewSwitched events # time=0.243ms
     
     # Subtest: responds to view:selectionChanged events
         ok 1 - should be equal
         1..1
-    ok 23 - responds to view:selectionChanged events # time=0.205ms
+    ok 23 - responds to view:selectionChanged events # time=0.232ms
     
     # Subtest: destroy cleans up state
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 24 - destroy cleans up state # time=0.4ms
+    ok 24 - destroy cleans up state # time=0.334ms
     
     # Subtest: DETAIL_LAYOUT exports correct values
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 25 - DETAIL_LAYOUT exports correct values # time=0.276ms
+    ok 25 - DETAIL_LAYOUT exports correct values # time=0.318ms
     
     1..25
-ok 1 - ViewDetailCoordinator # time=20.552ms
+ok 1 - ViewDetailCoordinator # time=21.029ms
 
 1..1
 # { total: 55, pass: 55 }
-# time=32.414ms
+# time=34.617ms

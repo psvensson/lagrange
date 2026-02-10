@@ -124,6 +124,7 @@ function createTestCoordinatorWithPersistence() {
     enableTimeouts: false,
   });
 
+  coordinator.initialize();
   return {coordinator, persistedOperations};
 }
 

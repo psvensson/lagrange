@@ -2,28 +2,28 @@ TAP version 14
 # Subtest: Property 6: Partition RaftNode.write() preserves all packet fields
     ok 1 - Partition RaftNode.write() preserves all packet fields
     1..1
-ok 1 - Property 6: Partition RaftNode.write() preserves all packet fields # time=11.019ms
+ok 1 - Property 6: Partition RaftNode.write() preserves all packet fields # time=6.515ms
 
 # Subtest: Property 6: Partition RaftNode.write() adds only destination address
     ok 1 - Partition RaftNode.write() adds only destination address without type conversion
     1..1
-ok 2 - Property 6: Partition RaftNode.write() adds only destination address # time=2.501ms
+ok 2 - Property 6: Partition RaftNode.write() adds only destination address # time=1.207ms
 
 # Subtest: Property 6: Partition RaftNode.write() invokes callback with result
     ok 1 - Partition RaftNode.write() invokes callback with delivery result
     1..1
-ok 3 - Property 6: Partition RaftNode.write() invokes callback with result # time=2.515ms
+ok 3 - Property 6: Partition RaftNode.write() invokes callback with result # time=1.449ms
 
 # Subtest: Property 6: Partition RaftNode.write() invokes callback with error on failure
     ok 1 - Partition RaftNode.write() invokes callback with error on failure
     1..1
-ok 4 - Property 6: Partition RaftNode.write() invokes callback with error on failure # time=1.527ms
+ok 4 - Property 6: Partition RaftNode.write() invokes callback with error on failure # time=0.947ms
 
 # Subtest: Property 6: Partition RaftNode.write() uses correct address format
     ok 1 - Partition RaftNode.write() uses correct address format
     1..1
-ok 5 - Property 6: Partition RaftNode.write() uses correct address format # time=5.083ms
+ok 5 - Property 6: Partition RaftNode.write() uses correct address format # time=3.661ms
 
 1..5
 # { total: 5, pass: 5 }
-# time=30.891ms
+# time=18.896ms

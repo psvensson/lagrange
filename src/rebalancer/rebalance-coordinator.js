@@ -16,7 +16,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {isNodeRecordReady} from '../node/node-readiness-policy.js';
-import {WORKFLOW_STEP, NUM} from '../constants/index.js';
+import {WORKFLOW_STEP, NUM, ERRORS, TIME_MS} from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -82,6 +82,8 @@ const SQL = Object.freeze({
 });
 
 const RECENT_INTENT_TTL_MS = 15000;
+const OPERATION_PERSIST_RETRY_DELAY_MS = TIME_MS.SECOND / NUM.FOUR;
+const OPERATION_PERSIST_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
 
 const OPERATION_HANDLER = Object.freeze({
   [SERVICE_TYPE.PARTITION]: 'replica-handler',
@@ -798,7 +800,7 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async persistNewOperation(operation) {
-    const result = await this.sqlQueryEngine.executeQuery(
+    const result = await this.executeOperationMutationWithRetry(
       SQL.INSERT_OPERATION,
       [
         operation.operationId,
@@ -841,7 +843,7 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async persistOperationUpdate(operation) {
-    const result = await this.sqlQueryEngine.executeQuery(
+    const result = await this.executeOperationMutationWithRetry(
       SQL.UPDATE_OPERATION,
       [
         operation.status,
@@ -862,6 +864,56 @@ class RebalanceCoordinator extends EventEmitter {
       });
       throw new Error(result.error);
     }
+  }
+
+  /**
+   * Execute operation mutation SQL with retry for transient leader gaps.
+   * @param {string} sql - SQL statement.
+   * @param {Array<*>} params - Statement parameters.
+   * @return {Promise<Object>} SQL query result.
+   * @private
+   */
+  async executeOperationMutationWithRetry(sql, params) {
+    const startedAt = Date.now();
+    while (true) {
+      const result = await this.sqlQueryEngine.executeQuery(sql, params);
+      if (result.success || !this.isRetryableOperationPersistError(result.error)) {
+        return result;
+      }
+
+      const elapsedMs = Date.now() - startedAt;
+      const remainingMs = OPERATION_PERSIST_RETRY_TIMEOUT_MS - elapsedMs;
+      if (remainingMs <= NUM.ZERO) {
+        return result;
+      }
+
+      const waitMs = Math.min(OPERATION_PERSIST_RETRY_DELAY_MS, remainingMs);
+      await this.waitForOperationPersistRetry(waitMs);
+    }
+  }
+
+  /**
+   * Check whether operation persist error is transient and retryable.
+   * @param {string} errorMessage - SQL error message.
+   * @return {boolean} True when retry should be attempted.
+   * @private
+   */
+  isRetryableOperationPersistError(errorMessage) {
+    return typeof errorMessage === 'string' &&
+      (
+        errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+        errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND)
+      );
+  }
+
+  /**
+   * Delay helper for operation mutation retry loop.
+   * @param {number} delayMs - Delay duration in milliseconds.
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForOperationPersistRetry(delayMs) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
   /**

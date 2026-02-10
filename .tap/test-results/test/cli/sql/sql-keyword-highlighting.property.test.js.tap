@@ -3,22 +3,22 @@ TAP version 14
     # Subtest: all SQL keywords are highlighted
         ok 1 - all SQL keywords are highlighted
         1..1
-    ok 1 - all SQL keywords are highlighted # time=6.538ms
+    ok 1 - all SQL keywords are highlighted # time=4.957ms
     
     # Subtest: keyword highlighting is case-insensitive
         ok 1 - keyword highlighting is case-insensitive
         1..1
-    ok 2 - keyword highlighting is case-insensitive # time=0.754ms
+    ok 2 - keyword highlighting is case-insensitive # time=0.937ms
     
     # Subtest: stripping highlighting returns original text
         ok 1 - stripping highlighting returns original text
         1..1
-    ok 3 - stripping highlighting returns original text # time=2.676ms
+    ok 3 - stripping highlighting returns original text # time=2.669ms
     
     # Subtest: keywords inside strings are not highlighted
         ok 1 - keywords inside strings are not highlighted
         1..1
-    ok 4 - keywords inside strings are not highlighted # time=0.751ms
+    ok 4 - keywords inside strings are not highlighted # time=0.635ms
     
     # Subtest: keywords inside comments are not highlighted as keywords
         ok 1 - keywords inside comments are not highlighted as keywords
@@ -28,16 +28,16 @@ TAP version 14
     # Subtest: highlighting preserves non-keyword text
         ok 1 - highlighting preserves non-keyword text
         1..1
-    ok 6 - highlighting preserves non-keyword text # time=1.146ms
+    ok 6 - highlighting preserves non-keyword text # time=1.186ms
     
     # Subtest: multiple keywords in same query are all highlighted
         ok 1 - multiple keywords in same query are all highlighted
         1..1
-    ok 7 - multiple keywords in same query are all highlighted # time=0.635ms
+    ok 7 - multiple keywords in same query are all highlighted # time=0.66ms
     
     1..7
-ok 1 - Property 22: SQL Keyword Highlighting # time=16.773ms
+ok 1 - Property 22: SQL Keyword Highlighting # time=14.438ms
 
 1..1
 # { total: 7, pass: 7 }
-# time=23.403ms
+# time=17.82ms

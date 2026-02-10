@@ -47,16 +47,21 @@ import {
 } from '../cache/cache-constants.js';
 import {TablePolicyService} from '../policy/table-policy-service.js';
 import {RebalanceCoordinator} from '../rebalancer/rebalance-coordinator.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   BOOTSTRAP_EVENT,
   BOOTSTRAP_SUBSYSTEM,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
   JOINING_PHASE,
 } from './bootstrap-constants.js';
-import {SYSTEM_TABLE_SCHEMAS} from './system-table-schemas-constants.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_SCHEMAS,
+} from './system-table-schemas-constants.js';
 import {
   getMissingSystemServiceLeaders,
   getMissingSystemServiceLeaderCount,
+  isSystemTableWriteReady,
 } from '../cache/leader-readiness-gate.js';
 import {
   JOINING_CLEANUP_RESULT,
@@ -99,6 +104,10 @@ import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 
 const JoiningPhase = JOINING_PHASE;
 const JoiningEvent = BOOTSTRAP_EVENT;
+const JOINING_REQUIRED_WRITE_TABLES = Object.freeze([
+  TABLES.NODES,
+  TABLES.NODE_ENDPOINTS,
+]);
 
 /**
  * Maps each JOINING_PHASE to its index in the cleanup steps array.
@@ -1097,7 +1106,10 @@ class NodeJoiningService extends EventEmitter {
 
     while (Date.now() - startTime < timeoutMs) {
       const missing = this.getMissingSystemServiceLeaders(systemTableCache);
-      const blockingMissing = this.getBlockingSystemServiceLeaders(missing);
+      const blockingMissing = this.getBlockingSystemServiceLeaders(
+        missing,
+        systemTableCache,
+      );
       const missingCount = getMissingSystemServiceLeaderCount(blockingMissing);
 
       if (missingCount === NUM.ZERO) {
@@ -1109,7 +1121,10 @@ class NodeJoiningService extends EventEmitter {
     }
 
     const missing = this.getMissingSystemServiceLeaders(systemTableCache);
-    const blockingMissing = this.getBlockingSystemServiceLeaders(missing);
+    const blockingMissing = this.getBlockingSystemServiceLeaders(
+      missing,
+      systemTableCache,
+    );
     const leadershipTimeout = JOINING_ERROR_MSG.leadershipTimeout;
     const error = new Error(leadershipTimeout(timeoutMs));
     error.missingLeaders = blockingMissing;
@@ -1121,6 +1136,81 @@ class NodeJoiningService extends EventEmitter {
     };
     error.timeoutMs = timeoutMs;
     throw error;
+  }
+
+  /**
+   * Get the system tables that must be write-routable before state-query writes.
+   * @return {Array<string>} Required system table names.
+   * @private
+   */
+  getRequiredSystemWriteTables() {
+    const requiredTables = [...JOINING_REQUIRED_WRITE_TABLES];
+    const strategy = this.bootstrapResponse?.messageGroupAssignment?.strategy;
+
+    if (strategy === AssignmentStrategy.CREATE_SELF_HOSTED) {
+      requiredTables.push(TABLES.MESSAGE_GROUPS);
+    }
+
+    return requiredTables;
+  }
+
+  /**
+   * Check whether a system table is currently write-routable for join workflow.
+   * Allows follower-routed writes when leader metadata is temporarily stale.
+   * @param {Object} systemTableCache - System table cache.
+   * @param {string} tableName - System table name.
+   * @return {boolean} True when writes can be routed.
+   * @private
+   */
+  isSystemTableWriteRoutable(systemTableCache, tableName) {
+    if (isSystemTableWriteReady(systemTableCache, tableName)) {
+      return true;
+    }
+
+    const partitionId = INITIAL_PARTITION_IDS[tableName];
+    if (!partitionId || typeof systemTableCache?.filter !== TYPEOF.FUNCTION) {
+      return false;
+    }
+
+    const routableServices = systemTableCache.filter(TABLES.SERVICES, (service) =>
+      service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
+      service?.[COLUMN.PARTITION_ID] === partitionId &&
+      service?.[COLUMN.STATUS] !== ReplicaStatus.FAILED &&
+      service?.[COLUMN.STATUS] !== ReplicaStatus.REMOVED &&
+      typeof service?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
+      service[COLUMN.ADDRESS].length > NUM.ZERO,
+    );
+
+    return routableServices.length > NUM.ZERO;
+  }
+
+  /**
+   * Check whether the cache currently includes a partition row for a table.
+   * Minimal synthetic caches in tests may omit unrelated system partitions.
+   * @param {Object} systemTableCache - System table cache.
+   * @param {string} tableName - System table name.
+   * @return {boolean} True when table partition is present in cache.
+   * @private
+   */
+  hasSystemTablePartition(systemTableCache, tableName) {
+    const partitionId = INITIAL_PARTITION_IDS[tableName];
+    if (!partitionId) {
+      return false;
+    }
+
+    if (typeof systemTableCache?.filter === TYPEOF.FUNCTION) {
+      const partitions = systemTableCache.filter(TABLES.PARTITIONS, (partition) =>
+        partition?.[COLUMN.PARTITION_ID] === partitionId,
+      );
+      return partitions.length > NUM.ZERO;
+    }
+
+    if (typeof systemTableCache?.getAll === TYPEOF.FUNCTION) {
+      const partitions = systemTableCache.getAll(TABLES.PARTITIONS) || [];
+      return partitions.some((partition) => partition?.[COLUMN.PARTITION_ID] === partitionId);
+    }
+
+    return false;
   }
 
   /**
@@ -1141,15 +1231,51 @@ class NodeJoiningService extends EventEmitter {
    * Keep join-time readiness gates focused on system-table write routing.
    * Message-group leader rows can legitimately lag during MOVE_REPLICA handoffs.
    * @param {Object} missing - Missing leader diagnostics.
+   * @param {Object} systemTableCache - System table cache.
    * @return {Object} Blocking subset for state-query readiness.
    * @private
    */
-  getBlockingSystemServiceLeaders(missing) {
+  getBlockingSystemServiceLeaders(missing, systemTableCache) {
+    const requiredTables = this.getRequiredSystemWriteTables();
+    const missingPartitionLeaders = [];
+    const missingPartitionLeaderNodes = [];
+    const missingPartitionLeaderAddresses = [];
+    const missingRequiredTables = [];
+
+    for (const tableName of requiredTables) {
+      if (!this.hasSystemTablePartition(systemTableCache, tableName)) {
+        continue;
+      }
+
+      if (this.isSystemTableWriteRoutable(systemTableCache, tableName)) {
+        continue;
+      }
+
+      missingRequiredTables.push(tableName);
+
+      const partitionId = INITIAL_PARTITION_IDS[tableName];
+      if (!partitionId) {
+        continue;
+      }
+      missingPartitionLeaders.push(partitionId);
+
+      if (missing.missingPartitionLeaderNodes?.includes(partitionId)) {
+        missingPartitionLeaderNodes.push(partitionId);
+      }
+      if (missing.missingPartitionLeaderAddresses?.includes(partitionId)) {
+        missingPartitionLeaderAddresses.push(partitionId);
+      }
+    }
+
     return {
       ...missing,
+      missingPartitionLeaders,
+      missingPartitionLeaderNodes,
+      missingPartitionLeaderAddresses,
       missingMessageGroupLeaders: [],
       missingMessageGroupLeaderNodes: [],
       missingMessageGroupLeaderAddresses: [],
+      missingRequiredTables,
     };
   }
 

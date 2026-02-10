@@ -3,51 +3,51 @@ TAP version 14
     # Subtest: parseAddress extracts correct components from valid addresses
         ok 1 - parseAddress extracts correct components from valid addresses
         1..1
-    ok 1 - parseAddress extracts correct components from valid addresses # time=14.324ms
+    ok 1 - parseAddress extracts correct components from valid addresses # time=7.89ms
     
     # Subtest: parseAddress handles malformed addresses gracefully
         ok 1 - parseAddress handles malformed addresses gracefully
         1..1
-    ok 2 - parseAddress handles malformed addresses gracefully # time=3.807ms
+    ok 2 - parseAddress handles malformed addresses gracefully # time=1.822ms
     
     # Subtest: isValidAddress accepts valid unified addresses
         ok 1 - isValidAddress accepts valid unified addresses
         1..1
-    ok 3 - isValidAddress accepts valid unified addresses # time=3.653ms
+    ok 3 - isValidAddress accepts valid unified addresses # time=1.571ms
     
     # Subtest: isValidAddress rejects invalid entity types
         ok 1 - isValidAddress rejects invalid entity types
         1..1
-    ok 4 - isValidAddress rejects invalid entity types # time=2.548ms
+    ok 4 - isValidAddress rejects invalid entity types # time=1.43ms
     
     # Subtest: isValidAddress rejects wrong segment count
         ok 1 - isValidAddress rejects wrong segment count
         1..1
-    ok 5 - isValidAddress rejects wrong segment count # time=2.448ms
+    ok 5 - isValidAddress rejects wrong segment count # time=1.274ms
     
     # Subtest: isValidAddress rejects empty segments
         ok 1 - isValidAddress rejects empty segments
         1..1
-    ok 6 - isValidAddress rejects empty segments # time=2.332ms
+    ok 6 - isValidAddress rejects empty segments # time=1.297ms
     
     # Subtest: register throws for invalid addresses
         ok 1 - register throws for invalid addresses
         1..1
-    ok 7 - register throws for invalid addresses # time=3.501ms
+    ok 7 - register throws for invalid addresses # time=1.58ms
     
     # Subtest: register accepts valid addresses
         ok 1 - register accepts valid addresses
         1..1
-    ok 8 - register accepts valid addresses # time=1.935ms
+    ok 8 - register accepts valid addresses # time=1.247ms
     
     # Subtest: parseAddress round-trip preserves components
         ok 1 - parseAddress round-trip preserves components
         1..1
-    ok 9 - parseAddress round-trip preserves components # time=1.594ms
+    ok 9 - parseAddress round-trip preserves components # time=1.224ms
     
     1..9
-ok 1 - Property 1: Address Format and Parsing # time=42.272ms
+ok 1 - Property 1: Address Format and Parsing # time=22.731ms
 
 1..1
 # { total: 9, pass: 9 }
-# time=117.879ms
+# time=67.001ms

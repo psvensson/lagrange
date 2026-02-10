@@ -310,6 +310,7 @@ function createTestCoordinator(options = {}) {
     enableTimeouts,
   });
 
+  coordinator.initialize();
   return coordinator;
 }
 

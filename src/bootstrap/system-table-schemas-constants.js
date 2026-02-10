@@ -33,6 +33,9 @@ const SystemTableName = {
   CODE: TABLES.CODE,
   REPLICA_OPERATIONS: TABLES.REPLICA_OPERATIONS,
   NODE_ENDPOINTS: TABLES.NODE_ENDPOINTS,
+  SERVICE_DEFINITIONS: TABLES.SERVICE_DEFINITIONS,
+  SERVICE_ENDPOINTS: TABLES.SERVICE_ENDPOINTS,
+  SERVICE_TIMERS: TABLES.SERVICE_TIMERS,
 };
 
 /**
@@ -367,6 +370,104 @@ const NODE_ENDPOINTS_SCHEMA = {
 };
 
 /**
+ * Service definitions system table schema.
+ * Stores metadata about WASM service definitions.
+ * Requirements: 12.3, 12.4, 12.5
+ */
+const SERVICE_DEFINITIONS_SCHEMA = {
+  tableName: SystemTableName.SERVICE_DEFINITIONS,
+  columns: [
+    {name: 'service_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'service_name', type: ColumnType.TEXT, notNull: true, unique: true},
+    {name: 'handler_function_id', type: ColumnType.TEXT, notNull: true},
+    {
+      name: 'read_consistency',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'strong\'',
+    },
+    {
+      name: 'write_consistency',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'strong\'',
+    },
+    {name: 'replica_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 3},
+    {name: 'protocol', type: ColumnType.TEXT, notNull: true, defaultValue: '\'websocket\''},
+    {name: 'resource_budget', type: ColumnType.TEXT, notNull: true, defaultValue: '\'{}\''},
+    {
+      name: 'safety_interval_ms',
+      type: ColumnType.INTEGER,
+      notNull: true,
+      defaultValue: 500,
+    },
+    {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {name: 'idx_svc_def_name', columns: ['service_name']},
+    {name: 'idx_svc_def_handler', columns: ['handler_function_id']},
+    {name: 'idx_svc_def_status', columns: ['status']},
+  ],
+};
+
+/**
+ * Service endpoints system table schema.
+ * Stores externally reachable endpoints for WASM service replicas.
+ * Requirements: 12.3, 12.4, 12.5
+ */
+const SERVICE_ENDPOINTS_SCHEMA = {
+  tableName: SystemTableName.SERVICE_ENDPOINTS,
+  columns: [
+    {name: 'endpoint_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'service_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'node_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'protocol', type: ColumnType.TEXT, notNull: true},
+    {name: 'address', type: ColumnType.TEXT, notNull: true},
+    {name: 'port', type: ColumnType.INTEGER, notNull: true},
+    {
+      name: 'health_status',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'healthy\'',
+    },
+    {name: 'metadata', type: ColumnType.TEXT, notNull: true, defaultValue: '\'{}\''},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {name: 'idx_svc_ep_service', columns: ['service_id']},
+    {name: 'idx_svc_ep_node', columns: ['node_id']},
+    {name: 'idx_svc_ep_health', columns: ['health_status']},
+  ],
+};
+
+/**
+ * Service timers system table schema.
+ * Stores persistent timer entries for WASM service groups.
+ * Requirements: 12.3, 12.4, 12.5
+ */
+const SERVICE_TIMERS_SCHEMA = {
+  tableName: SystemTableName.SERVICE_TIMERS,
+  columns: [
+    {name: 'timer_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'service_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'delay_ms', type: ColumnType.INTEGER, notNull: true},
+    {name: 'fire_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'payload', type: ColumnType.TEXT, notNull: true, defaultValue: '\'{}\''},
+    {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {name: 'idx_svc_timer_service', columns: ['service_id']},
+    {name: 'idx_svc_timer_status', columns: ['status']},
+    {name: 'idx_svc_timer_fire', columns: ['fire_at']},
+  ],
+};
+
+/**
  * All system table schemas in creation order.
  * Order matters for foreign key dependencies.
  */
@@ -384,6 +485,9 @@ const SYSTEM_TABLE_SCHEMAS = [
   CODE_SCHEMA,
   REPLICA_OPERATIONS_SCHEMA,
   NODE_ENDPOINTS_SCHEMA,
+  SERVICE_DEFINITIONS_SCHEMA,
+  SERVICE_ENDPOINTS_SCHEMA,
+  SERVICE_TIMERS_SCHEMA,
 ];
 
 /**
@@ -404,6 +508,9 @@ const INITIAL_PARTITION_IDS = {
   [SystemTableName.CODE]: 'code-p1',
   [SystemTableName.REPLICA_OPERATIONS]: 'replica_operations-p1',
   [SystemTableName.NODE_ENDPOINTS]: 'node_endpoints-p1',
+  [SystemTableName.SERVICE_DEFINITIONS]: 'service_definitions-p1',
+  [SystemTableName.SERVICE_ENDPOINTS]: 'service_endpoints-p1',
+  [SystemTableName.SERVICE_TIMERS]: 'service_timers-p1',
 };
 
 /**
@@ -431,6 +538,15 @@ const INITIAL_REPLICA_IDS = {
   ],
   [SystemTableName.NODE_ENDPOINTS]: [
     'node_endpoints-p1-r1', 'node_endpoints-p1-r2', 'node_endpoints-p1-r3',
+  ],
+  [SystemTableName.SERVICE_DEFINITIONS]: [
+    'service_definitions-p1-r1', 'service_definitions-p1-r2', 'service_definitions-p1-r3',
+  ],
+  [SystemTableName.SERVICE_ENDPOINTS]: [
+    'service_endpoints-p1-r1', 'service_endpoints-p1-r2', 'service_endpoints-p1-r3',
+  ],
+  [SystemTableName.SERVICE_TIMERS]: [
+    'service_timers-p1-r1', 'service_timers-p1-r2', 'service_timers-p1-r3',
   ],
 };
 
@@ -529,6 +645,9 @@ export {
   CODE_SCHEMA,
   REPLICA_OPERATIONS_SCHEMA,
   NODE_ENDPOINTS_SCHEMA,
+  SERVICE_DEFINITIONS_SCHEMA,
+  SERVICE_ENDPOINTS_SCHEMA,
+  SERVICE_TIMERS_SCHEMA,
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_PARTITION_IDS,
   INITIAL_REPLICA_IDS,

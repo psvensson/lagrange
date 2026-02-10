@@ -540,6 +540,7 @@ class CDCIntegrationService extends EventEmitter {
       return false;
     }
     return message.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+      message.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
       message === ERRORS.QUERY_FAILED ||
       message.includes(ERRORS.SYSTEM_CACHE_NOT_AVAILABLE) ||
       message.includes(ERRORS.SYSTEM_CACHE_PARTITION_LOOKUP_UNAVAILABLE) ||
@@ -1241,6 +1242,9 @@ class CDCIntegrationService extends EventEmitter {
       [SystemTableName.CODE]: COLUMN.FUNCTION_ID,
       [SystemTableName.REPLICA_OPERATIONS]: COLUMN.OPERATION_ID,
       [SystemTableName.NODE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
+      [SystemTableName.SERVICE_DEFINITIONS]: COLUMN.SERVICE_ID,
+      [SystemTableName.SERVICE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
+      [SystemTableName.SERVICE_TIMERS]: COLUMN.TIMER_ID,
     };
 
     return primaryKeyMap[tableName] || CDC_PRIMARY_KEY.FALLBACK;

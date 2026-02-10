@@ -2,33 +2,33 @@ TAP version 14
 # Subtest: Property 1: Single replica elects exactly one leader
     ok 1 - Single replica elects exactly one leader
     1..1
-ok 1 - Property 1: Single replica elects exactly one leader # time=11.389ms
+ok 1 - Property 1: Single replica elects exactly one leader # time=13.341ms
 
 # Subtest: Property 1: At most one leader exists (no split-brain)
     ok 1 - At most one leader exists (no split-brain)
     1..1
-ok 2 - Property 1: At most one leader exists (no split-brain) # time=9.999ms
+ok 2 - Property 1: At most one leader exists (no split-brain) # time=9.466ms
 
 # Subtest: Property 1: Partition status reflects correct leader state
     ok 1 - Partition status reflects correct leader state
     1..1
-ok 3 - Property 1: Partition status reflects correct leader state # time=4.967ms
+ok 3 - Property 1: Partition status reflects correct leader state # time=5.113ms
 
 # Subtest: Property 2: Leadership remains stable without topology changes
     ok 1 - Leadership remains stable without topology changes
     1..1
-ok 4 - Property 2: Leadership remains stable without topology changes # time=7.068ms
+ok 4 - Property 2: Leadership remains stable without topology changes # time=4.936ms
 
 # Subtest: Property 2: Term numbers stabilize after election
     ok 1 - Term numbers stabilize after election
     1..1
-ok 5 - Property 2: Term numbers stabilize after election # time=6.557ms
+ok 5 - Property 2: Term numbers stabilize after election # time=5.049ms
 
 # Subtest: Property 2: Multi-replica leadership stability
     ok 1 - Multi-replica leadership stability
     1..1
-ok 6 - Property 2: Multi-replica leadership stability # time=7.638ms
+ok 6 - Property 2: Multi-replica leadership stability # time=7.195ms
 
 1..6
 # { total: 6, pass: 6 }
-# time=191.236ms
+# time=184.844ms

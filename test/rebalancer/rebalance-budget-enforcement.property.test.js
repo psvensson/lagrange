@@ -63,7 +63,10 @@ function createBudgetSqlEngine(budget, inFlightCount) {
   return {
     executeQuery: async (sql, _params) => {
       if (sql.includes('COUNT(*)')) {
-        return {success: true, rows: [{count: inFlightCount}]};
+        return {
+          success: true,
+          rows: [{total_count: inFlightCount, count: inFlightCount}],
+        };
       }
       if (sql.includes('config_value')) {
         return {

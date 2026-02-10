@@ -6,7 +6,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 1 - constructor initializes with default state # time=12.669ms
+    ok 1 - constructor initializes with default state # time=11.768ms
     
     # Subtest: getColumns returns correct column definitions
         ok 1 - should be equal
@@ -15,7 +15,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 2 - getColumns returns correct column definitions # time=0.43ms
+    ok 2 - getColumns returns correct column definitions # time=0.52ms
     
     # Subtest: formatRow formats service data correctly
         ok 1 - should be equal
@@ -23,7 +23,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 3 - formatRow formats service data correctly # time=0.538ms
+    ok 3 - formatRow formats service data correctly # time=0.604ms
     
     # Subtest: formatRow handles missing values
         ok 1 - should be equal
@@ -31,14 +31,14 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 4 - formatRow handles missing values # time=0.337ms
+    ok 4 - formatRow handles missing values # time=0.413ms
     
     # Subtest: formatNodeAddress formats address correctly
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 5 - formatNodeAddress formats address correctly # time=0.289ms
+    ok 5 - formatNodeAddress formats address correctly # time=0.358ms
     
     # Subtest: formatShortName formats names correctly
         ok 1 - should be equal
@@ -47,14 +47,14 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 6 - formatShortName formats names correctly # time=0.577ms
+    ok 6 - formatShortName formats names correctly # time=0.501ms
     
     # Subtest: formatUnifiedAddress formats address correctly
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 7 - formatUnifiedAddress formats address correctly # time=0.402ms
+    ok 7 - formatUnifiedAddress formats address correctly # time=0.357ms
     
     # Subtest: formatServiceType formats types correctly
         ok 1 - should be equal
@@ -63,48 +63,48 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 8 - formatServiceType formats types correctly # time=0.402ms
+    ok 8 - formatServiceType formats types correctly # time=0.46ms
     
     # Subtest: formatStatus includes role when present
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 9 - formatStatus includes role when present # time=0.287ms
+    ok 9 - formatStatus includes role when present # time=0.35ms
     
     # Subtest: getRowStatus returns ERROR for failed services
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 10 - getRowStatus returns ERROR for failed services # time=0.272ms
+    ok 10 - getRowStatus returns ERROR for failed services # time=0.295ms
     
     # Subtest: getRowStatus returns WARNING for transitional states
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 11 - getRowStatus returns WARNING for transitional states # time=0.292ms
+    ok 11 - getRowStatus returns WARNING for transitional states # time=0.319ms
     
     # Subtest: getRowStatus returns NORMAL for active services
         ok 1 - should be equal
         1..1
-    ok 12 - getRowStatus returns NORMAL for active services # time=0.195ms
+    ok 12 - getRowStatus returns NORMAL for active services # time=0.235ms
     
     # Subtest: getItemKey returns service_id
         ok 1 - should be equal
         1..1
-    ok 13 - getItemKey returns service_id # time=0.189ms
+    ok 13 - getItemKey returns service_id # time=0.262ms
     
     # Subtest: setNodeFilter filters by node
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 14 - setNodeFilter filters by node # time=0.425ms
+    ok 14 - setNodeFilter filters by node # time=0.593ms
     
     # Subtest: setTypeFilter filters by type
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 15 - setTypeFilter filters by type # time=0.295ms
+    ok 15 - setTypeFilter filters by type # time=0.333ms
     
     # Subtest: clearServiceFilters removes all filters
         ok 1 - should be equal
@@ -112,32 +112,32 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 16 - clearServiceFilters removes all filters # time=0.432ms
+    ok 16 - clearServiceFilters removes all filters # time=0.494ms
     
     # Subtest: handleDrillDown returns partition navigation
         ok 1 - should be equivalent
         1..1
-    ok 17 - handleDrillDown returns partition navigation # time=1.136ms
+    ok 17 - handleDrillDown returns partition navigation # time=1.186ms
     
     # Subtest: handleDrillDown returns message_group navigation
         ok 1 - should be equivalent
         1..1
-    ok 18 - handleDrillDown returns message_group navigation # time=0.271ms
+    ok 18 - handleDrillDown returns message_group navigation # time=0.309ms
     
     # Subtest: handleDrillDown returns node navigation for node services
         ok 1 - should be equivalent
         1..1
-    ok 19 - handleDrillDown returns node navigation for node services # time=0.318ms
+    ok 19 - handleDrillDown returns node navigation for node services # time=0.312ms
     
     # Subtest: handleDrillDown returns null for unknown types
         ok 1 - should be equal
         1..1
-    ok 20 - handleDrillDown returns null for unknown types # time=0.247ms
+    ok 20 - handleDrillDown returns null for unknown types # time=0.224ms
     
     # Subtest: handleDrillDown returns null when no selection
         ok 1 - should be equal
         1..1
-    ok 21 - handleDrillDown returns null when no selection # time=0.245ms
+    ok 21 - handleDrillDown returns null when no selection # time=0.206ms
     
     # Subtest: getSelectedDetails returns service details
         ok 1 - should be equal
@@ -145,19 +145,19 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 22 - getSelectedDetails returns service details # time=0.667ms
+    ok 22 - getSelectedDetails returns service details # time=0.646ms
     
     # Subtest: getSelectedDetails includes partition details
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 23 - getSelectedDetails includes partition details # time=0.497ms
+    ok 23 - getSelectedDetails includes partition details # time=0.335ms
     
     # Subtest: getSelectedDetails includes message group details
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 24 - getSelectedDetails includes message group details # time=0.468ms
+    ok 24 - getSelectedDetails includes message group details # time=0.313ms
     
     # Subtest: formatBytes formats sizes correctly
         ok 1 - should be equal
@@ -168,14 +168,14 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 25 - formatBytes formats sizes correctly # time=0.867ms
+    ok 25 - formatBytes formats sizes correctly # time=0.553ms
     
     # Subtest: SERVICE_TYPES constants are correct
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 26 - SERVICE_TYPES constants are correct # time=0.437ms
+    ok 26 - SERVICE_TYPES constants are correct # time=0.308ms
     
     # Subtest: REPLICA_STATES constants are correct
         ok 1 - should be equal
@@ -186,7 +186,7 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 27 - REPLICA_STATES constants are correct # time=0.911ms
+    ok 27 - REPLICA_STATES constants are correct # time=0.625ms
     
     # Subtest: REPLICA_STATE_COLORS has correct color mappings
         ok 1 - should be equal
@@ -197,7 +197,7 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 28 - REPLICA_STATE_COLORS has correct color mappings # time=0.787ms
+    ok 28 - REPLICA_STATE_COLORS has correct color mappings # time=0.575ms
     
     # Subtest: TRANSITIONAL_STATES contains correct states
         ok 1 - should be equal
@@ -207,7 +207,7 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 29 - TRANSITIONAL_STATES contains correct states # time=0.974ms
+    ok 29 - TRANSITIONAL_STATES contains correct states # time=0.654ms
     
     # Subtest: getStatusColor returns correct colors for replica states
         ok 1 - should be equal
@@ -218,7 +218,7 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 30 - getStatusColor returns correct colors for replica states # time=0.775ms
+    ok 30 - getStatusColor returns correct colors for replica states # time=0.585ms
     
     # Subtest: getRowStatus returns WARNING for transitional states
         ok 1 - should be equal
@@ -226,7 +226,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 31 - getRowStatus returns WARNING for transitional states # time=0.424ms
+    ok 31 - getRowStatus returns WARNING for transitional states # time=0.386ms
     
     # Subtest: formatTimeInState formats durations correctly
         ok 1 - should be equal
@@ -238,19 +238,19 @@ TAP version 14
         ok 7 - should be equal
         ok 8 - should be equal
         1..8
-    ok 32 - formatTimeInState formats durations correctly # time=0.679ms
+    ok 32 - formatTimeInState formats durations correctly # time=0.618ms
     
     # Subtest: formatStatus includes time-in-state for transitional states
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 33 - formatStatus includes time-in-state for transitional states # time=0.365ms
+    ok 33 - formatStatus includes time-in-state for transitional states # time=0.282ms
     
     # Subtest: formatStatus does not include time-in-state for non-transitional
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 34 - formatStatus does not include time-in-state for non-transitional # time=0.377ms
+    ok 34 - formatStatus does not include time-in-state for non-transitional # time=0.338ms
     
     # Subtest: getSelectedDetails includes replica state section
         ok 1 - should be equal
@@ -259,20 +259,20 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 35 - getSelectedDetails includes replica state section # time=0.538ms
+    ok 35 - getSelectedDetails includes replica state section # time=0.564ms
     
     # Subtest: getSelectedDetails shows failure reason for failed replicas
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 36 - getSelectedDetails shows failure reason for failed replicas # time=0.355ms
+    ok 36 - getSelectedDetails shows failure reason for failed replicas # time=0.368ms
     
     # Subtest: getSelectedDetails does not show failure reason for non-failed
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 37 - getSelectedDetails does not show failure reason for non-failed # time=0.299ms
+    ok 37 - getSelectedDetails does not show failure reason for non-failed # time=0.308ms
     
     # Subtest: getSelectedDetails includes sync progress for syncing replicas
         ok 1 - should be equal
@@ -280,32 +280,32 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 38 - getSelectedDetails includes sync progress for syncing replicas # time=0.43ms
+    ok 38 - getSelectedDetails includes sync progress for syncing replicas # time=0.449ms
     
     # Subtest: getSelectedDetails includes navigation links
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 39 - getSelectedDetails includes navigation links # time=0.383ms
+    ok 39 - getSelectedDetails includes navigation links # time=0.347ms
     
     # Subtest: getSelectedDetails includes Raft state when available
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 40 - getSelectedDetails includes Raft state when available # time=0.536ms
+    ok 40 - getSelectedDetails includes Raft state when available # time=0.361ms
     
     # Subtest: getSelectedDetails includes epoch info when available
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 41 - getSelectedDetails includes epoch info when available # time=0.575ms
+    ok 41 - getSelectedDetails includes epoch info when available # time=0.373ms
     
     1..41
-ok 1 - ServicesView # time=40.636ms
+ok 1 - ServicesView # time=36.767ms
 
 1..1
 # { total: 139, pass: 139 }
-# time=57.629ms
+# time=49.088ms

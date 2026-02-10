@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: valid commands parse to correct name and args
         ok 1 - Valid commands parse correctly
         1..1
-    ok 1 - valid commands parse to correct name and args # time=4.99ms
+    ok 1 - valid commands parse to correct name and args # time=5.224ms
     
     # Subtest: invalid commands return error
         ok 1 - Invalid commands return error
         1..1
-    ok 2 - invalid commands return error # time=5.728ms
+    ok 2 - invalid commands return error # time=5.878ms
     
     # Subtest: missing required params return error
         ok 1 - Missing required params return error
         1..1
-    ok 3 - missing required params return error # time=0.597ms
+    ok 3 - missing required params return error # time=0.64ms
     
     # Subtest: aliases resolve to canonical command names
         ok 1 - Aliases resolve to canonical names
         1..1
-    ok 4 - aliases resolve to canonical command names # time=0.536ms
+    ok 4 - aliases resolve to canonical command names # time=0.563ms
     
     # Subtest: empty input returns error
         ok 1 - Empty/whitespace input returns error
         1..1
-    ok 5 - empty input returns error # time=0.739ms
+    ok 5 - empty input returns error # time=0.882ms
     
     # Subtest: quoted arguments preserve spaces
         ok 1 - Quoted arguments preserve spaces
         1..1
-    ok 6 - quoted arguments preserve spaces # time=1.234ms
+    ok 6 - quoted arguments preserve spaces # time=1.924ms
     
     1..6
-ok 1 - Property 11: Command Parsing Correctness # time=17.375ms
+ok 1 - Property 11: Command Parsing Correctness # time=18.533ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=20.652ms
+# time=21.819ms

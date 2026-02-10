@@ -3565,8 +3565,12 @@ class PartitionService extends EventEmitter {
    */
   async quiesceRebalancing() {
     if (this.rebalancer) {
-      this.rebalancer.setLeader(false);
-      this.rebalancer.shutdown();
+      if (typeof this.rebalancer.setLeader === 'function') {
+        this.rebalancer.setLeader(false);
+      }
+      if (typeof this.rebalancer.shutdown === 'function') {
+        this.rebalancer.shutdown();
+      }
       this.rebalancer = null;
     }
     if (this.rebalanceCoordinator) {

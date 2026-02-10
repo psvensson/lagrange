@@ -3,31 +3,31 @@ TAP version 14
     # Subtest: state counts match actual replica counts
         ok 1 - state counts match actual replica counts
         1..1
-    ok 1 - state counts match actual replica counts # time=5.291ms
+    ok 1 - state counts match actual replica counts # time=5.594ms
     
     # Subtest: state counts accurate after mixed transitions
         ok 1 - state counts accurate after mixed transitions
         1..1
-    ok 2 - state counts accurate after mixed transitions # time=2.786ms
+    ok 2 - state counts accurate after mixed transitions # time=3.208ms
     
     # Subtest: state counts sum equals total replicas
         ok 1 - state counts sum equals total replicas
         1..1
-    ok 3 - state counts sum equals total replicas # time=1.483ms
+    ok 3 - state counts sum equals total replicas # time=1.951ms
     
     # Subtest: add transitional counts accurate
         ok 1 - add transitional counts accurate
         1..1
-    ok 4 - add transitional counts accurate # time=1.695ms
+    ok 4 - add transitional counts accurate # time=2.263ms
     
     # Subtest: remove transitional count accurate
         ok 1 - remove transitional count accurate
         1..1
-    ok 5 - remove transitional count accurate # time=2.105ms
+    ok 5 - remove transitional count accurate # time=3.039ms
     
     1..5
-ok 1 - Property 11: State Count Accuracy # time=116.368ms
+ok 1 - Property 11: State Count Accuracy # time=136.679ms
 
 1..1
 # { total: 5, pass: 5 }
-# time=121.963ms
+# time=140.48ms

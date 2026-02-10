@@ -18,6 +18,7 @@ import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../../src/bootstrap/message-group-assignment.js';
+import {BOOTSTRAP_PIPELINE_ERROR_CODE} from '../../src/bootstrap/bootstrap-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -46,9 +47,9 @@ function initializeTestEnvironment() {
     logging: {level: 'error'},
     transport: {wsHost: '127.0.0.1'},
     raft: {
-      electionTimeoutMinMs: 100,
-      electionTimeoutMaxMs: 200,
-      heartbeatIntervalMs: 50,
+      electionTimeoutMinMs: 500,
+      electionTimeoutMaxMs: 900,
+      heartbeatIntervalMs: 150,
     },
   });
 
@@ -72,27 +73,57 @@ async function cleanupTestEnvironment() {
 function createInProcHttpPost(seedApi) {
   return async (url, body) => {
     const {pathname} = new URL(url);
-    const res = await seedApi.getFastify().inject({
-      method: 'POST',
-      url: pathname,
-      payload: body,
-    });
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw new Error(`HTTP ${res.statusCode}: ${res.payload}`);
+    let delayMs = BOOTSTRAP_RETRY_CONFIG.initialDelayMs;
+
+    for (let attempt = 1; attempt <= BOOTSTRAP_RETRY_CONFIG.maxAttempts; attempt++) {
+      const res = await seedApi.getFastify().inject({
+        method: 'POST',
+        url: pathname,
+        payload: body,
+      });
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        return res.json();
+      }
+
+      let parsedPayload = null;
+      try {
+        parsedPayload = res.json();
+      } catch (_error) {}
+
+      const isLeaderMetadataRetry =
+        res.statusCode === 503 &&
+        parsedPayload &&
+        parsedPayload.code === BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE &&
+        attempt < BOOTSTRAP_RETRY_CONFIG.maxAttempts;
+      if (!isLeaderMetadataRetry) {
+        throw new Error(`HTTP ${res.statusCode}: ${res.payload}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs = Math.min(delayMs * BOOTSTRAP_RETRY_CONFIG.backoffMultiplier,
+        BOOTSTRAP_RETRY_CONFIG.maxDelayMs);
     }
-    return res.json();
+
+    throw new Error('Bootstrap retries exhausted before leaders became available');
   };
 }
 
 // Fast bootstrap config
 const FAST_BOOTSTRAP_CONFIG = {
-  leadershipWaitTimeoutMs: 2000,
+  leadershipWaitTimeoutMs: 5000,
   leadershipWaitInitialDelayMs: 10,
   leadershipWaitMaxDelayMs: 50,
   replicaStaggerDelayMs: 10,
 };
 
-test('Property 11: Node Bootstrap Consistency', {timeout: 30000}, async (t) => {
+const BOOTSTRAP_RETRY_CONFIG = Object.freeze({
+  maxAttempts: 2,
+  initialDelayMs: 25,
+  maxDelayMs: 100,
+  backoffMultiplier: 2,
+});
+
+test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });

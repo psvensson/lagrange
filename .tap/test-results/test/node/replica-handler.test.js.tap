@@ -6,7 +6,7 @@ TAP version 14
         ok 3 - node ID set correctly
         ok 4 - not initialized after shutdown
         1..4
-    ok 1 - initialization # time=12.301ms
+    ok 1 - initialization # time=6.925ms
     
     # Subtest: handleMessage routes to correct handler
         ok 1 - correlationId preserved
@@ -15,428 +15,95 @@ TAP version 14
         ok 4 - not found
         ok 5 - error for unknown
         1..5
-    ok 2 - handleMessage routes to correct handler # time=4.066ms
+    ok 2 - handleMessage routes to correct handler # time=2.458ms
     
     # Subtest: handleCreateReplica - returns initiated for new replica
         ok 1 - status is initiated
         ok 2 - replicaId in response
         ok 3 - nodeId in response
         ok 4 - operationId in response
-        not ok 5 - local replica tracked
-          ---
-          at:
-            fileName: test/node/replica-handler.test.js
-            lineNumber: 317
-            columnNumber: 7
-            typeName: Test
-          stack: |
-            Test.<anonymous> (test/node/replica-handler.test.js:317:7)
-          source: >2
-                // Check local replica was tracked
-                const localReplica = handler.getLocalReplica('replica-1');
-                t.ok(localReplica, 'local replica tracked');
-            ------^
-                t.equal(localReplica.status, ReplicaStatus.CREATING, 'status is creating');
-          ...
-        
-        not ok 6 - Cannot read properties of null (reading 'status')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-handler.test.js:318:26)
-          at:
-            fileName: test/node/replica-handler.test.js
-            lineNumber: 318
-            columnNumber: 26
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: >2
-                const localReplica = handler.getLocalReplica('replica-1');
-                t.ok(localReplica, 'local replica tracked');
-                t.equal(localReplica.status, ReplicaStatus.CREATING, 'status is creating');
-            -------------------------^
-          
-                await created;
-          ...
-        
+        ok 5 - local replica tracked
+        ok 6 - status is creating
         1..6
-    not ok 3 - handleCreateReplica - returns initiated for new replica # time=21.097ms
-      ---
-      at:
-        fileName: test/node/replica-handler.test.js
-        lineNumber: 280
-        columnNumber: 5
-        typeName: Test
-      source: >2
-          });
-      
-          t.test('handleCreateReplica - returns initiated for new replica', async (t) => {
-        ----^
-            const cache = createSeededCache();
-            seedReplicaOperation(cache, 'op-1');
-      ...
+    ok 3 - handleCreateReplica - returns initiated for new replica # time=1.914ms
     
     # Subtest: handleCreateReplica - returns already_exists for active replica
-        not ok 1 - Cannot read properties of undefined (reading 'set')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-handler.test.js:341:29)
-          at:
-            fileName: test/node/replica-handler.test.js
-            lineNumber: 341
-            columnNumber: 29
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: |2
-          
-                  // Pre-populate local replica
-                  handler.localReplicas.set('replica-1', {
-            ----------------------------^
-                    replicaId: 'replica-1',
-                    partitionId: 'partition-1',
-          ...
-        
-        1..1
-    not ok 4 - handleCreateReplica - returns already_exists for active replica # time=4.054ms
-      ---
-      at:
-        fileName: test/node/replica-handler.test.js
-        lineNumber: 325
-        columnNumber: 5
-        typeName: Test
-      source: |2
-          });
-      
-          t.test('handleCreateReplica - returns already_exists for active replica',
-        ----^
-            async (t) => {
-              const cache = createSeededCache();
-      ...
+        ok 1 - already_exists
+        ok 2 - replicaId in response
+        1..2
+    ok 4 - handleCreateReplica - returns already_exists for active replica # time=0.59ms
     
     # Subtest: handleCreateReplica - returns in_progress for creating replica
-        not ok 1 - Cannot read properties of undefined (reading 'set')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-handler.test.js:378:29)
-          at:
-            fileName: test/node/replica-handler.test.js
-            lineNumber: 378
-            columnNumber: 29
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: |2
-          
-                  // Pre-populate local replica in creating state
-                  handler.localReplicas.set('replica-1', {
-            ----------------------------^
-                    replicaId: 'replica-1',
-                    partitionId: 'partition-1',
-          ...
-        
-        1..1
-    not ok 5 - handleCreateReplica - returns in_progress for creating replica # time=4.145ms
-      ---
-      at:
-        fileName: test/node/replica-handler.test.js
-        lineNumber: 362
-        columnNumber: 5
-        typeName: Test
-      source: |2
-            });
-      
-          t.test('handleCreateReplica - returns in_progress for creating replica',
-        ----^
-            async (t) => {
-              const cache = createSeededCache();
-      ...
+        ok 1 - in_progress
+        ok 2 - replicaId in response
+        1..2
+    ok 5 - handleCreateReplica - returns in_progress for creating replica # time=0.557ms
     
     # Subtest: handleCreateReplica - idempotent for same operationId
         ok 1 - in_progress
         ok 2 - operationId in response
         1..2
-    ok 6 - handleCreateReplica - idempotent for same operationId # time=0.668ms
+    ok 6 - handleCreateReplica - idempotent for same operationId # time=0.567ms
     
     # Subtest: handleRemoveReplica - returns not_found for missing replica
         ok 1 - not_found
         ok 2 - replicaId in response
         1..2
-    ok 7 - handleRemoveReplica - returns not_found for missing replica # time=0.485ms
+    ok 7 - handleRemoveReplica - returns not_found for missing replica # time=0.548ms
     
     # Subtest: handleRemoveReplica - returns initiated for existing replica
-        not ok 1 - Cannot read properties of undefined (reading 'set')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-handler.test.js:495:29)
-          at:
-            fileName: test/node/replica-handler.test.js
-            lineNumber: 495
-            columnNumber: 29
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: |2
-          
-                  // Pre-populate local replica
-                  handler.localReplicas.set('replica-1', {
-            ----------------------------^
-                    replicaId: 'replica-1',
-                    partitionId: 'partition-1',
-          ...
-        
-        1..1
-    not ok 8 - handleRemoveReplica - returns initiated for existing replica # time=2.661ms
-      ---
-      at:
-        fileName: test/node/replica-handler.test.js
-        lineNumber: 468
-        columnNumber: 5
-        typeName: Test
-      source: |2
-            });
-      
-          t.test('handleRemoveReplica - returns initiated for existing replica',
-        ----^
-            async (t) => {
-              const cache = createSeededCache();
-      ...
+        ok 1 - initiated
+        ok 2 - replicaId in response
+        ok 3 - operationId in response
+        ok 4 - status is removing
+        1..4
+    ok 8 - handleRemoveReplica - returns initiated for existing replica # time=1.372ms
     
     # Subtest: handleRemoveReplica - returns in_progress for removing replica
-        not ok 1 - Cannot read properties of undefined (reading 'set')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-handler.test.js:543:29)
-          at:
-            fileName: test/node/replica-handler.test.js
-            lineNumber: 543
-            columnNumber: 29
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: |2
-          
-                  // Pre-populate local replica in removing state
-                  handler.localReplicas.set('replica-1', {
-            ----------------------------^
-                    replicaId: 'replica-1',
-                    partitionId: 'partition-1',
-          ...
-        
-        1..1
-    not ok 9 - handleRemoveReplica - returns in_progress for removing replica # time=2.802ms
-      ---
-      at:
-        fileName: test/node/replica-handler.test.js
-        lineNumber: 527
-        columnNumber: 5
-        typeName: Test
-      source: |2
-            });
-      
-          t.test('handleRemoveReplica - returns in_progress for removing replica',
-        ----^
-            async (t) => {
-              const cache = createSeededCache();
-      ...
+        ok 1 - in_progress
+        ok 2 - replicaId in response
+        1..2
+    ok 9 - handleRemoveReplica - returns in_progress for removing replica # time=0.565ms
     
     # Subtest: handleRemoveReplica - returns completed for removed replica
-        not ok 1 - Cannot read properties of undefined (reading 'set')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-handler.test.js:581:29)
-          at:
-            fileName: test/node/replica-handler.test.js
-            lineNumber: 581
-            columnNumber: 29
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: |2
-          
-                  // Pre-populate local replica in removed state
-                  handler.localReplicas.set('replica-1', {
-            ----------------------------^
-                    replicaId: 'replica-1',
-                    partitionId: 'partition-1',
-          ...
-        
-        1..1
-    not ok 10 - handleRemoveReplica - returns completed for removed replica # time=2.669ms
-      ---
-      at:
-        fileName: test/node/replica-handler.test.js
-        lineNumber: 565
-        columnNumber: 5
-        typeName: Test
-      source: |2
-            });
-      
-          t.test('handleRemoveReplica - returns completed for removed replica',
-        ----^
-            async (t) => {
-              const cache = createSeededCache();
-      ...
+        ok 1 - completed
+        ok 2 - replicaId in response
+        1..2
+    ok 10 - handleRemoveReplica - returns completed for removed replica # time=0.556ms
     
     # Subtest: registerExistingReplica - registers and is idempotent
-        not ok 1 - replica registered
-          ---
-          at:
-            fileName: test/node/replica-handler.test.js
-            lineNumber: 626
-            columnNumber: 7
-            typeName: Test
-          stack: |
-            Test.<anonymous> (test/node/replica-handler.test.js:626:7)
-          source: |2
-          
-                const replica = handler.getLocalReplica('replica-1');
-                t.ok(replica, 'replica registered');
-            ------^
-                t.equal(replica.status, ReplicaStatus.ACTIVE, 'status correct');
-          ...
-        
-        not ok 2 - Cannot read properties of null (reading 'status')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-handler.test.js:627:21)
-          at:
-            fileName: test/node/replica-handler.test.js
-            lineNumber: 627
-            columnNumber: 21
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: |2
-                const replica = handler.getLocalReplica('replica-1');
-                t.ok(replica, 'replica registered');
-                t.equal(replica.status, ReplicaStatus.ACTIVE, 'status correct');
-            --------------------^
-          
-                // Register again (idempotent)
-          ...
-        
-        1..2
-    not ok 11 - registerExistingReplica - registers and is idempotent # time=4.484ms
-      ---
-      at:
-        fileName: test/node/replica-handler.test.js
-        lineNumber: 603
-        columnNumber: 5
-        typeName: Test
-      source: >2
-            });
-      
-          t.test('registerExistingReplica - registers and is idempotent', async (t) => {
-        ----^
-            const cache = createSeededCache();
-            const mockCDC = createMockCDCService(cache);
-      ...
+        ok 1 - replica registered
+        ok 2 - status correct
+        ok 3 - status unchanged
+        1..3
+    ok 11 - registerExistingReplica - registers and is idempotent # time=0.692ms
     
     # Subtest: getStats returns correct statistics
-        not ok 1 - Cannot read properties of undefined (reading 'set')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-handler.test.js:659:27)
-          at:
-            fileName: test/node/replica-handler.test.js
-            lineNumber: 659
-            columnNumber: 27
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: |2
-          
-                // Add some local replicas
-                handler.localReplicas.set('replica-1', {status: ReplicaStatus.ACTIVE});
-            --------------------------^
-                handler.localReplicas.set('replica-2', {status: ReplicaStatus.ACTIVE});
-          ...
-        
-        1..1
-    not ok 12 - getStats returns correct statistics # time=2.498ms
-      ---
-      at:
-        fileName: test/node/replica-handler.test.js
-        lineNumber: 644
-        columnNumber: 5
-        typeName: Test
-      source: |2
-          });
-      
-          t.test('getStats returns correct statistics', async (t) => {
-        ----^
-            const cache = createSeededCache();
-            const mockCDC = createMockCDCService(cache);
-      ...
+        ok 1 - correct node ID
+        ok 2 - initialized flag correct
+        ok 3 - correct local replica count
+        ok 4 - correct in-progress count
+        1..4
+    ok 12 - getStats returns correct statistics # time=0.703ms
     
     # Subtest: emits events during lifecycle operations
         ok 1 - replicaCreated event emitted
         ok 2 - correct replicaId
         1..2
-    ok 13 - emits events during lifecycle operations # time=0.888ms
+    ok 13 - emits events during lifecycle operations # time=0.82ms
     
     # Subtest: async creation updates status via CDC
         ok 1 - syncing status update via CDC
         ok 2 - active status update via CDC
         1..2
-    ok 14 - async creation updates status via CDC # time=0.783ms
+    ok 14 - async creation updates status via CDC # time=0.803ms
     
     # Subtest: async removal updates status via CDC
-        not ok 1 - Cannot read properties of undefined (reading 'set')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-handler.test.js:788:27)
-          at:
-            fileName: test/node/replica-handler.test.js
-            lineNumber: 788
-            columnNumber: 27
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: |2
-          
-                // Pre-populate local replica
-                handler.localReplicas.set('replica-1', {
-            --------------------------^
-                  replicaId: 'replica-1',
-                  partitionId: 'partition-1',
-          ...
-        
-        1..1
-    not ok 15 - async removal updates status via CDC # time=3.362ms
-      ---
-      at:
-        fileName: test/node/replica-handler.test.js
-        lineNumber: 762
-        columnNumber: 5
-        typeName: Test
-      source: |2
-          });
-      
-          t.test('async removal updates status via CDC', async (t) => {
-        ----^
-            const cache = createSeededCache();
-            seedReplicaOperation(cache, 'op-1', {type: 'REMOVE'});
-      ...
+        ok 1 - removing status update via CDC
+        ok 2 - removed status update via CDC
+        ok 3 - service row deleted via CDC
+        1..3
+    ok 15 - async removal updates status via CDC # time=0.994ms
     
     # Subtest: registerWithRouter registers handler at correct address
         ok 1 - handler registered at correct address
@@ -444,20 +111,20 @@ TAP version 14
         ok 3 - create initiated
         ok 4 - correlationId preserved
         1..4
-    ok 16 - registerWithRouter registers handler at correct address # time=1.016ms
+    ok 16 - registerWithRouter registers handler at correct address # time=1.085ms
     
     # Subtest: unregisterFromRouter removes handler
         ok 1 - handler registered
         ok 2 - handler unregistered
         1..2
-    ok 17 - unregisterFromRouter removes handler # time=0.835ms
+    ok 17 - unregisterFromRouter removes handler # time=0.658ms
     
     # Subtest: registerWithRouter with RPC client notifies on response
         ok 1 - RPC client notified
         ok 2 - correct correlationId
         ok 3 - correct status
         1..3
-    ok 18 - registerWithRouter with RPC client notifies on response # time=0.937ms
+    ok 18 - registerWithRouter with RPC client notifies on response # time=3.573ms
     
     # Subtest: shouldGateActivationOnVoterReadiness - critical joins gate only with paired REMOVE
         ok 1 - should not gate when operation metadata is missing and no REMOVE is in flight
@@ -465,30 +132,17 @@ TAP version 14
         ok 3 - should gate when a paired REMOVE is in flight during join
         ok 4 - should not gate non-critical partitions
         1..4
-    ok 19 - shouldGateActivationOnVoterReadiness - critical joins gate only with paired REMOVE # time=1.166ms
+    ok 19 - shouldGateActivationOnVoterReadiness - critical joins gate only with paired REMOVE # time=0.921ms
     
     # Subtest: shouldGateActivationOnVoterReadiness - respects explicit operation type when available
         ok 1 - should gate ADD operations on critical partitions
         ok 2 - should not gate non-ADD operations when metadata is explicit
         1..2
-    ok 20 - shouldGateActivationOnVoterReadiness - respects explicit operation type when available # time=0.819ms
+    ok 20 - shouldGateActivationOnVoterReadiness - respects explicit operation type when available # time=0.635ms
     
     1..20
-not ok 1 - ReplicaHandler # time=441.378ms
-  ---
-  at:
-    fileName: test/node/replica-handler.test.js
-    lineNumber: 160
-    columnNumber: 1
-    isToplevel: true
-  source: |
-    }
-  
-    test('ReplicaHandler', async (t) => {
-    ^
-      let tempDir;
-  ...
+ok 1 - ReplicaHandler # time=405.15ms
 
 1..1
-# { total: 47, pass: 36, fail: 11 }
-# time=448.522ms
+# { total: 60, pass: 60 }
+# time=411.675ms

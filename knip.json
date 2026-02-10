@@ -1,0 +1,18 @@
+{
+  "entry": [
+    "src/index.js",
+    "src/cli/bin/ddb-admin.js",
+    "test/**/*.test.js"
+  ],
+  "project": [
+    "src/**/*.js",
+    "test/**/*.js",
+    "scripts/**/*.js"
+  ],
+  "ignore": [
+    "dist/**",
+    "data/**",
+    "data2/**",
+    "data3/**"
+  ]
+}

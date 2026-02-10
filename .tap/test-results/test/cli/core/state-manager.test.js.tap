@@ -4,93 +4,93 @@ TAP version 14
     ok 2 - should be equivalent
     ok 3 - should be equal
     1..3
-ok 1 - StateManager - getState returns immutable copy # time=4.84ms
+ok 1 - StateManager - getState returns immutable copy # time=4.967ms
 
 # Subtest: StateManager - setState updates state
     ok 1 - should be equal
     1..1
-ok 2 - StateManager - setState updates state # time=0.413ms
+ok 2 - StateManager - setState updates state # time=0.448ms
 
 # Subtest: StateManager - setState deep merges objects
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 3 - StateManager - setState deep merges objects # time=0.314ms
+ok 3 - StateManager - setState deep merges objects # time=0.339ms
 
 # Subtest: StateManager - setState validates connection status
     ok 1 - expected to throw
     1..1
-ok 4 - StateManager - setState validates connection status # time=0.463ms
+ok 4 - StateManager - setState validates connection status # time=0.508ms
 
 # Subtest: StateManager - setState validates view
     ok 1 - expected to throw
     1..1
-ok 5 - StateManager - setState validates view # time=0.221ms
+ok 5 - StateManager - setState validates view # time=0.241ms
 
 # Subtest: StateManager - setState emits state:changed event
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 6 - StateManager - setState emits state:changed event # time=0.512ms
+ok 6 - StateManager - setState emits state:changed event # time=0.388ms
 
 # Subtest: StateManager - get() retrieves nested values
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 7 - StateManager - get() retrieves nested values # time=0.354ms
+ok 7 - StateManager - get() retrieves nested values # time=0.241ms
 
 # Subtest: StateManager - batchUpdate applies multiple changes
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 8 - StateManager - batchUpdate applies multiple changes # time=0.39ms
+ok 8 - StateManager - batchUpdate applies multiple changes # time=0.274ms
 
 # Subtest: StateManager - createSnapshot and restoreSnapshot
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 9 - StateManager - createSnapshot and restoreSnapshot # time=0.433ms
+ok 9 - StateManager - createSnapshot and restoreSnapshot # time=0.398ms
 
 # Subtest: StateManager - restoreSnapshot throws for invalid index
     ok 1 - expected to throw
     1..1
-ok 10 - StateManager - restoreSnapshot throws for invalid index # time=0.233ms
+ok 10 - StateManager - restoreSnapshot throws for invalid index # time=0.206ms
 
 # Subtest: StateManager - getSnapshots returns snapshot metadata
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 11 - StateManager - getSnapshots returns snapshot metadata # time=0.394ms
+ok 11 - StateManager - getSnapshots returns snapshot metadata # time=0.325ms
 
 # Subtest: StateManager - reset() restores initial state
     ok 1 - should be equal
     1..1
-ok 12 - StateManager - reset() restores initial state # time=0.26ms
+ok 12 - StateManager - reset() restores initial state # time=0.228ms
 
 # Subtest: StateManager - subscribe notifies on path changes
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 13 - StateManager - subscribe notifies on path changes # time=0.491ms
+ok 13 - StateManager - subscribe notifies on path changes # time=0.445ms
 
 # Subtest: StateManager - validates selectedIndex
     ok 1 - expected to throw
     1..1
-ok 14 - StateManager - validates selectedIndex # time=0.296ms
+ok 14 - StateManager - validates selectedIndex # time=0.233ms
 
 # Subtest: StateManager - validates sortDirection
     ok 1 - expected to throw
     1..1
-ok 15 - StateManager - validates sortDirection # time=0.255ms
+ok 15 - StateManager - validates sortDirection # time=0.215ms
 
 # Subtest: StateManager - validates refreshInterval
     ok 1 - expected to throw
     1..1
-ok 16 - StateManager - validates refreshInterval # time=0.245ms
+ok 16 - StateManager - validates refreshInterval # time=0.206ms
 
 1..16
 # { total: 28, pass: 28 }
-# time=18.317ms
+# time=18.432ms

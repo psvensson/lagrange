@@ -179,7 +179,9 @@ test('Property 2: Operation Record Completeness', async (t) => {
             // After failure, completedAt and errorMessage should be set
             const hasCompletedAt = typeof operation.completedAt === 'number' &&
               operation.completedAt > 0;
-            const hasErrorMessage = operation.errorMessage === errorMessage;
+            const expectedErrorMessage = errorMessage.trim().length > 0 ?
+              errorMessage : 'Unknown error';
+            const hasErrorMessage = operation.errorMessage === expectedErrorMessage;
             const hasFailedStatus = operation.status === ReplicaStatus.FAILED;
 
             return hasCompletedAt && hasErrorMessage && hasFailedStatus;

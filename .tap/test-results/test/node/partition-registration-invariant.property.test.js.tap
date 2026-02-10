@@ -1,186 +1,28 @@
 TAP version 14
 # Subtest: Property 1: Partition Registration Invariant
     # Subtest: registered partitions appear in localReplicas with correct metadata
-        not ok 1 - Property failed after 1 tests { seed: 950684376, path: "0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000"," ","active"] Shrunk 10 time(s) Got error: Property failed by returning false  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
-          ---
-          stack: |
-            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
-            throwIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:138:11)
-            reportRunDetails (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:151:16)
-            Module.assert (node_modules/fast-check/lib/esm/check/runner/Runner.js:69:9)
-            Test.<anonymous> (test/node/partition-registration-invariant.property.test.js:89:14)
-          at:
-            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
-            lineNumber: 126
-            columnNumber: 15
-            functionName: buildError
-          tapCaught: returnedPromiseRejection
-          source: |
-            function buildError(errorMessage, out) {
-                if (!out.runConfiguration.errorWithCause) {
-                    throw new Error(errorMessage);
-            --------------^
-                }
-                const ErrorWithCause = Error;
-          ...
-        
+        ok 1 - registered partitions appear in localReplicas with correct metadata
         1..1
-    not ok 1 - registered partitions appear in localReplicas with correct metadata # time=21.03ms
-      ---
-      at:
-        fileName: test/node/partition-registration-invariant.property.test.js
-        lineNumber: 88
-        columnNumber: 5
-        typeName: Test
-      source: >2
-           * the localReplicas map contains an entry with correct metadata.
-           */
-          t.test('registered partitions appear in localReplicas with correct metadata', async (t) => {
-        ----^
-            await fc.assert(
-              fc.property(
-      ...
+    ok 1 - registered partitions appear in localReplicas with correct metadata # time=6.233ms
     
     # Subtest: registered partitions default to active status
-        not ok 1 - Property failed after 1 tests { seed: 972815033, path: "0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000"," "] Shrunk 10 time(s) Got error: Property failed by returning false  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
-          ---
-          stack: |
-            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
-            throwIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:138:11)
-            reportRunDetails (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:151:16)
-            Module.assert (node_modules/fast-check/lib/esm/check/runner/Runner.js:69:9)
-            Test.<anonymous> (test/node/partition-registration-invariant.property.test.js:138:14)
-          at:
-            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
-            lineNumber: 126
-            columnNumber: 15
-            functionName: buildError
-          tapCaught: returnedPromiseRejection
-          source: |
-            function buildError(errorMessage, out) {
-                if (!out.runConfiguration.errorWithCause) {
-                    throw new Error(errorMessage);
-            --------------^
-                }
-                const ErrorWithCause = Error;
-          ...
-        
+        ok 1 - registered partitions default to active status
         1..1
-    not ok 2 - registered partitions default to active status # time=6.641ms
-      ---
-      at:
-        fileName: test/node/partition-registration-invariant.property.test.js
-        lineNumber: 137
-        columnNumber: 5
-        typeName: Test
-      source: |2
-           * the default status is 'active'.
-           */
-          t.test('registered partitions default to active status', async (t) => {
-        ----^
-            await fc.assert(
-              fc.property(
-      ...
+    ok 2 - registered partitions default to active status # time=1.609ms
     
     # Subtest: duplicate registration is idempotent
-        not ok 1 - Property failed after 1 tests { seed: -1063860575, path: "0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000"," "," "] Shrunk 12 time(s) Got error: Property failed by returning false  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
-          ---
-          stack: |
-            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
-            throwIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:138:11)
-            reportRunDetails (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:151:16)
-            Module.assert (node_modules/fast-check/lib/esm/check/runner/Runner.js:69:9)
-            Test.<anonymous> (test/node/partition-registration-invariant.property.test.js:181:14)
-          at:
-            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
-            lineNumber: 126
-            columnNumber: 15
-            functionName: buildError
-          tapCaught: returnedPromiseRejection
-          source: |
-            function buildError(errorMessage, out) {
-                if (!out.runConfiguration.errorWithCause) {
-                    throw new Error(errorMessage);
-            --------------^
-                }
-                const ErrorWithCause = Error;
-          ...
-        
+        ok 1 - duplicate registration is idempotent
         1..1
-    not ok 3 - duplicate registration is idempotent # time=6.766ms
-      ---
-      at:
-        fileName: test/node/partition-registration-invariant.property.test.js
-        lineNumber: 180
-        columnNumber: 5
-        typeName: Test
-      source: |2
-           * original data is preserved.
-           */
-          t.test('duplicate registration is idempotent', async (t) => {
-        ----^
-            await fc.assert(
-              fc.property(
-      ...
+    ok 3 - duplicate registration is idempotent # time=1.809ms
     
     # Subtest: multiple partitions all registered correctly
-        not ok 1 - Property failed after 1 tests { seed: -659394691, path: "0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: [[{"replicaId":"00000000-0000-1000-8000-000000000000","partitionId":"00000000-0000-1000-8000-000000000000","tableName":" "}]] Shrunk 10 time(s) Got error: Property failed by returning false  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
-          ---
-          stack: |
-            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
-            throwIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:138:11)
-            reportRunDetails (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:151:16)
-            Module.assert (node_modules/fast-check/lib/esm/check/runner/Runner.js:69:9)
-            Test.<anonymous> (test/node/partition-registration-invariant.property.test.js:236:14)
-          at:
-            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
-            lineNumber: 126
-            columnNumber: 15
-            functionName: buildError
-          tapCaught: returnedPromiseRejection
-          source: |
-            function buildError(errorMessage, out) {
-                if (!out.runConfiguration.errorWithCause) {
-                    throw new Error(errorMessage);
-            --------------^
-                }
-                const ErrorWithCause = Error;
-          ...
-        
+        ok 1 - multiple partitions all registered correctly
         1..1
-    not ok 4 - multiple partitions all registered correctly # time=4.548ms
-      ---
-      at:
-        fileName: test/node/partition-registration-invariant.property.test.js
-        lineNumber: 235
-        columnNumber: 5
-        typeName: Test
-      source: |2
-           * localReplicas with correct count.
-           */
-          t.test('multiple partitions all registered correctly', async (t) => {
-        ----^
-            await fc.assert(
-              fc.property(
-      ...
+    ok 4 - multiple partitions all registered correctly # time=2.435ms
     
     1..4
-not ok 1 - Property 1: Partition Registration Invariant # time=196.556ms
-  ---
-  at:
-    fileName: test/node/partition-registration-invariant.property.test.js
-    lineNumber: 67
-    columnNumber: 1
-    isToplevel: true
-  source: |
-    }
-  
-    test('Property 1: Partition Registration Invariant', async (t) => {
-    ^
-      t.beforeEach(async () => {
-        ConfigurationManager.resetInstance();
-  ...
+ok 1 - Property 1: Partition Registration Invariant # time=120.549ms
 
 1..1
-# { total: 4, pass: 0, fail: 4 }
-# time=224.281ms
+# { total: 4, pass: 4 }
+# time=124.471ms

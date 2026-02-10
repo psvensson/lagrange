@@ -1,50 +1,287 @@
 TAP version 14
-ok 1 - PartitionService - constructor requires partitionId # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 2 - PartitionService - constructor requires tableId # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 3 - PartitionService - constructor requires replicaId # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 4 - PartitionService - initializes with in-memory database # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 5 - PartitionService - creates table from schema # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 6 - PartitionService - executeQuery for SELECT # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 7 - PartitionService - updateData modifies records # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 8 - PartitionService - deleteData removes records # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 9 - PartitionService - generates CDC events on insert # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 10 - PartitionService - generates CDC events on update # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 11 - PartitionService - generates CDC events on delete # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 12 - PartitionService - generates CDC UPSERT events on upsert # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 13 - PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 14 - PartitionService - follower applyCommittedEntry must not emit CDC # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 15 - PartitionService - calculates partition size # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 16 - PartitionService - key range management # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 17 - PartitionService - full key range (null, null) # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 18 - PartitionService - getStatus returns complete status # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 19 - PartitionService - single replica becomes leader # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 20 - PartitionService - unsubscribe from CDC # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 21 - PartitionService - handleTransportMessage routes Raft packets to liferaft # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 22 - PartitionService - handleTransportMessage handles application messages # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 23 - PartitionService - handleTransportMessage rejects unknown message types # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 24 - PartitionService - liferaft instance is created with correct configuration # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 25 - PartitionService - buildPeerAddress returns correct format # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 26 - PartitionService - emits leaderElected event for single replica # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 27 - PartitionService - persists raft role updates to services table # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 28 - PartitionService - persists leader node updates to partitions table # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 29 - PartitionService - setCdcIntegrationService sets service on partition and rebalancer # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 30 - PartitionService - learner promotion deferred for even voter count # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 31 - PartitionService - learner promotes when voter count would be odd # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 32 - PartitionService - learner promotion deferred until leader is known # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
+# Subtest: PartitionService - constructor requires partitionId
+    ok 1 - expected to throw
+    1..1
+ok 1 - PartitionService - constructor requires partitionId # time=6.8ms
+
+# Subtest: PartitionService - constructor requires tableId
+    ok 1 - expected to throw
+    1..1
+ok 2 - PartitionService - constructor requires tableId # time=0.417ms
+
+# Subtest: PartitionService - constructor requires replicaId
+    ok 1 - expected to throw
+    1..1
+ok 3 - PartitionService - constructor requires replicaId # time=0.381ms
+
+# Subtest: PartitionService - initializes with in-memory database
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    1..6
+ok 4 - PartitionService - initializes with in-memory database # time=4.238ms
+
+# Subtest: PartitionService - creates table from schema
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 5 - PartitionService - creates table from schema # time=1.813ms
+
+# Subtest: PartitionService - executeQuery for SELECT
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 6 - PartitionService - executeQuery for SELECT # time=1.198ms
+
+# Subtest: PartitionService - updateData modifies records
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 7 - PartitionService - updateData modifies records # time=1.275ms
+
+# Subtest: PartitionService - deleteData removes records
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 8 - PartitionService - deleteData removes records # time=1.238ms
+
+# Subtest: PartitionService - generates CDC events on insert
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 9 - PartitionService - generates CDC events on insert # time=1.103ms
+
+# Subtest: PartitionService - generates CDC events on update
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 10 - PartitionService - generates CDC events on update # time=1.045ms
+
+# Subtest: PartitionService - generates CDC events on delete
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - DELETE CDC event should contain primary key
+    1..3
+ok 11 - PartitionService - generates CDC events on delete # time=1.109ms
+
+# Subtest: PartitionService - generates CDC UPSERT events on upsert
+    ok 1 - should be equal
+    ok 2 - UPSERT operation must produce CDCOperation.UPSERT, not INSERT
+    ok 3 - should be equal
+    1..3
+ok 12 - PartitionService - generates CDC UPSERT events on upsert # time=1.144ms
+
+# Subtest: PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT
+    ok 1 - should be equal
+    ok 2 - INSERT OR REPLACE SQL must produce CDCOperation.UPSERT
+    1..2
+ok 13 - PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT # time=1.452ms
+
+# Subtest: PartitionService - follower applyCommittedEntry must not emit CDC
+    ok 1 - Follower must not emit CDC events from applyCommittedEntry
+    1..1
+ok 14 - PartitionService - follower applyCommittedEntry must not emit CDC # time=1.146ms
+
+# Subtest: PartitionService - calculates partition size
+    ok 1 - Initial size should be non-negative
+    ok 2 - Size should increase after inserts
+    1..2
+ok 15 - PartitionService - calculates partition size # time=1.403ms
+
+# Subtest: PartitionService - key range management
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    1..7
+ok 16 - PartitionService - key range management # time=1.081ms
+
+# Subtest: PartitionService - full key range (null, null)
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 17 - PartitionService - full key range (null, null) # time=0.897ms
+
+# Subtest: PartitionService - getStatus returns complete status
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    1..8
+ok 18 - PartitionService - getStatus returns complete status # time=1.572ms
+
+# Subtest: PartitionService - single replica becomes leader
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 19 - PartitionService - single replica becomes leader # time=0.925ms
+
+# Subtest: PartitionService - unsubscribe from CDC
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 20 - PartitionService - unsubscribe from CDC # time=1.047ms
+
+# Subtest: PartitionService - handleTransportMessage routes Raft packets to liferaft
+    ok 1 - Raft packet should be acknowledged
+    ok 2 - Should emit data event to liferaft
+    ok 3 - Raft packet should be emitted to liferaft
+    ok 4 - Packet type should be preserved
+    ok 5 - Packet term should be preserved
+    1..5
+ok 21 - PartitionService - handleTransportMessage routes Raft packets to liferaft # time=1.209ms
+
+# Subtest: PartitionService - handleTransportMessage handles application messages
+    ok 1 - FORWARD_WRITE should succeed
+    ok 2 - One row should be inserted
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 22 - PartitionService - handleTransportMessage handles application messages # time=1.13ms
+
+# Subtest: PartitionService - handleTransportMessage rejects unknown message types
+    ok 1 - Unknown message should not be acknowledged
+    ok 2 - Error message should be present
+    ok 3 - Error should mention unknown type
+    1..3
+ok 23 - PartitionService - handleTransportMessage rejects unknown message types # time=0.893ms
+
+# Subtest: PartitionService - liferaft instance is created with correct configuration
+    ok 1 - Liferaft instance should exist
+    ok 2 - should be equal
+    1..2
+ok 24 - PartitionService - liferaft instance is created with correct configuration # time=0.802ms
+
+# Subtest: PartitionService - buildPeerAddress returns correct format
+    ok 1 - Should resolve correct address
+    ok 2 - Should return formatted address as-is
+    1..2
+ok 25 - PartitionService - buildPeerAddress returns correct format # time=0.795ms
+
+# Subtest: PartitionService - emits leaderElected event for single replica
+    ok 1 - leaderElected event should be emitted
+    ok 2 - Leader should be this replica
+    ok 3 - Partition ID should match
+    1..3
+ok 26 - PartitionService - emits leaderElected event for single replica # time=0.908ms
+
+# Subtest: PartitionService - persists raft role updates to services table
+    ok 1 - raft role update should be persisted via CDC
+    1..1
+ok 27 - PartitionService - persists raft role updates to services table # time=1.973ms
+
+# Subtest: PartitionService - persists leader node updates to partitions table
+    ok 1 - leader node update should be persisted via CDC
+    1..1
+ok 28 - PartitionService - persists leader node updates to partitions table # time=1.019ms
+
+# Subtest: PartitionService - setCdcIntegrationService sets service on partition and rebalancer
+    ok 1 - Initially null
+    ok 2 - Should be set on partition
+    ok 3 - Should be set on rebalancer
+    ok 4 - Should be set on coordinator
+    1..4
+ok 29 - PartitionService - setCdcIntegrationService sets service on partition and rebalancer # time=1.005ms
+
+# Subtest: PartitionService - learner promotion deferred for even voter count
+    ok 1 - Should remain learner to avoid even voter count
+    ok 2 - Should reschedule promotion check
+    1..2
+ok 30 - PartitionService - learner promotion deferred for even voter count # time=0.769ms
+
+# Subtest: PartitionService - learner promotes when voter count would be odd
+    ok 1 - Should promote to follower for odd voter count
+    1..1
+ok 31 - PartitionService - learner promotes when voter count would be odd # time=0.496ms
+
+# Subtest: PartitionService - learner promotion deferred until leader is known
+    ok 1 - Should remain learner until a leader is discovered
+    ok 2 - Should reschedule promotion check
+    1..2
+ok 32 - PartitionService - learner promotion deferred until leader is known # time=0.462ms
+
 # Subtest: PartitionService - critical partition defers learner on even voter count
     ok 1 - Critical partitions should also defer promotion that creates even voters
     ok 2 - Should reschedule promotion check
     1..2
-ok 33 - PartitionService - critical partition defers learner on even voter count # time=2.082ms
+ok 33 - PartitionService - critical partition defers learner on even voter count # time=0.562ms
 
-ok 34 - PartitionService - learner promotes when multiple learners reach odd count # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 35 - PartitionService - learner deferred when all learners would still be even # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 36 - PartitionService - countPendingLearners counts learner replicas # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 37 - PartitionService - countActiveVoters excludes learners and failed replicas # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 38 - PartitionService - handleRemoteQuery returns redirect for writes on follower # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 39 - PartitionService - handleRemoteQuery executes reads on follower # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 40 - PartitionService - isWriteQuery detects write operations # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
-ok 41 - PartitionService - election jitter prevents timeout overlap # SKIP filter: /PartitionService - critical partition defers learner on even voter count/
+# Subtest: PartitionService - learner promotes when multiple learners reach odd count
+    ok 1 - Should promote when all learners would reach odd count
+    1..1
+ok 34 - PartitionService - learner promotes when multiple learners reach odd count # time=0.441ms
+
+# Subtest: PartitionService - learner deferred when all learners would still be even
+    ok 1 - Should remain learner when all learners would still be even
+    ok 2 - Should reschedule promotion check
+    1..2
+ok 35 - PartitionService - learner deferred when all learners would still be even # time=0.455ms
+
+# Subtest: PartitionService - countPendingLearners counts learner replicas
+    ok 1 - Should count only active learner replicas
+    1..1
+ok 36 - PartitionService - countPendingLearners counts learner replicas # time=0.43ms
+
+# Subtest: PartitionService - countActiveVoters excludes learners and failed replicas
+    ok 1 - Should count only active non-learner replicas
+    1..1
+ok 37 - PartitionService - countActiveVoters excludes learners and failed replicas # time=0.472ms
+
+# Subtest: PartitionService - handleRemoteQuery returns redirect for writes on follower
+    ok 1 - should acknowledge the request
+    ok 2 - should not succeed (redirect instead)
+    ok 3 - should return redirect type
+    ok 4 - should include leader address
+    1..4
+ok 38 - PartitionService - handleRemoteQuery returns redirect for writes on follower # time=1.034ms
+
+# Subtest: PartitionService - handleRemoteQuery executes reads on follower
+    ok 1 - should acknowledge the request
+    ok 2 - should succeed for reads
+    ok 3 - should return data
+    ok 4 - should return correct data
+    1..4
+ok 39 - PartitionService - handleRemoteQuery executes reads on follower # time=0.943ms
+
+# Subtest: PartitionService - isWriteQuery detects write operations
+    ok 1 - INSERT is write
+    ok 2 - UPDATE is write
+    ok 3 - DELETE is write
+    ok 4 - CREATE is write
+    ok 5 - DROP is write
+    ok 6 - ALTER is write
+    ok 7 - SELECT is not write
+    ok 8 - lowercase SELECT is not write
+    ok 9 - null is not write
+    ok 10 - empty string is not write
+    1..10
+ok 40 - PartitionService - isWriteQuery detects write operations # time=0.798ms
+
+# Subtest: PartitionService - election jitter prevents timeout overlap
+    ok 1 - Jitter (2500ms) must be >= election range width (2000ms) to prevent timeout overlap between replicas
+    1..1
+ok 41 - PartitionService - election jitter prevents timeout overlap # time=0.612ms
+
 1..41
-# { total: 42, pass: 2, skip: 40 }
-# time=38.667ms
+# { total: 119, pass: 119 }
+# time=694.137ms

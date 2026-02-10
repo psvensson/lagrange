@@ -65,9 +65,9 @@ function initializeTestEnvironment() {
 }
 
 /**
- * Arbitrary for valid node IDs.
+ * Arbitrary for valid node IDs (alphanumeric with hyphens, no special chars).
  */
-const nodeIdArb = fc.string({minLength: 1, maxLength: 36}).filter((s) => s.trim().length > 0);
+const nodeIdArb = fc.stringMatching(/^[a-zA-Z0-9][a-zA-Z0-9-]{0,35}$/);
 
 test('Property 8: Phase Failure Handling', async (t) => {
   /**

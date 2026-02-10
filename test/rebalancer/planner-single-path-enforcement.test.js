@@ -105,6 +105,9 @@ function createTestRebalancer({
       },
     },
     rebalanceCoordinator: {
+      async getMoveSafetyError() {
+        return null;
+      },
       async createOperation(move) {
         dispatchedMoves.push({...move});
         return {

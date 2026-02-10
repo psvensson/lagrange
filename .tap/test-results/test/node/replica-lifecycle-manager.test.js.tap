@@ -6,13 +6,13 @@ TAP version 14
         ok 3 - node ID set correctly
         ok 4 - not initialized after shutdown
         1..4
-    ok 1 - initialization # time=2.487ms
+    ok 1 - initialization # time=2.412ms
     
     # Subtest: initializes with message group service
         ok 1 - manager should be initialized
         ok 2 - node ID should be set
         1..2
-    ok 2 - initializes with message group service # time=0.672ms
+    ok 2 - initializes with message group service # time=0.588ms
     
     # Subtest: status transition validation
         ok 1 - starting -> syncing is valid
@@ -25,46 +25,15 @@ TAP version 14
         ok 8 - active -> starting is invalid
         ok 9 - stopped -> active is invalid (terminal state)
         1..9
-    ok 3 - status transition validation # time=0.91ms
+    ok 3 - status transition validation # time=0.996ms
     
     # Subtest: handleCreateReplica - returns already_exists for duplicate
-        not ok 1 - Cannot read properties of undefined (reading 'set')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-lifecycle-manager.test.js:251:27)
-          at:
-            fileName: test/node/replica-lifecycle-manager.test.js
-            lineNumber: 251
-            columnNumber: 27
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: |2
-          
-                // Pre-populate local replica
-                manager.localReplicas.set('replica-1', {
-            --------------------------^
-                  replicaId: 'replica-1',
-                  partitionId: 'partition-1',
-          ...
-        
-        1..1
-    not ok 4 - handleCreateReplica - returns already_exists for duplicate # time=10.976ms
-      ---
-      at:
-        fileName: test/node/replica-lifecycle-manager.test.js
-        lineNumber: 237
-        columnNumber: 5
-        typeName: Test
-      source: >2
-      
-      
-          t.test('handleCreateReplica - returns already_exists for duplicate', async (t) => {
-        ----^
-            const mockCDC = createMockCDCService();
-      ...
+        ok 1 - correct ACK type
+        ok 2 - status is already_exists
+        ok 3 - replica_id in ACK
+        ok 4 - request_id in ACK
+        1..4
+    ok 4 - handleCreateReplica - returns already_exists for duplicate # time=0.973ms
     
     # Subtest: handleCreateReplica - returns initiated for new replica
         ok 1 - correct ACK type
@@ -72,53 +41,21 @@ TAP version 14
         ok 3 - replica_id in ACK
         ok 4 - node_id in ACK
         1..4
-    ok 5 - handleCreateReplica - returns initiated for new replica # time=0.764ms
+    ok 5 - handleCreateReplica - returns initiated for new replica # time=0.751ms
     
     # Subtest: handleRemoveReplica - returns not_found for missing replica
         ok 1 - correct ACK type
         ok 2 - status is not_found
         ok 3 - replica_id in ACK
         1..3
-    ok 6 - handleRemoveReplica - returns not_found for missing replica # time=0.86ms
+    ok 6 - handleRemoveReplica - returns not_found for missing replica # time=0.742ms
     
     # Subtest: handleRemoveReplica - returns initiated for existing replica
-        not ok 1 - Cannot read properties of undefined (reading 'set')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-lifecycle-manager.test.js:352:27)
-          at:
-            fileName: test/node/replica-lifecycle-manager.test.js
-            lineNumber: 352
-            columnNumber: 27
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: |2
-          
-                // Pre-populate local replica
-                manager.localReplicas.set('replica-1', {
-            --------------------------^
-                  replicaId: 'replica-1',
-                  partitionId: 'partition-1',
-          ...
-        
-        1..1
-    not ok 7 - handleRemoveReplica - returns initiated for existing replica # time=2.632ms
-      ---
-      at:
-        fileName: test/node/replica-lifecycle-manager.test.js
-        lineNumber: 338
-        columnNumber: 5
-        typeName: Test
-      source: >2
-          });
-      
-          t.test('handleRemoveReplica - returns initiated for existing replica', async (t) => {
-        ----^
-            const mockCDC = createMockCDCService();
-      ...
+        ok 1 - correct ACK type
+        ok 2 - status is initiated
+        ok 3 - replica_id in ACK
+        1..3
+    ok 7 - handleRemoveReplica - returns initiated for existing replica # time=0.605ms
     
     # Subtest: node recovery - queries services in transitional states
         ok 1 - filter was called on system table cache
@@ -126,52 +63,22 @@ TAP version 14
         ok 3 - predicate does not match active replicas
         ok 4 - predicate does not match other nodes
         1..4
-    ok 8 - node recovery - queries services in transitional states # time=0.689ms
+    ok 8 - node recovery - queries services in transitional states # time=0.838ms
     
     # Subtest: getStats returns correct statistics
-        not ok 1 - Cannot read properties of undefined (reading 'set')
-          ---
-          stack: |
-            Test.<anonymous> (test/node/replica-lifecycle-manager.test.js:459:27)
-          at:
-            fileName: test/node/replica-lifecycle-manager.test.js
-            lineNumber: 459
-            columnNumber: 27
-            typeName: Test
-            methodName: <anonymous>
-            functionName: Test.<anonymous>
-          type: TypeError
-          tapCaught: returnedPromiseRejection
-          source: |2
-          
-                // Add some local replicas
-                manager.localReplicas.set('replica-1', {status: ReplicaStatus.ACTIVE});
-            --------------------------^
-                manager.localReplicas.set('replica-2', {status: ReplicaStatus.ACTIVE});
-          ...
-        
-        1..1
-    not ok 9 - getStats returns correct statistics # time=3.737ms
-      ---
-      at:
-        fileName: test/node/replica-lifecycle-manager.test.js
-        lineNumber: 445
-        columnNumber: 5
-        typeName: Test
-      source: |2
-          });
-      
-          t.test('getStats returns correct statistics', async (t) => {
-        ----^
-            const mockCDC = createMockCDCService();
-      ...
+        ok 1 - correct node ID
+        ok 2 - initialized flag correct
+        ok 3 - correct local replica count
+        ok 4 - correct pending operation count
+        1..4
+    ok 9 - getStats returns correct statistics # time=0.677ms
     
     # Subtest: cleanupExpiredOperations removes old completed operations
         ok 1 - old completed operation removed
         ok 2 - recent completed operation kept
         ok 3 - pending operation kept (not completed)
         1..3
-    ok 10 - cleanupExpiredOperations removes old completed operations # time=0.586ms
+    ok 10 - cleanupExpiredOperations removes old completed operations # time=0.673ms
     
     # Subtest: handleCreateReplica returns correct ACK structure
         ok 1 - correct ACK type
@@ -180,30 +87,17 @@ TAP version 14
         ok 4 - node_id in ACK
         ok 5 - status is initiated or already_exists
         1..5
-    ok 11 - handleCreateReplica returns correct ACK structure # time=0.747ms
+    ok 11 - handleCreateReplica returns correct ACK structure # time=0.804ms
     
     1..11
-not ok 1 - ReplicaLifecycleManager # time=219.101ms
-  ---
-  at:
-    fileName: test/node/replica-lifecycle-manager.test.js
-    lineNumber: 109
-    columnNumber: 1
-    isToplevel: true
-  source: |
-    }
-  
-    test('ReplicaLifecycleManager', async (t) => {
-    ^
-      let tempDir;
-  ...
+ok 1 - ReplicaLifecycleManager # time=242.615ms
 
-{"level":50,"time":"2026-02-09T10:23:02.246Z","nodeId":"ce153e8a-3c30-452f-a22c-97f8f53845e4","pid":202404,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","partitionId":"partition-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:969:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:278:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:242:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"ce153e8a-3c30-452f-a22c-97f8f53845e4","msg":"Replica creation failed"}
-{"level":50,"time":"2026-02-09T10:23:02.247Z","nodeId":"ce153e8a-3c30-452f-a22c-97f8f53845e4","pid":202404,"subsystem":"replica-handler","replicaId":"replica-1","newStatus":"failed","error":"this.cdcIntegrationService.upsertSystemTableRow is not a function","nodeId":"ce153e8a-3c30-452f-a22c-97f8f53845e4","msg":"Failed to update replica status via CDC"}
-{"level":50,"time":"2026-02-09T10:23:02.247Z","nodeId":"ce153e8a-3c30-452f-a22c-97f8f53845e4","pid":202404,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","error":"this.cdcIntegrationService.upsertSystemTableRow is not a function","stack":"TypeError: this.cdcIntegrationService.upsertSystemTableRow is not a function\n    at ReplicaHandler.updateReplicaStatus (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:660:40)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:379:18)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:453:9)","nodeId":"ce153e8a-3c30-452f-a22c-97f8f53845e4","msg":"Async replica creation failed"}
-{"level":50,"time":"2026-02-09T10:23:02.247Z","nodeId":"568c87a6-c974-4ee2-9ddf-3ed3cd21deb3","pid":202404,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","partitionId":"partition-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:969:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:278:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:242:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"568c87a6-c974-4ee2-9ddf-3ed3cd21deb3","msg":"Replica creation failed"}
-{"level":50,"time":"2026-02-09T10:23:02.247Z","nodeId":"568c87a6-c974-4ee2-9ddf-3ed3cd21deb3","pid":202404,"subsystem":"replica-handler","replicaId":"replica-1","newStatus":"failed","error":"this.cdcIntegrationService.upsertSystemTableRow is not a function","nodeId":"568c87a6-c974-4ee2-9ddf-3ed3cd21deb3","msg":"Failed to update replica status via CDC"}
-{"level":50,"time":"2026-02-09T10:23:02.247Z","nodeId":"568c87a6-c974-4ee2-9ddf-3ed3cd21deb3","pid":202404,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","error":"this.cdcIntegrationService.upsertSystemTableRow is not a function","stack":"TypeError: this.cdcIntegrationService.upsertSystemTableRow is not a function\n    at ReplicaHandler.updateReplicaStatus (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:660:40)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:379:18)","nodeId":"568c87a6-c974-4ee2-9ddf-3ed3cd21deb3","msg":"Async replica creation failed"}
+{"level":50,"time":"2026-02-09T20:55:43.950Z","nodeId":"7ee27823-4a50-45f8-ade8-19b59780e026","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","partitionId":"partition-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1034:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:288:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:252:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"7ee27823-4a50-45f8-ade8-19b59780e026","msg":"Replica creation failed"}
+{"level":50,"time":"2026-02-09T20:55:43.951Z","nodeId":"7ee27823-4a50-45f8-ade8-19b59780e026","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1034:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:288:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:252:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"7ee27823-4a50-45f8-ade8-19b59780e026","msg":"Async replica creation failed"}
+{"level":50,"time":"2026-02-09T20:55:43.951Z","nodeId":"4126be23-6c0b-4530-b2dd-f0e11632e935","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","partitionId":"partition-1","error":"ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-oh79M9/partitions/partition-1'","stack":"Error: ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-oh79M9/partitions/partition-1'\n    at Object.readdirSync (node:fs:1583:26)\n    at ReplicaHandler.cleanupReplicaResources (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1162:26)\n    at ReplicaHandler.removeReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:577:18)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:453:9)","nodeId":"4126be23-6c0b-4530-b2dd-f0e11632e935","msg":"Replica removal failed"}
+{"level":50,"time":"2026-02-09T20:55:43.952Z","nodeId":"4126be23-6c0b-4530-b2dd-f0e11632e935","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","error":"ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-oh79M9/partitions/partition-1'","stack":"Error: ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-oh79M9/partitions/partition-1'\n    at Object.readdirSync (node:fs:1583:26)\n    at ReplicaHandler.cleanupReplicaResources (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1162:26)\n    at ReplicaHandler.removeReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:577:18)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:453:9)","nodeId":"4126be23-6c0b-4530-b2dd-f0e11632e935","msg":"Async replica removal failed"}
+{"level":50,"time":"2026-02-09T20:55:43.952Z","nodeId":"b09acace-fcd8-4088-9cda-4a08ec35ec15","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","partitionId":"partition-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1034:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:288:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:252:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"b09acace-fcd8-4088-9cda-4a08ec35ec15","msg":"Replica creation failed"}
+{"level":50,"time":"2026-02-09T20:55:43.952Z","nodeId":"b09acace-fcd8-4088-9cda-4a08ec35ec15","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1034:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:288:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:252:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"b09acace-fcd8-4088-9cda-4a08ec35ec15","msg":"Async replica creation failed"}
 1..1
-# { total: 37, pass: 34, fail: 3 }
-# time=227.166ms
+# { total: 45, pass: 45 }
+# time=248.99ms

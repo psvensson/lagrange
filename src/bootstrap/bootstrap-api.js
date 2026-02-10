@@ -66,6 +66,16 @@ import {MessageGroupAssignment} from './message-group-assignment.js';
  * Bootstrap response strategies.
  */
 const BootstrapStrategy = BOOTSTRAP_ASSIGNMENT_STRATEGY;
+const BOOTSTRAP_REQUIRED_LEADER_TABLES = Object.freeze([
+  TABLES.NODES,
+  TABLES.TABLES,
+  TABLES.PARTITIONS,
+  TABLES.SERVICES,
+  TABLES.MESSAGE_GROUPS,
+  TABLES.REPLICA_OPERATIONS,
+  TABLES.NODE_ENDPOINTS,
+  TABLES.CONFIG,
+]);
 
 /**
  * BootstrapAPI provides REST endpoints for node bootstrap and discovery.
@@ -415,6 +425,7 @@ class BootstrapAPI {
           BOOTSTRAP_API_HANDOFF_STATUS.VERIFYING,
           () => this.verifyMoveReplicaHandoffTarget(handoffContext, serviceData),
         );
+
         await this.executeMoveReplicaHandoffPhase(
           handoffContext,
           BOOTSTRAP_API_HANDOFF_PHASE.REMOVE_SOURCE,
@@ -422,8 +433,6 @@ class BootstrapAPI {
           BOOTSTRAP_API_HANDOFF_STATUS.REMOVING,
           () => this.removeLocalSourceReplicaForMoveReplica(serviceData),
         );
-      } else {
-        await this.removeLocalSourceReplicaForMoveReplica(serviceData);
       }
 
       // Use INSERT OR REPLACE to handle both new and existing services
@@ -788,7 +797,8 @@ class BootstrapAPI {
     }
 
     const existingService = this.systemTableCache?.get(TABLES.SERVICES, serviceId);
-    const localAddress = existingService?.[COLUMN.ADDRESS] ||
+    const localAddress = localService.unifiedAddress ||
+      existingService?.[COLUMN.ADDRESS] ||
       `${this.seedNodeId}${ADDRESS.SEPARATOR}` +
       `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${serviceId}`;
 
@@ -1060,10 +1070,18 @@ class BootstrapAPI {
       return;
     }
 
-    const timeoutMs = BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS;
-    let delay = BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.INITIAL_DELAY_MS;
-    const maxDelay = BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.MAX_DELAY_MS;
-    const backoff = BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.BACKOFF_MULTIPLIER;
+    const configuredTimeoutMs =
+      this.bootstrapService?.config?.leadershipWaitTimeoutMs;
+    const timeoutMs = Math.min(
+      configuredTimeoutMs || BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS,
+      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS,
+    );
+    let delay = this.bootstrapService?.config?.leadershipWaitInitialDelayMs ||
+      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.INITIAL_DELAY_MS;
+    const maxDelay = this.bootstrapService?.config?.leadershipWaitMaxDelayMs ||
+      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.MAX_DELAY_MS;
+    const backoff = this.bootstrapService?.config?.leadershipWaitBackoffMultiplier ||
+      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.BACKOFF_MULTIPLIER;
     const start = Date.now();
 
     while (Date.now() - start < timeoutMs) {
@@ -1213,6 +1231,272 @@ class BootstrapAPI {
   }
 
   /**
+   * Build partition ID sets for bootstrap leader-readiness checks.
+   * Required tables must have routable leaders before /bootstrap succeeds.
+   * @return {Object} Known/required partition ID sets.
+   * @private
+   */
+  getLeaderReadinessPartitionSets() {
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    const partitions = systemTableCache.getAll(TABLES.PARTITIONS) || [];
+
+    const knownPartitionIds = new Set();
+    const requiredPartitionIds = new Set();
+    const requiredTables = new Set(BOOTSTRAP_REQUIRED_LEADER_TABLES);
+
+    for (const partition of partitions) {
+      const partitionId = partition[COLUMN.PARTITION_ID];
+      if (!partitionId) {
+        continue;
+      }
+      knownPartitionIds.add(partitionId);
+
+      const tableName = partition[COLUMN.TABLE_ID] || partition.table_name;
+      if (requiredTables.has(tableName)) {
+        requiredPartitionIds.add(partitionId);
+      }
+    }
+
+    return {knownPartitionIds, requiredPartitionIds};
+  }
+
+  /**
+   * Keep missing-partition diagnostics focused on bootstrap-critical tables.
+   * Unknown partition IDs are preserved for safety.
+   * @param {Array<string>} partitionIds - Missing partition IDs.
+   * @return {Array<string>} Filtered missing IDs.
+   * @private
+   */
+  filterMissingRequiredPartitionIds(partitionIds = []) {
+    if (!Array.isArray(partitionIds) || partitionIds.length === NUM.ZERO) {
+      return [];
+    }
+
+    const {
+      knownPartitionIds,
+      requiredPartitionIds,
+    } = this.getLeaderReadinessPartitionSets();
+
+    if (knownPartitionIds.size === NUM.ZERO || requiredPartitionIds.size === NUM.ZERO) {
+      return partitionIds;
+    }
+
+    return partitionIds.filter((partitionId) =>
+      !knownPartitionIds.has(partitionId) || requiredPartitionIds.has(partitionId),
+    );
+  }
+
+  /**
+   * Build cached leader metadata by service type and entity ID.
+   * @param {string} serviceType - Service type value.
+   * @param {string} idColumn - Column key for entity ID.
+   * @return {Map<string, Object>} Entity ID -> metadata flags.
+   * @private
+   */
+  getCachedLeaderMetadataByServiceType(serviceType, idColumn) {
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    const services = systemTableCache.getAll(TABLES.SERVICES) || [];
+    const metadata = new Map();
+
+    for (const service of services) {
+      const entityId = service[idColumn];
+      if (!entityId ||
+          service[COLUMN.SERVICE_TYPE] !== serviceType ||
+          service[COLUMN.RAFT_ROLE] !== RAFT_ROLE.LEADER) {
+        continue;
+      }
+
+      const existing = metadata.get(entityId) || {
+        hasLeaderRecord: false,
+        hasNodeId: false,
+        hasAddress: false,
+      };
+      existing.hasLeaderRecord = true;
+      existing.hasNodeId = existing.hasNodeId || Boolean(service[COLUMN.NODE_ID]);
+      existing.hasAddress = existing.hasAddress || Boolean(service[COLUMN.ADDRESS]);
+      metadata.set(entityId, existing);
+    }
+
+    return metadata;
+  }
+
+  /**
+   * Determine whether a live service instance is currently leader.
+   * @param {Object} service - Service instance.
+   * @return {boolean} True when the service is leader.
+   * @private
+   */
+  isLiveServiceLeader(service) {
+    if (!service) {
+      return false;
+    }
+
+    const role = typeof service.getRole === TYPEOF.FUNCTION ?
+      service.getRole() :
+      service.role;
+    return service.isLeader === true ||
+      role === RAFT_ROLE.LEADER ||
+      (typeof service.isLeaderReplica === TYPEOF.FUNCTION &&
+        service.isLeaderReplica());
+  }
+
+  /**
+   * Build partition leader metadata from live partition services.
+   * @return {Map<string, Object>} Partition ID -> leader metadata.
+   * @private
+   */
+  getLivePartitionLeaders() {
+    const leaders = new Map();
+    if (!this.partitionServices || this.partitionServices.size === NUM.ZERO) {
+      return leaders;
+    }
+
+    for (const service of this.partitionServices.values()) {
+      const partitionId = service?.partitionId;
+      if (!partitionId || leaders.has(partitionId) || !this.isLiveServiceLeader(service)) {
+        continue;
+      }
+
+      const replicaId = service.replicaId || service.service_id;
+      const nodeId = service.nodeId || this.seedNodeId;
+      const address = service.unifiedAddress ||
+        `${nodeId}${ADDRESS.SEPARATOR}${ENTITY_TYPE.PARTITION}` +
+        `${ADDRESS.SEPARATOR}${replicaId}`;
+      leaders.set(partitionId, {nodeId, address});
+    }
+
+    return leaders;
+  }
+
+  /**
+   * Build message-group leader metadata from live services.
+   * @return {Map<string, Object>} Group ID -> leader metadata.
+   * @private
+   */
+  getLiveMessageGroupLeaders() {
+    const leaders = new Map();
+    if (!this.messageGroupServices || this.messageGroupServices.size === NUM.ZERO) {
+      return leaders;
+    }
+
+    for (const service of this.messageGroupServices.values()) {
+      const groupId = service?.groupId || service?.group_id;
+      if (!groupId || leaders.has(groupId) || !this.isLiveServiceLeader(service)) {
+        continue;
+      }
+
+      const replicaId = service.replicaId || service.service_id;
+      const nodeId = service.nodeId || this.seedNodeId;
+      const address = service.unifiedAddress ||
+        `${nodeId}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
+        `${ADDRESS.SEPARATOR}${replicaId}`;
+      leaders.set(groupId, {nodeId, address});
+    }
+
+    return leaders;
+  }
+
+  /**
+   * Normalize leader readiness diagnostics for /bootstrap gating.
+   * @param {Object} missing - Missing-leader diagnostics.
+   * @return {Object} Normalized diagnostics.
+   * @private
+   */
+  normalizeLeaderStatusForBootstrap(missing = {}) {
+    const cachedPartitionLeaders = this.getCachedLeaderMetadataByServiceType(
+      SERVICE_TYPE.PARTITION,
+      COLUMN.PARTITION_ID,
+    );
+    const cachedMessageGroupLeaders = this.getCachedLeaderMetadataByServiceType(
+      SERVICE_TYPE.MESSAGE_GROUP,
+      COLUMN.GROUP_ID,
+    );
+    const livePartitionLeaders = this.getLivePartitionLeaders();
+    const liveMessageGroupLeaders = this.getLiveMessageGroupLeaders();
+
+    return {
+      ...missing,
+      missingPartitionLeaders: this.filterMissingRequiredPartitionIds(
+        missing.missingPartitionLeaders || [],
+      ).filter((partitionId) => {
+        const cached = cachedPartitionLeaders.get(partitionId);
+        if (!cached || !cached.hasLeaderRecord) {
+          return true;
+        }
+        return !livePartitionLeaders.has(partitionId);
+      }),
+      missingPartitionLeaderNodes: this.filterMissingRequiredPartitionIds(
+        missing.missingPartitionLeaderNodes || [],
+      ).filter((partitionId) => {
+        const cached = cachedPartitionLeaders.get(partitionId);
+        if (!cached || !cached.hasLeaderRecord) {
+          return true;
+        }
+        if (cached.hasNodeId) {
+          return false;
+        }
+
+        const live = livePartitionLeaders.get(partitionId);
+        return !live || !live.nodeId;
+      }),
+      missingPartitionLeaderAddresses: this.filterMissingRequiredPartitionIds(
+        missing.missingPartitionLeaderAddresses || [],
+      ).filter((partitionId) => {
+        const cached = cachedPartitionLeaders.get(partitionId);
+        if (!cached || !cached.hasLeaderRecord) {
+          return true;
+        }
+        if (cached.hasAddress) {
+          return false;
+        }
+
+        const live = livePartitionLeaders.get(partitionId);
+        return !live || !live.address;
+      }),
+      missingMessageGroupLeaders:
+        (missing.missingMessageGroupLeaders || []).filter((groupId) => {
+          const cached = cachedMessageGroupLeaders.get(groupId);
+          if (!cached || !cached.hasLeaderRecord) {
+            return true;
+          }
+          return !liveMessageGroupLeaders.has(groupId);
+        }),
+      missingMessageGroupLeaderNodes:
+        (missing.missingMessageGroupLeaderNodes || []).filter((groupId) => {
+          const cached = cachedMessageGroupLeaders.get(groupId);
+          if (!cached || !cached.hasLeaderRecord) {
+            return true;
+          }
+          if (cached.hasNodeId) {
+            return false;
+          }
+
+          const live = liveMessageGroupLeaders.get(groupId);
+          return !live || !live.nodeId;
+        }),
+      missingMessageGroupLeaderAddresses:
+        (missing.missingMessageGroupLeaderAddresses || []).filter((groupId) => {
+          const cached = cachedMessageGroupLeaders.get(groupId);
+          if (!cached || !cached.hasLeaderRecord) {
+            return true;
+          }
+          if (cached.hasAddress) {
+            return false;
+          }
+
+          const live = liveMessageGroupLeaders.get(groupId);
+          return !live || !live.address;
+        }),
+    };
+  }
+
+  /**
    * Wait for all service raft groups to have leaders with complete routing info.
    * This is critical for bootstrap - joining nodes need complete leader information
    * (raft_role, node_id, address) to route writes correctly.
@@ -1224,7 +1508,9 @@ class BootstrapAPI {
         this.partitionServices.size > NUM.ZERO) ||
       (this.messageGroupServices && this.messageGroupServices.size > NUM.ZERO);
     if (!hasLiveServices) {
-      const missing = this.getMissingServiceLeaders();
+      const missing = this.normalizeLeaderStatusForBootstrap(
+        this.getMissingServiceLeaders(),
+      );
       const missingCount = this.countMissingLeaderInfo(missing);
       return {ready: missingCount === NUM.ZERO, ...missing};
     }
@@ -1236,7 +1522,9 @@ class BootstrapAPI {
     const start = Date.now();
 
     while (Date.now() - start < timeoutMs) {
-      const missing = this.getMissingServiceLeaders();
+      const missing = this.normalizeLeaderStatusForBootstrap(
+        this.getMissingServiceLeaders(),
+      );
       const missingCount = this.countMissingLeaderInfo(missing);
 
       if (missingCount === NUM.ZERO) {
@@ -1259,7 +1547,9 @@ class BootstrapAPI {
       delay = Math.min(delay * backoff, maxDelay);
     }
 
-    const missing = this.getMissingServiceLeaders();
+    const missing = this.normalizeLeaderStatusForBootstrap(
+      this.getMissingServiceLeaders(),
+    );
     this.logger.warn('Timeout waiting for service leaders', {
       seedNodeId: this.seedNodeId,
       timeoutMs,

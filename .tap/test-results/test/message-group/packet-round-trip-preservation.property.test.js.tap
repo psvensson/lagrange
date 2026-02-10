@@ -2,23 +2,23 @@ TAP version 14
 # Subtest: Property 1: Packet round-trip preserves all fields
     ok 1 - Packet round-trip preserves all fields
     1..1
-ok 1 - Property 1: Packet round-trip preserves all fields # time=5.88ms
+ok 1 - Property 1: Packet round-trip preserves all fields # time=6.525ms
 
 # Subtest: Property 1: No type conversion during round-trip
     ok 1 - No type conversion during round-trip
     1..1
-ok 2 - Property 1: No type conversion during round-trip # time=1.643ms
+ok 2 - Property 1: No type conversion during round-trip # time=1.795ms
 
 # Subtest: Property 1: All packet fields preserved exactly
     ok 1 - All packet fields preserved exactly
     1..1
-ok 3 - Property 1: All packet fields preserved exactly # time=1.32ms
+ok 3 - Property 1: All packet fields preserved exactly # time=1.947ms
 
 # Subtest: Property 1: Full send/receive cycle preserves packet
     ok 1 - Full send/receive cycle preserves packet
     1..1
-ok 4 - Property 1: Full send/receive cycle preserves packet # time=0.989ms
+ok 4 - Property 1: Full send/receive cycle preserves packet # time=2.075ms
 
 1..4
 # { total: 4, pass: 4 }
-# time=16.719ms
+# time=19.967ms

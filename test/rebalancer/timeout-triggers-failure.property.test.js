@@ -130,6 +130,7 @@ function createTimeoutTestCoordinator(options = {}) {
     enableTimeouts: false,
   });
 
+  coordinator.initialize();
   // Set very short timeouts for testing
   coordinator.config.pendingTimeoutMs = options.pendingTimeoutMs || 10;
   coordinator.config.creatingTimeoutMs = options.creatingTimeoutMs || 10;

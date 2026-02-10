@@ -3,24 +3,12 @@ TAP version 14
 Updating table policy {
   tableId: 'table-1',
   updates: {
-    replicaCount: 3,
+    replicaCount: 9,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 98553182008,
-    splitTrafficThreshold: 11,
-    mergeStorageThreshold: 1048605,
-    mergeTrafficThreshold: 8101
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 7,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 70104190407,
-    splitTrafficThreshold: 1424,
-    mergeStorageThreshold: 96268098437,
+    splitStorageThreshold: 107374182377,
+    splitTrafficThreshold: 2662,
+    mergeStorageThreshold: 107374182395,
     mergeTrafficThreshold: 14
   }
 }
@@ -30,10 +18,10 @@ Updating table policy {
     replicaCount: 9,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 18281765336,
-    splitTrafficThreshold: 9990,
-    mergeStorageThreshold: 107374182382,
-    mergeTrafficThreshold: 1885
+    splitStorageThreshold: 1048589,
+    splitTrafficThreshold: 2292,
+    mergeStorageThreshold: 1048612,
+    mergeTrafficThreshold: 2094
   }
 }
 Updating table policy {
@@ -42,10 +30,10 @@ Updating table policy {
     replicaCount: 3,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 1048583,
-    splitTrafficThreshold: 5385,
-    mergeStorageThreshold: 1048598,
-    mergeTrafficThreshold: 5
+    splitStorageThreshold: 106200442692,
+    splitTrafficThreshold: 9997,
+    mergeStorageThreshold: 107374182386,
+    mergeTrafficThreshold: 5842
   }
 }
 Updating table policy {
@@ -54,34 +42,308 @@ Updating table policy {
     replicaCount: 5,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 107374182394,
-    splitTrafficThreshold: 9042,
-    mergeStorageThreshold: 100574075309,
-    mergeTrafficThreshold: 10
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 9,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048596,
-    splitTrafficThreshold: 11,
-    mergeStorageThreshold: 85654562893,
-    mergeTrafficThreshold: 1898
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 9,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 30873574552,
+    splitStorageThreshold: 1048602,
     splitTrafficThreshold: 12,
-    mergeStorageThreshold: 106472485550,
-    mergeTrafficThreshold: 2
+    mergeStorageThreshold: 1048604,
+    mergeTrafficThreshold: 5607
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 23194858550,
+    splitTrafficThreshold: 9997,
+    mergeStorageThreshold: 88971361656,
+    mergeTrafficThreshold: 8594
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 7,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 58856739628,
+    splitTrafficThreshold: 6446,
+    mergeStorageThreshold: 17438023979,
+    mergeTrafficThreshold: 14
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 9,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 106369912768,
+    splitTrafficThreshold: 1,
+    mergeStorageThreshold: 1048578,
+    mergeTrafficThreshold: 9990
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 7,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 107374182370,
+    splitTrafficThreshold: 3015,
+    mergeStorageThreshold: 19594009131,
+    mergeTrafficThreshold: 9991
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 5,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 49817491643,
+    splitTrafficThreshold: 13,
+    mergeStorageThreshold: 65934513298,
+    mergeTrafficThreshold: 9996
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 91485599688,
+    splitTrafficThreshold: 9375,
+    mergeStorageThreshold: 95135151202,
+    mergeTrafficThreshold: 6343
+  }
+}
+    # Subtest: policy updates are written via CDC
+        ok 1 - Policy updates are written via CDC
+        1..1
+    ok 1 - policy updates are written via CDC # time=43.986ms
+    
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 5,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 1048590,
+    splitTrafficThreshold: 14,
+    mergeStorageThreshold: 1048587,
+    mergeTrafficThreshold: 11
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 5,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 37930004368,
+    splitTrafficThreshold: 9130,
+    mergeStorageThreshold: 31725259759,
+    mergeTrafficThreshold: 4396
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 84591004606,
+    splitTrafficThreshold: 9991,
+    mergeStorageThreshold: 17720960452,
+    mergeTrafficThreshold: 11
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 49265119499,
+    splitTrafficThreshold: 4,
+    mergeStorageThreshold: 1048589,
+    mergeTrafficThreshold: 14
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 50543851005,
+    splitTrafficThreshold: 4128,
+    mergeStorageThreshold: 1048604,
+    mergeTrafficThreshold: 8812
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 9,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 1048577,
+    splitTrafficThreshold: 4533,
+    mergeStorageThreshold: 1048611,
+    mergeTrafficThreshold: 9105
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 5,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 47663966851,
+    splitTrafficThreshold: 4757,
+    mergeStorageThreshold: 1048603,
+    mergeTrafficThreshold: 2798
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 5,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 22042672018,
+    splitTrafficThreshold: 4,
+    mergeStorageThreshold: 2850415237,
+    mergeTrafficThreshold: 2048
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 35038277623,
+    splitTrafficThreshold: 224,
+    mergeStorageThreshold: 36190581219,
+    mergeTrafficThreshold: 3
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 15232848935,
+    splitTrafficThreshold: 9650,
+    mergeStorageThreshold: 78792675670,
+    mergeTrafficThreshold: 2982
+  }
+}
+    # Subtest: policy changes emit events
+        ok 1 - Policy changes emit events
+        1..1
+    ok 2 - policy changes emit events # time=2.241ms
+    
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 5,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 1048595,
+    splitTrafficThreshold: 1,
+    mergeStorageThreshold: 47856459249,
+    mergeTrafficThreshold: 9994
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 8098587587,
+    splitTrafficThreshold: 7,
+    mergeStorageThreshold: 107374182376,
+    mergeTrafficThreshold: 13
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 7,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 1048601,
+    splitTrafficThreshold: 3662,
+    mergeStorageThreshold: 1048586,
+    mergeTrafficThreshold: 13
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 7,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 107374182381,
+    splitTrafficThreshold: 8857,
+    mergeStorageThreshold: 1048610,
+    mergeTrafficThreshold: 6523
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 5,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 70649383530,
+    splitTrafficThreshold: 8,
+    mergeStorageThreshold: 1048576,
+    mergeTrafficThreshold: 9801
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 9,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 1048612,
+    splitTrafficThreshold: 6400,
+    mergeStorageThreshold: 1048607,
+    mergeTrafficThreshold: 13
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 7,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 52031466807,
+    splitTrafficThreshold: 4748,
+    mergeStorageThreshold: 1048606,
+    mergeTrafficThreshold: 3505
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 9,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 97178686206,
+    splitTrafficThreshold: 12,
+    mergeStorageThreshold: 46518728385,
+    mergeTrafficThreshold: 1027
   }
 }
 Updating table policy {
@@ -91,271 +353,21 @@ Updating table policy {
     minReplicaCount: 3,
     maxReplicaCount: 9,
     splitStorageThreshold: 1048592,
-    splitTrafficThreshold: 11,
-    mergeStorageThreshold: 107374182366,
-    mergeTrafficThreshold: 4688
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 23650442378,
-    splitTrafficThreshold: 4,
-    mergeStorageThreshold: 58523518904,
-    mergeTrafficThreshold: 3929
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 5,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 71992657807,
-    splitTrafficThreshold: 7,
-    mergeStorageThreshold: 105337611611,
-    mergeTrafficThreshold: 4156
-  }
-}
-    # Subtest: policy updates are written via CDC
-        ok 1 - Policy updates are written via CDC
-        1..1
-    ok 1 - policy updates are written via CDC # time=39.039ms
-    
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048581,
-    splitTrafficThreshold: 7,
-    mergeStorageThreshold: 95118055102,
-    mergeTrafficThreshold: 9078
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 97786226340,
-    splitTrafficThreshold: 9,
-    mergeStorageThreshold: 1048595,
-    mergeTrafficThreshold: 8098
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 7,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 61551796063,
-    splitTrafficThreshold: 6267,
-    mergeStorageThreshold: 2260012555,
-    mergeTrafficThreshold: 9983
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 9,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 107374182365,
-    splitTrafficThreshold: 7774,
-    mergeStorageThreshold: 1048607,
-    mergeTrafficThreshold: 4
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 9,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 107374182387,
-    splitTrafficThreshold: 191,
-    mergeStorageThreshold: 4553256208,
-    mergeTrafficThreshold: 4560
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 5,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 62946315277,
-    splitTrafficThreshold: 8877,
-    mergeStorageThreshold: 84588475993,
-    mergeTrafficThreshold: 9
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 9,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048599,
-    splitTrafficThreshold: 2,
-    mergeStorageThreshold: 26729845598,
-    mergeTrafficThreshold: 636
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 7,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 65477209940,
-    splitTrafficThreshold: 8,
-    mergeStorageThreshold: 83006365325,
-    mergeTrafficThreshold: 9989
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 7,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 38985901691,
-    splitTrafficThreshold: 10000,
-    mergeStorageThreshold: 45681394196,
-    mergeTrafficThreshold: 5
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 40455447408,
-    splitTrafficThreshold: 8075,
-    mergeStorageThreshold: 89827241356,
-    mergeTrafficThreshold: 8743
-  }
-}
-    # Subtest: policy changes emit events
-        ok 1 - Policy changes emit events
-        1..1
-    ok 2 - policy changes emit events # time=2.808ms
-    
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 9,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048601,
-    splitTrafficThreshold: 10000,
-    mergeStorageThreshold: 72683606141,
-    mergeTrafficThreshold: 1885
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 105976098183,
-    splitTrafficThreshold: 3713,
-    mergeStorageThreshold: 64333295605,
-    mergeTrafficThreshold: 5
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 9,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048585,
-    splitTrafficThreshold: 7762,
-    mergeStorageThreshold: 79431396860,
-    mergeTrafficThreshold: 6137
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 5,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048609,
-    splitTrafficThreshold: 3212,
-    mergeStorageThreshold: 1048596,
-    mergeTrafficThreshold: 6142
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048609,
-    splitTrafficThreshold: 3,
-    mergeStorageThreshold: 107374182372,
-    mergeTrafficThreshold: 3
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 5,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 12021481993,
-    splitTrafficThreshold: 38,
-    mergeStorageThreshold: 1048589,
-    mergeTrafficThreshold: 7524
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 105626383676,
-    splitTrafficThreshold: 14,
-    mergeStorageThreshold: 1048597,
-    mergeTrafficThreshold: 5014
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 41186320225,
-    splitTrafficThreshold: 4998,
-    mergeStorageThreshold: 1048586,
+    splitTrafficThreshold: 9998,
+    mergeStorageThreshold: 107374182387,
     mergeTrafficThreshold: 8
   }
 }
 Updating table policy {
   tableId: 'table-1',
   updates: {
-    replicaCount: 5,
+    replicaCount: 3,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 1048590,
-    splitTrafficThreshold: 298,
-    mergeStorageThreshold: 55979654663,
-    mergeTrafficThreshold: 13
+    splitStorageThreshold: 1048586,
+    splitTrafficThreshold: 922,
+    mergeStorageThreshold: 26975510163,
+    mergeTrafficThreshold: 6037
   }
 }
 Updating table policy {
@@ -364,58 +376,22 @@ Updating table policy {
     replicaCount: 9,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 8847694911,
-    splitTrafficThreshold: 10000,
-    mergeStorageThreshold: 1048607,
-    mergeTrafficThreshold: 8670
+    splitStorageThreshold: 1048594,
+    splitTrafficThreshold: 3592,
+    mergeStorageThreshold: 872195315,
+    mergeTrafficThreshold: 9900
   }
 }
 Updating table policy {
   tableId: 'table-1',
   updates: {
-    replicaCount: 5,
+    replicaCount: 9,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 17564873606,
-    splitTrafficThreshold: 9989,
-    mergeStorageThreshold: 1048588,
-    mergeTrafficThreshold: 10
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 5,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048578,
-    splitTrafficThreshold: 8,
-    mergeStorageThreshold: 107374182388,
-    mergeTrafficThreshold: 7197
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 5,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 85923045689,
-    splitTrafficThreshold: 5,
-    mergeStorageThreshold: 107374182391,
-    mergeTrafficThreshold: 9
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 5,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1294531734,
-    splitTrafficThreshold: 3959,
-    mergeStorageThreshold: 19087111764,
-    mergeTrafficThreshold: 9140
+    splitStorageThreshold: 107374182392,
+    splitTrafficThreshold: 6918,
+    mergeStorageThreshold: 64604986937,
+    mergeTrafficThreshold: 9992
   }
 }
 Updating table policy {
@@ -424,164 +400,34 @@ Updating table policy {
     replicaCount: 7,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 63788108408,
-    splitTrafficThreshold: 9259,
-    mergeStorageThreshold: 49556445826,
-    mergeTrafficThreshold: 6
+    splitStorageThreshold: 107374182391,
+    splitTrafficThreshold: 9241,
+    mergeStorageThreshold: 18741637613,
+    mergeTrafficThreshold: 12
   }
 }
 Updating table policy {
   tableId: 'table-1',
   updates: {
-    replicaCount: 7,
+    replicaCount: 9,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 5660071927,
-    splitTrafficThreshold: 9999,
-    mergeStorageThreshold: 29530500481,
-    mergeTrafficThreshold: 3784
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 7,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048600,
-    splitTrafficThreshold: 9993,
-    mergeStorageThreshold: 98066428641,
-    mergeTrafficThreshold: 9794
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 7,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 81856578370,
-    splitTrafficThreshold: 9990,
-    mergeStorageThreshold: 1048611,
-    mergeTrafficThreshold: 803
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048607,
-    splitTrafficThreshold: 7036,
-    mergeStorageThreshold: 77011959656,
-    mergeTrafficThreshold: 10000
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 14264514650,
-    splitTrafficThreshold: 9990,
-    mergeStorageThreshold: 107374182379,
-    mergeTrafficThreshold: 4520
-  }
-}
-    # Subtest: policy retrieval reflects latest values
-        ok 1 - Policy retrieval reflects latest values
-        1..1
-    ok 3 - policy retrieval reflects latest values # time=7.029ms
-    
-    # Subtest: invalid policy changes are rejected
-        ok 1 - Invalid policy changes are rejected
-        1..1
-    ok 4 - invalid policy changes are rejected # time=0.996ms
-    
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 55897073086,
+    splitStorageThreshold: 100463311556,
     splitTrafficThreshold: 7,
-    mergeStorageThreshold: 1048607,
-    mergeTrafficThreshold: 2
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048600,
-    splitTrafficThreshold: 1775,
-    mergeStorageThreshold: 1048584,
-    mergeTrafficThreshold: 9993
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048611,
-    splitTrafficThreshold: 5514,
-    mergeStorageThreshold: 49952209632,
-    mergeTrafficThreshold: 8048
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 9,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 86524784204,
-    splitTrafficThreshold: 11,
-    mergeStorageThreshold: 40217966925,
-    mergeTrafficThreshold: 8
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 5,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 107374182367,
-    splitTrafficThreshold: 3,
-    mergeStorageThreshold: 1048594,
+    mergeStorageThreshold: 98924331431,
     mergeTrafficThreshold: 9988
   }
 }
 Updating table policy {
   tableId: 'table-1',
   updates: {
-    replicaCount: 7,
+    replicaCount: 3,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 1048599,
-    splitTrafficThreshold: 4449,
-    mergeStorageThreshold: 107374182389,
-    mergeTrafficThreshold: 7
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 7,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 82859162178,
-    splitTrafficThreshold: 8448,
-    mergeStorageThreshold: 28487109192,
-    mergeTrafficThreshold: 4132
+    splitStorageThreshold: 107374182392,
+    splitTrafficThreshold: 784,
+    mergeStorageThreshold: 24035567141,
+    mergeTrafficThreshold: 11
   }
 }
 Updating table policy {
@@ -590,9 +436,9 @@ Updating table policy {
     replicaCount: 5,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 107374182369,
-    splitTrafficThreshold: 6796,
-    mergeStorageThreshold: 1048605,
+    splitStorageThreshold: 39611852399,
+    splitTrafficThreshold: 7210,
+    mergeStorageThreshold: 85320905069,
     mergeTrafficThreshold: 9994
   }
 }
@@ -602,10 +448,34 @@ Updating table policy {
     replicaCount: 7,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 80189615778,
-    splitTrafficThreshold: 6767,
-    mergeStorageThreshold: 1048607,
-    mergeTrafficThreshold: 579
+    splitStorageThreshold: 24939963581,
+    splitTrafficThreshold: 8,
+    mergeStorageThreshold: 1048610,
+    mergeTrafficThreshold: 5105
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 9,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 107374182376,
+    splitTrafficThreshold: 9998,
+    mergeStorageThreshold: 1048595,
+    mergeTrafficThreshold: 10000
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 1048606,
+    splitTrafficThreshold: 5712,
+    mergeStorageThreshold: 71921119170,
+    mergeTrafficThreshold: 935
   }
 }
 Updating table policy {
@@ -614,16 +484,21 @@ Updating table policy {
     replicaCount: 5,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 27031400879,
-    splitTrafficThreshold: 9903,
-    mergeStorageThreshold: 88718177699,
-    mergeTrafficThreshold: 9988
+    splitStorageThreshold: 107374182397,
+    splitTrafficThreshold: 8390,
+    mergeStorageThreshold: 72518030298,
+    mergeTrafficThreshold: 9993
   }
 }
-    # Subtest: policy changes include timestamp
-        ok 1 - Policy changes include timestamp
+    # Subtest: policy retrieval reflects latest values
+        ok 1 - Policy retrieval reflects latest values
         1..1
-    ok 5 - policy changes include timestamp # time=2.033ms
+    ok 3 - policy retrieval reflects latest values # time=3.54ms
+    
+    # Subtest: invalid policy changes are rejected
+        ok 1 - Invalid policy changes are rejected
+        1..1
+    ok 4 - invalid policy changes are rejected # time=1.143ms
     
 Updating table policy {
   tableId: 'table-1',
@@ -631,21 +506,93 @@ Updating table policy {
     replicaCount: 3,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 58029399584,
-    splitTrafficThreshold: 9997,
-    mergeStorageThreshold: 96003820236,
-    mergeTrafficThreshold: 1
+    splitStorageThreshold: 40266801468,
+    splitTrafficThreshold: 5746,
+    mergeStorageThreshold: 56559650889,
+    mergeTrafficThreshold: 5125
   }
 }
 Updating table policy {
   tableId: 'table-1',
   updates: {
-    replicaCount: 5,
+    replicaCount: 9,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 24160775953,
-    splitTrafficThreshold: 4413,
-    mergeStorageThreshold: 103212448152,
+    splitStorageThreshold: 1048586,
+    splitTrafficThreshold: 14,
+    mergeStorageThreshold: 1048603,
+    mergeTrafficThreshold: 5979
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 45320280606,
+    splitTrafficThreshold: 1663,
+    mergeStorageThreshold: 1048592,
+    mergeTrafficThreshold: 3380
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 9,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 35697087509,
+    splitTrafficThreshold: 6,
+    mergeStorageThreshold: 107374182388,
+    mergeTrafficThreshold: 5323
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 7,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 1048607,
+    splitTrafficThreshold: 1308,
+    mergeStorageThreshold: 7723387927,
+    mergeTrafficThreshold: 4870
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 7,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 1048584,
+    splitTrafficThreshold: 8,
+    mergeStorageThreshold: 11761459198,
+    mergeTrafficThreshold: 6209
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 9,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 34602748892,
+    splitTrafficThreshold: 2586,
+    mergeStorageThreshold: 1048599,
+    mergeTrafficThreshold: 228
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 7,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 72954045186,
+    splitTrafficThreshold: 9989,
+    mergeStorageThreshold: 1048593,
     mergeTrafficThreshold: 2
   }
 }
@@ -655,34 +602,10 @@ Updating table policy {
     replicaCount: 5,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 71556808131,
-    splitTrafficThreshold: 5417,
-    mergeStorageThreshold: 1048604,
-    mergeTrafficThreshold: 8815
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 7,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 1048605,
-    splitTrafficThreshold: 4182,
-    mergeStorageThreshold: 5677771406,
-    mergeTrafficThreshold: 13
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 52361729160,
-    splitTrafficThreshold: 9999,
-    mergeStorageThreshold: 103113151600,
-    mergeTrafficThreshold: 4
+    splitStorageThreshold: 73633843883,
+    splitTrafficThreshold: 13,
+    mergeStorageThreshold: 1048595,
+    mergeTrafficThreshold: 7
   }
 }
 Updating table policy {
@@ -691,10 +614,99 @@ Updating table policy {
     replicaCount: 9,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 1048605,
-    splitTrafficThreshold: 9996,
-    mergeStorageThreshold: 14177345300,
-    mergeTrafficThreshold: 14
+    splitStorageThreshold: 84448252312,
+    splitTrafficThreshold: 11,
+    mergeStorageThreshold: 89235251348,
+    mergeTrafficThreshold: 6419
+  }
+}
+    # Subtest: policy changes include timestamp
+        ok 1 - Policy changes include timestamp
+        1..1
+    ok 5 - policy changes include timestamp # time=2.175ms
+    
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 5,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 1048611,
+    splitTrafficThreshold: 10,
+    mergeStorageThreshold: 89179622060,
+    mergeTrafficThreshold: 4465
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 9,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 90929061055,
+    splitTrafficThreshold: 1218,
+    mergeStorageThreshold: 96754894475,
+    mergeTrafficThreshold: 10000
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 75484296658,
+    splitTrafficThreshold: 2757,
+    mergeStorageThreshold: 55633694396,
+    mergeTrafficThreshold: 8292
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 103378650442,
+    splitTrafficThreshold: 14,
+    mergeStorageThreshold: 1048612,
+    mergeTrafficThreshold: 9995
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 7,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 1048581,
+    splitTrafficThreshold: 7,
+    mergeStorageThreshold: 89446226159,
+    mergeTrafficThreshold: 9999
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 7,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 1048610,
+    splitTrafficThreshold: 3251,
+    mergeStorageThreshold: 29426415982,
+    mergeTrafficThreshold: 5
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 3,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 59080412163,
+    splitTrafficThreshold: 3243,
+    mergeStorageThreshold: 10611283243,
+    mergeTrafficThreshold: 13
   }
 }
 Updating table policy {
@@ -703,10 +715,22 @@ Updating table policy {
     replicaCount: 5,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 41684018991,
-    splitTrafficThreshold: 5,
+    splitStorageThreshold: 107374182384,
+    splitTrafficThreshold: 9,
     mergeStorageThreshold: 107374182375,
-    mergeTrafficThreshold: 9016
+    mergeTrafficThreshold: 9990
+  }
+}
+Updating table policy {
+  tableId: 'table-1',
+  updates: {
+    replicaCount: 5,
+    minReplicaCount: 3,
+    maxReplicaCount: 9,
+    splitStorageThreshold: 27825635881,
+    splitTrafficThreshold: 9988,
+    mergeStorageThreshold: 1048588,
+    mergeTrafficThreshold: 5957
   }
 }
 Updating table policy {
@@ -715,44 +739,20 @@ Updating table policy {
     replicaCount: 3,
     minReplicaCount: 3,
     maxReplicaCount: 9,
-    splitStorageThreshold: 96162773293,
-    splitTrafficThreshold: 1920,
-    mergeStorageThreshold: 107374182371,
-    mergeTrafficThreshold: 6
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 107374182389,
-    splitTrafficThreshold: 8,
-    mergeStorageThreshold: 55011547132,
-    mergeTrafficThreshold: 3710
-  }
-}
-Updating table policy {
-  tableId: 'table-1',
-  updates: {
-    replicaCount: 3,
-    minReplicaCount: 3,
-    maxReplicaCount: 9,
-    splitStorageThreshold: 33055268027,
-    splitTrafficThreshold: 9108,
-    mergeStorageThreshold: 7529355628,
-    mergeTrafficThreshold: 8
+    splitStorageThreshold: 25666213418,
+    splitTrafficThreshold: 8238,
+    mergeStorageThreshold: 1048590,
+    mergeTrafficThreshold: 5731
   }
 }
     # Subtest: complete policy replacement works
         ok 1 - Complete policy replacement works
         1..1
-    ok 6 - complete policy replacement works # time=2.203ms
+    ok 6 - complete policy replacement works # time=2.048ms
     
     1..6
-ok 1 - Property 35: Policy-Driven Automatic Adjustment # time=56.899ms
+ok 1 - Property 35: Policy-Driven Automatic Adjustment # time=58.053ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=61.045ms
+# time=64.821ms

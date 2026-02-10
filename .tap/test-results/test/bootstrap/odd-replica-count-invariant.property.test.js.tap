@@ -26,47 +26,53 @@ TAP version 14
     ok 24 - System table replica_operations has at least 3 replicas: 3
     ok 25 - System table node_endpoints has odd replica count: 3
     ok 26 - System table node_endpoints has at least 3 replicas: 3
-    1..26
-ok 1 - Property 33: All system table partitions have odd replica counts # time=3.707ms
+    ok 27 - System table service_definitions has odd replica count: 3
+    ok 28 - System table service_definitions has at least 3 replicas: 3
+    ok 29 - System table service_endpoints has odd replica count: 3
+    ok 30 - System table service_endpoints has at least 3 replicas: 3
+    ok 31 - System table service_timers has odd replica count: 3
+    ok 32 - System table service_timers has at least 3 replicas: 3
+    1..32
+ok 1 - Property 33: All system table partitions have odd replica counts # time=4.285ms
 
 # Subtest: Property 33: Initial message group has odd replica count
     ok 1 - Initial message group has odd replica count: 3
     ok 2 - Initial message group has at least 3 replicas: 3
     1..2
-ok 2 - Property 33: Initial message group has odd replica count # time=0.38ms
+ok 2 - Property 33: Initial message group has odd replica count # time=0.451ms
 
 # Subtest: Property 33: Default partition replica count is odd
     ok 1 - Default partition replica count is odd: 3
     ok 2 - Default partition replica count is at least 3: 3
     1..2
-ok 3 - Property 33: Default partition replica count is odd # time=0.325ms
+ok 3 - Property 33: Default partition replica count is odd # time=0.368ms
 
 # Subtest: Property 33: Default message group replica count is odd
     ok 1 - Default message group replica count is odd: 3
     ok 2 - Default message group replica count is at least 3: 3
     1..2
-ok 4 - Property 33: Default message group replica count is odd # time=0.337ms
+ok 4 - Property 33: Default message group replica count is odd # time=0.36ms
 
 # Subtest: Property 33: Valid replica counts are always odd
     ok 1 - Valid replica counts are always odd
     1..1
-ok 5 - Property 33: Valid replica counts are always odd # time=1.666ms
+ok 5 - Property 33: Valid replica counts are always odd # time=1.9ms
 
 # Subtest: Property 33: Replica count growth maintains odd invariant
     ok 1 - Replica count growth maintains odd invariant
     1..1
-ok 6 - Property 33: Replica count growth maintains odd invariant # time=0.731ms
+ok 6 - Property 33: Replica count growth maintains odd invariant # time=0.777ms
 
 # Subtest: Property 33: Replica count shrink maintains odd invariant
     ok 1 - Replica count shrink maintains odd invariant
     1..1
-ok 7 - Property 33: Replica count shrink maintains odd invariant # time=0.602ms
+ok 7 - Property 33: Replica count shrink maintains odd invariant # time=0.686ms
 
 # Subtest: Property 33: Quorum calculation requires odd replica count
     ok 1 - Quorum calculation requires odd replica count
     1..1
-ok 8 - Property 33: Quorum calculation requires odd replica count # time=0.436ms
+ok 8 - Property 33: Quorum calculation requires odd replica count # time=0.514ms
 
 1..8
-# { total: 36, pass: 36 }
-# time=134.27ms
+# { total: 42, pass: 42 }
+# time=178.925ms

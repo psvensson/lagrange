@@ -1,216 +1,58 @@
 TAP version 14
 # Subtest: Property 79: Replica Status State Machine Validity
     # Subtest: valid transitions succeed
-        not ok 1 - Property failed after 1 tests { seed: -165933237, path: "0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: [{"from":"starting","to":"syncing"},"00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000"] Shrunk 9 time(s) Got TypeError: Cannot read properties of undefined (reading 'set')     at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/replica-status-state-machine.property.test.js:145:33     at AsyncProperty.predicate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.js:14:59)     at AsyncProperty.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:39)     at asyncRunIt (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:36)     at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/replica-status-state-machine.property.test.js:126:5)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
-          ---
-          stack: |
-            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
-            asyncThrowIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
-          at:
-            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
-            lineNumber: 126
-            columnNumber: 15
-            functionName: buildError
-          tapCaught: returnedPromiseRejection
-          source: |
-            function buildError(errorMessage, out) {
-                if (!out.runConfiguration.errorWithCause) {
-                    throw new Error(errorMessage);
-            --------------^
-                }
-                const ErrorWithCause = Error;
-          ...
-        
+        ok 1 - valid transitions succeed
         1..1
-    not ok 1 - valid transitions succeed # time=20.316ms
-      ---
-      at:
-        fileName: test/node/replica-status-state-machine.property.test.js
-        lineNumber: 110
-        columnNumber: 5
-        typeName: Test
-      source: |2
-           * the transition should succeed.
-           */
-          t.test('valid transitions succeed', async (t) => {
-        ----^
-            // Generate valid transition pairs
-            const validTransitions = [];
-      ...
+    ok 1 - valid transitions succeed # time=4.905ms
     
+{"level":50,"time":"2026-02-09T20:55:55.307Z","nodeId":"49505c94-1250-4192-a763-f930ef876491","pid":449979,"subsystem":"replica-lifecycle","replicaId":"2bb5ef8f-85f7-13a5-8a70-f07d0000001d","currentStatus":"syncing","newStatus":"starting","nodeId":"49505c94-1250-4192-a763-f930ef876491","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.307Z","nodeId":"49505c94-1250-4192-a763-f930ef876491","pid":449979,"subsystem":"replica-lifecycle","replicaId":"ffffffe9-fff6-5fff-8000-000c8c9ed939","currentStatus":"stopped","newStatus":"syncing","nodeId":"49505c94-1250-4192-a763-f930ef876491","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.307Z","nodeId":"49505c94-1250-4192-a763-f930ef876491","pid":449979,"subsystem":"replica-lifecycle","replicaId":"fffffffb-59a3-354b-8c1c-5018950a349a","currentStatus":"failed","newStatus":"syncing","nodeId":"49505c94-1250-4192-a763-f930ef876491","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.307Z","nodeId":"49505c94-1250-4192-a763-f930ef876491","pid":449979,"subsystem":"replica-lifecycle","replicaId":"0000000a-0015-1000-8976-cc9b0000000a","currentStatus":"failed","newStatus":"stopped","nodeId":"49505c94-1250-4192-a763-f930ef876491","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.308Z","nodeId":"49505c94-1250-4192-a763-f930ef876491","pid":449979,"subsystem":"replica-lifecycle","replicaId":"00000006-0013-1000-bfff-fff249e15d5d","currentStatus":"stopping","newStatus":"starting","nodeId":"49505c94-1250-4192-a763-f930ef876491","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.308Z","nodeId":"49505c94-1250-4192-a763-f930ef876491","pid":449979,"subsystem":"replica-lifecycle","replicaId":"822e9fb1-a5ff-494c-91ae-f9c9dc42ebca","currentStatus":"syncing","newStatus":"stopped","nodeId":"49505c94-1250-4192-a763-f930ef876491","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.308Z","nodeId":"49505c94-1250-4192-a763-f930ef876491","pid":449979,"subsystem":"replica-lifecycle","replicaId":"fdcde7bd-0009-1000-9336-cdcafffffff1","currentStatus":"failed","newStatus":"starting","nodeId":"49505c94-1250-4192-a763-f930ef876491","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.308Z","nodeId":"49505c94-1250-4192-a763-f930ef876491","pid":449979,"subsystem":"replica-lifecycle","replicaId":"00000017-dfa1-3cb2-befc-6eb90000001b","currentStatus":"stopped","newStatus":"syncing","nodeId":"49505c94-1250-4192-a763-f930ef876491","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.308Z","nodeId":"49505c94-1250-4192-a763-f930ef876491","pid":449979,"subsystem":"replica-lifecycle","replicaId":"00000004-a1c3-51f5-8000-000e0000001b","currentStatus":"active","newStatus":"starting","nodeId":"49505c94-1250-4192-a763-f930ef876491","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.308Z","nodeId":"49505c94-1250-4192-a763-f930ef876491","pid":449979,"subsystem":"replica-lifecycle","replicaId":"11c78aea-1d20-112c-81d5-5eabfed65b3c","currentStatus":"stopped","newStatus":"starting","nodeId":"49505c94-1250-4192-a763-f930ef876491","msg":"Invalid status transition attempted"}
     # Subtest: invalid transitions fail
-        not ok 1 - Property failed after 1 tests { seed: -1729398891, path: "0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: [{"from":"starting","to":"active"},"00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000"] Shrunk 9 time(s) Got TypeError: Cannot read properties of undefined (reading 'set')     at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/replica-status-state-machine.property.test.js:216:33     at AsyncProperty.predicate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.js:14:59)     at AsyncProperty.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:39)     at asyncRunIt (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:36)     at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/replica-status-state-machine.property.test.js:197:5)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
-          ---
-          stack: |
-            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
-            asyncThrowIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
-          at:
-            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
-            lineNumber: 126
-            columnNumber: 15
-            functionName: buildError
-          tapCaught: returnedPromiseRejection
-          source: |
-            function buildError(errorMessage, out) {
-                if (!out.runConfiguration.errorWithCause) {
-                    throw new Error(errorMessage);
-            --------------^
-                }
-                const ErrorWithCause = Error;
-          ...
-        
+        ok 1 - invalid transitions fail
         1..1
-    not ok 2 - invalid transitions fail # time=3.287ms
-      ---
-      at:
-        fileName: test/node/replica-status-state-machine.property.test.js
-        lineNumber: 176
-        columnNumber: 5
-        typeName: Test
-      source: |2
-           * and not to FAILED), the transition should fail.
-           */
-          t.test('invalid transitions fail', async (t) => {
-        ----^
-            // Generate invalid transition pairs
-            const invalidTransitions = [];
-      ...
+    ok 2 - invalid transitions fail # time=2.574ms
     
     # Subtest: transition to FAILED always succeeds
-        not ok 1 - Property failed after 1 tests { seed: 1007083954, path: "0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["starting","00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000000"] Shrunk 8 time(s) Got TypeError: Cannot read properties of undefined (reading 'set')     at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/replica-status-state-machine.property.test.js:265:33     at AsyncProperty.predicate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.js:14:59)     at AsyncProperty.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:39)     at asyncRunIt (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:36)     at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/replica-status-state-machine.property.test.js:246:5)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
-          ---
-          stack: |
-            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
-            asyncThrowIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
-          at:
-            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
-            lineNumber: 126
-            columnNumber: 15
-            functionName: buildError
-          tapCaught: returnedPromiseRejection
-          source: |
-            function buildError(errorMessage, out) {
-                if (!out.runConfiguration.errorWithCause) {
-                    throw new Error(errorMessage);
-            --------------^
-                }
-                const ErrorWithCause = Error;
-          ...
-        
+        ok 1 - transition to FAILED always succeeds
         1..1
-    not ok 3 - transition to FAILED always succeeds # time=3.14ms
-      ---
-      at:
-        fileName: test/node/replica-status-state-machine.property.test.js
-        lineNumber: 245
-        columnNumber: 5
-        typeName: Test
-      source: |2
-           * Property: For any state, transition to FAILED should always succeed.
-           */
-          t.test('transition to FAILED always succeeds', async (t) => {
-        ----^
-            await fc.assert(
-              fc.asyncProperty(
-      ...
+    ok 3 - transition to FAILED always succeeds # time=1.593ms
     
     # Subtest: isValidTransition validates correctly
         ok 1 - isValidTransition validates correctly
         1..1
-    ok 4 - isValidTransition validates correctly # time=1.065ms
+    ok 4 - isValidTransition validates correctly # time=0.839ms
     
+{"level":50,"time":"2026-02-09T20:55:55.365Z","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","pid":449979,"subsystem":"replica-lifecycle","replicaId":"ffffffff-62d4-10e7-ab11-993f00000017","currentStatus":"failed","newStatus":"starting","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.365Z","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","pid":449979,"subsystem":"replica-lifecycle","replicaId":"82f43331-501c-175b-8000-000d6363d3ff","currentStatus":"stopped","newStatus":"active","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.365Z","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","pid":449979,"subsystem":"replica-lifecycle","replicaId":"ffffffef-0006-1000-8000-0019fffffff1","currentStatus":"failed","newStatus":"active","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.365Z","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","pid":449979,"subsystem":"replica-lifecycle","replicaId":"41f1b96a-000e-1000-8000-001777248d74","currentStatus":"failed","newStatus":"stopping","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.365Z","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","pid":449979,"subsystem":"replica-lifecycle","replicaId":"cda701de-fffb-5fff-bfff-fff600000014","currentStatus":"stopped","newStatus":"starting","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.366Z","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","pid":449979,"subsystem":"replica-lifecycle","replicaId":"00000016-ffef-5fff-b874-a3d3fffffffb","currentStatus":"stopped","newStatus":"active","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.366Z","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","pid":449979,"subsystem":"replica-lifecycle","replicaId":"00000018-0015-1000-bfff-fffa8d77f66d","currentStatus":"failed","newStatus":"stopped","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.366Z","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","pid":449979,"subsystem":"replica-lifecycle","replicaId":"0000000c-120b-5e4b-aafb-06964245370b","currentStatus":"failed","newStatus":"starting","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.366Z","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","pid":449979,"subsystem":"replica-lifecycle","replicaId":"00000017-d7a3-3320-9738-61d4fffffff3","currentStatus":"failed","newStatus":"starting","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-09T20:55:55.366Z","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","pid":449979,"subsystem":"replica-lifecycle","replicaId":"b07c7678-647a-3afc-8000-001800000011","currentStatus":"stopped","newStatus":"syncing","nodeId":"75542d89-1ba9-4b82-af3b-74dbe4f725ba","msg":"Invalid status transition attempted"}
     # Subtest: terminal states have no outgoing transitions
-        not ok 1 - Property failed after 1 tests { seed: 1830348176, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["stopped","starting","00000000-0000-1000-8000-000000000000"] Shrunk 5 time(s) Got TypeError: Cannot read properties of undefined (reading 'set')     at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/replica-status-state-machine.property.test.js:355:33     at AsyncProperty.predicate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.js:14:59)     at AsyncProperty.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:39)     at asyncRunIt (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:36)     at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/replica-status-state-machine.property.test.js:335:5)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
-          ---
-          stack: |
-            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
-            asyncThrowIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
-          at:
-            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
-            lineNumber: 126
-            columnNumber: 15
-            functionName: buildError
-          tapCaught: returnedPromiseRejection
-          source: |
-            function buildError(errorMessage, out) {
-                if (!out.runConfiguration.errorWithCause) {
-                    throw new Error(errorMessage);
-            --------------^
-                }
-                const ErrorWithCause = Error;
-          ...
-        
+        ok 1 - terminal states have no outgoing transitions
         1..1
-    not ok 5 - terminal states have no outgoing transitions # time=3.185ms
-      ---
-      at:
-        fileName: test/node/replica-status-state-machine.property.test.js
-        lineNumber: 332
-        columnNumber: 5
-        typeName: Test
-      source: >2
-           * Property: Terminal states (STOPPED, FAILED) have no valid outgoing transitions.
-           */
-          t.test('terminal states have no outgoing transitions', async (t) => {
-        ----^
-            const terminalStates = [ReplicaStatus.STOPPED, ReplicaStatus.FAILED];
-      ...
+    ok 5 - terminal states have no outgoing transitions # time=1.679ms
     
     # Subtest: status updates emit statusChanged event
-        not ok 1 - Property failed after 1 tests { seed: -1626732383, path: "0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000"] Shrunk 4 time(s) Got TypeError: Cannot read properties of undefined (reading 'set')     at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/replica-status-state-machine.property.test.js:403:33     at AsyncProperty.predicate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.js:14:59)     at AsyncProperty.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:39)     at asyncRunIt (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:36)     at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/node/replica-status-state-machine.property.test.js:386:5)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
-          ---
-          stack: |
-            buildError (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
-            asyncThrowIfFailed (node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
-          at:
-            fileName: node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
-            lineNumber: 126
-            columnNumber: 15
-            functionName: buildError
-          tapCaught: returnedPromiseRejection
-          source: |
-            function buildError(errorMessage, out) {
-                if (!out.runConfiguration.errorWithCause) {
-                    throw new Error(errorMessage);
-            --------------^
-                }
-                const ErrorWithCause = Error;
-          ...
-        
+        ok 1 - status updates emit statusChanged event
         1..1
-    not ok 6 - status updates emit statusChanged event # time=2.85ms
-      ---
-      at:
-        fileName: test/node/replica-status-state-machine.property.test.js
-        lineNumber: 385
-        columnNumber: 5
-        typeName: Test
-      source: |2
-           * Property: Status updates emit statusChanged event with correct data.
-           */
-          t.test('status updates emit statusChanged event', async (t) => {
-        ----^
-            await fc.assert(
-              fc.asyncProperty(
-      ...
+    ok 6 - status updates emit statusChanged event # time=1.341ms
     
     1..6
-not ok 1 - Property 79: Replica Status State Machine Validity # time=163.323ms
-  ---
-  at:
-    fileName: test/node/replica-status-state-machine.property.test.js
-    lineNumber: 89
-    columnNumber: 1
-    isToplevel: true
-  source: |
-    ];
-  
-    test('Property 79: Replica Status State Machine Validity', async (t) => {
-    ^
-      t.beforeEach(async () => {
-        ConfigurationManager.resetInstance();
-  ...
+ok 1 - Property 79: Replica Status State Machine Validity # time=149.702ms
 
 1..1
-# { total: 6, pass: 1, fail: 5 }
-# time=177.603ms
+# { total: 6, pass: 6 }
+# time=154.758ms

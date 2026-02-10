@@ -3,41 +3,41 @@ TAP version 14
     # Subtest: insertChar always increases value length by 1
         ok 1 - insertChar always increases length by 1
         1..1
-    ok 1 - insertChar always increases value length by 1 # time=5.781ms
+    ok 1 - insertChar always increases value length by 1 # time=6.065ms
     
     # Subtest: deleteBackward decreases length by 1 when cursor > 0
         ok 1 - deleteBackward decreases length by 1 when cursor > 0
         1..1
-    ok 2 - deleteBackward decreases length by 1 when cursor > 0 # time=0.867ms
+    ok 2 - deleteBackward decreases length by 1 when cursor > 0 # time=0.952ms
     
     # Subtest: deleteBackward preserves length when cursor at 0
         ok 1 - deleteBackward preserves length when cursor at 0
         1..1
-    ok 3 - deleteBackward preserves length when cursor at 0 # time=0.676ms
+    ok 3 - deleteBackward preserves length when cursor at 0 # time=0.773ms
     
     # Subtest: cursor position always within valid bounds after operations
         ok 1 - cursor position always within valid bounds
         1..1
-    ok 4 - cursor position always within valid bounds after operations # time=1.402ms
+    ok 4 - cursor position always within valid bounds after operations # time=1.61ms
     
     # Subtest: multi-line input supported via newline insertion
         ok 1 - multi-line input supported via newline insertion
         1..1
-    ok 5 - multi-line input supported via newline insertion # time=0.931ms
+    ok 5 - multi-line input supported via newline insertion # time=1.112ms
     
     # Subtest: insertText followed by getValue returns consistent result
         ok 1 - insertText followed by getValue returns consistent result
         1..1
-    ok 6 - insertText followed by getValue returns consistent result # time=0.464ms
+    ok 6 - insertText followed by getValue returns consistent result # time=0.585ms
     
     # Subtest: cursor movement is bounded
         ok 1 - cursor movement is bounded
         1..1
-    ok 7 - cursor movement is bounded # time=0.657ms
+    ok 7 - cursor movement is bounded # time=0.764ms
     
     1..7
-ok 1 - Property 24: Query Input Text Handling # time=13.44ms
+ok 1 - Property 24: Query Input Text Handling # time=14.568ms
 
 1..1
 # { total: 7, pass: 7 }
-# time=17.163ms
+# time=17.91ms

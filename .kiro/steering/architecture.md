@@ -9,6 +9,7 @@ A scalable distributed database where:
 - ALL tables are implemented as partitions
 - ALL partitions are Raft consensus groups with odd-numbered replicas (minimum 3)
 - ALL partitions use SQLite for storage
+- WASM service groups are a third Raft group type for hosting replicated WASI/WASM services
 
 ## Core Principles
 
@@ -44,7 +45,7 @@ The following system tables store cluster metadata:
 |-------|---------|-------------|
 | `nodes` | All registered nodes with addresses and status | `node_id` |
 | `partitions` | All partitions with key ranges and replica counts | `partition_id` |
-| `services` | All partition and message group replicas with addresses and Raft roles | `service_id` |
+| `services` | All partition, message group, and WASM service replicas with addresses and Raft roles | `service_id` |
 | `tables` | All user tables with schemas and policies | `table_id` |
 | `message_groups` | All message groups with replica counts | `group_id` |
 | `replica_operations` | Pending replica operations (splits, merges, rebalancing) | `operation_id` |
@@ -54,6 +55,9 @@ The following system tables store cluster metadata:
 | `live_queries` | Active live query subscriptions | `query_id` |
 | `contexts` | Function execution contexts | `context_id` |
 | `code` | Stored functions/procedures | `code_id` |
+| `service_definitions` | WASM service definitions with handler functions and configuration | `service_id` |
+| `service_endpoints` | WASM service endpoint addresses for gateway integration | `endpoint_id` |
+| `service_timers` | Persistent timers for WASM service groups | `timer_id` |
 
 ## Node State Vocabulary
 
@@ -106,6 +110,10 @@ The general `STATE` enum (`src/constants/states.js`) retains only non-node value
 │  │ Replica 1       │  │ Replica 2       │  │    (SQLite + Raft)          │  │
 │  │ (Raft)          │  │ (Raft)          │  │                             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
+│                                            ┌─────────────────────────────┐  │
+│                                            │  WASM Service Groups        │  │
+│                                            │  (SQLite + Raft + WASM)     │  │
+│                                            └─────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -166,6 +174,13 @@ The general `STATE` enum (`src/constants/states.js`) retains only non-node value
 - Ensures message delivery with retry logic
 - Every node has at least one message group replica
 
+### WasmServiceReplica
+- Third Raft group type alongside partitions and message groups
+- Extends `RaftReplicaBase` with `entityType` set to `WASM_SERVICE`
+- Integrates SessionKVStore (replicated KV), SafetyInterval (read consistency), TimerManager (persistent timers), and WasmExecutor (WASM function execution)
+- Registers in `services` table with `service_type` set to `wasm_service`
+- Managed by `UnifiedRebalancer` for replica placement using the same policy-based approach as other entity types
+
 ### SQLQueryEngine
 - Main entry point for SQL query processing
 - Routes queries through system cache to find partition leaders
@@ -190,7 +205,7 @@ The former monolithic ControlPlaneService is decomposed into four focused servic
 A thin `ControlPlaneService` facade remains for backward compatibility, delegating to these focused services.
 
 ### UnifiedRebalancer
-- Manages replica placement for partitions and message groups
+- Manages replica placement for partitions, message groups, and WASM service groups
 - Operates autonomously (no manual placement)
 - Uses policies to determine target replica count and placement
 - Stabilization period prevents thrashing
@@ -334,11 +349,13 @@ All services use a unified address format:
 Examples:
 - `node-1/partition/partition-nodes-p1-r1`
 - `node-2/message-group/mg-1-r2`
+- `node-3/wasm-service/my-service-r1`
 - `seed-node/lifecycle`
 
 Entity types:
 - `partition` - Partition service replicas
 - `message-group` - Message group replicas
+- `wasm-service` - WASM service group replicas
 - `lifecycle` - Node lifecycle handler
 
 ## Raft Consensus
@@ -358,15 +375,16 @@ Entity types:
 ### Log Storage
 - Message groups: In-memory log adapter
 - Partitions: SQLite log adapter (persistent)
+- WASM service groups: SQLite log adapter (persistent)
 
 ## Rebalancing
 
 ### UnifiedRebalancer
 
-The `UnifiedRebalancer` is the single rebalancer implementation for both partitions and message groups. Each partition/message group leader runs its own rebalancer instance, making independent decisions that converge to optimal state.
+The `UnifiedRebalancer` is the single rebalancer implementation for partitions, message groups, and WASM service groups. Each partition/message group/WASM service group leader runs its own rebalancer instance, making independent decisions that converge to optimal state.
 
 Key characteristics:
-- **Per-entity rebalancer**: Each partition/message group has its own rebalancer instance
+- **Per-entity rebalancer**: Each partition/message group/WASM service group has its own rebalancer instance
 - **Leader-driven**: Only the Raft leader runs the rebalancer for that entity
 - **Event-driven**: Emits `nodeStateChange` and `rebalanceNeeded` events for observability
 - **Policy-based**: Uses `TablePolicyService` for placement decisions
@@ -399,6 +417,29 @@ Key characteristics:
 - ADD moves execute first to ensure data availability
 - Critical REMOVE moves (failed replicas, wrong nodes) execute alongside ADDs
 - Non-critical REMOVE moves (spread optimization) deferred until ADDs complete
+
+## Safety Interval (Read Consistency)
+
+WASM service groups use a CockroachDB-style closed-timestamp mechanism for strong reads without routing all reads to the leader.
+
+- The leader periodically broadcasts its committed log index and timestamp to followers
+- Followers track their local applied index and the last leader broadcast
+- A follower can serve a strong read locally when its applied index >= the leader's last broadcast index AND the broadcast is within the configured safety interval
+- When a follower's apply lag exceeds the safety interval, it forwards the read to the leader
+- Three read consistency modes:
+  - **leader_only** — all reads route to the Raft leader
+  - **strong** — reads served locally when within safety interval, forwarded to leader otherwise
+  - **eventual** — any replica serves reads from local state without staleness checks
+
+## Timer Persistence and Exactly-Once Semantics
+
+WASM service groups support persistent timers with exactly-once firing guarantees.
+
+- Timer entries are stored in the Raft-replicated KV store under the reserved `_timers/` prefix
+- Only the Raft leader runs active timers; followers store timer state but do not schedule execution
+- On leader election, the new leader reconstructs all active timers from the KV store, skipping entries with `fired` or `cancelled` status
+- **Fire-before-invoke**: when a timer fires, the leader marks it as `fired` via a Raft-committed write BEFORE invoking the handler function
+- If the leader fails after committing the fired marker but before completing handler invocation, the new leader sees the `fired` status and does not re-fire, ensuring exactly-once semantics
 
 ## Epoch Management
 

@@ -55,8 +55,8 @@ test('NodeState enum - uses canonical runtime NODE_STATE source', async (t) => {
 test('VALID_TRANSITIONS - defines correct transitions', async (t) => {
   t.same(
     VALID_TRANSITIONS[NodeState.STARTING],
-    [NodeState.CONNECTING],
-    'STARTING can only go to CONNECTING',
+    [NodeState.CONNECTING, NodeState.STOPPED],
+    'STARTING can go to CONNECTING or STOPPED',
   );
   t.same(
     VALID_TRANSITIONS[NodeState.CONNECTING],
@@ -417,8 +417,8 @@ test('NodeLifecycleStateMachine - getValidTransitions', async (t) => {
 
   t.same(
     sm.getValidTransitions(),
-    [NodeState.CONNECTING],
-    'STARTING has CONNECTING as valid transition',
+    [NodeState.CONNECTING, NodeState.STOPPED],
+    'STARTING has CONNECTING and STOPPED as valid transitions',
   );
 
   sm.transition(NodeState.CONNECTING);

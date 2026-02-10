@@ -2,33 +2,33 @@ TAP version 14
 # Subtest: Property 44: Split maintains range integrity
     ok 1 - Split maintains range integrity
     1..1
-ok 1 - Property 44: Split maintains range integrity # time=6.659ms
+ok 1 - Property 44: Split maintains range integrity # time=5.912ms
 
 # Subtest: Property 44: Merge maintains range integrity
     ok 1 - Merge maintains range integrity
     1..1
-ok 2 - Property 44: Merge maintains range integrity # time=1.512ms
+ok 2 - Property 44: Merge maintains range integrity # time=1.583ms
 
 # Subtest: Property 44: Multiple splits maintain range integrity
     ok 1 - Multiple splits maintain range integrity
     1..1
-ok 3 - Property 44: Multiple splits maintain range integrity # time=4.124ms
+ok 3 - Property 44: Multiple splits maintain range integrity # time=2.588ms
 
 # Subtest: Property 44: Split then merge restores original range
     ok 1 - Split then merge restores original range
     1..1
-ok 4 - Property 44: Split then merge restores original range # time=2.458ms
+ok 4 - Property 44: Split then merge restores original range # time=1.447ms
 
 # Subtest: Property 44: Invalid split ranges are rejected
     ok 1 - Invalid split ranges are rejected
     1..1
-ok 5 - Property 44: Invalid split ranges are rejected # time=0.983ms
+ok 5 - Property 44: Invalid split ranges are rejected # time=1.008ms
 
 # Subtest: Property 44: Key space coverage is preserved
     ok 1 - Key space coverage is preserved
     1..1
-ok 6 - Property 44: Key space coverage is preserved # time=1.848ms
+ok 6 - Property 44: Key space coverage is preserved # time=1.723ms
 
 1..6
 # { total: 6, pass: 6 }
-# time=172.941ms
+# time=154.12ms

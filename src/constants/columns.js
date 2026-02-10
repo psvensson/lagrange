@@ -43,6 +43,8 @@ const COLUMN = Object.freeze({
   TRANSPORT_TYPE: 'transport_type',
   PRIORITY: 'priority',
   METADATA: 'metadata',
+  // Timer columns for service_timers table
+  TIMER_ID: 'timer_id',
 });
 
 export {COLUMN};

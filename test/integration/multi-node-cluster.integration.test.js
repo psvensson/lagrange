@@ -345,7 +345,7 @@ test('Multi-node cluster integration tests', async (t) => {
       rebalancer.initialize();
 
       // Test odd count validation
-      const policy = rebalancer.getPolicy();
+      const policy = await rebalancer.getPolicy();
       t.equal(policy.replicaCount % 2, 1, 'default replica count should be odd');
 
       const validated3 = rebalancer.validateReplicaCount(3, policy);

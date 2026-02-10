@@ -3,41 +3,41 @@ TAP version 14
     # Subtest: serialize then deserialize preserves all entries
         ok 1 - serialize then deserialize preserves all entries
         1..1
-    ok 1 - serialize then deserialize preserves all entries # time=5.753ms
+    ok 1 - serialize then deserialize preserves all entries # time=5.936ms
     
     # Subtest: entry order is preserved after round-trip
         ok 1 - entry order is preserved after round-trip
         1..1
-    ok 2 - entry order is preserved after round-trip # time=1.706ms
+    ok 2 - entry order is preserved after round-trip # time=2.034ms
     
     # Subtest: deserialize filters invalid entries
         ok 1 - deserialize filters invalid entries
         1..1
-    ok 3 - deserialize filters invalid entries # time=1.033ms
+    ok 3 - deserialize filters invalid entries # time=1.096ms
     
     # Subtest: deserialize handles malformed JSON gracefully
         ok 1 - deserialize handles malformed JSON gracefully
         1..1
-    ok 4 - deserialize handles malformed JSON gracefully # time=0.51ms
+    ok 4 - deserialize handles malformed JSON gracefully # time=0.602ms
     
     # Subtest: serialize produces valid JSON
         ok 1 - serialize produces valid JSON
         1..1
-    ok 5 - serialize produces valid JSON # time=2.436ms
+    ok 5 - serialize produces valid JSON # time=1.159ms
     
     # Subtest: double round-trip is idempotent
         ok 1 - double round-trip is idempotent
         1..1
-    ok 6 - double round-trip is idempotent # time=0.833ms
+    ok 6 - double round-trip is idempotent # time=0.975ms
     
     # Subtest: deserialize respects maxEntries
         ok 1 - deserialize respects maxEntries
         1..1
-    ok 7 - deserialize respects maxEntries # time=2.2ms
+    ok 7 - deserialize respects maxEntries # time=3.635ms
     
     1..7
-ok 1 - Property 19: Query History Persistence Round-Trip # time=18.263ms
+ok 1 - Property 19: Query History Persistence Round-Trip # time=19.176ms
 
 1..1
 # { total: 7, pass: 7 }
-# time=33.192ms
+# time=22.58ms

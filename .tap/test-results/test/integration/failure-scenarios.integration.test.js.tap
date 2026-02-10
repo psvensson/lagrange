@@ -5,13 +5,13 @@ TAP version 14
         ok 2 - should have system table cache
         ok 3 - should have CDC integration service
         ok 4 - cache should be updated with failing node
-{"level":50,"time":"2026-02-09T10:20:44.770Z","nodeId":"test-node","pid":200152,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T10:20:24.521Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-02-09T20:50:37.852Z","nodeId":"test-node","pid":445672,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T20:50:17.704Z","threshold":15000,"msg":"Node failure detected"}
         ok 5 - should emit failure event
         ok 6 - should identify the correct failing node
         ok 7 - replicas should be marked as failed via CDC
         ok 8 - node should be marked as failed
         1..8
-    ok 1 - Req 15.1 - node failure detection marks replicas unavailable # time=1574.692ms
+    ok 1 - Req 15.1 - node failure detection marks replicas unavailable # time=1636.802ms
     
     # Subtest: Req 15.2 - rebalancer creates replacement replicas
         ok 1 - bootstrap should succeed
@@ -21,10 +21,8 @@ TAP version 14
         ok 5 - should have partitions
         ok 6 - rebalance should succeed
         ok 7 - should generate moves to handle failed replica
-{"level":50,"time":"2026-02-09T10:20:46.211Z","nodeId":"test-node","pid":200152,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO node_endpoints (endpoint_id, node_id, transport_type, address, priority, meta","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-02-09T10:20:46.211Z","nodeId":"test-node","pid":200152,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-550e8400-e29b-41d4-a716-446655440002-ws","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
         1..7
-    ok 2 - Req 15.2 - rebalancer creates replacement replicas # time=1355.089ms
+    ok 2 - Req 15.2 - rebalancer creates replacement replicas # time=1486.578ms
     
     # Subtest: Req 15.3 - Raft maintains consistency during partition
         ok 1 - insert should succeed
@@ -32,7 +30,7 @@ TAP version 14
         ok 3 - data should be consistent
         ok 4 - leader maintains role with quorum
         1..4
-    ok 3 - Req 15.3 - Raft maintains consistency during partition # time=1.212ms
+    ok 3 - Req 15.3 - Raft maintains consistency during partition # time=1.392ms
     
     # Subtest: Req 15.4 - recovered node triggers rebalancing
         ok 1 - bootstrap should succeed
@@ -43,7 +41,7 @@ TAP version 14
         ok 6 - should identify recovered node
         ok 7 - should update node status to recovering via CDC
         1..7
-    ok 4 - Req 15.4 - recovered node triggers rebalancing # time=1398.897ms
+    ok 4 - Req 15.4 - recovered node triggers rebalancing # time=1503.634ms
     
     # Subtest: Req 15.5 - data available with majority replicas
         ok 1 - write should succeed with majority
@@ -52,7 +50,7 @@ TAP version 14
         ok 4 - update should succeed with majority
         ok 5 - update should be visible
         1..5
-    ok 5 - Req 15.5 - data available with majority replicas # time=1.381ms
+    ok 5 - Req 15.5 - data available with majority replicas # time=1.567ms
     
     # Subtest: failure detector - suspicion before failure
         ok 1 - bootstrap should succeed
@@ -60,29 +58,15 @@ TAP version 14
         ok 3 - should emit suspected event
         ok 4 - should not emit failure yet
         1..4
-    ok 6 - failure detector - suspicion before failure # time=1346.978ms
+    ok 6 - failure detector - suspicion before failure # time=1608.655ms
     
-{"level":"debug","message":"Executing SQL query","subsystem":"sql-query-engine","sql":"SELECT * FROM replica_operations \n    WHERE status NOT IN ('active', 'removed', 'failed')","paramCount":0,"sessionId":"default"}
-{"level":"debug","message":"No key conditions, using scatter-gather","subsystem":"partition-resolver","tableName":"replica_operations","partitionCount":1}
-{"level":"debug","message":"Resolved partitions for SELECT","subsystem":"sql-query-engine","tableName":"replica_operations","totalPartitions":1,"targetPartitions":1,"sessionId":"default"}
-{"level":"debug","message":"Executing distributed SELECT","subsystem":"query-executor","partitionCount":1,"timestamp":"1770632449304-0-550e8400-e29b-41d4-a716-446655440001","hasJoins":false,"hasAggregates":false}
-{"level":"debug","message":"Routing query to partition service","subsystem":"query-executor","partitionId":"replica_operations-p1","address":"550e8400-e29b-41d4-a716-446655440001/partition/replica_operations-p1-r1"}
-{"level":"info","message":"Initializing MessageRouter","subsystem":"message-router","routerId":"98c6083f-b929-4b9d-8b47-680fee6609db","nodeId":"550e8400-e29b-41d4-a716-446655440001","wsPort":64752,"wsHost":"127.0.0.1"}
     # Subtest: failure detector - flapping detection increases threshold
         ok 1 - bootstrap should succeed
-{"level":50,"time":"2026-02-09T10:20:50.269Z","nodeId":"test-node","pid":200152,"subsystem":"failure-detector","nodeId":"test-node","failureCount":3,"window":30000,"action":"Increasing failure threshold adaptively","msg":"Node flapping detected"}
+{"level":50,"time":"2026-02-09T20:50:44.028Z","nodeId":"test-node","pid":445672,"subsystem":"failure-detector","nodeId":"test-node","failureCount":3,"window":30000,"action":"Increasing failure threshold adaptively","msg":"Node flapping detected"}
         ok 2 - threshold should increase after flapping
-{"level":50,"time":"2026-02-09T10:20:50.272Z","nodeId":"test-node","pid":200152,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-02-09T10:20:50.272Z","nodeId":"test-node","pid":200152,"subsystem":"cdc-integration","tableName":"nodes","id":"550e8400-e29b-41d4-a716-446655440011","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
         1..2
-    ok 7 - failure detector - flapping detection increases threshold # time=1188.171ms
+    ok 7 - failure detector - flapping detection increases threshold # time=1430.345ms
     
-{"level":"debug","message":"Executing SQL query","subsystem":"sql-query-engine","sql":"SELECT * FROM replica_operations \n    WHERE status NOT IN ('active', 'removed', 'failed')","paramCount":0,"sessionId":"default"}
-{"level":"debug","message":"No key conditions, using scatter-gather","subsystem":"partition-resolver","tableName":"replica_operations","partitionCount":1}
-{"level":"debug","message":"Resolved partitions for SELECT","subsystem":"sql-query-engine","tableName":"replica_operations","totalPartitions":1,"targetPartitions":1,"sessionId":"default"}
-{"level":"debug","message":"Executing distributed SELECT","subsystem":"query-executor","partitionCount":1,"timestamp":"1770632450988-0-550e8400-e29b-41d4-a716-446655440002","hasJoins":false,"hasAggregates":false}
-{"level":"debug","message":"Routing query to partition service","subsystem":"query-executor","partitionId":"replica_operations-p1","address":"550e8400-e29b-41d4-a716-446655440002/partition/replica_operations-p1-r1"}
-{"level":"info","message":"Initializing MessageRouter","subsystem":"message-router","routerId":"8f0084f2-87d2-4a54-b13f-cb0f397786f7","nodeId":"550e8400-e29b-41d4-a716-446655440002","wsPort":64753,"wsHost":"127.0.0.1"}
     # Subtest: failure detector - stats reporting
         ok 1 - bootstrap should succeed
         ok 2 - should report node ID
@@ -90,52 +74,44 @@ TAP version 14
         ok 4 - should report failure threshold
         ok 5 - should report initialized
         ok 6 - should report not running (not started)
-{"level":50,"time":"2026-02-09T10:20:51.593Z","nodeId":"test-node","pid":200152,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO nodes (node_id, node_address, cpu_cores, memory_mb, disk_gb, cpu_usage_percen","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-02-09T10:20:51.593Z","nodeId":"test-node","pid":200152,"subsystem":"cdc-integration","tableName":"nodes","id":"550e8400-e29b-41d4-a716-446655440012","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
         1..6
-    ok 8 - failure detector - stats reporting # time=1288.567ms
+    ok 8 - failure detector - stats reporting # time=1538.855ms
     
     # Subtest: Req 14.1-14.5 - complete failure and recovery cycle
         ok 1 - should suspect node-2
-{"level":50,"time":"2026-02-09T10:20:51.623Z","nodeId":"test-node","pid":200152,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T10:20:31.621Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-02-09T20:50:45.779Z","nodeId":"test-node","pid":445672,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T20:50:25.779Z","threshold":15000,"msg":"Node failure detected"}
         ok 2 - should detect node-2 failure
         ok 3 - should mark replicas as failed via CDC
         ok 4 - should detect node-2 recovery
         ok 5 - should have multiple status updates
         1..5
-    ok 9 - Req 14.1-14.5 - complete failure and recovery cycle # time=3.568ms
+    ok 9 - Req 14.1-14.5 - complete failure and recovery cycle # time=1.22ms
     
     # Subtest: network partition - minority partition cannot write
         ok 1 - write should be rejected on follower
         1..1
-    ok 10 - network partition - minority partition cannot write # time=1.015ms
+    ok 10 - network partition - minority partition cannot write # time=1.052ms
     
     # Subtest: data availability - reads succeed on any replica
         ok 1 - read should succeed on follower
         ok 2 - data should be correct
         1..2
-    ok 11 - data availability - reads succeed on any replica # time=0.934ms
+    ok 11 - data availability - reads succeed on any replica # time=1.035ms
     
-{"level":"debug","message":"Executing SQL query","subsystem":"sql-query-engine","sql":"SELECT * FROM replica_operations \n    WHERE status NOT IN ('active', 'removed', 'failed')","paramCount":0,"sessionId":"default"}
-{"level":"debug","message":"No key conditions, using scatter-gather","subsystem":"partition-resolver","tableName":"replica_operations","partitionCount":1}
-{"level":"debug","message":"Resolved partitions for SELECT","subsystem":"sql-query-engine","tableName":"replica_operations","totalPartitions":1,"targetPartitions":1,"sessionId":"default"}
-{"level":"debug","message":"Executing distributed SELECT","subsystem":"query-executor","partitionCount":1,"timestamp":"1770632452389-0-550e8400-e29b-41d4-a716-446655440003","hasJoins":false,"hasAggregates":false}
-{"level":"debug","message":"Routing query to partition service","subsystem":"query-executor","partitionId":"replica_operations-p1","address":"550e8400-e29b-41d4-a716-446655440003/partition/replica_operations-p1-r1"}
-{"level":"info","message":"Initializing MessageRouter","subsystem":"message-router","routerId":"92bc4075-1fd6-48ec-ba7e-0b588ca74a0b","nodeId":"550e8400-e29b-41d4-a716-446655440003","wsPort":64754,"wsHost":"127.0.0.1"}
     # Subtest: multiple node failures - system remains available
         ok 1 - bootstrap should succeed
         ok 2 - cache should be updated with all nodes
-{"level":50,"time":"2026-02-09T10:20:53.026Z","nodeId":"test-node","pid":200152,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T10:20:32.819Z","threshold":15000,"msg":"Node failure detected"}
-{"level":50,"time":"2026-02-09T10:20:53.035Z","nodeId":"test-node","pid":200152,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T10:20:32.819Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-02-09T20:50:47.408Z","nodeId":"test-node","pid":445672,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T20:50:27.262Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-02-09T20:50:47.420Z","nodeId":"test-node","pid":445672,"subsystem":"failure-detector","nodeId":"test-node","lastHeartbeat":"2026-02-09T20:50:27.262Z","threshold":15000,"msg":"Node failure detected"}
         ok 3 - should detect 2 node failures
         ok 4 - should identify correct failing nodes
         ok 5 - should have 3 healthy replicas (majority)
         1..5
-    ok 12 - multiple node failures - system remains available # time=1382.13ms
+    ok 12 - multiple node failures - system remains available # time=1631.878ms
     
     1..12
-ok 1 - Failure scenario integration tests # time=9843.299ms
+ok 1 - Failure scenario integration tests # time=11241.326ms
 
 1..1
 # { total: 56, pass: 56 }
-# time=9849.118ms
+# time=11247.989ms

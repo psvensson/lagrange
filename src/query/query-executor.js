@@ -19,6 +19,7 @@ import {
 } from '../constants/index.js';
 import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
@@ -589,22 +590,37 @@ class QueryExecutor {
     let lastError = null;
 
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
-      const serviceCandidates = this.getPartitionServiceCandidates(
+      let serviceCandidates = this.getPartitionServiceCandidates(
         partitionId,
         forRead,
         preferLeader,
       );
       if (serviceCandidates.length === 0) {
-        const hasActiveService = this.hasActivePartitionService(partitionId);
+        const hasRoutableService = this.hasRoutablePartitionService(partitionId);
+        const hasPartitionRecord = this.hasPartitionRecord(partitionId);
 
         if (!forRead) {
-          if (hasActiveService && attempt < maxAttempts) {
+          if (hasRoutableService) {
+            // If leader metadata is stale/missing, route to routable replicas and
+            // rely on follower forwarding/redirect to reach the current leader.
+            serviceCandidates = this.getPartitionServiceCandidates(
+              partitionId,
+              true,
+              false,
+            );
+          }
+
+          if (serviceCandidates.length > 0) {
+            // Continue with routable replica candidates in the normal routing loop.
+          } else if (hasRoutableService && attempt < maxAttempts) {
             lastError = ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE;
             await this.delay(this.leaderRetryDelayMs);
             continue;
-          }
-
-          if (hasActiveService) {
+          } else if (!hasRoutableService && hasPartitionRecord && attempt < maxAttempts) {
+            lastError = ERRORS.PARTITION_SERVICE_NOT_FOUND;
+            await this.delay(this.leaderRetryDelayMs);
+            continue;
+          } else if (hasRoutableService) {
             this.logger.warn(QUERY_LOG_MSG.NO_LEADER_SERVICE_FOR_PARTITION, {
               partitionId,
               attempts: attempt,
@@ -615,9 +631,7 @@ class QueryExecutor {
               error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
               rows: [],
             };
-          }
-
-          if (!hasActiveService) {
+          } else if (!hasRoutableService) {
             this.logger.warn(QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION, {partitionId});
             return {
               partitionId,
@@ -626,14 +640,16 @@ class QueryExecutor {
               rows: [],
             };
           }
+        } else {
+          this.logger.warn(QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION, {partitionId});
+          return {
+            partitionId,
+            success: false,
+            error: QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
+            rows: [],
+          };
         }
-        this.logger.warn(QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION, {partitionId});
-        return {
-          partitionId,
-          success: false,
-          error: QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
-          rows: [],
-        };
+
       }
 
       for (const serviceInfo of serviceCandidates) {
@@ -747,7 +763,7 @@ class QueryExecutor {
    * @private
    */
   getWriteRetryAttemptLimit() {
-    const maxRecoveryAttempts = NUM.TEN * NUM.TWO;
+    const maxRecoveryAttempts = NUM.TEN * NUM.FOUR;
     const retryDelayMs = Math.max(this.leaderRetryDelayMs || NUM.ZERO, NUM.ONE);
     const timeoutBoundAttempts = Math.ceil(this.queryTimeoutMs / retryDelayMs);
     const boundedAttempts = Math.min(timeoutBoundAttempts, maxRecoveryAttempts);
@@ -801,7 +817,7 @@ class QueryExecutor {
       return [];
     }
 
-    const services = this.getActivePartitionServices(partitionId);
+    const services = this.getRoutablePartitionServices(partitionId);
 
     if (services.length === 0) {
       this.logger.warn(QUERY_LOG_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION, {partitionId});
@@ -847,12 +863,12 @@ class QueryExecutor {
   }
 
   /**
-   * Get active partition services from system cache.
+   * Get write-routable partition services from system cache.
    * @param {string} partitionId - Partition ID.
-   * @return {Array<Object>} Active services for the partition.
+   * @return {Array<Object>} Routable services for the partition.
    * @private
    */
-  getActivePartitionServices(partitionId) {
+  getRoutablePartitionServices(partitionId) {
     if (!this.systemCache || typeof this.systemCache.filter !== 'function') {
       return [];
     }
@@ -860,18 +876,49 @@ class QueryExecutor {
     return this.systemCache.filter(TABLES.SERVICES, (service) =>
       service.partition_id === partitionId &&
       service.service_type === SERVICE_TYPE.PARTITION &&
-      service.status === STATE.ACTIVE,
+      service.status !== ReplicaStatus.FAILED &&
+      service.status !== ReplicaStatus.REMOVED &&
+      typeof service.address === 'string' &&
+      service.address.length > NUM.ZERO,
     ) || [];
   }
 
   /**
-   * Check whether a partition has active services in the system cache.
+   * Check whether a partition has write-routable services in the system cache.
    * @param {string} partitionId - Partition ID.
-   * @return {boolean} True when active services exist.
+   * @return {boolean} True when routable services exist.
    * @private
    */
-  hasActivePartitionService(partitionId) {
-    return this.getActivePartitionServices(partitionId).length > NUM.ZERO;
+  hasRoutablePartitionService(partitionId) {
+    return this.getRoutablePartitionServices(partitionId).length > NUM.ZERO;
+  }
+
+  /**
+   * Check whether partition metadata exists in the cache.
+   * @param {string} partitionId - Partition ID.
+   * @return {boolean} True when partition metadata exists.
+   * @private
+   */
+  hasPartitionRecord(partitionId) {
+    if (!this.systemCache) {
+      return false;
+    }
+
+    if (typeof this.systemCache.has === 'function') {
+      return this.systemCache.has(TABLES.PARTITIONS, partitionId);
+    }
+
+    if (typeof this.systemCache.get === 'function') {
+      return Boolean(this.systemCache.get(TABLES.PARTITIONS, partitionId));
+    }
+
+    if (typeof this.systemCache.filter === 'function') {
+      return this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
+        partition.partition_id === partitionId,
+      ).length > NUM.ZERO;
+    }
+
+    return false;
   }
 
   /**

@@ -3,56 +3,56 @@ TAP version 14
     # Subtest: isRecentlyUpdated returns true for recent contexts
         ok 1 - isRecentlyUpdated returns true for recent contexts
         1..1
-    ok 1 - isRecentlyUpdated returns true for recent contexts # time=7.223ms
+    ok 1 - isRecentlyUpdated returns true for recent contexts # time=4.164ms
     
     # Subtest: isRecentlyUpdated returns false for old contexts
         ok 1 - isRecentlyUpdated returns false for old contexts
         1..1
-    ok 2 - isRecentlyUpdated returns false for old contexts # time=1.83ms
+    ok 2 - isRecentlyUpdated returns false for old contexts # time=1.146ms
     
     # Subtest: isRecentlyUpdated returns false for contexts without updated_at
         ok 1 - isRecentlyUpdated returns false for contexts without updated_at
         1..1
-    ok 3 - isRecentlyUpdated returns false for contexts without updated_at # time=1.606ms
+    ok 3 - isRecentlyUpdated returns false for contexts without updated_at # time=1.001ms
     
     # Subtest: threshold boundary is respected
         ok 1 - threshold boundary is respected
         1..1
-    ok 4 - threshold boundary is respected # time=0.728ms
+    ok 4 - threshold boundary is respected # time=0.471ms
     
     # Subtest: custom threshold is respected
         ok 1 - custom threshold is respected
         1..1
-    ok 5 - custom threshold is respected # time=0.766ms
+    ok 5 - custom threshold is respected # time=0.487ms
     
     # Subtest: future timestamps are not considered recent
         ok 1 - future timestamps are not considered recent
         1..1
-    ok 6 - future timestamps are not considered recent # time=0.812ms
+    ok 6 - future timestamps are not considered recent # time=0.456ms
     
     # Subtest: getRowStatus uses isRecentlyUpdated correctly
         ok 1 - getRowStatus returns WARNING for recent contexts
         1..1
-    ok 7 - getRowStatus uses isRecentlyUpdated correctly # time=0.77ms
+    ok 7 - getRowStatus uses isRecentlyUpdated correctly # time=0.449ms
     
     # Subtest: getRowStatus returns NORMAL for old contexts
         ok 1 - getRowStatus returns NORMAL for old contexts
         1..1
-    ok 8 - getRowStatus returns NORMAL for old contexts # time=0.641ms
+    ok 8 - getRowStatus returns NORMAL for old contexts # time=0.426ms
     
     # Subtest: getRowStatus returns NORMAL for contexts without updated_at
         ok 1 - getRowStatus returns NORMAL for contexts without updated_at
         1..1
-    ok 9 - getRowStatus returns NORMAL for contexts without updated_at # time=1.408ms
+    ok 9 - getRowStatus returns NORMAL for contexts without updated_at # time=0.867ms
     
     # Subtest: status bar counts recently updated correctly
         ok 1 - status bar counts recently updated correctly
         1..1
-    ok 10 - status bar counts recently updated correctly # time=1.469ms
+    ok 10 - status bar counts recently updated correctly # time=0.778ms
     
     1..10
-ok 1 - Property 47: Contexts Recent Update Highlighting # time=26.278ms
+ok 1 - Property 47: Contexts Recent Update Highlighting # time=15.048ms
 
 1..1
 # { total: 10, pass: 10 }
-# time=34.457ms
+# time=19.758ms

@@ -4,42 +4,42 @@ TAP version 14
     ok 2 - metadataCache is a Map
     ok 3 - lastCacheUpdate is null
     1..3
-ok 1 - TableMetadataComputer - constructor initializes correctly # time=4.082ms
+ok 1 - TableMetadataComputer - constructor initializes correctly # time=3.913ms
 
 # Subtest: TableMetadataComputer - computePartitionCount returns correct count
     ok 1 - partition count is 3
     1..1
-ok 2 - TableMetadataComputer - computePartitionCount returns correct count # time=0.351ms
+ok 2 - TableMetadataComputer - computePartitionCount returns correct count # time=0.361ms
 
 # Subtest: TableMetadataComputer - computePartitionCount returns 0 for no partitions
     ok 1 - partition count is 0
     1..1
-ok 3 - TableMetadataComputer - computePartitionCount returns 0 for no partitions # time=0.225ms
+ok 3 - TableMetadataComputer - computePartitionCount returns 0 for no partitions # time=0.209ms
 
 # Subtest: TableMetadataComputer - computeReplicaFactor returns most common
     ok 1 - replica factor is 3 (most common)
     1..1
-ok 4 - TableMetadataComputer - computeReplicaFactor returns most common # time=0.311ms
+ok 4 - TableMetadataComputer - computeReplicaFactor returns most common # time=0.288ms
 
 # Subtest: TableMetadataComputer - computeReplicaFactor returns null for no partitions
     ok 1 - replica factor is null
     1..1
-ok 5 - TableMetadataComputer - computeReplicaFactor returns null for no partitions # time=0.212ms
+ok 5 - TableMetadataComputer - computeReplicaFactor returns null for no partitions # time=0.192ms
 
 # Subtest: TableMetadataComputer - computeTotalSize sums partition sizes
     ok 1 - total size is 6000
     1..1
-ok 6 - TableMetadataComputer - computeTotalSize sums partition sizes # time=0.263ms
+ok 6 - TableMetadataComputer - computeTotalSize sums partition sizes # time=0.226ms
 
 # Subtest: TableMetadataComputer - computeTotalSize returns 0 for no partitions
     ok 1 - total size is 0
     1..1
-ok 7 - TableMetadataComputer - computeTotalSize returns 0 for no partitions # time=0.201ms
+ok 7 - TableMetadataComputer - computeTotalSize returns 0 for no partitions # time=0.181ms
 
 # Subtest: TableMetadataComputer - computeTotalSize returns null for missing sizes
     ok 1 - total size is null when no sizes available
     1..1
-ok 8 - TableMetadataComputer - computeTotalSize returns null for missing sizes # time=0.21ms
+ok 8 - TableMetadataComputer - computeTotalSize returns null for missing sizes # time=0.179ms
 
 # Subtest: TableMetadataComputer - computeMetadata enriches table
     ok 1 - table_id preserved
@@ -48,65 +48,65 @@ ok 8 - TableMetadataComputer - computeTotalSize returns null for missing sizes #
     ok 4 - replica_factor computed
     ok 5 - total_size computed
     1..5
-ok 9 - TableMetadataComputer - computeMetadata enriches table # time=0.487ms
+ok 9 - TableMetadataComputer - computeMetadata enriches table # time=0.457ms
 
 # Subtest: TableMetadataComputer - computeMetadata caches results
     ok 1 - same object returned from cache
     ok 2 - one entry in cache
     1..2
-ok 10 - TableMetadataComputer - computeMetadata caches results # time=0.281ms
+ok 10 - TableMetadataComputer - computeMetadata caches results # time=0.24ms
 
 # Subtest: TableMetadataComputer - invalidateCache clears metadata
     ok 1 - cache has entry
     ok 2 - cache is empty
     1..2
-ok 11 - TableMetadataComputer - invalidateCache clears metadata # time=0.288ms
+ok 11 - TableMetadataComputer - invalidateCache clears metadata # time=0.239ms
 
 # Subtest: TableMetadataComputer - invalidateTable clears specific table
     ok 1 - cache has 2 entries
     ok 2 - cache has 1 entry
     ok 3 - tbl-2 still cached
     1..3
-ok 12 - TableMetadataComputer - invalidateTable clears specific table # time=0.312ms
+ok 12 - TableMetadataComputer - invalidateTable clears specific table # time=0.288ms
 
 # Subtest: TableMetadataComputer - auto-invalidates on cache update
     ok 1 - initial partition count is 1
     ok 2 - metadata is cached
     ok 3 - partition count updated to 2
     1..3
-ok 13 - TableMetadataComputer - auto-invalidates on cache update # time=0.326ms
+ok 13 - TableMetadataComputer - auto-invalidates on cache update # time=0.294ms
 
 # Subtest: TableMetadataComputer - getTablesWithMetadata returns all tables
     ok 1 - returns 2 tables
     ok 2 - all have partition_count
     ok 3 - all have replica_factor
     1..3
-ok 14 - TableMetadataComputer - getTablesWithMetadata returns all tables # time=0.339ms
+ok 14 - TableMetadataComputer - getTablesWithMetadata returns all tables # time=0.362ms
 
 # Subtest: TableMetadataComputer - getTableWithMetadata returns single table
     ok 1 - correct table returned
     ok 2 - partition_count computed
     1..2
-ok 15 - TableMetadataComputer - getTableWithMetadata returns single table # time=0.282ms
+ok 15 - TableMetadataComputer - getTableWithMetadata returns single table # time=0.241ms
 
 # Subtest: TableMetadataComputer - getTableWithMetadata returns undefined for missing
     ok 1 - returns undefined for missing table
     1..1
-ok 16 - TableMetadataComputer - getTableWithMetadata returns undefined for missing # time=0.212ms
+ok 16 - TableMetadataComputer - getTableWithMetadata returns undefined for missing # time=0.165ms
 
 # Subtest: TableMetadataComputer - handles null/undefined table gracefully
     ok 1 - returns null for null input
     ok 2 - returns undefined for undefined input
     ok 3 - returns empty object for empty input
     1..3
-ok 17 - TableMetadataComputer - handles null/undefined table gracefully # time=0.952ms
+ok 17 - TableMetadataComputer - handles null/undefined table gracefully # time=1.054ms
 
 # Subtest: TableMetadataComputer - getStats returns statistics
     ok 1 - cachedTables is 1
     ok 2 - lastCacheUpdate is set
     1..2
-ok 18 - TableMetadataComputer - getStats returns statistics # time=0.313ms
+ok 18 - TableMetadataComputer - getStats returns statistics # time=0.297ms
 
 1..18
 # { total: 36, pass: 36 }
-# time=25.709ms
+# time=24.021ms

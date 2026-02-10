@@ -1623,7 +1623,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
     });
 
     const currentReplicas = rebalancer.getCurrentReplicas();
-    const policy = rebalancer.getPolicy();
+    const policy = await rebalancer.getPolicy();
     const targetState = rebalancer.calculateTargetState(currentReplicas, policy);
     const moves = rebalancer.calculateMoves(currentReplicas, targetState);
 

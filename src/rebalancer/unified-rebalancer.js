@@ -54,7 +54,7 @@ const SQL_BUDGET = Object.freeze({
   SELECT_REBALANCE_BUDGET:
     'SELECT config_value FROM config WHERE config_key = ? LIMIT 1',
   SELECT_IN_FLIGHT_COUNT:
-    `SELECT COUNT(*) AS count FROM replica_operations
+    `SELECT COUNT(*) AS total_count FROM replica_operations
      WHERE status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`,
 });
 
@@ -698,7 +698,7 @@ class UnifiedRebalancer extends EventEmitter {
       return 0;
     }
 
-    const parsed = Number(result.rows[0].count);
+    const parsed = Number(result.rows[0].total_count);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
   }
 

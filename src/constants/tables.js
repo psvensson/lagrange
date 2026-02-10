@@ -12,6 +12,9 @@ const TABLES = Object.freeze({
   CODE: 'code',
   TABLES: 'tables',
   NODE_ENDPOINTS: 'node_endpoints',
+  SERVICE_DEFINITIONS: 'service_definitions',
+  SERVICE_ENDPOINTS: 'service_endpoints',
+  SERVICE_TIMERS: 'service_timers',
 });
 
 export {TABLES};

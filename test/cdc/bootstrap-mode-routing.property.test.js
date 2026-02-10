@@ -133,6 +133,19 @@ async function executeWrite(cdc, operation, tableName, primaryKey) {
   if (tableName === SystemTableName.NODES) {
     data.node_address = 'ws://localhost:8080';
     data.status = 'active';
+  } else if (tableName === SystemTableName.SERVICE_DEFINITIONS) {
+    data.service_name = `svc-${primaryKey.slice(0, 8)}`;
+    data.handler_function_id = 'handler-1';
+  } else if (tableName === SystemTableName.SERVICE_ENDPOINTS) {
+    data.service_id = 'svc-1';
+    data.node_id = 'node-1';
+    data.protocol = 'websocket';
+    data.address = 'ws://localhost:9090';
+    data.port = 9090;
+  } else if (tableName === SystemTableName.SERVICE_TIMERS) {
+    data.service_id = 'svc-1';
+    data.delay_ms = 1000;
+    data.fire_at = Date.now() + 1000;
   }
 
   switch (operation) {
@@ -176,6 +189,9 @@ function getPrimaryKeyField(tableName) {
     [SystemTableName.CODE]: 'function_id',
     [SystemTableName.REPLICA_OPERATIONS]: 'operation_id',
     [SystemTableName.NODE_ENDPOINTS]: 'endpoint_id',
+    [SystemTableName.SERVICE_DEFINITIONS]: 'service_id',
+    [SystemTableName.SERVICE_ENDPOINTS]: 'endpoint_id',
+    [SystemTableName.SERVICE_TIMERS]: 'timer_id',
   };
   return map[tableName] || 'id';
 }

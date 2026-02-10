@@ -4,7 +4,7 @@ A scalable distributed database system with self-contained metadata storage, bui
 
 ## Overview
 
-This system implements a distributed database where ALL persistent information is stored in tables, ALL tables are implemented as partitions, and ALL partitions are Raft consensus groups with odd-numbered replicas (minimum 3) using SQLite for storage.
+This system implements a distributed database where ALL persistent information is stored in tables, ALL tables are implemented as partitions, and ALL partitions are Raft consensus groups with odd-numbered replicas (minimum 3) using SQLite for storage. WASM service groups provide a third Raft group type for hosting replicated WASI/WASM services.
 
 It aims to have similar(ish) functionality to that of Spanner and CockroachDB, a scalalble and distributed DB where the system itself partitions and replicates according to user policy - no manual placement.
 
@@ -16,7 +16,7 @@ All partitions are raft groups using sqlite for storage..
 
 The system stores information abohut itself in itself.
 
-There are other raft abstractions - one is the message group, where every node in the system must be a part of one. So nodes organizes in one way themselves in three-ring raft group replicas which uses in-memory sqlite to ensure message deliveries to other nodes. Another will be a service group, where interface code runs, where any replica run message handlers and where replicas share in-memory storage.
+There are other raft abstractions - one is the message group, where every node in the system must be a part of one. So nodes organizes in one way themselves in three-ring raft group replicas which uses in-memory sqlite to ensure message deliveries to other nodes. Another is the WASM service group, a persistent Raft consensus group that hosts WASI/WASM handler functions with a replicated key-value store for session context, configurable read consistency (leader-only, strong via safety interval, or eventual), persistent timers with exactly-once firing semantics, and communication port allocation for external connectivity.
 
 It will be several orders of magnitude slower than any comparable system running on just one node, but it will never get slower - regardless of how much the system grows horizontally.
 
@@ -83,8 +83,9 @@ npm run lint
 1. **All Information in Tables**: System metadata and user data are stored in tables
 2. **Tables as Partitions**: Each table is implemented as one or more partitions
 3. **Partitions as Raft Groups**: Each partition is a Raft consensus group using liferaft
-4. **System Cache**: In-memory cache of system tables, updated by CDC events
-5. **Message Router**: All communication (even local) goes through message groups
+4. **WASM Service Groups**: A third Raft group type for hosting replicated WASI/WASM services
+5. **System Cache**: In-memory cache of system tables, updated by CDC events
+6. **Message Router**: All communication (even local) goes through message groups
 
 ### System Cache Seeding Architecture
 
@@ -96,10 +97,13 @@ The following system tables store cluster metadata:
 
 - **nodes**: All registered nodes with addresses and status
 - **partitions**: All partitions with key ranges and replica counts
-- **services**: All partition and message group replicas with addresses and Raft roles
+- **services**: All partition, message group, and WASM service replicas with addresses and Raft roles
 - **tables**: All user tables with schemas and policies
 - **message_groups**: All message groups with replica counts
 - **replica_operations**: Pending replica operations (splits, merges, rebalancing)
+- **service_definitions**: WASM service definitions with handler functions and configuration
+- **service_endpoints**: WASM service endpoint addresses for gateway integration
+- **service_timers**: Persistent timers for WASM service groups
 
 #### Bootstrap Process
 
@@ -264,6 +268,7 @@ npm run lint:fix
 │   ├── config/          # Configuration management
 │   ├── logging/         # Logging infrastructure
 │   ├── threading/       # Worker thread pool
+│   ├── wasm-service/    # WASM service group components
 │   └── index.js         # Main entry point
 ├── test/
 │   ├── config/          # Configuration tests

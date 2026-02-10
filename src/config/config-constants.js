@@ -515,7 +515,7 @@ const DEFAULT_CONFIG = {
     nodeCpuThreshold: 0.8, // 80% CPU threshold
     nodeMemoryThreshold: 0.8, // 80% memory threshold
     nodeDiskThreshold: 0.9, // 90% disk threshold
-    stabilizationPeriodMs: 10000, // 10 second stabilization period (Req 2.1)
+    stabilizationPeriodMs: 1000, // 1 second stabilization period (Req 2.1)
   },
   replicaHandler: {
     syncTimeoutMs: 60000, // 60 seconds to wait for voter-ready activation

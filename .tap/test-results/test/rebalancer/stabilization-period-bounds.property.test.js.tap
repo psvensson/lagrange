@@ -3,27 +3,27 @@ TAP version 14
     # Subtest: default stabilization period is 1000ms
         ok 1 - Default stabilization period should be 1000ms
         1..1
-    ok 1 - default stabilization period is 1000ms # time=44.013ms
+    ok 1 - default stabilization period is 1000ms # time=38.018ms
     
     # Subtest: values within valid range are preserved
         ok 1 - Values within range [1000ms, 10000ms] are preserved
         1..1
-    ok 2 - values within valid range are preserved # time=199.183ms
+    ok 2 - values within valid range are preserved # time=197.284ms
     
     # Subtest: clampStabilizationPeriod clamps values below minimum
         ok 1 - clampStabilizationPeriod clamps values below minimum to 1000ms
         1..1
-    ok 3 - clampStabilizationPeriod clamps values below minimum # time=129.42ms
+    ok 3 - clampStabilizationPeriod clamps values below minimum # time=110.767ms
     
     # Subtest: clampStabilizationPeriod clamps values above maximum
         ok 1 - clampStabilizationPeriod clamps values above maximum to 10000ms
         1..1
-    ok 4 - clampStabilizationPeriod clamps values above maximum # time=153.508ms
+    ok 4 - clampStabilizationPeriod clamps values above maximum # time=102.773ms
     
     # Subtest: clampStabilizationPeriod preserves values within range
         ok 1 - clampStabilizationPeriod preserves values within range
         1..1
-    ok 5 - clampStabilizationPeriod preserves values within range # time=187.556ms
+    ok 5 - clampStabilizationPeriod preserves values within range # time=93.273ms
     
     # Subtest: clampStabilizationPeriod handles non-numeric values
         ok 1 - undefined should return default
@@ -31,16 +31,16 @@ TAP version 14
         ok 3 - NaN should return default
         ok 4 - string should return default
         1..4
-    ok 6 - clampStabilizationPeriod handles non-numeric values # time=22.591ms
+    ok 6 - clampStabilizationPeriod handles non-numeric values # time=10.498ms
     
     # Subtest: effective value is always in valid range
         ok 1 - Effective stabilization period is always in valid range
         1..1
-    ok 7 - effective value is always in valid range # time=132.609ms
+    ok 7 - effective value is always in valid range # time=98.709ms
     
     1..7
-ok 1 - Property 3: Stabilization Period Configuration Bounds # time=874.783ms
+ok 1 - Property 3: Stabilization Period Configuration Bounds # time=655.339ms
 
 1..1
 # { total: 10, pass: 10 }
-# time=894.388ms
+# time=660.839ms

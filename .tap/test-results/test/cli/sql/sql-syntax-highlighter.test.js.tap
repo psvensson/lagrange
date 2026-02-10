@@ -5,26 +5,26 @@ TAP version 14
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - constructor initializes with default colors # time=7.678ms
+    ok 1 - constructor initializes with default colors # time=8.277ms
     
     # Subtest: constructor accepts custom colors
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 2 - constructor accepts custom colors # time=0.454ms
+    ok 2 - constructor accepts custom colors # time=0.346ms
     
     # Subtest: highlight returns empty string for null/undefined
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 3 - highlight returns empty string for null/undefined # time=0.369ms
+    ok 3 - highlight returns empty string for null/undefined # time=0.385ms
     
     # Subtest: highlight highlights SELECT keyword
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 4 - highlight highlights SELECT keyword # time=0.773ms
+    ok 4 - highlight highlights SELECT keyword # time=0.735ms
     
     # Subtest: highlight is case-insensitive for keywords
         ok 1 - should be equal
@@ -32,113 +32,113 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 5 - highlight is case-insensitive for keywords # time=0.392ms
+    ok 5 - highlight is case-insensitive for keywords # time=0.446ms
     
     # Subtest: highlight highlights INSERT keyword
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 6 - highlight highlights INSERT keyword # time=0.341ms
+    ok 6 - highlight highlights INSERT keyword # time=0.384ms
     
     # Subtest: highlight highlights UPDATE keyword
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 7 - highlight highlights UPDATE keyword # time=0.291ms
+    ok 7 - highlight highlights UPDATE keyword # time=0.349ms
     
     # Subtest: highlight highlights DELETE keyword
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 8 - highlight highlights DELETE keyword # time=0.295ms
+    ok 8 - highlight highlights DELETE keyword # time=0.369ms
     
     # Subtest: highlight highlights WHERE clause keywords
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 9 - highlight highlights WHERE clause keywords # time=0.294ms
+    ok 9 - highlight highlights WHERE clause keywords # time=0.371ms
     
     # Subtest: highlight highlights JOIN keywords
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 10 - highlight highlights JOIN keywords # time=0.302ms
+    ok 10 - highlight highlights JOIN keywords # time=0.376ms
     
     # Subtest: highlight highlights ORDER BY keywords
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 11 - highlight highlights ORDER BY keywords # time=0.287ms
+    ok 11 - highlight highlights ORDER BY keywords # time=0.383ms
     
     # Subtest: highlight highlights string literals
         ok 1 - should be equal
         1..1
-    ok 12 - highlight highlights string literals # time=0.195ms
+    ok 12 - highlight highlights string literals # time=0.238ms
     
     # Subtest: highlight handles escaped quotes in strings
         ok 1 - should be equal
         1..1
-    ok 13 - highlight handles escaped quotes in strings # time=0.321ms
+    ok 13 - highlight handles escaped quotes in strings # time=0.286ms
     
     # Subtest: highlight highlights numeric literals
         ok 1 - should be equal
         1..1
-    ok 14 - highlight highlights numeric literals # time=0.333ms
+    ok 14 - highlight highlights numeric literals # time=0.239ms
     
     # Subtest: highlight highlights decimal numbers
         ok 1 - should be equal
         1..1
-    ok 15 - highlight highlights decimal numbers # time=0.299ms
+    ok 15 - highlight highlights decimal numbers # time=0.238ms
     
     # Subtest: highlight highlights parameter placeholders
         ok 1 - should be equal
         1..1
-    ok 16 - highlight highlights parameter placeholders # time=0.331ms
+    ok 16 - highlight highlights parameter placeholders # time=0.24ms
     
     # Subtest: highlight highlights $n style parameters
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 17 - highlight highlights $n style parameters # time=0.39ms
+    ok 17 - highlight highlights $n style parameters # time=0.3ms
     
     # Subtest: highlight highlights NULL keyword
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 18 - highlight highlights NULL keyword # time=0.403ms
+    ok 18 - highlight highlights NULL keyword # time=0.441ms
     
     # Subtest: highlight highlights TRUE and FALSE
         ok 1 - should be equal
         1..1
-    ok 19 - highlight highlights TRUE and FALSE # time=0.389ms
+    ok 19 - highlight highlights TRUE and FALSE # time=0.374ms
     
     # Subtest: highlight highlights LIVE keyword
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 20 - highlight highlights LIVE keyword # time=0.27ms
+    ok 20 - highlight highlights LIVE keyword # time=0.31ms
     
     # Subtest: highlight highlights aggregate functions
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 21 - highlight highlights aggregate functions # time=0.297ms
+    ok 21 - highlight highlights aggregate functions # time=0.391ms
     
     # Subtest: highlight highlights -- comments
         ok 1 - should be equal
         1..1
-    ok 22 - highlight highlights -- comments # time=0.2ms
+    ok 22 - highlight highlights -- comments # time=0.266ms
     
     # Subtest: highlight highlights /* */ comments
         ok 1 - should be equal
         1..1
-    ok 23 - highlight highlights /* */ comments # time=0.194ms
+    ok 23 - highlight highlights /* */ comments # time=0.263ms
     
     # Subtest: isKeyword returns true for SQL keywords
         ok 1 - should be equal
@@ -147,7 +147,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 24 - isKeyword returns true for SQL keywords # time=1.995ms
+    ok 24 - isKeyword returns true for SQL keywords # time=0.512ms
     
     # Subtest: isKeyword returns false for non-keywords
         ok 1 - should be equal
@@ -155,7 +155,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 25 - isKeyword returns false for non-keywords # time=0.357ms
+    ok 25 - isKeyword returns false for non-keywords # time=0.448ms
     
     # Subtest: getKeywords returns all keywords
         ok 1 - should be equal
@@ -163,7 +163,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 26 - getKeywords returns all keywords # time=0.361ms
+    ok 26 - getKeywords returns all keywords # time=0.584ms
     
     # Subtest: getKeywordsByCategory returns category keywords
         ok 1 - should be equal
@@ -171,23 +171,23 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 27 - getKeywordsByCategory returns category keywords # time=0.525ms
+    ok 27 - getKeywordsByCategory returns category keywords # time=0.524ms
     
     # Subtest: getKeywordsByCategory returns empty for unknown category
         ok 1 - should be equivalent
         1..1
-    ok 28 - getKeywordsByCategory returns empty for unknown category # time=0.785ms
+    ok 28 - getKeywordsByCategory returns empty for unknown category # time=0.915ms
     
     # Subtest: stripHighlighting removes color tags
         ok 1 - should be equal
         1..1
-    ok 29 - stripHighlighting removes color tags # time=0.334ms
+    ok 29 - stripHighlighting removes color tags # time=0.431ms
     
     # Subtest: stripHighlighting handles empty input
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 30 - stripHighlighting handles empty input # time=0.376ms
+    ok 30 - stripHighlighting handles empty input # time=0.431ms
     
     # Subtest: SQL_KEYWORDS constant has expected categories
         ok 1 - should be equal
@@ -200,7 +200,7 @@ TAP version 14
         ok 8 - should be equal
         ok 9 - should be equal
         1..9
-    ok 31 - SQL_KEYWORDS constant has expected categories # time=0.747ms
+    ok 31 - SQL_KEYWORDS constant has expected categories # time=0.891ms
     
     # Subtest: HIGHLIGHT_COLORS constant has expected colors
         ok 1 - should be equal
@@ -209,11 +209,11 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 32 - HIGHLIGHT_COLORS constant has expected colors # time=0.515ms
+    ok 32 - HIGHLIGHT_COLORS constant has expected colors # time=0.539ms
     
     1..32
-ok 1 - SQLSyntaxHighlighter # time=27.95ms
+ok 1 - SQLSyntaxHighlighter # time=29.521ms
 
 1..1
 # { total: 83, pass: 83 }
-# time=31.795ms
+# time=33.018ms

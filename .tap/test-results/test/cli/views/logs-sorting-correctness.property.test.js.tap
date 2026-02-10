@@ -3,46 +3,46 @@ TAP version 14
     # Subtest: default sort is timestamp descending
         ok 1 - default sort is timestamp descending
         1..1
-    ok 1 - default sort is timestamp descending # time=12.865ms
+    ok 1 - default sort is timestamp descending # time=7.46ms
     
     # Subtest: ascending sort produces correct order
         ok 1 - ascending sort produces correct order
         1..1
-    ok 2 - ascending sort produces correct order # time=3.1ms
+    ok 2 - ascending sort produces correct order # time=2.857ms
     
     # Subtest: descending sort produces correct order
         ok 1 - descending sort produces correct order
         1..1
-    ok 3 - descending sort produces correct order # time=3.646ms
+    ok 3 - descending sort produces correct order # time=3ms
     
     # Subtest: toggling sort direction reverses order
         ok 1 - toggling sort direction reverses order
         1..1
-    ok 4 - toggling sort direction reverses order # time=2.874ms
+    ok 4 - toggling sort direction reverses order # time=3.122ms
     
     # Subtest: sort preserves all data
         ok 1 - sort preserves all data
         1..1
-    ok 5 - sort preserves all data # time=3.941ms
+    ok 5 - sort preserves all data # time=2.029ms
     
     # Subtest: sort handles null timestamps
         ok 1 - sort handles null timestamps
         1..1
-    ok 6 - sort handles null timestamps # time=1.879ms
+    ok 6 - sort handles null timestamps # time=1.742ms
     
     # Subtest: sort is stable for equal timestamps
         ok 1 - sort is stable for equal timestamps
         1..1
-    ok 7 - sort is stable for equal timestamps # time=1.158ms
+    ok 7 - sort is stable for equal timestamps # time=0.757ms
     
     # Subtest: sort works with filtered data
         ok 1 - sort works with filtered data
         1..1
-    ok 8 - sort works with filtered data # time=3.679ms
+    ok 8 - sort works with filtered data # time=2.31ms
     
     1..8
-ok 1 - Property 43: Logs Sorting Correctness # time=40.15ms
+ok 1 - Property 43: Logs Sorting Correctness # time=28.299ms
 
 1..1
 # { total: 8, pass: 8 }
-# time=45.825ms
+# time=33.866ms

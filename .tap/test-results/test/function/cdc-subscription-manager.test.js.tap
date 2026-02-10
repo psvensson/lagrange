@@ -3,17 +3,17 @@ TAP version 14
     ok 1 - Should not be initialized
     ok 2 - Should have no subscriptions
     1..2
-ok 1 - CDCSubscriptionManager - constructor # time=6.861ms
+ok 1 - CDCSubscriptionManager - constructor # time=3.979ms
 
 CDC subscription manager initialized
 # Subtest: CDCSubscriptionManager - initialize
     ok 1 - Should be initialized
     ok 2 - Should have registry
     1..2
-ok 2 - CDCSubscriptionManager - initialize # time=1.033ms
+ok 2 - CDCSubscriptionManager - initialize # time=0.644ms
 
 CDC subscription created {
-  subscriptionId: 'subscriber-1:users:ff4421d1-4788-4ba3-bb30-f7b34e04925c',
+  subscriptionId: 'subscriber-1:users:b6fb20c1-2209-4551-a339-16d2900ac54e',
   subscriberId: 'subscriber-1',
   tableName: 'users',
   type: 'callback'
@@ -25,15 +25,15 @@ CDC subscription created {
     ok 4 - Should be callback type
     ok 5 - Should have table name
     1..5
-ok 3 - CDCSubscriptionManager - subscribe creates callback subscription # time=1.606ms
+ok 3 - CDCSubscriptionManager - subscribe creates callback subscription # time=1.051ms
 
 # Subtest: CDCSubscriptionManager - subscribe requires callback function
     ok 1 - Should reject non-function callback
     1..1
-ok 4 - CDCSubscriptionManager - subscribe requires callback function # time=1.874ms
+ok 4 - CDCSubscriptionManager - subscribe requires callback function # time=1.178ms
 
 CDC subscription with invoke created {
-  subscriptionId: 'subscriber-1:orders:b83b1b18-9482-4a20-ae13-0a63b32e522a',
+  subscriptionId: 'subscriber-1:orders:a7a0391c-8ff5-4b98-abdd-d320f1b7f88e',
   subscriberId: 'subscriber-1',
   tableName: 'orders',
   functionId: 'process-order',
@@ -46,21 +46,21 @@ CDC subscription with invoke created {
     ok 4 - Should have function ID
     ok 5 - Should have base context
     1..5
-ok 5 - CDCSubscriptionManager - subscribeWithInvoke creates invoke subscription # time=1.994ms
+ok 5 - CDCSubscriptionManager - subscribeWithInvoke creates invoke subscription # time=1.216ms
 
 # Subtest: CDCSubscriptionManager - subscribeWithInvoke requires function ID
     ok 1 - Should reject null function ID
     1..1
-ok 6 - CDCSubscriptionManager - subscribeWithInvoke requires function ID # time=0.724ms
+ok 6 - CDCSubscriptionManager - subscribeWithInvoke requires function ID # time=0.41ms
 
 CDC subscription created {
-  subscriptionId: 'sub-1:users:bd4bbc06-16c0-4249-8812-4806a21d0880',
+  subscriptionId: 'sub-1:users:ef075eb0-d1e0-4f38-8664-2c6a0c5b49c5',
   subscriberId: 'sub-1',
   tableName: 'users',
   type: 'callback'
 }
 CDC subscription removed {
-  subscriptionId: 'sub-1:users:bd4bbc06-16c0-4249-8812-4806a21d0880',
+  subscriptionId: 'sub-1:users:ef075eb0-d1e0-4f38-8664-2c6a0c5b49c5',
   subscriberId: 'sub-1',
   tableName: 'users'
 }
@@ -68,39 +68,39 @@ CDC subscription removed {
     ok 1 - Should return true
     ok 2 - Should remove subscription
     1..2
-ok 7 - CDCSubscriptionManager - unsubscribe removes subscription # time=0.877ms
+ok 7 - CDCSubscriptionManager - unsubscribe removes subscription # time=0.564ms
 
 Subscription not found for unsubscribe { subscriptionId: 'nonexistent' }
 # Subtest: CDCSubscriptionManager - unsubscribe returns false for nonexistent
     ok 1 - Should return false
     1..1
-ok 8 - CDCSubscriptionManager - unsubscribe returns false for nonexistent # time=0.549ms
+ok 8 - CDCSubscriptionManager - unsubscribe returns false for nonexistent # time=0.361ms
 
 CDC subscription created {
-  subscriptionId: 'sub-1:users:56d2d4ca-7f74-4904-aca5-d0a3922e9048',
+  subscriptionId: 'sub-1:users:eacc6437-9733-4b3b-aa32-f9835270e108',
   subscriberId: 'sub-1',
   tableName: 'users',
   type: 'callback'
 }
 CDC subscription created {
-  subscriptionId: 'sub-1:orders:00f975a0-c032-4248-b034-a4c97ebdeeaa',
+  subscriptionId: 'sub-1:orders:4b44def1-5d89-48b0-b2e8-b273ac2a2bf7',
   subscriberId: 'sub-1',
   tableName: 'orders',
   type: 'callback'
 }
 CDC subscription created {
-  subscriptionId: 'sub-2:users:dc192a0b-562b-441f-b5ac-b85a5fb1ecae',
+  subscriptionId: 'sub-2:users:6fa42930-686c-4e8d-a47d-2fbaee0c1541',
   subscriberId: 'sub-2',
   tableName: 'users',
   type: 'callback'
 }
 CDC subscription removed {
-  subscriptionId: 'sub-1:users:56d2d4ca-7f74-4904-aca5-d0a3922e9048',
+  subscriptionId: 'sub-1:users:eacc6437-9733-4b3b-aa32-f9835270e108',
   subscriberId: 'sub-1',
   tableName: 'users'
 }
 CDC subscription removed {
-  subscriptionId: 'sub-1:orders:00f975a0-c032-4248-b034-a4c97ebdeeaa',
+  subscriptionId: 'sub-1:orders:4b44def1-5d89-48b0-b2e8-b273ac2a2bf7',
   subscriberId: 'sub-1',
   tableName: 'orders'
 }
@@ -110,16 +110,16 @@ All subscriptions removed for subscriber { subscriberId: 'sub-1', count: 2 }
     ok 2 - Should have none for sub-1
     ok 3 - Should still have sub-2
     1..3
-ok 9 - CDCSubscriptionManager - unsubscribeAll removes all for subscriber # time=1.552ms
+ok 9 - CDCSubscriptionManager - unsubscribeAll removes all for subscriber # time=0.886ms
 
 CDC subscription created {
-  subscriptionId: 'sub-1:users:0583c5cc-f21e-4be2-aa61-8996924f71cb',
+  subscriptionId: 'sub-1:users:c711d206-2470-4775-89cc-303ac26744f4',
   subscriberId: 'sub-1',
   tableName: 'users',
   type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: 'sub-1:users:0583c5cc-f21e-4be2-aa61-8996924f71cb',
+  subscriptionId: 'sub-1:users:c711d206-2470-4775-89cc-303ac26744f4',
   matchType: 'insert'
 }
 # Subtest: CDCSubscriptionManager - handleCDCEvent calls callback for INSERT
@@ -127,16 +127,16 @@ CDC callback executed {
     ok 2 - Should be insert type
     ok 3 - Should have row data
     1..3
-ok 10 - CDCSubscriptionManager - handleCDCEvent calls callback for INSERT # time=1.259ms
+ok 10 - CDCSubscriptionManager - handleCDCEvent calls callback for INSERT # time=0.813ms
 
 CDC subscription created {
-  subscriptionId: 'sub-1:users:b85e290e-689e-4a7c-9b20-5c49209b8d46',
+  subscriptionId: 'sub-1:users:2b567394-5d9d-48db-baf4-0abc77f82a65',
   subscriberId: 'sub-1',
   tableName: 'users',
   type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: 'sub-1:users:b85e290e-689e-4a7c-9b20-5c49209b8d46',
+  subscriptionId: 'sub-1:users:2b567394-5d9d-48db-baf4-0abc77f82a65',
   matchType: 'update'
 }
 # Subtest: CDCSubscriptionManager - handleCDCEvent calls callback for UPDATE
@@ -145,16 +145,16 @@ CDC callback executed {
     ok 3 - Should have old data
     ok 4 - Should have new data
     1..4
-ok 11 - CDCSubscriptionManager - handleCDCEvent calls callback for UPDATE # time=1.073ms
+ok 11 - CDCSubscriptionManager - handleCDCEvent calls callback for UPDATE # time=0.759ms
 
 CDC subscription created {
-  subscriptionId: 'sub-1:users:5cecd37a-4076-480d-ae97-2377bf112e82',
+  subscriptionId: 'sub-1:users:95b85976-531b-4c98-a846-c3aee24005d5',
   subscriberId: 'sub-1',
   tableName: 'users',
   type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: 'sub-1:users:5cecd37a-4076-480d-ae97-2377bf112e82',
+  subscriptionId: 'sub-1:users:95b85976-531b-4c98-a846-c3aee24005d5',
   matchType: 'delete'
 }
 # Subtest: CDCSubscriptionManager - handleCDCEvent calls callback for DELETE
@@ -162,17 +162,17 @@ CDC callback executed {
     ok 2 - Should be delete type
     ok 3 - Should have row data
     1..3
-ok 12 - CDCSubscriptionManager - handleCDCEvent calls callback for DELETE # time=0.918ms
+ok 12 - CDCSubscriptionManager - handleCDCEvent calls callback for DELETE # time=0.616ms
 
 CDC subscription with invoke created {
-  subscriptionId: 'sub-1:orders:df6c311e-0287-4186-b640-78e87981b6cb',
+  subscriptionId: 'sub-1:orders:faf9e383-8a2c-4932-b772-8e785438f531',
   subscriberId: 'sub-1',
   tableName: 'orders',
   functionId: 'process-order',
   type: 'invoke'
 }
 CDC function invoked {
-  subscriptionId: 'sub-1:orders:df6c311e-0287-4186-b640-78e87981b6cb',
+  subscriptionId: 'sub-1:orders:faf9e383-8a2c-4932-b772-8e785438f531',
   functionId: 'process-order',
   matchType: 'insert'
 }
@@ -183,76 +183,76 @@ CDC function invoked {
     ok 4 - Should pass CDC event
     ok 5 - Should pass match result
     1..5
-ok 13 - CDCSubscriptionManager - handleCDCEvent invokes function # time=1.154ms
+ok 13 - CDCSubscriptionManager - handleCDCEvent invokes function # time=0.74ms
 
 CDC subscription created {
-  subscriptionId: 'sub-1:users:d4da3d5c-555a-4c21-9046-bbf54b219712',
+  subscriptionId: 'sub-1:users:f0812f68-705a-4320-85ed-744a409a84e7',
   subscriberId: 'sub-1',
   tableName: 'users',
   type: 'callback'
 }
 CDC subscription created {
-  subscriptionId: 'sub-1:orders:66092ed1-84fd-47b5-8482-41cf598cac5c',
+  subscriptionId: 'sub-1:orders:4c6cffd8-a01f-4265-a9eb-4b7f4007c422',
   subscriberId: 'sub-1',
   tableName: 'orders',
   type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: 'sub-1:users:d4da3d5c-555a-4c21-9046-bbf54b219712',
+  subscriptionId: 'sub-1:users:f0812f68-705a-4320-85ed-744a409a84e7',
   matchType: 'insert'
 }
 # Subtest: CDCSubscriptionManager - handleCDCEvent filters by table
     ok 1 - Should receive user event
     ok 2 - Should not receive order event
     1..2
-ok 14 - CDCSubscriptionManager - handleCDCEvent filters by table # time=0.982ms
+ok 14 - CDCSubscriptionManager - handleCDCEvent filters by table # time=0.652ms
 
 CDC subscription created {
-  subscriptionId: 'sub-1:users:c49b20b0-7f9f-490e-ae08-f8a1bd20f86b',
+  subscriptionId: 'sub-1:users:9526160a-91fe-435b-98de-99cee95c58f9',
   subscriberId: 'sub-1',
   tableName: 'users',
   type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: 'sub-1:users:c49b20b0-7f9f-490e-ae08-f8a1bd20f86b',
+  subscriptionId: 'sub-1:users:9526160a-91fe-435b-98de-99cee95c58f9',
   matchType: 'insert'
 }
 # Subtest: CDCSubscriptionManager - handleCDCEvent filters by predicate
     ok 1 - Should only receive matching event
     ok 2 - Should have correct row
     1..2
-ok 15 - CDCSubscriptionManager - handleCDCEvent filters by predicate # time=0.966ms
+ok 15 - CDCSubscriptionManager - handleCDCEvent filters by predicate # time=0.594ms
 
 CDC subscription created {
-  subscriptionId: 'sub-1:users:3788ae91-5280-4750-a0da-3aa474b87de4',
+  subscriptionId: 'sub-1:users:71c19914-8957-491a-8bcb-0d5883b050c4',
   subscriberId: 'sub-1',
   tableName: 'users',
   type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: 'sub-1:users:3788ae91-5280-4750-a0da-3aa474b87de4',
+  subscriptionId: 'sub-1:users:71c19914-8957-491a-8bcb-0d5883b050c4',
   matchType: 'enter'
 }
 # Subtest: CDCSubscriptionManager - UPDATE enter/exit detection
     ok 1 - Should receive enter event
     ok 2 - Should be enter type
 CDC callback executed {
-  subscriptionId: 'sub-1:users:3788ae91-5280-4750-a0da-3aa474b87de4',
+  subscriptionId: 'sub-1:users:71c19914-8957-491a-8bcb-0d5883b050c4',
   matchType: 'exit'
 }
     ok 3 - Should receive exit event
     ok 4 - Should be exit type
     1..4
-ok 16 - CDCSubscriptionManager - UPDATE enter/exit detection # time=1.195ms
+ok 16 - CDCSubscriptionManager - UPDATE enter/exit detection # time=0.76ms
 
 CDC subscription created {
-  subscriptionId: 'sub-1:users:c2788680-af8a-4343-a5d0-89a4b490e273',
+  subscriptionId: 'sub-1:users:7d4c7929-6638-4b84-a2ff-b0d1280c59fd',
   subscriberId: 'sub-1',
   tableName: 'users',
   type: 'callback'
 }
 CDC subscription created {
-  subscriptionId: 'sub-2:orders:3e84001a-6ea8-4b95-ab57-46a96323dfdd',
+  subscriptionId: 'sub-2:orders:a8fd27e0-022a-4d86-8b52-9ede1d760993',
   subscriberId: 'sub-2',
   tableName: 'orders',
   type: 'callback'
@@ -261,10 +261,10 @@ CDC subscription created {
     ok 1 - Should have 2 subscriptions
     ok 2 - Should have 2 subscribers
     1..2
-ok 17 - CDCSubscriptionManager - getStats returns statistics # time=0.871ms
+ok 17 - CDCSubscriptionManager - getStats returns statistics # time=0.516ms
 
 CDC subscription created {
-  subscriptionId: 'sub-1:users:ea757cd9-69cf-4561-8ef9-0e91991fc093',
+  subscriptionId: 'sub-1:users:58324be4-6af4-452a-905f-1d3b8f2bb3d7',
   subscriberId: 'sub-1',
   tableName: 'users',
   type: 'callback'
@@ -275,8 +275,8 @@ CDC subscription manager shutdown
     ok 1 - Should not be initialized
     ok 2 - Should have no subscriptions
     1..2
-ok 18 - CDCSubscriptionManager - shutdown clears state # time=0.756ms
+ok 18 - CDCSubscriptionManager - shutdown clears state # time=0.467ms
 
 1..18
 # { total: 49, pass: 49 }
-# time=50.876ms
+# time=31.833ms

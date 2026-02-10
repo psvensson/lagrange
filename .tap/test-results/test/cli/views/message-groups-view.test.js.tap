@@ -5,15 +5,15 @@ TAP version 14
             ok 1 - should be equal
             ok 2 - should be equal
             1..2
-        ok 1 - creates view with default options # time=6.186ms
+        ok 1 - creates view with default options # time=4.601ms
         
         # Subtest: creates view with cache option
             ok 1 - should be equal
             1..1
-        ok 2 - creates view with cache option # time=0.458ms
+        ok 2 - creates view with cache option # time=0.312ms
         
         1..2
-    ok 1 - constructor # time=8.428ms
+    ok 1 - constructor # time=6.268ms
     
     # Subtest: getColumns
         # Subtest: returns correct column definitions
@@ -27,7 +27,7 @@ TAP version 14
             ok 8 - should be equal
             ok 9 - should be equal
             1..9
-        ok 1 - returns correct column definitions # time=1.285ms
+        ok 1 - returns correct column definitions # time=1.491ms
         
         # Subtest: all columns have width defined
             ok 1 - Column group_id should have width
@@ -35,10 +35,10 @@ TAP version 14
             ok 3 - Column nodes_covered should have width
             ok 4 - Column status should have width
             1..4
-        ok 2 - all columns have width defined # time=2.1ms
+        ok 2 - all columns have width defined # time=0.577ms
         
         1..2
-    ok 2 - getColumns # time=4.782ms
+    ok 2 - getColumns # time=3.24ms
     
     # Subtest: formatRow
         # Subtest: formats complete message group record
@@ -47,259 +47,259 @@ TAP version 14
             ok 3 - should be equal
             ok 4 - should be equal
             1..4
-        ok 1 - formats complete message group record # time=2.217ms
+        ok 1 - formats complete message group record # time=2.436ms
         
         # Subtest: handles missing group_id
             ok 1 - should be equal
             1..1
-        ok 2 - handles missing group_id # time=0.242ms
+        ok 2 - handles missing group_id # time=0.278ms
         
         # Subtest: handles missing replica_count
             ok 1 - should be equal
             1..1
-        ok 3 - handles missing replica_count # time=0.273ms
+        ok 3 - handles missing replica_count # time=0.314ms
         
         # Subtest: handles null replica_count
             ok 1 - should be equal
             1..1
-        ok 4 - handles null replica_count # time=0.222ms
+        ok 4 - handles null replica_count # time=0.26ms
         
         # Subtest: handles missing status
             ok 1 - should be equal
             1..1
-        ok 5 - handles missing status # time=0.207ms
+        ok 5 - handles missing status # time=0.255ms
         
         1..5
-    ok 3 - formatRow # time=4.569ms
+    ok 3 - formatRow # time=5.061ms
     
     # Subtest: formatNodesCovered
         # Subtest: formats array of nodes
             ok 1 - should be equal
             1..1
-        ok 1 - formats array of nodes # time=2.256ms
+        ok 1 - formats array of nodes # time=4.2ms
         
         # Subtest: handles single node array
             ok 1 - should be equal
             1..1
-        ok 2 - handles single node array # time=0.265ms
+        ok 2 - handles single node array # time=0.286ms
         
         # Subtest: handles empty array
             ok 1 - should be equal
             1..1
-        ok 3 - handles empty array # time=0.212ms
+        ok 3 - handles empty array # time=0.255ms
         
         # Subtest: handles null
             ok 1 - should be equal
             1..1
-        ok 4 - handles null # time=0.242ms
+        ok 4 - handles null # time=0.304ms
         
         # Subtest: handles undefined
             ok 1 - should be equal
             1..1
-        ok 5 - handles undefined # time=0.209ms
+        ok 5 - handles undefined # time=0.268ms
         
         # Subtest: handles string value
             ok 1 - should be equal
             1..1
-        ok 6 - handles string value # time=0.197ms
+        ok 6 - handles string value # time=0.24ms
         
         1..6
-    ok 4 - formatNodesCovered # time=4.748ms
+    ok 4 - formatNodesCovered # time=7.239ms
     
     # Subtest: formatReplicaCount
         # Subtest: formats positive number
             ok 1 - should be equal
             ok 2 - should be equal
             1..2
-        ok 1 - formats positive number # time=1.863ms
+        ok 1 - formats positive number # time=1.778ms
         
         # Subtest: formats zero
             ok 1 - should be equal
             1..1
-        ok 2 - formats zero # time=0.237ms
+        ok 2 - formats zero # time=0.272ms
         
         # Subtest: handles null
             ok 1 - should be equal
             1..1
-        ok 3 - handles null # time=0.199ms
+        ok 3 - handles null # time=0.242ms
         
         # Subtest: handles undefined
             ok 1 - should be equal
             1..1
-        ok 4 - handles undefined # time=0.216ms
+        ok 4 - handles undefined # time=0.239ms
         
         1..4
-    ok 5 - formatReplicaCount # time=3.736ms
+    ok 5 - formatReplicaCount # time=3.939ms
     
     # Subtest: getRowStatus
         # Subtest: returns NORMAL for healthy group
             ok 1 - should be equal
             1..1
-        ok 1 - returns NORMAL for healthy group # time=2.571ms
+        ok 1 - returns NORMAL for healthy group # time=2.781ms
         
         # Subtest: returns ERROR for failed status
             ok 1 - should be equal
             1..1
-        ok 2 - returns ERROR for failed status # time=0.338ms
+        ok 2 - returns ERROR for failed status # time=0.279ms
         
         # Subtest: returns ERROR for error status
             ok 1 - should be equal
             1..1
-        ok 3 - returns ERROR for error status # time=0.27ms
+        ok 3 - returns ERROR for error status # time=0.248ms
         
         # Subtest: returns WARNING for degraded status
             ok 1 - should be equal
             1..1
-        ok 4 - returns WARNING for degraded status # time=0.22ms
+        ok 4 - returns WARNING for degraded status # time=0.239ms
         
         # Subtest: returns WARNING when unhealthy_replica_count > 0
             ok 1 - should be equal
             1..1
-        ok 5 - returns WARNING when unhealthy_replica_count > 0 # time=0.319ms
+        ok 5 - returns WARNING when unhealthy_replica_count > 0 # time=0.345ms
         
         # Subtest: returns WARNING when replica_statuses has unhealthy
             ok 1 - should be equal
             1..1
-        ok 6 - returns WARNING when replica_statuses has unhealthy # time=0.256ms
+        ok 6 - returns WARNING when replica_statuses has unhealthy # time=0.275ms
         
         # Subtest: returns NORMAL when all replica_statuses healthy
             ok 1 - should be equal
             1..1
-        ok 7 - returns NORMAL when all replica_statuses healthy # time=0.218ms
+        ok 7 - returns NORMAL when all replica_statuses healthy # time=0.259ms
         
         1..7
-    ok 6 - getRowStatus # time=5.808ms
+    ok 6 - getRowStatus # time=6.129ms
     
     # Subtest: hasUnhealthyReplicas
         # Subtest: returns false when unhealthy_replica_count is 0
             ok 1 - should be equal
             1..1
-        ok 1 - returns false when unhealthy_replica_count is 0 # time=1.64ms
+        ok 1 - returns false when unhealthy_replica_count is 0 # time=1.739ms
         
         # Subtest: returns true when unhealthy_replica_count > 0
             ok 1 - should be equal
             1..1
-        ok 2 - returns true when unhealthy_replica_count > 0 # time=0.249ms
+        ok 2 - returns true when unhealthy_replica_count > 0 # time=0.269ms
         
         # Subtest: returns false when replica_statuses all healthy
             ok 1 - should be equal
             1..1
-        ok 3 - returns false when replica_statuses all healthy # time=0.227ms
+        ok 3 - returns false when replica_statuses all healthy # time=0.246ms
         
         # Subtest: returns true when replica_statuses has unhealthy
             ok 1 - should be equal
             1..1
-        ok 4 - returns true when replica_statuses has unhealthy # time=0.213ms
+        ok 4 - returns true when replica_statuses has unhealthy # time=0.233ms
         
         # Subtest: returns false when no health info available
             ok 1 - should be equal
             1..1
-        ok 5 - returns false when no health info available # time=0.217ms
+        ok 5 - returns false when no health info available # time=0.226ms
         
         1..5
-    ok 7 - hasUnhealthyReplicas # time=3.917ms
+    ok 7 - hasUnhealthyReplicas # time=4.025ms
     
     # Subtest: getItemKey
         # Subtest: returns group_id
             ok 1 - should be equal
             1..1
-        ok 1 - returns group_id # time=0.777ms
+        ok 1 - returns group_id # time=0.748ms
         
         # Subtest: returns empty string for missing group_id
             ok 1 - should be equal
             1..1
-        ok 2 - returns empty string for missing group_id # time=0.241ms
+        ok 2 - returns empty string for missing group_id # time=0.25ms
         
         1..2
-    ok 8 - getItemKey # time=1.915ms
+    ok 8 - getItemKey # time=1.866ms
     
     # Subtest: handleDrillDown
         # Subtest: returns null when no item selected
             ok 1 - should be equal
             1..1
-        ok 1 - returns null when no item selected # time=0.879ms
+        ok 1 - returns null when no item selected # time=0.734ms
         
         # Subtest: returns navigation action for selected group
             ok 1 - should be equivalent
             1..1
-        ok 2 - returns navigation action for selected group # time=1.614ms
+        ok 2 - returns navigation action for selected group # time=1.338ms
         
         1..2
-    ok 9 - handleDrillDown # time=3.423ms
+    ok 9 - handleDrillDown # time=2.945ms
     
     # Subtest: navigateToNode
         # Subtest: returns null when no item selected
             ok 1 - should be equal
             1..1
-        ok 1 - returns null when no item selected # time=2.052ms
+        ok 1 - returns null when no item selected # time=2.025ms
         
         # Subtest: returns null when nodes_covered is empty
             ok 1 - should be equal
             1..1
-        ok 2 - returns null when nodes_covered is empty # time=0.356ms
+        ok 2 - returns null when nodes_covered is empty # time=0.328ms
         
         # Subtest: returns null when nodes_covered is not array
             ok 1 - should be equal
             1..1
-        ok 3 - returns null when nodes_covered is not array # time=0.222ms
+        ok 3 - returns null when nodes_covered is not array # time=0.237ms
         
         # Subtest: navigates to first node by default
             ok 1 - should be equivalent
             1..1
-        ok 4 - navigates to first node by default # time=0.343ms
+        ok 4 - navigates to first node by default # time=0.318ms
         
         # Subtest: navigates to specified node index
             ok 1 - should be equivalent
             1..1
-        ok 5 - navigates to specified node index # time=0.273ms
+        ok 5 - navigates to specified node index # time=0.287ms
         
         # Subtest: clamps index to array bounds
             ok 1 - should be equivalent
             1..1
-        ok 6 - clamps index to array bounds # time=0.265ms
+        ok 6 - clamps index to array bounds # time=0.271ms
         
         1..6
-    ok 10 - navigateToNode # time=5.037ms
+    ok 10 - navigateToNode # time=4.936ms
     
     # Subtest: handleKey
         # Subtest: handles enter key for drill-down
             ok 1 - should be equal
             ok 2 - should be equal
             1..2
-        ok 1 - handles enter key for drill-down # time=2.096ms
+        ok 1 - handles enter key for drill-down # time=1.841ms
         
         # Subtest: handles return key for drill-down
             ok 1 - should be equal
             ok 2 - should be equal
             1..2
-        ok 2 - handles return key for drill-down # time=0.398ms
+        ok 2 - handles return key for drill-down # time=0.36ms
         
         # Subtest: handles n key for node navigation
             ok 1 - should be equal
             ok 2 - should be equal
             ok 3 - should be equal
             1..3
-        ok 3 - handles n key for node navigation # time=0.507ms
+        ok 3 - handles n key for node navigation # time=0.377ms
         
         # Subtest: handles N key for node navigation
             ok 1 - should be equal
             ok 2 - should be equal
             1..2
-        ok 4 - handles N key for node navigation # time=0.455ms
+        ok 4 - handles N key for node navigation # time=0.301ms
         
         # Subtest: delegates other keys to base class
             ok 1 - should be equal
             1..1
-        ok 5 - delegates other keys to base class # time=0.363ms
+        ok 5 - delegates other keys to base class # time=0.248ms
         
         1..5
-    ok 11 - handleKey # time=5.388ms
+    ok 11 - handleKey # time=4.41ms
     
     # Subtest: getSelectedDetails
         # Subtest: returns null when no item selected
             ok 1 - should be equal
             1..1
-        ok 1 - returns null when no item selected # time=2.725ms
+        ok 1 - returns null when no item selected # time=1.788ms
         
         # Subtest: returns basic details for selected group
             ok 1 - should be equal
@@ -307,47 +307,47 @@ TAP version 14
             ok 3 - should be equal
             ok 4 - should be equal
             1..4
-        ok 2 - returns basic details for selected group # time=0.658ms
+        ok 2 - returns basic details for selected group # time=0.49ms
         
         # Subtest: includes leader node when available
             ok 1 - should be equal
             ok 2 - should be equal
             1..2
-        ok 3 - includes leader node when available # time=0.422ms
+        ok 3 - includes leader node when available # time=0.383ms
         
         # Subtest: includes Raft state when available
             ok 1 - should be equal
             ok 2 - should be equal
             ok 3 - should be equal
             1..3
-        ok 4 - includes Raft state when available # time=0.546ms
+        ok 4 - includes Raft state when available # time=0.404ms
         
         # Subtest: shows unhealthy replicas status
             ok 1 - should be equal
             ok 2 - should be equal
             1..2
-        ok 5 - shows unhealthy replicas status # time=0.46ms
+        ok 5 - shows unhealthy replicas status # time=0.331ms
         
         1..5
-    ok 12 - getSelectedDetails # time=7.159ms
+    ok 12 - getSelectedDetails # time=4.695ms
     
     # Subtest: data management
         # Subtest: setData stores and filters data
             ok 1 - should be equal
             1..1
-        ok 1 - setData stores and filters data # time=0.715ms
+        ok 1 - setData stores and filters data # time=0.719ms
         
         # Subtest: filter applies to group_id
             ok 1 - should be equal
             1..1
-        ok 2 - filter applies to group_id # time=0.313ms
+        ok 2 - filter applies to group_id # time=0.354ms
         
         1..2
-    ok 13 - data management # time=1.832ms
+    ok 13 - data management # time=1.994ms
     
     1..13
-ok 1 - MessageGroupsView # time=64.043ms
+ok 1 - MessageGroupsView # time=59.739ms
 
 1..1
 # { total: 81, pass: 81 }
-# time=79.734ms
+# time=72.098ms
