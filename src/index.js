@@ -5,11 +5,13 @@
 import {ConfigurationManager} from './config/configuration-manager.js';
 import {CONFIG_KEY} from './config/config-constants.js';
 import {LoggingService} from './logging/logging-service.js';
+import {LogsTableService} from './logging/logs-table-service.js';
 import {HLCClockService} from './hlc/hlc-clock-service.js';
 import {DataDirectoryManager} from './storage/data-directory-manager.js';
 import {BootstrapService} from './bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
 import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
+import {ADMIN_DEFAULT} from './admin/admin-constants.js';
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
 import {NodeService} from './node/node-service.js';
 import {assertCritical} from './utils/assert.js';
@@ -94,6 +96,54 @@ function parseCommandLineArgs() {
   }
 
   return result;
+}
+
+/**
+ * Connect structured logging persistence to the replicated logs table.
+ * @param {Object|null} cdcIntegrationService - CDC integration service.
+ * @param {Object} logger - Entrypoint logger.
+ * @return {Promise<LogsTableService|null>} Logs table service when connected.
+ */
+async function connectLogsTablePersistence(cdcIntegrationService, logger) {
+  if (!cdcIntegrationService) {
+    logger.warn(ENTRYPOINT_LOG_MSG.LOGS_TABLE_CONNECT_SKIPPED);
+    return null;
+  }
+
+  try {
+    const logsTableService = LogsTableService.getInstance();
+    logsTableService.initialize({cdcIntegrationService});
+    const flushedCount = await logsTableService.connectToLoggingService();
+    logger.info(ENTRYPOINT_LOG_MSG.LOGS_TABLE_CONNECTED, {
+      bufferedEntriesFlushed: flushedCount,
+    });
+    return logsTableService;
+  } catch (error) {
+    logger.warn(ENTRYPOINT_LOG_MSG.LOGS_TABLE_CONNECT_FAILED, {
+      error: error.message,
+    });
+    return null;
+  }
+}
+
+/**
+ * Shutdown logs table persistence with best-effort semantics.
+ * @param {LogsTableService|null} logsTableService - Logs table service instance.
+ * @param {Object} logger - Entrypoint logger.
+ * @return {Promise<void>}
+ */
+async function shutdownLogsTablePersistence(logsTableService, logger) {
+  if (!logsTableService) {
+    return;
+  }
+
+  try {
+    await logsTableService.shutdown();
+  } catch (error) {
+    logger.warn(ENTRYPOINT_LOG_MSG.LOGS_TABLE_SHUTDOWN_FAILED, {
+      error: error.message,
+    });
+  }
 }
 
 /**
@@ -195,6 +245,11 @@ async function main() {
       process.exit(1);
     }
 
+    const joinLogsTableService = await connectLogsTablePersistence(
+      nodeJoiningService.cdcIntegrationService,
+      mainLogger,
+    );
+
     mainLogger.info(ENTRYPOINT_LOG_MSG.JOINED_CLUSTER, {
       messageGroupCount: joinResult.messageGroupServices.size,
       duration: joinResult.duration,
@@ -223,6 +278,8 @@ async function main() {
         systemCache: systemTableCache,
         messageRouter: joinResult.messageRouter,
         nodeId: config.get(CONFIG_KEY.NODE_ID),
+        runtimeDriverRegistry: nodeJoiningService.runtimeDriverRegistry,
+        serviceRuntimeLifecycle: nodeJoiningService.serviceRuntimeLifecycle,
       });
     }
 
@@ -233,8 +290,7 @@ async function main() {
       sqlQueryEngine,
     });
 
-    const adminPort =
-      config.get(CONFIG_KEY.ADMIN_WEBSOCKET_PORT) || ENTRYPOINT_DEFAULT.ADMIN_PORT;
+    const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
     await adminAPI.initialize(adminPort);
 
     mainLogger.info(ENTRYPOINT_LOG_MSG.NODE_READY, {
@@ -257,6 +313,7 @@ async function main() {
 
       mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
       try {
+        await shutdownLogsTablePersistence(joinLogsTableService, mainLogger);
         await nodeJoiningService.cleanup();
         await adminAPI.shutdown();
         process.exit(0);
@@ -305,6 +362,11 @@ async function main() {
       process.exit(1);
     }
 
+    const seedLogsTableService = await connectLogsTablePersistence(
+      bootstrapService.cdcIntegrationService,
+      mainLogger,
+    );
+
     mainLogger.info(ENTRYPOINT_LOG_MSG.BOOTSTRAP_COMPLETED, {
       servicesCreated: bootstrapResult.servicesCreated,
       partitionsCreated: bootstrapResult.partitionsCreated,
@@ -346,6 +408,8 @@ async function main() {
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       nodeId: config.get(CONFIG_KEY.NODE_ID),
+      runtimeDriverRegistry: bootstrapService.runtimeDriverRegistry,
+      serviceRuntimeLifecycle: bootstrapService.serviceRuntimeLifecycle,
     });
 
     // Set SQL query engine on bootstrap API for distributed node registration
@@ -358,8 +422,7 @@ async function main() {
       sqlQueryEngine,
     });
 
-    const adminPort =
-      config.get(CONFIG_KEY.ADMIN_WEBSOCKET_PORT) || ENTRYPOINT_DEFAULT.ADMIN_PORT;
+    const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
     await adminAPI.initialize(adminPort);
 
     mainLogger.info(ENTRYPOINT_LOG_MSG.NODE_READY, {
@@ -383,6 +446,7 @@ async function main() {
 
       mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
       try {
+        await shutdownLogsTablePersistence(seedLogsTableService, mainLogger);
         await bootstrapService.shutdown();
         await bootstrapAPI.shutdown();
         await adminAPI.shutdown();

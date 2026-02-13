@@ -8,13 +8,13 @@ TAP version 14
     ok 6 - WebSocket server should be running
     ok 7 - self-connection should be established
     1..7
-ok 1 - Bootstrap sequence - server starts before services # time=8073.581ms
+ok 1 - Bootstrap sequence - server starts before services # time=11443.792ms
 
 # Subtest: Bootstrap sequence - self-connection established before services
     ok 1 - bootstrap should succeed
     ok 2 - self-connection should be established before services are created
     1..2
-ok 2 - Bootstrap sequence - self-connection established before services # time=8113.387ms
+ok 2 - Bootstrap sequence - self-connection established before services # time=11407.34ms
 
 # Subtest: Bootstrap sequence - services created after self-connection
     ok 1 - bootstrap should succeed
@@ -22,16 +22,16 @@ ok 2 - Bootstrap sequence - self-connection established before services # time=8
     ok 3 - partition services should be created
     ok 4 - self-connection should still be active after services created
     1..4
-ok 3 - Bootstrap sequence - services created after self-connection # time=7990.081ms
+ok 3 - Bootstrap sequence - services created after self-connection # time=11384.823ms
 
-{"level":50,"time":"2026-02-09T20:43:14.871Z","nodeId":"test-bootstrap-node","pid":435948,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":1833,"error":"Message group mg-1 failed to establish leadership within 100ms","stack":"Error: Message group mg-1 failed to establish leadership within 100ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:684:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1082:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:389:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:284:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:179:20)","msg":"Bootstrap phase failed"}
-{"level":50,"time":"2026-02-09T20:43:14.873Z","nodeId":"test-bootstrap-node","pid":435948,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":1945,"error":"Message group mg-1 failed to establish leadership within 100ms","stack":"Error: Message group mg-1 failed to establish leadership within 100ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:684:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1082:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:389:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:284:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:179:20)","servicesCreated":51,"msg":"Bootstrap failed"}
+{"level":50,"time":"2026-02-13T06:14:17.870Z","nodeId":"test-bootstrap-node","pid":1365340,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":2298,"error":"Message group mg-1 failed to establish leadership within 100ms","stack":"Error: Message group mg-1 failed to establish leadership within 100ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:679:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1221:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:419:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:314:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:179:20)","msg":"Bootstrap phase failed"}
+{"level":50,"time":"2026-02-13T06:14:17.870Z","nodeId":"test-bootstrap-node","pid":1365340,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":2400,"error":"Message group mg-1 failed to establish leadership within 100ms","stack":"Error: Message group mg-1 failed to establish leadership within 100ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:679:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1221:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:419:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:314:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:179:20)","servicesCreated":66,"msg":"Bootstrap failed"}
 # Subtest: Bootstrap sequence - without wsPort fails (no server)
     ok 1 - bootstrap should fail without wsPort
     ok 2 - should have error message
     ok 3 - error should mention leadership timeout
     1..3
-ok 4 - Bootstrap sequence - without wsPort fails (no server) # time=1980.986ms
+ok 4 - Bootstrap sequence - without wsPort fails (no server) # time=2425.377ms
 
 # Subtest: Bootstrap sequence - startWebSocketServer after bootstrap
     ok 1 - bootstrap should succeed
@@ -40,7 +40,7 @@ ok 4 - Bootstrap sequence - without wsPort fails (no server) # time=1980.986ms
     ok 4 - WebSocket server should still be running
     ok 5 - self-connection should still be established
     1..5
-ok 5 - Bootstrap sequence - startWebSocketServer after bootstrap # time=10408.758ms
+ok 5 - Bootstrap sequence - startWebSocketServer after bootstrap # time=8839.828ms
 
 # Subtest: Bootstrap sequence - epoch manager initialized with partition assignments
     ok 1 - bootstrap should succeed
@@ -66,24 +66,29 @@ ok 5 - Bootstrap sequence - startWebSocketServer after bootstrap # time=10408.75
     ok 21 - partition service_definitions-p1 should be assigned to seed node
     ok 22 - partition service_endpoints-p1 should be assigned to seed node
     ok 23 - partition service_timers-p1 should be assigned to seed node
-    1..23
-ok 6 - Bootstrap sequence - epoch manager initialized with partition assignments # time=6583.579ms
+    ok 24 - partition module_manifests-p1 should be assigned to seed node
+    ok 25 - partition package_registry_mappings-p1 should be assigned to seed node
+    ok 26 - partition package_registry_overrides-p1 should be assigned to seed node
+    ok 27 - partition module_dependency_locks-p1 should be assigned to seed node
+    ok 28 - partition wasm_operations-p1 should be assigned to seed node
+    1..28
+ok 6 - Bootstrap sequence - epoch manager initialized with partition assignments # time=8789.685ms
 
 # Subtest: Bootstrap sequence - epoch manager cleaned up on shutdown
     ok 1 - bootstrap should succeed
     ok 2 - epoch manager should exist before shutdown
     ok 3 - epoch manager should be null after shutdown
     1..3
-ok 7 - Bootstrap sequence - epoch manager cleaned up on shutdown # time=10681.551ms
+ok 7 - Bootstrap sequence - epoch manager cleaned up on shutdown # time=11164.582ms
 
-{"level":50,"time":"1970-01-01T00:00:01.010Z","nodeId":"test-bootstrap-node","pid":435948,"subsystem":"bootstrap","totalPartitions":2,"leadersFound":0,"missingLeaders":["services-p1","nodes-p1"],"elapsedMs":10,"nodeId":"test-bootstrap-node","msg":"Some partitions still electing leaders, failing bootstrap"}
+{"level":50,"time":"1970-01-01T00:00:01.010Z","nodeId":"test-bootstrap-node","pid":1365340,"subsystem":"bootstrap","totalPartitions":2,"leadersFound":0,"missingLeaders":["services-p1","nodes-p1"],"elapsedMs":10,"nodeId":"test-bootstrap-node","msg":"Some partitions still electing leaders, failing bootstrap"}
 # Subtest: Bootstrap sequence - partition leadership wait fails when no leaders
     ok 1 - should report leadership timeout
     ok 2 - should list services partition
     ok 3 - should list nodes partition
     1..3
-ok 8 - Bootstrap sequence - partition leadership wait fails when no leaders # time=19.691ms
+ok 8 - Bootstrap sequence - partition leadership wait fails when no leaders # time=18.113ms
 
 1..8
-# { total: 50, pass: 50 }
-# time=53893.761ms
+# { total: 55, pass: 55 }
+# time=65531.291ms

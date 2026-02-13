@@ -21,22 +21,24 @@ This guide covers all features of the DDB Admin CLI, a terminal-based administra
 
 The CLI connects to any node in the cluster via WebSocket. You can specify the address in several ways:
 
+Note: the system admin WebSocket service listens on the fixed port `8081`.
+
 **Command line:**
 ```bash
-ddb-admin localhost:8080
-ddb-admin 192.168.1.100:8080
+ddb-admin localhost:8081
+ddb-admin 192.168.1.100:8081
 ```
 
 **Environment variable:**
 ```bash
-export DDB_NODE_ADDRESS=localhost:8080
+export DDB_NODE_ADDRESS=localhost:8081
 ddb-admin
 ```
 
 **Interactive prompt:**
 ```bash
 ddb-admin
-# Enter node address: localhost:8080
+# Enter node address: localhost:8081
 ```
 
 **Command palette:**
@@ -50,7 +52,7 @@ The status bar at the bottom displays connection information:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Connected: localhost:8080 │ CDC: Active │ Last: 2s ago     │
+│ Connected: localhost:8081 │ CDC: Active │ Last: 2s ago     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -490,7 +492,7 @@ Event color coding:
 **Cannot connect to node:**
 1. Verify the node address is correct
 2. Check that the node is running
-3. Ensure the admin API port is accessible
+3. Ensure port `8081` is accessible
 4. Check firewall rules for WebSocket connections
 
 **Frequent disconnections:**

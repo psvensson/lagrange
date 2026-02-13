@@ -19,6 +19,7 @@ import {
 import {
   WORKER_ENTITY_TYPE,
   CACHE_MESSAGE_TYPE,
+  CDC_MESSAGE_TYPE,
 } from '../../src/worker/worker-constants.js';
 import {RAFT_GROUP_ROLE} from '../../src/raft/raft-group-constants.js';
 import {CDC_OPERATION} from '../../src/constants/index.js';
@@ -33,6 +34,7 @@ function createMockMessageBridge() {
   return {
     deliver: mock.fn(async () => ({status: 'ok'})),
     send: mock.fn(async () => ({status: 'ok'})),
+    sendFireAndForget: mock.fn(() => {}),
     initialize: mock.fn(async () => {}),
     shutdown: mock.fn(async () => {}),
     setMessageHandler: mock.fn(),
@@ -518,9 +520,11 @@ describe('MessageGroupWorkerService', () => {
     });
 
     it('should handle CDC_EVENT message type', async () => {
+      service.isLeaderReplica = () => true;
+      service.applyCDCEvent = mock.fn(async () => {});
       const now = Date.now();
       const response = await service.handleMessage({
-        type: 'CDC_EVENT',
+        type: CDC_MESSAGE_TYPE.CDC_EVENT,
         cdcEvent: {
           tableName: 'nodes',
           operation: CDC_OPERATION.INSERT,
@@ -540,10 +544,50 @@ describe('MessageGroupWorkerService', () => {
 
       assert.strictEqual(response.status, 'ok');
       assert.strictEqual(response.replicaId, 'replica-1');
-
-      const record = service.systemCache.get('nodes', 'node-1');
-      assert.ok(record);
+      assert.strictEqual(service.applyCDCEvent.mock.calls.length, 1);
     });
+
+    it('should relay direct CDC_EVENT on follower to leader hint',
+      async () => {
+        service.getLeaderId = () => 'node-2/message-group/replica-2';
+        const now = Date.now();
+
+        const response = await service.handleMessage({
+          type: CDC_MESSAGE_TYPE.CDC_EVENT,
+          cdcEvent: {
+            tableName: 'nodes',
+            operation: CDC_OPERATION.INSERT,
+            data: {
+              node_id: 'node-1',
+              node_address: 'localhost:8080',
+              cpu_cores: 4,
+              memory_mb: 8192,
+              disk_gb: 100,
+              status: 'active',
+              ws_connection_state: 'connected',
+              last_heartbeat: now,
+              created_at: now,
+            },
+          },
+        });
+
+        assert.strictEqual(response.status, 'ok');
+        assert.strictEqual(
+          response.leaderAddress,
+          'node-2/message-group/replica-2',
+        );
+        assert.strictEqual(
+          service.messageBridge.sendFireAndForget.mock.calls.length,
+          1,
+        );
+        assert.strictEqual(
+          service.messageBridge.sendFireAndForget.mock.calls[0].arguments[0],
+          'node-2/message-group/replica-2',
+        );
+
+        const record = service.systemCache.get('nodes', 'node-1');
+        assert.strictEqual(record, undefined);
+      });
 
     it('should delegate unknown message types to base class',
       async () => {

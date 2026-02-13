@@ -22,6 +22,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {generateCorrelationId} from '../utils/correlation.js';
 import {
+  COLUMN,
   SERVICE_TYPE,
   STATE,
   TABLES,
@@ -106,16 +107,23 @@ class QueryRouter {
   async routeToPartition(partitionId, message, options = {}) {
     const correlationId = options.correlationId || generateCorrelationId();
     const preferLeader = options.preferLeader !== false;
+    const preferSameLatencyGroup = options.preferSameLatencyGroup === true;
+    const localNodeId = options.localNodeId || null;
     const startTime = Date.now();
 
     this.logger.debug(QUERY_ROUTER_LOG_MSG.ROUTING_TO_PARTITION, {
       partitionId,
       correlationId,
       preferLeader,
+      preferSameLatencyGroup,
+      localNodeId,
     });
 
     // Get initial candidates (Requirements 3.2)
-    let candidates = this.findServiceCandidates(partitionId, preferLeader);
+    let candidates = this.findServiceCandidates(partitionId, preferLeader, {
+      preferSameLatencyGroup,
+      localNodeId,
+    });
 
     for (let attempt = NUM.ZERO; attempt < this.retryAttempts; attempt++) {
       // Check timeout (Requirements 3.5)
@@ -143,7 +151,10 @@ class QueryRouter {
         // Refresh candidates on retry
         if (attempt < this.retryAttempts - NUM.ONE) {
           await this.delay(this.calculateBackoffDelay(attempt));
-          candidates = this.findServiceCandidates(partitionId, preferLeader);
+          candidates = this.findServiceCandidates(partitionId, preferLeader, {
+            preferSameLatencyGroup,
+            localNodeId,
+          });
           continue;
         }
 
@@ -197,7 +208,10 @@ class QueryRouter {
         await this.delay(backoffDelay);
 
         // Refresh candidates for next attempt
-        candidates = this.findServiceCandidates(partitionId, preferLeader);
+        candidates = this.findServiceCandidates(partitionId, preferLeader, {
+          preferSameLatencyGroup,
+          localNodeId,
+        });
       }
     }
 
@@ -221,7 +235,7 @@ class QueryRouter {
    * @param {boolean} [preferLeader=true] - Whether to prefer leader replicas
    * @return {Array<Object>} Array of service candidates with address and metadata
    */
-  findServiceCandidates(partitionId, preferLeader = true) {
+  findServiceCandidates(partitionId, preferLeader = true, options = {}) {
     if (!this.systemCache || typeof this.systemCache.filter !== 'function') {
       return [];
     }
@@ -237,6 +251,13 @@ class QueryRouter {
       return [];
     }
 
+    const localGroupId = this.resolveNodeLatencyGroupId(options.localNodeId);
+    const preferSameLatencyGroup = options.preferSameLatencyGroup === true;
+    const orderedServices = this.orderServicesByLatencyPreference(
+      services,
+      localGroupId,
+      preferSameLatencyGroup,
+    );
     const candidates = [];
     const seen = new Set();
 
@@ -263,14 +284,80 @@ class QueryRouter {
 
     if (preferLeader) {
       // Add leaders first
-      const leaders = services.filter((s) => s.raft_role === RAFT_ROLE.LEADER);
+      const leaders = orderedServices.filter((s) => s.raft_role === RAFT_ROLE.LEADER);
       leaders.forEach(addService);
     }
 
     // Add remaining services
-    services.forEach(addService);
+    orderedServices.forEach(addService);
 
     return candidates;
+  }
+
+  /**
+   * Resolve node latency-group assignment from cache.
+   * @param {string|null} nodeId - Node ID.
+   * @return {string|null}
+   * @private
+   */
+  resolveNodeLatencyGroupId(nodeId) {
+    if (!nodeId || typeof this.systemCache?.get !== 'function') {
+      return null;
+    }
+    const nodeRow = this.systemCache.get(TABLES.NODES, nodeId);
+    return nodeRow?.[COLUMN.LATENCY_GROUP_ID] || null;
+  }
+
+  /**
+   * Order services to prefer same latency-group replicas when requested.
+   * @param {Object[]} services - Partition service rows.
+   * @param {string|null} localGroupId - Local latency group.
+   * @param {boolean} preferSameLatencyGroup - Whether preference is enabled.
+   * @return {Object[]}
+   * @private
+   */
+  orderServicesByLatencyPreference(services, localGroupId, preferSameLatencyGroup) {
+    if (!preferSameLatencyGroup || !localGroupId ||
+      typeof this.systemCache?.get !== 'function') {
+      return services;
+    }
+
+    const nodeGroupById = new Map();
+    return [...services].sort((left, right) => {
+      const leftNodeId = left?.node_id;
+      const rightNodeId = right?.node_id;
+      const leftGroupId = this.getNodeGroupFromCache(leftNodeId, nodeGroupById);
+      const rightGroupId = this.getNodeGroupFromCache(rightNodeId, nodeGroupById);
+      const leftPreferred = leftGroupId === localGroupId;
+      const rightPreferred = rightGroupId === localGroupId;
+      if (leftPreferred && !rightPreferred) {
+        return NUM.NEGATIVE_ONE;
+      }
+      if (!leftPreferred && rightPreferred) {
+        return NUM.ONE;
+      }
+      return NUM.ZERO;
+    });
+  }
+
+  /**
+   * Resolve and memoize node group assignments.
+   * @param {string} nodeId - Node ID.
+   * @param {Map<string, string|null>} nodeGroupById - Memoization map.
+   * @return {string|null}
+   * @private
+   */
+  getNodeGroupFromCache(nodeId, nodeGroupById) {
+    if (!nodeId) {
+      return null;
+    }
+    if (nodeGroupById.has(nodeId)) {
+      return nodeGroupById.get(nodeId);
+    }
+    const nodeRow = this.systemCache.get(TABLES.NODES, nodeId);
+    const groupId = nodeRow?.[COLUMN.LATENCY_GROUP_ID] || null;
+    nodeGroupById.set(nodeId, groupId);
+    return groupId;
   }
 
   /**

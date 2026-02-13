@@ -3,7 +3,7 @@
  *
  * Bootstrap Process:
  * 1. Contact seed node via HTTP to get bootstrap response
- * 2. Bootstrap response contains complete system table snapshots
+ * 2. Bootstrap response contains default cache-sync table snapshots
  * 3. Hydrate local system cache from snapshots
  * 4. System cache becomes single source of truth for query routing
  * 5. Subscribe to CDC events to keep cache updated
@@ -26,28 +26,30 @@ import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {NodeService} from '../node/node-service.js';
 import {MessageGroupService} from '../message-group/message-group-service.js';
-import {MessageRouter} from '../transport/message-router.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from './message-group-assignment.js';
 import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
+import {MessageRouterSetup} from './shared/message-router-setup.js';
+import {CDCIntegrationSetup} from './shared/cdc-integration-setup.js';
+import {ControlPlaneSetup} from './shared/control-plane-setup.js';
+import {LatencyTopologySetup} from './shared/latency-topology-setup.js';
 import {PartitionService} from '../partition/partition-service.js';
 import {
   NodeLifecycleStateMachine,
   NodeState,
 } from '../node/node-lifecycle-state-machine.js';
 import {
-  CDCIntegrationService,
-} from '../cdc/cdc-integration-service.js';
-import {SQLQueryEngine} from '../query/sql-query-engine.js';
-import {
   CACHE_DEFAULT,
-  CACHE_PRIMARY_KEY_FIELDS,
-  CACHE_SYSTEM_TABLES,
+  CACHE_HYDRATION_TABLES,
 } from '../cache/cache-constants.js';
+import {
+  getSystemCachePrimaryKeyFieldOrFallback,
+} from '../cache/system-cache-key-descriptor.js';
+import {SQLQueryEngine} from '../query/sql-query-engine.js';
 import {TablePolicyService} from '../policy/table-policy-service.js';
-import {RebalanceCoordinator} from '../rebalancer/rebalance-coordinator.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {NodeStorageBudgetSetup} from './shared/node-storage-budget-setup.js';
 import {
   BOOTSTRAP_EVENT,
   BOOTSTRAP_SUBSYSTEM,
@@ -56,7 +58,6 @@ import {
 } from './bootstrap-constants.js';
 import {
   INITIAL_PARTITION_IDS,
-  SYSTEM_TABLE_SCHEMAS,
 } from './system-table-schemas-constants.js';
 import {
   getMissingSystemServiceLeaders,
@@ -72,12 +73,7 @@ import {
   JOINING_HTTP,
   JOINING_LOG_MSG,
 } from './node-joining-constants.js';
-import {HeartbeatService} from '../control-plane/heartbeat-service.js';
-import {LeaseService} from '../control-plane/lease-service.js';
-import {EndpointService} from '../control-plane/endpoint-service.js';
-import {
-  ReplicaDispatchService,
-} from '../control-plane/replica-dispatch-service.js';
+import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
 import {RPCClient} from '../transport/rpc-client.js';
 import {
   ControlPlaneMessageType,
@@ -100,7 +96,9 @@ import {
   TRANSPORT_TYPE,
   TYPEOF,
 } from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
+import {createJoiningPhaseOwners} from './owners/join-phase-owners.js';
 
 const JoiningPhase = JOINING_PHASE;
 const JoiningEvent = BOOTSTRAP_EVENT;
@@ -108,6 +106,7 @@ const JOINING_REQUIRED_WRITE_TABLES = Object.freeze([
   TABLES.NODES,
   TABLES.NODE_ENDPOINTS,
 ]);
+const DEFAULT_CACHE_SYNC_TABLES = new Set(CACHE_HYDRATION_TABLES);
 
 /**
  * Maps each JOINING_PHASE to its index in the cleanup steps array.
@@ -195,13 +194,24 @@ class NodeJoiningService extends EventEmitter {
     this.dispatchService = null;
     this.rebalanceCoordinator = null;
 
+    // Unified runtime ownership wiring.
+    const runtimeWiring = createRuntimeStartupWiring({
+      ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
+    });
+    this.runtimeDriverRegistry = runtimeWiring.runtimeDriverRegistry;
+    this.serviceRuntimeLifecycle = runtimeWiring.serviceRuntimeLifecycle;
+    this.runtimeDrivers = runtimeWiring.drivers;
+
     // RPC client for control plane dispatch
     this.rpcClient = null;
 
     // CDC integration service for system table writes
     this.cdcIntegrationService = null;
+    // Storage budget owner for node registration
+    this.nodeStorageBudgetService = null;
     // Table policy service for partition placement decisions
     this.tablePolicyService = null;
+    this.latencyTopology = null;
     // Track system cache hydration state for rebalancer initialization
     this.systemCacheHydrated = false;
     // Track CDC subscription status
@@ -229,6 +239,13 @@ class NodeJoiningService extends EventEmitter {
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.NODE_JOINING) : console;
+    this.logger.debug(JOINING_LOG_MSG.RUNTIME_WIRING_READY, {
+      nodeId: this.nodeId,
+      owner: 'createRuntimeStartupWiring',
+      runtimeDriverCount: Object.keys(this.runtimeDrivers).length,
+      ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
+    });
+    this.joiningPhaseOwners = createJoiningPhaseOwners(this);
 
     // Error tracking
     this.lastError = null;
@@ -257,14 +274,14 @@ class NodeJoiningService extends EventEmitter {
       // Phase 1: Contact seed node via HTTP
       await this.executePhase(
         JoiningPhase.CONTACTING_SEED,
-        () => this.phaseContactSeed(),
+        () => this.joiningPhaseOwners.contactSeed(),
       );
 
       // Phase 2: Connect to seed node via WebSocket for cross-node communication
       // Requirements: 8.1, 8.2 - Start server and self-connect BEFORE creating services
       await this.executePhase(
         JoiningPhase.CONNECTING_WEBSOCKET,
-        () => this.phaseConnectWebSocket(),
+        () => this.joiningPhaseOwners.connectWebSocket(),
       );
 
       // Transition to DISCOVERING state
@@ -278,19 +295,19 @@ class NodeJoiningService extends EventEmitter {
       if (assignment.strategy === AssignmentStrategy.CREATE_SELF_HOSTED) {
         await this.executePhase(
           JoiningPhase.CREATING_MESSAGE_GROUP,
-          () => this.phaseCreateSelfHostedMessageGroup(assignment),
+          () => this.joiningPhaseOwners.createSelfHostedMessageGroup(assignment),
         );
       } else if (assignment.strategy === AssignmentStrategy.MOVE_REPLICA) {
         await this.executePhase(
           JoiningPhase.JOINING_MESSAGE_GROUP,
-          () => this.phaseJoinExistingMessageGroup(assignment),
+          () => this.joiningPhaseOwners.joinExistingMessageGroup(assignment),
         );
       }
 
       // Phase 4: Wait for leadership establishment
       await this.executePhase(
         JoiningPhase.WAITING_LEADERSHIP,
-        () => this.phaseWaitForLeadership(),
+        () => this.joiningPhaseOwners.waitForLeadership(),
       );
 
       // Initialize ReplicaHandler BEFORE registering node in cluster
@@ -307,6 +324,8 @@ class NodeJoiningService extends EventEmitter {
         this.rpcClient = new RPCClient({messageGroupService: leaderMessageGroup});
       }
 
+      this.createCdcIntegrationService();
+      this.ensureLatencyTopologyOwners();
       this.initializeReplicaHandler();
       await this.initializeControlPlaneService();
 
@@ -318,10 +337,11 @@ class NodeJoiningService extends EventEmitter {
       // This includes registering the node in the cluster's nodes table
       await this.executePhase(
         JoiningPhase.QUERYING_STATE,
-        () => this.phaseQuerySystemState(),
+        () => this.joiningPhaseOwners.querySystemState(),
       );
 
       await this.signalReadyForReplicas();
+      this.startLatencyTopologyLifecycle();
 
       // Transition to READY state
       // Requirements: 2.10 - READY state for accepting traffic
@@ -810,6 +830,12 @@ class NodeJoiningService extends EventEmitter {
         return service;
       }
     }
+    // Fall back to any local message group service if leadership metadata is delayed
+    for (const service of this.messageGroupServices.values()) {
+      if (service) {
+        return service;
+      }
+    }
     return null;
   }
 
@@ -1054,6 +1080,7 @@ class NodeJoiningService extends EventEmitter {
     let delay = this.config.leadershipWaitInitialDelayMs;
     const maxDelay = this.config.leadershipWaitMaxDelayMs;
     const backoffMultiplier = this.config.leadershipWaitBackoffMultiplier;
+    const systemTableCache = NodeService.getInstance().getSystemTableCache();
 
     this.logger.debug(JOINING_LOG_MSG.WAITING_LEADERSHIP, {
       nodeId: this.nodeId,
@@ -1062,6 +1089,8 @@ class NodeJoiningService extends EventEmitter {
     });
 
     while (Date.now() - startTime < timeoutMs) {
+      const hasCacheLeader = this.hasMessageGroupLeaderInCache(systemTableCache);
+
       // Check if any local replica is leader or has a known leader
       for (const [replicaId, service] of this.messageGroupServices) {
         if (service.isLeaderReplica() || service.getLeaderId()) {
@@ -1074,6 +1103,16 @@ class NodeJoiningService extends EventEmitter {
           });
           return;
         }
+      }
+      if (hasCacheLeader) {
+        this.logger.debug(JOINING_LOG_MSG.LEADERSHIP_ESTABLISHED, {
+          nodeId: this.nodeId,
+          replicaId: null,
+          isLeader: false,
+          leaderId: null,
+          elapsedMs: Date.now() - startTime,
+        });
+        return;
       }
 
       // Wait with exponential backoff
@@ -1294,6 +1333,7 @@ class NodeJoiningService extends EventEmitter {
       seedNodeWsAddress: this.seedNodeWsAddress,
       messageGroupAssignment: this.bootstrapResponse.messageGroupAssignment,
       partitionLeaders: this.bootstrapResponse.partitionLeaders,
+      latencyTopologyHints: this.bootstrapResponse.latencyTopologyHints,
       clusterConfig: this.bootstrapResponse.clusterConfig,
       timestamp: this.bootstrapResponse.timestamp,
     };
@@ -1490,58 +1530,23 @@ class NodeJoiningService extends EventEmitter {
     const wsPort = this.wsPort ?? this.config.wsPort;
     const identifyPayload = this.getIdentifyBootstrapPayload();
 
-    // Create MessageRouter for unified local/remote message routing
-    // Requirements: 8.1, 8.2 - Initialize MessageRouter before creating services
-    this.messageRouter = new MessageRouter({
-      nodeId: this.nodeId,
-      nodeAddress: this.nodeAddress,
-      wsPort: wsPort,
-      identifyPayload,
-    });
-
-    // Set up resolver to extract nodeId from address pattern "${nodeId}/..."
-    this.messageRouter.setServiceNodeResolver((address) => {
-      const match = address.match(/^([^/]+)\//);
-      return match ? match[NUM.ONE] : null;
-    });
-
-    // Requirements: 8.1, 8.2, 8.4 - Start server first, then establish self-connection
-    // If wsPort is specified, start server and establish self-connection
-    // This ensures all messages (local and remote) go through WebSocket
-    if (wsPort) {
-      try {
-        // Requirements: 8.1 - Start WebSocket server first
-        await this.messageRouter.initialize({startServer: true});
-
-        this.logger.info(JOINING_LOG_MSG.WS_SELF_CONNECTED, {
-          nodeId: this.nodeId,
-          wsPort: wsPort,
-          hasSelfConnection: this.messageRouter.hasSelfConnection(),
-        });
-      } catch (error) {
-        // Requirements: 8.4 - Fail joining if self-connection fails
-        this.logger.error(JOINING_LOG_MSG.ROUTER_INIT_FAILED, {
-          nodeId: this.nodeId,
-          wsPort: wsPort,
-          error: error.message,
-          stack: error.stack,
-        });
-        const routerInitFailed = JOINING_ERROR_MSG.ROUTER_INIT_FAILED;
-        throw new Error(routerInitFailed(error.message));
-      }
-    } else {
-      // No wsPort - initialize without server (for testing or single-node scenarios)
-      try {
-        await this.messageRouter.initialize({startServer: false});
-      } catch (error) {
-        this.logger.error(JOINING_LOG_MSG.ROUTER_INIT_FAILED, {
-          nodeId: this.nodeId,
-          error: error.message,
-          stack: error.stack,
-        });
-        const routerInitFailed = JOINING_ERROR_MSG.ROUTER_INIT_FAILED;
-        throw new Error(routerInitFailed(error.message));
-      }
+    // Route message-router setup through the shared owner.
+    try {
+      this.messageRouter = await MessageRouterSetup.create({
+        nodeId: this.nodeId,
+        nodeAddress: this.nodeAddress,
+        wsPort: wsPort,
+        identifyPayload,
+      });
+    } catch (error) {
+      this.logger.error(JOINING_LOG_MSG.ROUTER_INIT_FAILED, {
+        nodeId: this.nodeId,
+        wsPort: wsPort,
+        error: error.message,
+        stack: error.stack,
+      });
+      const routerInitFailed = JOINING_ERROR_MSG.ROUTER_INIT_FAILED;
+      throw new Error(routerInitFailed(error.message));
     }
 
     // Use MessageRouter directly for all services
@@ -1633,6 +1638,7 @@ class NodeJoiningService extends EventEmitter {
       wsPort: wsPort,
       hasMessageRouter: !!this.messageRouter,
       hasSelfConnection: wsPort ? this.messageRouter.hasSelfConnection() : false,
+      owner: 'MessageRouterSetup',
     });
   }
 
@@ -1806,7 +1812,8 @@ class NodeJoiningService extends EventEmitter {
    *   * tables - All table schemas
    *   * message_groups - All message group configurations
    *   * replica_operations - Pending operations
-   *   * indices, config, logs, live_queries, contexts, code - additional system metadata
+   *   * indices, config, live_queries, contexts, code - additional system metadata
+   *   * logs is intentionally excluded from default cache hydration
    * - After hydration, node can immediately read and write to system tables
    * - System cache becomes the single source of truth for query routing
    * - No bootstrap directories needed after hydration
@@ -1843,7 +1850,7 @@ class NodeJoiningService extends EventEmitter {
     );
 
     // Hydrate each system table from snapshots
-    const systemTables = CACHE_SYSTEM_TABLES;
+    const systemTables = CACHE_HYDRATION_TABLES;
 
     let totalRecords = NUM.ZERO;
 
@@ -1897,7 +1904,10 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   getSnapshotHydrationOperation(systemTableCache, tableName, record) {
-    const pkField = CACHE_PRIMARY_KEY_FIELDS[tableName] || CACHE_DEFAULT.PRIMARY_KEY_FALLBACK;
+    const pkField = getSystemCachePrimaryKeyFieldOrFallback(
+      tableName,
+      CACHE_DEFAULT.PRIMARY_KEY_FALLBACK,
+    );
     const key = record?.[pkField] ?? record?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
 
     // Let cache validation handle malformed rows that have no key.
@@ -1959,6 +1969,7 @@ class NodeJoiningService extends EventEmitter {
       JOINING_ERROR_MSG.STATE_QUERY_ENGINE_REQUIRED,
     );
     assertCritical(this.messageRouter, JOINING_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
+    this.ensureLatencyTopologyOwners();
 
     try {
       // Hydrate system cache from bootstrap response snapshots if not already done
@@ -2092,14 +2103,12 @@ class NodeJoiningService extends EventEmitter {
     };
 
     try {
-      const result = await this.upsertSystemTableRow(
-        TABLES.NODES,
-        nodeData,
-      );
-
-      if (!result.success) {
-        throw new Error(`Failed to register node: ${result.error}`);
-      }
+      const budgetService = this.getNodeStorageBudgetService();
+      const {resolution} = await NodeStorageBudgetSetup.resolveAndPersist({
+        budgetService,
+        nodeRow: nodeData,
+        nodeId: this.nodeId,
+      });
 
       this.logger.info('Node registered in cluster', {
         nodeId: this.nodeId,
@@ -2107,17 +2116,20 @@ class NodeJoiningService extends EventEmitter {
         cpuCores,
         memoryMb: totalMemoryMb,
         diskGb,
+        budgetBytes: resolution?.budgetBytes || null,
+        budgetSource: resolution?.source || null,
       });
 
       // Register WebSocket endpoint in node_endpoints table
       // Requirements: 8.2 - Node registration creates endpoint
       await this.registerNodeEndpoint(now);
     } catch (error) {
+      const wrappedError = new Error(`Failed to register node: ${error.message}`);
       this.logger.error('Failed to register node in cluster', {
         nodeId: this.nodeId,
-        error: error.message,
+        error: wrappedError.message,
       });
-      throw error;
+      throw wrappedError;
     }
   }
 
@@ -2194,7 +2206,7 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
-   * Subscribe to CDC events for all system tables.
+   * Subscribe to CDC events for default cache-sync tables.
    * This keeps the system cache updated as cluster state changes.
    * Requirements: 4.1, 4.2, 4.3 - CDC subscriptions keep cache updated.
    * @return {Promise<void>}
@@ -2204,7 +2216,7 @@ class NodeJoiningService extends EventEmitter {
     if (!this.cdcIntegrationService) {
       const error = new Error(
         JOINING_ERROR_MSG.controlPlaneCdcSubscribeFailed(
-          'all system tables',
+          'default cache-sync tables',
           'CDC integration service not available',
         ),
       );
@@ -2350,9 +2362,9 @@ class NodeJoiningService extends EventEmitter {
       registeredNodeId: this.nodeId,
       createdServiceIds: Array.from(this.messageGroupServices.keys()),
       createdMessageGroupIds: this.bootstrapResponse
-        ?.messageGroupAssignment?.groupId
-        ? [this.bootstrapResponse.messageGroupAssignment.groupId]
-        : [],
+        ?.messageGroupAssignment?.groupId ?
+        [this.bootstrapResponse.messageGroupAssignment.groupId] :
+        [],
     };
     await this.cleanupFailedJoin(failedPhase, cleanupContext);
 
@@ -2400,9 +2412,9 @@ class NodeJoiningService extends EventEmitter {
 
     const startIndex =
       JOINING_PHASE_TO_CLEANUP_INDEX[failedPhase];
-    const effectiveStart = startIndex !== undefined
-      ? startIndex
-      : NUM.ZERO;
+    const effectiveStart = startIndex !== undefined ?
+      startIndex :
+      NUM.ZERO;
 
     const stepsToRun =
       JOINING_CLEANUP_STEPS_REVERSE.slice(effectiveStart);
@@ -2445,16 +2457,16 @@ class NodeJoiningService extends EventEmitter {
    */
   async _executeJoinCleanupStep(step, cleanupContext) {
     switch (step) {
-      case JOINING_CLEANUP_STEP.QUERYING_STATE:
-        return this._cleanupQueryingState(cleanupContext);
-      case JOINING_CLEANUP_STEP.WAITING_LEADERSHIP:
-        return this._cleanupWaitingLeadership();
-      case JOINING_CLEANUP_STEP.MESSAGE_GROUP:
-        return this._cleanupMessageGroup(cleanupContext);
-      case JOINING_CLEANUP_STEP.CONNECTING_WEBSOCKET:
-        return this._cleanupConnectingWebSocket();
-      default:
-        return JOINING_CLEANUP_RESULT.SKIPPED;
+    case JOINING_CLEANUP_STEP.QUERYING_STATE:
+      return this._cleanupQueryingState(cleanupContext);
+    case JOINING_CLEANUP_STEP.WAITING_LEADERSHIP:
+      return this._cleanupWaitingLeadership();
+    case JOINING_CLEANUP_STEP.MESSAGE_GROUP:
+      return this._cleanupMessageGroup(cleanupContext);
+    case JOINING_CLEANUP_STEP.CONNECTING_WEBSOCKET:
+      return this._cleanupConnectingWebSocket();
+    default:
+      return JOINING_CLEANUP_RESULT.SKIPPED;
     }
   }
 
@@ -2725,6 +2737,8 @@ class NodeJoiningService extends EventEmitter {
       messageGroupServices: this.messageGroupServices.size,
       partitionServices: this.partitionServices.size,
     });
+    LatencyTopologySetup.stop(this.latencyTopology);
+    this.latencyTopology = null;
 
     // Shutdown replica state machine
     if (this.replicaStateMachine) {
@@ -2870,7 +2884,11 @@ class NodeJoiningService extends EventEmitter {
       this.partitionServices.set(options.replicaId, partition);
 
       const tableName = options.tableName;
-      if (tableName && messageGroupService) {
+      if (
+        tableName &&
+        messageGroupService &&
+        DEFAULT_CACHE_SYNC_TABLES.has(tableName)
+      ) {
         await messageGroupService.subscribeToCDC(tableName);
 
         partition.subscribeToCDC(async (cdcEvent) => {
@@ -2884,10 +2902,9 @@ class NodeJoiningService extends EventEmitter {
             // Only apply CDC event if this message group is the leader
             // This ensures CDC events are replicated through Raft to all nodes
             if (messageGroupService.isLeaderReplica()) {
-              await messageGroupService.applyCDCEvent(
-                cdcEvent.tableName,
-                cdcEvent.operation,
-                cdcEvent.data,
+              await this.propagatePartitionCDCEvent(
+                messageGroupService,
+                cdcEvent,
               );
             }
           }
@@ -2951,18 +2968,6 @@ class NodeJoiningService extends EventEmitter {
       this.tablePolicyService.cdcIntegrationService = cdcIntegrationService;
     }
 
-    if (!this.rebalanceCoordinator) {
-      this.rebalanceCoordinator = new RebalanceCoordinator({
-        nodeId: this.nodeId,
-        systemTableCache,
-        cdcIntegrationService,
-        messageRouter: this.messageRouter,
-        tablePolicyService: this.tablePolicyService,
-        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
-      });
-      this.rebalanceCoordinator.initialize();
-    }
-
     for (const messageGroupService of this.messageGroupServices.values()) {
       assertCritical(
         messageGroupService && typeof messageGroupService.subscribeToCDC === TYPEOF.FUNCTION,
@@ -2972,18 +2977,18 @@ class NodeJoiningService extends EventEmitter {
         ),
       );
 
-      for (const schema of SYSTEM_TABLE_SCHEMAS) {
+      for (const tableName of CACHE_HYDRATION_TABLES) {
         try {
-          await messageGroupService.subscribeToCDC(schema.tableName);
+          await messageGroupService.subscribeToCDC(tableName);
         } catch (error) {
           this.logger.error(JOINING_LOG_MSG.CDC_SUBSCRIPTION_FAILED, {
             nodeId: this.nodeId,
-            tableName: schema.tableName,
+            tableName,
             error: error.message,
           });
           throw new Error(
             JOINING_ERROR_MSG.controlPlaneCdcSubscribeFailed(
-              schema.tableName,
+              tableName,
               error.message,
             ),
           );
@@ -2991,39 +2996,22 @@ class NodeJoiningService extends EventEmitter {
       }
     }
 
-    this.heartbeatService = new HeartbeatService({
+    const controlPlane = await ControlPlaneSetup.create({
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
-      cdcIntegrationService: cdcIntegrationService,
-      systemTableCache: systemTableCache,
-    });
-    this.heartbeatService.initialize();
-
-    this.leaseService = new LeaseService({
-      nodeId: this.nodeId,
-      cdcIntegrationService: cdcIntegrationService,
-      systemTableCache: systemTableCache,
-      sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
-    });
-    this.leaseService.initialize();
-
-    this.endpointService = new EndpointService({
-      nodeId: this.nodeId,
-      cdcIntegrationService: cdcIntegrationService,
-      systemTableCache: systemTableCache,
-      sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
-    });
-    this.endpointService.initialize();
-
-    this.dispatchService = new ReplicaDispatchService({
-      nodeId: this.nodeId,
       messageRouter: this.messageRouter,
-      cdcIntegrationService: cdcIntegrationService,
-      systemTableCache: systemTableCache,
+      cdcIntegrationService,
+      systemTableCache,
+      tablePolicyService: this.tablePolicyService,
+      messageGroupServices: this.messageGroupServices,
       rebalanceCoordinator: this.rebalanceCoordinator,
-      sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
     });
-    this.dispatchService.initialize();
+
+    this.heartbeatService = controlPlane.heartbeatService;
+    this.leaseService = controlPlane.leaseService;
+    this.endpointService = controlPlane.endpointService;
+    this.dispatchService = controlPlane.dispatchService;
+    this.rebalanceCoordinator = controlPlane.rebalanceCoordinator;
 
     for (const messageGroupService
       of this.messageGroupServices.values()) {
@@ -3037,15 +3025,13 @@ class NodeJoiningService extends EventEmitter {
           this.rebalanceCoordinator,
         );
       }
-      this.dispatchService.attachMessageGroupService(
-        messageGroupService,
-      );
-      this.leaseService.messageGroupServices.add(
-        messageGroupService,
-      );
     }
 
-    this.leaseService.start();
+    this.logger.info('Control plane initialized by owner', {
+      nodeId: this.nodeId,
+      owner: 'ControlPlaneSetup',
+      messageGroupCount: this.messageGroupServices.size,
+    });
   }
 
   /**
@@ -3083,6 +3069,10 @@ class NodeJoiningService extends EventEmitter {
       break;
     }
 
+    if (!systemTableCache) {
+      systemTableCache = NodeService.getInstance().getSystemTableCache();
+    }
+
     assertCritical(systemTableCache, JOINING_ERROR_MSG.STATE_QUERY_CACHE_REQUIRED);
     assertCritical(this.messageRouter, JOINING_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
 
@@ -3095,20 +3085,12 @@ class NodeJoiningService extends EventEmitter {
       nodeId: this.nodeId,
     });
 
-    // Create and initialize the CDC integration service
-    // Uses SQL query engine for transparent routing to partition leaders
-    const cdcIntegrationService = new CDCIntegrationService({
+    const cdcIntegrationService = CDCIntegrationSetup.createForNormal({
       nodeId: this.nodeId,
       sqlQueryEngine,
       systemTableCache,
+      messageRouter: this.messageRouter,
     });
-    cdcIntegrationService.initialize();
-    cdcIntegrationService.setSystemTableCache(systemTableCache);
-
-    // Set message router for mesh connectivity on node join
-    if (this.messageRouter) {
-      cdcIntegrationService.setMessageRouter(this.messageRouter);
-    }
 
     for (const messageGroup of this.messageGroupServices.values()) {
       if (messageGroup.setCdcIntegrationService) {
@@ -3117,7 +3099,97 @@ class NodeJoiningService extends EventEmitter {
     }
 
     this.cdcIntegrationService = cdcIntegrationService;
+    this.logger.debug('CDC integration initialized by owner', {
+      nodeId: this.nodeId,
+      owner: 'CDCIntegrationSetup',
+      mode: 'normal',
+    });
+
     return cdcIntegrationService;
+  }
+
+  /**
+   * Ensure latency topology owners are initialized.
+   * @return {Object}
+   * @private
+   */
+  ensureLatencyTopologyOwners() {
+    if (this.latencyTopology) {
+      return this.latencyTopology;
+    }
+
+    this.latencyTopology = LatencyTopologySetup.create({
+      nodeId: this.nodeId,
+      systemTableCache: NodeService.getInstance().getSystemTableCache(),
+      cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.messageRouter,
+    });
+    this.latencyTopology.latencyTreeService.start({
+      recomputeImmediately: true,
+    });
+    this.latencyTopology.cdcGroupPropagationService.start();
+
+    this.logger.info(JOINING_LOG_MSG.LATENCY_TOPOLOGY_READY, {
+      nodeId: this.nodeId,
+      owner: 'LatencyTopologySetup',
+    });
+    return this.latencyTopology;
+  }
+
+  /**
+   * Start latency topology lifecycle owners.
+   * This is intentionally non-blocking relative to READY transition.
+   * @private
+   */
+  startLatencyTopologyLifecycle() {
+    const topologyOwners = assertCritical(
+      this.latencyTopology,
+      JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
+    );
+    LatencyTopologySetup.start(topologyOwners);
+    this.logger.info(JOINING_LOG_MSG.LATENCY_TOPOLOGY_STARTED, {
+      nodeId: this.nodeId,
+      owner: 'LatencyTopologySetup',
+    });
+  }
+
+  /**
+   * Propagate partition CDC via topology-owned propagation path.
+   * @param {Object} messageGroupService
+   * @param {Object} cdcEvent
+   * @return {Promise<Object>}
+   * @private
+   */
+  async propagatePartitionCDCEvent(messageGroupService, cdcEvent) {
+    const topologyOwners = assertCritical(
+      this.latencyTopology,
+      JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
+    );
+    return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
+      tableName: cdcEvent.tableName,
+      operation: cdcEvent.operation,
+      data: cdcEvent.data,
+      sourceMessageGroupService: messageGroupService,
+    });
+  }
+
+  /**
+   * Get the node storage budget service.
+   * @return {NodeStorageBudgetService}
+   * @private
+   */
+  getNodeStorageBudgetService() {
+    if (this.nodeStorageBudgetService) {
+      return this.nodeStorageBudgetService;
+    }
+
+    const service = NodeStorageBudgetSetup.create({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+    });
+
+    this.nodeStorageBudgetService = service;
+    return service;
   }
 
   /**
@@ -3163,6 +3235,45 @@ class NodeJoiningService extends EventEmitter {
       }
     }
     return false;
+  }
+
+  /**
+   * Check if any joined message group has a leader in the system cache.
+   * @param {Object} systemTableCache - System table cache.
+   * @return {boolean} True if cache reports a leader for any joined group.
+   * @private
+   */
+  hasMessageGroupLeaderInCache(systemTableCache) {
+    if (!systemTableCache) {
+      return false;
+    }
+
+    const groupIds = new Set();
+    for (const service of this.messageGroupServices.values()) {
+      if (service?.groupId) {
+        groupIds.add(service.groupId);
+      }
+    }
+
+    if (groupIds.size === NUM.ZERO) {
+      return false;
+    }
+
+    const services = typeof systemTableCache.filter === TYPEOF.FUNCTION ?
+      systemTableCache.filter(TABLES.SERVICES, (service) =>
+        service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
+        groupIds.has(service?.[COLUMN.GROUP_ID]) &&
+        service?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
+        service?.[COLUMN.STATUS] === STATE.ACTIVE,
+      ) :
+      (systemTableCache.getAll?.(TABLES.SERVICES) || []).filter((service) =>
+        service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
+        groupIds.has(service?.[COLUMN.GROUP_ID]) &&
+        service?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
+        service?.[COLUMN.STATUS] === STATE.ACTIVE,
+      );
+
+    return services.length > NUM.ZERO;
   }
 
   /**

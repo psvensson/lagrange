@@ -1,10 +1,12 @@
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM, TYPEOF, SERVICE_PROFILE} from '../constants/index.js';
+import {RUNTIME_KIND} from '../constants/runtime.js';
 import {
   READ_CONSISTENCY_MODE,
   WRITE_CONSISTENCY_MODE,
   WASM_SERVICE_ERROR_MSG,
 } from './wasm-service-constants.js';
 import {RB_FIELD} from './wasm-service-models.js';
+import {validateRuntimeDescriptor} from './runtime-descriptor-validator.js';
 
 /**
  * SQL query to check if a handler function exists in the code table.
@@ -64,9 +66,34 @@ class ServiceDefinitionValidator {
   async validate(definition) {
     const errors = [];
 
-    await this._validateHandlerFunction(
-      definition.handlerFunctionId, errors,
-    );
+    const runtimeKind = definition.runtimeKind ??
+      definition.runtime_kind ??
+      null;
+    const runtimeRef = definition.runtimeRef ??
+      definition.runtime_ref ??
+      null;
+    const runtimeConfig = definition.runtimeConfig ??
+      definition.runtime_config ??
+      null;
+
+    if (runtimeKind !== null) {
+      const descriptorResult = validateRuntimeDescriptor({
+        runtimeKind,
+        runtimeRef,
+        runtimeConfig,
+      });
+      if (!descriptorResult.valid) {
+        errors.push(...descriptorResult.errors);
+      }
+    }
+
+    if (this.shouldValidateHandler(definition, runtimeKind)) {
+      const handlerId = definition.handlerFunctionId ||
+        (runtimeKind === RUNTIME_KIND.WASM_COMPONENT ?
+          runtimeRef :
+          null);
+      await this._validateHandlerFunction(handlerId, errors);
+    }
     this._validateReplicaCount(definition.replicaCount, errors);
     this._validateConsistencyModes(definition, errors);
     this._validateResourceBudget(
@@ -80,6 +107,23 @@ class ServiceDefinitionValidator {
   }
 
   /**
+   * Determine whether handler existence must be validated.
+   * @param {Object} definition - ServiceDefinition object.
+   * @param {string|null} runtimeKind - Runtime kind value.
+   * @return {boolean} True when handler lookup is required.
+   * @private
+   */
+  shouldValidateHandler(definition, runtimeKind) {
+    if (definition.serviceProfile === SERVICE_PROFILE.SQL_ENGINE) {
+      return false;
+    }
+    if (runtimeKind === null) {
+      return true;
+    }
+    return runtimeKind === RUNTIME_KIND.WASM_COMPONENT;
+  }
+
+  /**
    * Check that the handler function exists in the code table.
    * @param {string} handlerFunctionId - Function ID to check.
    * @param {string[]} errors - Errors array to append to.
@@ -87,6 +131,12 @@ class ServiceDefinitionValidator {
    * @private
    */
   async _validateHandlerFunction(handlerFunctionId, errors) {
+    if (!handlerFunctionId) {
+      errors.push(
+        WASM_SERVICE_ERROR_MSG.HANDLER_FUNCTION_NOT_FOUND,
+      );
+      return;
+    }
     const result = await this.sqlQueryEngine.executeQuery(
       SQL_CHECK_HANDLER,
       [handlerFunctionId],

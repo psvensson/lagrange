@@ -21,8 +21,8 @@ LoggingService.getInstance().initialize({level: 'error'});
  */
 function createMockQueryEngine() {
   return {
-    executeQuery: async (sql, _params, _options) => {
-      const sqlLower = sql.toLowerCase().trim();
+    executeRequest: async (request) => {
+      const sqlLower = request.statement.toLowerCase().trim();
 
       // Check for error conditions first (before checking statement type)
       if (sqlLower.includes('invalid_table')) {
@@ -36,7 +36,7 @@ function createMockQueryEngine() {
       } else if (sqlLower.startsWith('select')) {
         return {
           success: true,
-          results: [{id: '1', name: 'test'}],
+          rows: [{id: '1', name: 'test'}],
           count: 1,
           partitions: ['partition-1'],
           tableName: 'test_table',
@@ -67,7 +67,7 @@ function createMockQueryEngine() {
         };
       }
 
-      return {success: true, results: [], count: 0};
+      return {success: true, rows: [], count: 0};
     },
   };
 }
@@ -187,6 +187,10 @@ test('AdminWebSocketAPI - cache dump on connection', async (t) => {
   t.ok(Array.isArray(message.data.tables), 'should have tables array');
   t.ok(Array.isArray(message.data.message_groups), 'should have message_groups');
   t.ok(Array.isArray(message.data.indices), 'should have indices array');
+  t.ok(Array.isArray(message.data.latency_groups),
+    'should include latency_groups in cache dump');
+  t.ok(Array.isArray(message.data.inter_group_latencies),
+    'should include inter_group_latencies in cache dump');
   t.equal(message.data.nodes.length, 1, 'should have 1 node');
   t.equal(message.data.nodes[0].id, 'node-1', 'should have correct node');
 

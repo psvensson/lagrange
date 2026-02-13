@@ -11,162 +11,162 @@ TAP version 14
         ok 8 - has quit command
         ok 9 - has history command
         1..9
-    ok 1 - constructor initializes with default commands # time=2.165ms
+    ok 1 - constructor initializes with default commands # time=2.25ms
     
     # Subtest: parse() handles valid commands
         ok 1 - should be equivalent
         1..1
-    ok 2 - parse() handles valid commands # time=1.241ms
+    ok 2 - parse() handles valid commands # time=1.191ms
     
     # Subtest: parse() handles commands with arguments
         ok 1 - should be equivalent
         1..1
-    ok 3 - parse() handles commands with arguments # time=0.377ms
+    ok 3 - parse() handles commands with arguments # time=0.38ms
     
     # Subtest: parse() handles commands with multiple arguments
         ok 1 - should be equivalent
         1..1
-    ok 4 - parse() handles commands with multiple arguments # time=0.302ms
+    ok 4 - parse() handles commands with multiple arguments # time=0.291ms
     
     # Subtest: parse() handles quoted arguments
         ok 1 - should be equivalent
         1..1
-    ok 5 - parse() handles quoted arguments # time=0.299ms
+    ok 5 - parse() handles quoted arguments # time=0.282ms
     
     # Subtest: parse() returns error for unknown commands
         ok 1 - has error
         ok 2 - should match pattern
         1..2
-    ok 6 - parse() returns error for unknown commands # time=0.537ms
+    ok 6 - parse() returns error for unknown commands # time=0.478ms
     
     # Subtest: parse() returns error for missing required params
         ok 1 - has error
         ok 2 - should match pattern
         1..2
-    ok 7 - parse() returns error for missing required params # time=0.333ms
+    ok 7 - parse() returns error for missing required params # time=0.275ms
     
     # Subtest: parse() returns error for empty input
         ok 1 - has error
         ok 2 - should match pattern
         1..2
-    ok 8 - parse() returns error for empty input # time=0.366ms
+    ok 8 - parse() returns error for empty input # time=0.337ms
     
     # Subtest: parse() resolves aliases to canonical names
         ok 1 - should be equivalent
         1..1
-    ok 9 - parse() resolves aliases to canonical names # time=0.331ms
+    ok 9 - parse() resolves aliases to canonical names # time=0.293ms
     
     # Subtest: parse() is case-insensitive
         ok 1 - should be equivalent
         1..1
-    ok 10 - parse() is case-insensitive # time=0.274ms
+    ok 10 - parse() is case-insensitive # time=0.277ms
     
     # Subtest: getCompletions() returns all commands for empty input
         ok 1 - has completions
         ok 2 - includes connect
         1..2
-    ok 11 - getCompletions() returns all commands for empty input # time=0.344ms
+    ok 11 - getCompletions() returns all commands for empty input # time=0.364ms
     
     # Subtest: getCompletions() filters by prefix
         ok 1 - includes connect
         ok 2 - excludes refresh
         1..2
-    ok 12 - getCompletions() filters by prefix # time=0.348ms
+    ok 12 - getCompletions() filters by prefix # time=0.405ms
     
     # Subtest: getCompletions() returns view names for goto
         ok 1 - includes nodes
         1..1
-    ok 13 - getCompletions() returns view names for goto # time=0.276ms
+    ok 13 - getCompletions() returns view names for goto # time=0.281ms
     
     # Subtest: getCompletions() returns directions for sort
         ok 1 - includes asc
         1..1
-    ok 14 - getCompletions() returns directions for sort # time=0.245ms
+    ok 14 - getCompletions() returns directions for sort # time=0.252ms
     
     # Subtest: history is maintained
         ok 1 - has 2 entries
         ok 2 - most recent first
         ok 3 - older second
         1..3
-    ok 15 - history is maintained # time=0.477ms
+    ok 15 - history is maintained # time=0.383ms
     
     # Subtest: history removes duplicates
         ok 1 - has 2 entries
         ok 2 - duplicate moved to front
         1..2
-    ok 16 - history removes duplicates # time=0.371ms
+    ok 16 - history removes duplicates # time=0.35ms
     
     # Subtest: history respects max limit
         ok 1 - limited to 3
         ok 2 - most recent first
         1..2
-    ok 17 - history respects max limit # time=0.305ms
+    ok 17 - history respects max limit # time=0.34ms
     
     # Subtest: getHistoryAt() returns correct entry
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 18 - getHistoryAt() returns correct entry # time=0.417ms
+    ok 18 - getHistoryAt() returns correct entry # time=2.97ms
     
     # Subtest: getHelp() returns formatted help
         ok 1 - has help
         ok 2 - should match pattern
         ok 3 - should match pattern
         1..3
-    ok 19 - getHelp() returns formatted help # time=0.423ms
+    ok 19 - getHelp() returns formatted help # time=0.474ms
     
     # Subtest: getHelp() returns null for unknown command
         ok 1 - should be equal
         1..1
-    ok 20 - getHelp() returns null for unknown command # time=0.215ms
+    ok 20 - getHelp() returns null for unknown command # time=0.245ms
     
     # Subtest: validate() returns valid for correct commands
         ok 1 - should be equivalent
         1..1
-    ok 21 - validate() returns valid for correct commands # time=0.301ms
+    ok 21 - validate() returns valid for correct commands # time=0.297ms
     
     # Subtest: validate() returns error for invalid commands
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 22 - validate() returns error for invalid commands # time=0.295ms
+    ok 22 - validate() returns error for invalid commands # time=0.302ms
     
     # Subtest: register() adds custom commands
         ok 1 - should be equivalent
         1..1
-    ok 23 - register() adds custom commands # time=0.324ms
+    ok 23 - register() adds custom commands # time=0.317ms
     
     # Subtest: getAllCommands() returns all non-alias commands
         ok 1 - has at least 8 commands
         ok 2 - no aliases
         1..2
-    ok 24 - getAllCommands() returns all non-alias commands # time=4.766ms
+    ok 24 - getAllCommands() returns all non-alias commands # time=4.618ms
     
     # Subtest: clearHistory() empties history
         ok 1 - should be equal
         1..1
-    ok 25 - clearHistory() empties history # time=0.233ms
+    ok 25 - clearHistory() empties history # time=0.261ms
     
     # Subtest: history command parses with replica_id argument
         ok 1 - should be equivalent
         1..1
-    ok 26 - history command parses with replica_id argument # time=0.291ms
+    ok 26 - history command parses with replica_id argument # time=0.31ms
     
     # Subtest: history command requires replica_id argument
         ok 1 - has error
         ok 2 - should match pattern
         1..2
-    ok 27 - history command requires replica_id argument # time=0.307ms
+    ok 27 - history command requires replica_id argument # time=0.337ms
     
     # Subtest: history command alias hist works
         ok 1 - should be equivalent
         1..1
-    ok 28 - history command alias hist works # time=0.294ms
+    ok 28 - history command alias hist works # time=0.307ms
     
     1..28
-ok 1 - CommandParser # time=28.003ms
+ok 1 - CommandParser # time=29.511ms
 
 1..1
 # { total: 52, pass: 52 }
-# time=41.036ms
+# time=43.702ms

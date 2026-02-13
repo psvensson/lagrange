@@ -83,7 +83,7 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
           });
 
           // Calculate target state with no existing replicas
-          const targetState = rebalancer.calculateTargetState([], policy);
+          const targetState = await rebalancer.calculateTargetState([], policy);
 
           // Target replica count should be within policy bounds
           const withinBounds = targetState.targetReplicaCount >= policy.minReplicaCount &&
@@ -128,7 +128,7 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
           };
 
           // Calculate target state with no existing replicas
-          const targetState = rebalancer.calculateTargetState([], policy);
+          const targetState = await rebalancer.calculateTargetState([], policy);
 
           // When spreading across nodes, target nodes should be different
           const targetNodeIds = new Set(targetState.targetNodes);
@@ -215,7 +215,7 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
           });
 
           // Calculate target state and check result
-          const targetState = rebalancer.calculateTargetState([], policy);
+          const targetState = await rebalancer.calculateTargetState([], policy);
 
           // Result should have valid structure
           const hasValidStructure = targetState &&

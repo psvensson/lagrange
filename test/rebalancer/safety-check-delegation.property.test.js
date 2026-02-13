@@ -133,6 +133,12 @@ function createMockPolicyService() {
       minReplicaCount: 3,
       maxReplicaCount: 7,
     }),
+    getMessageGroupPolicy: async () => ({
+      targetReplicaCount: 3,
+      maxReplicaCount: 5,
+      ensureLocalAccess: true,
+      placementConstraints: {spreadAcrossNodes: true},
+    }),
   };
 }
 

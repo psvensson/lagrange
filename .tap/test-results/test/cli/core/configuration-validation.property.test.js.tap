@@ -3,51 +3,51 @@ TAP version 14
     # Subtest: valid config values are accepted
         ok 1 - Valid config values are accepted
         1..1
-    ok 1 - valid config values are accepted # time=3.377ms
+    ok 1 - valid config values are accepted # time=3.135ms
     
     # Subtest: invalid refresh_interval uses default
         ok 1 - Invalid refresh_interval uses default
         1..1
-    ok 2 - invalid refresh_interval uses default # time=1.031ms
+    ok 2 - invalid refresh_interval uses default # time=1.005ms
     
     # Subtest: invalid default_view uses default
         ok 1 - Invalid default_view uses default
         1..1
-    ok 3 - invalid default_view uses default # time=2.229ms
+    ok 3 - invalid default_view uses default # time=1.829ms
     
     # Subtest: CLI args override file and env config
         ok 1 - CLI args override file and env config
         1..1
-    ok 4 - CLI args override file and env config # time=0.533ms
+    ok 4 - CLI args override file and env config # time=0.45ms
     
     # Subtest: validateConfig returns errors for invalid fields
         ok 1 - validateConfig returns errors for invalid fields
         1..1
-    ok 5 - validateConfig returns errors for invalid fields # time=0.971ms
+    ok 5 - validateConfig returns errors for invalid fields # time=0.839ms
     
     # Subtest: valid complete config passes validation
         ok 1 - Valid complete config passes validation
         1..1
-    ok 6 - valid complete config passes validation # time=0.635ms
+    ok 6 - valid complete config passes validation # time=0.546ms
     
     # Subtest: non-number refresh_interval is rejected
         ok 1 - Non-number refresh_interval is rejected
         1..1
-    ok 7 - non-number refresh_interval is rejected # time=0.569ms
+    ok 7 - non-number refresh_interval is rejected # time=0.488ms
     
     # Subtest: non-string view is rejected
         ok 1 - Non-string view is rejected
         1..1
-    ok 8 - non-string view is rejected # time=0.7ms
+    ok 8 - non-string view is rejected # time=0.399ms
     
     # Subtest: non-boolean read_only_mode is rejected
         ok 1 - Non-boolean read_only_mode is rejected
         1..1
-    ok 9 - non-boolean read_only_mode is rejected # time=0.531ms
+    ok 9 - non-boolean read_only_mode is rejected # time=0.41ms
     
     1..9
-ok 1 - Property 14: Configuration Validation # time=14.97ms
+ok 1 - Property 14: Configuration Validation # time=13.454ms
 
 1..1
 # { total: 9, pass: 9 }
-# time=18.272ms
+# time=16.552ms

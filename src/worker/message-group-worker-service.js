@@ -20,6 +20,8 @@ import {
   CDC_MESSAGE_TYPE,
   SEED_CACHE_MESSAGE_TYPE,
   FACADE_MESSAGE_TYPE,
+  WORKER_ADDRESS,
+  WORKER_RESPONSE_STATUS,
 } from './worker-constants.js';
 import {NUM} from '../constants/index.js';
 import {RaftGroup} from '../raft/raft-group.js';
@@ -47,6 +49,8 @@ const MESSAGE_GROUP_WORKER_DEFAULT = Object.freeze({
   ELECTION_JITTER_PER_REPLICA_MS: 500,
   /** In-memory database path */
   MEMORY_DB_PATH: ':memory:',
+  /** Maximum CDC relay hops when forwarding from stale follower targets */
+  CDC_RELAY_MAX_HOPS: NUM.TWO,
 });
 
 /**
@@ -756,10 +760,41 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
             },
           );
         });
+        return {
+          status: WORKER_RESPONSE_STATUS.OK,
+          replicaId: this.replicaId,
+        };
       } else {
-        await this.applyCDCEvent(cdcEvent);
+        const leaderAddress = this.resolveLeaderAddress();
+        const relayCount = Number(message.cdcRelayCount) || NUM.ZERO;
+        if (leaderAddress &&
+          leaderAddress !== this.unifiedAddress &&
+          relayCount < MESSAGE_GROUP_WORKER_DEFAULT.CDC_RELAY_MAX_HOPS &&
+          this.messageBridge) {
+          try {
+            this.messageBridge.sendFireAndForget(leaderAddress, {
+              type: CDC_MESSAGE_TYPE.CDC_EVENT,
+              cdcEvent,
+              cdcRelayCount: relayCount + NUM.ONE,
+            });
+          } catch (error) {
+            this.logger.warn(
+              MESSAGE_GROUP_WORKER_ERROR_MSG.CDC_APPLY_FAILED,
+              {
+                groupId: this.groupId,
+                replicaId: this.replicaId,
+                leaderAddress,
+                error: error.message,
+              },
+            );
+          }
+        }
+        return {
+          status: WORKER_RESPONSE_STATUS.OK,
+          replicaId: this.replicaId,
+          leaderAddress,
+        };
       }
-      return {status: 'ok', replicaId: this.replicaId};
     }
 
     // Handle SEED_CACHE message (during bootstrap)
@@ -803,6 +838,31 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
 
     // Delegate to base class
     return super.handleMessage(message);
+  }
+
+  /**
+   * Resolve the current leader to a unified address when possible.
+   * @return {string|null} Leader unified address or null when unknown.
+   * @private
+   */
+  resolveLeaderAddress() {
+    const leaderId = this.getLeaderId();
+    if (!leaderId || typeof leaderId !== 'string') {
+      return null;
+    }
+
+    if (leaderId.includes(WORKER_ADDRESS.SEPARATOR)) {
+      return leaderId;
+    }
+
+    if (leaderId === this.replicaId) {
+      return this.unifiedAddress;
+    }
+
+    const matchedPeer = this.peerAddresses.find((address) =>
+      address.endsWith(`${WORKER_ADDRESS.SEPARATOR}${leaderId}`),
+    );
+    return matchedPeer || null;
   }
 
   /**

@@ -47,6 +47,7 @@ import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
@@ -369,6 +370,11 @@ class PartitionService extends EventEmitter {
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(PARTITION_SUBSYSTEM.PARTITION) : console;
+    this.suppressLifecycleLogs = Boolean(options.suppressLifecycleLogs);
+    this.onInitializationStage =
+      typeof options.onInitializationStage === PARTITION_SERVICE_TYPE.FUNCTION ?
+      options.onInitializationStage :
+      null;
 
     // State
     this.initialized = false;
@@ -523,6 +529,33 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Report partition initialization progress stage.
+   * @param {string} stage - Initialization stage.
+   * @param {Object} details - Additional stage details.
+   * @private
+   */
+  reportInitializationStage(stage, details = {}) {
+    if (!this.onInitializationStage) {
+      return;
+    }
+    try {
+      this.onInitializationStage({
+        stage,
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        ...details,
+      });
+    } catch (error) {
+      this.logger.warn(PARTITION_SERVICE_LOG_MSG.INIT_STAGE_CALLBACK_FAILED, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        stage,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
    * Initialize the partition service.
    * Uses liferaft library for Raft consensus with simplified transport.
    * Requirements: 8.1, 10.1, 10.2, 10.3, 10.4, 10.5
@@ -533,7 +566,7 @@ class PartitionService extends EventEmitter {
       return;
     }
 
-    this.logger.info(PARTITION_SERVICE_LOG_MSG.INITIALIZING, {
+    this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.STARTING, {
       partitionId: this.partitionId,
       tableId: this.tableId,
       replicaId: this.replicaId,
@@ -541,6 +574,16 @@ class PartitionService extends EventEmitter {
       replicaCount: this.replicaIds.length,
       dbPath: this.dbPath,
     });
+    if (!this.suppressLifecycleLogs) {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.INITIALIZING, {
+        partitionId: this.partitionId,
+        tableId: this.tableId,
+        replicaId: this.replicaId,
+        nodeId: this.nodeId,
+        replicaCount: this.replicaIds.length,
+        dbPath: this.dbPath,
+      });
+    }
 
     // Ensure directory exists for file-based databases
     if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
@@ -550,6 +593,10 @@ class PartitionService extends EventEmitter {
         this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {path: dbDir});
       }
     }
+
+    this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.OPENING_DB, {
+      dbPath: this.dbPath,
+    });
 
     // Open SQLite database
     this.db = new Database(this.dbPath);
@@ -804,19 +851,34 @@ class PartitionService extends EventEmitter {
 
     // Join peer nodes
     // Requirements: 3.1, 3.2, 3.3 - All peer addresses use fully qualified format
+    const totalPeerCount = Math.max(NUM.ZERO, this.replicaIds.length - NUM.ONE);
+    let joinedPeerCount = NUM.ZERO;
+    this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.JOINING_PEERS, {
+      peerTotal: totalPeerCount,
+      peerJoined: joinedPeerCount,
+    });
     for (const peerId of this.replicaIds) {
       if (peerId !== this.replicaId) {
         const peerAddress = this.buildPeerAddress(peerId);
-        this.logger.info(PARTITION_SERVICE_LOG_MSG.JOINING_PEER_ADDRESS, {
+        if (!this.suppressLifecycleLogs) {
+          this.logger.info(PARTITION_SERVICE_LOG_MSG.JOINING_PEER_ADDRESS, {
+            peerId,
+            peerAddress,
+            replicaId: this.replicaId,
+            partitionId: this.partitionId,
+            addressFormat: peerAddress.includes(PARTITION_SERVICE_ADDRESS.SEPARATOR) ?
+              PARTITION_SERVICE_ADDRESS.FORMAT_UNIFIED :
+              PARTITION_SERVICE_ADDRESS.FORMAT_SIMPLE,
+          });
+        }
+        this.raft.join(peerAddress);
+        joinedPeerCount += NUM.ONE;
+        this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.JOINED_PEER, {
           peerId,
           peerAddress,
-          replicaId: this.replicaId,
-          partitionId: this.partitionId,
-          addressFormat: peerAddress.includes(PARTITION_SERVICE_ADDRESS.SEPARATOR) ?
-            PARTITION_SERVICE_ADDRESS.FORMAT_UNIFIED :
-            PARTITION_SERVICE_ADDRESS.FORMAT_SIMPLE,
+          peerTotal: totalPeerCount,
+          peerJoined: joinedPeerCount,
         });
-        this.raft.join(peerAddress);
       }
     }
 
@@ -862,11 +924,18 @@ class PartitionService extends EventEmitter {
 
     this.initialized = true;
 
-    this.logger.info(PARTITION_SERVICE_LOG_MSG.INITIALIZED, {
-      partitionId: this.partitionId,
-      replicaId: this.replicaId,
+    this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.READY, {
       sizeBytes: this.sizeBytes,
+      peerTotal: totalPeerCount,
+      peerJoined: joinedPeerCount,
     });
+    if (!this.suppressLifecycleLogs) {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.INITIALIZED, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        sizeBytes: this.sizeBytes,
+      });
+    }
 
     this.emit(PARTITION_SERVICE_EVENT.INITIALIZED, {
       partitionId: this.partitionId,

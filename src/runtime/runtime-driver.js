@@ -1,0 +1,176 @@
+/**
+ * RuntimeDriver — abstract base class defining the contract that all
+ * runtime drivers must implement.
+ *
+ * Contract methods:
+ *   validateDescriptor(definition) → ValidationResult
+ *   prepare(definition, context)   → Promise<PrepareResult>
+ *   start(replicaContext)           → Promise<StartResult>
+ *   stop(replicaContext)            → Promise<void>
+ *   health(replicaContext)          → Promise<HealthResult>
+ *
+ * Contract rules:
+ *   1. No driver writes system metadata directly.
+ *   2. All driver failures return typed errors.
+ *   3. Driver lifecycle calls are idempotent where possible.
+ *
+ * Requirements: 1.1, 4.4
+ *
+ * @module runtime/runtime-driver
+ */
+
+import {ALLOWED_RUNTIME_KINDS} from '../constants/runtime.js';
+import {TYPEOF} from '../constants/types.js';
+import {DriverNotImplementedError} from './runtime-driver-errors.js';
+
+// --- Result status constants ---
+
+const VALIDATION_STATUS = Object.freeze({
+  VALID: 'valid',
+  INVALID: 'invalid',
+});
+
+const PREPARE_STATUS = Object.freeze({
+  READY: 'ready',
+  FAILED: 'failed',
+});
+
+const START_STATUS = Object.freeze({
+  RUNNING: 'running',
+  FAILED: 'failed',
+});
+
+const HEALTH_STATUS = Object.freeze({
+  HEALTHY: 'healthy',
+  UNHEALTHY: 'unhealthy',
+  UNKNOWN: 'unknown',
+});
+
+/**
+ * @typedef {Object} ValidationResult
+ * @property {boolean} valid - Whether the descriptor is valid.
+ * @property {string[]} [errors] - Validation error messages (when invalid).
+ */
+
+/**
+ * @typedef {Object} PrepareResult
+ * @property {string} status - 'ready' or 'failed'.
+ * @property {string} [error] - Failure description (when failed).
+ */
+
+/**
+ * @typedef {Object} StartResult
+ * @property {string} status - 'running' or 'failed'.
+ * @property {Object} [endpointIntent] - Endpoint intent for registration.
+ * @property {string} [error] - Failure description (when failed).
+ */
+
+/**
+ * @typedef {Object} HealthResult
+ * @property {string} status - 'healthy', 'unhealthy', or 'unknown'.
+ * @property {string} [detail] - Optional diagnostic detail.
+ */
+
+/**
+ * Abstract base class for runtime drivers.
+ *
+ * Subclasses MUST:
+ *   - Call super(kind) with a valid RUNTIME_KIND value.
+ *   - Override validateDescriptor, prepare, start, stop, and health.
+ *
+ * @abstract
+ */
+class RuntimeDriver {
+  /**
+   * @param {string} kind - One of the ALLOWED_RUNTIME_KINDS values.
+   * @throws {Error} If kind is not a valid runtime kind.
+   * @throws {Error} If instantiated directly (abstract guard).
+   */
+  constructor(kind) {
+    if (new.target === RuntimeDriver) {
+      throw new Error(
+        'RuntimeDriver is abstract and cannot be instantiated directly',
+      );
+    }
+    if (typeof kind !== TYPEOF.STRING || !ALLOWED_RUNTIME_KINDS.has(kind)) {
+      throw new Error(
+        `RuntimeDriver requires a valid runtime kind, got '${kind}'`,
+      );
+    }
+
+    /**
+     * The runtime kind this driver handles.
+     * @type {string}
+     * @readonly
+     */
+    this.kind = kind;
+    Object.defineProperty(this, 'kind', {writable: false, configurable: false});
+  }
+
+  /**
+   * Validate a service definition's runtime descriptor.
+   *
+   * @param {Object} definition - The service definition to validate.
+   * @return {{valid: boolean, errors?: string[]}} Validation result.
+   * @abstract
+   */
+  validateDescriptor(_definition) {
+    throw new DriverNotImplementedError(this.kind, 'validateDescriptor');
+  }
+
+  /**
+   * Prepare runtime artifacts for a service definition.
+   * Idempotent: calling prepare on an already-prepared definition is safe.
+   *
+   * @param {Object} definition - The service definition.
+   * @param {Object} context - Preparation context (e.g. node info).
+   * @return {Promise<{status: string, error?: string}>} Prepare result.
+   * @abstract
+   */
+  async prepare(_definition, _context) {
+    throw new DriverNotImplementedError(this.kind, 'prepare');
+  }
+
+  /**
+   * Start a service replica.
+   * Idempotent: calling start on an already-running replica is safe.
+   *
+   * @param {Object} replicaContext - Replica execution context.
+   * @return {Promise<{status: string, endpointIntent?: Object, error?: string}>}
+   * @abstract
+   */
+  async start(_replicaContext) {
+    throw new DriverNotImplementedError(this.kind, 'start');
+  }
+
+  /**
+   * Stop a service replica.
+   * Idempotent: calling stop on an already-stopped replica is safe.
+   *
+   * @param {Object} replicaContext - Replica execution context.
+   * @return {Promise<void>}
+   * @abstract
+   */
+  async stop(_replicaContext) {
+    throw new DriverNotImplementedError(this.kind, 'stop');
+  }
+
+  /**
+   * Check health of a service replica.
+   *
+   * @param {Object} replicaContext - Replica execution context.
+   * @return {Promise<{status: string, detail?: string}>} Health result.
+   * @abstract
+   */
+  async health(_replicaContext) {
+    throw new DriverNotImplementedError(this.kind, 'health');
+  }
+}
+
+export {
+  RuntimeDriver,
+  VALIDATION_STATUS,
+  PREPARE_STATUS,
+  START_STATUS,
+  HEALTH_STATUS,
+};

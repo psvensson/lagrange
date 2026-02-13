@@ -52,6 +52,16 @@ test('ConfigurationManager default values', async (t) => {
     DEFAULT_CONFIG.partition.defaultReplicaCount,
     'should use default replica count',
   );
+  t.equal(
+    config.get('latency.groupThresholdMs'),
+    DEFAULT_CONFIG.latency.groupThresholdMs,
+    'should use default latency group threshold',
+  );
+  t.equal(
+    config.get('latency.propagationMode'),
+    DEFAULT_CONFIG.latency.propagationMode,
+    'should use default latency propagation mode',
+  );
 
   ConfigurationManager.resetInstance();
 });
@@ -106,6 +116,22 @@ test('ConfigurationManager validation', async (t) => {
   ConfigurationManager.resetInstance();
 });
 
+test('ConfigurationManager latency validation', async (t) => {
+  ConfigurationManager.resetInstance();
+  const config = ConfigurationManager.getInstance();
+
+  t.throws(
+    () => config.initialize({
+      node: {id: 'n-1'},
+      latency: {smoothingAlpha: 2},
+    }),
+    /Configuration validation failed/,
+    'should reject out-of-range smoothing alpha',
+  );
+
+  ConfigurationManager.resetInstance();
+});
+
 test('ConfigurationManager categories', async (t) => {
   ConfigurationManager.resetInstance();
   const config = ConfigurationManager.getInstance();
@@ -117,6 +143,7 @@ test('ConfigurationManager categories', async (t) => {
   t.ok(categories.includes('messageGroup'), 'should have messageGroup category');
   t.ok(categories.includes('partition'), 'should have partition category');
   t.ok(categories.includes('logging'), 'should have logging category');
+  t.ok(categories.includes('latency'), 'should have latency category');
 
   const nodeConfig = config.getCategory('node');
   t.ok(nodeConfig.id, 'should return category configuration');

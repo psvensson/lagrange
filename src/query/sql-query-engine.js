@@ -41,6 +41,25 @@ import {
   QUERY_SESSION,
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
+import {isSqlRequest} from './sql-request.js';
+import {PartitionCallbackDispatcher} from
+  './partition-callback-dispatcher.js';
+import {CallbackExecutionHost} from
+  './callback-execution-host.js';
+import {createCallbackDriverRegistry} from
+  './callback-runtime-driver-registry.js';
+import {executeStage} from './call-stage.js';
+import {executePlan} from './call-plan.js';
+import {ExecutionContext} from './execution-context.js';
+import {BudgetEnforcer} from './budget-enforcer.js';
+import {CancellationToken} from './cancellation-token.js';
+import {LineageTracker} from './lineage-tracker.js';
+import {DEFAULT_SNAPSHOT_MODE} from './runtime-constants.js';
+import {
+  EXECUTION_MODE,
+  ADAPTER_ERROR_MSG,
+  ADAPTER_LOG_MSG,
+} from './sql-adapter-constants.js';
 
 /**
  * SQLQueryEngine is the main entry point for SQL query processing.
@@ -82,12 +101,24 @@ class SQLQueryEngine {
       cdcIntegrationService: this.cdcIntegrationService,
     });
 
+    this.partitionCallbackDispatcher = new PartitionCallbackDispatcher({
+      sqlParser: {parse: (sql) => this.parse(sql)},
+      partitionResolver: this.partitionResolver,
+      queryExecutor: this.queryExecutor,
+      getTablePartitions: (name) => this.getTablePartitions(name),
+      isSystemTable: (name) => this.isSystemTable(name),
+    });
+
     this.logger = this.initLogger();
 
     // Configuration
     const config = ConfigurationManager.getInstance();
     this.queryTimeoutMs = config.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
       QUERY_DEFAULTS.QUERY_TIMEOUT_MS;
+
+    // Unified runtime ownership components (startup-wired).
+    this.runtimeDriverRegistry = options.runtimeDriverRegistry || null;
+    this.serviceRuntimeLifecycle = options.serviceRuntimeLifecycle || null;
 
     // Transaction state per client/session
     this.activeTransactions = new Map(); // sessionId -> {partitionId, partition}
@@ -138,6 +169,315 @@ class SQLQueryEngine {
     this.cdcIntegrationService = service;
     this.tableCreationService.setCDCIntegrationService(service);
   }
+
+  /**
+   * Set runtime driver registry.
+   * @param {Object} registry - Runtime driver registry.
+   */
+  setRuntimeDriverRegistry(registry) {
+    this.runtimeDriverRegistry = registry;
+  }
+
+  /**
+   * Set unified runtime lifecycle owner.
+   * @param {Object} lifecycle - Service runtime lifecycle.
+   */
+  setServiceRuntimeLifecycle(lifecycle) {
+    this.serviceRuntimeLifecycle = lifecycle;
+  }
+
+  /**
+   * Execute a canonical SqlRequest with execution-mode dispatch.
+   *
+   * This is the single owning dispatch entrypoint for
+   * execution-mode behavior. All adapters (internal, protocol,
+   * WASM) should converge here.
+   *
+   * Requirements: 1.1, 13.1
+   * @param {Readonly<Object>} sqlRequest - Frozen SqlRequest object.
+   * @return {Promise<Object>} Execution result.
+   */
+  async executeRequest(sqlRequest) {
+    if (!isSqlRequest(sqlRequest)) {
+      throw new Error(ADAPTER_ERROR_MSG.INVALID_SQL_REQUEST);
+    }
+
+    const {executionMode, statement, parameters, sessionId} = sqlRequest;
+
+    this.logger.debug(ADAPTER_LOG_MSG.EXECUTE_REQUEST_START, {
+      executionMode,
+      statement: statement.substring(0, 100),
+      sessionId,
+    });
+
+    try {
+      let result;
+
+      switch (executionMode) {
+      case EXECUTION_MODE.SQL_STATEMENT:
+        result = await this.executeQuery(statement, parameters, {
+          sessionId,
+        });
+        break;
+
+      case EXECUTION_MODE.PARTITION_CALLBACK:
+        result = await this.executePartitionCallback(sqlRequest);
+        break;
+
+      case EXECUTION_MODE.STAGE:
+        result = await this.executeStageRequest(sqlRequest);
+        break;
+
+      case EXECUTION_MODE.PLAN:
+        result = await this.executePlanRequest(sqlRequest);
+        break;
+
+      default:
+        throw new Error(
+          `${ADAPTER_ERROR_MSG.UNSUPPORTED_EXECUTION_MODE}${executionMode}`,
+        );
+      }
+
+      this.logger.debug(ADAPTER_LOG_MSG.EXECUTE_REQUEST_COMPLETE, {
+        executionMode,
+        success: result.success,
+      });
+
+      return result;
+    } catch (error) {
+      this.logger.error(ADAPTER_LOG_MSG.EXECUTE_REQUEST_FAILED, {
+        executionMode,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Execute a partition_callback request through a dedicated path.
+   *
+   * This is the single dispatch target for partition_callback mode.
+   * It validates callback-specific fields, resolves target partitions
+   * from the select query, and will delegate to
+   * Callback_Execution_Host for per-partition batch invocation
+   * (wired in subsequent tasks).
+   *
+   * Requirements: 13.1, 14.1
+   * @param {Readonly<Object>} sqlRequest - Frozen SqlRequest object.
+   * @return {Promise<Object>} Execution result.
+   */
+  async executePartitionCallback(sqlRequest) {
+    const {
+      statement,
+      callbackModuleRef,
+      callbackExport,
+      runtimeKind,
+      sessionId,
+    } = sqlRequest;
+
+    if (!callbackModuleRef || !callbackExport) {
+      throw new Error(
+        ADAPTER_ERROR_MSG.PARTITION_CALLBACK_MISSING_FIELDS,
+      );
+    }
+    if (!runtimeKind) {
+      throw new Error(
+        ADAPTER_ERROR_MSG.PARTITION_CALLBACK_RUNTIME_KIND_REQUIRED,
+      );
+    }
+
+    this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_DISPATCH, {
+      statement: statement.substring(0, 100),
+      callbackModuleRef,
+      callbackExport,
+      sessionId,
+    });
+
+    // 1. Resolve target partitions and construct per-partition
+    // batches via the single planner path.
+    const dispatchResult =
+          await this.partitionCallbackDispatcher.dispatch(sqlRequest);
+
+    // 2. Route batches through the single
+    // Callback_Execution_Host contract. No parallel
+    // callback executor path is allowed.
+    const descriptor = {
+      callbackModuleRef: dispatchResult.callbackModuleRef,
+      callbackExport: dispatchResult.callbackExport,
+      runtimeKind,
+    };
+
+    // 3. Create callback runtime selector as a strict
+    // adapter over unified runtime selection ownership.
+    const unifiedRuntimeRegistry =
+          sqlRequest.runtimeDriverRegistry ||
+          this.runtimeDriverRegistry ||
+          null;
+    if (!sqlRequest.callbackRuntimeDriverRegistry &&
+            !unifiedRuntimeRegistry) {
+      throw new Error(
+        ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED,
+      );
+    }
+    const callbackRuntimeRegistry =
+          sqlRequest.callbackRuntimeDriverRegistry ||
+          createCallbackDriverRegistry({
+            runtimeDriverRegistry: unifiedRuntimeRegistry,
+            wasmExecutor: sqlRequest.wasmExecutor || null,
+            ociFeatureGateEnabled: Boolean(
+              sqlRequest.ociFeatureGateEnabled,
+            ),
+          });
+    if (typeof callbackRuntimeRegistry.hasRuntimeDriverRegistry !== 'function' ||
+            !callbackRuntimeRegistry.hasRuntimeDriverRegistry()) {
+      throw new Error(
+        ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED,
+      );
+    }
+
+    const host = new CallbackExecutionHost({
+      budgetEnforcer: sqlRequest.budgetEnforcer || null,
+      lineageTracker: sqlRequest.lineageTracker || null,
+      dedupeRegistry: sqlRequest.dedupeRegistry || null,
+      cancellationToken: sqlRequest.cancellationToken || null,
+      stageIndex: sqlRequest.stageIndex || 0,
+      runtimeDriverRegistry: callbackRuntimeRegistry,
+    });
+
+    const hostResult = await host.execute(
+      dispatchResult.batches, descriptor,
+      {handler: sqlRequest.handler || null},
+    );
+
+    this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_COMPLETE, {
+      success: hostResult.state === 'completed',
+      batchCount: dispatchResult.batches.length,
+      processedPartitions: hostResult.processedPartitions,
+      callbackModuleRef,
+      callbackExport,
+    });
+
+    return {
+      success: hostResult.state === 'completed' ||
+            hostResult.state === 'failed',
+      batches: dispatchResult.batches,
+      callbackModuleRef,
+      callbackExport,
+      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
+      hostResult,
+    };
+  }
+
+  /**
+   * Build or reuse an execution context for stage/plan dispatch.
+   *
+   * @param {Readonly<Object>} sqlRequest - Canonical SqlRequest object.
+   * @return {ExecutionContext} Execution context instance.
+   * @private
+   */
+  createRequestExecutionContext(sqlRequest) {
+    if (sqlRequest.executionContext) {
+      return sqlRequest.executionContext;
+    }
+
+    const sessionId = sqlRequest.sessionId || QUERY_SESSION.DEFAULT;
+    const budgetEnforcer = sqlRequest.budgetEnforcer ||
+      new BudgetEnforcer(sqlRequest.budgets || {});
+    const cancellationToken = sqlRequest.cancellationToken ||
+      new CancellationToken();
+    const lineageTracker = sqlRequest.lineageTracker ||
+      new LineageTracker(`${sessionId}-${Date.now()}`);
+
+    return new ExecutionContext({
+      session: sessionId,
+      snapshot: sqlRequest.snapshot || {mode: DEFAULT_SNAPSHOT_MODE},
+      budgetEnforcer,
+      cancellationToken,
+      lineageTracker,
+      queryExecutor: async (query, params) =>
+        this.executeQuery(query, params, {sessionId}),
+      resultStream: sqlRequest.resultStream,
+      exchangeManager: sqlRequest.exchangeManager,
+      dedupeRegistry: sqlRequest.dedupeRegistry,
+      planDiagnostics: sqlRequest.planDiagnostics || null,
+    });
+  }
+
+  /**
+   * Execute a stage-mode SqlRequest via the shared stage executor.
+   *
+   * @param {Readonly<Object>} sqlRequest - Canonical SqlRequest object.
+   * @return {Promise<Object>} Stage execution result.
+   * @private
+   */
+  async executeStageRequest(sqlRequest) {
+    if (typeof sqlRequest.handler !== 'function') {
+      throw new Error(ADAPTER_ERROR_MSG.STAGE_HANDLER_REQUIRED);
+    }
+
+    const executionContext = this.createRequestExecutionContext(sqlRequest);
+    const cancellationToken = sqlRequest.cancellationToken ||
+      executionContext.getCancellationToken();
+    const stageOptions = sqlRequest.options || null;
+    const stageResults = await executeStage({
+      query: sqlRequest.statement,
+      params: sqlRequest.parameters,
+      handler: sqlRequest.handler,
+      opts: stageOptions,
+      queryExecutor: async (query, params) =>
+        this.executeQuery(query, params, {
+          sessionId: sqlRequest.sessionId,
+        }),
+      cancellationToken,
+      executionContext,
+    });
+
+    return {
+      success: true,
+      executionMode: EXECUTION_MODE.STAGE,
+      results: stageResults,
+    };
+  }
+
+  /**
+   * Execute a plan-mode SqlRequest via the shared plan executor.
+   *
+   * @param {Readonly<Object>} sqlRequest - Canonical SqlRequest object.
+   * @return {Promise<Object>} Plan execution result.
+   * @private
+   */
+  async executePlanRequest(sqlRequest) {
+    const plan = sqlRequest.plan ||
+      sqlRequest.hints?.plan ||
+      null;
+    if (!plan || typeof plan !== 'object') {
+      throw new Error(ADAPTER_ERROR_MSG.PLAN_OBJECT_REQUIRED);
+    }
+
+    const executionContext = this.createRequestExecutionContext(sqlRequest);
+    const cancellationToken = sqlRequest.cancellationToken ||
+      executionContext.getCancellationToken();
+    const planOptions = sqlRequest.options || null;
+    const planResult = await executePlan({
+      plan,
+      params: sqlRequest.parameters,
+      handler: sqlRequest.handler,
+      opts: planOptions,
+      queryExecutor: async (query, params) =>
+        this.executeQuery(query, params, {
+          sessionId: sqlRequest.sessionId,
+        }),
+      cancellationToken,
+      executionContext,
+    });
+
+    return {
+      success: true,
+      executionMode: EXECUTION_MODE.PLAN,
+      result: planResult,
+    };
+  }
+
 
   /**
    * Execute a SQL query.

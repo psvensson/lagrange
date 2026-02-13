@@ -12,7 +12,7 @@ import fc from 'fast-check';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {CACHE_SYSTEM_TABLES} from '../../src/cache/cache-constants.js';
+import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SERVICE_TYPE, STATE} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
@@ -225,7 +225,7 @@ test('Property 1: Bootstrap response contains all system table snapshots', async
           const snapshots = body.systemTableSnapshots;
 
           // Verify all required system tables are present
-          for (const tableName of CACHE_SYSTEM_TABLES) {
+          for (const tableName of CACHE_HYDRATION_TABLES) {
             if (!snapshots[tableName]) {
               return false;
             }
@@ -322,7 +322,7 @@ test('Property 1: Bootstrap response snapshots match cache data', async (t) => {
           const snapshots = body.systemTableSnapshots;
 
           // Verify snapshot data matches cache data
-          for (const tableName of CACHE_SYSTEM_TABLES) {
+          for (const tableName of CACHE_HYDRATION_TABLES) {
             const snapshotRows = snapshots[tableName] || [];
             const cacheRows = systemTableData[tableName] || [];
             if (snapshotRows.length !== cacheRows.length) {

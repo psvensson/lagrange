@@ -211,7 +211,8 @@ test('MessageGroupService - buildPeerAddress follows cache updates after relocat
   }
 });
 
-test('MessageGroupService - buildPeerAddress logs structured diagnostics on hint fallback', async (t) => {
+test('MessageGroupService - buildPeerAddress logs structured diagnostics ' +
+  'on hint fallback', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
     const peerId = 'mg-1-r2';
@@ -552,6 +553,43 @@ test('MessageGroupService - applyCDCEvent updates cache', async (t) => {
     const result = await service.querySystemCache('nodes', {key: 'node-1'});
     t.ok(result, 'Should find record in cache');
     t.equal(result.address, '127.0.0.1:8080', 'Should have correct address');
+
+    await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
+test('MessageGroupService - CDC paths delegate to CDCHandler owner', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  try {
+    const service = new MessageGroupService({
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r1',
+      nodeId,
+      transport: router,
+    });
+
+    await service.initialize();
+    t.equal(service.cdcHandler.getSubscriptions().length, 0);
+
+    await service.subscribeToCDC('nodes');
+    t.ok(service.cdcHandler.isSubscribed('nodes'));
+
+    await service.applyCDCEvent('nodes', 'INSERT', {
+      id: 'node-owner-1',
+      status: 'active',
+    });
+    t.ok(service.getWritableCache().get('nodes', 'node-owner-1'));
+
+    await service.applyCDCEvent('partitions', 'INSERT', {
+      id: 'partition-owner-1',
+      status: 'active',
+    });
+    t.equal(
+      service.getWritableCache().get('partitions', 'partition-owner-1'),
+      undefined,
+    );
 
     await service.shutdown();
   } finally {

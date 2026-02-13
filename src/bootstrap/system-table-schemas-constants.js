@@ -5,6 +5,14 @@
  */
 
 import {TABLES} from '../constants/index.js';
+import {
+  SD_COL,
+  SERVICE_DEFINITION_COLUMN_LIST,
+} from '../wasm-service/wasm-service-models.js';
+import {
+  LATENCY_ASSIGNMENT_STATE,
+  LATENCY_GROUP_STATE,
+} from '../topology/latency-topology-constants.js';
 
 /**
  * Column type definitions for schema.
@@ -36,6 +44,14 @@ const SystemTableName = {
   SERVICE_DEFINITIONS: TABLES.SERVICE_DEFINITIONS,
   SERVICE_ENDPOINTS: TABLES.SERVICE_ENDPOINTS,
   SERVICE_TIMERS: TABLES.SERVICE_TIMERS,
+  MODULE_MANIFESTS: TABLES.MODULE_MANIFESTS,
+  PACKAGE_REGISTRY_MAPPINGS: TABLES.PACKAGE_REGISTRY_MAPPINGS,
+  PACKAGE_REGISTRY_OVERRIDES: TABLES.PACKAGE_REGISTRY_OVERRIDES,
+  MODULE_DEPENDENCY_LOCKS: TABLES.MODULE_DEPENDENCY_LOCKS,
+  WASM_OPERATIONS: TABLES.WASM_OPERATIONS,
+  STORAGE_RESERVATIONS: TABLES.STORAGE_RESERVATIONS,
+  LATENCY_GROUPS: TABLES.LATENCY_GROUPS,
+  INTER_GROUP_LATENCIES: TABLES.INTER_GROUP_LATENCIES,
 };
 
 /**
@@ -148,11 +164,75 @@ const NODES_SCHEMA = {
     {name: 'capabilities', type: ColumnType.TEXT, defaultValue: '\'[]\''},
     {name: 'last_heartbeat', type: ColumnType.INTEGER, notNull: true},
     {name: 'ready_lease_expires_at', type: ColumnType.INTEGER},
+    {name: 'storage_budget_bytes', type: ColumnType.INTEGER},
+    {name: 'storage_budget_source', type: ColumnType.TEXT},
+    {name: 'storage_budget_updated_at', type: ColumnType.INTEGER},
+    {name: 'latency_group_id', type: ColumnType.TEXT},
+    {name: 'last_latency_check_at', type: ColumnType.INTEGER},
+    {
+      name: 'latency_assignment_state',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: `'${LATENCY_ASSIGNMENT_STATE.UNASSIGNED}'`,
+    },
     {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_nodes_address', columns: ['node_address']},
     {name: 'idx_nodes_status', columns: ['status']},
+    {name: 'idx_nodes_latency_group', columns: ['latency_group_id']},
+  ],
+};
+
+/**
+ * Latency groups system table schema.
+ * Stores persisted metadata for latency-group membership ownership.
+ */
+const LATENCY_GROUPS_SCHEMA = {
+  tableName: SystemTableName.LATENCY_GROUPS,
+  columns: [
+    {name: 'group_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'representative_node_id', type: ColumnType.TEXT},
+    {name: 'coordinator_node_id', type: ColumnType.TEXT},
+    {
+      name: 'state',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: `'${LATENCY_GROUP_STATE.ACTIVE}'`,
+    },
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {name: 'idx_latency_groups_rep_node', columns: ['representative_node_id']},
+    {name: 'idx_latency_groups_coord_node', columns: ['coordinator_node_id']},
+    {name: 'idx_latency_groups_state', columns: ['state']},
+  ],
+};
+
+/**
+ * Inter-group latencies system table schema.
+ * Stores RTT sample aggregates between latency-group representatives.
+ */
+const INTER_GROUP_LATENCIES_SCHEMA = {
+  tableName: SystemTableName.INTER_GROUP_LATENCIES,
+  columns: [
+    {name: 'latency_edge_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'source_group_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'target_group_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'latency_ms', type: ColumnType.REAL, notNull: true},
+    {name: 'sample_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 1},
+    {name: 'sample_quality', type: ColumnType.TEXT, notNull: true, defaultValue: '\'good\''},
+    {name: 'last_measured_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {
+      name: 'idx_inter_group_latencies_source_target',
+      columns: ['source_group_id', 'target_group_id'],
+    },
+    {name: 'idx_inter_group_latencies_measured', columns: ['last_measured_at']},
   ],
 };
 
@@ -371,44 +451,104 @@ const NODE_ENDPOINTS_SCHEMA = {
 
 /**
  * Service definitions system table schema.
- * Stores metadata about WASM service definitions.
- * Requirements: 12.3, 12.4, 12.5
+ * Stores metadata about replicated service definitions.
+ * Supports unified runtime model (native_js, wasm_component, oci_container).
+ * Requirements: 5.1, 5.5, 12.3, 12.4, 12.5
  */
+const SERVICE_DEFINITION_COLUMN_SPEC = Object.freeze({
+  [SD_COL.SERVICE_ID]: Object.freeze({
+    type: ColumnType.TEXT,
+    primaryKey: true,
+  }),
+  [SD_COL.SERVICE_NAME]: Object.freeze({
+    type: ColumnType.TEXT,
+    notNull: true,
+    unique: true,
+  }),
+  [SD_COL.SERVICE_PROFILE]: Object.freeze({
+    type: ColumnType.TEXT,
+    notNull: true,
+    defaultValue: '\'default\'',
+  }),
+  [SD_COL.HANDLER_FUNCTION_ID]: Object.freeze({
+    type: ColumnType.TEXT,
+  }),
+  [SD_COL.READ_CONSISTENCY]: Object.freeze({
+    type: ColumnType.TEXT,
+    notNull: true,
+    defaultValue: '\'strong\'',
+  }),
+  [SD_COL.WRITE_CONSISTENCY]: Object.freeze({
+    type: ColumnType.TEXT,
+    notNull: true,
+    defaultValue: '\'strong\'',
+  }),
+  [SD_COL.REPLICA_COUNT]: Object.freeze({
+    type: ColumnType.INTEGER,
+    notNull: true,
+    defaultValue: 3,
+  }),
+  [SD_COL.PROTOCOL]: Object.freeze({
+    type: ColumnType.TEXT,
+    notNull: true,
+    defaultValue: '\'websocket\'',
+  }),
+  [SD_COL.RESOURCE_BUDGET]: Object.freeze({
+    type: ColumnType.TEXT,
+    notNull: true,
+    defaultValue: '\'{}\'',
+  }),
+  [SD_COL.SAFETY_INTERVAL_MS]: Object.freeze({
+    type: ColumnType.INTEGER,
+    notNull: true,
+    defaultValue: 500,
+  }),
+  [SD_COL.RUNTIME_KIND]: Object.freeze({type: ColumnType.TEXT}),
+  [SD_COL.RUNTIME_REF]: Object.freeze({type: ColumnType.TEXT}),
+  [SD_COL.RUNTIME_CONFIG]: Object.freeze({type: ColumnType.TEXT}),
+  [SD_COL.STATUS]: Object.freeze({
+    type: ColumnType.TEXT,
+    notNull: true,
+    defaultValue: '\'active\'',
+  }),
+  [SD_COL.CREATED_AT]: Object.freeze({
+    type: ColumnType.INTEGER,
+    notNull: true,
+  }),
+  [SD_COL.UPDATED_AT]: Object.freeze({
+    type: ColumnType.INTEGER,
+    notNull: true,
+  }),
+});
+
+/**
+ * Build canonical service_definitions column descriptors from the shared
+ * service-definition column list.
+ * @return {Array<Object>} Ordered schema column descriptors.
+ */
+function createServiceDefinitionColumns() {
+  return SERVICE_DEFINITION_COLUMN_LIST.map((columnName) => {
+    const spec = SERVICE_DEFINITION_COLUMN_SPEC[columnName];
+    if (!spec) {
+      throw new Error(
+        `Missing schema spec for service_definitions column: ${columnName}`,
+      );
+    }
+    return {
+      name: columnName,
+      ...spec,
+    };
+  });
+}
+
 const SERVICE_DEFINITIONS_SCHEMA = {
   tableName: SystemTableName.SERVICE_DEFINITIONS,
-  columns: [
-    {name: 'service_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'service_name', type: ColumnType.TEXT, notNull: true, unique: true},
-    {name: 'handler_function_id', type: ColumnType.TEXT, notNull: true},
-    {
-      name: 'read_consistency',
-      type: ColumnType.TEXT,
-      notNull: true,
-      defaultValue: '\'strong\'',
-    },
-    {
-      name: 'write_consistency',
-      type: ColumnType.TEXT,
-      notNull: true,
-      defaultValue: '\'strong\'',
-    },
-    {name: 'replica_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 3},
-    {name: 'protocol', type: ColumnType.TEXT, notNull: true, defaultValue: '\'websocket\''},
-    {name: 'resource_budget', type: ColumnType.TEXT, notNull: true, defaultValue: '\'{}\''},
-    {
-      name: 'safety_interval_ms',
-      type: ColumnType.INTEGER,
-      notNull: true,
-      defaultValue: 500,
-    },
-    {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
-  ],
+  columns: createServiceDefinitionColumns(),
   indices: [
-    {name: 'idx_svc_def_name', columns: ['service_name']},
-    {name: 'idx_svc_def_handler', columns: ['handler_function_id']},
-    {name: 'idx_svc_def_status', columns: ['status']},
+    {name: 'idx_svc_def_name', columns: [SD_COL.SERVICE_NAME]},
+    {name: 'idx_svc_def_handler', columns: [SD_COL.HANDLER_FUNCTION_ID]},
+    {name: 'idx_svc_def_status', columns: [SD_COL.STATUS]},
+    {name: 'idx_svc_def_runtime_kind', columns: [SD_COL.RUNTIME_KIND]},
   ],
 };
 
@@ -468,12 +608,256 @@ const SERVICE_TIMERS_SCHEMA = {
 };
 
 /**
+ * Module manifests system table schema.
+ * Stores WASM module/package metadata with component-model identity.
+ * Requirements: 3.2, 5.2, 10.1, 10.2
+ */
+const MODULE_MANIFESTS_SCHEMA = {
+  tableName: SystemTableName.MODULE_MANIFESTS,
+  columns: [
+    {name: 'namespace', type: ColumnType.TEXT, notNull: true},
+    {name: 'name', type: ColumnType.TEXT, notNull: true},
+    {name: 'version', type: ColumnType.TEXT, notNull: true},
+    {name: 'digest', type: ColumnType.TEXT, notNull: true},
+    {name: 'run_export', type: ColumnType.TEXT, notNull: true},
+    {
+      name: 'exports',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'[]\'',
+    },
+    {
+      name: 'dependencies',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'[]\'',
+    },
+    {
+      name: 'capabilities',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'[]\'',
+    },
+    {name: 'source_reference', type: ColumnType.TEXT},
+    {name: 'artifact_pointer', type: ColumnType.TEXT},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  primaryKey: ['namespace', 'name', 'version'],
+  indices: [
+    {
+      name: 'idx_module_manifests_digest',
+      columns: ['digest'],
+    },
+    {
+      name: 'idx_module_manifests_namespace',
+      columns: ['namespace'],
+    },
+  ],
+};
+
+/**
+ * Package registry mappings system table schema.
+ * Stores namespace-to-registry resolution rules.
+ * Requirements: 4.1, 10.1, 10.2
+ */
+const PACKAGE_REGISTRY_MAPPINGS_SCHEMA = {
+  tableName: SystemTableName.PACKAGE_REGISTRY_MAPPINGS,
+  columns: [
+    {name: 'namespace', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'registry_url', type: ColumnType.TEXT, notNull: true},
+    {
+      name: 'policy_metadata',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'{}\'',
+    },
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [],
+};
+
+/**
+ * Package registry overrides system table schema.
+ * Stores per-package registry override rules.
+ * Requirements: 4.2, 10.1, 10.2
+ */
+const PACKAGE_REGISTRY_OVERRIDES_SCHEMA = {
+  tableName: SystemTableName.PACKAGE_REGISTRY_OVERRIDES,
+  columns: [
+    {name: 'namespace', type: ColumnType.TEXT, notNull: true},
+    {name: 'name', type: ColumnType.TEXT, notNull: true},
+    {name: 'registry_url', type: ColumnType.TEXT, notNull: true},
+    {
+      name: 'policy_metadata',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'{}\'',
+    },
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  primaryKey: ['namespace', 'name'],
+  indices: [],
+};
+
+/**
+ * Module dependency locks system table schema.
+ * Stores resolved dependency graphs pinned to immutable digests.
+ * Requirements: 5.2, 10.1, 10.2
+ */
+const MODULE_DEPENDENCY_LOCKS_SCHEMA = {
+  tableName: SystemTableName.MODULE_DEPENDENCY_LOCKS,
+  columns: [
+    {name: 'lock_id', type: ColumnType.TEXT, primaryKey: true},
+    {
+      name: 'target_module_namespace',
+      type: ColumnType.TEXT,
+      notNull: true,
+    },
+    {
+      name: 'target_module_name',
+      type: ColumnType.TEXT,
+      notNull: true,
+    },
+    {
+      name: 'target_module_version',
+      type: ColumnType.TEXT,
+      notNull: true,
+    },
+    {name: 'target_service_id', type: ColumnType.TEXT},
+    {
+      name: 'resolved_dependencies',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'[]\'',
+    },
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {
+      name: 'idx_dep_locks_target',
+      columns: [
+        'target_module_namespace',
+        'target_module_name',
+        'target_module_version',
+      ],
+    },
+    {
+      name: 'idx_dep_locks_service',
+      columns: ['target_service_id'],
+    },
+  ],
+};
+
+/**
+ * WASM operations system table schema.
+ * Stores async operation workflow state and idempotency metadata.
+ * Requirements: 8.1, 8.3, 10.1, 10.2
+ */
+const WASM_OPERATIONS_SCHEMA = {
+  tableName: SystemTableName.WASM_OPERATIONS,
+  columns: [
+    {name: 'operation_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'tenant_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'command', type: ColumnType.TEXT, notNull: true},
+    {name: 'idempotency_key', type: ColumnType.TEXT},
+    {
+      name: 'state',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'pending\'',
+    },
+    {
+      name: 'result',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'{}\'',
+    },
+    {
+      name: 'error',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'{}\'',
+    },
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {
+      name: 'idx_wasm_ops_tenant',
+      columns: ['tenant_id'],
+    },
+    {
+      name: 'idx_wasm_ops_state',
+      columns: ['state'],
+    },
+    {
+      name: 'idx_wasm_ops_idempotency',
+      columns: ['tenant_id', 'idempotency_key'],
+    },
+  ],
+};
+
+/**
+ * Storage reservations system table schema.
+ * Tracks in-flight storage reservations for admission control.
+ * Requirements: 1.2, 2.1, 12.1
+ */
+const STORAGE_RESERVATIONS_SCHEMA = {
+  tableName: SystemTableName.STORAGE_RESERVATIONS,
+  columns: [
+    {name: 'reservation_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'operation_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'entity_type', type: ColumnType.TEXT, notNull: true},
+    {name: 'entity_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'partition_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'target_node_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'estimated_bytes', type: ColumnType.INTEGER, notNull: true},
+    {
+      name: 'amplification_factor',
+      type: ColumnType.REAL,
+      notNull: true,
+      defaultValue: 1,
+    },
+    {
+      name: 'status',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'active\'',
+    },
+    {name: 'reason_code', type: ColumnType.TEXT},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'expires_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'released_at', type: ColumnType.INTEGER},
+  ],
+  indices: [
+    {
+      name: 'idx_storage_res_node_status',
+      columns: ['target_node_id', 'status'],
+    },
+    {name: 'idx_storage_res_operation', columns: ['operation_id']},
+    {
+      name: 'idx_storage_res_entity_status',
+      columns: ['entity_type', 'entity_id', 'status'],
+    },
+    {
+      name: 'idx_storage_res_expires_status',
+      columns: ['expires_at', 'status'],
+    },
+  ],
+};
+
+/**
  * All system table schemas in creation order.
  * Order matters for foreign key dependencies.
  */
 const SYSTEM_TABLE_SCHEMAS = [
   TABLES_SCHEMA,
   NODES_SCHEMA,
+  LATENCY_GROUPS_SCHEMA,
+  INTER_GROUP_LATENCIES_SCHEMA,
   MESSAGE_GROUPS_SCHEMA,
   PARTITIONS_SCHEMA,
   SERVICES_SCHEMA,
@@ -488,6 +872,12 @@ const SYSTEM_TABLE_SCHEMAS = [
   SERVICE_DEFINITIONS_SCHEMA,
   SERVICE_ENDPOINTS_SCHEMA,
   SERVICE_TIMERS_SCHEMA,
+  MODULE_MANIFESTS_SCHEMA,
+  PACKAGE_REGISTRY_MAPPINGS_SCHEMA,
+  PACKAGE_REGISTRY_OVERRIDES_SCHEMA,
+  MODULE_DEPENDENCY_LOCKS_SCHEMA,
+  WASM_OPERATIONS_SCHEMA,
+  STORAGE_RESERVATIONS_SCHEMA,
 ];
 
 /**
@@ -511,6 +901,17 @@ const INITIAL_PARTITION_IDS = {
   [SystemTableName.SERVICE_DEFINITIONS]: 'service_definitions-p1',
   [SystemTableName.SERVICE_ENDPOINTS]: 'service_endpoints-p1',
   [SystemTableName.SERVICE_TIMERS]: 'service_timers-p1',
+  [SystemTableName.MODULE_MANIFESTS]: 'module_manifests-p1',
+  [SystemTableName.PACKAGE_REGISTRY_MAPPINGS]:
+    'package_registry_mappings-p1',
+  [SystemTableName.PACKAGE_REGISTRY_OVERRIDES]:
+    'package_registry_overrides-p1',
+  [SystemTableName.MODULE_DEPENDENCY_LOCKS]:
+    'module_dependency_locks-p1',
+  [SystemTableName.WASM_OPERATIONS]: 'wasm_operations-p1',
+  [SystemTableName.STORAGE_RESERVATIONS]: 'storage_reservations-p1',
+  [SystemTableName.LATENCY_GROUPS]: 'latency_groups-p1',
+  [SystemTableName.INTER_GROUP_LATENCIES]: 'inter_group_latencies-p1',
 };
 
 /**
@@ -548,6 +949,46 @@ const INITIAL_REPLICA_IDS = {
   [SystemTableName.SERVICE_TIMERS]: [
     'service_timers-p1-r1', 'service_timers-p1-r2', 'service_timers-p1-r3',
   ],
+  [SystemTableName.MODULE_MANIFESTS]: [
+    'module_manifests-p1-r1',
+    'module_manifests-p1-r2',
+    'module_manifests-p1-r3',
+  ],
+  [SystemTableName.PACKAGE_REGISTRY_MAPPINGS]: [
+    'package_registry_mappings-p1-r1',
+    'package_registry_mappings-p1-r2',
+    'package_registry_mappings-p1-r3',
+  ],
+  [SystemTableName.PACKAGE_REGISTRY_OVERRIDES]: [
+    'package_registry_overrides-p1-r1',
+    'package_registry_overrides-p1-r2',
+    'package_registry_overrides-p1-r3',
+  ],
+  [SystemTableName.MODULE_DEPENDENCY_LOCKS]: [
+    'module_dependency_locks-p1-r1',
+    'module_dependency_locks-p1-r2',
+    'module_dependency_locks-p1-r3',
+  ],
+  [SystemTableName.WASM_OPERATIONS]: [
+    'wasm_operations-p1-r1',
+    'wasm_operations-p1-r2',
+    'wasm_operations-p1-r3',
+  ],
+  [SystemTableName.STORAGE_RESERVATIONS]: [
+    'storage_reservations-p1-r1',
+    'storage_reservations-p1-r2',
+    'storage_reservations-p1-r3',
+  ],
+  [SystemTableName.LATENCY_GROUPS]: [
+    'latency_groups-p1-r1',
+    'latency_groups-p1-r2',
+    'latency_groups-p1-r3',
+  ],
+  [SystemTableName.INTER_GROUP_LATENCIES]: [
+    'inter_group_latencies-p1-r1',
+    'inter_group_latencies-p1-r2',
+    'inter_group_latencies-p1-r3',
+  ],
 };
 
 /**
@@ -583,7 +1024,15 @@ function generateCreateTableSQL(schema) {
     return def;
   }).join(', ');
 
-  return `CREATE TABLE IF NOT EXISTS ${schema.tableName} (${columnDefs})`;
+  let sql = `CREATE TABLE IF NOT EXISTS ${schema.tableName} (${columnDefs}`;
+
+  if (schema.primaryKey && schema.primaryKey.length > 0) {
+    const pkCols = schema.primaryKey.join(', ');
+    sql += `, PRIMARY KEY (${pkCols})`;
+  }
+
+  sql += ')';
+  return sql;
 }
 
 /**
@@ -637,6 +1086,8 @@ export {
   INDICES_SCHEMA,
   MESSAGE_GROUPS_SCHEMA,
   NODES_SCHEMA,
+  LATENCY_GROUPS_SCHEMA,
+  INTER_GROUP_LATENCIES_SCHEMA,
   SERVICES_SCHEMA,
   LOGS_SCHEMA,
   CONFIG_SCHEMA,
@@ -648,6 +1099,12 @@ export {
   SERVICE_DEFINITIONS_SCHEMA,
   SERVICE_ENDPOINTS_SCHEMA,
   SERVICE_TIMERS_SCHEMA,
+  MODULE_MANIFESTS_SCHEMA,
+  PACKAGE_REGISTRY_MAPPINGS_SCHEMA,
+  PACKAGE_REGISTRY_OVERRIDES_SCHEMA,
+  MODULE_DEPENDENCY_LOCKS_SCHEMA,
+  WASM_OPERATIONS_SCHEMA,
+  STORAGE_RESERVATIONS_SCHEMA,
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_PARTITION_IDS,
   INITIAL_REPLICA_IDS,

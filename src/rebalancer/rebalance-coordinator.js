@@ -43,6 +43,13 @@ import {
   REBALANCER_SKIP_REASON,
   REBALANCER_SUBSYSTEM,
 } from './rebalancer-constants.js';
+import {
+  RESERVATION_REASON,
+  RESERVATION_STATUS,
+  STORAGE_CAPACITY_CONFIG_KEY,
+  STORAGE_CAPACITY_DEFAULT,
+  STORAGE_CAPACITY_LOG_MSG,
+} from './storage-capacity-constants.js';
 
 /**
  * SQL queries for replica_operations table access.
@@ -79,6 +86,20 @@ const SQL = Object.freeze({
   SELECT_REPLICA_STATUS: 'SELECT status FROM services WHERE service_id = ?',
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT status FROM services 
     WHERE partition_id = ? AND node_id = ?`,
+  INSERT_RESERVATION: `INSERT INTO storage_reservations (
+    reservation_id, operation_id, entity_type, entity_id,
+    partition_id, target_node_id, estimated_bytes,
+    amplification_factor, status, reason_code,
+    created_at, updated_at, expires_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  RELEASE_RESERVATION_BY_OPERATION: `UPDATE storage_reservations
+    SET status = ?, updated_at = ?, released_at = ?
+    WHERE operation_id = ? AND status = ?`,
+  SELECT_ACTIVE_RESERVATIONS:
+    `SELECT * FROM storage_reservations WHERE status = 'active'`,
+  EXPIRE_STALE_RESERVATIONS: `UPDATE storage_reservations
+    SET status = ?, updated_at = ?, released_at = ?
+    WHERE status = ? AND expires_at <= ?`,
 });
 
 const RECENT_INTENT_TTL_MS = 15000;
@@ -98,6 +119,7 @@ const LEARNER_ROLE = 'learner';
 const DEFAULT_MIN_REPLICA_COUNT = NUM.THREE;
 const REPLICA_ID_SEPARATOR = '-r';
 const REPLICA_ID_START_INDEX = NUM.ONE;
+const DEFAULT_AMPLIFICATION_FACTOR = NUM.ONE;
 const FAILURE_LOG_LEVEL = Object.freeze({
   ERROR: 'error',
   WARN: 'warn',
@@ -117,6 +139,10 @@ class RebalanceCoordinator extends EventEmitter {
    * @param {Object} options.messageRouter - MessageRouter instance for delivery.
    * @param {Object} options.tablePolicyService - TablePolicyService for policy lookup.
    * @param {Object} options.sqlQueryEngine - SQL query engine for system table access.
+   * @param {Object} [options.storageAccountingService] - Storage capacity
+   *   accounting service for replica size estimation.
+   * @param {Object} [options.storageAdmissionService] - Storage admission
+   *   service for reservation management.
    */
   constructor(options = {}) {
     super();
@@ -147,6 +173,12 @@ class RebalanceCoordinator extends EventEmitter {
     );
     this.enableTimeouts = options.enableTimeouts !== false;
 
+    // Optional storage capacity services (Req 4.1, 11.4)
+    this.storageAccountingService =
+      options.storageAccountingService || null;
+    this.storageAdmissionService =
+      options.storageAdmissionService || null;
+
     // Configuration (centralized) - Requirements 6.1, 6.4
     const configManager = ConfigurationManager.getInstance();
     this.config = {
@@ -171,6 +203,10 @@ class RebalanceCoordinator extends EventEmitter {
       periodicCheckIntervalMs:
         configManager.get(REBALANCER_CONFIG_KEY.PERIODIC_CHECK_INTERVAL_MS) ||
         REBALANCER_DEFAULT.COORDINATOR.PERIODIC_CHECK_INTERVAL_MS,
+      reservationTtlMs:
+        configManager.get(
+          STORAGE_CAPACITY_CONFIG_KEY.RESERVATION_TTL_MS,
+        ) || STORAGE_CAPACITY_DEFAULT.RESERVATION_TTL_MS,
     };
 
     // Timeout checking interval
@@ -188,6 +224,9 @@ class RebalanceCoordinator extends EventEmitter {
       operationsCompleted: NUM.ZERO,
       operationsFailed: NUM.ZERO,
       operationsTimedOut: NUM.ZERO,
+      reservationsCreated: NUM.ZERO,
+      reservationsReleased: NUM.ZERO,
+      reservationsReconciled: NUM.ZERO,
     };
 
     // In-memory dedupe guard for concurrent createOperation() calls.
@@ -788,6 +827,9 @@ class RebalanceCoordinator extends EventEmitter {
     this.stats.operationsCreated++;
     this.rememberOperationIntent(dedupeKey, operation);
 
+    // Create storage reservation atomically (Req 4.1)
+    await this.createReservationForOperation(operation);
+
     this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
 
     return operation;
@@ -914,6 +956,257 @@ class RebalanceCoordinator extends EventEmitter {
    */
   async waitForOperationPersistRetry(delayMs) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  // --- Reservation lifecycle (Req 4.1, 4.2, 4.3, 4.4, 4.5) ---
+
+  /**
+   * Check whether an operation type increases storage on the target node.
+   * Only ADD and REPLACE operations require reservations.
+   * @param {string} operationType - Operation type.
+   * @return {boolean}
+   * @private
+   */
+  isStorageIncreasingOperation(operationType) {
+    return operationType === OperationType.ADD ||
+      operationType === OperationType.REPLACE;
+  }
+
+  /**
+   * Map operation type to reservation reason code.
+   * @param {string} operationType - Operation type.
+   * @return {string} Reservation reason code.
+   * @private
+   */
+  getReservationReasonCode(operationType) {
+    if (operationType === OperationType.REPLACE) {
+      return RESERVATION_REASON.REPLACE_REPLICA;
+    }
+    return RESERVATION_REASON.ADD_REPLICA;
+  }
+
+  /**
+   * Create a storage reservation atomically with operation creation.
+   * Delegates size estimation to the accounting service.
+   * Requirements: 4.1
+   *
+   * @param {Object} operation - The persisted operation record.
+   * @return {Promise<void>}
+   * @private
+   */
+  async createReservationForOperation(operation) {
+    if (!this.storageAccountingService) {
+      return;
+    }
+    if (!this.isStorageIncreasingOperation(operation.type)) {
+      return;
+    }
+
+    const estimatedBytes = this.storageAccountingService
+      .estimateReplicaBytes({
+        entityType: operation.entityType || SERVICE_TYPE.PARTITION,
+        sizeBytes: NUM.ZERO,
+      });
+
+    const now = Date.now();
+    const reservationId = `res-${operation.operationId}`;
+    const expiresAt = now + this.config.reservationTtlMs;
+
+    const result = await this.executeOperationMutationWithRetry(
+      SQL.INSERT_RESERVATION,
+      [
+        reservationId,
+        operation.operationId,
+        operation.entityType || SERVICE_TYPE.PARTITION,
+        operation.entityId || operation.partitionId,
+        operation.partitionId,
+        operation.targetNodeId,
+        estimatedBytes,
+        DEFAULT_AMPLIFICATION_FACTOR,
+        RESERVATION_STATUS.ACTIVE,
+        this.getReservationReasonCode(operation.type),
+        now,
+        now,
+        expiresAt,
+      ],
+    );
+
+    if (!result.success) {
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_CREATE_FAILED, {
+          operationId: operation.operationId,
+          reservationId,
+          error: result.error,
+        });
+      return;
+    }
+
+    this.stats.reservationsCreated++;
+
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_CREATED, {
+        reservationId,
+        operationId: operation.operationId,
+        targetNodeId: operation.targetNodeId,
+        estimatedBytes,
+        expiresAt,
+      });
+
+    this.emit(REBALANCE_COORDINATOR_EVENT.RESERVATION_CREATED, {
+      reservationId,
+      operationId: operation.operationId,
+      targetNodeId: operation.targetNodeId,
+      estimatedBytes,
+    });
+  }
+
+  /**
+   * Release the storage reservation tied to an operation.
+   * Called on terminal outcomes (completed, failed, cancelled).
+   * Requirements: 4.3
+   *
+   * @param {Object} operation - The terminal operation record.
+   * @return {Promise<void>}
+   * @private
+   */
+  async releaseReservationForOperation(operation) {
+    if (!this.storageAccountingService) {
+      return;
+    }
+    if (!this.isStorageIncreasingOperation(operation.type)) {
+      return;
+    }
+
+    const now = Date.now();
+    const result = await this.executeOperationMutationWithRetry(
+      SQL.RELEASE_RESERVATION_BY_OPERATION,
+      [
+        RESERVATION_STATUS.RELEASED,
+        now,
+        now,
+        operation.operationId,
+        RESERVATION_STATUS.ACTIVE,
+      ],
+    );
+
+    if (!result.success) {
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED, {
+          operationId: operation.operationId,
+          error: result.error,
+        });
+      return;
+    }
+
+    this.stats.reservationsReleased++;
+
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASED, {
+        operationId: operation.operationId,
+      });
+
+    this.emit(REBALANCE_COORDINATOR_EVENT.RESERVATION_RELEASED, {
+      operationId: operation.operationId,
+    });
+  }
+
+  /**
+   * Reconcile stale and orphan reservations.
+   * - Expire active reservations past their TTL.
+   * - Release active reservations whose operations are terminal.
+   * Called during startup recovery and periodically.
+   * Requirements: 4.4, 12.3
+   *
+   * @return {Promise<Object>} Reconciliation result counts.
+   */
+  async reconcileReservations() {
+    if (!this.storageAccountingService) {
+      return {expired: NUM.ZERO, orphansReleased: NUM.ZERO};
+    }
+
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_START,
+    );
+
+    const now = Date.now();
+    let expired = NUM.ZERO;
+    let orphansReleased = NUM.ZERO;
+
+    // 1. Expire reservations past TTL
+    const expireResult = await this.sqlQueryEngine.executeQuery(
+      SQL.EXPIRE_STALE_RESERVATIONS,
+      [
+        RESERVATION_STATUS.EXPIRED,
+        now,
+        now,
+        RESERVATION_STATUS.ACTIVE,
+        now,
+      ],
+    );
+
+    if (expireResult.success &&
+        typeof expireResult.changes === 'number') {
+      expired = expireResult.changes;
+    }
+
+    if (expired > NUM.ZERO) {
+      this.logger.info(
+        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_EXPIRED,
+        {count: expired},
+      );
+    }
+
+    // 2. Release orphan reservations (operation is terminal)
+    const activeResult = await this.sqlQueryEngine.executeQuery(
+      SQL.SELECT_ACTIVE_RESERVATIONS,
+      [],
+    );
+
+    if (activeResult.success && activeResult.rows) {
+      for (const row of activeResult.rows) {
+        const op = await this.queryOperationById(row.operation_id);
+        const isTerminal = !op ||
+          TERMINAL_STATUSES.includes(op.status);
+        if (isTerminal) {
+          const releaseResult =
+            await this.sqlQueryEngine.executeQuery(
+              SQL.RELEASE_RESERVATION_BY_OPERATION,
+              [
+                RESERVATION_STATUS.RELEASED,
+                now,
+                now,
+                row.operation_id,
+                RESERVATION_STATUS.ACTIVE,
+              ],
+            );
+          if (releaseResult.success) {
+            orphansReleased++;
+            this.logger.info(
+              REBALANCE_COORDINATOR_LOG_MSG
+                .RESERVATION_RECONCILE_ORPHAN,
+              {
+                reservationId: row.reservation_id,
+                operationId: row.operation_id,
+              },
+            );
+          }
+        }
+      }
+    }
+
+    this.stats.reservationsReconciled += expired + orphansReleased;
+
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_COMPLETED,
+      {expired, orphansReleased},
+    );
+
+    this.emit(REBALANCE_COORDINATOR_EVENT.RESERVATION_RECONCILED, {
+      expired,
+      orphansReleased,
+    });
+
+    return {expired, orphansReleased};
   }
 
   /**
@@ -1207,6 +1500,9 @@ class RebalanceCoordinator extends EventEmitter {
 
     await this.persistOperationUpdate(operation);
 
+    // Release storage reservation on terminal completion (Req 4.3)
+    await this.releaseReservationForOperation(operation);
+
     this.stats.operationsCompleted++;
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_COMPLETED, {
@@ -1476,6 +1772,9 @@ class RebalanceCoordinator extends EventEmitter {
 
     await this.persistOperationUpdate(operation);
 
+    // Release storage reservation on terminal failure (Req 4.3)
+    await this.releaseReservationForOperation(operation);
+
     this.stats.operationsFailed++;
 
     const logPayload = {
@@ -1598,6 +1897,14 @@ class RebalanceCoordinator extends EventEmitter {
         this.stats.operationsTimedOut++;
       }
     }
+
+    // Periodic reservation reconciliation (Req 4.4)
+    await this.reconcileReservations().catch((error) => {
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
+        {error: error.message},
+      );
+    });
   }
 
   /**
@@ -1686,6 +1993,11 @@ class RebalanceCoordinator extends EventEmitter {
       nodeId: this.nodeId,
       ...result,
     });
+
+    // Reconcile stale/orphan reservations after recovery (Req 4.4, 12.3)
+    const reservationResult = await this.reconcileReservations();
+    result.reservationsExpired = reservationResult.expired;
+    result.reservationsOrphansReleased = reservationResult.orphansReleased;
 
     this.emit(REBALANCE_COORDINATOR_EVENT.RECOVERY_COMPLETED, result);
 

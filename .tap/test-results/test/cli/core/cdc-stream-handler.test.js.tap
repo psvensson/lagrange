@@ -7,7 +7,7 @@ TAP version 14
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 1 - CDCStreamHandler - constructor initializes with default state # time=4.003ms
+ok 1 - CDCStreamHandler - constructor initializes with default state # time=8.17ms
 
 # Subtest: CDCStreamHandler - handleCacheDump initializes cache
     ok 1 - should be equal
@@ -15,7 +15,7 @@ ok 1 - CDCStreamHandler - constructor initializes with default state # time=4.00
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 2 - CDCStreamHandler - handleCacheDump initializes cache # time=0.765ms
+ok 2 - CDCStreamHandler - handleCacheDump initializes cache # time=1.155ms
 
 # Subtest: CDCStreamHandler - handleCDCEvent updates cache and emits events
     ok 1 - should be equal
@@ -26,7 +26,7 @@ ok 2 - CDCStreamHandler - handleCacheDump initializes cache # time=0.765ms
     ok 6 - should be equal
     ok 7 - should be equal
     1..7
-ok 3 - CDCStreamHandler - handleCDCEvent updates cache and emits events # time=0.693ms
+ok 3 - CDCStreamHandler - handleCDCEvent updates cache and emits events # time=0.959ms
 
 # Subtest: CDCStreamHandler - paused state prevents event processing
     ok 1 - should be equal
@@ -34,14 +34,14 @@ ok 3 - CDCStreamHandler - handleCDCEvent updates cache and emits events # time=0
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 4 - CDCStreamHandler - paused state prevents event processing # time=0.371ms
+ok 4 - CDCStreamHandler - paused state prevents event processing # time=0.366ms
 
 # Subtest: CDCStreamHandler - resume restores event processing
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 5 - CDCStreamHandler - resume restores event processing # time=0.341ms
+ok 5 - CDCStreamHandler - resume restores event processing # time=0.494ms
 
 # Subtest: CDCStreamHandler - togglePause switches pause state
     ok 1 - should be equal
@@ -50,25 +50,25 @@ ok 5 - CDCStreamHandler - resume restores event processing # time=0.341ms
     ok 4 - should be equal
     ok 5 - should be equal
     1..5
-ok 6 - CDCStreamHandler - togglePause switches pause state # time=0.468ms
+ok 6 - CDCStreamHandler - togglePause switches pause state # time=0.401ms
 
 # Subtest: CDCStreamHandler - tracks changed rows for highlighting
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 7 - CDCStreamHandler - tracks changed rows for highlighting # time=0.324ms
+ok 7 - CDCStreamHandler - tracks changed rows for highlighting # time=0.384ms
 
 # Subtest: CDCStreamHandler - requestRefresh sends cache dump request
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 8 - CDCStreamHandler - requestRefresh sends cache dump request # time=0.257ms
+ok 8 - CDCStreamHandler - requestRefresh sends cache dump request # time=0.323ms
 
 # Subtest: CDCStreamHandler - requestRefresh fails when disconnected
     ok 1 - should be equal
     1..1
-ok 9 - CDCStreamHandler - requestRefresh fails when disconnected # time=0.167ms
+ok 9 - CDCStreamHandler - requestRefresh fails when disconnected # time=0.21ms
 
 # Subtest: CDCStreamHandler - getStatusBarInfo returns correct info
     ok 1 - should be equal
@@ -79,7 +79,7 @@ ok 9 - CDCStreamHandler - requestRefresh fails when disconnected # time=0.167ms
     ok 6 - should be equal
     ok 7 - should be equal
     1..7
-ok 10 - CDCStreamHandler - getStatusBarInfo returns correct info # time=0.51ms
+ok 10 - CDCStreamHandler - getStatusBarInfo returns correct info # time=0.585ms
 
 # Subtest: CDCStreamHandler - handleStatusChange updates status
     ok 1 - should be equal
@@ -88,14 +88,14 @@ ok 10 - CDCStreamHandler - getStatusBarInfo returns correct info # time=0.51ms
     ok 4 - should be equal
     ok 5 - should be equal
     1..5
-ok 11 - CDCStreamHandler - handleStatusChange updates status # time=0.407ms
+ok 11 - CDCStreamHandler - handleStatusChange updates status # time=0.453ms
 
 # Subtest: CDCStreamHandler - emits table-specific CDC events
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 12 - CDCStreamHandler - emits table-specific CDC events # time=0.346ms
+ok 12 - CDCStreamHandler - emits table-specific CDC events # time=0.493ms
 
 # Subtest: CDCStreamHandler - resetStats clears statistics
     ok 1 - should be equal
@@ -103,20 +103,20 @@ ok 12 - CDCStreamHandler - emits table-specific CDC events # time=0.346ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 13 - CDCStreamHandler - resetStats clears statistics # time=0.386ms
+ok 13 - CDCStreamHandler - resetStats clears statistics # time=0.628ms
 
 # Subtest: CDCStreamHandler - destroy cleans up resources
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 14 - CDCStreamHandler - destroy cleans up resources # time=0.325ms
+ok 14 - CDCStreamHandler - destroy cleans up resources # time=0.451ms
 
 # Subtest: CDCStreamHandler - calculates event rate correctly
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 15 - CDCStreamHandler - calculates event rate correctly # time=0.322ms
+ok 15 - CDCStreamHandler - calculates event rate correctly # time=0.448ms
 
 # Subtest: CDCStreamHandler - emits pause/resume events
     ok 1 - should be equal
@@ -124,8 +124,8 @@ ok 15 - CDCStreamHandler - calculates event rate correctly # time=0.322ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 16 - CDCStreamHandler - emits pause/resume events # time=0.434ms
+ok 16 - CDCStreamHandler - emits pause/resume events # time=0.57ms
 
 1..16
 # { total: 63, pass: 63 }
-# time=2014.518ms
+# time=2021.972ms

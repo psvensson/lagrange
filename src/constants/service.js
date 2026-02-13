@@ -5,4 +5,9 @@ const SERVICE_TYPE = Object.freeze({
   WASM_SERVICE: 'wasm_service',
 });
 
-export {SERVICE_TYPE};
+const SERVICE_PROFILE = Object.freeze({
+  DEFAULT: 'default',
+  SQL_ENGINE: 'sql_engine',
+});
+
+export {SERVICE_TYPE, SERVICE_PROFILE};

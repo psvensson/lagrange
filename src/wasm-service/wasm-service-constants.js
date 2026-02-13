@@ -54,6 +54,14 @@ const WASM_SERVICE_ERROR_MSG = Object.freeze({
   SERVICE_SIZE_LIMIT_EXCEEDED: 'Service total context size limit exceeded',
   SERVICE_NOT_READY: 'WASM service group is not ready',
   MODULE_NOT_AVAILABLE: 'WASM module not available on any node',
+  RUN_EXPORT_NOT_FOUND:
+    'run_export function not found in module exports',
+  RUN_EXPORT_NOT_CALLABLE:
+    'run_export must be a callable function',
+  HANDLER_INVOCATION_FAILED: 'Handler invocation failed',
+  RUN_EXPORT_SIGNATURE_MISMATCH:
+    'run_export signature does not match required runtime' +
+    ' contract (2-3 params)',
   PORT_EXHAUSTED: 'No ports available for allocation',
 });
 
@@ -91,6 +99,12 @@ const WASM_SERVICE_LOG_MSG = Object.freeze({
 });
 
 const WASM_SERVICE_EXECUTOR_TYPE = 'wasm_service';
+
+const SQL_ENGINE_PROFILE = Object.freeze({
+  SUBSYSTEM: 'sql-engine-profile',
+  DEFAULT_READ_CONSISTENCY: 'leader_only',
+  DEFAULT_WRITE_CONSISTENCY: 'strong',
+});
 
 const WASM_SERVICE_PROTOCOL = Object.freeze({
   WEBSOCKET: 'websocket',
@@ -130,6 +144,7 @@ export {
   WASM_SERVICE_ERROR_MSG,
   WASM_SERVICE_LOG_MSG,
   WASM_SERVICE_EXECUTOR_TYPE,
+  SQL_ENGINE_PROFILE,
   WASM_SERVICE_PROTOCOL,
   WASM_SERVICE_HEALTH_STATUS,
   WASM_SERVICE_DEFINITION_STATUS,

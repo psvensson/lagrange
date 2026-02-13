@@ -7,10 +7,12 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {TABLES} from '../constants/index.js';
+import {NUM, TABLES} from '../constants/index.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {
+  DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_TABLE_POLICY,
+  MESSAGE_GROUP_POLICY_FIELD_TYPES,
   POLICY_DEFAULT,
   POLICY_ERROR_MSG,
   POLICY_EVENT,
@@ -20,6 +22,28 @@ import {
   POLICY_VALUE,
   TYPEOF,
 } from './policy-constants.js';
+import {
+  STORAGE_PLACEMENT_CONSTRAINT,
+} from '../rebalancer/storage-capacity-constants.js';
+
+/**
+ * Extract storage-related placement constraints from a constraints
+ * object. Returns only the storage capacity keys defined in
+ * STORAGE_PLACEMENT_CONSTRAINT.
+ * @param {Object} constraints - Full placement constraints.
+ * @return {Object} Storage-only constraint values.
+ */
+function extractStorageConstraints(constraints) {
+  const pc = constraints || {};
+  return {
+    [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
+      pc[STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE],
+    [STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT]:
+      pc[STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT],
+    [STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM]:
+      pc[STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM],
+  };
+}
 
 /**
  * TablePolicyService manages table policies for partition behavior.
@@ -255,10 +279,58 @@ class TablePolicyService extends EventEmitter {
       errors.push(POLICY_ERROR_MSG.MERGE_TRAFFIC_NONNEGATIVE);
     }
 
+    if (policy.placementConstraints !== undefined &&
+        policy.placementConstraints &&
+        typeof policy.placementConstraints === TYPEOF.OBJECT) {
+      errors.push(...this.validatePlacementConstraints(policy.placementConstraints));
+    }
+
     return {
       valid: errors.length === 0,
       errors,
     };
+  }
+
+  /**
+   * Validate placement constraints in the policy.
+   * @param {Object} placementConstraints - Placement constraints.
+   * @return {string[]} Array of validation error messages.
+   */
+  validatePlacementConstraints(placementConstraints) {
+    const errors = [];
+
+    for (const [field, defaultValue] of Object.entries(
+      DEFAULT_TABLE_POLICY.placementConstraints,
+    )) {
+      if (placementConstraints[field] !== undefined) {
+        const expectedType = typeof defaultValue;
+        const actualType = typeof placementConstraints[field];
+        if (actualType !== expectedType) {
+          errors.push(POLICY_ERROR_MSG.fieldTypeMismatch(
+            field,
+            expectedType,
+            actualType,
+          ));
+        }
+      }
+    }
+
+    const minFree = placementConstraints[
+      STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE
+    ];
+    if (typeof minFree === TYPEOF.NUMBER && minFree < NUM.ZERO) {
+      errors.push(POLICY_ERROR_MSG.PLACEMENT_MIN_FREE_NONNEGATIVE);
+    }
+
+    const maxUtil = placementConstraints[
+      STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT
+    ];
+    if (typeof maxUtil === TYPEOF.NUMBER &&
+        (maxUtil < NUM.ZERO || maxUtil > NUM.HUNDRED)) {
+      errors.push(POLICY_ERROR_MSG.PLACEMENT_MAX_UTIL_RANGE);
+    }
+
+    return errors;
   }
 
 
@@ -407,6 +479,194 @@ class TablePolicyService extends EventEmitter {
   async getPlacementConstraints(tableId) {
     const policy = await this.getTablePolicy(tableId);
     return {...policy.placementConstraints};
+  }
+
+  /**
+   * Get the default message group policy.
+   * @return {Object} Default message group policy.
+   */
+  getDefaultMessageGroupPolicy() {
+    return {...DEFAULT_MESSAGE_GROUP_POLICY,
+      placementConstraints: {
+        ...DEFAULT_MESSAGE_GROUP_POLICY.placementConstraints,
+      },
+    };
+  }
+
+  /**
+   * Get the policy for a specific message group.
+   * Reads from the message_groups table and merges with defaults.
+   * @param {string} groupId - Message group ID.
+   * @return {Promise<Object>} Message group policy (merged with defaults).
+   */
+  async getMessageGroupPolicy(groupId) {
+    if (!groupId) {
+      return this.getDefaultMessageGroupPolicy();
+    }
+
+    // Check local cache
+    const cacheKey = `mg:${groupId}`;
+    const cached = this.policyCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.cacheTTLMs) {
+      return cached.policy;
+    }
+
+    // Get from SQL engine
+    let group = null;
+    if (this.sqlQueryEngine) {
+      const result = await this.sqlQueryEngine.executeQuery(
+        'SELECT * FROM message_groups WHERE group_id = ?',
+        [groupId],
+      );
+      group = result.rows?.[0] || null;
+    }
+    if (!group) {
+      this.logger.debug(
+        POLICY_LOG_MSG.MESSAGE_GROUP_NOT_FOUND_DEFAULT, {groupId},
+      );
+      return this.getDefaultMessageGroupPolicy();
+    }
+
+    // Parse stored policy
+    let storedPolicy = POLICY_VALUE.EMPTY_POLICY;
+    if (group.policy) {
+      try {
+        storedPolicy = typeof group.policy === TYPEOF.STRING ?
+          JSON.parse(group.policy) : group.policy;
+      } catch (error) {
+        this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
+          groupId,
+          error: error.message,
+        });
+        throw error;
+      }
+    }
+
+    // Merge with defaults
+    const mergedPolicy =
+      this.mergeMessageGroupWithDefaults(storedPolicy);
+
+    // Update cache
+    this.policyCache.set(cacheKey, {
+      policy: mergedPolicy,
+      timestamp: Date.now(),
+    });
+
+    return mergedPolicy;
+  }
+
+  /**
+   * Merge a stored message group policy with defaults.
+   * @param {Object} storedPolicy - Policy from storage.
+   * @return {Object} Merged policy with all fields.
+   */
+  mergeMessageGroupWithDefaults(storedPolicy) {
+    const merged = this.getDefaultMessageGroupPolicy();
+
+    for (const [key, value] of Object.entries(storedPolicy)) {
+      if (key === 'placementConstraints' && typeof value === 'object') {
+        merged.placementConstraints = {
+          ...DEFAULT_MESSAGE_GROUP_POLICY.placementConstraints,
+          ...value,
+        };
+      } else if (key in DEFAULT_MESSAGE_GROUP_POLICY) {
+        merged[key] = value;
+      }
+    }
+
+    return merged;
+  }
+
+  /**
+   * Validate a message group policy object.
+   * Uses the same canonical validation path for placement constraints.
+   * @param {Object} policy - Policy to validate.
+   * @return {Object} Validation result {valid, errors}.
+   */
+  validateMessageGroupPolicy(policy) {
+    const errors = [];
+
+    // Validate field types
+    for (const [field, expectedType] of Object.entries(
+      MESSAGE_GROUP_POLICY_FIELD_TYPES,
+    )) {
+      if (policy[field] !== undefined) {
+        const actualType = typeof policy[field];
+        if (actualType !== expectedType) {
+          errors.push(POLICY_ERROR_MSG.fieldTypeMismatch(
+            field, expectedType, actualType,
+          ));
+        }
+      }
+    }
+
+    // Validate replica counts
+    if (policy.targetReplicaCount !== undefined) {
+      if (policy.targetReplicaCount < NUM.ONE) {
+        errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_MIN);
+      }
+      if (policy.targetReplicaCount % NUM.TWO === NUM.ZERO) {
+        errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_ODD);
+      }
+    }
+
+    if (policy.maxReplicaCount !== undefined) {
+      if (policy.maxReplicaCount < NUM.ONE) {
+        errors.push(POLICY_ERROR_MSG.MAX_REPLICA_COUNT_MIN);
+      }
+      if (policy.maxReplicaCount % NUM.TWO === NUM.ZERO) {
+        errors.push(POLICY_ERROR_MSG.MAX_REPLICA_COUNT_ODD);
+      }
+    }
+
+    // Validate target <= max
+    const target = policy.targetReplicaCount ||
+      DEFAULT_MESSAGE_GROUP_POLICY.targetReplicaCount;
+    const max = policy.maxReplicaCount ||
+      DEFAULT_MESSAGE_GROUP_POLICY.maxReplicaCount;
+    if (target > max) {
+      errors.push(POLICY_ERROR_MSG.REPLICA_BETWEEN);
+    }
+
+    // Reuse canonical placement constraint validation
+    if (policy.placementConstraints !== undefined &&
+        policy.placementConstraints &&
+        typeof policy.placementConstraints === TYPEOF.OBJECT) {
+      errors.push(
+        ...this.validatePlacementConstraints(
+          policy.placementConstraints,
+        ),
+      );
+    }
+
+    return {
+      valid: errors.length === NUM.ZERO,
+      errors,
+    };
+  }
+
+  /**
+   * Get effective storage placement constraints for a table.
+   * Extracts only storage-related constraint values from the
+   * merged policy. Req 6.5.
+   * @param {string} tableId - Table ID.
+   * @return {Promise<Object>} Storage placement constraints.
+   */
+  async getEffectiveStorageConstraints(tableId) {
+    const policy = await this.getTablePolicy(tableId);
+    return extractStorageConstraints(policy.placementConstraints);
+  }
+
+  /**
+   * Get effective storage placement constraints for a message group.
+   * Extracts only storage-related constraint values from the
+   * merged policy. Req 6.5.
+   * @param {string} groupId - Message group ID.
+   * @return {Promise<Object>} Storage placement constraints.
+   */
+  async getEffectiveMessageGroupStorageConstraints(groupId) {
+    const policy = await this.getMessageGroupPolicy(groupId);
+    return extractStorageConstraints(policy.placementConstraints);
   }
 
   /**

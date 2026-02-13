@@ -6,13 +6,13 @@ TAP version 14
         ok 3 - node ID set correctly
         ok 4 - not initialized after shutdown
         1..4
-    ok 1 - initialization # time=2.412ms
+    ok 1 - initialization # time=2.198ms
     
     # Subtest: initializes with message group service
         ok 1 - manager should be initialized
         ok 2 - node ID should be set
         1..2
-    ok 2 - initializes with message group service # time=0.588ms
+    ok 2 - initializes with message group service # time=0.569ms
     
     # Subtest: status transition validation
         ok 1 - starting -> syncing is valid
@@ -25,7 +25,7 @@ TAP version 14
         ok 8 - active -> starting is invalid
         ok 9 - stopped -> active is invalid (terminal state)
         1..9
-    ok 3 - status transition validation # time=0.996ms
+    ok 3 - status transition validation # time=0.821ms
     
     # Subtest: handleCreateReplica - returns already_exists for duplicate
         ok 1 - correct ACK type
@@ -33,7 +33,7 @@ TAP version 14
         ok 3 - replica_id in ACK
         ok 4 - request_id in ACK
         1..4
-    ok 4 - handleCreateReplica - returns already_exists for duplicate # time=0.973ms
+    ok 4 - handleCreateReplica - returns already_exists for duplicate # time=0.8ms
     
     # Subtest: handleCreateReplica - returns initiated for new replica
         ok 1 - correct ACK type
@@ -41,21 +41,21 @@ TAP version 14
         ok 3 - replica_id in ACK
         ok 4 - node_id in ACK
         1..4
-    ok 5 - handleCreateReplica - returns initiated for new replica # time=0.751ms
+    ok 5 - handleCreateReplica - returns initiated for new replica # time=0.661ms
     
     # Subtest: handleRemoveReplica - returns not_found for missing replica
         ok 1 - correct ACK type
         ok 2 - status is not_found
         ok 3 - replica_id in ACK
         1..3
-    ok 6 - handleRemoveReplica - returns not_found for missing replica # time=0.742ms
+    ok 6 - handleRemoveReplica - returns not_found for missing replica # time=0.647ms
     
     # Subtest: handleRemoveReplica - returns initiated for existing replica
         ok 1 - correct ACK type
         ok 2 - status is initiated
         ok 3 - replica_id in ACK
         1..3
-    ok 7 - handleRemoveReplica - returns initiated for existing replica # time=0.605ms
+    ok 7 - handleRemoveReplica - returns initiated for existing replica # time=0.496ms
     
     # Subtest: node recovery - queries services in transitional states
         ok 1 - filter was called on system table cache
@@ -63,7 +63,7 @@ TAP version 14
         ok 3 - predicate does not match active replicas
         ok 4 - predicate does not match other nodes
         1..4
-    ok 8 - node recovery - queries services in transitional states # time=0.838ms
+    ok 8 - node recovery - queries services in transitional states # time=0.69ms
     
     # Subtest: getStats returns correct statistics
         ok 1 - correct node ID
@@ -71,14 +71,14 @@ TAP version 14
         ok 3 - correct local replica count
         ok 4 - correct pending operation count
         1..4
-    ok 9 - getStats returns correct statistics # time=0.677ms
+    ok 9 - getStats returns correct statistics # time=0.557ms
     
     # Subtest: cleanupExpiredOperations removes old completed operations
         ok 1 - old completed operation removed
         ok 2 - recent completed operation kept
         ok 3 - pending operation kept (not completed)
         1..3
-    ok 10 - cleanupExpiredOperations removes old completed operations # time=0.673ms
+    ok 10 - cleanupExpiredOperations removes old completed operations # time=0.528ms
     
     # Subtest: handleCreateReplica returns correct ACK structure
         ok 1 - correct ACK type
@@ -87,17 +87,17 @@ TAP version 14
         ok 4 - node_id in ACK
         ok 5 - status is initiated or already_exists
         1..5
-    ok 11 - handleCreateReplica returns correct ACK structure # time=0.804ms
+    ok 11 - handleCreateReplica returns correct ACK structure # time=0.62ms
     
     1..11
-ok 1 - ReplicaLifecycleManager # time=242.615ms
+ok 1 - ReplicaLifecycleManager # time=171.42ms
 
-{"level":50,"time":"2026-02-09T20:55:43.950Z","nodeId":"7ee27823-4a50-45f8-ade8-19b59780e026","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","partitionId":"partition-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1034:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:288:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:252:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"7ee27823-4a50-45f8-ade8-19b59780e026","msg":"Replica creation failed"}
-{"level":50,"time":"2026-02-09T20:55:43.951Z","nodeId":"7ee27823-4a50-45f8-ade8-19b59780e026","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1034:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:288:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:252:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"7ee27823-4a50-45f8-ade8-19b59780e026","msg":"Async replica creation failed"}
-{"level":50,"time":"2026-02-09T20:55:43.951Z","nodeId":"4126be23-6c0b-4530-b2dd-f0e11632e935","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","partitionId":"partition-1","error":"ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-oh79M9/partitions/partition-1'","stack":"Error: ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-oh79M9/partitions/partition-1'\n    at Object.readdirSync (node:fs:1583:26)\n    at ReplicaHandler.cleanupReplicaResources (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1162:26)\n    at ReplicaHandler.removeReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:577:18)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:453:9)","nodeId":"4126be23-6c0b-4530-b2dd-f0e11632e935","msg":"Replica removal failed"}
-{"level":50,"time":"2026-02-09T20:55:43.952Z","nodeId":"4126be23-6c0b-4530-b2dd-f0e11632e935","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","error":"ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-oh79M9/partitions/partition-1'","stack":"Error: ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-oh79M9/partitions/partition-1'\n    at Object.readdirSync (node:fs:1583:26)\n    at ReplicaHandler.cleanupReplicaResources (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1162:26)\n    at ReplicaHandler.removeReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:577:18)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:453:9)","nodeId":"4126be23-6c0b-4530-b2dd-f0e11632e935","msg":"Async replica removal failed"}
-{"level":50,"time":"2026-02-09T20:55:43.952Z","nodeId":"b09acace-fcd8-4088-9cda-4a08ec35ec15","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","partitionId":"partition-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1034:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:288:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:252:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"b09acace-fcd8-4088-9cda-4a08ec35ec15","msg":"Replica creation failed"}
-{"level":50,"time":"2026-02-09T20:55:43.952Z","nodeId":"b09acace-fcd8-4088-9cda-4a08ec35ec15","pid":449698,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1034:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:288:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:252:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"b09acace-fcd8-4088-9cda-4a08ec35ec15","msg":"Async replica creation failed"}
+{"level":50,"time":"2026-02-12T18:14:25.367Z","nodeId":"9eda4405-473f-40c2-b06c-cf34688038ff","pid":1227811,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","partitionId":"partition-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1229:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:463:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:418:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"9eda4405-473f-40c2-b06c-cf34688038ff","msg":"Replica creation failed"}
+{"level":50,"time":"2026-02-12T18:14:25.367Z","nodeId":"9eda4405-473f-40c2-b06c-cf34688038ff","pid":1227811,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1229:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:463:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:418:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"9eda4405-473f-40c2-b06c-cf34688038ff","msg":"Async replica creation failed"}
+{"level":50,"time":"2026-02-12T18:14:25.368Z","nodeId":"4e10d8f3-0914-45b6-a290-95e44c550226","pid":1227811,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","partitionId":"partition-1","error":"ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-wxinHE/partitions/partition-1'","stack":"Error: ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-wxinHE/partitions/partition-1'\n    at Object.readdirSync (node:fs:1583:26)\n    at ReplicaHandler.cleanupReplicaResources (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1357:26)\n    at ReplicaHandler.removeReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:769:18)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:453:9)","nodeId":"4e10d8f3-0914-45b6-a290-95e44c550226","msg":"Replica removal failed"}
+{"level":50,"time":"2026-02-12T18:14:25.368Z","nodeId":"4e10d8f3-0914-45b6-a290-95e44c550226","pid":1227811,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","error":"ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-wxinHE/partitions/partition-1'","stack":"Error: ENOENT: no such file or directory, scandir '/tmp/lifecycle-test-wxinHE/partitions/partition-1'\n    at Object.readdirSync (node:fs:1583:26)\n    at ReplicaHandler.cleanupReplicaResources (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1357:26)\n    at ReplicaHandler.removeReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:769:18)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:453:9)","nodeId":"4e10d8f3-0914-45b6-a290-95e44c550226","msg":"Async replica removal failed"}
+{"level":50,"time":"2026-02-12T18:14:25.368Z","nodeId":"b856dec5-2b26-4792-a36c-aa51c267caff","pid":1227811,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","partitionId":"partition-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1229:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:463:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:418:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"b856dec5-2b26-4792-a36c-aa51c267caff","msg":"Replica creation failed"}
+{"level":50,"time":"2026-02-12T18:14:25.368Z","nodeId":"b856dec5-2b26-4792-a36c-aa51c267caff","pid":1227811,"subsystem":"replica-handler","operationId":"req-1","replicaId":"replica-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1229:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:463:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:418:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"b856dec5-2b26-4792-a36c-aa51c267caff","msg":"Async replica creation failed"}
 1..1
 # { total: 45, pass: 45 }
-# time=248.99ms
+# time=176.811ms

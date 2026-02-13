@@ -1,5 +1,12 @@
 import {NUM, STATE} from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
+import {
+  STORAGE_PLACEMENT_CONSTRAINT,
+  STORAGE_PLACEMENT_DEFAULT,
+} from './storage-capacity-constants.js';
+import {
+  DEFAULT_MESSAGE_GROUP_POLICY,
+} from '../policy/policy-constants.js';
 
 const REBALANCER_SUBSYSTEM = Object.freeze({
   UNIFIED: 'rebalancer',
@@ -98,17 +105,15 @@ const REBALANCER_DEFAULT_POLICY = Object.freeze({
       considerDiskSpace: true,
       considerCpuLoad: true,
       considerMemoryLoad: true,
+      [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
+        STORAGE_PLACEMENT_DEFAULT.MIN_FREE_BYTES_PER_NODE,
+      [STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT]:
+        STORAGE_PLACEMENT_DEFAULT.MAX_BUDGET_UTILIZATION_PERCENT,
+      [STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM]:
+        STORAGE_PLACEMENT_DEFAULT.RESERVE_EMERGENCY_HEADROOM,
     },
   }),
-  MESSAGE_GROUP: Object.freeze({
-    targetReplicaCount: NUM.THREE,
-    maxReplicaCount: NUM.FIVE,
-    ensureLocalAccess: true,
-    placementConstraints: {
-      spreadAcrossNodes: true,
-      preferNearbyNodes: true,
-    },
-  }),
+  MESSAGE_GROUP: DEFAULT_MESSAGE_GROUP_POLICY,
   WASM_SERVICE: Object.freeze({
     targetReplicaCount: NUM.THREE,
     minReplicaCount: NUM.THREE,
@@ -172,6 +177,9 @@ const REBALANCE_COORDINATOR_EVENT = Object.freeze({
   OPERATION_FAILED: 'operationFailed',
   RECOVERY_COMPLETED: 'recoveryCompleted',
   RECOVERY_FAILED: 'recoveryFailed',
+  RESERVATION_CREATED: 'reservationCreated',
+  RESERVATION_RELEASED: 'reservationReleased',
+  RESERVATION_RECONCILED: 'reservationReconciled',
   SHUTDOWN: 'shutdown',
 });
 
@@ -204,6 +212,20 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   STEPS_HISTORY_PARSE_ERROR: 'Failed to parse steps_history JSON',
   QUERY_OPERATION_FAILED: 'Failed to query operation from system table',
   QUERY_OPERATIONS_FAILED: 'Failed to query operations from system table',
+  RESERVATION_CREATED: 'Storage reservation created with operation',
+  RESERVATION_RELEASED: 'Storage reservation released',
+  RESERVATION_CREATE_FAILED:
+    'Failed to create storage reservation for operation',
+  RESERVATION_RELEASE_FAILED:
+    'Failed to release storage reservation for operation',
+  RESERVATION_RECONCILE_START:
+    'Starting storage reservation reconciliation',
+  RESERVATION_RECONCILE_COMPLETED:
+    'Storage reservation reconciliation completed',
+  RESERVATION_RECONCILE_EXPIRED:
+    'Expired stale storage reservation during reconciliation',
+  RESERVATION_RECONCILE_ORPHAN:
+    'Released orphan storage reservation during reconciliation',
 });
 
 const REBALANCE_COORDINATOR_ERROR_MSG = Object.freeze({
@@ -236,6 +258,11 @@ const STABILIZATION_RESET_TRIGGER = Object.freeze({
   POLICY_CHANGED: 'policy_changed',
 });
 
+const PLACEMENT_DEGRADED_REASON = Object.freeze({
+  INSUFFICIENT_NODES: 'insufficient_nodes',
+  INSUFFICIENT_CAPACITY: 'insufficient_capacity',
+});
+
 const REBALANCER_SKIP_REASON = Object.freeze({
   BUDGET_EXCEEDED: 'budget_exceeded',
   BUDGET_QUERY_FAILED: 'budget_query_failed',
@@ -249,6 +276,7 @@ const REBALANCER_SKIP_REASON = Object.freeze({
 });
 
 export {
+  PLACEMENT_DEGRADED_REASON,
   REBALANCER_SUBSYSTEM,
   REBALANCER_ENTITY_TYPE,
   REBALANCER_TRIGGER,

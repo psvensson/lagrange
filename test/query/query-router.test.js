@@ -17,15 +17,25 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 /**
  * Create a mock system cache with configurable services.
  * @param {Array} services - Array of service objects
+ * @param {Array} nodes - Array of node rows
  * @return {Object} Mock system cache
  */
-function createMockSystemCache(services = []) {
+function createMockSystemCache(services = [], nodes = []) {
+  const nodeById = new Map(
+    nodes.map((node) => [node.node_id, node]),
+  );
   return {
     filter: (tableName, predicate) => {
       if (tableName === TABLES.SERVICES) {
         return services.filter(predicate);
       }
       return [];
+    },
+    get: (tableName, key) => {
+      if (tableName === TABLES.NODES) {
+        return nodeById.get(key) || null;
+      }
+      return null;
     },
   };
 }
@@ -203,6 +213,44 @@ describe('QueryRouter', () => {
 
       const candidates = router.findServiceCandidates('partition-1');
       assert.strictEqual(candidates.length, 1);
+    });
+
+    it('should prioritize same latency-group candidates when requested', () => {
+      const services = [
+        createService({
+          service_id: 'remote-1',
+          node_id: 'node-remote',
+          address: 'ws://remote:8080',
+        }),
+        createService({
+          service_id: 'local-1',
+          node_id: 'node-local',
+          address: 'ws://local:8080',
+        }),
+      ];
+      const nodes = [
+        {node_id: 'node-client', latency_group_id: 'g-1'},
+        {node_id: 'node-local', latency_group_id: 'g-1'},
+        {node_id: 'node-remote', latency_group_id: 'g-2'},
+      ];
+
+      const router = new QueryRouter({
+        systemCache: createMockSystemCache(services, nodes),
+        messageRouter: createMockMessageRouter(() => ({})),
+      });
+
+      const candidates = router.findServiceCandidates(
+        'partition-1',
+        false,
+        {
+          preferSameLatencyGroup: true,
+          localNodeId: 'node-client',
+        },
+      );
+
+      assert.strictEqual(candidates.length, 2);
+      assert.strictEqual(candidates[0].nodeId, 'node-local');
+      assert.strictEqual(candidates[1].nodeId, 'node-remote');
     });
   });
 

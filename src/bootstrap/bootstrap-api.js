@@ -4,7 +4,7 @@
  *
  * Architecture:
  * - System cache is the single source of truth for all cluster state
- * - Bootstrap response contains complete snapshots of all system tables
+ * - Bootstrap response contains default cache-sync table snapshots
  * - Joining nodes hydrate their cache from these snapshots
  * - After hydration, all nodes use system cache for query routing
  *
@@ -32,7 +32,7 @@ import {
   TYPEOF,
   WORKFLOW_STEP,
 } from '../constants/index.js';
-import {CACHE_SYSTEM_TABLES} from '../cache/cache-constants.js';
+import {CACHE_HYDRATION_TABLES} from '../cache/cache-constants.js';
 import {
   getMissingSystemServiceLeaders,
   getMissingSystemServiceLeaderCount,
@@ -45,7 +45,7 @@ import {
 } from './bootstrap-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {NODE_CONFIG_KEY, NODE_DEFAULT} from '../node/node-constants.js';
-import {CONFIG_CATEGORY} from '../config/config-constants.js';
+import {CONFIG_CATEGORY, CONFIG_KEY} from '../config/config-constants.js';
 import {
   BOOTSTRAP_API_CLUSTER_STATE,
   BOOTSTRAP_API_DEFAULT,
@@ -303,6 +303,7 @@ class BootstrapAPI {
 
       // Get current assignment epoch if available
       const currentEpoch = this.getCurrentEpoch();
+      const latencyTopologyHints = this.getLatencyTopologyHints(nodeId);
 
       // Node registration happens after WebSocket IDENTIFY + NODE_STATE_UPDATE.
       // System table cache is the source of truth.
@@ -335,6 +336,7 @@ class BootstrapAPI {
         readyNodes,
         tablePolicies,
         currentEpoch,
+        latencyTopologyHints,
         clusterConfig,
         timestamp: Date.now(),
       };
@@ -1133,6 +1135,7 @@ class BootstrapAPI {
         replica_id: service[COLUMN.REPLICA_ID] || service[COLUMN.SERVICE_ID],
         node_id: service[COLUMN.NODE_ID],
         address: service[COLUMN.ADDRESS],
+        raft_role: service[COLUMN.RAFT_ROLE],
       });
       group.replica_count = group.replicas.length;
     }
@@ -1154,6 +1157,7 @@ class BootstrapAPI {
           replica_id: service[COLUMN.REPLICA_ID] || service[COLUMN.SERVICE_ID],
           node_id: service[COLUMN.NODE_ID],
           address: service[COLUMN.ADDRESS],
+          raft_role: service[COLUMN.RAFT_ROLE],
         }));
 
       return {
@@ -1169,14 +1173,15 @@ class BootstrapAPI {
    *
    * System Cache Seeding Architecture:
    * - System cache is the single source of truth for cluster state
-   * - Bootstrap response includes complete snapshots of all system tables:
+   * - Bootstrap response includes complete snapshots of default cache-sync tables:
    *   * nodes - All registered nodes with addresses and status
    *   * partitions - All partitions with key ranges and replica counts
    *   * services - All services (partition/message group replicas) with addresses and Raft roles
    *   * tables - All user tables with schemas and policies
    *   * message_groups - All message groups with replica counts
    *   * replica_operations - Any pending replica operations
-   *   * indices, config, logs, live_queries, contexts, code - additional system metadata
+   *   * indices, config, live_queries, contexts, code - additional system metadata
+   * - High-volume logs table is intentionally excluded from default snapshots
    * - Joining nodes hydrate their cache from these snapshots
    * - After hydration, joining nodes can immediately read and write to system tables
    * - No bootstrap directories needed - system cache provides all routing information
@@ -1191,7 +1196,7 @@ class BootstrapAPI {
 
     // Get snapshots from cache
     const snapshots = {};
-    for (const tableName of CACHE_SYSTEM_TABLES) {
+    for (const tableName of CACHE_HYDRATION_TABLES) {
       snapshots[tableName] = systemTableCache.getAll(tableName) || [];
     }
 
@@ -1212,6 +1217,33 @@ class BootstrapAPI {
     }
 
     return snapshots;
+  }
+
+  /**
+   * Build latency topology hints for joining node bootstrap.
+   * @param {string} nodeId - Joining node ID.
+   * @return {Object}
+   * @private
+   */
+  getLatencyTopologyHints(nodeId) {
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    const config = ConfigurationManager.getInstance();
+    const propagationMode = config.get(CONFIG_KEY.LATENCY_PROPAGATION_MODE) || null;
+    const joiningNode = systemTableCache.get(TABLES.NODES, nodeId) || null;
+    const groups = systemTableCache.getAll(TABLES.LATENCY_GROUPS) || [];
+    const interGroupLatencies =
+      systemTableCache.getAll(TABLES.INTER_GROUP_LATENCIES) || [];
+
+    return {
+      suggestedGroupId: joiningNode?.[COLUMN.LATENCY_GROUP_ID] || null,
+      groupCount: groups.length,
+      interGroupEdgeCount: interGroupLatencies.length,
+      propagationMode,
+      timestamp: Date.now(),
+    };
   }
 
   /**

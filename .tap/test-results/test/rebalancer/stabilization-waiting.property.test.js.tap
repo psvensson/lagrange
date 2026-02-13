@@ -3,42 +3,42 @@ TAP version 14
     # Subtest: isStabilized returns false on fresh rebalancer (bootstrap protection)
         ok 1 - Should not be stabilized on fresh rebalancer (bootstrap protection)
         1..1
-    ok 1 - isStabilized returns false on fresh rebalancer (bootstrap protection) # time=40.416ms
+    ok 1 - isStabilized returns false on fresh rebalancer (bootstrap protection) # time=42.966ms
     
     # Subtest: isStabilized returns false immediately after state change
         ok 1 - isStabilized returns false immediately after state change
         1..1
-    ok 2 - isStabilized returns false immediately after state change # time=171.009ms
+    ok 2 - isStabilized returns false immediately after state change # time=167.406ms
     
     # Subtest: getTimeUntilStabilized returns positive value after state change
         ok 1 - getTimeUntilStabilized returns positive value after state change
         1..1
-    ok 3 - getTimeUntilStabilized returns positive value after state change # time=146.869ms
+    ok 3 - getTimeUntilStabilized returns positive value after state change # time=130.831ms
     
     # Subtest: getTimeUntilStabilized returns positive value on fresh rebalancer
         ok 1 - Should return positive value on fresh rebalancer (bootstrap protection)
         ok 2 - Time remaining should not exceed stabilization period
         1..2
-    ok 4 - getTimeUntilStabilized returns positive value on fresh rebalancer # time=14.972ms
+    ok 4 - getTimeUntilStabilized returns positive value on fresh rebalancer # time=13.458ms
     
     # Subtest: checkRebalance skips moves during stabilization period
         ok 1 - checkRebalance skips moves during stabilization period
         1..1
-    ok 5 - checkRebalance skips moves during stabilization period # time=139.003ms
+    ok 5 - checkRebalance skips moves during stabilization period # time=126.804ms
     
     # Subtest: stabilization period prevents immediate moves on node join
         ok 1 - Should not be stabilized immediately after node join
         1..1
-    ok 6 - stabilization period prevents immediate moves on node join # time=13.913ms
+    ok 6 - stabilization period prevents immediate moves on node join # time=13.055ms
     
     # Subtest: stabilization period prevents immediate moves on suboptimal state
         ok 1 - Should not be stabilized immediately after suboptimal state detected
         1..1
-    ok 7 - stabilization period prevents immediate moves on suboptimal state # time=13.714ms
+    ok 7 - stabilization period prevents immediate moves on suboptimal state # time=11.864ms
     
     1..7
-ok 1 - Property 4: Stabilization Waiting Before Moves # time=544.289ms
+ok 1 - Property 4: Stabilization Waiting Before Moves # time=510.721ms
 
 1..1
 # { total: 8, pass: 8 }
-# time=559.847ms
+# time=524.414ms

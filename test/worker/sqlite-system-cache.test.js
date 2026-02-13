@@ -389,7 +389,11 @@ test('SQLiteSystemCache - getStats()', async (t) => {
 
   stats = cache.getStats();
   t.equal(stats.initialized, true, 'shows initialized');
-  t.equal(stats.tableCount, 16, 'has 16 system tables');
+  t.equal(
+    stats.tableCount,
+    Object.keys(PRIMARY_KEY_COLUMNS).length,
+    'has all primary-key mapped system tables',
+  );
   t.equal(stats.totalRecords, 0, 'no records yet');
 
   // Insert some data

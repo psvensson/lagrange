@@ -181,8 +181,7 @@ class HeartbeatService extends EventEmitter {
     const cache = this.systemTableCache;
     const existing = cache.get(SystemTableName.NODES, this.nodeId) || null;
 
-    const baseRow = {
-      node_id: this.nodeId,
+    const updateRow = {
       node_address: this.nodeAddress ||
         existing?.node_address || STRING.UNKNOWN,
       cpu_cores: Number.isFinite(stats?.cpu?.count) ?
@@ -206,11 +205,12 @@ class HeartbeatService extends EventEmitter {
         (existing?.capabilities || STRING.EMPTY_JSON_ARRAY),
       last_heartbeat: now,
       ready_lease_expires_at: now + this.readyLeaseMs,
-      created_at: existing?.created_at || now,
     };
 
-    await this.cdcIntegrationService.upsertSystemTableRow(
-      SystemTableName.NODES, baseRow,
+    await this.cdcIntegrationService.updateSystemTableRow(
+      SystemTableName.NODES,
+      {node_id: this.nodeId},
+      updateRow,
     );
 
     // Register WebSocket endpoint

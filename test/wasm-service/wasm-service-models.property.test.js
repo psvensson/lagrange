@@ -24,6 +24,7 @@ import {
   WASM_SERVICE_PROTOCOL,
   WASM_SERVICE_DEFINITION_STATUS,
 } from '../../src/wasm-service/wasm-service-constants.js';
+import {SERVICE_PROFILE} from '../../src/constants/index.js';
 
 // --- Arbitraries ---
 
@@ -33,6 +34,7 @@ const TIMER_STATUS_VALUES = Object.values(TIMER_STATUS);
 const PROTOCOL_VALUES = Object.values(WASM_SERVICE_PROTOCOL);
 const DEFINITION_STATUS_VALUES =
   Object.values(WASM_SERVICE_DEFINITION_STATUS);
+const SERVICE_PROFILE_VALUES = Object.values(SERVICE_PROFILE);
 
 /** Generates odd integers >= 3 for replica counts. */
 const oddReplicaCount = fc.integer({min: 1, max: 50}).map(
@@ -54,6 +56,7 @@ const identifierArb = fc.stringMatching(/^[a-z][a-z0-9-]{0,29}$/);
 const serviceDefinitionArb = fc.record({
   serviceId: identifierArb,
   serviceName: identifierArb,
+  serviceProfile: fc.constantFrom(...SERVICE_PROFILE_VALUES),
   handlerFunctionId: identifierArb,
   readConsistency: fc.constantFrom(...READ_CONSISTENCY_VALUES),
   writeConsistency: fc.constantFrom(...WRITE_CONSISTENCY_VALUES),
@@ -110,6 +113,10 @@ test('Property 7: ServiceDefinition serialization round-trip',
               // All scalar fields must match
               if (result.serviceId !== definition.serviceId) return false;
               if (result.serviceName !== definition.serviceName) {
+                return false;
+              }
+              if (result.serviceProfile !==
+                definition.serviceProfile) {
                 return false;
               }
               if (result.handlerFunctionId !==

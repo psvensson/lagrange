@@ -15,6 +15,14 @@ const TABLES = Object.freeze({
   SERVICE_DEFINITIONS: 'service_definitions',
   SERVICE_ENDPOINTS: 'service_endpoints',
   SERVICE_TIMERS: 'service_timers',
+  MODULE_MANIFESTS: 'module_manifests',
+  PACKAGE_REGISTRY_MAPPINGS: 'package_registry_mappings',
+  PACKAGE_REGISTRY_OVERRIDES: 'package_registry_overrides',
+  MODULE_DEPENDENCY_LOCKS: 'module_dependency_locks',
+  WASM_OPERATIONS: 'wasm_operations',
+  STORAGE_RESERVATIONS: 'storage_reservations',
+  LATENCY_GROUPS: 'latency_groups',
+  INTER_GROUP_LATENCIES: 'inter_group_latencies',
 });
 
 export {TABLES};

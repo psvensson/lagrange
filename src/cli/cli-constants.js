@@ -178,7 +178,7 @@ const CLI_HELP_TEXT = Object.freeze({
   USAGE: `Usage: ${CLI_APP.BIN} [options] [node-address]`,
   EXAMPLES: [
     `${CLI_APP.BIN}                     Connect to localhost:8081`,
-    `${CLI_APP.BIN} localhost:8080      Connect to specific node`,
+    `${CLI_APP.BIN} localhost:8081      Connect to specific node`,
     `${CLI_APP.BIN} --read-only         Start in read-only mode`,
   ],
 });

@@ -1,37 +1,37 @@
 TAP version 14
 # Subtest: Property 25: System stops after max retries exceeded
     ok 1 - Should return MAX_RETRIES_EXCEEDED
-    ok 2 - Should make exactly 4 attempts
+    ok 2 - Should make exactly 2 attempts
     ok 3 - Attempt history should match call count
     ok 4 - Should return MAX_RETRIES_EXCEEDED
-    ok 5 - Should make exactly 6 attempts
+    ok 5 - Should make exactly 2 attempts
     ok 6 - Attempt history should match call count
     ok 7 - Should return MAX_RETRIES_EXCEEDED
     ok 8 - Should make exactly 2 attempts
     ok 9 - Attempt history should match call count
     ok 10 - Should return MAX_RETRIES_EXCEEDED
-    ok 11 - Should make exactly 2 attempts
+    ok 11 - Should make exactly 4 attempts
     ok 12 - Attempt history should match call count
     ok 13 - Should return MAX_RETRIES_EXCEEDED
-    ok 14 - Should make exactly 2 attempts
+    ok 14 - Should make exactly 6 attempts
     ok 15 - Attempt history should match call count
     ok 16 - Should return MAX_RETRIES_EXCEEDED
-    ok 17 - Should make exactly 5 attempts
+    ok 17 - Should make exactly 2 attempts
     ok 18 - Attempt history should match call count
     ok 19 - Should return MAX_RETRIES_EXCEEDED
-    ok 20 - Should make exactly 3 attempts
+    ok 20 - Should make exactly 2 attempts
     ok 21 - Attempt history should match call count
     ok 22 - Should return MAX_RETRIES_EXCEEDED
-    ok 23 - Should make exactly 2 attempts
+    ok 23 - Should make exactly 3 attempts
     ok 24 - Attempt history should match call count
     ok 25 - Should return MAX_RETRIES_EXCEEDED
-    ok 26 - Should make exactly 2 attempts
+    ok 26 - Should make exactly 6 attempts
     ok 27 - Attempt history should match call count
     ok 28 - Should return MAX_RETRIES_EXCEEDED
-    ok 29 - Should make exactly 3 attempts
+    ok 29 - Should make exactly 6 attempts
     ok 30 - Attempt history should match call count
     1..30
-ok 1 - Property 25: System stops after max retries exceeded # time=76.801ms
+ok 1 - Property 25: System stops after max retries exceeded # time=101.2ms
 
 # Subtest: Property 25: Error includes diagnostic information
     ok 1 - Should have diagnostics
@@ -115,7 +115,7 @@ ok 1 - Property 25: System stops after max retries exceeded # time=76.801ms
     ok 79 - Diagnostics should include tried targets
     ok 80 - Tried targets should include original target
     1..80
-ok 2 - Property 25: Error includes diagnostic information # time=44.503ms
+ok 2 - Property 25: Error includes diagnostic information # time=42.969ms
 
 # Subtest: Property 25: All tried targets recorded in diagnostics
     ok 1 - Should include primary target
@@ -149,31 +149,31 @@ ok 2 - Property 25: Error includes diagnostic information # time=44.503ms
     ok 29 - Should have tried at least one alternative
     ok 30 - Tried targets should be unique
     1..30
-ok 3 - Property 25: All tried targets recorded in diagnostics # time=76.957ms
+ok 3 - Property 25: All tried targets recorded in diagnostics # time=67.927ms
 
 # Subtest: Property 25: Error message is descriptive
-    ok 1 - Error should mention 5 attempts
+    ok 1 - Error should mention 3 attempts
     ok 2 - Error should include original error message
     ok 3 - Error should mention 3 attempts
     ok 4 - Error should include original error message
-    ok 5 - Error should mention 4 attempts
+    ok 5 - Error should mention 2 attempts
     ok 6 - Error should include original error message
-    ok 7 - Error should mention 4 attempts
+    ok 7 - Error should mention 3 attempts
     ok 8 - Error should include original error message
-    ok 9 - Error should mention 4 attempts
+    ok 9 - Error should mention 2 attempts
     ok 10 - Error should include original error message
     ok 11 - Error should mention 5 attempts
     ok 12 - Error should include original error message
-    ok 13 - Error should mention 2 attempts
+    ok 13 - Error should mention 4 attempts
     ok 14 - Error should include original error message
-    ok 15 - Error should mention 5 attempts
+    ok 15 - Error should mention 2 attempts
     ok 16 - Error should include original error message
     ok 17 - Error should mention 5 attempts
     ok 18 - Error should include original error message
-    ok 19 - Error should mention 4 attempts
+    ok 19 - Error should mention 2 attempts
     ok 20 - Error should include original error message
     1..20
-ok 4 - Property 25: Error message is descriptive # time=112.487ms
+ok 4 - Property 25: Error message is descriptive # time=53.931ms
 
 # Subtest: Property 25: Statistics track failed deliveries
     ok 1 - Failed deliveries should match
@@ -217,7 +217,7 @@ ok 4 - Property 25: Error message is descriptive # time=112.487ms
     ok 39 - Retries performed should match
     ok 40 - Success rate should be 0
     1..40
-ok 5 - Property 25: Statistics track failed deliveries # time=65.353ms
+ok 5 - Property 25: Statistics track failed deliveries # time=60.921ms
 
 # Subtest: Property 25: maxRetriesExceeded event is emitted
     ok 1 - maxRetriesExceeded event should be emitted
@@ -261,8 +261,8 @@ ok 5 - Property 25: Statistics track failed deliveries # time=65.353ms
     ok 39 - Event should include originalTarget
     ok 40 - Event should include attemptHistory
     1..40
-ok 6 - Property 25: maxRetriesExceeded event is emitted # time=48.125ms
+ok 6 - Property 25: maxRetriesExceeded event is emitted # time=39.574ms
 
 1..6
 # { total: 240, pass: 240 }
-# time=597.944ms
+# time=505.962ms

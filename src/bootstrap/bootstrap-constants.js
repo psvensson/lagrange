@@ -130,6 +130,7 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
   WS_SELF_CONNECTED: 'WebSocket server started and self-connection established',
   ROUTER_INIT_FAILED: 'MessageRouter initialization failed',
   INFRA_READY: 'Infrastructure setup complete',
+  RUNTIME_WIRING_READY: 'Runtime startup wiring initialized',
   CREATING_MESSAGE_GROUP: 'Creating initial message group',
   MESSAGE_GROUP_REPLICA_CREATED: 'Message group replica created',
   MESSAGE_GROUPS_CREATED_DEFERRED: 'Message group replicas created, elections deferred',
@@ -155,6 +156,10 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
   BOOTSTRAP_MODE_ENABLED: 'Bootstrap mode enabled for direct partition writes',
   BOOTSTRAP_MODE_DISABLED: 'Bootstrap mode disabled, routing through SQL engine',
   SERVICE_REGISTRATION_COMPLETE: 'Service registration complete',
+  SERVICE_DEFINITIONS_SCHEMA_MIGRATING:
+    'Migrating service_definitions schema to canonical contract',
+  SERVICE_DEFINITIONS_SCHEMA_MIGRATED:
+    'service_definitions schema migrated to canonical contract',
   CDC_MG_UNAVAILABLE: 'CDC integration service not available for message group registration',
   MESSAGE_GROUP_REGISTERED: 'Message group registered',
   MESSAGE_GROUP_REGISTER_FAILED: 'Failed to register message group',
@@ -191,6 +196,8 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
   REPLICA_HANDLER_REGISTER_FAILED: 'Failed to register partition with replica handler',
   REPLICA_HANDLER_REGISTERED: 'Registered partitions with replica handler',
   CONTROL_PLANE_READY: 'Control plane service initialized',
+  LATENCY_TOPOLOGY_READY: 'Latency topology services initialized',
+  LATENCY_TOPOLOGY_STARTED: 'Latency topology lifecycle started',
   CONTROL_PLANE_REGISTER_FAILED: 'Failed to register seed node via control plane',
   STATE_MACHINE_MISSING: 'No state machine provided for replica registration',
   STATE_MACHINE_REGISTER_FAILED: 'Failed to register replica with state machine',
@@ -257,6 +264,7 @@ const BOOTSTRAP_ERROR = Object.freeze({
   CDC_REPLICA_HANDLER_MISSING: 'CDC integration service not initialized for replica handler',
   CDC_CONTROL_PLANE_MISSING: 'CDC integration service not initialized for control plane',
   CDC_HYDRATION_MISSING: 'No message group available for CDC hydration',
+  LATENCY_TOPOLOGY_MISSING: 'Latency topology services are not initialized',
   SYSTEM_CACHE_MISSING: 'System table cache not available',
   seedReadyTimeout: (nodeId, timeoutMs) =>
     `Seed node ${nodeId} not ready in system cache within ${timeoutMs}ms`,

@@ -32,47 +32,57 @@ TAP version 14
     ok 30 - System table service_endpoints has at least 3 replicas: 3
     ok 31 - System table service_timers has odd replica count: 3
     ok 32 - System table service_timers has at least 3 replicas: 3
-    1..32
-ok 1 - Property 33: All system table partitions have odd replica counts # time=4.285ms
+    ok 33 - System table module_manifests has odd replica count: 3
+    ok 34 - System table module_manifests has at least 3 replicas: 3
+    ok 35 - System table package_registry_mappings has odd replica count: 3
+    ok 36 - System table package_registry_mappings has at least 3 replicas: 3
+    ok 37 - System table package_registry_overrides has odd replica count: 3
+    ok 38 - System table package_registry_overrides has at least 3 replicas: 3
+    ok 39 - System table module_dependency_locks has odd replica count: 3
+    ok 40 - System table module_dependency_locks has at least 3 replicas: 3
+    ok 41 - System table wasm_operations has odd replica count: 3
+    ok 42 - System table wasm_operations has at least 3 replicas: 3
+    1..42
+ok 1 - Property 33: All system table partitions have odd replica counts # time=4.295ms
 
 # Subtest: Property 33: Initial message group has odd replica count
     ok 1 - Initial message group has odd replica count: 3
     ok 2 - Initial message group has at least 3 replicas: 3
     1..2
-ok 2 - Property 33: Initial message group has odd replica count # time=0.451ms
+ok 2 - Property 33: Initial message group has odd replica count # time=0.39ms
 
 # Subtest: Property 33: Default partition replica count is odd
     ok 1 - Default partition replica count is odd: 3
     ok 2 - Default partition replica count is at least 3: 3
     1..2
-ok 3 - Property 33: Default partition replica count is odd # time=0.368ms
+ok 3 - Property 33: Default partition replica count is odd # time=0.338ms
 
 # Subtest: Property 33: Default message group replica count is odd
     ok 1 - Default message group replica count is odd: 3
     ok 2 - Default message group replica count is at least 3: 3
     1..2
-ok 4 - Property 33: Default message group replica count is odd # time=0.36ms
+ok 4 - Property 33: Default message group replica count is odd # time=0.337ms
 
 # Subtest: Property 33: Valid replica counts are always odd
     ok 1 - Valid replica counts are always odd
     1..1
-ok 5 - Property 33: Valid replica counts are always odd # time=1.9ms
+ok 5 - Property 33: Valid replica counts are always odd # time=1.764ms
 
 # Subtest: Property 33: Replica count growth maintains odd invariant
     ok 1 - Replica count growth maintains odd invariant
     1..1
-ok 6 - Property 33: Replica count growth maintains odd invariant # time=0.777ms
+ok 6 - Property 33: Replica count growth maintains odd invariant # time=0.727ms
 
 # Subtest: Property 33: Replica count shrink maintains odd invariant
     ok 1 - Replica count shrink maintains odd invariant
     1..1
-ok 7 - Property 33: Replica count shrink maintains odd invariant # time=0.686ms
+ok 7 - Property 33: Replica count shrink maintains odd invariant # time=0.65ms
 
 # Subtest: Property 33: Quorum calculation requires odd replica count
     ok 1 - Quorum calculation requires odd replica count
     1..1
-ok 8 - Property 33: Quorum calculation requires odd replica count # time=0.514ms
+ok 8 - Property 33: Quorum calculation requires odd replica count # time=0.427ms
 
 1..8
-# { total: 42, pass: 42 }
-# time=178.925ms
+# { total: 52, pass: 52 }
+# time=137.338ms

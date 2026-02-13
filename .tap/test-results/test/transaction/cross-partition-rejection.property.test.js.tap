@@ -2,703 +2,703 @@ TAP version 14
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002784-0.8312060119307743'
+  sessionId: 'session-1770796038343-0.91136093143472'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002784-0.8312060119307743' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038343-0.91136093143472' }
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('ba', 'User1'), ('x', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1770671002784-0.8312060119307743'
+  sessionId: 'session-1770796038343-0.91136093143472'
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002795-0.6923055431077612'
+  sessionId: 'session-1770796038359-0.24499287592952812'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002795-0.6923055431077612' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038359-0.24499287592952812' }
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('x', 'User2')",
+  sql: "INSERT INTO users (id, name) VALUES ('ba', 'User1'), ('zx', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1770671002795-0.6923055431077612'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002796-0.18546274795024797'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002796-0.18546274795024797' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('z', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1770671002796-0.18546274795024797'
+  sessionId: 'session-1770796038359-0.24499287592952812'
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002797-0.6177176238895903'
+  sessionId: 'session-1770796038361-0.8241448425731808'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002797-0.6177176238895903' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038361-0.8241448425731808' }
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ca', 'User1'), ('yx', 'User2')",
+  sql: "INSERT INTO users (id, name) VALUES ('ba', 'User1'), ('yz', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1770671002797-0.6177176238895903'
+  sessionId: 'session-1770796038361-0.8241448425731808'
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002797-0.022680485895715474'
+  sessionId: 'session-1770796038362-0.5204459919904612'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002797-0.022680485895715474' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038362-0.5204459919904612' }
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('y', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1770671002797-0.022680485895715474'
+  sessionId: 'session-1770796038362-0.5204459919904612'
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002798-0.5540943249174055'
+  sessionId: 'session-1770796038363-0.8033574346484624'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002798-0.5540943249174055' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038363-0.8033574346484624' }
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ac', 'User1'), ('z', 'User2')",
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('xz', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1770671002798-0.5540943249174055'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002799-0.40878973933552243'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002799-0.40878973933552243' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('y', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1770671002799-0.40878973933552243'
+  sessionId: 'session-1770796038363-0.8033574346484624'
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002799-0.2664104259099107'
+  sessionId: 'session-1770796038364-0.05660131896444698'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002799-0.2664104259099107' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038364-0.05660131896444698' }
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('y', 'User2')",
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('yx', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1770671002799-0.2664104259099107'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002800-0.5342013409034903'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002800-0.5342013409034903' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('y', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1770671002800-0.5342013409034903'
+  sessionId: 'session-1770796038364-0.05660131896444698'
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002800-0.7299253298808048'
+  sessionId: 'session-1770796038365-0.6983897020626464'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002800-0.7299253298808048' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038365-0.6983897020626464' }
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('yy', 'User2')",
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('yx', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1770671002800-0.7299253298808048'
+  sessionId: 'session-1770796038365-0.6983897020626464'
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038365-0.9256433622257327'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038365-0.9256433622257327' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('bc', 'User1'), ('zx', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1770796038365-0.9256433622257327'
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038366-0.2724785935103804'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038366-0.2724785935103804' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('xy', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1770796038366-0.2724785935103804'
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038367-0.41073784235339583'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038367-0.41073784235339583' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('xy', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1770796038367-0.41073784235339583'
 }
 # Subtest: Property 47: Cross-partition INSERT is rejected
     ok 1 - Cross-partition INSERT rejection property holds
     1..1
-ok 1 - Property 47: Cross-partition INSERT is rejected # time=20.638ms
+ok 1 - Property 47: Cross-partition INSERT is rejected # time=32.371ms
 
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002804-0.7676279765042686'
+  sessionId: 'session-1770796038373-0.6983618023445666'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002804-0.7676279765042686' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ca', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002804-0.7676279765042686'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002804-0.7676279765042686'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1770671002804-0.7676279765042686'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002808-0.34284803379514894'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002808-0.34284803379514894' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ba', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002808-0.34284803379514894'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002808-0.34284803379514894'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1770671002808-0.34284803379514894'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002809-0.1677260071591682'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002809-0.1677260071591682' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ca', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002809-0.1677260071591682'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002809-0.1677260071591682'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1770671002809-0.1677260071591682'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002809-0.6534325901658478'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002809-0.6534325901658478' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002809-0.6534325901658478'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002809-0.6534325901658478'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1770671002809-0.6534325901658478'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002810-0.9443743808470713'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002810-0.9443743808470713' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('aa', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002810-0.9443743808470713'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002810-0.9443743808470713'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1770671002810-0.9443743808470713'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002811-0.8749002858467287'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002811-0.8749002858467287' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ac', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002811-0.8749002858467287'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002811-0.8749002858467287'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1770671002811-0.8749002858467287'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002812-0.7909541000846263'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002812-0.7909541000846263' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002812-0.7909541000846263'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002812-0.7909541000846263'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1770671002812-0.7909541000846263'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002813-0.36697665249929456'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002813-0.36697665249929456' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('cb', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002813-0.36697665249929456'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002813-0.36697665249929456'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1770671002813-0.36697665249929456'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002814-0.5980073281654126'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002814-0.5980073281654126' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038373-0.6983618023445666' }
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
   paramCount: 0,
-  sessionId: 'session-1770671002814-0.5980073281654126'
+  sessionId: 'session-1770796038373-0.6983618023445666'
 }
 Routing INSERT to partitions {
   tableName: 'users',
   rowCount: 1,
   partitionCount: 1,
-  sessionId: 'session-1770671002814-0.5980073281654126'
+  sessionId: 'session-1770796038373-0.6983618023445666'
 }
 Executing SQL query {
   sql: "UPDATE users SET status = 'active' WHERE age > 18",
   paramCount: 0,
-  sessionId: 'session-1770671002814-0.5980073281654126'
+  sessionId: 'session-1770796038373-0.6983618023445666'
 }
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002815-0.7251651870340234'
+  sessionId: 'session-1770796038380-0.8408772761648717'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002815-0.7251651870340234' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038380-0.8408772761648717' }
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('cb', 'User1')",
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
   paramCount: 0,
-  sessionId: 'session-1770671002815-0.7251651870340234'
+  sessionId: 'session-1770796038380-0.8408772761648717'
 }
 Routing INSERT to partitions {
   tableName: 'users',
   rowCount: 1,
   partitionCount: 1,
-  sessionId: 'session-1770671002815-0.7251651870340234'
+  sessionId: 'session-1770796038380-0.8408772761648717'
 }
 Executing SQL query {
   sql: "UPDATE users SET status = 'active' WHERE age > 18",
   paramCount: 0,
-  sessionId: 'session-1770671002815-0.7251651870340234'
+  sessionId: 'session-1770796038380-0.8408772761648717'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038382-0.6115723816117116'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038382-0.6115723816117116' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038382-0.6115723816117116'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038382-0.6115723816117116'
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1770796038382-0.6115723816117116'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038384-0.8740436528220004'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038384-0.8740436528220004' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('ac', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038384-0.8740436528220004'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038384-0.8740436528220004'
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1770796038384-0.8740436528220004'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038385-0.08446661699947744'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038385-0.08446661699947744' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038385-0.08446661699947744'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038385-0.08446661699947744'
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1770796038385-0.08446661699947744'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038387-0.3785830338974703'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038387-0.3785830338974703' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('aa', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038387-0.3785830338974703'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038387-0.3785830338974703'
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1770796038387-0.3785830338974703'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038388-0.5425173042296523'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038388-0.5425173042296523' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038388-0.5425173042296523'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038388-0.5425173042296523'
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1770796038388-0.5425173042296523'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038390-0.5604328389459514'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038390-0.5604328389459514' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('aa', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038390-0.5604328389459514'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038390-0.5604328389459514'
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1770796038390-0.5604328389459514'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038391-0.10098410968377802'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038391-0.10098410968377802' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038391-0.10098410968377802'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038391-0.10098410968377802'
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1770796038391-0.10098410968377802'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038393-0.23044594207809843'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038393-0.23044594207809843' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038393-0.23044594207809843'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038393-0.23044594207809843'
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1770796038393-0.23044594207809843'
 }
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 # Subtest: Property 47: Cross-partition UPDATE is rejected
     ok 1 - Cross-partition UPDATE rejection property holds
     1..1
-ok 2 - Property 47: Cross-partition UPDATE is rejected # time=13.189ms
+ok 2 - Property 47: Cross-partition UPDATE is rejected # time=22.55ms
 
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002817-0.7811904619374344'
+  sessionId: 'session-1770796038396-0.09137278147365113'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002817-0.7811904619374344' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002817-0.7811904619374344'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002817-0.7811904619374344'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1770671002817-0.7811904619374344'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002819-0.6729394919719032'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002819-0.6729394919719032' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002819-0.6729394919719032'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002819-0.6729394919719032'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1770671002819-0.6729394919719032'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002820-0.269007704868951'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002820-0.269007704868951' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002820-0.269007704868951'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002820-0.269007704868951'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1770671002820-0.269007704868951'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002821-0.019794932350584604'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002821-0.019794932350584604' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002821-0.019794932350584604'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002821-0.019794932350584604'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1770671002821-0.019794932350584604'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002821-0.3970866372904933'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002821-0.3970866372904933' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038396-0.09137278147365113' }
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
   paramCount: 0,
-  sessionId: 'session-1770671002821-0.3970866372904933'
+  sessionId: 'session-1770796038396-0.09137278147365113'
 }
 Routing INSERT to partitions {
   tableName: 'users',
   rowCount: 1,
   partitionCount: 1,
-  sessionId: 'session-1770671002821-0.3970866372904933'
+  sessionId: 'session-1770796038396-0.09137278147365113'
 }
 Executing SQL query {
   sql: 'DELETE FROM users WHERE age > 18',
   paramCount: 0,
-  sessionId: 'session-1770671002821-0.3970866372904933'
+  sessionId: 'session-1770796038396-0.09137278147365113'
 }
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002822-0.8591305889894203'
+  sessionId: 'session-1770796038399-0.3683779345134486'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002822-0.8591305889894203' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038399-0.3683779345134486' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038399-0.3683779345134486'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038399-0.3683779345134486'
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1770796038399-0.3683779345134486'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038400-0.5170529845481853'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038400-0.5170529845481853' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038400-0.5170529845481853'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038400-0.5170529845481853'
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1770796038400-0.5170529845481853'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038402-0.9263226050834912'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038402-0.9263226050834912' }
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
   paramCount: 0,
-  sessionId: 'session-1770671002822-0.8591305889894203'
+  sessionId: 'session-1770796038402-0.9263226050834912'
 }
 Routing INSERT to partitions {
   tableName: 'users',
   rowCount: 1,
   partitionCount: 1,
-  sessionId: 'session-1770671002822-0.8591305889894203'
+  sessionId: 'session-1770796038402-0.9263226050834912'
 }
 Executing SQL query {
   sql: 'DELETE FROM users WHERE age > 18',
   paramCount: 0,
-  sessionId: 'session-1770671002822-0.8591305889894203'
+  sessionId: 'session-1770796038402-0.9263226050834912'
 }
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002823-0.2809746235819819'
+  sessionId: 'session-1770796038403-0.9482259283544483'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002823-0.2809746235819819' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038403-0.9482259283544483' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('bc', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038403-0.9482259283544483'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038403-0.9482259283544483'
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1770796038403-0.9482259283544483'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038404-0.5716227953239872'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038404-0.5716227953239872' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('cb', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038404-0.5716227953239872'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038404-0.5716227953239872'
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1770796038404-0.5716227953239872'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038406-0.9569333289156625'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038406-0.9569333289156625' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('ba', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1770796038406-0.9569333289156625'
+}
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1770796038406-0.9569333289156625'
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1770796038406-0.9569333289156625'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038407-0.9843948607689612'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038407-0.9843948607689612' }
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('cc', 'User1')",
   paramCount: 0,
-  sessionId: 'session-1770671002823-0.2809746235819819'
+  sessionId: 'session-1770796038407-0.9843948607689612'
 }
 Routing INSERT to partitions {
   tableName: 'users',
   rowCount: 1,
   partitionCount: 1,
-  sessionId: 'session-1770671002823-0.2809746235819819'
+  sessionId: 'session-1770796038407-0.9843948607689612'
 }
 Executing SQL query {
   sql: 'DELETE FROM users WHERE age > 18',
   paramCount: 0,
-  sessionId: 'session-1770671002823-0.2809746235819819'
+  sessionId: 'session-1770796038407-0.9843948607689612'
 }
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002824-0.9444507871626249'
+  sessionId: 'session-1770796038408-0.6675531426956176'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002824-0.9444507871626249' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038408-0.6675531426956176' }
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('bb', 'User1')",
+  sql: "INSERT INTO users (id, name) VALUES ('cb', 'User1')",
   paramCount: 0,
-  sessionId: 'session-1770671002824-0.9444507871626249'
+  sessionId: 'session-1770796038408-0.6675531426956176'
 }
 Routing INSERT to partitions {
   tableName: 'users',
   rowCount: 1,
   partitionCount: 1,
-  sessionId: 'session-1770671002824-0.9444507871626249'
+  sessionId: 'session-1770796038408-0.6675531426956176'
 }
 Executing SQL query {
   sql: 'DELETE FROM users WHERE age > 18',
   paramCount: 0,
-  sessionId: 'session-1770671002824-0.9444507871626249'
+  sessionId: 'session-1770796038408-0.6675531426956176'
 }
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002825-0.15305239754592836'
+  sessionId: 'session-1770796038410-0.4257600578043348'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002825-0.15305239754592836' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038410-0.4257600578043348' }
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
+  sql: "INSERT INTO users (id, name) VALUES ('bc', 'User1')",
   paramCount: 0,
-  sessionId: 'session-1770671002825-0.15305239754592836'
+  sessionId: 'session-1770796038410-0.4257600578043348'
 }
 Routing INSERT to partitions {
   tableName: 'users',
   rowCount: 1,
   partitionCount: 1,
-  sessionId: 'session-1770671002825-0.15305239754592836'
+  sessionId: 'session-1770796038410-0.4257600578043348'
 }
 Executing SQL query {
   sql: 'DELETE FROM users WHERE age > 18',
   paramCount: 0,
-  sessionId: 'session-1770671002825-0.15305239754592836'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002826-0.6282451703394856'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002826-0.6282451703394856' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1770671002826-0.6282451703394856'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1770671002826-0.6282451703394856'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1770671002826-0.6282451703394856'
+  sessionId: 'session-1770796038410-0.4257600578043348'
 }
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 # Subtest: Property 47: Cross-partition DELETE is rejected
     ok 1 - Cross-partition DELETE rejection property holds
     1..1
-ok 3 - Property 47: Cross-partition DELETE is rejected # time=10.057ms
+ok 3 - Property 47: Cross-partition DELETE is rejected # time=18.044ms
 
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002827-0.6824076838840631'
+  sessionId: 'session-1770796038414-0.846494585493579'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002827-0.6824076838840631' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ba', 'User1'), ('z', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1770671002827-0.6824076838840631'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002828-0.3393101060659558'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002828-0.3393101060659558' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('cb', 'User1'), ('z', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1770671002828-0.3393101060659558'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002828-0.14527521905255325'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002828-0.14527521905255325' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('bc', 'User1'), ('x', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1770671002828-0.14527521905255325'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002829-0.9769746707588469'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002829-0.9769746707588469' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('z', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1770671002829-0.9769746707588469'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002829-0.7736595986155179'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002829-0.7736595986155179' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('y', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1770671002829-0.7736595986155179'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002830-0.26857918166940853'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002830-0.26857918166940853' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038414-0.846494585493579' }
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('y', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1770671002830-0.26857918166940853'
+  sessionId: 'session-1770796038414-0.846494585493579'
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002830-0.21072968432637285'
+  sessionId: 'session-1770796038414-0.03771807494727031'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002830-0.21072968432637285' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038414-0.03771807494727031' }
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('cc', 'User1'), ('z', 'User2')",
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('xz', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1770671002830-0.21072968432637285'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1770671002831-0.07709793865697478'
-}
-BEGIN TRANSACTION { sessionId: 'session-1770671002831-0.07709793865697478' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('yz', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1770671002831-0.07709793865697478'
+  sessionId: 'session-1770796038414-0.03771807494727031'
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002831-0.9750853627082505'
+  sessionId: 'session-1770796038415-0.8885743852839463'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002831-0.9750853627082505' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038415-0.8885743852839463' }
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ca', 'User1'), ('y', 'User2')",
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('yy', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1770671002831-0.9750853627082505'
+  sessionId: 'session-1770796038415-0.8885743852839463'
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1770671002832-0.015030373809988617'
+  sessionId: 'session-1770796038415-0.7767030205724206'
 }
-BEGIN TRANSACTION { sessionId: 'session-1770671002832-0.015030373809988617' }
+BEGIN TRANSACTION { sessionId: 'session-1770796038415-0.7767030205724206' }
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('z', 'User2')",
+  sql: "INSERT INTO users (id, name) VALUES ('ca', 'User1'), ('z', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1770671002832-0.015030373809988617'
+  sessionId: 'session-1770796038415-0.7767030205724206'
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038416-0.725780202256316'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038416-0.725780202256316' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('yy', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1770796038416-0.725780202256316'
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038417-0.6883903514260463'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038417-0.6883903514260463' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('zx', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1770796038417-0.6883903514260463'
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038418-0.7824226327834363'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038418-0.7824226327834363' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('z', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1770796038418-0.7824226327834363'
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038419-0.19907776010312617'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038419-0.19907776010312617' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('bc', 'User1'), ('y', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1770796038419-0.19907776010312617'
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038419-0.7135991212345008'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038419-0.7135991212345008' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('bb', 'User1'), ('z', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1770796038419-0.7135991212345008'
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1770796038420-0.8534445008912761'
+}
+BEGIN TRANSACTION { sessionId: 'session-1770796038420-0.8534445008912761' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('zy', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1770796038420-0.8534445008912761'
 }
 # Subtest: Property 47: Error message indicates cross-partition not supported
     ok 1 - Error message property holds
     1..1
-ok 4 - Property 47: Error message indicates cross-partition not supported # time=5.491ms
+ok 4 - Property 47: Error message indicates cross-partition not supported # time=7.846ms
 
 1..4
 # { total: 4, pass: 4 }
-# time=95.08ms
+# time=153.795ms

@@ -3,14 +3,14 @@ TAP version 14
     ok 1 - Service should be initialized
     ok 2 - Should have no indices initially
     1..2
-ok 1 - IndexService - initialization # time=4.68ms
+ok 1 - IndexService - initialization # time=4.185ms
 
 # Subtest: IndexService - loads indices from cache on init
     ok 1 - Should load 2 indices from cache
     ok 2 - idx_name should exist
     ok 3 - idx_value should exist
     1..3
-ok 2 - IndexService - loads indices from cache on init # time=0.591ms
+ok 2 - IndexService - loads indices from cache on init # time=0.531ms
 
 # Subtest: IndexService - createIndex stores metadata
     ok 1 - Should return index ID
@@ -22,25 +22,25 @@ ok 2 - IndexService - loads indices from cache on init # time=0.591ms
     ok 7 - Should insert into indices table
     ok 8 - Should have correct index name in data
     1..8
-ok 3 - IndexService - createIndex stores metadata # time=1.801ms
+ok 3 - IndexService - createIndex stores metadata # time=1.542ms
 
 # Subtest: IndexService - createIndex with multiple columns
     ok 1 - Should have multiple columns
     ok 2 - Should store columns as JSON array
     1..2
-ok 4 - IndexService - createIndex with multiple columns # time=0.541ms
+ok 4 - IndexService - createIndex with multiple columns # time=0.458ms
 
 # Subtest: IndexService - createIndex prevents duplicates
     ok 1 - Should indicate index already exists
     1..1
-ok 5 - IndexService - createIndex prevents duplicates # time=0.718ms
+ok 5 - IndexService - createIndex prevents duplicates # time=0.719ms
 
 # Subtest: IndexService - createIndex validates required params
     ok 1 - Should indicate tableId is required
     ok 2 - Should indicate indexName is required
     ok 3 - Should indicate columnNames is required
     1..3
-ok 6 - IndexService - createIndex validates required params # time=0.61ms
+ok 6 - IndexService - createIndex validates required params # time=0.522ms
 
 # Subtest: IndexService - dropIndex removes index metadata
     ok 1 - Index should exist
@@ -49,64 +49,64 @@ ok 6 - IndexService - createIndex validates required params # time=0.61ms
     ok 4 - Should delete one row
     ok 5 - Should delete from indices table
     1..5
-ok 7 - IndexService - dropIndex removes index metadata # time=0.926ms
+ok 7 - IndexService - dropIndex removes index metadata # time=0.818ms
 
 # Subtest: IndexService - dropIndex throws for non-existent
     ok 1 - Should indicate index not found
     1..1
-ok 8 - IndexService - dropIndex throws for non-existent # time=0.432ms
+ok 8 - IndexService - dropIndex throws for non-existent # time=0.372ms
 
 # Subtest: IndexService - getIndicesForTable returns all
     ok 1 - Should have 2 indices for users table
     ok 2 - Should have 1 index for orders table
     1..2
-ok 9 - IndexService - getIndicesForTable returns all # time=0.558ms
+ok 9 - IndexService - getIndicesForTable returns all # time=0.486ms
 
 # Subtest: IndexService - getAllIndices returns all indices
     ok 1 - Should have 2 total indices
     1..1
-ok 10 - IndexService - getAllIndices returns all indices # time=0.494ms
+ok 10 - IndexService - getAllIndices returns all indices # time=0.425ms
 
 # Subtest: IndexService - handleCDCEvent updates on INSERT
     ok 1 - Index should exist after CDC event
     1..1
-ok 11 - IndexService - handleCDCEvent updates on INSERT # time=0.49ms
+ok 11 - IndexService - handleCDCEvent updates on INSERT # time=0.438ms
 
 # Subtest: IndexService - handleCDCEvent updates on DELETE
     ok 1 - Index should exist
     ok 2 - Index should not exist
     1..2
-ok 12 - IndexService - handleCDCEvent updates on DELETE # time=0.522ms
+ok 12 - IndexService - handleCDCEvent updates on DELETE # time=0.469ms
 
 # Subtest: IndexService - creates SQLite index on partitions
     ok 1 - SQLite index should be created
     ok 2 - Index name should match
     1..2
-ok 13 - IndexService - creates SQLite index on partitions # time=4.918ms
+ok 13 - IndexService - creates SQLite index on partitions # time=4.362ms
 
 # Subtest: IndexService - creates indices on new partition via CDC
     ok 1 - Index should be created on new partition
     1..1
-ok 14 - IndexService - creates indices on new partition via CDC # time=1.417ms
+ok 14 - IndexService - creates indices on new partition via CDC # time=1.32ms
 
 # Subtest: IndexService - ensureIndicesOnPartition creates all
     ok 1 - Should create 2 indices
     ok 2 - Both indices should exist in SQLite
     1..2
-ok 15 - IndexService - ensureIndicesOnPartition creates all # time=1.231ms
+ok 15 - IndexService - ensureIndicesOnPartition creates all # time=1.219ms
 
 # Subtest: IndexService - rebuildIndex recreates on partitions
     ok 1 - Should rebuild on 1 partition
     ok 2 - Should have no failures
     ok 3 - Index should exist after rebuild
     1..3
-ok 16 - IndexService - rebuildIndex recreates on partitions # time=1.439ms
+ok 16 - IndexService - rebuildIndex recreates on partitions # time=1.38ms
 
 # Subtest: IndexService - ignores non-INSERT partition CDC
     ok 1 - Non-INSERT partition CDC events handled gracefully
     1..1
-ok 17 - IndexService - ignores non-INSERT partition CDC # time=0.378ms
+ok 17 - IndexService - ignores non-INSERT partition CDC # time=0.399ms
 
 1..17
 # { total: 40, pass: 40 }
-# time=324.571ms
+# time=255.816ms

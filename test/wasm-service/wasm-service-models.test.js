@@ -17,6 +17,10 @@ import {
   WASM_SERVICE_DEFINITION_STATUS,
   TIMER_STATUS,
 } from '../../src/wasm-service/wasm-service-constants.js';
+import {
+  RUNTIME_KIND,
+  RUNTIME_FIELD,
+} from '../../src/constants/runtime.js';
 
 describe('wasm-service-models', () => {
   describe('SD_COL', () => {
@@ -27,6 +31,7 @@ describe('wasm-service-models', () => {
     it('should have all service_definitions column names', () => {
       assert.equal(SD_COL.SERVICE_ID, 'service_id');
       assert.equal(SD_COL.SERVICE_NAME, 'service_name');
+      assert.equal(SD_COL.SERVICE_PROFILE, 'service_profile');
       assert.equal(
         SD_COL.HANDLER_FUNCTION_ID, 'handler_function_id'
       );
@@ -36,6 +41,15 @@ describe('wasm-service-models', () => {
       assert.equal(SD_COL.PROTOCOL, 'protocol');
       assert.equal(SD_COL.RESOURCE_BUDGET, 'resource_budget');
       assert.equal(SD_COL.SAFETY_INTERVAL_MS, 'safety_interval_ms');
+      assert.equal(
+        SD_COL.RUNTIME_KIND, RUNTIME_FIELD.RUNTIME_KIND
+      );
+      assert.equal(
+        SD_COL.RUNTIME_REF, RUNTIME_FIELD.RUNTIME_REF
+      );
+      assert.equal(
+        SD_COL.RUNTIME_CONFIG, RUNTIME_FIELD.RUNTIME_CONFIG
+      );
       assert.equal(SD_COL.STATUS, 'status');
       assert.equal(SD_COL.CREATED_AT, 'created_at');
       assert.equal(SD_COL.UPDATED_AT, 'updated_at');
@@ -139,6 +153,7 @@ describe('wasm-service-models', () => {
       const definition = {
         serviceId: 'svc-1',
         serviceName: 'my-service',
+        serviceProfile: 'default',
         handlerFunctionId: 'func-1',
         readConsistency: 'leader_only',
         writeConsistency: 'async',
@@ -151,6 +166,9 @@ describe('wasm-service-models', () => {
           serviceSizeLimitBytes: 52428800,
         },
         safetyIntervalMs: 1000,
+        runtimeKind: RUNTIME_KIND.NATIVE_JS,
+        runtimeRef: 'admin-handler-v1',
+        runtimeConfig: '{"timeout":5000}',
         status: 'active',
         createdAt: now,
         updatedAt: now,
@@ -168,6 +186,7 @@ describe('wasm-service-models', () => {
       });
       assert.ok(SD_COL.SERVICE_ID in row);
       assert.ok(SD_COL.SERVICE_NAME in row);
+      assert.ok(SD_COL.SERVICE_PROFILE in row);
       assert.ok(SD_COL.HANDLER_FUNCTION_ID in row);
       assert.ok(SD_COL.READ_CONSISTENCY in row);
       assert.ok(SD_COL.WRITE_CONSISTENCY in row);
@@ -175,6 +194,9 @@ describe('wasm-service-models', () => {
       assert.ok(SD_COL.PROTOCOL in row);
       assert.ok(SD_COL.RESOURCE_BUDGET in row);
       assert.ok(SD_COL.SAFETY_INTERVAL_MS in row);
+      assert.ok(SD_COL.RUNTIME_KIND in row);
+      assert.ok(SD_COL.RUNTIME_REF in row);
+      assert.ok(SD_COL.RUNTIME_CONFIG in row);
       assert.ok(SD_COL.STATUS in row);
       assert.ok(SD_COL.CREATED_AT in row);
       assert.ok(SD_COL.UPDATED_AT in row);
@@ -244,6 +266,64 @@ describe('wasm-service-models', () => {
         def.resourceBudget.cpuTimeLimitMs,
         DEFAULT_RESOURCE_BUDGET.CPU_TIME_LIMIT_MS
       );
+    });
+
+    it('should default runtime fields to null for legacy rows', () => {
+      const row = {
+        [SD_COL.SERVICE_ID]: 'svc-legacy',
+        [SD_COL.SERVICE_NAME]: 'legacy-svc',
+        [SD_COL.HANDLER_FUNCTION_ID]: 'func-1',
+        [SD_COL.READ_CONSISTENCY]: 'strong',
+        [SD_COL.WRITE_CONSISTENCY]: 'strong',
+        [SD_COL.REPLICA_COUNT]: 3,
+        [SD_COL.PROTOCOL]: 'websocket',
+        [SD_COL.RESOURCE_BUDGET]: '{}',
+        [SD_COL.SAFETY_INTERVAL_MS]: 500,
+        [SD_COL.STATUS]: 'active',
+        [SD_COL.CREATED_AT]: 1000,
+        [SD_COL.UPDATED_AT]: 1000,
+      };
+      const def = deserializeServiceDefinition(row);
+      assert.equal(def.runtimeKind, RUNTIME_KIND.WASM_COMPONENT);
+      assert.equal(def.runtimeRef, 'func-1');
+      assert.equal(def.runtimeConfig, null);
+    });
+
+    it('should serialize null runtime fields when not provided', () => {
+      const row = serializeServiceDefinition({
+        serviceId: 'svc-1',
+        serviceName: 'test',
+        handlerFunctionId: 'func-1',
+      });
+      assert.equal(
+        row[SD_COL.RUNTIME_KIND], RUNTIME_KIND.WASM_COMPONENT
+      );
+      assert.equal(row[SD_COL.RUNTIME_REF], 'func-1');
+      assert.equal(row[SD_COL.RUNTIME_CONFIG], null);
+    });
+
+    it('should preserve runtime fields through round-trip', () => {
+      const row = serializeServiceDefinition({
+        serviceId: 'svc-rt',
+        serviceName: 'runtime-svc',
+        handlerFunctionId: 'func-1',
+        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
+        runtimeRef: 'module-abc@sha256:deadbeef',
+        runtimeConfig: '{"memory":64}',
+      });
+      assert.equal(
+        row[SD_COL.RUNTIME_KIND], RUNTIME_KIND.WASM_COMPONENT
+      );
+      assert.equal(
+        row[SD_COL.RUNTIME_REF], 'module-abc@sha256:deadbeef'
+      );
+      assert.equal(row[SD_COL.RUNTIME_CONFIG], '{"memory":64}');
+      const def = deserializeServiceDefinition(row);
+      assert.equal(def.runtimeKind, RUNTIME_KIND.WASM_COMPONENT);
+      assert.equal(
+        def.runtimeRef, 'module-abc@sha256:deadbeef'
+      );
+      assert.equal(def.runtimeConfig, '{"memory":64}');
     });
   });
 

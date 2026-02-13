@@ -5,6 +5,12 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
+import {NUM, STRING, TYPEOF} from '../../src/constants/index.js';
+import {POLICY_ERROR_MSG} from '../../src/policy/policy-constants.js';
+import {
+  STORAGE_PLACEMENT_CONSTRAINT,
+  STORAGE_PLACEMENT_DEFAULT,
+} from '../../src/rebalancer/storage-capacity-constants.js';
 
 // Mock SQL query engine
 function createMockSqlEngine(data = {}) {
@@ -66,6 +72,27 @@ test('TablePolicyService - getDefaultPolicy returns complete policy',
       'Should have placement constraints');
     t.ok(policy.placementConstraints.spreadAcrossNodes,
       'Should spread across nodes');
+    t.equal(
+      policy.placementConstraints[
+        STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE
+      ],
+      STORAGE_PLACEMENT_DEFAULT.MIN_FREE_BYTES_PER_NODE,
+      'Should default min free bytes per node',
+    );
+    t.equal(
+      policy.placementConstraints[
+        STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT
+      ],
+      STORAGE_PLACEMENT_DEFAULT.MAX_BUDGET_UTILIZATION_PERCENT,
+      'Should default max budget utilization percent',
+    );
+    t.equal(
+      policy.placementConstraints[
+        STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM
+      ],
+      STORAGE_PLACEMENT_DEFAULT.RESERVE_EMERGENCY_HEADROOM,
+      'Should default emergency headroom reservation',
+    );
     t.end();
   });
 
@@ -202,6 +229,42 @@ test('TablePolicyService - validatePolicy rejects negative thresholds',
       'Negative threshold should fail validation');
     t.ok(result.errors.some((e) => e.includes('non-negative')),
       'Should mention non-negative');
+    t.end();
+  });
+
+test('TablePolicyService - validatePolicy rejects invalid placement constraints',
+  async (t) => {
+    const service = new TablePolicyService();
+
+    const invalidPolicy = {
+      placementConstraints: {
+        [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
+          NUM.NEGATIVE_ONE,
+        [STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT]:
+          NUM.HUNDRED + NUM.ONE,
+        [STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM]:
+          STRING.EMPTY,
+      },
+    };
+
+    const result = service.validatePolicy(invalidPolicy);
+    t.notOk(result.valid,
+      'Invalid placement constraints should fail validation');
+    t.ok(result.errors.includes(
+      POLICY_ERROR_MSG.PLACEMENT_MIN_FREE_NONNEGATIVE,
+    ),
+    'Should reject negative min free bytes');
+    t.ok(result.errors.includes(
+      POLICY_ERROR_MSG.PLACEMENT_MAX_UTIL_RANGE,
+    ),
+    'Should reject utilization out of range');
+    const expectedTypeError = POLICY_ERROR_MSG.fieldTypeMismatch(
+      STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM,
+      TYPEOF.BOOLEAN,
+      TYPEOF.STRING,
+    );
+    t.ok(result.errors.includes(expectedTypeError),
+      'Should reject emergency headroom type mismatch');
     t.end();
   });
 
@@ -500,3 +563,335 @@ test('TablePolicyService - cache invalidation', async (t) => {
 
   t.end();
 });
+
+
+// --- Message group policy tests (Task 8, Req 6.1, 6.3, 6.4, 6.5) ---
+
+test('TablePolicyService - getDefaultMessageGroupPolicy returns complete policy',
+  async (t) => {
+    const service = new TablePolicyService();
+    const policy = service.getDefaultMessageGroupPolicy();
+
+    t.equal(policy.targetReplicaCount, 3,
+      'Default target replica count should be 3');
+    t.equal(policy.maxReplicaCount, 5,
+      'Default max replica count should be 5');
+    t.equal(policy.ensureLocalAccess, true,
+      'Should ensure local access by default');
+    t.ok(policy.placementConstraints,
+      'Should have placement constraints');
+    t.ok(policy.placementConstraints.spreadAcrossNodes,
+      'Should spread across nodes');
+    t.ok(policy.placementConstraints.preferNearbyNodes,
+      'Should prefer nearby nodes');
+    t.equal(
+      policy.placementConstraints[
+        STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE
+      ],
+      STORAGE_PLACEMENT_DEFAULT.MIN_FREE_BYTES_PER_NODE,
+      'Should default min free bytes per node',
+    );
+    t.equal(
+      policy.placementConstraints[
+        STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT
+      ],
+      STORAGE_PLACEMENT_DEFAULT.MAX_BUDGET_UTILIZATION_PERCENT,
+      'Should default max budget utilization percent',
+    );
+    t.equal(
+      policy.placementConstraints[
+        STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM
+      ],
+      STORAGE_PLACEMENT_DEFAULT.RESERVE_EMERGENCY_HEADROOM,
+      'Should default emergency headroom reservation',
+    );
+    t.end();
+  });
+
+test('TablePolicyService - getMessageGroupPolicy without engine returns default',
+  async (t) => {
+    const service = new TablePolicyService();
+    const policy = await service.getMessageGroupPolicy('mg-1');
+
+    t.equal(policy.targetReplicaCount, 3,
+      'Should return default policy without engine');
+    t.equal(policy.ensureLocalAccess, true,
+      'Should have ensureLocalAccess');
+    t.end();
+  });
+
+test('TablePolicyService - getMessageGroupPolicy merges stored policy',
+  async (t) => {
+    const mockEngine = createMockSqlEngine({});
+    // Override executeQuery to handle message_groups
+    mockEngine.executeQuery = async (sql, params) => {
+      if (sql.includes('FROM message_groups') && params?.[0]) {
+        if (params[0] === 'mg-1') {
+          return {
+            rows: [{
+              group_id: 'mg-1',
+              policy: JSON.stringify({
+                targetReplicaCount: 5,
+                placementConstraints: {
+                  [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
+                    1048576,
+                },
+              }),
+            }],
+          };
+        }
+      }
+      return {rows: []};
+    };
+
+    const service = new TablePolicyService({
+      sqlQueryEngine: mockEngine,
+    });
+    const policy = await service.getMessageGroupPolicy('mg-1');
+
+    t.equal(policy.targetReplicaCount, 5,
+      'Should use stored target replica count');
+    t.equal(policy.maxReplicaCount, 5,
+      'Should use default max replica count');
+    t.equal(policy.ensureLocalAccess, true,
+      'Should use default ensureLocalAccess');
+    t.equal(
+      policy.placementConstraints[
+        STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE
+      ],
+      1048576,
+      'Should use stored min free bytes');
+    t.equal(
+      policy.placementConstraints[
+        STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT
+      ],
+      STORAGE_PLACEMENT_DEFAULT.MAX_BUDGET_UTILIZATION_PERCENT,
+      'Should use default max utilization for unset keys');
+    t.end();
+  });
+
+test('TablePolicyService - validateMessageGroupPolicy accepts valid policy',
+  async (t) => {
+    const service = new TablePolicyService();
+
+    const validPolicy = {
+      targetReplicaCount: 5,
+      maxReplicaCount: 7,
+      ensureLocalAccess: false,
+    };
+
+    const result = service.validateMessageGroupPolicy(validPolicy);
+    t.ok(result.valid, 'Valid policy should pass validation');
+    t.equal(result.errors.length, 0, 'Should have no errors');
+    t.end();
+  });
+
+test('TablePolicyService - validateMessageGroupPolicy rejects even replica count',
+  async (t) => {
+    const service = new TablePolicyService();
+
+    const result = service.validateMessageGroupPolicy({
+      targetReplicaCount: 4,
+    });
+    t.notOk(result.valid, 'Even replica count should fail');
+    t.ok(result.errors.some((e) => e.includes('odd')),
+      'Should mention odd requirement');
+    t.end();
+  });
+
+test('TablePolicyService - validateMessageGroupPolicy rejects target > max',
+  async (t) => {
+    const service = new TablePolicyService();
+
+    const result = service.validateMessageGroupPolicy({
+      targetReplicaCount: 7,
+      maxReplicaCount: 5,
+    });
+    t.notOk(result.valid, 'target > max should fail');
+    t.ok(result.errors.some((e) => e.includes('between')),
+      'Should mention constraint');
+    t.end();
+  });
+
+test('TablePolicyService - validateMessageGroupPolicy rejects invalid placement constraints',
+  async (t) => {
+    const service = new TablePolicyService();
+
+    const result = service.validateMessageGroupPolicy({
+      placementConstraints: {
+        [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
+          NUM.NEGATIVE_ONE,
+        [STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT]:
+          NUM.HUNDRED + NUM.ONE,
+      },
+    });
+    t.notOk(result.valid,
+      'Invalid placement constraints should fail');
+    t.ok(result.errors.includes(
+      POLICY_ERROR_MSG.PLACEMENT_MIN_FREE_NONNEGATIVE,
+    ), 'Should reject negative min free bytes');
+    t.ok(result.errors.includes(
+      POLICY_ERROR_MSG.PLACEMENT_MAX_UTIL_RANGE,
+    ), 'Should reject utilization out of range');
+    t.end();
+  });
+
+test('TablePolicyService - validateMessageGroupPolicy rejects type mismatches',
+  async (t) => {
+    const service = new TablePolicyService();
+
+    const result = service.validateMessageGroupPolicy({
+      targetReplicaCount: 'three',
+      ensureLocalAccess: 'yes',
+    });
+    t.notOk(result.valid, 'Type mismatches should fail');
+    t.ok(result.errors.length >= 2,
+      'Should have at least 2 type errors');
+    t.end();
+  });
+
+test('TablePolicyService - getEffectiveStorageConstraints for table',
+  async (t) => {
+    const mockEngine = createMockSqlEngine({
+      tables: {
+        'table-1': {
+          table_id: 'table-1',
+          table_policies: JSON.stringify({
+            placementConstraints: {
+              [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
+                5242880,
+              [STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM]:
+                true,
+            },
+          }),
+        },
+      },
+    });
+
+    const service = new TablePolicyService({
+      sqlQueryEngine: mockEngine,
+    });
+    const constraints =
+      await service.getEffectiveStorageConstraints('table-1');
+
+    t.equal(
+      constraints[STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE],
+      5242880,
+      'Should return stored min free bytes');
+    t.equal(
+      constraints[STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT],
+      STORAGE_PLACEMENT_DEFAULT.MAX_BUDGET_UTILIZATION_PERCENT,
+      'Should return default max utilization');
+    t.equal(
+      constraints[STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM],
+      true,
+      'Should return stored emergency headroom');
+    t.end();
+  });
+
+test('TablePolicyService - getEffectiveMessageGroupStorageConstraints',
+  async (t) => {
+    const mockEngine = {
+      executeQuery: async (sql, params) => {
+        if (sql.includes('FROM message_groups') &&
+            params?.[0] === 'mg-1') {
+          return {
+            rows: [{
+              group_id: 'mg-1',
+              policy: JSON.stringify({
+                placementConstraints: {
+                  [STORAGE_PLACEMENT_CONSTRAINT
+                    .MAX_BUDGET_UTILIZATION_PERCENT]: 80,
+                },
+              }),
+            }],
+          };
+        }
+        return {rows: []};
+      },
+    };
+
+    const service = new TablePolicyService({
+      sqlQueryEngine: mockEngine,
+    });
+    const constraints =
+      await service.getEffectiveMessageGroupStorageConstraints('mg-1');
+
+    t.equal(
+      constraints[STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT],
+      80,
+      'Should return stored max utilization');
+    t.equal(
+      constraints[STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE],
+      STORAGE_PLACEMENT_DEFAULT.MIN_FREE_BYTES_PER_NODE,
+      'Should return default min free bytes');
+    t.equal(
+      constraints[STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM],
+      STORAGE_PLACEMENT_DEFAULT.RESERVE_EMERGENCY_HEADROOM,
+      'Should return default emergency headroom');
+    t.end();
+  });
+
+test('TablePolicyService - message group policy uses same validation path as table',
+  async (t) => {
+    const service = new TablePolicyService();
+
+    // Same invalid constraint should fail in both paths
+    const tableResult = service.validatePolicy({
+      placementConstraints: {
+        [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
+          NUM.NEGATIVE_ONE,
+      },
+    });
+    const mgResult = service.validateMessageGroupPolicy({
+      placementConstraints: {
+        [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
+          NUM.NEGATIVE_ONE,
+      },
+    });
+
+    t.notOk(tableResult.valid, 'Table validation should fail');
+    t.notOk(mgResult.valid, 'Message group validation should fail');
+    t.equal(
+      tableResult.errors[0],
+      mgResult.errors[0],
+      'Both should produce the same error message',
+    );
+    t.end();
+  });
+
+test('TablePolicyService - message group policy cache works',
+  async (t) => {
+    let callCount = 0;
+    const mockEngine = {
+      executeQuery: async (sql, params) => {
+        if (sql.includes('FROM message_groups') &&
+            params?.[0] === 'mg-1') {
+          callCount++;
+          return {
+            rows: [{
+              group_id: 'mg-1',
+              policy: JSON.stringify({targetReplicaCount: 5}),
+            }],
+          };
+        }
+        return {rows: []};
+      },
+    };
+
+    const service = new TablePolicyService({
+      sqlQueryEngine: mockEngine,
+    });
+
+    await service.getMessageGroupPolicy('mg-1');
+    t.equal(callCount, 1, 'First call should query SQL engine');
+
+    await service.getMessageGroupPolicy('mg-1');
+    t.equal(callCount, 1, 'Second call should use cache');
+
+    service.clearCache();
+    await service.getMessageGroupPolicy('mg-1');
+    t.equal(callCount, 2,
+      'After clearCache should query SQL engine again');
+    t.end();
+  });

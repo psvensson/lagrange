@@ -13,75 +13,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '0cd5aebd-79fa-43b2-93c9-e35ee3c67ffa',
-  type: 'REMOVE',
-  partitionId: 'ffffffe1-a887-245a-9963-2d11541782ce',
-  targetNodeId: '4966a1d3-0017-1000-8000-001500000018',
-  entityType: 'partition',
-  entityId: 'ffffffe1-a887-245a-9963-2d11541782ce'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'd39e9d0c-45ce-44f4-9a4c-fc52e0f24da3',
-  type: 'REMOVE',
-  partitionId: 'd0c6072b-6f40-3c17-8000-000e0000000b',
-  targetNodeId: '177fe2e7-dcb3-1d9b-bfff-fff20000000d',
-  entityType: 'partition',
-  entityId: 'd0c6072b-6f40-3c17-8000-000e0000000b'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '91df9d7d-d9d2-48fb-aade-86c32be74c70',
-  type: 'REMOVE',
-  partitionId: '0000001e-436e-2b2d-8e85-2b0600000006',
-  targetNodeId: '00000002-7a5f-54eb-bfff-fff448d2588d',
-  entityType: 'partition',
-  entityId: '0000001e-436e-2b2d-8e85-2b0600000006'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'ab5538b5-4577-4386-8dd4-bd63621f8409',
+  operationId: '98bf9eb4-27be-4216-aebb-97a1f5d61d35',
   type: 'ADD',
-  partitionId: '0000000b-1cb9-1e08-8000-000d0e5d63e7',
-  targetNodeId: '00000006-000a-1000-8000-0007ffffffe4',
+  partitionId: '00000004-105b-2359-8783-a3678ff76899',
+  targetNodeId: '9401466f-0017-1000-8000-0004a86f23ce',
   entityType: 'partition',
-  entityId: '0000000b-1cb9-1e08-8000-000d0e5d63e7'
+  entityId: '00000004-105b-2359-8783-a3678ff76899'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -97,54 +34,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'c172eadd-9ccc-4f6d-b34c-65dddf82d981',
-  type: 'ADD',
-  partitionId: '7c38d7c3-efa4-2a0d-8000-00176c7a063e',
-  targetNodeId: 'ffffffe5-8961-1088-8d17-8d6d83834b8a',
-  entityType: 'partition',
-  entityId: '7c38d7c3-efa4-2a0d-8000-00176c7a063e'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '548bd52c-2e53-43b1-8bb7-42f3622ec38c',
-  type: 'ADD',
-  partitionId: '6184f440-248a-2729-bfff-fffb4b7017cb',
-  targetNodeId: 'a3907085-1630-14a8-87d9-dac90000001c',
-  entityType: 'partition',
-  entityId: '6184f440-248a-2729-bfff-fffb4b7017cb'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '29af988f-8d44-4e76-9098-8a0bbb88906b',
+  operationId: '066fbfb1-acab-42ec-8851-fdd5900c5a4f',
   type: 'REMOVE',
-  partitionId: 'a2c9db80-fffa-5fff-bfff-fffeffffffe1',
-  targetNodeId: '3d5f02aa-0002-1000-8000-0003ffffffec',
+  partitionId: 'ffffffe1-0012-1000-8000-000917f84f5b',
+  targetNodeId: 'be8b59e9-cae4-5d5e-875d-519dc56a159f',
   entityType: 'partition',
-  entityId: 'a2c9db80-fffa-5fff-bfff-fffeffffffe1'
+  entityId: 'ffffffe1-0012-1000-8000-000917f84f5b'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -160,60 +55,165 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '76a27964-7f46-4619-8ba1-54307bfec71b',
-  type: 'ADD',
-  partitionId: 'fffffff9-0009-1000-8000-000300000015',
-  targetNodeId: 'fffffff3-0003-1000-8000-001b1a087448',
-  entityType: 'partition',
-  entityId: 'fffffff9-0009-1000-8000-000300000015'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'a293d7e8-b0ad-42e4-942b-47c6cc6a2189',
-  type: 'ADD',
-  partitionId: '7b6dddfe-0012-1000-b464-6ce3aab90112',
-  targetNodeId: '05ebb890-fff7-5fff-8531-8d9000000005',
-  entityType: 'partition',
-  entityId: '7b6dddfe-0012-1000-b464-6ce3aab90112'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '00487350-e421-434f-a404-1e6516577c85',
+  operationId: 'ffef046b-0c9b-490a-8465-a00b3a6cb11e',
   type: 'REMOVE',
-  partitionId: 'aaa0d8a9-0018-1000-a5bb-7c042b2e1d56',
-  targetNodeId: '5ede10a9-662e-4aef-8af0-5452e254b69c',
+  partitionId: '686b014b-2354-3883-9426-408d6ba7c30c',
+  targetNodeId: 'ffffffeb-0012-1000-bf3e-dd4f00000009',
   entityType: 'partition',
-  entityId: 'aaa0d8a9-0018-1000-a5bb-7c042b2e1d56'
+  entityId: '686b014b-2354-3883-9426-408d6ba7c30c'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: '12979112-38fb-49e1-85cb-a981f5060dd9',
+  type: 'REMOVE',
+  partitionId: '2d25a6d4-408a-2d50-bc15-e685ffffffe0',
+  targetNodeId: '0000000f-debf-171e-aa6d-a5d255e69bb7',
+  entityType: 'partition',
+  entityId: '2d25a6d4-408a-2d50-bc15-e685ffffffe0'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: '332eb765-4530-42c2-86b9-3b534462d4ec',
+  type: 'ADD',
+  partitionId: '42c9d951-c6e4-14fa-bfff-fff90000000c',
+  targetNodeId: '00000012-ffee-5fff-b71d-db651ea7d933',
+  entityType: 'partition',
+  entityId: '42c9d951-c6e4-14fa-bfff-fff90000000c'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: 'c0714ee1-b293-410f-bd76-fb27934ce50b',
+  type: 'REMOVE',
+  partitionId: '00000012-fff7-5fff-9337-117a7fa50cfa',
+  targetNodeId: 'fffffff4-e826-2daa-8633-a630ffffffea',
+  entityType: 'partition',
+  entityId: '00000012-fff7-5fff-9337-117a7fa50cfa'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: 'd579a1e5-ef05-4db4-b2a0-11c285e54c56',
+  type: 'ADD',
+  partitionId: '4341b7cd-001e-1000-8000-0004ffffffea',
+  targetNodeId: '0000000b-ca51-2591-a92c-06111ef5c0de',
+  entityType: 'partition',
+  entityId: '4341b7cd-001e-1000-8000-0004ffffffea'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: '8e992a9c-2de7-4a05-b058-d94419f9378d',
+  type: 'REMOVE',
+  partitionId: '00000006-0016-1000-9aee-4710ff7a8b74',
+  targetNodeId: 'fffffff0-0002-1000-8000-00090000001b',
+  entityType: 'partition',
+  entityId: '00000006-0016-1000-9aee-4710ff7a8b74'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: 'fd2cf2ea-ca47-4426-a09f-62b7d791fe05',
+  type: 'REMOVE',
+  partitionId: '0000000f-8b46-3b80-8e18-1b0864f5fbc4',
+  targetNodeId: '35fc3e4a-0002-1000-8000-000a0000000d',
+  entityType: 'partition',
+  entityId: '0000000f-8b46-3b80-8e18-1b0864f5fbc4'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: '74d41d25-47c6-4266-b856-bd645eeccca8',
+  type: 'ADD',
+  partitionId: 'a7dbcff3-1aa6-532a-9ae4-0250ce9c822b',
+  targetNodeId: 'f6cb72ec-af55-3e4d-8b2c-d3849132ed7f',
+  entityType: 'partition',
+  entityId: 'a7dbcff3-1aa6-532a-9ae4-0250ce9c822b'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
     # Subtest: operations are persisted to replica_operations table
         ok 1 - Operations are persisted to replica_operations table
         1..1
-    ok 1 - operations are persisted to replica_operations table # time=45.304ms
+    ok 1 - operations are persisted to replica_operations table # time=59.506ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -228,12 +228,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '6881aeef-f502-42fb-8a23-6bb272ca9c69',
+  operationId: 'afa1ca03-46b3-4af8-a0d1-549d6ae4a4fa',
   type: 'REMOVE',
-  partitionId: '0e3b08e5-d59e-4873-8de7-2fdefffffffa',
-  targetNodeId: 'ffffffec-3373-4356-8000-001b62c9b11d',
+  partitionId: 'f685822e-0000-1000-8342-2603df575967',
+  targetNodeId: '0000000e-0010-1000-8000-000d00000002',
   entityType: 'partition',
-  entityId: '0e3b08e5-d59e-4873-8de7-2fdefffffffa'
+  entityId: 'f685822e-0000-1000-8342-2603df575967'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -249,12 +249,75 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '76f876c3-2303-4656-b830-533a1bad6854',
+  operationId: 'fdfaa76a-bb08-4743-ab39-658446ef5a75',
+  type: 'REMOVE',
+  partitionId: '0000001b-0004-1000-97cd-7595fffffff4',
+  targetNodeId: 'f4bc7776-0012-1000-8cb0-5d5a0000001d',
+  entityType: 'partition',
+  entityId: '0000001b-0004-1000-97cd-7595fffffff4'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: 'fc3f6e64-bb16-4804-9fa1-007c19dce5f0',
+  type: 'REMOVE',
+  partitionId: 'fffffff3-44af-3ff8-bfff-ffe9ee0b275a',
+  targetNodeId: '1cbb4531-0006-1000-bfff-ffe78abdb4eb',
+  entityType: 'partition',
+  entityId: 'fffffff3-44af-3ff8-bfff-ffe9ee0b275a'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: '9b2ca0d6-8b5a-4084-b5a9-03c59fa35203',
+  type: 'REMOVE',
+  partitionId: 'f230e629-0018-1000-8000-001cfffffff4',
+  targetNodeId: '0000000d-63d0-10b4-bfff-fff7fffffff6',
+  entityType: 'partition',
+  entityId: 'f230e629-0018-1000-8000-001cfffffff4'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: '714d3625-6b34-4638-8867-0640c63922fd',
   type: 'ADD',
-  partitionId: 'fffffffa-4a61-55c9-9636-a20dd90352c0',
-  targetNodeId: 'ffffffed-0015-1000-8000-00098c64d54c',
+  partitionId: '0000001c-0010-1000-bfff-ffef9e952f1e',
+  targetNodeId: '00000002-ea8a-2761-8000-0013ffffffef',
   entityType: 'partition',
-  entityId: 'fffffffa-4a61-55c9-9636-a20dd90352c0'
+  entityId: '0000001c-0010-1000-bfff-ffef9e952f1e'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -270,54 +333,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '66acdd96-f24e-4b1c-9a86-0c15ea38b43a',
-  type: 'REMOVE',
-  partitionId: '00000014-ffe3-5fff-b97b-a871cab9c5cf',
-  targetNodeId: 'cdb2fb2b-0015-1000-bfff-ffff519b8dff',
-  entityType: 'partition',
-  entityId: '00000014-ffe3-5fff-b97b-a871cab9c5cf'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '58a5c90e-980e-4499-8777-7748d270477d',
-  type: 'REMOVE',
-  partitionId: 'fe042fc6-0004-1000-a983-3cca217b73c1',
-  targetNodeId: '6462b503-0005-1000-bfff-fff5ffffffe0',
-  entityType: 'partition',
-  entityId: 'fe042fc6-0004-1000-a983-3cca217b73c1'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'd3b5bac9-d9bc-4265-a3d0-5761904beb40',
+  operationId: '0f6dc91a-6c3a-488e-90c2-644c6ee6d603',
   type: 'ADD',
-  partitionId: '58d6f6b1-6c0d-2d82-9501-2ed6a44d8b13',
-  targetNodeId: 'fffffff1-e27e-3769-8000-000ac6bcc5e6',
+  partitionId: 'fffffff4-fffe-5fff-ac35-4e753fc9c96d',
+  targetNodeId: '00000015-f344-3f48-a9b0-7b35397951ea',
   entityType: 'partition',
-  entityId: '58d6f6b1-6c0d-2d82-9501-2ed6a44d8b13'
+  entityId: 'fffffff4-fffe-5fff-ac35-4e753fc9c96d'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -333,12 +354,54 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'b2d95abb-4694-404e-8db3-a12c175abf3d',
+  operationId: '0288707f-4a24-470e-9ff7-2801a5f04d8a',
+  type: 'REMOVE',
+  partitionId: 'fffffff5-0004-1000-91d8-a65e45e25a6c',
+  targetNodeId: '0000001d-000c-1000-a281-2a50f66da733',
+  entityType: 'partition',
+  entityId: 'fffffff5-0004-1000-91d8-a65e45e25a6c'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: 'b626ca0e-06a8-4ce1-9d7c-6c776de29863',
+  type: 'REMOVE',
+  partitionId: 'e5882655-e07a-23f2-9c56-58dcfffffffc',
+  targetNodeId: 'e0bfb51f-c005-2900-a6d9-4e9c00000002',
+  entityType: 'partition',
+  entityId: 'e5882655-e07a-23f2-9c56-58dcfffffffc'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: '54f52a6c-dae8-431f-8e3d-0ff60c505e11',
   type: 'ADD',
-  partitionId: '52dd3635-0005-1000-8000-0016fffffff5',
-  targetNodeId: '0000001e-c719-394b-8000-000300000013',
+  partitionId: '479b6ac0-8eb9-43d8-8a2c-d167b82c9296',
+  targetNodeId: 'f1d2fe65-ffe6-5fff-bfff-fffffffffff2',
   entityType: 'partition',
-  entityId: '52dd3635-0005-1000-8000-0016fffffff5'
+  entityId: '479b6ac0-8eb9-43d8-8a2c-d167b82c9296'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -354,81 +417,18 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '2d780d2e-2990-4acc-8dc6-f4b00acf2fa1',
+  operationId: 'a63fb01f-f867-4782-a6f1-aed6f6c763a2',
   type: 'ADD',
-  partitionId: '45f32274-8dba-2602-8000-001a0000001c',
-  targetNodeId: '00000016-ffff-5fff-aba8-cd447be70a4e',
+  partitionId: '0000000e-dac3-32fb-b5c8-0d476924fceb',
+  targetNodeId: '00000004-4755-4a3a-949f-ed5700000015',
   entityType: 'partition',
-  entityId: '45f32274-8dba-2602-8000-001a0000001c'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '00a068ab-4eee-40ab-8f71-b411cf810563',
-  type: 'REMOVE',
-  partitionId: '423d92ad-38dd-1b76-9e76-350f00000010',
-  targetNodeId: '00000019-0015-1000-94af-7325ffffffe4',
-  entityType: 'partition',
-  entityId: '423d92ad-38dd-1b76-9e76-350f00000010'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '22dcc878-2aad-4b27-8b03-43f5e0b06103',
-  type: 'REMOVE',
-  partitionId: '8b59a8df-0006-1000-8000-000000000012',
-  targetNodeId: 'ffffffe5-ffe7-5fff-86d4-723800000006',
-  entityType: 'partition',
-  entityId: '8b59a8df-0006-1000-8000-000000000012'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'af4f8a21-7146-40d1-b258-ce83c0a30329',
-  type: 'REMOVE',
-  partitionId: '0000001f-940b-1cae-8000-001900000005',
-  targetNodeId: '0000001b-cf99-3c3e-a180-542500000016',
-  entityType: 'partition',
-  entityId: '0000001f-940b-1cae-8000-001900000005'
+  entityId: '0000000e-dac3-32fb-b5c8-0d476924fceb'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
     # Subtest: persisted record contains all required fields
         ok 1 - Persisted records contain all required fields
         1..1
-    ok 2 - persisted record contains all required fields # time=3.953ms
+    ok 2 - persisted record contains all required fields # time=3.895ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -443,19 +443,19 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '822b9bd0-087d-4d39-beaa-9d348197758f',
+  operationId: '16ca6a88-7e35-44ae-9d88-f3799737dbcf',
   type: 'REMOVE',
-  partitionId: 'ffffffe9-000e-1000-8000-00030000000b',
-  targetNodeId: 'eb82e592-001b-1000-95ce-4769fffffff2',
+  partitionId: '00000017-2796-2f1b-8000-0009497f06e8',
+  targetNodeId: '7385dad8-ae8d-1bd6-8000-001961a2df3d',
   entityType: 'partition',
-  entityId: 'ffffffe9-000e-1000-8000-00030000000b'
+  entityId: '00000017-2796-2f1b-8000-0009497f06e8'
 }
 Operation step changed {
-  operationId: '822b9bd0-087d-4d39-beaa-9d348197758f',
+  operationId: '16ca6a88-7e35-44ae-9d88-f3799737dbcf',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: 'ffffffe9-000e-1000-8000-00030000000b'
+  partitionId: '00000017-2796-2f1b-8000-0009497f06e8'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -471,19 +471,19 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '126c346f-a812-4661-9738-449a6d4b58a3',
+  operationId: 'e5c3148a-a852-49d8-9c1d-38e8f1a7794e',
   type: 'ADD',
-  partitionId: '0000000e-0763-5b21-bfff-ffe300000013',
-  targetNodeId: '00000000-000c-1000-8507-4378e882c5fd',
+  partitionId: '1ff95120-001b-1000-8000-00153f8afd5e',
+  targetNodeId: 'f7e2937b-fff8-5fff-83af-79b05d4aefe3',
   entityType: 'partition',
-  entityId: '0000000e-0763-5b21-bfff-ffe300000013'
+  entityId: '1ff95120-001b-1000-8000-00153f8afd5e'
 }
 Operation step changed {
-  operationId: '126c346f-a812-4661-9738-449a6d4b58a3',
+  operationId: 'e5c3148a-a852-49d8-9c1d-38e8f1a7794e',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: '0000000e-0763-5b21-bfff-ffe300000013'
+  partitionId: '1ff95120-001b-1000-8000-00153f8afd5e'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -499,19 +499,19 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '4e2bc98a-d1d4-4c3a-8ef7-c3582b3fcdcc',
+  operationId: 'c17e1056-cb53-4147-9d9b-e69da4dc2b15',
   type: 'ADD',
-  partitionId: 'fd276d85-ffee-5fff-8224-d3cc46025782',
-  targetNodeId: 'f279cf2a-0009-1000-b234-8a6000000017',
+  partitionId: '53153668-fff9-5fff-8000-001cb99f4ccb',
+  targetNodeId: 'fffffff3-0012-1000-8000-0006fffffff6',
   entityType: 'partition',
-  entityId: 'fd276d85-ffee-5fff-8224-d3cc46025782'
+  entityId: '53153668-fff9-5fff-8000-001cb99f4ccb'
 }
 Operation step changed {
-  operationId: '4e2bc98a-d1d4-4c3a-8ef7-c3582b3fcdcc',
+  operationId: 'c17e1056-cb53-4147-9d9b-e69da4dc2b15',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: 'fd276d85-ffee-5fff-8224-d3cc46025782'
+  partitionId: '53153668-fff9-5fff-8000-001cb99f4ccb'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -527,19 +527,19 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '6bf56f4c-968b-4095-ad8b-39a578ab3b61',
+  operationId: 'b6242dc5-dc9d-4f2e-aed6-cf7722a3e8b9',
   type: 'ADD',
-  partitionId: '77b57926-c767-4bd0-9d58-19c76b3652e7',
-  targetNodeId: 'e628428c-9766-4174-8000-000539573008',
+  partitionId: 'ffffffeb-fff9-5fff-8e60-63c45ed0c48d',
+  targetNodeId: 'd1805507-dc0b-2c62-8199-e424438558e2',
   entityType: 'partition',
-  entityId: '77b57926-c767-4bd0-9d58-19c76b3652e7'
+  entityId: 'ffffffeb-fff9-5fff-8e60-63c45ed0c48d'
 }
 Operation step changed {
-  operationId: '6bf56f4c-968b-4095-ad8b-39a578ab3b61',
+  operationId: 'b6242dc5-dc9d-4f2e-aed6-cf7722a3e8b9',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: '77b57926-c767-4bd0-9d58-19c76b3652e7'
+  partitionId: 'ffffffeb-fff9-5fff-8e60-63c45ed0c48d'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -555,19 +555,19 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '5f2cab7c-aab5-4891-8f84-f6447b66d7d8',
+  operationId: 'bda6e661-888a-4cfd-98a8-2fa3bcd56bc9',
   type: 'REMOVE',
-  partitionId: 'ffffffeb-fffb-5fff-bfff-ffef7ee1d36c',
-  targetNodeId: '00000001-79e6-3e0d-8000-001a42822356',
+  partitionId: '5eaf8bf2-be46-2431-bd3b-b39d6b36a4ad',
+  targetNodeId: '8b9d3171-ffe1-5fff-a81a-51640000000c',
   entityType: 'partition',
-  entityId: 'ffffffeb-fffb-5fff-bfff-ffef7ee1d36c'
+  entityId: '5eaf8bf2-be46-2431-bd3b-b39d6b36a4ad'
 }
 Operation step changed {
-  operationId: '5f2cab7c-aab5-4891-8f84-f6447b66d7d8',
+  operationId: 'bda6e661-888a-4cfd-98a8-2fa3bcd56bc9',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: 'ffffffeb-fffb-5fff-bfff-ffef7ee1d36c'
+  partitionId: '5eaf8bf2-be46-2431-bd3b-b39d6b36a4ad'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -583,137 +583,137 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '5455a0b4-7479-4972-9c1b-1844fd7765d3',
+  operationId: '36110d14-94fe-4211-b521-93c668c3e984',
+  type: 'REMOVE',
+  partitionId: 'd3710dd0-000e-1000-8000-0008efb66b07',
+  targetNodeId: 'fffffff5-44ce-39bb-8d48-08041f4241b6',
+  entityType: 'partition',
+  entityId: 'd3710dd0-000e-1000-8000-0008efb66b07'
+}
+Operation step changed {
+  operationId: '36110d14-94fe-4211-b521-93c668c3e984',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: 'd3710dd0-000e-1000-8000-0008efb66b07'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: '3b9a72e3-7071-48c7-9640-cdb6a68e8816',
+  type: 'REMOVE',
+  partitionId: '26449be0-fd88-242f-8000-0008abed910c',
+  targetNodeId: '00000008-ffe2-5fff-aab8-1cd30000001a',
+  entityType: 'partition',
+  entityId: '26449be0-fd88-242f-8000-0008abed910c'
+}
+Operation step changed {
+  operationId: '3b9a72e3-7071-48c7-9640-cdb6a68e8816',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '26449be0-fd88-242f-8000-0008abed910c'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: 'cc3539f9-176d-4cde-acd1-b2f4ffbe9689',
+  type: 'REMOVE',
+  partitionId: '26fe2853-297c-2654-8000-0005492f21e7',
+  targetNodeId: '00000000-0b43-4096-8000-00190000001c',
+  entityType: 'partition',
+  entityId: '26fe2853-297c-2654-8000-0005492f21e7'
+}
+Operation step changed {
+  operationId: 'cc3539f9-176d-4cde-acd1-b2f4ffbe9689',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '26fe2853-297c-2654-8000-0005492f21e7'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: '41e846e0-b83c-4ec5-aeee-af457cd9a495',
+  type: 'REMOVE',
+  partitionId: '00000003-0002-1000-8000-0018cbba648f',
+  targetNodeId: '00000017-fff3-5fff-abc4-4a4300000011',
+  entityType: 'partition',
+  entityId: '00000003-0002-1000-8000-0018cbba648f'
+}
+Operation step changed {
+  operationId: '41e846e0-b83c-4ec5-aeee-af457cd9a495',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  status: 'pending',
+  partitionId: '00000003-0002-1000-8000-0018cbba648f'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000
+  }
+}
+Creating operation {
+  operationId: '9ca6b4ea-2fea-49b4-92d2-87a80e29746e',
   type: 'ADD',
-  partitionId: '1fd9f579-b75a-223c-8000-0014d461fb5e',
-  targetNodeId: 'ee385679-000f-1000-bfff-fffff67cb67b',
+  partitionId: '19541226-90bf-4f58-adee-647bb952da43',
+  targetNodeId: '00000012-2373-5b60-a8de-762f00000001',
   entityType: 'partition',
-  entityId: '1fd9f579-b75a-223c-8000-0014d461fb5e'
+  entityId: '19541226-90bf-4f58-adee-647bb952da43'
 }
 Operation step changed {
-  operationId: '5455a0b4-7479-4972-9c1b-1844fd7765d3',
+  operationId: '9ca6b4ea-2fea-49b4-92d2-87a80e29746e',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
-  partitionId: '1fd9f579-b75a-223c-8000-0014d461fb5e'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '78ad5e2d-2451-4bf3-b189-2d0d476970f3',
-  type: 'REMOVE',
-  partitionId: 'd7116645-c46f-1873-975f-71a3ffffffe3',
-  targetNodeId: 'd3077c95-0013-1000-8166-dc9d0000001d',
-  entityType: 'partition',
-  entityId: 'd7116645-c46f-1873-975f-71a3ffffffe3'
-}
-Operation step changed {
-  operationId: '78ad5e2d-2451-4bf3-b189-2d0d476970f3',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: 'd7116645-c46f-1873-975f-71a3ffffffe3'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '57626c2e-f8f9-4c9a-a0e6-de7e8a2f7bf0',
-  type: 'ADD',
-  partitionId: '55102559-5dd4-2e07-8000-0012ce760288',
-  targetNodeId: 'ffffffed-4a58-120b-af75-0cc9bbc8ba3e',
-  entityType: 'partition',
-  entityId: '55102559-5dd4-2e07-8000-0012ce760288'
-}
-Operation step changed {
-  operationId: '57626c2e-f8f9-4c9a-a0e6-de7e8a2f7bf0',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '55102559-5dd4-2e07-8000-0012ce760288'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'd7f50319-26e1-45e9-b273-29f23b63fc95',
-  type: 'REMOVE',
-  partitionId: '20c709cb-ffff-5fff-8509-b00300000009',
-  targetNodeId: '9732967f-ca72-2081-8000-001b00000004',
-  entityType: 'partition',
-  entityId: '20c709cb-ffff-5fff-8509-b00300000009'
-}
-Operation step changed {
-  operationId: 'd7f50319-26e1-45e9-b273-29f23b63fc95',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '20c709cb-ffff-5fff-8509-b00300000009'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '8ef7ae54-d450-42e5-9af0-87f4abe737d2',
-  type: 'REMOVE',
-  partitionId: 'd8aef744-3f51-48be-be3b-9347fffffffe',
-  targetNodeId: '3b8ffe7e-d244-401b-9f42-9dfb32bd494f',
-  entityType: 'partition',
-  entityId: 'd8aef744-3f51-48be-be3b-9347fffffffe'
-}
-Operation step changed {
-  operationId: '8ef7ae54-d450-42e5-9af0-87f4abe737d2',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: 'd8aef744-3f51-48be-be3b-9347fffffffe'
+  partitionId: '19541226-90bf-4f58-adee-647bb952da43'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
     # Subtest: step updates are persisted
         ok 1 - Step updates are persisted
         1..1
-    ok 3 - step updates are persisted # time=4.752ms
+    ok 3 - step updates are persisted # time=8.763ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -728,18 +728,18 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'ed2dc83f-c56c-407d-ae7d-3742d67d3c35',
+  operationId: '20c35e66-6f4b-4d3f-8562-cf363e910f39',
   type: 'ADD',
-  partitionId: 'a4de4712-0000-1000-b810-fbd8ffffffe2',
-  targetNodeId: 'ffffffff-bf8e-44a1-8000-001900000010',
+  partitionId: '781e2059-000b-1000-a0d7-7a0a4e15a324',
+  targetNodeId: '0ebbdd10-0008-1000-bb09-02be9fdaa813',
   entityType: 'partition',
-  entityId: 'a4de4712-0000-1000-b810-fbd8ffffffe2'
+  entityId: '781e2059-000b-1000-a0d7-7a0a4e15a324'
 }
 Operation completed {
-  operationId: 'ed2dc83f-c56c-407d-ae7d-3742d67d3c35',
+  operationId: '20c35e66-6f4b-4d3f-8562-cf363e910f39',
   type: 'ADD',
-  partitionId: 'a4de4712-0000-1000-b810-fbd8ffffffe2',
-  targetNodeId: 'ffffffff-bf8e-44a1-8000-001900000010'
+  partitionId: '781e2059-000b-1000-a0d7-7a0a4e15a324',
+  targetNodeId: '0ebbdd10-0008-1000-bb09-02be9fdaa813'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
 RebalanceCoordinator initialized {
@@ -755,859 +755,16 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'dc4397e6-247d-431f-8930-839f7eca95f2',
-  type: 'REMOVE',
-  partitionId: '9a420514-ffff-5fff-ab4f-dc7df6aee6d9',
-  targetNodeId: 'fffffffc-ffed-5fff-bfff-ffe800000016',
-  entityType: 'partition',
-  entityId: '9a420514-ffff-5fff-ab4f-dc7df6aee6d9'
-}
-Operation completed {
-  operationId: 'dc4397e6-247d-431f-8930-839f7eca95f2',
-  type: 'REMOVE',
-  partitionId: '9a420514-ffff-5fff-ab4f-dc7df6aee6d9',
-  targetNodeId: 'fffffffc-ffed-5fff-bfff-ffe800000016'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '71668c82-482e-4189-bfb0-a36105c6b48e',
-  type: 'REMOVE',
-  partitionId: '7e67d8fa-9605-42bf-b89b-a34d952f3fe0',
-  targetNodeId: 'fffffff6-88c8-1e64-8000-00090000000f',
-  entityType: 'partition',
-  entityId: '7e67d8fa-9605-42bf-b89b-a34d952f3fe0'
-}
-Operation completed {
-  operationId: '71668c82-482e-4189-bfb0-a36105c6b48e',
-  type: 'REMOVE',
-  partitionId: '7e67d8fa-9605-42bf-b89b-a34d952f3fe0',
-  targetNodeId: 'fffffff6-88c8-1e64-8000-00090000000f'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'e1e17884-2afa-4ab0-843d-8247ed457022',
+  operationId: '53f50f51-a756-4a44-bea2-f1e2fd9200b8',
   type: 'ADD',
-  partitionId: 'ffffffe7-001b-1000-97e0-c9830000000f',
-  targetNodeId: 'a0bc358c-4fc3-19a4-8000-00100000001c',
+  partitionId: '00000017-ffe8-5fff-8000-000d00000007',
+  targetNodeId: '00000009-0019-1000-8000-000b0000000e',
   entityType: 'partition',
-  entityId: 'ffffffe7-001b-1000-97e0-c9830000000f'
+  entityId: '00000017-ffe8-5fff-8000-000d00000007'
 }
-Operation completed {
-  operationId: 'e1e17884-2afa-4ab0-843d-8247ed457022',
-  type: 'ADD',
-  partitionId: 'ffffffe7-001b-1000-97e0-c9830000000f',
-  targetNodeId: 'a0bc358c-4fc3-19a4-8000-00100000001c'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'b66c64fc-2ef2-4213-9ab1-c1fd61c65fad',
-  type: 'ADD',
-  partitionId: '5933a6f2-ee2a-5e75-8000-0003a58b9ba7',
-  targetNodeId: '0000000d-8906-3a44-8000-000800000013',
-  entityType: 'partition',
-  entityId: '5933a6f2-ee2a-5e75-8000-0003a58b9ba7'
-}
-Operation completed {
-  operationId: 'b66c64fc-2ef2-4213-9ab1-c1fd61c65fad',
-  type: 'ADD',
-  partitionId: '5933a6f2-ee2a-5e75-8000-0003a58b9ba7',
-  targetNodeId: '0000000d-8906-3a44-8000-000800000013'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'ea59ba79-e60a-4c11-b129-1baf254e9388',
-  type: 'REMOVE',
-  partitionId: '8a65b074-e4f6-2785-8000-000d00000001',
-  targetNodeId: '00000003-8436-58ee-b813-8f64ffffffe5',
-  entityType: 'partition',
-  entityId: '8a65b074-e4f6-2785-8000-000d00000001'
-}
-Operation completed {
-  operationId: 'ea59ba79-e60a-4c11-b129-1baf254e9388',
-  type: 'REMOVE',
-  partitionId: '8a65b074-e4f6-2785-8000-000d00000001',
-  targetNodeId: '00000003-8436-58ee-b813-8f64ffffffe5'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '06b07da3-098b-4f8f-af94-7da88491473c',
-  type: 'REMOVE',
-  partitionId: 'fffffff2-5d5a-2deb-8000-0017ffffffe4',
-  targetNodeId: '9abb7cfe-a9e7-532c-bfff-fff027b01ac0',
-  entityType: 'partition',
-  entityId: 'fffffff2-5d5a-2deb-8000-0017ffffffe4'
-}
-Operation completed {
-  operationId: '06b07da3-098b-4f8f-af94-7da88491473c',
-  type: 'REMOVE',
-  partitionId: 'fffffff2-5d5a-2deb-8000-0017ffffffe4',
-  targetNodeId: '9abb7cfe-a9e7-532c-bfff-fff027b01ac0'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '9212a3a3-48a7-45b1-bff5-4899cc0d8677',
-  type: 'REMOVE',
-  partitionId: '00000018-1959-3f98-8000-00141c59cff3',
-  targetNodeId: 'fffffff7-fff8-5fff-99e0-0a55c63720af',
-  entityType: 'partition',
-  entityId: '00000018-1959-3f98-8000-00141c59cff3'
-}
-Operation completed {
-  operationId: '9212a3a3-48a7-45b1-bff5-4899cc0d8677',
-  type: 'REMOVE',
-  partitionId: '00000018-1959-3f98-8000-00141c59cff3',
-  targetNodeId: 'fffffff7-fff8-5fff-99e0-0a55c63720af'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'bc5051ef-fc4f-422c-9bb6-72debf8f4c1e',
-  type: 'ADD',
-  partitionId: '00000015-747b-3e66-bfff-fff000000004',
-  targetNodeId: 'ffffffef-0018-1000-b3c5-ee80b549fa79',
-  entityType: 'partition',
-  entityId: '00000015-747b-3e66-bfff-fff000000004'
-}
-Operation completed {
-  operationId: 'bc5051ef-fc4f-422c-9bb6-72debf8f4c1e',
-  type: 'ADD',
-  partitionId: '00000015-747b-3e66-bfff-fff000000004',
-  targetNodeId: 'ffffffef-0018-1000-b3c5-ee80b549fa79'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'f6bdf44c-ba9a-4c72-853a-4cf9f22867e1',
-  type: 'REMOVE',
-  partitionId: '00000019-0018-1000-853d-f0b640aa05b9',
-  targetNodeId: '8aa56922-19ac-31e9-8000-0016b7839d28',
-  entityType: 'partition',
-  entityId: '00000019-0018-1000-853d-f0b640aa05b9'
-}
-Operation completed {
-  operationId: 'f6bdf44c-ba9a-4c72-853a-4cf9f22867e1',
-  type: 'REMOVE',
-  partitionId: '00000019-0018-1000-853d-f0b640aa05b9',
-  targetNodeId: '8aa56922-19ac-31e9-8000-0016b7839d28'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-    # Subtest: completion is persisted with completed_at
-        ok 1 - Completion is persisted with completed_at
-        1..1
-    ok 4 - completion is persisted with completed_at # time=4.485ms
-    
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'b1a615d0-6541-4f36-b890-a51bd23cebb6',
-  type: 'ADD',
-  partitionId: '0000001e-2777-4caa-8000-0000f6310372',
-  targetNodeId: '5078f430-fff2-5fff-ba58-ab3d00000014',
-  entityType: 'partition',
-  entityId: '0000001e-2777-4caa-8000-0000f6310372'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '370a0665-cf9d-40a3-a12e-0d12935cc7c9',
-  type: 'REMOVE',
-  partitionId: '0b868187-f5c6-2d58-bfcc-b96400000008',
-  targetNodeId: 'fffffff3-a43c-3711-8000-001100000016',
-  entityType: 'partition',
-  entityId: '0b868187-f5c6-2d58-bfcc-b96400000008'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '512317f2-7e9b-4524-9ee0-c1c2e0933e02',
-  type: 'ADD',
-  partitionId: '88410f3e-0003-1000-8000-000dfffffffc',
-  targetNodeId: 'fffffff2-761e-3e97-8fc6-46ac6234e37f',
-  entityType: 'partition',
-  entityId: '88410f3e-0003-1000-8000-000dfffffffc'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '88c30374-0636-46d8-9e87-b543213e489a',
-  type: 'REMOVE',
-  partitionId: 'f54070c1-14eb-286e-8000-001c1f2607aa',
-  targetNodeId: '00000012-001c-1000-a77f-0c9b0000001b',
-  entityType: 'partition',
-  entityId: 'f54070c1-14eb-286e-8000-001c1f2607aa'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '799af2d8-8411-410f-9fa2-c2762b7d0dfa',
-  type: 'REMOVE',
-  partitionId: '56d72468-0019-1000-8000-00041f36ab78',
-  targetNodeId: 'ffffffec-fffe-5fff-8000-00170000001a',
-  entityType: 'partition',
-  entityId: '56d72468-0019-1000-8000-00041f36ab78'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'f21a90e9-ab9c-426d-9a99-435bf83f14ab',
-  type: 'REMOVE',
-  partitionId: 'ffffffe9-001c-1000-8000-00180000001b',
-  targetNodeId: '0000001c-0008-1000-8000-0018d1d93abd',
-  entityType: 'partition',
-  entityId: 'ffffffe9-001c-1000-8000-00180000001b'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '478bbba9-ec0e-476e-a485-b1368edf5951',
-  type: 'ADD',
-  partitionId: 'fffffffa-d7d1-389f-bfff-fff40000000d',
-  targetNodeId: '0000001d-d771-53f5-bfff-ffea00000014',
-  entityType: 'partition',
-  entityId: 'fffffffa-d7d1-389f-bfff-fff40000000d'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '3d0a289c-4726-4b9c-90e1-8a68874f9b2d',
-  type: 'ADD',
-  partitionId: '2efe8ada-1ffc-296d-95cc-ae50254a288e',
-  targetNodeId: '0000000f-2109-183b-ac0e-893487fa113e',
-  entityType: 'partition',
-  entityId: '2efe8ada-1ffc-296d-95cc-ae50254a288e'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '992ab6d7-b539-459c-9ab0-ec8520deec7e',
-  type: 'ADD',
-  partitionId: 'fffffff1-fffc-5fff-bfff-ffe973ee6b9b',
-  targetNodeId: '59895e17-fffa-5fff-8000-000e00000008',
-  entityType: 'partition',
-  entityId: 'fffffff1-fffc-5fff-bfff-ffe973ee6b9b'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'fc7902b2-d5b2-4524-a03c-bf819c65b198',
-  type: 'ADD',
-  partitionId: 'bb9b77e3-2e54-40ce-a8e4-8f77c5d4592f',
-  targetNodeId: 'fffffff2-ffed-5fff-8000-00150000000f',
-  entityType: 'partition',
-  entityId: 'bb9b77e3-2e54-40ce-a8e4-8f77c5d4592f'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
-    # Subtest: failure is persisted with error_message
-        ok 1 - Failure is persisted with error_message
-        1..1
-    ok 5 - failure is persisted with error_message # time=6.462ms
-    
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'aa91296c-82de-407e-99ea-28a61f67f8e8',
-  type: 'REMOVE',
-  partitionId: '00000019-bbeb-1fcd-8000-001ae68b67c8',
-  targetNodeId: '86337192-08a6-5958-bfff-fff174a00b16',
-  entityType: 'partition',
-  entityId: '00000019-bbeb-1fcd-8000-001ae68b67c8'
-}
-Operation step changed {
-  operationId: 'aa91296c-82de-407e-99ea-28a61f67f8e8',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '00000019-bbeb-1fcd-8000-001ae68b67c8'
-}
-Operation step changed {
-  operationId: 'aa91296c-82de-407e-99ea-28a61f67f8e8',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: '00000019-bbeb-1fcd-8000-001ae68b67c8'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '038a035a-5421-4f85-be6e-25bcb292ec4a',
-  type: 'REMOVE',
-  partitionId: '4b8b73ca-fffb-5fff-8000-001100000002',
-  targetNodeId: '82e01775-efab-5375-958f-8948bc234056',
-  entityType: 'partition',
-  entityId: '4b8b73ca-fffb-5fff-8000-001100000002'
-}
-Operation step changed {
-  operationId: '038a035a-5421-4f85-be6e-25bcb292ec4a',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '4b8b73ca-fffb-5fff-8000-001100000002'
-}
-Operation step changed {
-  operationId: '038a035a-5421-4f85-be6e-25bcb292ec4a',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: '4b8b73ca-fffb-5fff-8000-001100000002'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '494c6c26-23eb-411b-be9a-7ab47a196b92',
-  type: 'ADD',
-  partitionId: '984154f9-872b-5f25-b811-32095b2b49b8',
-  targetNodeId: 'b0078bc2-001e-1000-bfff-ffe20000001d',
-  entityType: 'partition',
-  entityId: '984154f9-872b-5f25-b811-32095b2b49b8'
-}
-Operation step changed {
-  operationId: '494c6c26-23eb-411b-be9a-7ab47a196b92',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '984154f9-872b-5f25-b811-32095b2b49b8'
-}
-Operation step changed {
-  operationId: '494c6c26-23eb-411b-be9a-7ab47a196b92',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: '984154f9-872b-5f25-b811-32095b2b49b8'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'b3a2c628-89ed-48ee-aff3-28bd7d1007e2',
-  type: 'ADD',
-  partitionId: '0e3dd2b1-c453-48e4-8000-001624f81378',
-  targetNodeId: 'f36afc56-cd41-34ce-8cc4-175400000018',
-  entityType: 'partition',
-  entityId: '0e3dd2b1-c453-48e4-8000-001624f81378'
-}
-Operation step changed {
-  operationId: 'b3a2c628-89ed-48ee-aff3-28bd7d1007e2',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '0e3dd2b1-c453-48e4-8000-001624f81378'
-}
-Operation step changed {
-  operationId: 'b3a2c628-89ed-48ee-aff3-28bd7d1007e2',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: '0e3dd2b1-c453-48e4-8000-001624f81378'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '2f097b4f-229b-4a89-8217-4a8b3e2835e0',
-  type: 'REMOVE',
-  partitionId: 'ffffffe3-0010-1000-bfff-ffeb753023a9',
-  targetNodeId: '0000000d-000c-1000-8000-0018049fdc46',
-  entityType: 'partition',
-  entityId: 'ffffffe3-0010-1000-bfff-ffeb753023a9'
-}
-Operation step changed {
-  operationId: '2f097b4f-229b-4a89-8217-4a8b3e2835e0',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: 'ffffffe3-0010-1000-bfff-ffeb753023a9'
-}
-Operation step changed {
-  operationId: '2f097b4f-229b-4a89-8217-4a8b3e2835e0',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: 'ffffffe3-0010-1000-bfff-ffeb753023a9'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'ffb2bfdc-ce8a-42d0-aa39-c65032e6ff9a',
-  type: 'REMOVE',
-  partitionId: 'fffffffa-0004-1000-bfff-ffeef1559379',
-  targetNodeId: '00000002-0018-1000-8000-0016350f5508',
-  entityType: 'partition',
-  entityId: 'fffffffa-0004-1000-bfff-ffeef1559379'
-}
-Operation step changed {
-  operationId: 'ffb2bfdc-ce8a-42d0-aa39-c65032e6ff9a',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: 'fffffffa-0004-1000-bfff-ffeef1559379'
-}
-Operation step changed {
-  operationId: 'ffb2bfdc-ce8a-42d0-aa39-c65032e6ff9a',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: 'fffffffa-0004-1000-bfff-ffeef1559379'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'b7379172-f1fa-447c-a063-eafd0fd634d9',
-  type: 'ADD',
-  partitionId: '00000009-0011-1000-8a37-77802f25710c',
-  targetNodeId: '2de8ef99-2a07-3f71-b8af-3bbeed2e7dea',
-  entityType: 'partition',
-  entityId: '00000009-0011-1000-8a37-77802f25710c'
-}
-Operation step changed {
-  operationId: 'b7379172-f1fa-447c-a063-eafd0fd634d9',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '00000009-0011-1000-8a37-77802f25710c'
-}
-Operation step changed {
-  operationId: 'b7379172-f1fa-447c-a063-eafd0fd634d9',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: '00000009-0011-1000-8a37-77802f25710c'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'a06a71f6-804b-489a-b558-08f4a33ae4bb',
-  type: 'REMOVE',
-  partitionId: 'ffffffea-4e62-2e49-bfff-fff34fff85e5',
-  targetNodeId: '00000005-633e-5998-a66f-41eb0000001e',
-  entityType: 'partition',
-  entityId: 'ffffffea-4e62-2e49-bfff-fff34fff85e5'
-}
-Operation step changed {
-  operationId: 'a06a71f6-804b-489a-b558-08f4a33ae4bb',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: 'ffffffea-4e62-2e49-bfff-fff34fff85e5'
-}
-Operation step changed {
-  operationId: 'a06a71f6-804b-489a-b558-08f4a33ae4bb',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: 'ffffffea-4e62-2e49-bfff-fff34fff85e5'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '21fef2cd-0522-4dbf-ac1c-9a0122d7f92c',
-  type: 'ADD',
-  partitionId: '00000011-92c5-12f7-867e-30dd87b211e5',
-  targetNodeId: '00000016-0001-1000-8000-00190000000e',
-  entityType: 'partition',
-  entityId: '00000011-92c5-12f7-867e-30dd87b211e5'
-}
-Operation step changed {
-  operationId: '21fef2cd-0522-4dbf-ac1c-9a0122d7f92c',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '00000011-92c5-12f7-867e-30dd87b211e5'
-}
-Operation step changed {
-  operationId: '21fef2cd-0522-4dbf-ac1c-9a0122d7f92c',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: '00000011-92c5-12f7-867e-30dd87b211e5'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: '2dbb53a1-f1dd-4e61-a526-022e3ec62172',
-  type: 'REMOVE',
-  partitionId: '6ef233e7-61bf-3be4-b0eb-c44820bac00b',
-  targetNodeId: 'c9a52b07-e327-37a9-8000-001cf0789f2e',
-  entityType: 'partition',
-  entityId: '6ef233e7-61bf-3be4-b0eb-c44820bac00b'
-}
-Operation step changed {
-  operationId: '2dbb53a1-f1dd-4e61-a526-022e3ec62172',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: '6ef233e7-61bf-3be4-b0eb-c44820bac00b'
-}
-Operation step changed {
-  operationId: '2dbb53a1-f1dd-4e61-a526-022e3ec62172',
-  previousStep: 'SENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: '6ef233e7-61bf-3be4-b0eb-c44820bac00b'
-}
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
-    # Subtest: steps_history is persisted as JSON
-        ok 1 - steps_history is persisted as valid JSON
-        1..1
-    ok 6 - steps_history is persisted as JSON # time=4.98ms
-    
-RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
-  config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000
-  }
-}
-Creating operation {
-  operationId: 'e791bca4-3479-4087-b7cb-708594b8cda5',
-  type: 'ADD',
-  partitionId: 'partition-1',
-  targetNodeId: 'node-1',
-  entityType: 'partition',
-  entityId: 'partition-1'
-}
-Creating operation {
-  operationId: 'b890fbae-4c2c-4bea-a97e-f56565883565',
-  type: 'ADD',
-  partitionId: 'partition-2',
-  targetNodeId: 'node-2',
-  entityType: 'partition',
-  entityId: 'partition-2'
-}
-Operation completed {
-  operationId: 'b890fbae-4c2c-4bea-a97e-f56565883565',
-  type: 'ADD',
-  partitionId: 'partition-2',
-  targetNodeId: 'node-2'
-}
-Creating operation {
-  operationId: '02177330-7cc9-4fb1-aeeb-95d77bb57eb1',
-  type: 'REMOVE',
-  partitionId: 'partition-3',
-  targetNodeId: 'node-3',
-  entityType: 'partition',
-  entityId: 'partition-3'
-}
-    # Subtest: getInFlightOperations returns non-terminal operations
-        ok 1 - Should return 1 in-flight operation
-        ok 2 - Should return the pending operation
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
         1..2
-    ok 7 - getInFlightOperations returns non-terminal operations # time=1.292ms
+    ok 7 - getInFlightOperations returns non-terminal operations # time=1.914ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -1622,7 +779,7 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'de969d1c-3138-42be-aaf5-ec1bdd0b1424',
+  operationId: 'b141dc60-d43a-4c02-94d8-dd502775b085',
   type: 'ADD',
   partitionId: 'partition-1',
   targetNodeId: 'node-1',
@@ -1642,11 +799,11 @@ Creating operation {
         ok 10 - Has stepsHistory as array
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
         1..10
-    ok 8 - getInFlightOperations converts row to operation object # time=1.212ms
+    ok 8 - getInFlightOperations converts row to operation object # time=1.235ms
     
     1..8
-ok 1 - Property 10: Operation Log Persistence # time=79.943ms
+ok 1 - Property 10: Operation Log Persistence # time=101.329ms
 
 1..1
 # { total: 18, pass: 18 }
-# time=85.306ms
+# time=107.094ms

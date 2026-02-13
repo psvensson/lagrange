@@ -322,6 +322,55 @@ test('ReplicaHandler', async (t) => {
     handler.shutdown();
   });
 
+  t.test(
+    'handleCreateReplica - passes lifecycle stage callback options to partition factory',
+    async (t) => {
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-1');
+      const mockCDC = createMockCDCService(cache);
+      let capturedOptions = null;
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: async (options) => {
+          capturedOptions = options;
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+      });
+
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        partitionId: 'partition-1',
+        replicaId: 'replica-1',
+      });
+      await created;
+
+      t.equal(capturedOptions.suppressLifecycleLogs, true,
+        'lifecycle logs are suppressed for dynamic replica creation');
+      t.equal(typeof capturedOptions.onInitializationStage, 'function',
+        'stage callback is passed to partition service factory');
+
+      handler.shutdown();
+    },
+  );
+
   t.test('handleCreateReplica - returns already_exists for active replica',
     async (t) => {
       const cache = createSeededCache();

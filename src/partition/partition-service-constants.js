@@ -166,6 +166,14 @@ const PARTITION_SERVICE_TYPE = Object.freeze({
   FUNCTION: 'function',
 });
 
+const PARTITION_SERVICE_INIT_STAGE = Object.freeze({
+  STARTING: 'starting',
+  OPENING_DB: 'opening_db',
+  JOINING_PEERS: 'joining_peers',
+  JOINED_PEER: 'joined_peer',
+  READY: 'ready',
+});
+
 const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   INITIALIZING: 'Initializing partition service',
   CREATED_PARTITION_DIR: 'Created partition directory',
@@ -222,6 +230,7 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   CDC_SUBSCRIBER_ADDED: 'CDC subscriber added',
   CDC_SUBSCRIBER_REMOVED: 'CDC subscriber removed',
   PARTITION_SIZE_UPDATED: 'Partition size updated',
+  INIT_STAGE_CALLBACK_FAILED: 'Partition initialization stage callback failed',
   DELIVERING_WITH_ACK: 'Delivering message with ACK via PendingRequestTracker',
   TRACKER_SHUTDOWN: 'Tracker shutdown',
   TRACKER_SHUTDOWN_DELIVERY:
@@ -340,6 +349,7 @@ export {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,

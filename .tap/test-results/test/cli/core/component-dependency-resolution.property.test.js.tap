@@ -3,31 +3,31 @@ TAP version 14
     # Subtest: dependencies initialize before dependents
         ok 1 - Dependencies initialize before dependents
         1..1
-    ok 1 - dependencies initialize before dependents # time=2.553ms
+    ok 1 - dependencies initialize before dependents # time=4.453ms
     
     # Subtest: all dependencies are injected correctly
         ok 1 - All dependencies are injected correctly
         1..1
-    ok 2 - all dependencies are injected correctly # time=0.371ms
+    ok 2 - all dependencies are injected correctly # time=0.603ms
     
     # Subtest: diamond dependencies resolve correctly
         ok 1 - Diamond dependencies resolve correctly
         1..1
-    ok 3 - diamond dependencies resolve correctly # time=0.386ms
+    ok 3 - diamond dependencies resolve correctly # time=0.618ms
     
     # Subtest: singleton components return same instance
         ok 1 - Singleton components return same instance
         1..1
-    ok 4 - singleton components return same instance # time=0.325ms
+    ok 4 - singleton components return same instance # time=0.488ms
     
     # Subtest: factory components create new instances
         ok 1 - Factory components create new instances
         1..1
-    ok 5 - factory components create new instances # time=0.326ms
+    ok 5 - factory components create new instances # time=0.465ms
     
     1..5
-ok 1 - Property 35: Component Dependency Resolution # time=7.929ms
+ok 1 - Property 35: Component Dependency Resolution # time=13.316ms
 
 1..1
 # { total: 5, pass: 5 }
-# time=15.317ms
+# time=27.843ms

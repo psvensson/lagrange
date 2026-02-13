@@ -4,12 +4,10 @@
  * ModuleMirror for module loading and enforces ResourceBudget
  * CPU/memory limits per invocation.
  *
- * The actual WASM runtime instantiation is stubbed until a
- * real WASM runtime is integrated. The structure for module
- * loading, resource enforcement, and context injection is
- * fully in place.
+ * Invokes the module's declared `run_export` function from
+ * the loaded module exports with (context, args) parameters.
  *
- * Requirements: 6.1, 6.3, 6.4, 6.5
+ * Requirements: 6.1, 6.3, 6.4, 6.5, 12.5
  * @module wasm-service/wasm-executor
  */
 
@@ -18,6 +16,11 @@ import {
   WASM_SERVICE_ERROR_MSG,
   DEFAULT_RESOURCE_BUDGET,
 } from './wasm-service-constants.js';
+import {
+  MODULE_MANIFEST_FIELD,
+  RUN_EXPORT_MIN_PARAMS,
+  RUN_EXPORT_MAX_PARAMS,
+} from './module-manifest-constants.js';
 
 /**
  * Resolves the function identifier from a func object.
@@ -107,7 +110,7 @@ class WasmExecutor {
       DEFAULT_RESOURCE_BUDGET.CPU_TIME_LIMIT_MS;
 
     const result = await this._executeWithTimeout(
-      func, context, args, cpuTimeLimit,
+      mod, context, args, cpuTimeLimit,
     );
 
     return result;
@@ -117,7 +120,7 @@ class WasmExecutor {
    * Run the handler function with a CPU time limit guard.
    * Uses a setTimeout-based timeout to enforce the limit.
    *
-   * @param {Object} func - Function definition.
+   * @param {Object} mod - Resolved module from ModuleMirror.
    * @param {Object} context - Session context.
    * @param {Object} args - Handler arguments.
    * @param {number} cpuTimeLimitMs - Maximum execution time
@@ -126,7 +129,7 @@ class WasmExecutor {
    * @throws {Error} CPU_TIME_LIMIT_EXCEEDED on timeout.
    * @private
    */
-  async _executeWithTimeout(func, context, args, cpuTimeLimitMs) {
+  async _executeWithTimeout(mod, context, args, cpuTimeLimitMs) {
     let timeoutId;
     try {
       const timeoutPromise = new Promise((_resolve, reject) => {
@@ -138,7 +141,7 @@ class WasmExecutor {
       });
 
       const executionPromise = this._invokeHandler(
-        func, context, args,
+        mod, context, args,
       );
 
       return await Promise.race([
@@ -151,19 +154,63 @@ class WasmExecutor {
   }
 
   /**
-   * Stub handler invocation. Returns the args as the result
-   * with an empty mutations array. This will be replaced with
-   * real WASM instantiation once a runtime is integrated.
+   * Invoke the module's declared run_export function with
+   * the provided context and arguments.
    *
-   * @param {Object} _func - Function definition (unused in stub).
-   * @param {Object} _context - Session context (unused in stub).
-   * @param {Object} args - Handler arguments returned as result.
+   * @param {Object} mod - Resolved module with manifest and
+   *   exports.
+   * @param {Object} context - Session context injected into
+   *   the handler.
+   * @param {Object} args - Arguments passed to the handler.
    * @return {Promise<Object>} Object with `result` and
    *   `mutations` fields.
+   * @throws {Error} RUN_EXPORT_NOT_FOUND if the export name
+   *   is not present in module exports.
+   * @throws {Error} RUN_EXPORT_NOT_CALLABLE if the export is
+   *   not a function.
+   * @throws {Error} HANDLER_INVOCATION_FAILED if the export
+   *   throws during execution.
    * @private
    */
-  async _invokeHandler(_func, _context, args) {
-    return {result: args, mutations: []};
+  async _invokeHandler(mod, context, args) {
+    const manifest = mod.manifest;
+    const exports = mod.exports;
+    const runExportName =
+      manifest[MODULE_MANIFEST_FIELD.RUN_EXPORT];
+
+    if (!exports || !(runExportName in exports)) {
+      throw new Error(
+        WASM_SERVICE_ERROR_MSG.RUN_EXPORT_NOT_FOUND,
+      );
+    }
+
+    const handler = exports[runExportName];
+
+    if (typeof handler !== 'function') {
+      throw new Error(
+        WASM_SERVICE_ERROR_MSG.RUN_EXPORT_NOT_CALLABLE,
+      );
+    }
+
+    if (handler.length < RUN_EXPORT_MIN_PARAMS ||
+        handler.length > RUN_EXPORT_MAX_PARAMS) {
+      throw new Error(
+        WASM_SERVICE_ERROR_MSG.RUN_EXPORT_SIGNATURE_MISMATCH,
+      );
+    }
+
+    let result;
+    try {
+      result = await handler(context, args);
+    } catch (cause) {
+      const err = new Error(
+        WASM_SERVICE_ERROR_MSG.HANDLER_INVOCATION_FAILED,
+      );
+      err.cause = cause;
+      throw err;
+    }
+
+    return {result, mutations: []};
   }
 }
 

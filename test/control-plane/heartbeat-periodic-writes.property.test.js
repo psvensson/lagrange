@@ -57,6 +57,10 @@ function createMockCdc() {
     get writeCount() {
       return writeCount;
     },
+    updateSystemTableRow: async () => {
+      writeCount++;
+      return {success: true};
+    },
     upsertSystemTableRow: async () => {
       writeCount++;
       return {success: true};

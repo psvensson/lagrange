@@ -6,48 +6,48 @@ TAP version 14
         ok 3 - should have local address
         ok 4 - should not be initialized
         1..4
-    ok 1 - constructor creates transport with default options # time=5.806ms
+    ok 1 - constructor creates transport with default options # time=11.136ms
     
     # Subtest: constructor accepts custom options
         ok 1 - should use custom node ID
         ok 2 - should use custom address
         1..2
-    ok 2 - constructor accepts custom options # time=0.347ms
+    ok 2 - constructor accepts custom options # time=0.583ms
     
     # Subtest: initialize sets initialized flag
         ok 1 - should be initialized
         1..1
-    ok 3 - initialize sets initialized flag # time=0.561ms
+    ok 3 - initialize sets initialized flag # time=0.842ms
     
     # Subtest: initialize is idempotent
         ok 1 - should remain initialized
         1..1
-    ok 4 - initialize is idempotent # time=0.279ms
+    ok 4 - initialize is idempotent # time=0.431ms
     
     # Subtest: register adds message handler
         ok 1 - should have handler
         1..1
-    ok 5 - register adds message handler # time=0.279ms
+    ok 5 - register adds message handler # time=0.464ms
     
     # Subtest: register throws for non-function handler
         ok 1 - should throw for invalid handler
         1..1
-    ok 6 - register throws for non-function handler # time=0.846ms
+    ok 6 - register throws for non-function handler # time=1.273ms
     
     # Subtest: unregister removes message handler
         ok 1 - should not have handler
         1..1
-    ok 7 - unregister removes message handler # time=0.293ms
+    ok 7 - unregister removes message handler # time=0.487ms
     
     # Subtest: getConnectionState returns null for unknown node
         ok 1 - should return null
         1..1
-    ok 8 - getConnectionState returns null for unknown node # time=0.237ms
+    ok 8 - getConnectionState returns null for unknown node # time=0.415ms
     
     # Subtest: getConnectedNodes returns empty array initially
         ok 1 - should return empty array
         1..1
-    ok 9 - getConnectedNodes returns empty array initially # time=0.506ms
+    ok 9 - getConnectedNodes returns empty array initially # time=0.967ms
     
     # Subtest: getStats returns transport statistics
         ok 1 - should have transport ID
@@ -57,33 +57,33 @@ TAP version 14
         ok 5 - should have zero messages
         ok 6 - should have zero connected nodes
         1..6
-    ok 10 - getStats returns transport statistics # time=0.6ms
+    ok 10 - getStats returns transport statistics # time=0.978ms
     
     # Subtest: deliver returns error when no connection
         ok 1 - should not be acknowledged
         ok 2 - should have error
         1..2
-    ok 11 - deliver returns error when no connection # time=0.395ms
+    ok 11 - deliver returns error when no connection # time=0.715ms
     
     # Subtest: shutdown clears all state
         ok 1 - should not be initialized
         ok 2 - should have no handlers
         ok 3 - should have no connections
         1..3
-    ok 12 - shutdown clears all state # time=0.38ms
+    ok 12 - shutdown clears all state # time=0.597ms
     
     # Subtest: emits initialized event
         ok 1 - should emit event
         ok 2 - should have transport ID
         ok 3 - should have local node ID
         1..3
-    ok 13 - emits initialized event # time=0.385ms
+    ok 13 - emits initialized event # time=0.617ms
     
     # Subtest: emits shutdown event
         ok 1 - should emit event
         ok 2 - should have transport ID
         1..2
-    ok 14 - emits shutdown event # time=0.306ms
+    ok 14 - emits shutdown event # time=0.478ms
     
     # Subtest: ConnectionState enum has expected values
         ok 1 - should be equal
@@ -92,7 +92,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 15 - ConnectionState enum has expected values # time=0.49ms
+    ok 15 - ConnectionState enum has expected values # time=0.8ms
     
     # Subtest: WSMessageType enum has expected values
         ok 1 - should be equal
@@ -101,23 +101,28 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 16 - WSMessageType enum has expected values # time=0.485ms
+    ok 16 - WSMessageType enum has expected values # time=0.715ms
     
-{"level":50,"time":"2026-02-09T21:04:38.797Z","nodeId":"test-node","pid":460086,"subsystem":"websocket-transport","error":"listen EPERM: operation not permitted 127.0.0.1:9876","transportId":"5b06f9c0-2583-4715-b28f-02af33f20df8","nodeId":"test-node","msg":"WebSocket server error"}
     # Subtest: server and client communication
-        ok 1 - socket listen not permitted in this environment: listen EPERM: operation not permitted 127.0.0.1:9876
-        1..1
-    ok 17 - server and client communication # time=5.849ms
+        ok 1 - should be acknowledged
+        ok 2 - server should receive message
+        ok 3 - should have correct data
+        1..3
+    ok 17 - server and client communication # time=121.115ms
     
-{"level":50,"time":"2026-02-09T21:04:38.798Z","nodeId":"test-node","pid":460086,"subsystem":"websocket-transport","error":"listen EPERM: operation not permitted 127.0.0.1:9878","transportId":"2220a035-768c-4c0d-8b5e-a104e08d372c","nodeId":"test-node","msg":"WebSocket server error"}
     # Subtest: async handler returns resolved value in ACK
-        ok 1 - socket listen not permitted in this environment: listen EPERM: operation not permitted 127.0.0.1:9878
-        1..1
-    ok 18 - async handler returns resolved value in ACK # time=0.926ms
+        ok 1 - should be acknowledged
+        ok 2 - should have request_id
+        ok 3 - should have status
+        ok 4 - should have replica_id
+        ok 5 - result should not be a Promise
+        ok 6 - result should not have .then method
+        1..6
+    ok 18 - async handler returns resolved value in ACK # time=114.135ms
     
     1..18
-ok 1 - WebSocketTransport # time=23.454ms
+ok 1 - WebSocketTransport # time=265.935ms
 
 1..1
-# { total: 41, pass: 41 }
-# time=74.018ms
+# { total: 48, pass: 48 }
+# time=337.951ms

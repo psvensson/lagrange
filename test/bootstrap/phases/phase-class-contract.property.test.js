@@ -1,12 +1,8 @@
 /**
- * Property tests for phase class contract.
+ * Property tests for phase class adapter contract.
  *
- * Property 6: Phase Class Contract
- * For any phase class, the constructor SHALL require its dependencies,
- * execute() SHALL return an object containing the services created,
- * and events SHALL be emitted for phase start, completion, and failure.
- *
- * Validates: Requirements 2.6, 2.7, 2.8
+ * Legacy phase classes are now delegation adapters. They keep constructor
+ * validation and lifecycle events, but execute through canonical owners.
  */
 
 import {test} from 'tap';
@@ -30,7 +26,6 @@ import {
 
 test('Property 6: Phase Class Contract', async (t) => {
   t.test('InfrastructurePhase requires no dependencies but accepts options', async (t) => {
-    // InfrastructurePhase has no required dependencies
     fc.assert(
       fc.property(
         fc.record({
@@ -39,7 +34,6 @@ test('Property 6: Phase Class Contract', async (t) => {
           wsPort: fc.option(fc.integer({min: 1024, max: 65535}), {nil: undefined}),
         }),
         (options) => {
-          // Should not throw - no required dependencies
           const phase = new InfrastructurePhase(options);
           return phase !== null;
         },
@@ -50,7 +44,6 @@ test('Property 6: Phase Class Contract', async (t) => {
   });
 
   t.test('MessageGroupPhase requires nodeId and messageRouter', async (t) => {
-    // Test missing nodeId
     fc.assert(
       fc.property(
         fc.constant(null),
@@ -61,7 +54,7 @@ test('Property 6: Phase Class Contract', async (t) => {
               nodeId: null,
               messageRouter: mockRouter,
             });
-            return false; // Should have thrown
+            return false;
           } catch (error) {
             return error.message.includes('nodeId is required');
           }
@@ -70,7 +63,6 @@ test('Property 6: Phase Class Contract', async (t) => {
       {numRuns: 10},
     );
 
-    // Test missing messageRouter
     fc.assert(
       fc.property(
         fc.string({minLength: 1}),
@@ -80,7 +72,7 @@ test('Property 6: Phase Class Contract', async (t) => {
               nodeId,
               messageRouter: null,
             });
-            return false; // Should have thrown
+            return false;
           } catch (error) {
             return error.message.includes('messageRouter is required');
           }
@@ -96,10 +88,8 @@ test('Property 6: Phase Class Contract', async (t) => {
     const mockRouter = {register: () => {}};
     const mockWorkerManager = {
       isInitialized: () => true,
-      createMessageGroupReplica: async () => ({replicaId: 'test'}),
     };
 
-    // Test that workerManager can be provided for worker process isolation
     fc.assert(
       fc.property(
         fc.string({minLength: 1}),
@@ -118,11 +108,9 @@ test('Property 6: Phase Class Contract', async (t) => {
     t.pass('MessageGroupPhase accepts workerManager for worker process isolation');
   });
 
-  t.test('PartitionPhase requires nodeId, messageRouter, and getLeaderMgService in-process', async (t) => {
+  t.test('PartitionPhase requires nodeId and messageRouter', async (t) => {
     const mockRouter = {register: () => {}};
-    const mockGetLeader = () => null;
 
-    // Test missing nodeId
     fc.assert(
       fc.property(
         fc.constant(null),
@@ -131,7 +119,6 @@ test('Property 6: Phase Class Contract', async (t) => {
             new PartitionPhase({
               nodeId: null,
               messageRouter: mockRouter,
-              getLeaderMessageGroupService: mockGetLeader,
             });
             return false;
           } catch (error) {
@@ -142,7 +129,6 @@ test('Property 6: Phase Class Contract', async (t) => {
       {numRuns: 10},
     );
 
-    // Test missing messageRouter
     fc.assert(
       fc.property(
         fc.string({minLength: 1}),
@@ -151,7 +137,6 @@ test('Property 6: Phase Class Contract', async (t) => {
             new PartitionPhase({
               nodeId,
               messageRouter: null,
-              getLeaderMessageGroupService: mockGetLeader,
             });
             return false;
           } catch (error) {
@@ -162,13 +147,10 @@ test('Property 6: Phase Class Contract', async (t) => {
       {numRuns: 10},
     );
 
-    // Test that getLeaderMessageGroupService is optional at construction
-    // (only required at execute time in in-process mode)
     fc.assert(
       fc.property(
         fc.string({minLength: 1}),
         (nodeId) => {
-          // Should NOT throw at construction - getLeaderMessageGroupService is optional
           const phase = new PartitionPhase({
             nodeId,
             messageRouter: mockRouter,
@@ -187,10 +169,8 @@ test('Property 6: Phase Class Contract', async (t) => {
     const mockRouter = {register: () => {}};
     const mockWorkerManager = {
       isInitialized: () => true,
-      createPartitionReplica: async () => ({replicaId: 'test'}),
     };
 
-    // Test that workerManager can be provided instead of getLeaderMessageGroupService
     fc.assert(
       fc.property(
         fc.string({minLength: 1}),
@@ -216,7 +196,6 @@ test('Property 6: Phase Class Contract', async (t) => {
     const mockGetLeader = () => null;
     const mockGetCache = () => ({});
 
-    // Test missing nodeId
     try {
       new RegistrationPhase({
         nodeId: null,
@@ -231,7 +210,6 @@ test('Property 6: Phase Class Contract', async (t) => {
       t.ok(error.message.includes('nodeId is required'), 'Throws for missing nodeId');
     }
 
-    // Test missing partitionServices
     try {
       new RegistrationPhase({
         nodeId: 'test-node',
@@ -249,7 +227,6 @@ test('Property 6: Phase Class Contract', async (t) => {
       );
     }
 
-    // Test missing messageGroupServices
     try {
       new RegistrationPhase({
         nodeId: 'test-node',
@@ -267,7 +244,6 @@ test('Property 6: Phase Class Contract', async (t) => {
       );
     }
 
-    // Test missing cdcIntegrationService
     try {
       new RegistrationPhase({
         nodeId: 'test-node',
@@ -292,7 +268,6 @@ test('Property 6: Phase Class Contract', async (t) => {
     const mockGetCache = () => ({});
     const mockGetLeader = () => null;
 
-    // Test missing nodeId
     try {
       new CacheHydrationPhase({
         nodeId: null,
@@ -306,7 +281,6 @@ test('Property 6: Phase Class Contract', async (t) => {
       t.ok(error.message.includes('nodeId is required'), 'Throws for missing nodeId');
     }
 
-    // Test missing partitionServices
     try {
       new CacheHydrationPhase({
         nodeId: 'test-node',
@@ -323,7 +297,6 @@ test('Property 6: Phase Class Contract', async (t) => {
       );
     }
 
-    // Test missing messageRouter
     try {
       new CacheHydrationPhase({
         nodeId: 'test-node',
@@ -341,12 +314,23 @@ test('Property 6: Phase Class Contract', async (t) => {
     }
   });
 
-  t.test('Phase classes emit events on start, complete, and failure', async (t) => {
-    // Test InfrastructurePhase event emission
+  t.test('Phase execute delegates to owner and emits lifecycle events', async (t) => {
     const phase = new InfrastructurePhase({
       nodeId: 'test-node',
       nodeAddress: 'localhost',
-      wsPort: null, // No server for testing
+      wsPort: null,
+      executeOwner: async (adapter) => {
+        adapter.messageRouter = {shutdown: async () => {}};
+        return {
+          phaseName: INFRASTRUCTURE_PHASE.NAME,
+          services: {
+            messageRouter: adapter.messageRouter,
+          },
+          metadata: {
+            nodeId: adapter.nodeId,
+          },
+        };
+      },
     });
 
     let startEmitted = false;
@@ -358,65 +342,56 @@ test('Property 6: Phase Class Contract', async (t) => {
 
     phase.on(INFRASTRUCTURE_PHASE.EVENT_COMPLETE, (result) => {
       completeEmitted = true;
-      t.ok(result.phaseName === INFRASTRUCTURE_PHASE.NAME, 'Complete event includes phase name');
-      t.ok(typeof result.duration === 'number', 'Complete event includes duration');
-      t.ok(result.services !== undefined, 'Complete event includes services');
+      t.equal(result.phaseName, INFRASTRUCTURE_PHASE.NAME);
+      t.equal(typeof result.duration, 'number');
+      t.ok(result.services !== undefined);
     });
 
-    await phase.execute();
+    const result = await phase.execute();
 
+    t.equal(result.phaseName, INFRASTRUCTURE_PHASE.NAME);
     t.ok(startEmitted, 'Start event was emitted');
     t.ok(completeEmitted, 'Complete event was emitted');
-
-    // Cleanup
-    await phase.cleanup();
   });
 
-  t.test('Phase execute() returns object with services and metadata', async (t) => {
-    fc.assert(
-      fc.asyncProperty(
-        fc.constant(null),
-        async () => {
-          const phase = new InfrastructurePhase({
-            nodeId: 'test-node',
-            nodeAddress: 'localhost',
-            wsPort: null,
-          });
-
-          const result = await phase.execute();
-
-          // Verify result structure
-          const hasPhaseNameString = typeof result.phaseName === 'string';
-          const hasDurationNumber = typeof result.duration === 'number';
-          const hasServicesObject = typeof result.services === 'object';
-          const hasMetadataObject = typeof result.metadata === 'object';
-
-          await phase.cleanup();
-
-          return hasPhaseNameString && hasDurationNumber &&
-                 hasServicesObject && hasMetadataObject;
-        },
-      ),
-      {numRuns: 10},
-    );
-    t.pass('Phase execute() returns properly structured result');
-  });
-
-  t.test('Phase cleanup() releases resources', async (t) => {
+  t.test('Phase execute fails fast when owner is missing', async (t) => {
     const phase = new InfrastructurePhase({
       nodeId: 'test-node',
       nodeAddress: 'localhost',
       wsPort: null,
     });
 
-    await phase.execute();
+    try {
+      await phase.execute();
+      t.fail('execute() should reject when owner is missing');
+    } catch (error) {
+      t.match(error.message, /executeOwner/);
+    }
+  });
 
-    // Verify resources exist before cleanup
+  t.test('Phase cleanup delegates and releases adapter fields', async (t) => {
+    let cleanupCalled = false;
+    const phase = new InfrastructurePhase({
+      nodeId: 'test-node',
+      executeOwner: async (adapter) => {
+        adapter.messageRouter = {id: 'router'};
+        return {
+          services: {
+            messageRouter: adapter.messageRouter,
+          },
+        };
+      },
+      cleanupOwner: async () => {
+        cleanupCalled = true;
+      },
+    });
+
+    await phase.execute();
     t.ok(phase.messageRouter !== null, 'MessageRouter exists before cleanup');
 
     await phase.cleanup();
 
-    // Verify resources are released after cleanup
-    t.ok(phase.messageRouter === null, 'MessageRouter is null after cleanup');
+    t.equal(cleanupCalled, true, 'cleanupOwner was called');
+    t.equal(phase.messageRouter, null, 'MessageRouter cleared after cleanup');
   });
 });

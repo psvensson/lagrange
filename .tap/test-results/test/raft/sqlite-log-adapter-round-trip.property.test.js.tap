@@ -3,42 +3,42 @@ TAP version 14
     # Subtest: put/get round-trip preserves entry
         ok 1 - put/get round-trip preserves entry
         1..1
-    ok 1 - put/get round-trip preserves entry # time=9.284ms
+    ok 1 - put/get round-trip preserves entry # time=9.305ms
     
     # Subtest: put/getRange round-trip preserves multiple entries
         ok 1 - put/getRange round-trip preserves multiple entries
         1..1
-    ok 2 - put/getRange round-trip preserves multiple entries # time=3.697ms
+    ok 2 - put/getRange round-trip preserves multiple entries # time=5.604ms
     
     # Subtest: getLastInfo returns correct info after puts
         ok 1 - getLastInfo returns correct info after puts
         1..1
-    ok 3 - getLastInfo returns correct info after puts # time=3.416ms
+    ok 3 - getLastInfo returns correct info after puts # time=3.184ms
     
     # Subtest: removeFrom removes entries at and after index
         ok 1 - removeFrom removes entries at and after index
         1..1
-    ok 4 - removeFrom removes entries at and after index # time=3.929ms
+    ok 4 - removeFrom removes entries at and after index # time=3.301ms
     
     # Subtest: get returns null for non-existent index
         ok 1 - get returns null for non-existent index
         1..1
-    ok 5 - get returns null for non-existent index # time=1.406ms
+    ok 5 - get returns null for non-existent index # time=1.339ms
     
     # Subtest: getLastInfo returns default for empty log
         ok 1 - index is 0 for empty log
         ok 2 - term is 0 for empty log
         1..2
-    ok 6 - getLastInfo returns default for empty log # time=0.546ms
+    ok 6 - getLastInfo returns default for empty log # time=0.526ms
     
     # Subtest: getRange returns empty array for non-existent range
         ok 1 - getRange returns empty array for non-existent range
         1..1
-    ok 7 - getRange returns empty array for non-existent range # time=0.924ms
+    ok 7 - getRange returns empty array for non-existent range # time=0.908ms
     
     1..7
-ok 1 - Property 7: SQLite Log Adapter Round-Trip # time=26.127ms
+ok 1 - Property 7: SQLite Log Adapter Round-Trip # time=26.977ms
 
 1..1
 # { total: 8, pass: 8 }
-# time=29.65ms
+# time=30.438ms

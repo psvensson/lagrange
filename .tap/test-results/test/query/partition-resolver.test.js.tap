@@ -4,7 +4,7 @@ No key conditions, using scatter-gather { tableName: 'users', partitionCount: 3 
     ok 1 - should be equal
     ok 2 - should be equivalent
     1..2
-ok 1 - PartitionResolver - routes to all partitions without WHERE # time=5.186ms
+ok 1 - PartitionResolver - routes to all partitions without WHERE # time=6.806ms
 
 Resolved partitions for query {
   tableName: 'users',
@@ -23,7 +23,7 @@ Resolved partitions for query {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 2 - PartitionResolver - routes to single partition with equals # time=9.48ms
+ok 2 - PartitionResolver - routes to single partition with equals # time=11.525ms
 
 Resolved partitions for query {
   tableName: 'users',
@@ -42,7 +42,7 @@ Resolved partitions for query {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 3 - PartitionResolver - routes to correct partition for key in middle # time=0.668ms
+ok 3 - PartitionResolver - routes to correct partition for key in middle # time=0.639ms
 
 Resolved partitions for query {
   tableName: 'users',
@@ -61,7 +61,7 @@ Resolved partitions for query {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 4 - PartitionResolver - routes to last partition for high key # time=0.643ms
+ok 4 - PartitionResolver - routes to last partition for high key # time=0.548ms
 
 Resolved partitions for query {
   tableName: 'users',
@@ -80,7 +80,7 @@ Resolved partitions for query {
     ok 1 - should be equal
     ok 2 - should be equivalent
     1..2
-ok 5 - PartitionResolver - routes to multiple partitions with IN clause # time=1.34ms
+ok 5 - PartitionResolver - routes to multiple partitions with IN clause # time=1.166ms
 
 Resolved partitions for query {
   tableName: 'users',
@@ -99,7 +99,7 @@ Resolved partitions for query {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 6 - PartitionResolver - routes to subset with IN clause # time=0.771ms
+ok 6 - PartitionResolver - routes to subset with IN clause # time=0.621ms
 
 Resolved partitions for query {
   tableName: 'users',
@@ -118,7 +118,7 @@ Resolved partitions for query {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 7 - PartitionResolver - routes with range query (>=) # time=0.723ms
+ok 7 - PartitionResolver - routes with range query (>=) # time=0.679ms
 
 Resolved partitions for query {
   tableName: 'users',
@@ -137,7 +137,7 @@ Resolved partitions for query {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 8 - PartitionResolver - routes with range query (<) # time=0.618ms
+ok 8 - PartitionResolver - routes with range query (<) # time=0.522ms
 
 Resolved partitions for query {
   tableName: 'users',
@@ -156,19 +156,19 @@ Resolved partitions for query {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 9 - PartitionResolver - routes with BETWEEN # time=1.014ms
+ok 9 - PartitionResolver - routes with BETWEEN # time=0.667ms
 
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 3 }
 # Subtest: PartitionResolver - scatter-gather for non-key WHERE
     ok 1 - should be equal
     1..1
-ok 10 - PartitionResolver - scatter-gather for non-key WHERE # time=0.894ms
+ok 10 - PartitionResolver - scatter-gather for non-key WHERE # time=0.793ms
 
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 3 }
 # Subtest: PartitionResolver - scatter-gather for OR conditions
     ok 1 - should be equal
     1..1
-ok 11 - PartitionResolver - scatter-gather for OR conditions # time=0.616ms
+ok 11 - PartitionResolver - scatter-gather for OR conditions # time=0.536ms
 
 Resolved partitions for query {
   tableName: 'users',
@@ -187,27 +187,27 @@ Resolved partitions for query {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 12 - PartitionResolver - handles AND with key condition # time=0.683ms
+ok 12 - PartitionResolver - handles AND with key condition # time=0.638ms
 
 # Subtest: PartitionResolver - resolvePartitionForKey finds correct partition
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 13 - PartitionResolver - resolvePartitionForKey finds correct partition # time=0.337ms
+ok 13 - PartitionResolver - resolvePartitionForKey finds correct partition # time=0.387ms
 
 # Subtest: PartitionResolver - handles boundary values
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 14 - PartitionResolver - handles boundary values # time=0.228ms
+ok 14 - PartitionResolver - handles boundary values # time=0.317ms
 
 # Subtest: PartitionResolver - handles numeric keys
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 15 - PartitionResolver - handles numeric keys # time=0.292ms
+ok 15 - PartitionResolver - handles numeric keys # time=0.243ms
 
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 1 }
 # Subtest: PartitionResolver - handles single partition (full range)
@@ -215,24 +215,24 @@ No key conditions, using scatter-gather { tableName: 'users', partitionCount: 1 
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 16 - PartitionResolver - handles single partition (full range) # time=0.45ms
+ok 16 - PartitionResolver - handles single partition (full range) # time=0.403ms
 
 # Subtest: PartitionResolver - returns empty for no partitions
     ok 1 - should be equal
     1..1
-ok 17 - PartitionResolver - returns empty for no partitions # time=0.357ms
+ok 17 - PartitionResolver - returns empty for no partitions # time=0.3ms
 
 # Subtest: PartitionResolver - getAllPartitions returns all
     ok 1 - should be equal
     1..1
-ok 18 - PartitionResolver - getAllPartitions returns all # time=0.206ms
+ok 18 - PartitionResolver - getAllPartitions returns all # time=0.186ms
 
 # Subtest: PartitionResolver - handles keyRange format
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 19 - PartitionResolver - handles keyRange format # time=0.236ms
+ok 19 - PartitionResolver - handles keyRange format # time=0.202ms
 
 1..19
 # { total: 37, pass: 37 }
-# time=69.846ms
+# time=75.1ms

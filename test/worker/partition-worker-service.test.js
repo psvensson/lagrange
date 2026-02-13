@@ -30,6 +30,7 @@ function createMockMessageBridge() {
   return {
     deliver: mock.fn(async () => ({status: 'ok'})),
     send: mock.fn(async () => ({status: 'ok'})),
+    sendFireAndForget: mock.fn(() => {}),
     initialize: mock.fn(async () => {}),
     shutdown: mock.fn(async () => {}),
     setMessageHandler: mock.fn(),
@@ -503,6 +504,22 @@ describe('PartitionWorkerService', () => {
       assert.strictEqual(response.partitionId, 'partition-1');
       assert.strictEqual(response.replicaId, 'replica-1');
     });
+
+    it('should forward CDC delivery to subscribed address',
+      async () => {
+        const subscriberAddress = 'node-2/message-group/replica-1';
+
+        await service.handleMessage({
+          type: CDC_MESSAGE_TYPE.SUBSCRIBE_CDC,
+          subscriberAddress,
+        });
+
+        await service.getCDCEmitter().emit('INSERT', {id: 'row-1'});
+
+        const sendCalls = service.messageBridge.sendFireAndForget.mock.calls;
+        assert.strictEqual(sendCalls.length, 1);
+        assert.strictEqual(sendCalls[0].arguments[0], subscriberAddress);
+      });
   });
 
   describe('CDCEmitter integration', () => {

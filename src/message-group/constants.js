@@ -1,5 +1,6 @@
 import {COLUMN, TABLES} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from '../topology/latency-topology-constants.js';
 
 const MESSAGE_STATUS = Object.freeze({
   PENDING: 'pending',
@@ -27,7 +28,24 @@ const MESSAGE_GROUP_METADATA_SQL = Object.freeze({
     `SELECT * FROM ${TABLES.NODES} WHERE ${COLUMN.NODE_ID} = ?`,
 });
 
+const MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE = Object.freeze({
+  LATENCY_CDC_PROPAGATION: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION,
+});
+
+const MESSAGE_GROUP_APPLICATION_STATUS = Object.freeze({
+  DUPLICATE: 'duplicate',
+  RECEIVED: 'received',
+  LATENCY_CDC_PROPAGATED: 'latency_cdc_propagated',
+});
+
+const MESSAGE_GROUP_APPLICATION_ERROR_MSG = Object.freeze({
+  INVALID_LATENCY_CDC_PAYLOAD: 'Invalid latency CDC propagation payload',
+});
+
 export {
+  MESSAGE_GROUP_APPLICATION_ERROR_MSG,
+  MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
+  MESSAGE_GROUP_APPLICATION_STATUS,
   MESSAGE_GROUP_SUBSYSTEM,
   MESSAGE_STATUS,
   MESSAGE_GROUP_METADATA_TABLE,

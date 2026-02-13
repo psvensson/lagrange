@@ -7,6 +7,23 @@ import {
   DEFAULT_RESOURCE_BUDGET,
 } from '../../src/wasm-service/wasm-service-constants.js';
 
+const RUN_EXPORT_NAME = 'handle';
+
+/**
+ * Creates a mock module with manifest and exports.
+ * @param {Function} [handler] - The run_export handler function.
+ * @return {Object} Mock module.
+ */
+function createMockModule(handler) {
+  const fn = handler || ((_ctx, args) => args);
+  return {
+    version: '1.0',
+    wasmBytes: Buffer.alloc(0),
+    manifest: {runExport: RUN_EXPORT_NAME},
+    exports: {[RUN_EXPORT_NAME]: fn},
+  };
+}
+
 /**
  * Creates a mock ModuleMirror with a configurable module map.
  * @param {Map<string, Object>} [modules] - Pre-populated modules.
@@ -41,10 +58,7 @@ describe('WasmExecutor', () => {
 
   beforeEach(() => {
     const modules = new Map();
-    modules.set('func-1', {
-      version: '1.0',
-      wasmBytes: Buffer.alloc(0),
-    });
+    modules.set('func-1', createMockModule());
     mirror = createMockMirror(modules);
     executor = new WasmExecutor({
       resourceBudget: DEFAULT_RESOURCE_BUDGET,
@@ -158,10 +172,9 @@ describe('WasmExecutor', () => {
       async () => {
         const largeModules = new Map();
         const memLimit = 1024;
-        largeModules.set('big-func', {
-          version: '1.0',
-          wasmBytes: Buffer.alloc(memLimit + 1),
-        });
+        const mod = createMockModule();
+        mod.wasmBytes = Buffer.alloc(memLimit + 1);
+        largeModules.set('big-func', mod);
         const largeMirror = createMockMirror(largeModules);
         const ex = new WasmExecutor({
           resourceBudget: {memoryLimitBytes: memLimit},

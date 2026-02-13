@@ -51,6 +51,7 @@ const JOINING_LOG_MSG = Object.freeze({
   LEADERSHIP_ESTABLISHED: 'Message group leadership established',
   WS_SELF_CONNECTED: 'WebSocket server started and self-connection established',
   ROUTER_INIT_FAILED: 'MessageRouter initialization failed',
+  RUNTIME_WIRING_READY: 'Runtime startup wiring initialized',
   SEED_WS_CONNECTING: '[JOIN-DEBUG] Connecting to seed node via WebSocket',
   SEED_WS_CONNECTED: '[JOIN-DEBUG] Connected to seed node via WebSocket',
   SEED_WS_CONNECT_FAILED: '[JOIN-DEBUG] Failed to connect to seed node via WebSocket',
@@ -76,6 +77,8 @@ const JOINING_LOG_MSG = Object.freeze({
   CDC_EVENT_RECEIVED: 'CDC event received from partition on joining node',
   CDC_SUBSCRIPTION_REGISTERED: 'CDC subscription set up for partition on joining node',
   CDC_SUBSCRIPTION_FAILED: 'CDC subscription failed for message group service',
+  LATENCY_TOPOLOGY_READY: 'Latency topology services initialized for joining node',
+  LATENCY_TOPOLOGY_STARTED: 'Latency topology lifecycle started for joining node',
   REPLICA_HANDLER_READY: 'ReplicaHandler initialized',
   CDC_INTEGRATION_CREATE: 'Creating CDC integration service for joining node',
   ENDPOINT_REGISTERING: 'Registering node endpoint in cluster',
@@ -142,6 +145,7 @@ const JOINING_ERROR_MSG = Object.freeze({
   controlPlaneCdcSubscribeFailed: (tableName, message) =>
     `CDC subscription failed for ${tableName}: ${message}`,
   REPLICA_HANDLER_ROUTER_REQUIRED: 'MessageRouter must be initialized before ReplicaHandler',
+  LATENCY_TOPOLOGY_MISSING: 'Latency topology services are not initialized',
 });
 
 const JOINING_CLEANUP_STEP = Object.freeze({

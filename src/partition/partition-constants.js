@@ -67,6 +67,7 @@ const SPLIT_MERGE_EVENT = Object.freeze({
   SPLIT_STARTED: 'splitStarted',
   SPLIT_COMPLETED: 'splitCompleted',
   SPLIT_FAILED: 'splitFailed',
+  SPLIT_DEFERRED: 'splitDeferred',
   MERGE_STARTED: 'mergeStarted',
   MERGE_COMPLETED: 'mergeCompleted',
   MERGE_FAILED: 'mergeFailed',
@@ -75,6 +76,8 @@ const SPLIT_MERGE_EVENT = Object.freeze({
 
 const SPLIT_MERGE_REASON = Object.freeze({
   BUSY: 'busy',
+  INSUFFICIENT_CAPACITY: 'insufficient_capacity',
+  CAPACITY_AVAILABLE: 'capacity_available',
 });
 
 const SPLIT_MERGE_ID = Object.freeze({
@@ -116,6 +119,11 @@ const SPLIT_MERGE_LOG_MSG = Object.freeze({
   PARTITION_EVAL_COMPLETED: 'Partition evaluation completed',
   THRESHOLDS_UPDATED: 'Thresholds updated',
   MANAGER_SHUTDOWN: 'PartitionSplitMergeManager shutdown',
+  SPLIT_CAPACITY_PREFLIGHT: 'Split capacity preflight check',
+  SPLIT_DEFERRED_CAPACITY: 'Split deferred due to insufficient capacity',
+  SPLIT_CAPACITY_ALLOWED: 'Split capacity preflight passed',
+  MERGE_ELIGIBLE_UNDER_PRESSURE:
+    'Merge remains eligible under capacity pressure',
 });
 
 const SPLIT_MERGE_ERROR_MSG = Object.freeze({

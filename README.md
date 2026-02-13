@@ -10,6 +10,12 @@ It aims to have similar(ish) functionality to that of Spanner and CockroachDB, a
 
 It also aims, as a future feature to allow code to be executed near the data it should operate on or with. Like rpc calls with SELECT routing, or accomodating stored procedures, perhaps.
 
+All SQL execution flows through a single engine (SqlCore) regardless of
+entrypoint: internal API, external PostgreSQL-wire protocol, or programmatic
+`DB.call(select, fn)` from WASM services. Three adapters normalize each
+entrypoint into a canonical `SqlRequest` before delegation to SqlCore, so there
+is exactly one planner, one optimizer, and one execution path.
+
 Everything in the system is stored as tables.
 All tables are imnplemented as partitions.
 All partitions are raft groups using sqlite for storage..
@@ -209,9 +215,125 @@ After bootstrap mode is disabled, the seed node populates its system cache by re
 4. **System Table Cache**: In-memory cache of cluster metadata
 5. **CDC Integration Service**: Change data capture for cache synchronization
 6. **Message Router**: Reliable message delivery through message groups
-7. **SQL Query Engine**: Query parsing, routing, and execution
-8. **Bootstrap Service**: Seed node initialization
-9. **Node Joining Service**: Joining node bootstrap
+7. **SQL Query Engine (SqlCore)**: Single SQL planner/executor for all entrypoints
+8. **SQL Adapter Layer**: InternalSqlAdapter, PostgresWireAdapter, WasmCallAdapter
+9. **Bootstrap Service**: Seed node initialization
+10. **Node Joining Service**: Joining node bootstrap
+
+### SQL Entrypoints
+
+All SQL traffic converges through three adapters into SqlCore:
+
+- **Internal SQL** — in-process calls from system components via `InternalSqlAdapter`
+- **External SQL Protocol** — PostgreSQL-wire compatible sessions via `PostgresWireAdapter`, with authentication and tenant/service policy mapping
+- **DB.call(select, fn)** — programmatic distributed execution via `WasmCallAdapter`, running `fn` on every partition selected by `select` in batch/stage mode
+
+`SqlCore.executeRequest` dispatches by execution mode with dedicated branches:
+`sql_statement` for standard SQL, `partition_callback` for `DB.call` style
+per-partition callback execution, `stage` for callback-stage plans, and `plan`
+for plan-object modes such as `reduceByKey` / `useBroadcast`. Each mode has its
+own dispatch path and typed validation failures. `partition_callback` is never
+aliased to plain statement execution.
+
+Admin ingress remains fixed at `:8081` as a compatibility endpoint, but command
+and mutation ownership routes through adapter -> meta-service contracts rather
+than node-local direct mutation handlers.
+
+### Distributed Movement Primitives
+
+Cross-partition data movement from WASM callbacks is restricted to three
+explicit primitives to prevent accidental cluster chatter:
+
+- **ctx.lookup(table, keys[])** — batched, deduplicated key fetch (pk/unique/bounded index only)
+- **ctx.emit(key, value)** — engine-managed shuffle/group with backpressure and spill-to-disk
+- **ctx.broadcast(ref, dataset)** / **ctx.useBroadcast(ref)** — versioned small dataset replication with hard size cap
+
+Strategy selection (broadcast → lookup → emit/shuffle) is automatic based on
+dataset size and access path, with optional user hints validated against
+guardrails. Decisions are visible in EXPLAIN output.
+
+### Programmatic Runtime v0
+
+Distributed execution is available through a runtime API that injects session,
+snapshot, and budget defaults:
+
+```javascript
+runtime.run(async (ctx) => {
+  // Iterator mode — async iteration over query results
+  for await (const row of ctx.call('SELECT * FROM users')) {
+    ctx.out(row);
+  }
+
+  // Stage mode — batch handler invoked per partition
+  await ctx.call('SELECT * FROM orders', null, async (batch) => {
+    for (const row of batch) ctx.out(row);
+  }, {exchangeBy: 'key'});
+
+  // Plan mode — grouped reduce across partitions
+  await ctx.call({kind: 'reduceByKey', source: 'events', key: 'user_id'});
+});
+```
+
+`ctx.call` supports three modes: iterator (no handler), stage (with handler),
+and plan (plan object). `ctx.out(value, meta?)` emits final output into the
+result stream with budget enforcement.
+
+Stage options accept `exchangeBy: 'local'` (default, no shuffle) or
+`exchangeBy: 'key'` (keyed shuffle with at-least-once delivery). Exchange
+delivery does not guarantee global ordering across records.
+
+Nested `ctx.call` inside stage handlers is classified as bounded or unbounded.
+In v0, unbounded nested calls are rejected with a teachable error directing
+users to `ctx.emit(...)` + `ctx.call({kind: 'reduceByKey', ...})`. Bounded
+patterns (constant key lookups, single-row fetches) pass through.
+
+### Resource Guardrails
+
+Per-query budgets are enforced for CPU time, memory, wall time, lookup
+keys/bytes, emitted intermediate bytes, and broadcast payload bytes. Budget
+violations terminate the operation with a descriptive error. Lineage IDs
+attached to stage artifacts enable retry deduplication and cancellation
+propagation across distributed stages.
+
+### WASM Module Manifests
+
+Every deployable WASM module requires a manifest declaring `run_export` (entry
+function), pinned dependency digests, and capability requirements. Activation
+validates the export signature, resolves dependencies from approved sources, and
+enforces tenant/service capability allowlists. All resolution decisions are
+audit-logged.
+
+#### Manifest Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `module_id` | string | yes | Unique module identifier |
+| `version` | string | yes | Semantic version |
+| `digest` | string | yes | `sha256:` followed by 64 hex chars; immutable identity |
+| `run_export` | string | yes | Named export serving as the callable entry function |
+| `exports` | string[] | yes | All declared module exports; `run_export` must be listed |
+| `dependencies` | object[] | no | Pinned digest references to capability modules |
+| `capabilities` | string[] | no | Required capabilities (e.g., `sql.read`, `kv.session`) |
+
+#### run_export Contract
+
+The `run_export` function must:
+- Exist in the module's declared `exports` list
+- Resolve to a function in the WASM module instance
+- Accept 2-3 parameters: `(context, batch)` or `(context, batch, options)`
+
+#### Dependency Resolution
+
+Each dependency entry requires `module_id` and `digest`. At activation:
+- Dependencies are resolved from approved module sources by pinned digest
+- Digest mismatches are rejected (no implicit mutation)
+- Version upgrades require explicit rollout with new digest
+
+#### Capability Policy
+
+Capabilities declared in the manifest are checked against tenant/service
+allowlists. Only declared and allowed capabilities are injected into runtime
+imports. Undeclared capability usage is rejected at deployment time.
 
 ### Key Features
 
@@ -267,12 +389,14 @@ npm run lint:fix
 ├── src/
 │   ├── config/          # Configuration management
 │   ├── logging/         # Logging infrastructure
+│   ├── query/           # SQL adapters, strategy selector, primitives, guardrails
 │   ├── threading/       # Worker thread pool
-│   ├── wasm-service/    # WASM service group components
+│   ├── wasm-service/    # WASM service group components, module manifests
 │   └── index.js         # Main entry point
 ├── test/
 │   ├── config/          # Configuration tests
-│   └── logging/         # Logging tests
+│   ├── logging/         # Logging tests
+│   └── query/           # SQL adapter, strategy, primitive, guardrail tests
 ├── package.json
 ├── .eslintrc.json
 └── README.md

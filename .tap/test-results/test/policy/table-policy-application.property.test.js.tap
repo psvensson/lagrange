@@ -3,41 +3,41 @@ TAP version 14
     # Subtest: split decisions follow table policy thresholds
         ok 1 - Split decisions correctly apply policy thresholds
         1..1
-    ok 1 - split decisions follow table policy thresholds # time=42.729ms
+    ok 1 - split decisions follow table policy thresholds # time=41.952ms
     
     # Subtest: merge decisions follow table policy thresholds
         ok 1 - Merge decisions correctly apply policy thresholds
         1..1
-    ok 2 - merge decisions follow table policy thresholds # time=1.692ms
+    ok 2 - merge decisions follow table policy thresholds # time=1.423ms
     
     # Subtest: replication settings follow table policy
         ok 1 - Replication settings match policy values
         1..1
-    ok 3 - replication settings follow table policy # time=1.304ms
+    ok 3 - replication settings follow table policy # time=1.189ms
     
     # Subtest: policy validation ensures odd replica counts
         ok 1 - Even replica counts are rejected
         1..1
-    ok 4 - policy validation ensures odd replica counts # time=0.857ms
+    ok 4 - policy validation ensures odd replica counts # time=0.772ms
     
     # Subtest: policy validation ensures min <= max replica count
         ok 1 - min > max replica count is rejected
         1..1
-    ok 5 - policy validation ensures min <= max replica count # time=0.595ms
+    ok 5 - policy validation ensures min <= max replica count # time=0.462ms
     
     # Subtest: policy merging preserves custom values
         ok 1 - Policy merging preserves custom values and defaults
         1..1
-    ok 6 - policy merging preserves custom values # time=0.667ms
+    ok 6 - policy merging preserves custom values # time=0.539ms
     
     # Subtest: split threshold comparison is consistent
         ok 1 - Split threshold comparison is consistent
         1..1
-    ok 7 - split threshold comparison is consistent # time=1.408ms
+    ok 7 - split threshold comparison is consistent # time=1.146ms
     
     1..7
-ok 1 - Property 16: Table Policy Application # time=52.326ms
+ok 1 - Property 16: Table Policy Application # time=50.266ms
 
 1..1
 # { total: 7, pass: 7 }
-# time=56.101ms
+# time=64.234ms

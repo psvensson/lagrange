@@ -34,10 +34,14 @@ import {
   EntityType as RebalancerEntityType,
 } from '../rebalancer/unified-rebalancer.js';
 import {
+  MESSAGE_GROUP_APPLICATION_ERROR_MSG,
+  MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
+  MESSAGE_GROUP_APPLICATION_STATUS,
   MESSAGE_GROUP_SUBSYSTEM,
   MESSAGE_STATUS as MessageStatus,
   RAFT_ROLE as RaftRole,
 } from './constants.js';
+import {CDCHandler} from './cdc-handler.js';
 
 // Note: isRaftPacket and RAFT_PACKET_TYPES are imported from shared module
 // src/raft/raft-packet-utils.js - Requirements: 9.1, 9.2, 9.3, 9.4
@@ -249,8 +253,10 @@ class MessageGroupService extends EventEmitter {
     // HLC clock for ordering
     this.hlcClock = new HLCClockService(this.replicaId);
 
-    // CDC subscriptions
-    this.cdcSubscriptions = new Set();
+    // Single-owner CDC handler for subscriptions and cache application.
+    this.cdcHandler = new CDCHandler(this.systemTableCache);
+    // Backward-compatible alias retained for status/read-only access.
+    this.cdcSubscriptions = this.cdcHandler.subscriptions;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -573,6 +579,7 @@ class MessageGroupService extends EventEmitter {
       throw error;
     }
 
+    this.cdcHandler.initialize();
     this.initialized = true;
     this.maybeInitializeRebalancer();
 
@@ -751,12 +758,14 @@ class MessageGroupService extends EventEmitter {
       // Handle message persistence - already tracked in pendingMessages
       break;
     case 'CDC':
-      // Apply CDC event to cache
-      // Requirements: 6.2
-      this.systemTableCache.applySystemTableChange(
-        command.tableName,
-        command.operation,
-        command.data,
+      this.cdcHandler.applyImmediate(
+        {
+          tableName: command.tableName,
+          operation: command.operation,
+          data: command.data,
+          timestamp: command.timestamp || this.hlcClock.now().toString(),
+        },
+        {skipSubscriptionCheck: true},
       );
       this.emit('cdcApplied', command);
       break;
@@ -1046,7 +1055,7 @@ class MessageGroupService extends EventEmitter {
       this.logger.debug('Duplicate message ignored', {messageId});
       return {
         messageId,
-        status: 'duplicate',
+        status: MESSAGE_GROUP_APPLICATION_STATUS.DUPLICATE,
         acknowledged: true,
       };
     }
@@ -1068,6 +1077,12 @@ class MessageGroupService extends EventEmitter {
 
     // Process the message
     try {
+      if (payload &&
+        payload.type ===
+          MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION) {
+        return this.handleLatencyCdcPropagationMessage(messageId, payload);
+      }
+
       this.emit('messageReceived', {
         messageId,
         payload,
@@ -1077,7 +1092,7 @@ class MessageGroupService extends EventEmitter {
 
       return {
         messageId,
-        status: 'received',
+        status: MESSAGE_GROUP_APPLICATION_STATUS.RECEIVED,
         acknowledged: false,
       };
     } catch (error) {
@@ -1087,6 +1102,36 @@ class MessageGroupService extends EventEmitter {
       });
       throw error;
     }
+  }
+
+  /**
+   * Handle grouped-latency CDC propagation message.
+   * @param {string} messageId - Message ID.
+   * @param {Object} payload - Propagation payload.
+   * @return {Promise<Object>}
+   * @private
+   */
+  async handleLatencyCdcPropagationMessage(messageId, payload) {
+    const tableName = payload.tableName;
+    const operation = payload.operation;
+    const data = payload.data;
+    if (!tableName || !operation || !data) {
+      throw new Error(
+        MESSAGE_GROUP_APPLICATION_ERROR_MSG.INVALID_LATENCY_CDC_PAYLOAD,
+      );
+    }
+
+    await this.applyCDCEvent(tableName, operation, data, {
+      skipSubscriptionCheck: true,
+    });
+
+    return {
+      messageId,
+      status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
+      acknowledged: true,
+      tableName,
+      operation,
+    };
   }
 
   /**
@@ -1144,11 +1189,7 @@ class MessageGroupService extends EventEmitter {
    * @return {Promise<void>}
    */
   async subscribeToCDC(tableName) {
-    if (this.cdcSubscriptions.has(tableName)) {
-      return;
-    }
-
-    this.cdcSubscriptions.add(tableName);
+    this.cdcHandler.subscribe(tableName);
 
     this.logger.debug('Subscribed to CDC', {
       tableName,
@@ -1168,16 +1209,19 @@ class MessageGroupService extends EventEmitter {
    */
   async applyCDCEvent(tableName, operation, data, options = {}) {
     const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
-    if (!skipSubscriptionCheck && !this.cdcSubscriptions.has(tableName)) {
-      this.logger.debug('Ignoring CDC event for unsubscribed table', {
+    const eventTimestamp = options.timestamp || this.hlcClock.now().toString();
+    const applied = this.cdcHandler.applyImmediate(
+      {
         tableName,
         operation,
-      });
+        data,
+        timestamp: eventTimestamp,
+      },
+      {skipSubscriptionCheck},
+    );
+    if (!applied) {
       return;
     }
-
-    // Apply to cache
-    this.systemTableCache.applySystemTableChange(tableName, operation, data);
 
     if (!options.skipReplication) {
       // Persist CDC event to Raft log for replication
@@ -1186,7 +1230,7 @@ class MessageGroupService extends EventEmitter {
         tableName,
         operation,
         data,
-        timestamp: this.hlcClock.now().toString(),
+        timestamp: eventTimestamp,
       });
 
       // Replicate if leader using liferaft
@@ -1439,6 +1483,9 @@ class MessageGroupService extends EventEmitter {
         },
       );
       this.persistedRole = role;
+    } catch (error) {
+      this.scheduleRoleUpdateRetry();
+      throw error;
     } finally {
       this.roleUpdateInFlight = false;
     }
@@ -1484,6 +1531,9 @@ class MessageGroupService extends EventEmitter {
         },
       );
       this.persistedLeaderNodeId = leaderNodeId;
+    } catch (error) {
+      this.scheduleLeaderNodeUpdateRetry();
+      throw error;
     } finally {
       this.leaderNodeUpdateInFlight = false;
     }
@@ -1628,7 +1678,7 @@ class MessageGroupService extends EventEmitter {
       logLength: this.storage.getLogLength(),
       pendingMessages: this.pendingMessages.size,
       acknowledgedMessages: this.acknowledgedMessages.size,
-      cdcSubscriptions: Array.from(this.cdcSubscriptions),
+      cdcSubscriptions: this.cdcHandler.getSubscriptions(),
       initialized: this.initialized,
     };
   }
@@ -1683,6 +1733,7 @@ class MessageGroupService extends EventEmitter {
       this.leaderNodeUpdateRetryTimer = null;
     }
     await this.quiesceRebalancing();
+    this.cdcHandler.shutdown();
 
     this.initialized = false;
     this.pendingMessages.clear();

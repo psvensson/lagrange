@@ -4,7 +4,7 @@ TAP version 14
     ok 2 - Should have no cache
     ok 3 - Should have no CDC service
     1..3
-ok 1 - ContextManager - constructor # time=3.264ms
+ok 1 - ContextManager - constructor # time=4.852ms
 
 Context manager initialized
 # Subtest: ContextManager - initialize
@@ -12,15 +12,15 @@ Context manager initialized
     ok 2 - Should have CDC service
     ok 3 - Should have SQL engine
     1..3
-ok 2 - ContextManager - initialize # time=0.731ms
+ok 2 - ContextManager - initialize # time=0.742ms
 
 # Subtest: ContextManager - getContext returns null when not found
     ok 1 - Should return null
     1..1
-ok 3 - ContextManager - getContext returns null when not found # time=0.34ms
+ok 3 - ContextManager - getContext returns null when not found # time=0.304ms
 
 Context created {
-  contextId: '00febe64-7165-475a-a740-eff0ee600cef',
+  contextId: 'a1f68e5d-c144-48b0-a656-2cd6fb90f405',
   contextType: 'function',
   contextName: 'test-context',
   ownerId: 'owner-123'
@@ -34,16 +34,16 @@ Context created {
     ok 6 - Should have correct data
     ok 7 - Should have correct owner
     1..7
-ok 4 - ContextManager - setContext creates new context # time=1.906ms
+ok 4 - ContextManager - setContext creates new context # time=1.994ms
 
 Context created {
-  contextId: '30ff22ff-fc1b-4409-97e5-095c12cdc069',
+  contextId: 'd9768ff9-df5f-42a8-bd84-69c3098cfb8e',
   contextType: 'service',
   contextName: 'my-service',
   ownerId: null
 }
 Context updated {
-  contextId: '30ff22ff-fc1b-4409-97e5-095c12cdc069',
+  contextId: 'd9768ff9-df5f-42a8-bd84-69c3098cfb8e',
   contextType: 'service',
   contextName: 'my-service',
   ownerId: null
@@ -52,16 +52,16 @@ Context updated {
     ok 1 - Should indicate existing context
     ok 2 - Should have updated data
     1..2
-ok 5 - ContextManager - setContext updates existing context # time=0.62ms
+ok 5 - ContextManager - setContext updates existing context # time=0.884ms
 
 Context created {
-  contextId: 'bd4b35fb-3eb5-4098-b1f5-1bfa4320ede0',
+  contextId: 'da54d20f-77a7-4701-abf4-67f9a0c7af0b',
   contextType: 'user',
   contextName: 'user-ctx',
   ownerId: null
 }
 Context deleted {
-  contextId: 'bd4b35fb-3eb5-4098-b1f5-1bfa4320ede0',
+  contextId: 'da54d20f-77a7-4701-abf4-67f9a0c7af0b',
   contextType: 'user',
   contextName: 'user-ctx'
 }
@@ -69,28 +69,28 @@ Context deleted {
     ok 1 - Should return true
     ok 2 - Should not find deleted context
     1..2
-ok 6 - ContextManager - deleteContext removes context # time=0.576ms
+ok 6 - ContextManager - deleteContext removes context # time=0.538ms
 
 Context not found for deletion { contextType: 'function', contextName: 'nonexistent' }
 # Subtest: ContextManager - deleteContext returns false for nonexistent
     ok 1 - Should return false
     1..1
-ok 7 - ContextManager - deleteContext returns false for nonexistent # time=0.302ms
+ok 7 - ContextManager - deleteContext returns false for nonexistent # time=0.262ms
 
 Context created {
-  contextId: 'f92681e9-992d-4456-8b90-898b302a8a05',
+  contextId: 'c17ac93c-7bc6-4f97-ab79-082b76686673',
   contextType: 'function',
   contextName: 'ctx1',
   ownerId: 'owner-1'
 }
 Context created {
-  contextId: '99a5632d-4167-49dc-96a6-4f9ad0a0c86f',
+  contextId: '0f7bda63-9dd8-4ef5-ad58-7aa8b8ad44aa',
   contextType: 'function',
   contextName: 'ctx2',
   ownerId: 'owner-1'
 }
 Context created {
-  contextId: '3c0ba6ec-1d84-47b3-aa2e-6f7ca194b0fa',
+  contextId: 'accaba51-4802-4bba-8955-342ec4050994',
   contextType: 'function',
   contextName: 'ctx3',
   ownerId: 'owner-2'
@@ -100,22 +100,22 @@ Context created {
     ok 2 - Should include ctx1
     ok 3 - Should include ctx2
     1..3
-ok 8 - ContextManager - getContextsByOwner returns matching # time=0.709ms
+ok 8 - ContextManager - getContextsByOwner returns matching # time=0.643ms
 
 Context created {
-  contextId: 'e177c2c1-962d-40da-b86f-a08e4f6ddb2f',
+  contextId: '5c5897ac-4b51-4c8d-b96f-79956d79bc2c',
   contextType: 'function',
   contextName: 'func-ctx',
   ownerId: null
 }
 Context created {
-  contextId: '7d7dec1f-6a67-4ef0-afc0-dacaf9bcf5ce',
+  contextId: '934c14a8-ca45-405d-a480-ceb71873f91b',
   contextType: 'service',
   contextName: 'svc-ctx',
   ownerId: null
 }
 Context created {
-  contextId: 'dfbccb5d-f23f-48db-aff7-b971929cea64',
+  contextId: '1301d7a4-ab00-429d-aba4-1882b86477a0',
   contextType: 'user',
   contextName: 'user-ctx',
   ownerId: null
@@ -124,18 +124,18 @@ Context created {
     ok 1 - Should return 1 function context
     ok 2 - Should return 1 service context
     1..2
-ok 9 - ContextManager - getContextsByType returns matching # time=0.752ms
+ok 9 - ContextManager - getContextsByType returns matching # time=0.58ms
 
 # Subtest: ContextManager - validates context type
     ok 1 - Should throw for invalid type
     1..1
-ok 10 - ContextManager - validates context type # time=1.084ms
+ok 10 - ContextManager - validates context type # time=0.884ms
 
 # Subtest: ContextManager - throws when CDC not available
     ok 1 - Should throw when CDC not available
     1..1
-ok 11 - ContextManager - throws when CDC not available # time=0.412ms
+ok 11 - ContextManager - throws when CDC not available # time=0.605ms
 
 1..11
 # { total: 26, pass: 26 }
-# time=24.756ms
+# time=31.756ms

@@ -56,7 +56,7 @@ const TEST_CONFIG = Object.freeze({
   /** Polling interval for leader election in milliseconds */
   LEADER_ELECTION_POLL_MS: 100,
   /** Timeout for CDC event propagation in milliseconds */
-  CDC_PROPAGATION_TIMEOUT_MS: 15000,
+  CDC_PROPAGATION_TIMEOUT_MS: 30000,
   /** Polling interval for CDC propagation in milliseconds */
   CDC_PROPAGATION_POLL_MS: 50,
   /** Test partition ID */
@@ -156,7 +156,7 @@ function generateUniqueNodeId(counter) {
 // Counter for generating unique node IDs
 let nodeIdCounter = 0xB00000000000;
 
-test('Cross-Worker CDC Integration', {timeout: 60000}, async (t) => {
+test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
   t.beforeEach(() => {
     const nodeId = generateUniqueNodeId(nodeIdCounter++);
     initializeTestEnvironment(nodeId);

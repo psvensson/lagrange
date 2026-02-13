@@ -1,4 +1,8 @@
 import {NUM, STRING, TYPEOF} from '../constants/index.js';
+import {
+  STORAGE_PLACEMENT_CONSTRAINT,
+  STORAGE_PLACEMENT_DEFAULT,
+} from '../rebalancer/storage-capacity-constants.js';
 
 const POLICY_SUBSYSTEM = Object.freeze({
   TABLE_POLICY: 'table-policy',
@@ -30,6 +34,8 @@ const POLICY_LOG_MSG = Object.freeze({
   TABLE_POLICY_INITIALIZED: 'TablePolicyService initialized',
   TABLE_NOT_FOUND_DEFAULT: 'Table not found, using default policy',
   PARTITION_NOT_FOUND_DEFAULT: 'Partition not found, using default policy',
+  MESSAGE_GROUP_NOT_FOUND_DEFAULT:
+    'Message group not found, using default policy',
   POLICY_PARSE_FAILED: 'Failed to parse table policy, using defaults',
   UPDATE_TABLE_POLICY: 'Updating table policy',
   UPDATE_TABLE_POLICY_FAILED: 'Failed to update table policy',
@@ -60,6 +66,10 @@ const POLICY_ERROR_MSG = Object.freeze({
   SPLIT_TRAFFIC_NONNEGATIVE: 'splitTrafficThreshold must be non-negative',
   MERGE_STORAGE_NONNEGATIVE: 'mergeStorageThreshold must be non-negative',
   MERGE_TRAFFIC_NONNEGATIVE: 'mergeTrafficThreshold must be non-negative',
+  PLACEMENT_MIN_FREE_NONNEGATIVE:
+    'minFreeBytesPerNode must be non-negative',
+  PLACEMENT_MAX_UTIL_RANGE:
+    'maxBudgetUtilizationPercent must be between 0 and 100',
 });
 
 const POLICY_DEFAULT = Object.freeze({
@@ -87,6 +97,28 @@ const DEFAULT_TABLE_POLICY = Object.freeze({
     considerDiskSpace: true,
     considerCpuLoad: true,
     considerMemoryLoad: true,
+    [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
+      STORAGE_PLACEMENT_DEFAULT.MIN_FREE_BYTES_PER_NODE,
+    [STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT]:
+      STORAGE_PLACEMENT_DEFAULT.MAX_BUDGET_UTILIZATION_PERCENT,
+    [STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM]:
+      STORAGE_PLACEMENT_DEFAULT.RESERVE_EMERGENCY_HEADROOM,
+  },
+});
+
+const DEFAULT_MESSAGE_GROUP_POLICY = Object.freeze({
+  targetReplicaCount: NUM.THREE,
+  maxReplicaCount: NUM.FIVE,
+  ensureLocalAccess: true,
+  placementConstraints: {
+    spreadAcrossNodes: true,
+    preferNearbyNodes: true,
+    [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
+      STORAGE_PLACEMENT_DEFAULT.MIN_FREE_BYTES_PER_NODE,
+    [STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT]:
+      STORAGE_PLACEMENT_DEFAULT.MAX_BUDGET_UTILIZATION_PERCENT,
+    [STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM]:
+      STORAGE_PLACEMENT_DEFAULT.RESERVE_EMERGENCY_HEADROOM,
   },
 });
 
@@ -101,6 +133,13 @@ const POLICY_FIELD_TYPES = Object.freeze({
   placementConstraints: TYPEOF.OBJECT,
 });
 
+const MESSAGE_GROUP_POLICY_FIELD_TYPES = Object.freeze({
+  targetReplicaCount: TYPEOF.NUMBER,
+  maxReplicaCount: TYPEOF.NUMBER,
+  ensureLocalAccess: TYPEOF.BOOLEAN,
+  placementConstraints: TYPEOF.OBJECT,
+});
+
 const POLICY_RESULT_REASON = Object.freeze({
   NO_CDC_SERVICE: 'no_cdc_service',
 });
@@ -110,7 +149,9 @@ const POLICY_VALUE = Object.freeze({
 });
 
 export {
+  DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_TABLE_POLICY,
+  MESSAGE_GROUP_POLICY_FIELD_TYPES,
   POLICY_DEFAULT,
   POLICY_ERROR_MSG,
   POLICY_EVENT,

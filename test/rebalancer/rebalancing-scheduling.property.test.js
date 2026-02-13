@@ -152,7 +152,7 @@ test('Property 23: Rebalancing Scheduling', async (t) => {
             status: 'active',
           }));
 
-          const targetState = rebalancer.calculateTargetState(replicas, policy);
+          const targetState = await rebalancer.calculateTargetState(replicas, policy);
           const moves = rebalancer.calculateMoves(replicas, targetState);
 
           // Clean up

@@ -49,3 +49,16 @@ export {
 
 // RebalanceCoordinator (new simplified architecture)
 export {RebalanceCoordinator} from './rebalance-coordinator.js';
+
+// Storage capacity budget registration
+export {NodeStorageBudgetService} from './node-storage-budget-service.js';
+// Storage capacity accounting
+export {StorageCapacityAccountingService} from './storage-capacity-accounting-service.js';
+// Storage admission gate
+export {StorageAdmissionService} from './storage-admission-service.js';
+// Storage pressure behavior
+export {StoragePressureBehavior} from './storage-pressure-behavior.js';
+// Storage capacity metrics
+export {StorageCapacityMetrics} from './storage-capacity-metrics.js';
+// Storage capacity migration
+export {StorageCapacityMigration} from './storage-capacity-migration.js';

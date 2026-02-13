@@ -8,7 +8,7 @@ TAP version 14
         ok 5 - should avoid standalone add moves when degraded topology is already at target
         ok 6 - should schedule REPLACE moves for spread correction under degraded topology
         1..6
-    ok 1 - full flow: seed node, second node joins, replica placed via message group # time=21.879ms
+    ok 1 - full flow: seed node, second node joins, replica placed via message group # time=19.292ms
     
     # Subtest: message group routes CREATE_REPLICA via real WebSocket
         ok 1 - should have message ID
@@ -17,7 +17,7 @@ TAP version 14
         ok 4 - should receive CREATE_REPLICA message
         ok 5 - should have correct request ID
         1..5
-    ok 2 - message group routes CREATE_REPLICA via real WebSocket # time=1.99ms
+    ok 2 - message group routes CREATE_REPLICA via real WebSocket # time=2.136ms
     
     # Subtest: rebalancer schedules REPLACE moves in degraded two-node topology
         ok 1 - rebalance should succeed
@@ -27,7 +27,7 @@ TAP version 14
         ok 5 - should schedule one paired replacement move with two ready nodes
         ok 6 - scheduled degraded move should use REPLACE workflow
         1..6
-    ok 3 - rebalancer schedules REPLACE moves in degraded two-node topology # time=1.315ms
+    ok 3 - rebalancer schedules REPLACE moves in degraded two-node topology # time=1.32ms
     
     # Subtest: replica lifecycle manager handles CREATE_REPLICA idempotently
         ok 1 - first call should return initiated
@@ -35,11 +35,11 @@ TAP version 14
         ok 3 - second call should return already_exists
         ok 4 - should only create replica once
         1..4
-    ok 4 - replica lifecycle manager handles CREATE_REPLICA idempotently # time=26.925ms
+    ok 4 - replica lifecycle manager handles CREATE_REPLICA idempotently # time=26.708ms
     
     1..4
-ok 1 - Cross-node replica placement integration tests # time=153.613ms
+ok 1 - Cross-node replica placement integration tests # time=163.748ms
 
 1..1
 # { total: 21, pass: 21 }
-# time=157.268ms
+# time=167.403ms

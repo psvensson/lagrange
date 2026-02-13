@@ -231,8 +231,11 @@ class CDCHandler extends EventEmitter {
    * Apply a CDC event immediately (bypass buffering).
    * Used for critical events that need immediate application.
    * @param {CDCEvent|Object} event - CDC event.
+   * @param {Object} [options] - Apply options.
+   * @param {boolean} [options.skipSubscriptionCheck] - Skip subscription gating.
+   * @return {boolean} True when event was applied.
    */
-  applyImmediate(event) {
+  applyImmediate(event, options = {}) {
     const cdcEvent = event instanceof CDCEvent ?
       event :
       new CDCEvent(
@@ -243,7 +246,26 @@ class CDCHandler extends EventEmitter {
         event.sourcePartition,
       );
 
+    const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
+    if (!skipSubscriptionCheck && !this.subscriptions.has(cdcEvent.tableName)) {
+      this.logger.debug('Ignoring event for unsubscribed table', {
+        tableName: cdcEvent.tableName,
+      });
+      return false;
+    }
+
+    const eventId = this.generateEventId(cdcEvent);
+    if (this.processedEventIds.has(eventId)) {
+      this.logger.debug('Duplicate CDC event ignored', {
+        tableName: cdcEvent.tableName,
+        eventId,
+        key: cdcEvent.getKey(),
+      });
+      return false;
+    }
+
     this.applyEvent(cdcEvent);
+    return true;
   }
 
   /**

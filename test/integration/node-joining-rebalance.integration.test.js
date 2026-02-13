@@ -14,6 +14,10 @@ import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
+  ReplicaStatus,
+  TERMINAL_STATUSES,
+} from '../../src/rebalancer/replica-status.js';
+import {
   UnifiedRebalancer,
   EntityType,
   MoveType,
@@ -25,7 +29,72 @@ import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
+  waitFor,
 } from './helpers/cluster-test-helpers.js';
+
+/**
+ * Wait until replica operations are quiescent for deterministic move assertions.
+ * @param {Object} systemTableCache - System table cache.
+ * @param {number} timeoutMs - Timeout in milliseconds.
+ * @return {Promise<boolean>} True when no in-flight operations remain.
+ */
+async function waitForReplicaOperationsToSettle(systemTableCache, timeoutMs = 5000) {
+  return waitFor(() => {
+    const inFlight = systemTableCache.filter(
+      SystemTableName.REPLICA_OPERATIONS,
+      (operation) => !TERMINAL_STATUSES.includes(operation.status),
+    ) || [];
+    return inFlight.length === 0;
+  }, timeoutMs);
+}
+
+/**
+ * Pick a partition that has only stable replica service states.
+ * @param {Object} systemTableCache - System table cache.
+ * @param {number} timeoutMs - Timeout in milliseconds.
+ * @return {Promise<string|null>} Stable partition ID or null.
+ */
+async function waitForStablePartitionId(systemTableCache, timeoutMs = 5000) {
+  const disallowedStatuses = new Set([
+    ReplicaStatus.CREATING,
+    ReplicaStatus.SYNCING,
+    ReplicaStatus.REMOVING,
+    ReplicaStatus.PENDING,
+  ]);
+
+  let selectedPartitionId = null;
+  const found = await waitFor(() => {
+    const partitions = systemTableCache.getAll(SystemTableName.PARTITIONS) || [];
+    for (const partition of partitions) {
+      const partitionId = partition?.partition_id;
+      if (!partitionId) {
+        continue;
+      }
+      const services = systemTableCache.filter(
+        SystemTableName.SERVICES,
+        (service) =>
+          service.service_type === EntityType.PARTITION &&
+          service.partition_id === partitionId,
+      ) || [];
+      if (services.length === 0) {
+        continue;
+      }
+      const hasDisallowedStatus = services.some((service) => {
+        return disallowedStatuses.has(String(service.status || '').toLowerCase());
+      });
+      if (!hasDisallowedStatus) {
+        selectedPartitionId = partitionId;
+        return true;
+      }
+    }
+    return false;
+  }, timeoutMs);
+
+  if (!found) {
+    return null;
+  }
+  return selectedPartitionId;
+}
 
 test('Node joining rebalancing integration', async (t) => {
   t.beforeEach(() => {
@@ -91,10 +160,8 @@ test('Node joining rebalancing integration', async (t) => {
       });
       rebalanceCoordinator.initialize();
 
-      // Get a partition ID from the bootstrapped partitions
-      const partitions = systemTableCache.getAll('partitions') || [];
-      t.ok(partitions.length > 0, 'should have partitions');
-      const partitionId = partitions[0].partition_id;
+      const partitionId = await waitForStablePartitionId(systemTableCache);
+      t.ok(partitionId, 'should have a stable partition for rebalancing');
 
       // Create real UnifiedRebalancer with real dependencies
       const rebalancer = new UnifiedRebalancer({
@@ -328,10 +395,8 @@ test('Node joining rebalancing integration', async (t) => {
         created_at: now,
       });
 
-      // Get a partition ID from the bootstrapped partitions
-      const partitions = systemTableCache.getAll('partitions') || [];
-      t.ok(partitions.length > 0, 'should have partitions');
-      const partitionId = partitions[0].partition_id;
+      const partitionId = await waitForStablePartitionId(systemTableCache);
+      t.ok(partitionId, 'should have a stable partition for rebalancing');
 
       // Create real UnifiedRebalancer with real dependencies
       const rebalancer = new UnifiedRebalancer({
@@ -351,6 +416,11 @@ test('Node joining rebalancing integration', async (t) => {
       rebalancer.moveBatchSize = 2;
       rebalancer.interBatchDelayMs = 0;
       rebalancer.maxConcurrentMoves = 10;
+
+      const operationsSettled = await waitForReplicaOperationsToSettle(
+        systemTableCache,
+      );
+      t.ok(operationsSettled, 'replica operations should settle before rebalance');
 
       // Override executeMove to track concurrency
       // This is acceptable since we're testing the batching logic, not the actual move execution
@@ -376,8 +446,12 @@ test('Node joining rebalancing integration', async (t) => {
       });
 
       t.equal(result.success, true, 'rebalance should succeed');
-      t.ok(result.moves.some((m) => m.operation === MoveType.ADD),
-        'should have ADD moves');
+      t.ok(
+        result.moves.some(
+          (m) => m.operation === MoveType.ADD || m.operation === MoveType.REPLACE,
+        ),
+        'should have ADD or REPLACE moves',
+      );
 
       // Verify that maxInFlight per node never exceeds the batch size
       for (const [nodeId, max] of maxInFlight.entries()) {
@@ -517,10 +591,8 @@ test('Node joining rebalancing integration', async (t) => {
         created_at: now,
       });
 
-      // Get a partition ID from the bootstrapped partitions
-      const partitions = systemTableCache.getAll('partitions') || [];
-      t.ok(partitions.length > 0, 'should have partitions');
-      const partitionId = partitions[0].partition_id;
+      const partitionId = await waitForStablePartitionId(systemTableCache);
+      t.ok(partitionId, 'should have a stable partition for rebalancing');
 
       // Create real UnifiedRebalancer with real dependencies
       const rebalancer = new UnifiedRebalancer({
@@ -536,6 +608,11 @@ test('Node joining rebalancing integration', async (t) => {
       rebalancer.initialize();
       rebalancer.setLeader(true);
 
+      const operationsSettled = await waitForReplicaOperationsToSettle(
+        systemTableCache,
+      );
+      t.ok(operationsSettled, 'replica operations should settle before rebalance');
+
       // Trigger rebalance
       const result = await rebalancer.rebalance('node_join');
       t.equal(result.success, true, 'rebalance should succeed');
@@ -545,20 +622,23 @@ test('Node joining rebalancing integration', async (t) => {
       // doesn't have a real WebSocket connection. This is correct behavior.
       // The test verifies that the rebalancer correctly identifies the need for
       // ADD moves and attempts to schedule them.
-      const addMoves = result.moves.filter((move) => move.operation === MoveType.ADD);
-      const skippedMoves = result.moves.filter((move) => move.skipped === true);
+      const createMoves = result.moves.filter((move) =>
+        move.operation === MoveType.ADD || move.operation === MoveType.REPLACE);
+      const skippedCreateMoves = result.moves.filter((move) =>
+        move.skipped === true &&
+        (move.operation === MoveType.ADD || move.operation === MoveType.REPLACE));
 
-      // Either we have ADD moves scheduled, or they were skipped due to node not ready
-      // Both are valid outcomes with real components
+      // Either we have replica-creation moves scheduled, or they were skipped because
+      // the simulated joining node has no real transport connection.
       t.ok(
-        addMoves.length > 0 || skippedMoves.length > 0,
-        'should have ADD moves (scheduled or skipped)',
+        createMoves.length > 0 || skippedCreateMoves.length > 0,
+        'should have ADD/REPLACE moves (scheduled or skipped)',
       );
 
       // If moves were skipped, verify it was due to node_not_ready (correct behavior)
-      if (skippedMoves.length > 0) {
+      if (skippedCreateMoves.length > 0) {
         t.ok(
-          skippedMoves.some((move) => move.reason === 'node_not_ready'),
+          skippedCreateMoves.some((move) => move.reason === 'node_not_ready'),
           'skipped moves should be due to node_not_ready',
         );
       }

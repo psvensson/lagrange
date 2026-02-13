@@ -617,6 +617,7 @@ class MessageRouter extends EventEmitter {
           });
 
           if (connectionInfo.state === ConnectionState.CONNECTING) {
+            this.handleConnectionClose(connectionInfo.nodeId);
             reject(error);
           }
         });

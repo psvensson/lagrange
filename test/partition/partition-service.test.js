@@ -14,6 +14,10 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
+  PARTITION_SERVICE_INIT_STAGE,
+  PARTITION_SERVICE_LOG_MSG,
+} from '../../src/partition/partition-service-constants.js';
+import {
   SystemTableName,
   INITIAL_PARTITION_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -76,6 +80,58 @@ test('PartitionService - initializes with in-memory database', async (t) => {
   // Single replica becomes leader immediately
   t.equal(partition.getRole(), RaftRole.LEADER);
   t.equal(partition.getState(), PartitionState.NORMAL);
+
+  await partition.shutdown();
+});
+
+test('PartitionService - suppresses lifecycle logs and emits stage callbacks', async (t) => {
+  const stageEvents = [];
+  const infoMessages = [];
+  const partition = new PartitionService({
+    partitionId: 'stage-partition-1',
+    tableId: 'stage_table',
+    tableName: 'stage_table',
+    replicaId: 'stage-partition-1-r1',
+    replicaIds: ['stage-partition-1-r1', 'stage-partition-1-r2', 'stage-partition-1-r3'],
+    peerAddresses: [
+      'node-1/partition/stage-partition-1-r1',
+      'node-1/partition/stage-partition-1-r2',
+      'node-1/partition/stage-partition-1-r3',
+    ],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+    suppressLifecycleLogs: true,
+    onInitializationStage: (event) => stageEvents.push(event),
+  });
+  partition.logger = {
+    info: (message) => infoMessages.push(message),
+    debug: () => {},
+    warn: () => {},
+    error: () => {},
+  };
+
+  await partition.initialize();
+
+  const stageNames = stageEvents.map((event) => event.stage);
+  t.equal(stageNames[0], PARTITION_SERVICE_INIT_STAGE.STARTING);
+  t.ok(stageNames.includes(PARTITION_SERVICE_INIT_STAGE.OPENING_DB));
+  t.ok(stageNames.includes(PARTITION_SERVICE_INIT_STAGE.JOINING_PEERS));
+  t.ok(stageNames.includes(PARTITION_SERVICE_INIT_STAGE.JOINED_PEER));
+  t.equal(
+    stageNames[stageNames.length - 1],
+    PARTITION_SERVICE_INIT_STAGE.READY,
+  );
+  t.equal(
+    stageEvents.filter((event) =>
+      event.stage === PARTITION_SERVICE_INIT_STAGE.JOINED_PEER,
+    ).length,
+    2,
+    'should emit one JOINED_PEER event per peer',
+  );
+
+  t.notOk(infoMessages.includes(PARTITION_SERVICE_LOG_MSG.INITIALIZING));
+  t.notOk(infoMessages.includes(PARTITION_SERVICE_LOG_MSG.JOINING_PEER_ADDRESS));
+  t.notOk(infoMessages.includes(PARTITION_SERVICE_LOG_MSG.INITIALIZED));
 
   await partition.shutdown();
 });

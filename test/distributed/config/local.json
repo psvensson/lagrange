@@ -1,0 +1,28 @@
+{
+  "size": 5,
+  "docker": {
+    "socketPath": "/var/run/docker.sock"
+  },
+  "image": "distributed-db:test",
+  "timeouts": {
+    "nodeStartup": 30000,
+    "convergence": 30000,
+    "quietWindow": 5000,
+    "scenarioDefault": 120000
+  },
+  "convergence": {
+    "targetVoterCount": 3,
+    "settleTimeoutMs": 30000,
+    "quietWindowMs": 5000,
+    "maxSustainedOverTargetMs": 2000,
+    "sampleIntervalMs": 250
+  },
+  "resourceLimits": {
+    "memory": "512m",
+    "cpus": "1.0"
+  },
+  "load": {
+    "defaultOpsPerSec": 100,
+    "defaultDuration": "30s"
+  }
+}

@@ -2,23 +2,23 @@ TAP version 14
 # Subtest: Property 5: Cache dump contains all six system tables
     ok 1 - Cache dump contains all six system tables
     1..1
-ok 1 - Property 5: Cache dump contains all six system tables # time=50.254ms
+ok 1 - Property 5: Cache dump contains all six system tables # time=58.312ms
 
 # Subtest: Property 5: Cache dump data matches cache contents
     ok 1 - Cache dump data matches cache contents
     1..1
-ok 2 - Property 5: Cache dump data matches cache contents # time=23.94ms
+ok 2 - Property 5: Cache dump data matches cache contents # time=27.244ms
 
 # Subtest: Property 5: Cache dump format matches protocol
     ok 1 - Cache dump format matches protocol
     1..1
-ok 3 - Property 5: Cache dump format matches protocol # time=21.905ms
+ok 3 - Property 5: Cache dump format matches protocol # time=27.597ms
 
 # Subtest: Property 5: Empty cache rejects cache dump
     ok 1 - should reject empty cache dumps
     1..1
-ok 4 - Property 5: Empty cache rejects cache dump # time=3.171ms
+ok 4 - Property 5: Empty cache rejects cache dump # time=3.195ms
 
 1..4
 # { total: 4, pass: 4 }
-# time=219.481ms
+# time=244.976ms

@@ -1,0 +1,190 @@
+/**
+ * Constants for the distributed testing framework.
+ * All scalars are defined here — no magic literals in framework code.
+ */
+
+// --- Port Constants ---
+const REST_PORT = 8080;
+const ADMIN_API_PORT = 8081;
+const WS_TRANSPORT_PORT = 9080;
+
+const PORTS = Object.freeze({
+  REST: REST_PORT,
+  ADMIN_API: ADMIN_API_PORT,
+  WS_TRANSPORT: WS_TRANSPORT_PORT,
+});
+
+// --- Timeout Constants (milliseconds) ---
+const NODE_STARTUP_TIMEOUT_MS = 30000;
+const CONVERGENCE_TIMEOUT_MS = 30000;
+const QUIET_WINDOW_MS = 5000;
+const SCENARIO_DEFAULT_TIMEOUT_MS = 120000;
+
+const TIMEOUTS = Object.freeze({
+  NODE_STARTUP: NODE_STARTUP_TIMEOUT_MS,
+  CONVERGENCE: CONVERGENCE_TIMEOUT_MS,
+  QUIET_WINDOW: QUIET_WINDOW_MS,
+  SCENARIO_DEFAULT: SCENARIO_DEFAULT_TIMEOUT_MS,
+});
+
+// --- Docker Label Constants ---
+const LABEL_PREFIX = 'ddb-test';
+const LABEL_CLUSTER = `${LABEL_PREFIX}.cluster`;
+const LABEL_NODE_ID = `${LABEL_PREFIX}.node-id`;
+const LABEL_ROLE = `${LABEL_PREFIX}.role`;
+const LABEL_SCENARIO = `${LABEL_PREFIX}.scenario`;
+
+const LABELS = Object.freeze({
+  PREFIX: LABEL_PREFIX,
+  CLUSTER: LABEL_CLUSTER,
+  NODE_ID: LABEL_NODE_ID,
+  ROLE: LABEL_ROLE,
+  SCENARIO: LABEL_SCENARIO,
+});
+
+// --- Convergence Defaults ---
+const TARGET_VOTER_COUNT = 3;
+const SETTLE_TIMEOUT_MS = 30000;
+const MAX_SUSTAINED_OVER_TARGET_MS = 2000;
+const SAMPLE_INTERVAL_MS = 250;
+
+const CONVERGENCE_DEFAULTS = Object.freeze({
+  targetVoterCount: TARGET_VOTER_COUNT,
+  settleTimeoutMs: SETTLE_TIMEOUT_MS,
+  quietWindowMs: QUIET_WINDOW_MS,
+  maxSustainedOverTargetMs: MAX_SUSTAINED_OVER_TARGET_MS,
+  sampleIntervalMs: SAMPLE_INTERVAL_MS,
+});
+
+// --- Load Generation Defaults ---
+const DEFAULT_OPS_PER_SEC = 100;
+const DEFAULT_LOAD_DURATION = '30s';
+
+const LOAD_DEFAULTS = Object.freeze({
+  defaultOpsPerSec: DEFAULT_OPS_PER_SEC,
+  defaultDuration: DEFAULT_LOAD_DURATION,
+});
+
+// --- Resource Limit Defaults ---
+const DEFAULT_MEMORY_LIMIT = '512m';
+const DEFAULT_CPU_LIMIT = '1.0';
+
+const RESOURCE_DEFAULTS = Object.freeze({
+  memory: DEFAULT_MEMORY_LIMIT,
+  cpus: DEFAULT_CPU_LIMIT,
+});
+
+// --- Docker Image Defaults ---
+const DEFAULT_IMAGE_TAG = 'distributed-db:test';
+const DEFAULT_DOCKERFILE = 'Dockerfile';
+const DEFAULT_DOCKER_SOCKET_PATH = '/var/run/docker.sock';
+const DOCKER_REMOTE_PORT = 2376;
+
+const DOCKER_DEFAULTS = Object.freeze({
+  imageTag: DEFAULT_IMAGE_TAG,
+  dockerfile: DEFAULT_DOCKERFILE,
+  socketPath: DEFAULT_DOCKER_SOCKET_PATH,
+  remotePort: DOCKER_REMOTE_PORT,
+});
+
+// --- Log Analyzer Defaults ---
+const ELECTION_STORM_MULTIPLIER = 4;
+const STUCK_REBALANCE_TIMEOUT_MS = 60000;
+const CDC_DELAY_THRESHOLD_MS = 5000;
+const REPEATED_ERROR_THRESHOLD = 3;
+
+const ANALYZER_DEFAULTS = Object.freeze({
+  electionStormMultiplier: ELECTION_STORM_MULTIPLIER,
+  stuckRebalanceTimeoutMs: STUCK_REBALANCE_TIMEOUT_MS,
+  cdcDelayThresholdMs: CDC_DELAY_THRESHOLD_MS,
+  repeatedErrorThreshold: REPEATED_ERROR_THRESHOLD,
+});
+
+// --- Container Environment Variable Names ---
+const ENV_NODE_ID = 'NODE_ID';
+const ENV_NODE_ADDRESS = 'NODE_ADDRESS';
+const ENV_SEED_NODE_ADDRESS = 'SEED_NODE_ADDRESS';
+const ENV_DATA_DIR = 'DATA_DIR';
+
+const CONTAINER_ENV_KEYS = Object.freeze({
+  NODE_ID: ENV_NODE_ID,
+  NODE_ADDRESS: ENV_NODE_ADDRESS,
+  SEED_NODE_ADDRESS: ENV_SEED_NODE_ADDRESS,
+  DATA_DIR: ENV_DATA_DIR,
+});
+
+// --- Network Constants ---
+const NETWORK_NAME_PREFIX = 'ddb-test-net';
+const ISOLATION_NETWORK_PREFIX = 'ddb-test-iso';
+
+const NETWORK = Object.freeze({
+  NAME_PREFIX: NETWORK_NAME_PREFIX,
+  ISOLATION_PREFIX: ISOLATION_NETWORK_PREFIX,
+});
+
+// --- Node Roles ---
+const ROLE_SEED = 'seed';
+const ROLE_JOINER = 'joiner';
+
+const NODE_ROLES = Object.freeze({
+  SEED: ROLE_SEED,
+  JOINER: ROLE_JOINER,
+});
+
+// --- Default Cluster Size ---
+const DEFAULT_CLUSTER_SIZE = 5;
+
+// --- Output Defaults ---
+const DEFAULT_OUTPUT_DIR = 'test-output';
+const TIMELINE_FILENAME = '_timeline.log';
+const ANALYSIS_FILENAME = '_analysis.json';
+
+const OUTPUT = Object.freeze({
+  DEFAULT_DIR: DEFAULT_OUTPUT_DIR,
+  TIMELINE_FILENAME: TIMELINE_FILENAME,
+  ANALYSIS_FILENAME: ANALYSIS_FILENAME,
+});
+
+// --- CLI Runner Constants ---
+const DEFAULT_CONFIG_PATH = 'test/distributed/config/local.json';
+const DEFAULT_REPORT_OUTPUT = 'test-output/report.json';
+const ARG_CONFIG = '--config';
+const ARG_SCENARIO = '--scenario';
+const ARG_OUTPUT = '--output';
+const ARG_VERBOSE = '--verbose';
+
+const CLI = Object.freeze({
+  DEFAULT_CONFIG: DEFAULT_CONFIG_PATH,
+  DEFAULT_OUTPUT: DEFAULT_REPORT_OUTPUT,
+  ARG_CONFIG,
+  ARG_SCENARIO,
+  ARG_OUTPUT,
+  ARG_VERBOSE,
+});
+
+// --- Exit Codes ---
+const EXIT_SUCCESS = 0;
+const EXIT_FAILURE = 1;
+
+const EXIT_CODES = Object.freeze({
+  SUCCESS: EXIT_SUCCESS,
+  FAILURE: EXIT_FAILURE,
+});
+
+export {
+  PORTS,
+  TIMEOUTS,
+  LABELS,
+  CONVERGENCE_DEFAULTS,
+  LOAD_DEFAULTS,
+  RESOURCE_DEFAULTS,
+  DOCKER_DEFAULTS,
+  ANALYZER_DEFAULTS,
+  CONTAINER_ENV_KEYS,
+  NETWORK,
+  NODE_ROLES,
+  DEFAULT_CLUSTER_SIZE,
+  OUTPUT,
+  CLI,
+  EXIT_CODES,
+};

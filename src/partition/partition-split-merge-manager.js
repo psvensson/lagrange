@@ -10,7 +10,7 @@ import {v4 as uuidv4} from 'uuid';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
-import {NUM} from '../constants/index.js';
+import {NUM, SERVICE_TYPE} from '../constants/index.js';
 import {
   PARTITION_SUBSYSTEM,
   SPLIT_MERGE_DEFAULT,
@@ -22,6 +22,11 @@ import {
   SPLIT_MERGE_SQL,
   SPLIT_MERGE_STATE,
 } from './partition-constants.js';
+import {
+  ADMISSION_DECISION,
+  STORAGE_CAPACITY_CONFIG_KEY,
+  STORAGE_CAPACITY_DEFAULT,
+} from '../rebalancer/storage-capacity-constants.js';
 import {KeyRange} from './key-range-manager.js';
 
 const OperationState = SPLIT_MERGE_STATE;
@@ -45,37 +50,63 @@ class PartitionSplitMergeManager extends EventEmitter {
    * @param {Function} options.createPartition - Function to create a new partition.
    * @param {Function} options.deletePartition - Function to delete a partition.
    */
-  constructor(options = {}) {
-    super();
+  /**
+     * Create a new PartitionSplitMergeManager.
+     * @param {Object} options - Configuration options.
+     * @param {Object} options.keyRangeManager - KeyRangeManager instance.
+     * @param {Function} options.getPartitionMetrics - Function to get metrics.
+     * @param {Object} options.tablePolicyService - TablePolicyService instance.
+     * @param {Function} options.createPartition - Create a new partition.
+     * @param {Function} options.deletePartition - Delete a partition.
+     * @param {Object} [options.storageAdmissionService] - Admission gate.
+     * @param {Object} [options.storageAccountingService] - Accounting owner.
+     */
+    constructor(options = {}) {
+      super();
 
-    this.keyRangeManager = options.keyRangeManager || null;
-    this.getPartitionMetrics = options.getPartitionMetrics || (() => ({}));
-    this.tablePolicyService = options.tablePolicyService || null;
-    this.createPartition = options.createPartition || (() => {});
-    this.deletePartition = options.deletePartition || (() => {});
+      this.keyRangeManager = options.keyRangeManager || null;
+      this.getPartitionMetrics = options.getPartitionMetrics || (() => ({}));
+      this.tablePolicyService = options.tablePolicyService || null;
+      this.createPartition = options.createPartition || (() => {});
+      this.deletePartition = options.deletePartition || (() => {});
+      this.storageAdmissionService =
+        options.storageAdmissionService || null;
+      this.storageAccountingService =
+        options.storageAccountingService || null;
 
-    // Configuration
-    const config = ConfigurationManager.getInstance();
-    this.splitStorageThreshold = config.get(CONFIG_KEY.PARTITION_SPLIT_THRESHOLD_BYTES) ||
-      SPLIT_MERGE_DEFAULT.SPLIT_STORAGE_THRESHOLD_BYTES;
-    this.splitTrafficThreshold = config.get(CONFIG_KEY.PARTITION_SPLIT_THRESHOLD_QPM) ||
-      SPLIT_MERGE_DEFAULT.SPLIT_TRAFFIC_THRESHOLD_QPM;
-    this.mergeStorageThreshold = config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_BYTES) ||
-      SPLIT_MERGE_DEFAULT.MERGE_STORAGE_THRESHOLD_BYTES;
-    this.mergeTrafficThreshold = config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_QPM) ||
-      SPLIT_MERGE_DEFAULT.MERGE_TRAFFIC_THRESHOLD_QPM;
-    this.evaluationIntervalMs = config.get(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS) ||
-      SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS;
+      // Configuration
+      const config = ConfigurationManager.getInstance();
+      this.splitStorageThreshold =
+        config.get(CONFIG_KEY.PARTITION_SPLIT_THRESHOLD_BYTES) ||
+        SPLIT_MERGE_DEFAULT.SPLIT_STORAGE_THRESHOLD_BYTES;
+      this.splitTrafficThreshold =
+        config.get(CONFIG_KEY.PARTITION_SPLIT_THRESHOLD_QPM) ||
+        SPLIT_MERGE_DEFAULT.SPLIT_TRAFFIC_THRESHOLD_QPM;
+      this.mergeStorageThreshold =
+        config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_BYTES) ||
+        SPLIT_MERGE_DEFAULT.MERGE_STORAGE_THRESHOLD_BYTES;
+      this.mergeTrafficThreshold =
+        config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_QPM) ||
+        SPLIT_MERGE_DEFAULT.MERGE_TRAFFIC_THRESHOLD_QPM;
+      this.evaluationIntervalMs =
+        config.get(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS) ||
+        SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS;
+      this.splitAmplificationFactor = this.getNumericConfig(
+        config,
+        STORAGE_CAPACITY_CONFIG_KEY.SPLIT_AMPLIFICATION_FACTOR,
+        STORAGE_CAPACITY_DEFAULT.SPLIT_AMPLIFICATION_FACTOR,
+      );
 
-    // State
-    this.state = OperationState.IDLE;
-    this.evaluationTimer = null;
+      // State
+      this.state = OperationState.IDLE;
+      this.evaluationTimer = null;
 
-    // Logging
-    const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(PARTITION_SUBSYSTEM.SPLIT_MERGE) : console;
-  }
+      // Logging
+      const loggingService = LoggingService.getInstance();
+      this.logger = loggingService.isInitialized() ?
+        loggingService.forSubsystem(PARTITION_SUBSYSTEM.SPLIT_MERGE) :
+        console;
+    }
 
   /**
    * Get the table policy for a partition.
@@ -87,6 +118,88 @@ class PartitionSplitMergeManager extends EventEmitter {
       return this.tablePolicyService.getPolicyForPartition(partitionId);
     }
     throw new Error('TablePolicyService is required for split/merge policy lookup');
+  }
+
+  /**
+   * Resolve a numeric config value with fallback.
+   * @param {Object} config - ConfigurationManager instance.
+   * @param {string} key - Config key.
+   * @param {number} fallback - Default value.
+   * @return {number}
+   * @private
+   */
+  getNumericConfig(config, key, fallback) {
+    const value = config.get(key);
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    return fallback;
+  }
+
+  /**
+   * Run capacity preflight for a split-derived replica creation.
+   *
+   * Estimates the bytes needed for the split (including write-
+   * amplification reservation) and delegates to the admission
+   * service. Returns a structured result with decision, reason,
+   * and projected utilization.
+   *
+   * Requirements: 7.1, 7.2, 7.4, 7.5
+   *
+   * @param {string} partitionId - Partition being split.
+   * @param {Object} metrics - Partition metrics with sizeBytes.
+   * @param {string} targetNodeId - Node that would host the
+   *   split-derived replica.
+   * @return {Promise<Object>} Preflight result with
+   *   {feasible, reason, admissionResult}.
+   */
+  async checkSplitCapacityPreflight(
+    partitionId, metrics, targetNodeId,
+  ) {
+    if (!this.storageAdmissionService ||
+        !this.storageAccountingService) {
+      // No admission wired — allow by default (observe mode).
+      return {
+        feasible: true,
+        reason: SPLIT_MERGE_REASON.CAPACITY_AVAILABLE,
+        admissionResult: null,
+      };
+    }
+
+    const sizeBytes = metrics.sizeBytes || NUM.ZERO;
+    const estimatedBytes =
+      this.storageAccountingService.estimateReplicaBytes({
+        entityType: SERVICE_TYPE.PARTITION,
+        sizeBytes,
+        amplificationFactor: this.splitAmplificationFactor,
+      });
+
+    const admissionResult =
+      await this.storageAdmissionService.checkSplit({
+        targetNodeId,
+        estimatedBytes,
+      });
+
+    const feasible =
+      admissionResult.decision === ADMISSION_DECISION.ALLOW;
+
+    this.logger.info(SPLIT_MERGE_LOG_MSG.SPLIT_CAPACITY_PREFLIGHT, {
+      partitionId,
+      targetNodeId,
+      sizeBytes,
+      estimatedBytes,
+      amplificationFactor: this.splitAmplificationFactor,
+      decision: admissionResult.decision,
+      reason: admissionResult.reason,
+    });
+
+    return {
+      feasible,
+      reason: feasible ?
+        SPLIT_MERGE_REASON.CAPACITY_AVAILABLE :
+        SPLIT_MERGE_REASON.INSUFFICIENT_CAPACITY,
+      admissionResult,
+    };
   }
 
   /**
@@ -555,68 +668,137 @@ class PartitionSplitMergeManager extends EventEmitter {
    * Evaluate all partitions for split/merge operations.
    * @return {Promise<Object>} Evaluation results.
    */
-  async evaluateAllPartitions() {
-    if (this.state !== OperationState.IDLE) {
-      this.logger.debug(SPLIT_MERGE_LOG_MSG.SKIPPING_EVAL_BUSY, {
-        state: this.state,
-      });
-      return {evaluated: false, reason: SPLIT_MERGE_REASON.BUSY};
-    }
+  /**
+     * Evaluate all partitions for split/merge operations.
+     *
+     * Split candidates that fail capacity preflight are moved to
+     * splitDeferred with reason codes (Req 7.2, 7.4). Merge
+     * candidates are never blocked by capacity pressure (Req 7.3).
+     *
+     * @param {Object} [preflightOptions] - Optional preflight config.
+     * @param {string} [preflightOptions.targetNodeId] - Node to check
+     *   capacity against for split preflight.
+     * @return {Promise<Object>} Evaluation results.
+     */
+    async evaluateAllPartitions(preflightOptions = {}) {
+      if (this.state !== OperationState.IDLE) {
+        this.logger.debug(SPLIT_MERGE_LOG_MSG.SKIPPING_EVAL_BUSY, {
+          state: this.state,
+        });
+        return {evaluated: false, reason: SPLIT_MERGE_REASON.BUSY};
+      }
 
-    this.state = OperationState.EVALUATING;
+      this.state = OperationState.EVALUATING;
 
-    try {
-      const results = {
-        evaluated: true,
-        partitionsEvaluated: NUM.ZERO,
-        splitCandidates: [],
-        mergeCandidates: [],
-      };
+      try {
+        const results = {
+          evaluated: true,
+          partitionsEvaluated: NUM.ZERO,
+          splitCandidates: [],
+          splitDeferred: [],
+          mergeCandidates: [],
+        };
 
-      if (!this.keyRangeManager) {
+        if (!this.keyRangeManager) {
+          return results;
+        }
+
+        const partitions = this.keyRangeManager.getAllPartitions();
+        results.partitionsEvaluated = partitions.length;
+        const targetNodeId = preflightOptions.targetNodeId || null;
+
+        for (const partitionId of partitions) {
+          const metrics =
+            await this.getPartitionMetrics(partitionId);
+          const policy = await this.getTablePolicy(partitionId);
+
+          if (!this.evaluateSplitCriteria(
+            partitionId, metrics, policy)) {
+            continue;
+          }
+
+          // Capacity preflight for split candidates
+          if (targetNodeId && this.storageAdmissionService) {
+            const preflight =
+              await this.checkSplitCapacityPreflight(
+                partitionId, metrics, targetNodeId,
+              );
+            if (preflight.feasible) {
+              this.logger.debug(
+                SPLIT_MERGE_LOG_MSG.SPLIT_CAPACITY_ALLOWED, {
+                  partitionId,
+                  targetNodeId,
+                });
+              results.splitCandidates.push(partitionId);
+            } else {
+              this.logger.warn(
+                SPLIT_MERGE_LOG_MSG.SPLIT_DEFERRED_CAPACITY, {
+                  partitionId,
+                  targetNodeId,
+                  reason: preflight.reason,
+                });
+              results.splitDeferred.push({
+                partitionId,
+                reason: preflight.reason,
+                admissionResult: preflight.admissionResult,
+              });
+              this.emit(SPLIT_MERGE_EVENT.SPLIT_DEFERRED, {
+                partitionId,
+                reason: preflight.reason,
+              });
+            }
+          } else {
+            results.splitCandidates.push(partitionId);
+          }
+        }
+
+        // Merge eligibility is never blocked by capacity pressure
+        // (Req 7.3). Merges reduce storage usage and remain
+        // eligible even under hard/exhausted pressure.
+        const sortedPartitions =
+          this.keyRangeManager.getSortedPartitions();
+        for (
+          let i = NUM.ZERO;
+          i < sortedPartitions.length - NUM.ONE;
+          i++
+        ) {
+          const leftId = sortedPartitions[i].partitionId;
+          const rightId =
+            sortedPartitions[i + NUM.ONE].partitionId;
+
+          const leftMetrics =
+            await this.getPartitionMetrics(leftId);
+          const rightMetrics =
+            await this.getPartitionMetrics(rightId);
+          const policy = await this.getTablePolicy(leftId);
+
+          if (this.evaluateMergeCriteria(
+            leftId, rightId, leftMetrics, rightMetrics, policy,
+          )) {
+            results.mergeCandidates.push({leftId, rightId});
+            this.logger.debug(
+              SPLIT_MERGE_LOG_MSG.MERGE_ELIGIBLE_UNDER_PRESSURE, {
+                leftId,
+                rightId,
+              });
+          }
+        }
+
+        this.logger.debug(SPLIT_MERGE_LOG_MSG.PARTITION_EVAL_COMPLETED,
+          {
+            partitionsEvaluated: results.partitionsEvaluated,
+            splitCandidates: results.splitCandidates.length,
+            splitDeferred: results.splitDeferred.length,
+            mergeCandidates: results.mergeCandidates.length,
+          });
+
+        this.emit(
+          SPLIT_MERGE_EVENT.EVALUATION_COMPLETED, results);
         return results;
+      } finally {
+        this.state = OperationState.IDLE;
       }
-
-      const partitions = this.keyRangeManager.getAllPartitions();
-      results.partitionsEvaluated = partitions.length;
-
-      for (const partitionId of partitions) {
-        const metrics = await this.getPartitionMetrics(partitionId);
-        const policy = await this.getTablePolicy(partitionId);
-
-        // Check split criteria
-        if (this.evaluateSplitCriteria(partitionId, metrics, policy)) {
-          results.splitCandidates.push(partitionId);
-        }
-      }
-
-      // Check merge criteria for adjacent pairs
-      const sortedPartitions = this.keyRangeManager.getSortedPartitions();
-      for (let i = NUM.ZERO; i < sortedPartitions.length - NUM.ONE; i++) {
-        const leftId = sortedPartitions[i].partitionId;
-        const rightId = sortedPartitions[i + NUM.ONE].partitionId;
-
-        const leftMetrics = await this.getPartitionMetrics(leftId);
-        const rightMetrics = await this.getPartitionMetrics(rightId);
-        const policy = await this.getTablePolicy(leftId);
-
-        if (this.evaluateMergeCriteria(leftId, rightId, leftMetrics, rightMetrics, policy)) {
-          results.mergeCandidates.push({leftId, rightId});
-        }
-      }
-
-      this.logger.debug(SPLIT_MERGE_LOG_MSG.PARTITION_EVAL_COMPLETED, {
-        partitionsEvaluated: results.partitionsEvaluated,
-        splitCandidates: results.splitCandidates.length,
-        mergeCandidates: results.mergeCandidates.length,
-      });
-
-      this.emit(SPLIT_MERGE_EVENT.EVALUATION_COMPLETED, results);
-      return results;
-    } finally {
-      this.state = OperationState.IDLE;
     }
-  }
 
   /**
    * Get the current operation state.

@@ -8,7 +8,7 @@ import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api
 import {BOOTSTRAP_API_ERROR} from '../../src/bootstrap/bootstrap-api-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {CACHE_SYSTEM_TABLES} from '../../src/cache/cache-constants.js';
+import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
@@ -535,9 +535,10 @@ test('BootstrapAPI - buildSystemTableSnapshots', async (t) => {
 
   // Verify all system tables are present
   t.ok(snapshots, 'should return snapshots object');
-  for (const tableName of CACHE_SYSTEM_TABLES) {
+  for (const tableName of CACHE_HYDRATION_TABLES) {
     t.ok(Array.isArray(snapshots[tableName]), `${tableName} should be an array`);
   }
+  t.notOk(snapshots[TABLES.LOGS], 'logs table is excluded from default snapshots');
 
   // Verify data is correct
   t.equal(snapshots.nodes.length, 2, 'should have 2 nodes');
@@ -570,12 +571,12 @@ test('BootstrapAPI - buildSystemTableSnapshots handles empty cache', async (t) =
 
   // Verify all system tables are present but empty
   t.ok(snapshots, 'should return snapshots object');
-  for (const tableName of CACHE_SYSTEM_TABLES) {
+  for (const tableName of CACHE_HYDRATION_TABLES) {
     t.ok(Array.isArray(snapshots[tableName]), `${tableName} should be an array`);
   }
 
   // Verify all arrays are empty
-  for (const tableName of CACHE_SYSTEM_TABLES) {
+  for (const tableName of CACHE_HYDRATION_TABLES) {
     t.equal(snapshots[tableName].length, 0, `${tableName} should be empty`);
   }
 
@@ -1059,3 +1060,116 @@ test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots
 
   await api.shutdown();
 });
+
+test('BootstrapAPI - handleBootstrapRequest includes latency topology hints',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const mockCache = {
+      get() {
+        return null;
+      },
+      getAll(tableName) {
+        if (tableName === TABLES.NODES) {
+          return [{node_id: 'seed-node-1', node_address: 'ws://localhost:8080'}];
+        }
+        if (tableName === TABLES.PARTITIONS) {
+          return [{
+            partition_id: 'p1',
+            table_name: 'nodes',
+            leader_node_id: 'seed-node-1',
+          }];
+        }
+        if (tableName === TABLES.SERVICES) {
+          return [
+            {
+              service_id: 'partition-leader',
+              service_type: SERVICE_TYPE.PARTITION,
+              partition_id: 'p1',
+              node_id: 'seed-node-1',
+              address: 'seed-node-1/partition/partition-leader',
+              raft_role: RAFT_ROLE.LEADER,
+              status: STATE.ACTIVE,
+            },
+            {
+              service_id: 'message-group-leader',
+              service_type: SERVICE_TYPE.MESSAGE_GROUP,
+              group_id: 'mg1',
+              node_id: 'seed-node-1',
+              address: 'seed-node-1/message-group/message-group-leader',
+              raft_role: RAFT_ROLE.LEADER,
+              status: STATE.ACTIVE,
+            },
+          ];
+        }
+        if (tableName === TABLES.TABLES) {
+          return [{table_id: 't1', table_name: 'nodes'}];
+        }
+        if (tableName === TABLES.MESSAGE_GROUPS) {
+          return [{group_id: 'mg1', leader_node_id: 'seed-node-1'}];
+        }
+        if (tableName === TABLES.LATENCY_GROUPS) {
+          return [
+            {group_id: 'g-1', representative_node_id: 'seed-node-1'},
+            {group_id: 'g-2', representative_node_id: 'seed-node-2'},
+          ];
+        }
+        if (tableName === TABLES.INTER_GROUP_LATENCIES) {
+          return [
+            {
+              source_group_id: 'g-1',
+              target_group_id: 'g-2',
+              latency_ms: 42,
+              sample_count: 3,
+            },
+          ];
+        }
+        return [];
+      },
+      filter() {
+        return [];
+      },
+      find() {
+        return null;
+      },
+      getReadyNodes() {
+        return [];
+      },
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'http://localhost:8080',
+      wsPort: 9090,
+      systemTableCache: mockCache,
+      messageGroupServices: new Map(),
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440123',
+        nodeAddress: 'ws://localhost:9090',
+      },
+    });
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const body = JSON.parse(response.body);
+
+    t.ok(body.latencyTopologyHints, 'should include latencyTopologyHints');
+    t.equal(body.latencyTopologyHints.suggestedGroupId, null,
+      'should include suggestedGroupId');
+    t.equal(body.latencyTopologyHints.groupCount, 2,
+      'should include latency group count');
+    t.equal(body.latencyTopologyHints.interGroupEdgeCount, 1,
+      'should include inter-group edge count');
+    t.equal(body.latencyTopologyHints.propagationMode, 'safe',
+      'should include configured propagation mode');
+    t.ok(body.latencyTopologyHints.timestamp > 0,
+      'should include topology hint timestamp');
+
+    await api.shutdown();
+  });

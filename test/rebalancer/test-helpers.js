@@ -7,6 +7,7 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {
   DEFAULT_TABLE_POLICY,
+  DEFAULT_MESSAGE_GROUP_POLICY,
   EntityType,
 } from '../../src/rebalancer/unified-rebalancer.js';
 
@@ -112,6 +113,7 @@ function createMockPolicyService(options = {}) {
         return {...DEFAULT_TABLE_POLICY};
       }
     },
+    getMessageGroupPolicy: async () => ({...DEFAULT_MESSAGE_GROUP_POLICY}),
   };
 }
 

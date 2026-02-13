@@ -3,22 +3,22 @@ TAP version 14
     ok 1 - should set nodeId
     ok 2 - should not be initialized
     1..2
-ok 1 - NodeLifecycleService - constructor # time=2.038ms
+ok 1 - NodeLifecycleService - constructor # time=1.879ms
 
 # Subtest: NodeLifecycleService - initialize
     ok 1 - should be initialized
     1..1
-ok 2 - NodeLifecycleService - initialize # time=0.503ms
+ok 2 - NodeLifecycleService - initialize # time=0.519ms
 
 # Subtest: NodeLifecycleService - initialize requires cdcIntegrationService
     ok 1 - should have error message
     1..1
-ok 3 - NodeLifecycleService - initialize requires cdcIntegrationService # time=0.388ms
+ok 3 - NodeLifecycleService - initialize requires cdcIntegrationService # time=0.311ms
 
 # Subtest: NodeLifecycleService - initialize requires nodeId
     ok 1 - should have error message
     1..1
-ok 4 - NodeLifecycleService - initialize requires nodeId # time=0.32ms
+ok 4 - NodeLifecycleService - initialize requires nodeId # time=0.301ms
 
 # Subtest: NodeLifecycleService - registerNode
     ok 1 - should succeed
@@ -28,7 +28,7 @@ ok 4 - NodeLifecycleService - initialize requires nodeId # time=0.32ms
     ok 5 - should have correct node_id
     ok 6 - should have active status
     1..6
-ok 5 - NodeLifecycleService - registerNode # time=0.744ms
+ok 5 - NodeLifecycleService - registerNode # time=0.856ms
 
 # Subtest: NodeLifecycleService - updateHeartbeat
     ok 1 - should succeed
@@ -39,7 +39,7 @@ ok 5 - NodeLifecycleService - registerNode # time=0.744ms
     ok 6 - should have last_heartbeat
     ok 7 - should have cpu_usage_percent
     1..7
-ok 6 - NodeLifecycleService - updateHeartbeat # time=1.646ms
+ok 6 - NodeLifecycleService - updateHeartbeat # time=1.603ms
 
 # Subtest: NodeLifecycleService - removeNode
     ok 1 - should succeed
@@ -47,7 +47,7 @@ ok 6 - NodeLifecycleService - updateHeartbeat # time=1.646ms
     ok 3 - should be delete
     ok 4 - should have correct whereClause
     1..4
-ok 7 - NodeLifecycleService - removeNode # time=0.628ms
+ok 7 - NodeLifecycleService - removeNode # time=0.767ms
 
 # Subtest: NodeLifecycleService - emits events for write operations
     ok 1 - should emit 3 events
@@ -55,17 +55,17 @@ ok 7 - NodeLifecycleService - removeNode # time=0.628ms
     ok 3 - should emit heartbeat
     ok 4 - should emit removed
     1..4
-ok 8 - NodeLifecycleService - emits events for write operations # time=0.601ms
+ok 8 - NodeLifecycleService - emits events for write operations # time=0.558ms
 
 # Subtest: NodeLifecycleService - throws when not initialized
     ok 1 - should have error message
     1..1
-ok 9 - NodeLifecycleService - throws when not initialized # time=0.405ms
+ok 9 - NodeLifecycleService - throws when not initialized # time=0.37ms
 
 # Subtest: NodeLifecycleService - shutdown
     ok 1 - should not be initialized
     1..1
-ok 10 - NodeLifecycleService - shutdown # time=0.397ms
+ok 10 - NodeLifecycleService - shutdown # time=0.316ms
 
 # Subtest: NodeLifecycleService - NodeLifecycleStatus values
     ok 1 - should have active
@@ -74,7 +74,7 @@ ok 10 - NodeLifecycleService - shutdown # time=0.397ms
     ok 4 - should have shutting_down
     ok 5 - should have stopped
     1..5
-ok 11 - NodeLifecycleService - NodeLifecycleStatus values # time=0.478ms
+ok 11 - NodeLifecycleService - NodeLifecycleStatus values # time=0.46ms
 
 # Subtest: NodeLifecycleService - does not have failure detection methods
     ok 1 - should not have detectFailedNodes
@@ -85,7 +85,7 @@ ok 11 - NodeLifecycleService - NodeLifecycleStatus values # time=0.478ms
     ok 6 - should not have markNodeActive
     ok 7 - should not have getKnownNodes
     1..7
-ok 12 - NodeLifecycleService - does not have failure detection methods # time=0.6ms
+ok 12 - NodeLifecycleService - does not have failure detection methods # time=0.629ms
 
 # Subtest: NodeLifecycleService - does not have failure detection fields
     ok 1 - should not have knownNodes
@@ -93,8 +93,8 @@ ok 12 - NodeLifecycleService - does not have failure detection methods # time=0.
     ok 3 - should not have heartbeatTimeoutMs
     ok 4 - should not have failureDetectionIntervalMs
     1..4
-ok 13 - NodeLifecycleService - does not have failure detection fields # time=0.453ms
+ok 13 - NodeLifecycleService - does not have failure detection fields # time=0.398ms
 
 1..13
 # { total: 44, pass: 44 }
-# time=260.925ms
+# time=222.967ms

@@ -125,6 +125,12 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
       },
       tablePolicyService: {
         getPolicyForPartition: () => ({}),
+        getMessageGroupPolicy: async () => ({
+          targetReplicaCount: 3,
+          maxReplicaCount: 5,
+          ensureLocalAccess: true,
+          placementConstraints: {spreadAcrossNodes: true},
+        }),
       },
       messageRouter: {
         getConnectionState: () => 'connected',
@@ -180,6 +186,12 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
       },
       tablePolicyService: {
         getPolicyForPartition: () => ({}),
+        getMessageGroupPolicy: async () => ({
+          targetReplicaCount: 3,
+          maxReplicaCount: 5,
+          ensureLocalAccess: true,
+          placementConstraints: {spreadAcrossNodes: true},
+        }),
       },
       messageRouter: {
         getConnectionState: () => 'connected',

@@ -36,7 +36,6 @@ import {DataDirectoryManager as _DataDirectoryManager} from '../storage/data-dir
 import {NodeService} from '../node/node-service.js';
 import {MessageGroupService} from '../message-group/message-group-service.js';
 import {PartitionService} from '../partition/partition-service.js';
-import {MessageRouter} from '../transport/message-router.js';
 import {
   BOOTSTRAP_CLEANUP_STEP,
   BOOTSTRAP_DEFAULT,
@@ -62,6 +61,7 @@ import {
   INITIAL_MESSAGE_GROUP_REPLICA_IDS,
 } from './system-table-schemas-constants.js';
 import {CacheHydrationService as _CacheHydrationService} from '../cache/cache-hydration-service.js';
+import {CACHE_HYDRATION_TABLES} from '../cache/cache-constants.js';
 import {
   getMissingSystemServiceLeaders,
   getMissingSystemServiceLeaderCount,
@@ -69,31 +69,34 @@ import {
 import {SQLQueryEngine} from '../query/sql-query-engine.js';
 import {DynamicConfigService} from '../config/dynamic-config-service.js';
 import {
-  CDCIntegrationService,
   EPOCH_CONFIG_KEY,
 } from '../cdc/cdc-integration-service.js';
 import {
   BootstrapSystemTableWriter,
   RoutedSqlSystemTableWriter,
 } from './system-table-writer.js';
-import {HeartbeatService} from '../control-plane/heartbeat-service.js';
-import {LeaseService} from '../control-plane/lease-service.js';
-import {EndpointService} from '../control-plane/endpoint-service.js';
-import {
-  ReplicaDispatchService,
-} from '../control-plane/replica-dispatch-service.js';
 import {RPCClient} from '../transport/rpc-client.js';
 import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
 import {ReplicaState} from '../node/replica-state-machine.js';
 import {AssignmentEpochManager} from '../rebalancer/assignment-epoch-manager.js';
 import {AssignmentEpoch} from '../rebalancer/assignment-epoch.js';
-import {RebalanceCoordinator} from '../rebalancer/rebalance-coordinator.js';
+import {NodeStorageBudgetSetup} from './shared/node-storage-budget-setup.js';
+import {MessageRouterSetup} from './shared/message-router-setup.js';
+import {CDCIntegrationSetup} from './shared/cdc-integration-setup.js';
+import {ControlPlaneSetup} from './shared/control-plane-setup.js';
+import {LatencyTopologySetup} from './shared/latency-topology-setup.js';
 import {assertCritical} from '../utils/assert.js';
 import {TablePolicyService} from '../policy/table-policy-service.js';
 import {NODE_CONFIG_KEY} from '../node/node-constants.js';
 import {PARTITION_STATE} from '../partition/partition-constants.js';
+import {PARTITION_SERVICE_INIT_STAGE} from '../partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
+import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
+import {
+  ReplicaCreationProgressReporter,
+} from '../utils/replica-creation-progress-reporter.js';
+import {createSeedPhaseOwners} from './owners/seed-phase-owners.js';
 import {
   NodeLifecycleStateMachine,
   NodeState,
@@ -106,6 +109,7 @@ import {
   NUM,
   SERVICE_TYPE,
   STATE,
+  STRING,
   TABLES,
   CDC_OPERATION,
 } from '../constants/index.js';
@@ -119,6 +123,12 @@ const messageGroupLeadershipTimeout = bootstrapError.messageGroupLeadershipTimeo
 const partitionLeadershipTimeout = bootstrapError.partitionLeadershipTimeout;
 const DEFAULT_BOOTSTRAP_CONFIG = BOOTSTRAP_DEFAULT;
 const EPOCH_CONFIG_DESCRIPTION = 'Authoritative cluster assignment epoch';
+const BOOTSTRAP_REPLICA_PROGRESS = Object.freeze({
+  PREFIX: '[replica-create]',
+  TYPE_PARTITION: 'partition',
+  SPINNER_IDLE: '|',
+});
+const DEFAULT_CACHE_SYNC_TABLES = new Set(CACHE_HYDRATION_TABLES);
 
 /**
  * Maps BOOTSTRAP_PHASE values to BOOTSTRAP_SUB_PHASE values
@@ -211,6 +221,14 @@ class BootstrapService extends EventEmitter {
     this.dispatchService = null;
     this.rebalanceCoordinator = null;
 
+    // Unified runtime ownership wiring.
+    const runtimeWiring = createRuntimeStartupWiring({
+      ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
+    });
+    this.runtimeDriverRegistry = runtimeWiring.runtimeDriverRegistry;
+    this.serviceRuntimeLifecycle = runtimeWiring.serviceRuntimeLifecycle;
+    this.runtimeDrivers = runtimeWiring.drivers;
+
     // CDC integration service for system table writes
     this.cdcIntegrationService = null;
     this.systemTableWriter = null;
@@ -222,6 +240,8 @@ class BootstrapService extends EventEmitter {
     this.systemTableCache = null;
     // Table policy service for partition placement decisions
     this.tablePolicyService = null;
+    // Latency topology owner bundle
+    this.latencyTopology = null;
 
     // Assignment epoch manager for epoch-based partition assignments
     // Requirements: 3.4, 4.1 - Epoch-based initialization
@@ -247,6 +267,20 @@ class BootstrapService extends EventEmitter {
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE) : console;
+    this.logger.debug(BootstrapLog.RUNTIME_WIRING_READY, {
+      nodeId: this.nodeId,
+      owner: 'createRuntimeStartupWiring',
+      runtimeDriverCount: Object.keys(this.runtimeDrivers).length,
+      ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
+    });
+    this.seedPhaseOwners = createSeedPhaseOwners(this);
+    this.partitionReplicaProgressReporter = new ReplicaCreationProgressReporter({
+      logger: this.logger,
+      formatLine: (progress, status, error) =>
+        this.formatPartitionReplicaProgressLine(progress, status, error),
+      buildContext: (progress, status, error) =>
+        this.buildPartitionReplicaProgressContext(progress, status, error),
+    });
 
     // Error tracking
     this.lastError = null;
@@ -271,39 +305,40 @@ class BootstrapService extends EventEmitter {
       // Phase 1: Infrastructure setup
       await this.executePhase(
         BootstrapPhase.INFRASTRUCTURE,
-        () => this.phaseInfrastructure(),
+        () => this.seedPhaseOwners.infrastructure(),
       );
 
       // Phase 2: Message group creation
       await this.executePhase(
         BootstrapPhase.MESSAGE_GROUPS,
-        () => this.phaseMessageGroups(),
+        () => this.seedPhaseOwners.messageGroups(),
       );
 
       // Phase 3: Partition creation for system tables
       await this.executePhase(
         BootstrapPhase.PARTITIONS,
-        () => this.phasePartitions(),
+        () => this.seedPhaseOwners.partitions(),
       );
 
       // Phase 4: Service registration
       await this.executePhase(
         BootstrapPhase.REGISTRATION,
-        () => this.phaseRegistration(),
+        () => this.seedPhaseOwners.registration(),
       );
 
       // Phase 5: Cache hydration
       await this.executePhase(
         BootstrapPhase.CACHE_HYDRATION,
-        () => this.phaseCacheHydration(),
+        () => this.seedPhaseOwners.cacheHydration(),
       );
 
       // Initialize replica handler after all services are ready
       this.initializeReplicaHandler();
 
       // Initialize control plane service after cache and handlers are ready
-      this.initializeControlPlaneService();
+      await this.initializeControlPlaneService();
       await this.registerSeedNodeWithControlPlane();
+      this.startLatencyTopologyLifecycle();
 
       // Bootstrap complete
       const currentState = this.lifecycleStateMachine.getState();
@@ -470,57 +505,21 @@ class BootstrapService extends EventEmitter {
     // Determine WebSocket port from config or options
     const wsPort = this.wsPort || this.config.wsPort;
 
-    // Create MessageRouter for unified local/remote message routing
-    // Requirements: 2.3 - Initialize MessageRouter before creating message groups
-    this.messageRouter = new MessageRouter({
-      nodeId: this.nodeId,
-      nodeAddress: this.nodeAddress,
-      wsPort: wsPort,
-    });
-
-    // Set up resolver to extract nodeId from address pattern "${nodeId}/..."
-    // This enables routing messages to remote nodes based on address patterns
-    // like "joining-node-id/lifecycle" -> routes to node "joining-node-id"
-    this.messageRouter.setServiceNodeResolver((address) => {
-      const match = address.match(/^([^/]+)\//);
-      return match ? match[NUM.ONE] : null;
-    });
-
-    // Requirements: 8.1, 8.2, 8.4 - Start server first, then establish self-connection
-    // If wsPort is specified, start server and establish self-connection
-    // This ensures all messages (local and remote) go through WebSocket
-    if (wsPort) {
-      try {
-        // Requirements: 8.1 - Start WebSocket server first
-        await this.messageRouter.initialize({startServer: true});
-
-        this.logger.info(BootstrapLog.WS_SELF_CONNECTED, {
-          nodeId: this.nodeId,
-          wsPort: wsPort,
-          hasSelfConnection: this.messageRouter.hasSelfConnection(),
-        });
-      } catch (error) {
-        // Requirements: 8.4 - Fail bootstrap if self-connection fails
-        this.logger.error(BootstrapLog.ROUTER_INIT_FAILED, {
-          nodeId: this.nodeId,
-          wsPort: wsPort,
-          error: error.message,
-          stack: error.stack,
-        });
-        throw new Error(routerInitFailed(error.message));
-      }
-    } else {
-      // No wsPort - initialize without server (for testing or single-node scenarios)
-      try {
-        await this.messageRouter.initialize({startServer: false});
-      } catch (error) {
-        this.logger.error(BootstrapLog.ROUTER_INIT_FAILED, {
-          nodeId: this.nodeId,
-          error: error.message,
-          stack: error.stack,
-        });
-        throw new Error(routerInitFailed(error.message));
-      }
+    // Route message-router setup through the shared owner.
+    try {
+      this.messageRouter = await MessageRouterSetup.create({
+        nodeId: this.nodeId,
+        nodeAddress: this.nodeAddress,
+        wsPort: wsPort,
+      });
+    } catch (error) {
+      this.logger.error(BootstrapLog.ROUTER_INIT_FAILED, {
+        nodeId: this.nodeId,
+        wsPort: wsPort,
+        error: error.message,
+        stack: error.stack,
+      });
+      throw new Error(routerInitFailed(error.message));
     }
 
     // Use MessageRouter directly for all services
@@ -534,6 +533,7 @@ class BootstrapService extends EventEmitter {
       wsPort: wsPort,
       hasMessageRouter: !!this.messageRouter,
       hasSelfConnection: wsPort ? this.messageRouter.hasSelfConnection() : false,
+      owner: 'MessageRouterSetup',
     });
   }
 
@@ -697,7 +697,7 @@ class BootstrapService extends EventEmitter {
    */
   async waitForPartitionLeadership() {
     const startTime = Date.now();
-    // Wait up to 5 seconds for partition leadership
+    // Wait up to leadershipWaitTimeoutMs (capped by TIMEOUT_CAP_MS) for partition leadership
     // Raft election takes 150-300ms per partition, and elections happen in parallel
     // so this should be enough for all 12 system table partitions
     const timeoutMs = Math.min(
@@ -877,25 +877,84 @@ class BootstrapService extends EventEmitter {
       return this.cdcIntegrationService;
     }
 
-    const sqlQueryEngine = new SQLQueryEngine({
-      systemCache: null,
+    this.cdcIntegrationService = CDCIntegrationSetup.createForBootstrap({
+      nodeId: this.nodeId,
       messageRouter: this.messageRouter,
-      nodeId: this.nodeId,
     });
 
-    const cdcIntegrationService = new CDCIntegrationService({
+    this.logger.debug('CDC integration initialized by owner', {
       nodeId: this.nodeId,
-      sqlQueryEngine,
+      owner: 'CDCIntegrationSetup',
+      mode: 'bootstrap',
     });
-    cdcIntegrationService.initialize();
 
-    // Set message router for mesh connectivity on node join
-    if (this.messageRouter) {
-      cdcIntegrationService.setMessageRouter(this.messageRouter);
+    const cdcIntegrationService = this.cdcIntegrationService;
+    return cdcIntegrationService;
+  }
+
+  /**
+   * Ensure latency topology owners are initialized.
+   * @return {Object}
+   * @private
+   */
+  ensureLatencyTopologyOwners() {
+    if (this.latencyTopology) {
+      return this.latencyTopology;
     }
 
-    this.cdcIntegrationService = cdcIntegrationService;
-    return cdcIntegrationService;
+    this.latencyTopology = LatencyTopologySetup.create({
+      nodeId: this.nodeId,
+      systemTableCache: this.getSystemTableCache(),
+      cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.messageRouter,
+    });
+    this.latencyTopology.latencyTreeService.start({
+      recomputeImmediately: true,
+    });
+    this.latencyTopology.cdcGroupPropagationService.start();
+
+    this.logger.info(BootstrapLog.LATENCY_TOPOLOGY_READY, {
+      nodeId: this.nodeId,
+      owner: 'LatencyTopologySetup',
+    });
+    return this.latencyTopology;
+  }
+
+  /**
+   * Start latency topology lifecycle owners.
+   * Runs assignment lifecycle without blocking bootstrap readiness.
+   * @private
+   */
+  startLatencyTopologyLifecycle() {
+    const topologyOwners = assertCritical(
+      this.latencyTopology,
+      bootstrapError.LATENCY_TOPOLOGY_MISSING,
+    );
+    LatencyTopologySetup.start(topologyOwners);
+    this.logger.info(BootstrapLog.LATENCY_TOPOLOGY_STARTED, {
+      nodeId: this.nodeId,
+      owner: 'LatencyTopologySetup',
+    });
+  }
+
+  /**
+   * Propagate partition CDC via topology-owned propagation path.
+   * @param {Object} messageGroupService
+   * @param {Object} cdcEvent
+   * @return {Promise<Object>}
+   * @private
+   */
+  async propagatePartitionCDCEvent(messageGroupService, cdcEvent) {
+    const topologyOwners = assertCritical(
+      this.latencyTopology,
+      bootstrapError.LATENCY_TOPOLOGY_MISSING,
+    );
+    return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
+      tableName: cdcEvent.tableName,
+      operation: cdcEvent.operation,
+      data: cdcEvent.data,
+      sourceMessageGroupService: messageGroupService,
+    });
   }
 
   /**
@@ -957,6 +1016,139 @@ class BootstrapService extends EventEmitter {
       }
     }
     return null;
+  }
+
+  /**
+   * Start progress reporting for one partition replica creation.
+   * @param {Object} details - Replica progress details.
+   * @return {Object} Reporter progress context.
+   * @private
+   */
+  startPartitionReplicaProgress(details) {
+    return this.partitionReplicaProgressReporter.start({
+      ...details,
+      stage: PARTITION_SERVICE_INIT_STAGE.STARTING,
+      peerTotal: Math.max(NUM.ZERO, details.peerTotal || NUM.ZERO),
+      peerJoined: NUM.ZERO,
+    });
+  }
+
+  /**
+   * Update partition creation progress based on stage callbacks.
+   * @param {Object|null} progress - Reporter progress context.
+   * @param {Object} stageEvent - Stage event from PartitionService.
+   * @private
+   */
+  updatePartitionReplicaProgress(progress, stageEvent) {
+    if (!progress || !stageEvent) {
+      return;
+    }
+
+    const update = {};
+    if (stageEvent.stage) {
+      update.stage = stageEvent.stage;
+    }
+    if (Number.isFinite(stageEvent.peerTotal)) {
+      update.peerTotal = Math.max(NUM.ZERO, stageEvent.peerTotal);
+    }
+    if (Number.isFinite(stageEvent.peerJoined)) {
+      update.peerJoined = Math.max(NUM.ZERO, stageEvent.peerJoined);
+    }
+    if (stageEvent.peerId) {
+      update.peerId = stageEvent.peerId;
+    }
+    if (Number.isFinite(stageEvent.sizeBytes)) {
+      update.sizeBytes = stageEvent.sizeBytes;
+    }
+
+    this.partitionReplicaProgressReporter.update(progress, update);
+  }
+
+  /**
+   * Complete partition creation progress reporting.
+   * @param {Object|null} progress - Reporter progress context.
+   * @private
+   */
+  finishPartitionReplicaProgress(progress) {
+    this.partitionReplicaProgressReporter.finish(progress, {
+      stage: PARTITION_SERVICE_INIT_STAGE.READY,
+    });
+  }
+
+  /**
+   * Fail partition creation progress reporting.
+   * @param {Object|null} progress - Reporter progress context.
+   * @param {Error|string|null} error - Failure reason.
+   * @private
+   */
+  failPartitionReplicaProgress(progress, error) {
+    this.partitionReplicaProgressReporter.fail(progress, error);
+  }
+
+  /**
+   * Format one partition creation progress line.
+   * @param {Object} progress - Reporter progress context.
+   * @param {string|null} status - Optional terminal status.
+   * @param {Error|string|null} error - Optional error.
+   * @return {string} Formatted progress line.
+   * @private
+   */
+  formatPartitionReplicaProgressLine(progress, status, error) {
+    const spinner = progress.spinnerFrame || BOOTSTRAP_REPLICA_PROGRESS.SPINNER_IDLE;
+    const peerTotal = Number.isFinite(progress.peerTotal) ? progress.peerTotal : NUM.ZERO;
+    const peerJoined = Number.isFinite(progress.peerJoined) ? progress.peerJoined : NUM.ZERO;
+    const localReplicas = this.partitionServices.size + (status ? NUM.ZERO : NUM.ONE);
+    const statusText = status ? ` status=${status}` : '';
+    const errorText = error ? ` error=${this.formatReplicaCreationError(error)}` : '';
+
+    return (
+      `${BOOTSTRAP_REPLICA_PROGRESS.PREFIX} ${spinner} ` +
+      `service=${progress.partitionId} replica=${progress.replicaId} ` +
+      `type=${BOOTSTRAP_REPLICA_PROGRESS.TYPE_PARTITION} stage=${progress.stage} ` +
+      `peers=${peerJoined}/${peerTotal} local_replicas=${localReplicas}` +
+      `${statusText}${errorText}`
+    );
+  }
+
+  /**
+   * Build structured context for non-interactive partition progress logs.
+   * @param {Object} progress - Reporter progress context.
+   * @param {string|null} status - Optional terminal status.
+   * @param {Error|string|null} error - Optional error.
+   * @return {Object} Structured context object.
+   * @private
+   */
+  buildPartitionReplicaProgressContext(progress, status = null, error = null) {
+    const context = {
+      nodeId: this.nodeId,
+      partitionId: progress.partitionId,
+      tableName: progress.tableName,
+      replicaId: progress.replicaId,
+      stage: progress.stage,
+      peerTotal: progress.peerTotal,
+      peerJoined: progress.peerJoined,
+      localReplicas: this.partitionServices.size,
+    };
+    if (status) {
+      context.status = status;
+    }
+    if (error) {
+      context.error = this.formatReplicaCreationError(error);
+    }
+    return context;
+  }
+
+  /**
+   * Normalize replica creation errors for display.
+   * @param {Error|string|null} error - Error value.
+   * @return {string} Error message.
+   * @private
+   */
+  formatReplicaCreationError(error) {
+    if (!error) {
+      return STRING.EMPTY;
+    }
+    return typeof error === 'string' ? error : error.message;
   }
 
   /**
@@ -1023,39 +1215,56 @@ class BootstrapService extends EventEmitter {
           dbPath = this.config.partitionDbPath;
         }
 
-        const partition = new PartitionService({
-          partitionId,
-          tableId: tableName,
-          tableName,
-          schema,
-          keyRange: {start: null, end: null}, // Full key space
-          replicaId,
-          replicaIds,
-          peerAddresses,
-          nodeId: this.nodeId,
-          transport: this.transport,
-          dbPath,
-          // Pass message group service for CREATE_REPLICA/REMOVE_REPLICA messages
-          messageGroupService: this.getLeaderMessageGroupService(),
-          // Pass MessageRouter for cross-node lifecycle messages
-          messageRouter: this.messageRouter,
-          // Defer election until ALL partitions are created to prevent election storms
-          deferElection: true,
-        });
-
-        await partition.initialize();
-
-        this.partitionServices.set(replicaId, partition);
-        allPartitionReplicas.push(partition);
-        this.servicesCreated++;
-
-        this.logger.debug(BootstrapLog.PARTITION_REPLICA_CREATED, {
+        const progress = this.startPartitionReplicaProgress({
           tableName,
           partitionId,
           replicaId,
-          replicaIndex: i,
-          nodeId: this.nodeId,
+          peerTotal: Math.max(NUM.ZERO, replicaIds.length - NUM.ONE),
         });
+
+        try {
+          const partition = new PartitionService({
+            partitionId,
+            tableId: tableName,
+            tableName,
+            schema,
+            keyRange: {start: null, end: null}, // Full key space
+            replicaId,
+            replicaIds,
+            peerAddresses,
+            nodeId: this.nodeId,
+            transport: this.transport,
+            dbPath,
+            // Pass message group service for CREATE_REPLICA/REMOVE_REPLICA messages
+            messageGroupService: this.getLeaderMessageGroupService(),
+            // Pass MessageRouter for cross-node lifecycle messages
+            messageRouter: this.messageRouter,
+            // Defer election until ALL partitions are created to prevent election storms
+            deferElection: true,
+            // Collapse per-replica startup chatter into one staged progress line.
+            suppressLifecycleLogs: true,
+            onInitializationStage: (stageEvent) =>
+              this.updatePartitionReplicaProgress(progress, stageEvent),
+          });
+
+          await partition.initialize();
+
+          this.partitionServices.set(replicaId, partition);
+          allPartitionReplicas.push(partition);
+          this.servicesCreated++;
+          this.finishPartitionReplicaProgress(progress);
+
+          this.logger.debug(BootstrapLog.PARTITION_REPLICA_CREATED, {
+            tableName,
+            partitionId,
+            replicaId,
+            replicaIndex: i,
+            nodeId: this.nodeId,
+          });
+        } catch (error) {
+          this.failPartitionReplicaProgress(progress, error);
+          throw error;
+        }
       }
 
       this.partitionsCreated++;
@@ -1290,11 +1499,7 @@ class BootstrapService extends EventEmitter {
             // Only apply CDC event if this message group is the leader
             // This ensures CDC events are replicated through Raft to all nodes
             if (messageGroup.isLeaderReplica()) {
-              await messageGroup.applyCDCEvent(
-                cdcEvent.tableName,
-                cdcEvent.operation,
-                cdcEvent.data,
-              );
+              await this.propagatePartitionCDCEvent(messageGroup, cdcEvent);
 
               if (tableName === TABLES.CONFIG) {
                 this.applyCurrentEpochFromCache();
@@ -1323,8 +1528,7 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   async subscribeToInitialSystemTableCDC() {
-    for (const schema of SYSTEM_TABLE_SCHEMAS) {
-      const tableName = schema.tableName;
+    for (const tableName of CACHE_HYDRATION_TABLES) {
       const partitionId = INITIAL_PARTITION_IDS[tableName];
       const replicaIds = INITIAL_REPLICA_IDS[tableName] || [];
       if (!partitionId || replicaIds.length === NUM.ZERO) {
@@ -1882,6 +2086,7 @@ class BootstrapService extends EventEmitter {
     // Strict gate: all leaders must have complete routing metadata before
     // switching out of bootstrap writer/routing mode.
     await this.waitForSystemServiceLeadersInCache();
+    this.ensureLatencyTopologyOwners();
 
     await this.subscribeToInitialSystemTableCDC();
 
@@ -1895,31 +2100,30 @@ class BootstrapService extends EventEmitter {
     });
 
     if (!this.cdcIntegrationService) {
-      // Create CDC integration service for partition rebalancer operations
-      // Uses SQL query engine with system cache for transparent routing to partition leaders
-      const cdcIntegrationService = new CDCIntegrationService({
+      this.cdcIntegrationService = CDCIntegrationSetup.createForNormal({
         nodeId: this.nodeId,
         sqlQueryEngine: cdcQueryEngine,
         systemTableCache,
+        messageRouter: this.messageRouter,
       });
-      cdcIntegrationService.initialize();
-      cdcIntegrationService.setSystemTableCache(systemTableCache);
 
-      // Set message router for mesh connectivity on node join
-      if (this.messageRouter) {
-        cdcIntegrationService.setMessageRouter(this.messageRouter);
-      }
-
-      this.cdcIntegrationService = cdcIntegrationService;
+      this.logger.debug('CDC integration initialized by owner', {
+        nodeId: this.nodeId,
+        owner: 'CDCIntegrationSetup',
+        mode: 'normal',
+      });
     } else {
-      // Update existing CDC integration service to use cache-based routing
-      this.cdcIntegrationService.sqlQueryEngine = cdcQueryEngine;
-      this.cdcIntegrationService.setSystemTableCache(systemTableCache);
+      CDCIntegrationSetup.upgrade({
+        cdcIntegrationService: this.cdcIntegrationService,
+        sqlQueryEngine: cdcQueryEngine,
+        systemTableCache,
+        messageRouter: this.messageRouter,
+      });
 
-      // Ensure message router is set for mesh connectivity
-      if (this.messageRouter && !this.cdcIntegrationService.messageRouter) {
-        this.cdcIntegrationService.setMessageRouter(this.messageRouter);
-      }
+      this.logger.debug('CDC integration upgraded by owner', {
+        nodeId: this.nodeId,
+        owner: 'CDCIntegrationSetup',
+      });
     }
 
     if (this.epochManager) {
@@ -1984,21 +2188,8 @@ class BootstrapService extends EventEmitter {
       errors: [],
     };
 
-    // Get list of system tables to hydrate
-    const systemTables = [
-      SystemTableName.NODES,
-      SystemTableName.PARTITIONS,
-      SystemTableName.SERVICES,
-      SystemTableName.TABLES,
-      SystemTableName.MESSAGE_GROUPS,
-      SystemTableName.REPLICA_OPERATIONS,
-      SystemTableName.INDICES,
-      SystemTableName.CONFIG,
-      SystemTableName.LOGS,
-      SystemTableName.LIVE_QUERIES,
-      SystemTableName.CONTEXTS,
-      SystemTableName.CODE,
-    ];
+    // Hydrate only default cache-sync tables; high-volume logs are opt-in.
+    const systemTables = CACHE_HYDRATION_TABLES;
 
     for (const tableName of systemTables) {
       try {
@@ -2208,7 +2399,11 @@ class BootstrapService extends EventEmitter {
       this.servicesCreated++;
 
       const tableName = options.tableName;
-      if (tableName && messageGroupService) {
+      if (
+        tableName &&
+        messageGroupService &&
+        DEFAULT_CACHE_SYNC_TABLES.has(tableName)
+      ) {
         await messageGroupService.subscribeToCDC(tableName);
 
         partition.subscribeToCDC(async (cdcEvent) => {
@@ -2222,10 +2417,9 @@ class BootstrapService extends EventEmitter {
             // Only apply CDC event if this message group is the leader
             // This ensures CDC events are replicated through Raft to all nodes
             if (messageGroupService.isLeaderReplica()) {
-              await messageGroupService.applyCDCEvent(
-                cdcEvent.tableName,
-                cdcEvent.operation,
-                cdcEvent.data,
+              await this.propagatePartitionCDCEvent(
+                messageGroupService,
+                cdcEvent,
               );
 
               if (tableName === TABLES.CONFIG) {
@@ -2311,60 +2505,27 @@ class BootstrapService extends EventEmitter {
    * Initialize the control plane service for ordered registration and dispatch.
    * @private
    */
-  initializeControlPlaneService() {
+  async initializeControlPlaneService() {
     if (!this.cdcIntegrationService) {
       throw new Error(bootstrapError.CDC_CONTROL_PLANE_MISSING);
     }
 
-    if (!this.rebalanceCoordinator) {
-      this.rebalanceCoordinator = new RebalanceCoordinator({
-        nodeId: this.nodeId,
-        systemTableCache: this.systemTableCache,
-        cdcIntegrationService: this.cdcIntegrationService,
-        messageRouter: this.messageRouter,
-        tablePolicyService: this.tablePolicyService,
-        sqlQueryEngine:
-          this.cdcIntegrationService.sqlQueryEngine,
-      });
-      this.rebalanceCoordinator.initialize();
-    }
-
-    this.heartbeatService = new HeartbeatService({
+    const controlPlane = await ControlPlaneSetup.create({
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
-      cdcIntegrationService: this.cdcIntegrationService,
-      systemTableCache: this.systemTableCache,
-    });
-    this.heartbeatService.initialize();
-
-    this.leaseService = new LeaseService({
-      nodeId: this.nodeId,
-      cdcIntegrationService: this.cdcIntegrationService,
-      systemTableCache: this.systemTableCache,
-      sqlQueryEngine:
-        this.cdcIntegrationService.sqlQueryEngine,
-    });
-    this.leaseService.initialize();
-
-    this.endpointService = new EndpointService({
-      nodeId: this.nodeId,
-      cdcIntegrationService: this.cdcIntegrationService,
-      systemTableCache: this.systemTableCache,
-      sqlQueryEngine:
-        this.cdcIntegrationService.sqlQueryEngine,
-    });
-    this.endpointService.initialize();
-
-    this.dispatchService = new ReplicaDispatchService({
-      nodeId: this.nodeId,
       messageRouter: this.messageRouter,
       cdcIntegrationService: this.cdcIntegrationService,
       systemTableCache: this.systemTableCache,
+      tablePolicyService: this.tablePolicyService,
+      messageGroupServices: this.messageGroupServices,
       rebalanceCoordinator: this.rebalanceCoordinator,
-      sqlQueryEngine:
-        this.cdcIntegrationService.sqlQueryEngine,
     });
-    this.dispatchService.initialize();
+
+    this.heartbeatService = controlPlane.heartbeatService;
+    this.leaseService = controlPlane.leaseService;
+    this.endpointService = controlPlane.endpointService;
+    this.dispatchService = controlPlane.dispatchService;
+    this.rebalanceCoordinator = controlPlane.rebalanceCoordinator;
 
     for (const mgs of this.messageGroupServices.values()) {
       if (mgs.setTablePolicyService) {
@@ -2373,15 +2534,12 @@ class BootstrapService extends EventEmitter {
       if (mgs.setRebalanceCoordinator) {
         mgs.setRebalanceCoordinator(this.rebalanceCoordinator);
       }
-      this.dispatchService.attachMessageGroupService(mgs);
-      this.leaseService.messageGroupServices.add(mgs);
     }
-
-    this.leaseService.start();
 
     this.logger.info(BootstrapLog.CONTROL_PLANE_READY, {
       nodeId: this.nodeId,
       messageGroupCount: this.messageGroupServices.size,
+      owner: 'ControlPlaneSetup',
     });
   }
 
@@ -2398,6 +2556,47 @@ class BootstrapService extends EventEmitter {
     try {
       await this.waitForSystemServiceLeadersInCache();
       const stats = await NodeService.getInstance().getNodeStats();
+      const cpuCores = Number.isFinite(stats?.cpu?.count) ?
+        stats.cpu.count : NUM.ZERO;
+      const totalMemoryMb = Number.isFinite(stats?.memory?.totalBytes) ?
+        Math.round(stats.memory.totalBytes / NUM.BYTES_PER_MIB) :
+        NUM.ZERO;
+      const diskGb = Number.isFinite(stats?.diskGb) ?
+        stats.diskGb : NUM.HUNDRED;
+      const now = Date.now();
+
+      const nodeRow = {
+        [COLUMN.NODE_ID]: this.nodeId,
+        [COLUMN.NODE_ADDRESS]: this.nodeAddress,
+        [COLUMN.CPU_CORES]: cpuCores,
+        [COLUMN.MEMORY_MB]: totalMemoryMb,
+        [COLUMN.DISK_GB]: diskGb,
+        [COLUMN.CPU_USAGE_PERCENT]:
+          Number.isFinite(stats?.cpu?.usagePercent) ?
+            stats.cpu.usagePercent : NUM.ZERO,
+        [COLUMN.MEMORY_USAGE_PERCENT]:
+          Number.isFinite(stats?.memory?.usagePercent) ?
+            stats.memory.usagePercent : NUM.ZERO,
+        [COLUMN.DISK_USAGE_PERCENT]:
+          Number.isFinite(stats?.diskUsagePercent) ?
+            stats.diskUsagePercent : NUM.ZERO,
+        [COLUMN.STATUS]: STATE.ACTIVE,
+        [COLUMN.WS_CONNECTION_STATE]: STATE.CONNECTED,
+        [COLUMN.CAPABILITIES]: JSON.stringify([]),
+        [COLUMN.LAST_HEARTBEAT]: now,
+        [COLUMN.CREATED_AT]: now,
+      };
+
+      const budgetService = NodeStorageBudgetSetup.create({
+        nodeId: this.nodeId,
+        cdcIntegrationService: this.cdcIntegrationService,
+      });
+      await NodeStorageBudgetSetup.resolveAndPersist({
+        budgetService,
+        nodeRow,
+        nodeId: this.nodeId,
+      });
+
       await this.heartbeatService.sendHeartbeat(
         {
           cpu: {
@@ -2803,6 +3002,8 @@ class BootstrapService extends EventEmitter {
         this.systemTableWriter.disable();
       }
       this.systemTableWriter = null;
+      LatencyTopologySetup.stop(this.latencyTopology);
+      this.latencyTopology = null;
 
       // Clear CDC integration service
       if (this.cdcIntegrationService) {
@@ -3124,6 +3325,8 @@ class BootstrapService extends EventEmitter {
 
     this.clearNodeReadyRebalanceState();
     await this.quiesceRebalancers();
+    LatencyTopologySetup.stop(this.latencyTopology);
+    this.latencyTopology = null;
 
     // Shutdown control plane services FIRST to stop heartbeat timers
     // This prevents heartbeat from firing after router shutdown

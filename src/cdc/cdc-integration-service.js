@@ -33,6 +33,9 @@ import {
   INITIAL_PARTITION_IDS,
   getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
+import {
+  getSystemCachePrimaryKeyFieldOrFallback,
+} from '../cache/system-cache-key-descriptor.js';
 import {CDCEventHandler} from './cdc-event-handler.js';
 import {
   CDC_CONFIG_KEY,
@@ -1227,27 +1230,10 @@ class CDCIntegrationService extends EventEmitter {
    * @private
    */
   getPrimaryKeyField(tableName) {
-    // Map table names to their primary key fields
-    const primaryKeyMap = {
-      [SystemTableName.TABLES]: COLUMN.TABLE_ID,
-      [SystemTableName.PARTITIONS]: COLUMN.PARTITION_ID,
-      [SystemTableName.INDICES]: COLUMN.INDEX_ID,
-      [SystemTableName.MESSAGE_GROUPS]: COLUMN.GROUP_ID,
-      [SystemTableName.NODES]: COLUMN.NODE_ID,
-      [SystemTableName.SERVICES]: COLUMN.SERVICE_ID,
-      [SystemTableName.LOGS]: COLUMN.LOG_ID,
-      [SystemTableName.CONFIG]: COLUMN.CONFIG_KEY,
-      [SystemTableName.LIVE_QUERIES]: COLUMN.QUERY_ID,
-      [SystemTableName.CONTEXTS]: COLUMN.CONTEXT_ID,
-      [SystemTableName.CODE]: COLUMN.FUNCTION_ID,
-      [SystemTableName.REPLICA_OPERATIONS]: COLUMN.OPERATION_ID,
-      [SystemTableName.NODE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
-      [SystemTableName.SERVICE_DEFINITIONS]: COLUMN.SERVICE_ID,
-      [SystemTableName.SERVICE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
-      [SystemTableName.SERVICE_TIMERS]: COLUMN.TIMER_ID,
-    };
-
-    return primaryKeyMap[tableName] || CDC_PRIMARY_KEY.FALLBACK;
+    return getSystemCachePrimaryKeyFieldOrFallback(
+      tableName,
+      CDC_PRIMARY_KEY.FALLBACK,
+    );
   }
 
   /**

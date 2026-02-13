@@ -2,28 +2,28 @@ TAP version 14
 # Subtest: Property 36: setContext propagates via CDC to all caches
     ok 1 - setContext propagates via CDC to all caches
     1..1
-ok 1 - Property 36: setContext propagates via CDC to all caches # time=7.581ms
+ok 1 - Property 36: setContext propagates via CDC to all caches # time=12.894ms
 
 # Subtest: Property 36: Multiple context updates maintain CDC consistency
     ok 1 - Multiple context updates maintain CDC consistency
     1..1
-ok 2 - Property 36: Multiple context updates maintain CDC consistency # time=11.834ms
+ok 2 - Property 36: Multiple context updates maintain CDC consistency # time=18.59ms
 
 # Subtest: Property 36: Context updates propagate via CDC
     ok 1 - Context updates propagate via CDC
     1..1
-ok 3 - Property 36: Context updates propagate via CDC # time=2.733ms
+ok 3 - Property 36: Context updates propagate via CDC # time=5.279ms
 
 # Subtest: Property 36: Context deletion propagates via CDC
     ok 1 - Context deletion propagates via CDC
     1..1
-ok 4 - Property 36: Context deletion propagates via CDC # time=2.584ms
+ok 4 - Property 36: Context deletion propagates via CDC # time=3.936ms
 
 # Subtest: Property 36: Context data retrievable from any cache
     ok 1 - Context data retrievable from any cache
     1..1
-ok 5 - Property 36: Context data retrievable from any cache # time=2.337ms
+ok 5 - Property 36: Context data retrievable from any cache # time=3.113ms
 
 1..5
 # { total: 5, pass: 5 }
-# time=154.094ms
+# time=218.718ms

@@ -1,7 +1,7 @@
 TAP version 14
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1770670701702-0-query-executor',
+  timestamp: '1770989964938-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -11,11 +11,11 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 1 - QueryExecutor - executes SELECT on single partition # time=9.73ms
+ok 1 - QueryExecutor - executes SELECT on single partition # time=8.949ms
 
 Executing distributed SELECT {
   partitionCount: 3,
-  timestamp: '1770670701710-0-query-executor',
+  timestamp: '1770989964944-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -27,17 +27,17 @@ Routing query to partition service { partitionId: 'p3', address: 'test-node/part
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 2 - QueryExecutor - executes SELECT on multiple partitions # time=1.085ms
+ok 2 - QueryExecutor - executes SELECT on multiple partitions # time=0.967ms
 
 # Subtest: QueryExecutor - returns empty for no partitions
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 3 - QueryExecutor - returns empty for no partitions # time=0.424ms
+ok 3 - QueryExecutor - returns empty for no partitions # time=0.313ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701711-1-query-executor',
+  timestamp: '1770989964946-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -46,11 +46,11 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 4 - QueryExecutor - handles missing partition gracefully # time=0.981ms
+ok 4 - QueryExecutor - handles missing partition gracefully # time=0.948ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701715-0-query-executor',
+  timestamp: '1770989964949-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -63,11 +63,11 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
     ok 4 - should be equal
     ok 5 - should be equal
     1..5
-ok 5 - QueryExecutor - applies ORDER BY across partitions # time=8.438ms
+ok 5 - QueryExecutor - applies ORDER BY across partitions # time=7.061ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701721-1-query-executor',
+  timestamp: '1770989964954-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -78,11 +78,11 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 6 - QueryExecutor - applies ORDER BY DESC # time=0.934ms
+ok 6 - QueryExecutor - applies ORDER BY DESC # time=0.816ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701722-1-query-executor',
+  timestamp: '1770989964955-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -91,11 +91,11 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
 # Subtest: QueryExecutor - applies LIMIT across partitions
     ok 1 - should be equal
     1..1
-ok 7 - QueryExecutor - applies LIMIT across partitions # time=1.087ms
+ok 7 - QueryExecutor - applies LIMIT across partitions # time=0.963ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701723-1-query-executor',
+  timestamp: '1770989964956-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -104,11 +104,11 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
 # Subtest: QueryExecutor - applies LIMIT with OFFSET
     ok 1 - should be equal
     1..1
-ok 8 - QueryExecutor - applies LIMIT with OFFSET # time=0.85ms
+ok 8 - QueryExecutor - applies LIMIT with OFFSET # time=0.74ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701725-0-query-executor',
+  timestamp: '1770989964958-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -117,11 +117,11 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
 # Subtest: QueryExecutor - applies DISTINCT across partitions
     ok 1 - should be equal
     1..1
-ok 9 - QueryExecutor - applies DISTINCT across partitions # time=1.383ms
+ok 9 - QueryExecutor - applies DISTINCT across partitions # time=1.111ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701726-1-query-executor',
+  timestamp: '1770989964959-0-query-executor',
   hasJoins: false,
   hasAggregates: true
 }
@@ -131,11 +131,11 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 10 - QueryExecutor - computes COUNT aggregate # time=1.273ms
+ok 10 - QueryExecutor - computes COUNT aggregate # time=1.067ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701727-1-query-executor',
+  timestamp: '1770989964960-1-query-executor',
   hasJoins: false,
   hasAggregates: true
 }
@@ -144,11 +144,11 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
 # Subtest: QueryExecutor - computes SUM aggregate
     ok 1 - should be equal
     1..1
-ok 11 - QueryExecutor - computes SUM aggregate # time=1.017ms
+ok 11 - QueryExecutor - computes SUM aggregate # time=0.84ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701728-1-query-executor',
+  timestamp: '1770989964961-0-query-executor',
   hasJoins: false,
   hasAggregates: true
 }
@@ -157,11 +157,11 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
 # Subtest: QueryExecutor - computes AVG aggregate
     ok 1 - should be equal
     1..1
-ok 12 - QueryExecutor - computes AVG aggregate # time=0.919ms
+ok 12 - QueryExecutor - computes AVG aggregate # time=0.782ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701730-0-query-executor',
+  timestamp: '1770989964962-0-query-executor',
   hasJoins: false,
   hasAggregates: true
 }
@@ -171,7 +171,7 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
     ok 1 - should be equal
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701731-0-query-executor',
+  timestamp: '1770989964962-1-query-executor',
   hasJoins: false,
   hasAggregates: true
 }
@@ -179,11 +179,11 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
     ok 2 - should be equal
     1..2
-ok 13 - QueryExecutor - computes MIN/MAX aggregates # time=1.735ms
+ok 13 - QueryExecutor - computes MIN/MAX aggregates # time=1.456ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1770670701732-0-query-executor',
+  timestamp: '1770989964964-0-query-executor',
   hasJoins: false,
   hasAggregates: true
 }
@@ -193,7 +193,7 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 14 - QueryExecutor - applies GROUP BY across partitions # time=1.634ms
+ok 14 - QueryExecutor - applies GROUP BY across partitions # time=2.645ms
 
 Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
@@ -202,17 +202,17 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 15 - QueryExecutor - executes INSERT on partition # time=1.853ms
+ok 15 - QueryExecutor - executes INSERT on partition # time=1.5ms
 
 # Subtest: QueryExecutor - preserves INSERT OR REPLACE when rebuilding SQL
     ok 1 - should match pattern
     1..1
-ok 16 - QueryExecutor - preserves INSERT OR REPLACE when rebuilding SQL # time=0.904ms
+ok 16 - QueryExecutor - preserves INSERT OR REPLACE when rebuilding SQL # time=0.764ms
 
 # Subtest: QueryExecutor - preserves INSERT OR IGNORE when rebuilding SQL
     ok 1 - should match pattern
     1..1
-ok 17 - QueryExecutor - preserves INSERT OR IGNORE when rebuilding SQL # time=0.42ms
+ok 17 - QueryExecutor - preserves INSERT OR IGNORE when rebuilding SQL # time=0.32ms
 
 Executing UPDATE { table: 'users', partitionCount: 2 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
@@ -222,7 +222,7 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 18 - QueryExecutor - executes UPDATE on partitions # time=1.441ms
+ok 18 - QueryExecutor - executes UPDATE on partitions # time=1.228ms
 
 Executing DELETE { table: 'users', partitionCount: 1 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
@@ -230,13 +230,13 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 19 - QueryExecutor - executes DELETE on partitions # time=1.197ms
+ok 19 - QueryExecutor - executes DELETE on partitions # time=0.95ms
 
 Executing INSERT { table: 'users', partitionId: 'missing', rowCount: 1 }
 # Subtest: QueryExecutor - throws for INSERT on missing partition
     ok 1 - expected to reject
     1..1
-ok 20 - QueryExecutor - throws for INSERT on missing partition # time=1.301ms
+ok 20 - QueryExecutor - throws for INSERT on missing partition # time=1.255ms
 
 Executing UPDATE { table: 'users', partitionCount: 1 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
@@ -244,7 +244,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
     ok 1 - update should still route without leader
     ok 2 - should target the partition
     1..2
-ok 21 - QueryExecutor - routes writes when no leader is present # time=0.836ms
+ok 21 - QueryExecutor - routes writes when no leader is present # time=0.654ms
 
 # Subtest: QueryExecutor - builds correct SELECT SQL
     ok 1 - should be equal
@@ -255,28 +255,28 @@ ok 21 - QueryExecutor - routes writes when no leader is present # time=0.836ms
     ok 6 - should be equal
     ok 7 - should be equal
     1..7
-ok 22 - QueryExecutor - builds correct SELECT SQL # time=0.967ms
+ok 22 - QueryExecutor - builds correct SELECT SQL # time=0.717ms
 
 # Subtest: QueryExecutor - preserves NOT IN when rebuilding SQL
     ok 1 - should match pattern
     1..1
-ok 23 - QueryExecutor - preserves NOT IN when rebuilding SQL # time=0.526ms
+ok 23 - QueryExecutor - preserves NOT IN when rebuilding SQL # time=0.423ms
 
 # Subtest: QueryExecutor - preserves IS NULL when rebuilding SQL
     ok 1 - should match pattern
     ok 2 - should not match pattern
     1..2
-ok 24 - QueryExecutor - preserves IS NULL when rebuilding SQL # time=1.984ms
+ok 24 - QueryExecutor - preserves IS NULL when rebuilding SQL # time=1.396ms
 
 # Subtest: QueryExecutor - preserves IS NOT NULL when rebuilding SQL
     ok 1 - should match pattern
     ok 2 - should not match pattern
     1..2
-ok 25 - QueryExecutor - preserves IS NOT NULL when rebuilding SQL # time=1.229ms
+ok 25 - QueryExecutor - preserves IS NOT NULL when rebuilding SQL # time=0.569ms
 
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1770670701747-1-query-executor',
+  timestamp: '1770989964977-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -285,42 +285,42 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 26 - QueryExecutor - handles partition query errors # time=1.268ms
+ok 26 - QueryExecutor - handles partition query errors # time=0.576ms
 
 # Subtest: QueryExecutor - findPartitionLeaderAddress returns leader address
     ok 1 - should be equal
     1..1
-ok 27 - QueryExecutor - findPartitionLeaderAddress returns leader address # time=0.34ms
+ok 27 - QueryExecutor - findPartitionLeaderAddress returns leader address # time=0.212ms
 
 No leader service found for partition { partitionId: 'p1' }
 # Subtest: QueryExecutor - findPartitionLeaderAddress returns null when no leader
     ok 1 - should be equal
     1..1
-ok 28 - QueryExecutor - findPartitionLeaderAddress returns null when no leader # time=0.422ms
+ok 28 - QueryExecutor - findPartitionLeaderAddress returns null when no leader # time=0.266ms
 
 # Subtest: QueryExecutor - findPartitionLeaderAddress returns null when cache unavailable
     ok 1 - should be equal
     1..1
-ok 29 - QueryExecutor - findPartitionLeaderAddress returns null when cache unavailable # time=0.339ms
+ok 29 - QueryExecutor - findPartitionLeaderAddress returns null when cache unavailable # time=0.271ms
 
 # Subtest: QueryExecutor - findPartitionLeaderAddress filters by leader role
     ok 1 - should be equal
     1..1
-ok 30 - QueryExecutor - findPartitionLeaderAddress filters by leader role # time=0.223ms
+ok 30 - QueryExecutor - findPartitionLeaderAddress filters by leader role # time=0.203ms
 
 # Subtest: QueryExecutor - findPartitionLeaderAddress filters by active status
     ok 1 - should be equal
     1..1
-ok 31 - QueryExecutor - findPartitionLeaderAddress filters by active status # time=0.208ms
+ok 31 - QueryExecutor - findPartitionLeaderAddress filters by active status # time=0.155ms
 
 # Subtest: QueryExecutor - read candidates ignore NodeService leader hints
     ok 1 - read routing must use services table leader, not NodeService hint
     1..1
-ok 32 - QueryExecutor - read candidates ignore NodeService leader hints # time=0.232ms
+ok 32 - QueryExecutor - read candidates ignore NodeService leader hints # time=0.193ms
 
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1770670701751-1-query-executor',
+  timestamp: '1770989964979-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -335,11 +335,11 @@ Following leader redirect {
     ok 2 - should return data from leader
     ok 3 - should make two calls (follower + leader)
     1..3
-ok 33 - QueryExecutor - follows leader redirect response # time=1.084ms
+ok 33 - QueryExecutor - follows leader redirect response # time=0.761ms
 
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1770670701753-0-query-executor',
+  timestamp: '1770989964980-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -353,8 +353,8 @@ Following leader redirect {
     ok 1 - overall query succeeds
     ok 2 - no rows when all replicas fail
     1..2
-ok 34 - QueryExecutor - handles redirect when leader also fails # time=0.942ms
+ok 34 - QueryExecutor - handles redirect when leader also fails # time=0.679ms
 
 1..34
 # { total: 67, pass: 67 }
-# time=105.692ms
+# time=83.229ms

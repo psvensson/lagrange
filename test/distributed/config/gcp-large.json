@@ -1,0 +1,37 @@
+{
+  "size": 60,
+  "docker": {
+    "hosts": [
+      "tcp://gcp-vm-1:2376",
+      "tcp://gcp-vm-2:2376",
+      "tcp://gcp-vm-3:2376",
+      "tcp://gcp-vm-4:2376",
+      "tcp://gcp-vm-5:2376",
+      "tcp://gcp-vm-6:2376"
+    ]
+  },
+  "nodesPerHost": 10,
+  "image": "distributed-db:test",
+  "timeouts": {
+    "nodeStartup": 60000,
+    "convergence": 60000,
+    "quietWindow": 10000,
+    "scenarioDefault": 300000
+  },
+  "convergence": {
+    "settleTimeoutMs": 60000,
+    "quietWindowMs": 10000,
+    "maxSustainedOverTargetMs": 5000
+  },
+  "resourceLimits": {
+    "memory": "1g",
+    "cpus": "2.0"
+  },
+  "gcp": {
+    "project": "my-project",
+    "zone": "us-central1-a",
+    "machineType": "e2-standard-8",
+    "vmCount": 6,
+    "preemptible": true
+  }
+}

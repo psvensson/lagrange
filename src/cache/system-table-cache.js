@@ -13,10 +13,13 @@ import {
   CACHE_DEFAULT,
   CACHE_ERROR_MSG,
   CACHE_LOG_MSG,
-  CACHE_PRIMARY_KEY_FIELDS,
   CACHE_SUBSYSTEM,
   CACHE_SYSTEM_TABLES,
 } from './cache-constants.js';
+import {
+  SYSTEM_CACHE_KEY_DESCRIPTOR,
+  getSystemCachePrimaryKeyField,
+} from './system-cache-key-descriptor.js';
 
 /**
  * System table names that are cached.
@@ -26,7 +29,7 @@ const SYSTEM_TABLES = CACHE_SYSTEM_TABLES;
 /**
  * Primary key field names for each system table.
  */
-const PRIMARY_KEY_FIELDS = CACHE_PRIMARY_KEY_FIELDS;
+const PRIMARY_KEY_FIELDS = SYSTEM_CACHE_KEY_DESCRIPTOR;
 
 /**
  * CDC operation types.
@@ -331,7 +334,7 @@ class SystemTableCache {
     this.validateOperation(operation);
 
     // Get the primary key field for this table
-    const pkField = PRIMARY_KEY_FIELDS[tableName] || CACHE_DEFAULT.PRIMARY_KEY_FALLBACK;
+    const pkField = getSystemCachePrimaryKeyField(tableName);
     const key = data[pkField] || data[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
 
     if (!data || typeof key === TYPEOF.UNDEFINED) {

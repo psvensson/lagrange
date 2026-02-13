@@ -26,7 +26,6 @@ const ENTRYPOINT_ENV = Object.freeze({
 
 const ENTRYPOINT_DEFAULT = Object.freeze({
   REST_API_PORT: 8080,
-  ADMIN_PORT: 8081,
   WS_PORT_OFFSET: 1000,
   LOCALHOST: 'localhost',
   HTTP_PREFIX: 'http://',
@@ -42,6 +41,10 @@ const ENTRYPOINT_LOG_MSG = Object.freeze({
   JOINING_CLUSTER: 'Joining existing cluster',
   FAILED_JOIN: 'Failed to join cluster',
   JOINED_CLUSTER: 'Successfully joined cluster',
+  LOGS_TABLE_CONNECTED: 'Connected logging persistence to logs table',
+  LOGS_TABLE_CONNECT_SKIPPED: 'Skipping logs table persistence (CDC unavailable)',
+  LOGS_TABLE_CONNECT_FAILED: 'Failed to connect logs table persistence',
+  LOGS_TABLE_SHUTDOWN_FAILED: 'Failed to shutdown logs table persistence',
   STARTING_SEED: 'Starting as seed node',
   BOOTSTRAP_FAILED: 'Bootstrap failed',
   BOOTSTRAP_COMPLETED: 'Bootstrap completed',

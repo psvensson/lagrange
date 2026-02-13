@@ -10,6 +10,10 @@ import {FailureDetector} from '../../src/node/failure-detector.js';
 import {NODE_STATUS} from '../../src/node/node-constants.js';
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {
+  ReplicaStatus,
+  TERMINAL_STATUSES,
+} from '../../src/rebalancer/replica-status.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -30,6 +34,70 @@ import {
  */
 function createPeerAddresses(replicaIds) {
   return replicaIds.map((replicaId, index) => `node-${index + 1}/partition/${replicaId}`);
+}
+
+/**
+ * Wait until replica operations are quiescent for deterministic rebalancer checks.
+ * @param {Object} systemTableCache - System table cache.
+ * @param {number} timeoutMs - Timeout in milliseconds.
+ * @return {Promise<boolean>} True when no in-flight operations remain.
+ */
+async function waitForReplicaOperationsToSettle(systemTableCache, timeoutMs = 5000) {
+  return waitFor(() => {
+    const inFlight = systemTableCache.filter(
+      SystemTableName.REPLICA_OPERATIONS,
+      (operation) => !TERMINAL_STATUSES.includes(operation.status),
+    ) || [];
+    return inFlight.length === 0;
+  }, timeoutMs);
+}
+
+/**
+ * Pick a partition that has only stable replica service states.
+ * @param {Object} systemTableCache - System table cache.
+ * @param {number} timeoutMs - Timeout in milliseconds.
+ * @return {Promise<string|null>} Stable partition ID or null.
+ */
+async function waitForStablePartitionId(systemTableCache, timeoutMs = 5000) {
+  const disallowedStatuses = new Set([
+    ReplicaStatus.CREATING,
+    ReplicaStatus.SYNCING,
+    ReplicaStatus.REMOVING,
+    ReplicaStatus.PENDING,
+  ]);
+
+  let selectedPartitionId = null;
+  const found = await waitFor(() => {
+    const partitions = systemTableCache.getAll(SystemTableName.PARTITIONS) || [];
+    for (const partition of partitions) {
+      const partitionId = partition?.partition_id;
+      if (!partitionId) {
+        continue;
+      }
+      const services = systemTableCache.filter(
+        SystemTableName.SERVICES,
+        (service) =>
+          service.service_type === EntityType.PARTITION &&
+          service.partition_id === partitionId,
+      ) || [];
+      if (services.length === 0) {
+        continue;
+      }
+      const hasDisallowedStatus = services.some((service) =>
+        disallowedStatuses.has(String(service.status || '').toLowerCase()),
+      );
+      if (!hasDisallowedStatus) {
+        selectedPartitionId = partitionId;
+        return true;
+      }
+    }
+    return false;
+  }, timeoutMs);
+
+  if (!found) {
+    return null;
+  }
+  return selectedPartitionId;
 }
 
 test('Failure scenario integration tests', async (t) => {
@@ -242,10 +310,8 @@ test('Failure scenario integration tests', async (t) => {
         });
       }
 
-      // Get a partition ID from the bootstrapped partitions
-      const partitions = systemTableCache.getAll('partitions') || [];
-      t.ok(partitions.length > 0, 'should have partitions');
-      const partitionId = partitions[0].partition_id;
+      const partitionId = await waitForStablePartitionId(systemTableCache);
+      t.ok(partitionId, 'should have a stable partition for rebalancing');
 
       // Add services (replicas) for the partition, including one with 'failed' status
       // First, add replicas on node-2 and node-3 as active
@@ -283,6 +349,11 @@ test('Failure scenario integration tests', async (t) => {
       rebalancer.initialize();
       rebalancer.setLeader(true);
 
+      const operationsSettled = await waitForReplicaOperationsToSettle(
+        systemTableCache,
+      );
+      t.ok(operationsSettled, 'replica operations should settle before rebalance');
+
       // Track rebalancing events
       const addEvents = [];
       rebalancer.on('addReplica', (data) => addEvents.push(data));
@@ -298,12 +369,16 @@ test('Failure scenario integration tests', async (t) => {
       // 2. Generate ADD moves to replace it
       // 3. Or both, depending on the current state
       const addMoves = result.moves.filter((m) => m.operation === 'add');
+      const replaceMoves = result.moves.filter((m) => m.operation === 'replace');
       const removeMoves = result.moves.filter((m) => m.operation === 'remove');
 
       // With a failed replica, the rebalancer should generate moves
       // Either ADD moves to replace, REMOVE moves to clean up, or both
       t.ok(
-        addMoves.length > 0 || removeMoves.length > 0 || addEvents.length > 0,
+        addMoves.length > 0 ||
+        replaceMoves.length > 0 ||
+        removeMoves.length > 0 ||
+        addEvents.length > 0,
         'should generate moves to handle failed replica',
       );
 

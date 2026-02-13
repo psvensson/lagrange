@@ -5,44 +5,44 @@ TAP version 14
     ok 3 - Should be used for WHERE
     ok 4 - Should estimate index scan
     1..4
-ok 1 - QueryOptimizer - analyzes SELECT with WHERE clause # time=8.543ms
+ok 1 - QueryOptimizer - analyzes SELECT with WHERE clause # time=7.649ms
 
 # Subtest: QueryOptimizer - suggests index when none available
     ok 1 - Should find no usable indices
     ok 2 - Should provide hints
     ok 3 - Hint should mention email column
     1..3
-ok 2 - QueryOptimizer - suggests index when none available # time=1.335ms
+ok 2 - QueryOptimizer - suggests index when none available # time=1.14ms
 
 # Subtest: QueryOptimizer - analyzes SELECT with ORDER BY
     ok 1 - Should find index for ORDER BY
     ok 2 - Should use created_at index
     1..2
-ok 3 - QueryOptimizer - analyzes SELECT with ORDER BY # time=1.193ms
+ok 3 - QueryOptimizer - analyzes SELECT with ORDER BY # time=1.177ms
 
 # Subtest: QueryOptimizer - analyzes compound index
     ok 1 - Should use compound index for first column
     ok 2 - Should use compound index for both columns
     1..2
-ok 4 - QueryOptimizer - analyzes compound index # time=1.373ms
+ok 4 - QueryOptimizer - analyzes compound index # time=1.147ms
 
 # Subtest: QueryOptimizer - analyzes UPDATE query
     ok 1 - Should find usable index for UPDATE
     ok 2 - Should be used for WHERE
     1..2
-ok 5 - QueryOptimizer - analyzes UPDATE query # time=1.11ms
+ok 5 - QueryOptimizer - analyzes UPDATE query # time=1.015ms
 
 # Subtest: QueryOptimizer - analyzes DELETE query
     ok 1 - Should find usable index for DELETE
     1..1
-ok 6 - QueryOptimizer - analyzes DELETE query # time=1.492ms
+ok 6 - QueryOptimizer - analyzes DELETE query # time=1.016ms
 
 # Subtest: QueryOptimizer - suggestIndices returns suggestions
     ok 1 - Should suggest at least one index
     ok 2 - Should suggest index for WHERE clause
     ok 3 - Should suggest email column
     1..3
-ok 7 - QueryOptimizer - suggestIndices returns suggestions # time=1.136ms
+ok 7 - QueryOptimizer - suggestIndices returns suggestions # time=0.961ms
 
 # Subtest: QueryOptimizer - getExecutionPlan returns complete plan
     ok 1 - Should have correct query type
@@ -52,30 +52,30 @@ ok 7 - QueryOptimizer - suggestIndices returns suggestions # time=1.136ms
     ok 5 - Should have hints array
     ok 6 - Should have suggestions array
     1..6
-ok 8 - QueryOptimizer - getExecutionPlan returns complete plan # time=1.378ms
+ok 8 - QueryOptimizer - getExecutionPlan returns complete plan # time=1.127ms
 
 # Subtest: QueryOptimizer - handles query without WHERE clause
     ok 1 - Should not find index for WHERE when no WHERE clause
     ok 2 - Should estimate full scan
     1..2
-ok 9 - QueryOptimizer - handles query without WHERE clause # time=0.537ms
+ok 9 - QueryOptimizer - handles query without WHERE clause # time=0.468ms
 
 # Subtest: QueryOptimizer - handles null/undefined inputs
     ok 1 - Should return empty for null AST
     ok 2 - Should return empty for null tableId
     1..2
-ok 10 - QueryOptimizer - handles null/undefined inputs # time=0.677ms
+ok 10 - QueryOptimizer - handles null/undefined inputs # time=0.621ms
 
 # Subtest: QueryOptimizer - does not suggest existing indices
     ok 1 - Should not suggest existing index
     1..1
-ok 11 - QueryOptimizer - does not suggest existing indices # time=0.664ms
+ok 11 - QueryOptimizer - does not suggest existing indices # time=0.534ms
 
 # Subtest: QueryOptimizer - analyzes JOIN conditions
     ok 1 - Should find index for JOIN
     1..1
-ok 12 - QueryOptimizer - analyzes JOIN conditions # time=0.828ms
+ok 12 - QueryOptimizer - analyzes JOIN conditions # time=0.717ms
 
 1..12
 # { total: 29, pass: 29 }
-# time=261.691ms
+# time=202.482ms

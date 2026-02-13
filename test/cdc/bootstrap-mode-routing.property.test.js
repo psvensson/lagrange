@@ -113,6 +113,12 @@ function getValidUpdateData(tableName) {
     return {created_at: Date.now()};
   case SystemTableName.LOGS:
     return {created_at: Date.now()};
+  case SystemTableName.MODULE_MANIFESTS:
+    return {digest: 'sha256:updated'};
+  case SystemTableName.PACKAGE_REGISTRY_OVERRIDES:
+    return {registry_url: 'https://updated.example.com'};
+  case SystemTableName.MODULE_DEPENDENCY_LOCKS:
+    return {target_service_id: 'svc-updated'};
   default:
     return {updated_at: Date.now()};
   }
@@ -146,6 +152,28 @@ async function executeWrite(cdc, operation, tableName, primaryKey) {
     data.service_id = 'svc-1';
     data.delay_ms = 1000;
     data.fire_at = Date.now() + 1000;
+  } else if (tableName === SystemTableName.MODULE_MANIFESTS) {
+    data.namespace = `ns-${primaryKey.slice(0, 8)}`;
+    data.name = `mod-${primaryKey.slice(0, 8)}`;
+    data.version = '1.0.0';
+    data.digest = `sha256:${primaryKey.replace(/-/g, '')}`;
+    data.run_export = 'run';
+  } else if (tableName === SystemTableName.PACKAGE_REGISTRY_MAPPINGS) {
+    data.namespace = `ns-${primaryKey.slice(0, 8)}`;
+    data.registry_url = 'https://registry.example.com';
+  } else if (tableName === SystemTableName.PACKAGE_REGISTRY_OVERRIDES) {
+    data.namespace = `ns-${primaryKey.slice(0, 8)}`;
+    data.name = `pkg-${primaryKey.slice(0, 8)}`;
+    data.registry_url = 'https://override.example.com';
+  } else if (tableName === SystemTableName.MODULE_DEPENDENCY_LOCKS) {
+    data.lock_id = primaryKey;
+    data.target_module_namespace = 'ns';
+    data.target_module_name = 'mod';
+    data.target_module_version = '1.0.0';
+  } else if (tableName === SystemTableName.WASM_OPERATIONS) {
+    data.operation_id = primaryKey;
+    data.tenant_id = 'tenant-1';
+    data.command = 'publishModule';
   }
 
   switch (operation) {
@@ -192,6 +220,11 @@ function getPrimaryKeyField(tableName) {
     [SystemTableName.SERVICE_DEFINITIONS]: 'service_id',
     [SystemTableName.SERVICE_ENDPOINTS]: 'endpoint_id',
     [SystemTableName.SERVICE_TIMERS]: 'timer_id',
+    [SystemTableName.MODULE_MANIFESTS]: 'namespace',
+    [SystemTableName.PACKAGE_REGISTRY_MAPPINGS]: 'namespace',
+    [SystemTableName.PACKAGE_REGISTRY_OVERRIDES]: 'namespace',
+    [SystemTableName.MODULE_DEPENDENCY_LOCKS]: 'lock_id',
+    [SystemTableName.WASM_OPERATIONS]: 'operation_id',
   };
   return map[tableName] || 'id';
 }

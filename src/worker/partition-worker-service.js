@@ -169,6 +169,9 @@ class PartitionWorkerService extends ReplicaWorkerBase {
 
     /** @type {Set<string>} CDC subscriber addresses */
     this.cdcSubscribers = new Set();
+
+    /** @type {Function|null} CDC forwarder subscribed to CDCEmitter */
+    this.cdcSubscriberForwarder = null;
   }
 
   /**
@@ -380,6 +383,8 @@ class PartitionWorkerService extends ReplicaWorkerBase {
   async onStop() {
     // 1. Shutdown CDCEmitter
     if (this.cdcEmitter) {
+      this.removeCDCForwarder();
+
       this.logger.info(PARTITION_WORKER_LOG_MSG.STOPPING_CDC, {
         partitionId: this.partitionId,
         replicaId: this.replicaId,
@@ -427,6 +432,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
     }
 
     this.cdcSubscribers.clear();
+    this.cdcSubscriberForwarder = null;
   }
 
   /**
@@ -543,28 +549,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
   handleCDCSubscribe(message) {
     const subscriberAddress = message.subscriberAddress;
     this.cdcSubscribers.add(subscriberAddress);
-
-    // Register a CDC subscriber that forwards events via message bridge
-    if (this.cdcEmitter && this.messageBridge) {
-      const handler = (event) => {
-        try {
-          this.messageBridge.sendFireAndForget(subscriberAddress, {
-            type: CDC_MESSAGE_TYPE.CDC_EVENT,
-            cdcEvent: event,
-          });
-        } catch (error) {
-          this.logger.error(
-            PARTITION_WORKER_ERROR_MSG.CDC_DELIVERY_FAILED,
-            {
-              partitionId: this.partitionId,
-              subscriberAddress,
-              error: error.message,
-            },
-          );
-        }
-      };
-      this.cdcEmitter.subscribe(handler);
-    }
+    this.ensureCDCForwarder();
 
     return {
       status: 'ok',
@@ -581,7 +566,68 @@ class PartitionWorkerService extends ReplicaWorkerBase {
    */
   handleCDCUnsubscribe(message) {
     this.cdcSubscribers.delete(message.subscriberAddress);
+    if (this.cdcSubscribers.size === NUM.ZERO) {
+      this.removeCDCForwarder();
+    }
     return {status: 'ok', replicaId: this.replicaId};
+  }
+
+  /**
+   * Ensure a single CDC forwarder is attached to the CDC emitter.
+   * @private
+   */
+  ensureCDCForwarder() {
+    if (!this.cdcEmitter || !this.messageBridge || this.cdcSubscriberForwarder) {
+      return;
+    }
+
+    this.cdcSubscriberForwarder = (event) => {
+      const subscriberAddresses = Array.from(this.cdcSubscribers);
+      for (const subscriberAddress of subscriberAddresses) {
+        this.deliverCDCEventToSubscriber(subscriberAddress, event);
+      }
+    };
+
+    this.cdcEmitter.subscribe(this.cdcSubscriberForwarder);
+  }
+
+  /**
+   * Remove the CDC forwarder from the CDC emitter.
+   * @private
+   */
+  removeCDCForwarder() {
+    if (!this.cdcEmitter || !this.cdcSubscriberForwarder) {
+      return;
+    }
+    this.cdcEmitter.unsubscribe(this.cdcSubscriberForwarder);
+    this.cdcSubscriberForwarder = null;
+  }
+
+  /**
+   * Deliver a CDC event to one subscriber address.
+   * @param {string} subscriberAddress - Target subscriber address.
+   * @param {Object} event - CDC event payload.
+   * @private
+   */
+  deliverCDCEventToSubscriber(subscriberAddress, event) {
+    if (!this.messageBridge) {
+      return;
+    }
+    try {
+      this.messageBridge.sendFireAndForget(subscriberAddress, {
+        type: CDC_MESSAGE_TYPE.CDC_EVENT,
+        cdcEvent: event,
+      });
+    } catch (error) {
+      this.logger.error(
+        PARTITION_WORKER_ERROR_MSG.CDC_DELIVERY_FAILED,
+        {
+          partitionId: this.partitionId,
+          subscriberAddress,
+          error: error.message,
+        },
+      );
+    }
   }
 
   /**

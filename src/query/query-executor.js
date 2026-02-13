@@ -9,6 +9,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {
+  COLUMN,
   ERRORS,
   LOG_MSG,
   NUM,
@@ -148,6 +149,7 @@ class QueryExecutor {
       queryTimestamp,
       true, // forRead = true for SELECT
       options.preferLeader || false,
+      options.preferSameLatencyGroup === true,
     );
 
     // Aggregate results
@@ -193,6 +195,8 @@ class QueryExecutor {
       params,
       queryTimestamp,
       true,
+      options.preferLeader || false,
+      options.preferSameLatencyGroup === true,
     );
 
     let mainRows = [];
@@ -218,6 +222,7 @@ class QueryExecutor {
           queryTimestamp,
           true,
           options.preferLeader || false,
+          options.preferSameLatencyGroup === true,
         );
 
         let joinRows = [];
@@ -509,6 +514,7 @@ class QueryExecutor {
     _timestamp,
     forRead = false,
     preferLeader = false,
+    preferSameLatencyGroup = false,
   ) {
     // Limit parallel partitions
     const limitedIds = partitionIds.slice(0, this.maxParallelPartitions);
@@ -522,7 +528,14 @@ class QueryExecutor {
 
     // Create promises for parallel execution
     const promises = limitedIds.map((partitionId) =>
-      this.executeOnPartition(partitionId, sql, params, forRead, preferLeader),
+      this.executeOnPartition(
+        partitionId,
+        sql,
+        params,
+        forRead,
+        preferLeader,
+        preferSameLatencyGroup,
+      ),
     );
 
     // Execute with timeout - ensure timer is always cleared
@@ -564,7 +577,14 @@ class QueryExecutor {
    * @return {Promise<Object>} Partition result.
    * @private
    */
-  async executeOnPartition(partitionId, sql, params, forRead, preferLeader) {
+  async executeOnPartition(
+    partitionId,
+    sql,
+    params,
+    forRead,
+    preferLeader,
+    preferSameLatencyGroup,
+  ) {
     // Validate dependencies
     if (!this.messageRouter) {
       this.logger.error(QUERY_LOG_MSG.MESSAGE_ROUTER_UNAVAILABLE, {partitionId});
@@ -594,6 +614,7 @@ class QueryExecutor {
         partitionId,
         forRead,
         preferLeader,
+        preferSameLatencyGroup,
       );
       if (serviceCandidates.length === 0) {
         const hasRoutableService = this.hasRoutablePartitionService(partitionId);
@@ -607,6 +628,7 @@ class QueryExecutor {
               partitionId,
               true,
               false,
+              preferSameLatencyGroup,
             );
           }
 
@@ -804,7 +826,12 @@ class QueryExecutor {
    * @return {Array<Object>} Ordered list of service info objects.
    * @private
    */
-  getPartitionServiceCandidates(partitionId, forRead = false, preferLeader = false) {
+  getPartitionServiceCandidates(
+    partitionId,
+    forRead = false,
+    preferLeader = false,
+    preferSameLatencyGroup = false,
+  ) {
     const prioritizeLeader = preferLeader || !forRead;
 
     if (!this.systemCache) {
@@ -824,6 +851,12 @@ class QueryExecutor {
       return [];
     }
 
+    const localGroupId = this.resolveNodeLatencyGroupId(this.nodeId);
+    const orderedServices = this.orderServicesByLatencyGroup(
+      services,
+      localGroupId,
+      forRead && preferSameLatencyGroup,
+    );
     const candidates = [];
     const seen = new Set();
     const addService = (service) => {
@@ -842,7 +875,8 @@ class QueryExecutor {
       });
     };
 
-    const leaders = services.filter((service) => service.raft_role === RAFT_ROLE.LEADER);
+    const leaders = orderedServices
+      .filter((service) => service.raft_role === RAFT_ROLE.LEADER);
 
     if (!forRead) {
       leaders.forEach(addService);
@@ -851,15 +885,55 @@ class QueryExecutor {
 
     if (prioritizeLeader) {
       leaders.forEach(addService);
-
-      services
+      orderedServices
         .filter((service) => service.node_id === this.nodeId)
         .forEach(addService);
     }
 
-    services.forEach(addService);
+    orderedServices.forEach(addService);
 
     return candidates;
+  }
+
+  /**
+   * Resolve node latency-group assignment from system cache.
+   * @param {string} nodeId - Node ID.
+   * @return {string|null}
+   * @private
+   */
+  resolveNodeLatencyGroupId(nodeId) {
+    if (!nodeId || typeof this.systemCache?.get !== 'function') {
+      return null;
+    }
+    const nodeRow = this.systemCache.get(TABLES.NODES, nodeId);
+    return nodeRow?.[COLUMN.LATENCY_GROUP_ID] || null;
+  }
+
+  /**
+   * Sort services to prefer same-group replicas for read queries.
+   * @param {Object[]} services - Routable services.
+   * @param {string|null} localGroupId - Local node's latency group.
+   * @param {boolean} enabled - Preference enabled flag.
+   * @return {Object[]}
+   * @private
+   */
+  orderServicesByLatencyGroup(services, localGroupId, enabled) {
+    if (!enabled || !localGroupId || typeof this.systemCache?.get !== 'function') {
+      return services;
+    }
+    return [...services].sort((left, right) => {
+      const leftGroupId = this.resolveNodeLatencyGroupId(left?.node_id);
+      const rightGroupId = this.resolveNodeLatencyGroupId(right?.node_id);
+      const leftPreferred = leftGroupId === localGroupId;
+      const rightPreferred = rightGroupId === localGroupId;
+      if (leftPreferred && !rightPreferred) {
+        return NUM.NEGATIVE_ONE;
+      }
+      if (!leftPreferred && rightPreferred) {
+        return NUM.ONE;
+      }
+      return NUM.ZERO;
+    });
   }
 
   /**

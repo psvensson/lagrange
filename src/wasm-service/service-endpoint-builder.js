@@ -2,6 +2,10 @@ import {
   WASM_SERVICE_HEALTH_STATUS,
   WASM_SERVICE_PROTOCOL,
 } from './wasm-service-constants.js';
+import {SERVICE_PROFILE} from '../constants/index.js';
+import {
+  SQL_PROFILE_FIELD,
+} from './sql-profile-constants.js';
 
 /**
  * Column name constants for service_endpoints table.
@@ -87,10 +91,35 @@ function buildEndpointRecord(options) {
   };
 }
 
+/**
+ * Build a service endpoint record specifically for SQL engine
+ * profile services. Wraps `buildEndpointRecord` and adds
+ * `service_profile: 'sql_engine'` to the metadata JSON.
+ *
+ * @param {Object} options - Endpoint build options.
+ * @param {Object} options.serviceDefinition - Service
+ *   definition with serviceId, serviceName, protocol fields.
+ * @param {string} options.nodeId - The hosting node ID.
+ * @param {string} options.address - The endpoint address.
+ * @param {number} options.port - The allocated port number.
+ * @param {string} [options.version] - Service version string.
+ * @return {Object} A service_endpoints table row with
+ *   SQL engine metadata included.
+ */
+function buildSqlEngineEndpointRecord(options) {
+  const record = buildEndpointRecord(options);
+  const metadata = JSON.parse(record[EP_COL.METADATA]);
+  metadata[SQL_PROFILE_FIELD.SERVICE_PROFILE_META] =
+    SERVICE_PROFILE.SQL_ENGINE;
+  record[EP_COL.METADATA] = JSON.stringify(metadata);
+  return record;
+}
+
 export {
   EP_COL,
   EP_META,
   EP_ID_SEPARATOR,
   DEFAULT_VERSION,
   buildEndpointRecord,
+  buildSqlEngineEndpointRecord,
 };

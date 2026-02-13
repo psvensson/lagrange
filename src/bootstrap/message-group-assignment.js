@@ -6,6 +6,7 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {NUM, STRING} from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_DEFAULT,
   MESSAGE_GROUP_ASSIGNMENT_ERROR,
@@ -102,8 +103,12 @@ class MessageGroupAssignment {
       // Find node with 2+ replicas
       for (const [nodeId, nodeReplicas] of replicasByNode) {
         if (nodeReplicas.length >= MESSAGE_GROUP_ASSIGNMENT_DEFAULT.MIN_REPLICAS_ON_NODE_FOR_MOVE) {
-          // Found a movable replica - pick the first one
-          const replicaToMove = nodeReplicas[NUM.ZERO];
+          const nonLeaderReplicas = nodeReplicas.filter((replica) =>
+            replica.raft_role !== RAFT_ROLE.LEADER,
+          );
+          const replicaToMove = nonLeaderReplicas.length > NUM.ZERO ?
+            nonLeaderReplicas[NUM.ZERO] :
+            nodeReplicas[NUM.ZERO];
 
           return {
             groupId: group.group_id,

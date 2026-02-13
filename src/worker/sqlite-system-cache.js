@@ -15,27 +15,16 @@ import {
   generateCreateTableSQL,
   generateCreateIndexSQL,
 } from '../bootstrap/system-table-schemas-constants.js';
+import {
+  SYSTEM_CACHE_KEY_DESCRIPTOR,
+} from '../cache/system-cache-key-descriptor.js';
 
 /**
  * Primary key column names for each system table.
  * Used for get() and applyCDCEvent() operations.
  * @type {Readonly<Object>}
  */
-const PRIMARY_KEY_COLUMNS = Object.freeze({
-  tables: 'table_id',
-  partitions: 'partition_id',
-  indices: 'index_id',
-  message_groups: 'group_id',
-  nodes: 'node_id',
-  services: 'service_id',
-  logs: 'log_id',
-  config: 'config_key',
-  live_queries: 'query_id',
-  contexts: 'context_id',
-  code: 'function_id',
-  replica_operations: 'operation_id',
-  node_endpoints: 'endpoint_id',
-});
+const PRIMARY_KEY_COLUMNS = SYSTEM_CACHE_KEY_DESCRIPTOR;
 
 /**
  * Error messages for SQLiteSystemCache.

@@ -2,38 +2,38 @@ TAP version 14
 # Subtest: Property 38: executeQueryThenInvoke invokes function with results
     ok 1 - executeQueryThenInvoke invokes function with query results
     1..1
-ok 1 - Property 38: executeQueryThenInvoke invokes function with results # time=9.144ms
+ok 1 - Property 38: executeQueryThenInvoke invokes function with results # time=9.113ms
 
 # Subtest: Property 38: additional context passed to invoked function
     ok 1 - additional context passed to invoked function
     1..1
-ok 2 - Property 38: additional context passed to invoked function # time=3.662ms
+ok 2 - Property 38: additional context passed to invoked function # time=2.826ms
 
 # Subtest: Property 38: query result structure preserved in context
     ok 1 - query result structure preserved in context
     1..1
-ok 3 - Property 38: query result structure preserved in context # time=2.736ms
+ok 3 - Property 38: query result structure preserved in context # time=2.543ms
 
 # Subtest: Property 38: unique invocation IDs for each call
     ok 1 - unique invocation IDs for each call
     1..1
-ok 4 - Property 38: unique invocation IDs for each call # time=2.44ms
+ok 4 - Property 38: unique invocation IDs for each call # time=2.06ms
 
-{"level":50,"time":"2026-02-09T20:49:37.433Z","nodeId":"test-node","pid":444774,"subsystem":"function-query-executor","invocationId":"a5c73ef3-8c75-4c2b-be3b-d8676a03706e","nextFunctionId":"failing-function","error":"~5f=Mh!L[W$","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-02-09T20:49:37.433Z","nodeId":"test-node","pid":444774,"subsystem":"function-query-executor","invocationId":"8a39ba62-d5b5-4262-b323-5cd3c74aeb5f","nextFunctionId":"failing-function","error":"v?Bh_ToC(7QG","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-02-09T20:49:37.434Z","nodeId":"test-node","pid":444774,"subsystem":"function-query-executor","invocationId":"19b0cc9a-7d85-4abf-8b65-ac27bb4fb33a","nextFunctionId":"failing-function","error":".k$$YO?u(\"*6","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-02-09T20:49:37.434Z","nodeId":"test-node","pid":444774,"subsystem":"function-query-executor","invocationId":"3bbda4fe-3607-4648-bfa1-c328ccbd0773","nextFunctionId":"failing-function","error":">r`x}YAoh41","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-02-09T20:49:37.434Z","nodeId":"test-node","pid":444774,"subsystem":"function-query-executor","invocationId":"b5708457-262d-4601-81f8-291cbf0386d2","nextFunctionId":"failing-function","error":"GX","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-02-09T20:49:37.435Z","nodeId":"test-node","pid":444774,"subsystem":"function-query-executor","invocationId":"dceb5e2a-0bd7-425e-8ae2-d042a66871f8","nextFunctionId":"failing-function","error":"dTd","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-02-09T20:49:37.435Z","nodeId":"test-node","pid":444774,"subsystem":"function-query-executor","invocationId":"69df6e87-58e5-4202-8a65-4aba07efc32c","nextFunctionId":"failing-function","error":"\"","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-02-09T20:49:37.435Z","nodeId":"test-node","pid":444774,"subsystem":"function-query-executor","invocationId":"c6dd4ae6-0e1a-4092-9505-b531cee94de4","nextFunctionId":"failing-function","error":";zoC","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-02-09T20:49:37.436Z","nodeId":"test-node","pid":444774,"subsystem":"function-query-executor","invocationId":"508485a0-9dd1-4987-bdbb-bab85d1e6459","nextFunctionId":"failing-function","error":")zK@A]+%1","nodeId":"test-node","msg":"Function invocation failed after query"}
-{"level":50,"time":"2026-02-09T20:49:37.436Z","nodeId":"test-node","pid":444774,"subsystem":"function-query-executor","invocationId":"5f9d3d4d-e7ea-4e65-9663-4356f6821467","nextFunctionId":"failing-function","error":"__p","nodeId":"test-node","msg":"Function invocation failed after query"}
+{"level":50,"time":"2026-02-11T07:42:52.002Z","nodeId":"test-node","pid":876702,"subsystem":"function-query-executor","invocationId":"3c4d599c-bf3f-4d68-b070-09a099af85bb","nextFunctionId":"failing-function","error":"$Dx>B~>Z+m5","nodeId":"test-node","msg":"Function invocation failed after query"}
+{"level":50,"time":"2026-02-11T07:42:52.003Z","nodeId":"test-node","pid":876702,"subsystem":"function-query-executor","invocationId":"a83b8236-9c2e-4397-93a4-c8d9b439ccdc","nextFunctionId":"failing-function","error":"y$","nodeId":"test-node","msg":"Function invocation failed after query"}
+{"level":50,"time":"2026-02-11T07:42:52.003Z","nodeId":"test-node","pid":876702,"subsystem":"function-query-executor","invocationId":"494a204d-eb2a-4277-bcbf-0208c81d20c8","nextFunctionId":"failing-function","error":"8p","nodeId":"test-node","msg":"Function invocation failed after query"}
+{"level":50,"time":"2026-02-11T07:42:52.003Z","nodeId":"test-node","pid":876702,"subsystem":"function-query-executor","invocationId":"7bfd46fb-3278-45d5-9946-dcf89f9f8bb8","nextFunctionId":"failing-function","error":"bind","nodeId":"test-node","msg":"Function invocation failed after query"}
+{"level":50,"time":"2026-02-11T07:42:52.003Z","nodeId":"test-node","pid":876702,"subsystem":"function-query-executor","invocationId":"4c9c1697-8425-4942-870e-fd8fb66f2565","nextFunctionId":"failing-function","error":"m2","nodeId":"test-node","msg":"Function invocation failed after query"}
+{"level":50,"time":"2026-02-11T07:42:52.003Z","nodeId":"test-node","pid":876702,"subsystem":"function-query-executor","invocationId":"4cdf57b5-e011-4519-b7ef-7a5687f3c526","nextFunctionId":"failing-function","error":"Qa","nodeId":"test-node","msg":"Function invocation failed after query"}
+{"level":50,"time":"2026-02-11T07:42:52.004Z","nodeId":"test-node","pid":876702,"subsystem":"function-query-executor","invocationId":"c5700ca6-332d-4cab-90ab-c0b062a46ec6","nextFunctionId":"failing-function","error":">%2t","nodeId":"test-node","msg":"Function invocation failed after query"}
+{"level":50,"time":"2026-02-11T07:42:52.004Z","nodeId":"test-node","pid":876702,"subsystem":"function-query-executor","invocationId":"3653a1da-f8a1-41e2-bea2-3541059f3d47","nextFunctionId":"failing-function","error":"Hd&HL","nodeId":"test-node","msg":"Function invocation failed after query"}
+{"level":50,"time":"2026-02-11T07:42:52.004Z","nodeId":"test-node","pid":876702,"subsystem":"function-query-executor","invocationId":"77b79457-9c08-49ea-9e03-c80af4eef165","nextFunctionId":"failing-function","error":"key","nodeId":"test-node","msg":"Function invocation failed after query"}
+{"level":50,"time":"2026-02-11T07:42:52.004Z","nodeId":"test-node","pid":876702,"subsystem":"function-query-executor","invocationId":"4b6564b5-3636-45ee-bedf-517467f0f7f9","nextFunctionId":"failing-function","error":"l$~,","nodeId":"test-node","msg":"Function invocation failed after query"}
 # Subtest: Property 38: function failure preserves query result
     ok 1 - function failure preserves query result
     1..1
-ok 5 - Property 38: function failure preserves query result # time=4.027ms
+ok 5 - Property 38: function failure preserves query result # time=3.194ms
 
 1..5
 # { total: 5, pass: 5 }
-# time=147.427ms
+# time=143.969ms

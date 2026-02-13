@@ -1,11 +1,32 @@
 /**
- * Admin WebSocket API - WebSocket endpoint for admin CLI connections.
- * Provides real-time system state updates and query execution.
- * Requirements: 32.1, 32.2, 32.3, 32.4, 32.5, 32.6, 32.7, 32.8, 32.9, 32.10,
- *               32.11, 32.12, 32.13, 32.14, 32.15, 32.16, 32.17, 32.18, 32.19,
- *               32.20, 32.21, 32.22, 32.23, 32.24, 32.25, 32.26, 32.27, 32.28,
- *               32.29, 32.30, 32.31, 32.32, 32.33, 32.34, 32.35, 32.36, 32.37,
- *               32.38, 32.39
+ * Admin WebSocket API — node-local compatibility adapter.
+ *
+ * This class is a THIN ROUTING ADAPTER on fixed port 8081.
+ * It exists solely to preserve backward compatibility with
+ * existing CLI clients. Its responsibilities are:
+ *
+ *   1. Accept WebSocket connections from admin CLI clients.
+ *   2. Validate incoming message envelopes (JSON, required fields).
+ *   3. Route query execution through the SQL query engine
+ *      (SqlCore), which owns all SQL planning and mutation paths.
+ *   4. Forward CDC events from the system table cache to
+ *      connected clients for real-time state updates.
+ *   5. Return responses in the CLI-compatible envelope format.
+ *
+ * This adapter MUST NOT:
+ *   - Write to partitions directly (all writes go through SqlCore).
+ *   - Own or introduce alternative mutation paths.
+ *   - Maintain derived state beyond the client connection set.
+ *   - Bypass the SQL/CDC ownership contract.
+ *
+ * Query execution delegates through AdminApiAdapter contract
+ * and then into SqlCore.executeRequest(SqlRequest), which
+ * routes through the standard SQL/CDC mutation path.
+ * Cache reads use the read-only SystemTableCache interface.
+ *
+ * See architecture.md §AdminWebSocketAPI and §Admin Serviceization.
+ *
+ * Requirements: 2.4, 13.2
  */
 
 import Fastify from 'fastify';
@@ -14,11 +35,17 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {ERRNO, NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {TRANSPORT_EVENT} from '../constants/transport.js';
+import {createSqlRequest} from '../query/sql-request.js';
+import {EXECUTION_MODE} from '../query/sql-adapter-constants.js';
+import {guardedAdaptAdminAction} from './admin-api-adapter.js';
+import {ADMIN_META_ACTION} from './admin-meta-command-handlers.js';
+import {MUTATION_GUARD_MODE} from './admin-mutation-guard.js';
 import {
   ADMIN_CACHE_DUMP,
   ADMIN_CLIENT,
   ADMIN_CONFIG_KEY,
   ADMIN_DEFAULT,
+  ADMIN_ENFORCEMENT_MODE,
   ADMIN_ERROR_CODE,
   ADMIN_ERROR_HINT,
   ADMIN_ERROR_MATCH,
@@ -36,7 +63,12 @@ const MessageType = ADMIN_MESSAGE_TYPE;
 const ErrorCode = ADMIN_ERROR_CODE;
 
 /**
- * AdminWebSocketAPI provides WebSocket endpoint for admin CLI connections.
+ * AdminWebSocketAPI — node-local compatibility adapter for
+ * administrative SQL/cache operations on fixed port 8081.
+ *
+ * All query execution routes through SqlQueryEngine (SqlCore).
+ * All cache reads use the read-only SystemTableCache interface.
+ * No direct partition writes or alternative mutation paths.
  */
 class AdminWebSocketAPI {
   /**
@@ -50,10 +82,12 @@ class AdminWebSocketAPI {
     this.systemTableCache = options.systemTableCache || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.nodeId = options.nodeId || ADMIN_DEFAULT.NODE_ID;
+    this.enforcementMode = options.enforcementMode ||
+      ADMIN_DEFAULT.ENFORCEMENT_MODE;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.port = config.get(ADMIN_CONFIG_KEY.WEBSOCKET_PORT) || ADMIN_DEFAULT.WEBSOCKET_PORT;
+    this.port = ADMIN_DEFAULT.WEBSOCKET_PORT;
     this.queryTimeoutMs =
       config.get(ADMIN_CONFIG_KEY.QUERY_TIMEOUT_MS) || ADMIN_DEFAULT.QUERY_TIMEOUT_MS;
     this.cacheDumpTimeoutMs =
@@ -247,10 +281,11 @@ class AdminWebSocketAPI {
   /**
    * Send cache dump to a client.
    * @param {Object} clientInfo - Client information.
+   * @param {Array<string>} [tables] - Optional table filter.
    * @private
    */
-  sendCacheDump(clientInfo) {
-    const cacheDump = this.buildCacheDump();
+  sendCacheDump(clientInfo, tables) {
+    const cacheDump = this.buildCacheDump(tables);
 
     // Check if cache is empty (all tables have 0 rows) - Requirement 3.3
     const isEmpty = Object.values(cacheDump).every((arr) => arr.length === NUM.ZERO);
@@ -275,11 +310,12 @@ class AdminWebSocketAPI {
 
   /**
    * Build cache dump from system table cache.
+   * @param {Array<string>} [tables] - Optional table filter.
    * @return {Object} Cache dump with all system tables.
    * @private
    */
-  buildCacheDump() {
-    const tables = [
+  buildCacheDump(tables) {
+    const targetTables = tables || [
       TABLES.NODES,
       TABLES.SERVICES,
       TABLES.PARTITIONS,
@@ -290,6 +326,8 @@ class AdminWebSocketAPI {
       TABLES.CONFIG,
       TABLES.CONTEXTS,
       TABLES.LIVE_QUERIES,
+      TABLES.LATENCY_GROUPS,
+      TABLES.INTER_GROUP_LATENCIES,
     ];
     const dump = {};
 
@@ -298,7 +336,7 @@ class AdminWebSocketAPI {
       throw new Error('System table cache not initialized');
     }
 
-    for (const tableName of tables) {
+    for (const tableName of targetTables) {
       try {
         dump[tableName] = this.systemTableCache.getAll(tableName);
       } catch {
@@ -385,11 +423,30 @@ class AdminWebSocketAPI {
     });
 
     try {
+      const routed = guardedAdaptAdminAction(
+        ADMIN_META_ACTION.EXECUTE_QUERY,
+        {sql, queryParams: params || []},
+        this.systemTableCache,
+        this.resolveMutationGuardMode(),
+      );
+      if (!routed.success) {
+        this.sendError(
+          clientInfo,
+          queryId,
+          routed.code || ErrorCode.INTERNAL_ERROR,
+          routed.error || ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE,
+        );
+        return;
+      }
+
       const result = await this.executeQueryWithTimeout(
-        sql,
-        params || [],
+        routed.sql,
+        routed.params || [],
         queryId,
       );
+      if (routed.warning) {
+        result.warning = routed.warning;
+      }
 
       this.sendQueryResult(clientInfo, queryId, result);
     } catch (error) {
@@ -407,7 +464,8 @@ class AdminWebSocketAPI {
    * @private
    */
   async executeQueryWithTimeout(sql, params, queryId) {
-    if (!this.sqlQueryEngine) {
+    if (!this.sqlQueryEngine ||
+        typeof this.sqlQueryEngine.executeRequest !== TYPEOF.FUNCTION) {
       throw new Error(ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE);
     }
 
@@ -419,9 +477,14 @@ class AdminWebSocketAPI {
         }, this.queryTimeoutMs);
       });
 
-      const queryPromise = this.sqlQueryEngine.executeQuery(sql, params, {
-        sessionId: queryId,
-      });
+      const queryPromise = this.sqlQueryEngine.executeRequest(
+        createSqlRequest({
+          statement: sql,
+          parameters: params,
+          sessionId: queryId,
+          executionMode: EXECUTION_MODE.SQL_STATEMENT,
+        }),
+      );
 
       return await Promise.race([queryPromise, timeoutPromise]);
     } finally {
@@ -429,6 +492,18 @@ class AdminWebSocketAPI {
         clearTimeout(timeoutId);
       }
     }
+  }
+
+  /**
+   * Resolve guard mode for adapter routing based on enforcement mode.
+   * @return {string} MUTATION_GUARD_MODE value.
+   * @private
+   */
+  resolveMutationGuardMode() {
+    if (this.enforcementMode === ADMIN_ENFORCEMENT_MODE.ENFORCE) {
+      return MUTATION_GUARD_MODE.REJECT;
+    }
+    return MUTATION_GUARD_MODE.WARN;
   }
 
   /**
@@ -466,6 +541,10 @@ class AdminWebSocketAPI {
       message.tableName = result.tableName || null;
     }
 
+    if (result.warning) {
+      message.warning = result.warning;
+    }
+
     this.sendToClient(clientInfo, message);
 
     this.logger.debug(ADMIN_LOG_MSG.QUERY_RESULT_SENT, {
@@ -486,7 +565,23 @@ class AdminWebSocketAPI {
       clientId: clientInfo.id,
     });
 
-    this.sendCacheDump(clientInfo);
+    const routed = guardedAdaptAdminAction(
+      ADMIN_META_ACTION.GET_CACHE_DUMP,
+      {},
+      this.systemTableCache,
+      this.resolveMutationGuardMode(),
+    );
+    if (!routed.success) {
+      this.sendError(
+        clientInfo,
+        null,
+        routed.code || ErrorCode.INTERNAL_ERROR,
+        routed.error || ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE,
+      );
+      return;
+    }
+
+    this.sendCacheDump(clientInfo, routed.tables);
   }
 
   /**

@@ -8,6 +8,7 @@ const CONFIG_CATEGORY = Object.freeze({
   LOGGING: 'logging',
   NODE: 'node',
   CONTROL_PLANE: 'controlPlane',
+  LATENCY: 'latency',
 });
 
 const CONFIG_SUBSYSTEM = Object.freeze({
@@ -60,6 +61,11 @@ const CONFIG_KEY_FRAGMENT = Object.freeze({
 
 const CONFIG_LOG_LEVELS = Object.freeze({
   VALUES: Object.freeze(['trace', 'debug', 'info', 'warn', 'error', 'fatal']),
+});
+
+const LATENCY_PROPAGATION_MODE = Object.freeze({
+  SAFE: 'safe',
+  GROUPED: 'grouped',
 });
 
 const CONFIG_LOG_MSG = Object.freeze({
@@ -198,7 +204,6 @@ const CONFIG_KEY = Object.freeze({
 
   STORAGE_DATA_DIR: 'storage.dataDir',
 
-  ADMIN_WEBSOCKET_PORT: 'admin.websocketPort',
   ADMIN_QUERY_TIMEOUT_MS: 'admin.queryTimeoutMs',
   ADMIN_CACHE_DUMP_TIMEOUT_MS: 'admin.cacheDumpTimeoutMs',
 
@@ -232,6 +237,41 @@ const CONFIG_KEY = Object.freeze({
 
   TRANSPORT_CONNECTION_POOL_TTL_MS: 'transport.connectionPoolTtlMs',
   TRANSPORT_CONNECTION_POOL_CLEANUP_INTERVAL_MS: 'transport.connectionPoolCleanupIntervalMs',
+
+  // Storage capacity budget (node-level startup)
+  NODE_STORAGE_BUDGET_BYTES: 'node.storageBudgetBytes',
+  NODE_STORAGE_BUDGET_RATIO: 'node.storageBudgetRatio',
+
+  // Storage capacity rebalancer keys
+  REBALANCER_STORAGE_SOFT_PRESSURE_PERCENT:
+    'rebalancer.storageSoftPressurePercent',
+  REBALANCER_STORAGE_HARD_PRESSURE_PERCENT:
+    'rebalancer.storageHardPressurePercent',
+  REBALANCER_STORAGE_RESERVATION_TTL_MS:
+    'rebalancer.storageReservationTtlMs',
+  REBALANCER_STORAGE_EMERGENCY_HEADROOM_PERCENT:
+    'rebalancer.storageEmergencyHeadroomPercent',
+  REBALANCER_MINIMUM_REPLICA_BYTES:
+    'rebalancer.minimumReplicaBytes',
+  REBALANCER_SPLIT_AMPLIFICATION_FACTOR:
+    'rebalancer.splitAmplificationFactor',
+  REBALANCER_PARTITION_REPLICA_OVERHEAD_BYTES:
+    'rebalancer.partitionReplicaOverheadBytes',
+  REBALANCER_MESSAGE_GROUP_REPLICA_OVERHEAD_BYTES:
+    'rebalancer.messageGroupReplicaOverheadBytes',
+  REBALANCER_SERVICE_REPLICA_OVERHEAD_BYTES:
+    'rebalancer.serviceReplicaOverheadBytes',
+  REBALANCER_STORAGE_ADMISSION_MODE:
+    'rebalancer.storageAdmissionMode',
+
+  // Latency topology keys
+  LATENCY_GROUP_THRESHOLD_MS: 'latency.groupThresholdMs',
+  LATENCY_RECALC_INTERVAL_MS: 'latency.recalcIntervalMs',
+  LATENCY_RECALC_JITTER_RATIO: 'latency.recalcJitterRatio',
+  LATENCY_PING_TIMEOUT_MS: 'latency.pingTimeoutMs',
+  LATENCY_PING_RETRY_COUNT: 'latency.pingRetryCount',
+  LATENCY_SMOOTHING_ALPHA: 'latency.smoothingAlpha',
+  LATENCY_PROPAGATION_MODE: 'latency.propagationMode',
 });
 
 /**
@@ -251,6 +291,8 @@ const CONFIG_SCHEMA = {
         maxServicesPerNode: {type: 'number', minimum: 1},
         restApiPort: {type: 'number', minimum: 1, maximum: 65535},
         seedNodeAddress: {type: 'string'},
+        storageBudgetBytes: {type: 'number', minimum: 1},
+        storageBudgetRatio: {type: 'number', minimum: 0.01, maximum: 1.0},
       },
       required: ['id'],
       additionalProperties: false,
@@ -372,6 +414,24 @@ const CONFIG_SCHEMA = {
         nodeMemoryThreshold: {type: 'number', minimum: 0, maximum: 1},
         nodeDiskThreshold: {type: 'number', minimum: 0, maximum: 1},
         stabilizationPeriodMs: {type: 'number', minimum: 1000, maximum: 10000},
+        storageSoftPressurePercent: {
+          type: 'number', minimum: 1, maximum: 100,
+        },
+        storageHardPressurePercent: {
+          type: 'number', minimum: 1, maximum: 100,
+        },
+        storageReservationTtlMs: {type: 'number', minimum: 1000},
+        storageEmergencyHeadroomPercent: {
+          type: 'number', minimum: 0, maximum: 100,
+        },
+        minimumReplicaBytes: {type: 'number', minimum: 1},
+        splitAmplificationFactor: {type: 'number', minimum: 1},
+        partitionReplicaOverheadBytes: {type: 'number', minimum: 0},
+        messageGroupReplicaOverheadBytes: {type: 'number', minimum: 0},
+        serviceReplicaOverheadBytes: {type: 'number', minimum: 0},
+        storageAdmissionMode: {
+          type: 'string', enum: ['observe', 'enforce'],
+        },
       },
       additionalProperties: false,
     },
@@ -407,9 +467,24 @@ const CONFIG_SCHEMA = {
     admin: {
       type: 'object',
       properties: {
-        websocketPort: {type: 'number', minimum: 1, maximum: 65535},
         queryTimeoutMs: {type: 'number', minimum: 1000},
         cacheDumpTimeoutMs: {type: 'number', minimum: 1000},
+      },
+      additionalProperties: false,
+    },
+    latency: {
+      type: 'object',
+      properties: {
+        groupThresholdMs: {type: 'number', minimum: 1},
+        recalcIntervalMs: {type: 'number', minimum: 1000},
+        recalcJitterRatio: {type: 'number', minimum: 0, maximum: 1},
+        pingTimeoutMs: {type: 'number', minimum: 1},
+        pingRetryCount: {type: 'number', minimum: 0},
+        smoothingAlpha: {type: 'number', minimum: 0.01, maximum: 1},
+        propagationMode: {
+          type: 'string',
+          enum: Object.values(LATENCY_PROPAGATION_MODE),
+        },
       },
       additionalProperties: false,
     },
@@ -516,6 +591,16 @@ const DEFAULT_CONFIG = {
     nodeMemoryThreshold: 0.8, // 80% memory threshold
     nodeDiskThreshold: 0.9, // 90% disk threshold
     stabilizationPeriodMs: 1000, // 1 second stabilization period (Req 2.1)
+    storageSoftPressurePercent: 70,
+    storageHardPressurePercent: 85,
+    storageReservationTtlMs: 300000, // 5 minutes
+    storageEmergencyHeadroomPercent: 5,
+    minimumReplicaBytes: 1048576, // 1 MiB
+    splitAmplificationFactor: 2,
+    partitionReplicaOverheadBytes: 10485760, // 10 MiB
+    messageGroupReplicaOverheadBytes: 1048576, // 1 MiB
+    serviceReplicaOverheadBytes: 5242880, // 5 MiB
+    storageAdmissionMode: 'observe',
   },
   replicaHandler: {
     syncTimeoutMs: 60000, // 60 seconds to wait for voter-ready activation
@@ -535,9 +620,17 @@ const DEFAULT_CONFIG = {
     dataDir: './data', // Default data directory (Req 35.3)
   },
   admin: {
-    websocketPort: 8081, // Admin WebSocket API port
     queryTimeoutMs: 30000, // Query timeout (30 seconds)
     cacheDumpTimeoutMs: 5000, // Cache dump timeout (5 seconds)
+  },
+  latency: {
+    groupThresholdMs: 100,
+    recalcIntervalMs: 60000,
+    recalcJitterRatio: 0.1,
+    pingTimeoutMs: 1000,
+    pingRetryCount: 2,
+    smoothingAlpha: 0.3,
+    propagationMode: LATENCY_PROPAGATION_MODE.SAFE,
   },
 };
 
@@ -562,7 +655,6 @@ const ENV_MAPPINGS = {
   WORKER_MIN_THREADS: CONFIG_KEY.WORKER_MIN_THREADS,
   WORKER_MAX_THREADS: CONFIG_KEY.WORKER_MAX_THREADS,
   DATA_DIR: CONFIG_KEY.STORAGE_DATA_DIR,
-  ADMIN_WEBSOCKET_PORT: CONFIG_KEY.ADMIN_WEBSOCKET_PORT,
 };
 
 /**
@@ -714,6 +806,120 @@ const CONFIG_DEFINITIONS = {
     description: 'Maximum concurrent replica moves',
   },
 
+  // Storage capacity rebalancer configuration
+  [CONFIG_KEY.REBALANCER_STORAGE_SOFT_PRESSURE_PERCENT]: {
+    defaultValue: DEFAULT_CONFIG.rebalancer.storageSoftPressurePercent,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Budget utilization percent triggering soft pressure state',
+  },
+  [CONFIG_KEY.REBALANCER_STORAGE_HARD_PRESSURE_PERCENT]: {
+    defaultValue: DEFAULT_CONFIG.rebalancer.storageHardPressurePercent,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Budget utilization percent triggering hard pressure state',
+  },
+  [CONFIG_KEY.REBALANCER_STORAGE_RESERVATION_TTL_MS]: {
+    defaultValue: DEFAULT_CONFIG.rebalancer.storageReservationTtlMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'TTL for storage reservations in milliseconds',
+  },
+  [CONFIG_KEY.REBALANCER_STORAGE_EMERGENCY_HEADROOM_PERCENT]: {
+    defaultValue:
+      DEFAULT_CONFIG.rebalancer.storageEmergencyHeadroomPercent,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description:
+      'Budget percent reserved for critical correctness operations',
+  },
+  [CONFIG_KEY.REBALANCER_MINIMUM_REPLICA_BYTES]: {
+    defaultValue: DEFAULT_CONFIG.rebalancer.minimumReplicaBytes,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Minimum estimated bytes for any replica operation',
+  },
+  [CONFIG_KEY.REBALANCER_SPLIT_AMPLIFICATION_FACTOR]: {
+    defaultValue: DEFAULT_CONFIG.rebalancer.splitAmplificationFactor,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description:
+      'Multiplier for split write-amplification reservation estimates',
+  },
+  [CONFIG_KEY.REBALANCER_PARTITION_REPLICA_OVERHEAD_BYTES]: {
+    defaultValue:
+      DEFAULT_CONFIG.rebalancer.partitionReplicaOverheadBytes,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Fixed overhead bytes per partition replica',
+  },
+  [CONFIG_KEY.REBALANCER_MESSAGE_GROUP_REPLICA_OVERHEAD_BYTES]: {
+    defaultValue:
+      DEFAULT_CONFIG.rebalancer.messageGroupReplicaOverheadBytes,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Fixed overhead bytes per message group replica',
+  },
+  [CONFIG_KEY.REBALANCER_SERVICE_REPLICA_OVERHEAD_BYTES]: {
+    defaultValue:
+      DEFAULT_CONFIG.rebalancer.serviceReplicaOverheadBytes,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Fixed overhead bytes per service replica',
+  },
+  [CONFIG_KEY.REBALANCER_STORAGE_ADMISSION_MODE]: {
+    defaultValue:
+      DEFAULT_CONFIG.rebalancer.storageAdmissionMode,
+    type: CONFIG_VALUE_TYPE.STRING,
+    requiresRestart: false,
+    description:
+      'Storage admission mode: observe (log only) or enforce (block)',
+  },
+
+  // Latency topology configuration
+  [CONFIG_KEY.LATENCY_GROUP_THRESHOLD_MS]: {
+    defaultValue: DEFAULT_CONFIG.latency.groupThresholdMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Latency threshold in milliseconds for same-group membership',
+  },
+  [CONFIG_KEY.LATENCY_RECALC_INTERVAL_MS]: {
+    defaultValue: DEFAULT_CONFIG.latency.recalcIntervalMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Interval between latency group recalculation cycles',
+  },
+  [CONFIG_KEY.LATENCY_RECALC_JITTER_RATIO]: {
+    defaultValue: DEFAULT_CONFIG.latency.recalcJitterRatio,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Bounded jitter ratio applied to recalculation scheduling',
+  },
+  [CONFIG_KEY.LATENCY_PING_TIMEOUT_MS]: {
+    defaultValue: DEFAULT_CONFIG.latency.pingTimeoutMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Timeout for latency ping measurements in milliseconds',
+  },
+  [CONFIG_KEY.LATENCY_PING_RETRY_COUNT]: {
+    defaultValue: DEFAULT_CONFIG.latency.pingRetryCount,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Retry count for latency ping measurements',
+  },
+  [CONFIG_KEY.LATENCY_SMOOTHING_ALPHA]: {
+    defaultValue: DEFAULT_CONFIG.latency.smoothingAlpha,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Exponential smoothing alpha for RTT samples',
+  },
+  [CONFIG_KEY.LATENCY_PROPAGATION_MODE]: {
+    defaultValue: DEFAULT_CONFIG.latency.propagationMode,
+    type: CONFIG_VALUE_TYPE.STRING,
+    requiresRestart: false,
+    description: 'Latency-aware CDC propagation mode (safe or grouped)',
+  },
+
   // Query coordinator configuration
   [CONFIG_KEY.QUERY_COORDINATOR_MAX_PARALLEL_PARTITIONS]: {
     defaultValue: DEFAULT_CONFIG.queryCoordinator.maxParallelPartitions,
@@ -745,6 +951,7 @@ export {
   CONFIG_EVENT,
   CONFIG_KEY,
   CONFIG_KEY_FRAGMENT,
+  LATENCY_PROPAGATION_MODE,
   CONFIG_LOG_LEVELS,
   CONFIG_LOG_MSG,
   CONFIG_SCHEMA,

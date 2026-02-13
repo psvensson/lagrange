@@ -65,7 +65,22 @@ export {
   EP_COL,
   EP_META,
   buildEndpointRecord,
+  buildSqlEngineEndpointRecord,
 } from './service-endpoint-builder.js';
+
+// SQL engine profile factory
+export {
+  createSqlEngineDefinition,
+  isSqlEngineProfile,
+} from './sql-profile-factory.js';
+
+// SQL engine profile constants
+export {
+  SQL_PROFILE_FIELD,
+  SQL_PROFILE_ERROR_MSG,
+  SQL_PROFILE_LOG_MSG,
+  SQL_PROFILE_DEFAULT,
+} from './sql-profile-constants.js';
 
 // WASM service replica (Raft group member)
 export {

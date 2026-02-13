@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: generated node addresses are always unique
         ok 1 - all generated node addresses are unique
         1..1
-    ok 1 - generated node addresses are always unique # time=4.949ms
+    ok 1 - generated node addresses are always unique # time=10.994ms
     
     # Subtest: generated service addresses are always unique
         ok 1 - all generated service addresses are unique
         1..1
-    ok 2 - generated service addresses are always unique # time=1.057ms
+    ok 2 - generated service addresses are always unique # time=1.786ms
     
     # Subtest: no collisions between node and service addresses
         ok 1 - no collisions between node and service addresses
         1..1
-    ok 3 - no collisions between node and service addresses # time=1.19ms
+    ok 3 - no collisions between node and service addresses # time=1.244ms
     
     # Subtest: conflict detection identifies registered addresses
         ok 1 - conflict detection correctly identifies all registered addresses
         1..1
-    ok 4 - conflict detection identifies registered addresses # time=0.786ms
+    ok 4 - conflict detection identifies registered addresses # time=1.329ms
     
     # Subtest: cross-type registration prevents duplicates
         ok 1 - cross-type registration correctly prevents duplicates
         1..1
-    ok 5 - cross-type registration prevents duplicates # time=1.109ms
+    ok 5 - cross-type registration prevents duplicates # time=4.723ms
     
     # Subtest: address counts remain consistent after operations
         ok 1 - address counts remain consistent after operations
         1..1
-    ok 6 - address counts remain consistent after operations # time=1.388ms
+    ok 6 - address counts remain consistent after operations # time=3.188ms
     
     1..6
-ok 1 - Property 1: Address Uniqueness # time=13.229ms
+ok 1 - Property 1: Address Uniqueness # time=29.355ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=16.561ms
+# time=35.396ms

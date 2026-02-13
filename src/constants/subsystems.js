@@ -62,6 +62,9 @@ const SUBSYSTEM = Object.freeze({
   /** CDC integration setup during bootstrap */
   CDC_INTEGRATION_SETUP: 'cdc-integration-setup',
 
+  /** Node storage budget setup during bootstrap */
+  NODE_STORAGE_BUDGET_SETUP: 'node-storage-budget-setup',
+
   /** Service lifecycle management */
   SERVICE_LIFECYCLE: 'service-lifecycle',
 

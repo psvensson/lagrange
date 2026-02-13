@@ -9,7 +9,7 @@ TAP version 14
         ok 6 - should have valid assignment strategy
         ok 7 - should have system table snapshots
         1..7
-    ok 1 - new node with UUID receives valid bootstrap response # time=2732.03ms
+    ok 1 - new node with UUID receives valid bootstrap response # time=3399.209ms
     
     # Subtest: duplicate node ID is rejected
         ok 1 - seed bootstrap should succeed
@@ -17,7 +17,7 @@ TAP version 14
         ok 3 - idempotent second registration should return a response
         ok 4 - response should target same seed
         1..4
-    ok 2 - duplicate node ID is rejected # time=2979.273ms
+    ok 2 - duplicate node ID is rejected # time=2637.676ms
     
     # Subtest: bootstrap response contains required fields
         ok 1 - seed bootstrap should succeed
@@ -27,11 +27,11 @@ TAP version 14
         ok 5 - should have systemTableSnapshots
         ok 6 - should have currentEpoch
         1..6
-    ok 3 - bootstrap response contains required fields # time=2863.326ms
+    ok 3 - bootstrap response contains required fields # time=2947.707ms
     
     1..3
-ok 1 - Property 11: Node Bootstrap Consistency # time=8714.864ms
+ok 1 - Property 11: Node Bootstrap Consistency # time=9100.353ms
 
 1..1
 # { total: 17, pass: 17 }
-# time=8718.571ms
+# time=9126.329ms

@@ -1,44 +1,41 @@
 /**
- * Infrastructure Phase - First phase of bootstrap process.
+ * Infrastructure Phase - Delegation adapter.
  *
- * Creates core infrastructure services:
- * - NodeService initialization
- * - MessageRouter creation and configuration
- *
- * Requirements: 2.1, 2.6, 2.7, 2.8
+ * Legacy phase entry point retained for API compatibility.
+ * Canonical execution logic is owned by bootstrap phase owners.
  */
 
-import {v4 as uuidv4} from 'uuid';
 import {EventEmitter} from 'events';
-import {ConfigurationManager} from '../../config/configuration-manager.js';
 import {LoggingService} from '../../logging/logging-service.js';
-import {NodeService} from '../../node/node-service.js';
-import {MessageRouter} from '../../transport/message-router.js';
-import {NODE_CONFIG_KEY} from '../../node/node-constants.js';
-import {NUM} from '../../constants/index.js';
-import {BOOTSTRAP_SUBSYSTEM, BOOTSTRAP_LOG_MSG, BOOTSTRAP_ERROR} from '../bootstrap-constants.js';
+import {BOOTSTRAP_SUBSYSTEM} from '../bootstrap-constants.js';
+import {TYPEOF} from '../../constants/index.js';
 
 /**
  * Phase constants for infrastructure setup.
  */
-const INFRASTRUCTURE_PHASE = {
+const INFRASTRUCTURE_PHASE = Object.freeze({
   NAME: 'infrastructure',
   EVENT_START: 'infrastructure:start',
   EVENT_COMPLETE: 'infrastructure:complete',
   EVENT_FAILED: 'infrastructure:failed',
-};
+});
+
+const PHASE_ERROR = Object.freeze({
+  EXECUTE_OWNER_REQUIRED:
+    'InfrastructurePhase requires executeOwner delegation function',
+});
 
 /**
- * InfrastructurePhase handles the first phase of bootstrap.
- * Creates NodeService and MessageRouter for cluster communication.
+ * InfrastructurePhase delegation adapter.
  */
 class InfrastructurePhase extends EventEmitter {
   /**
-   * Create infrastructure phase.
-   * @param {Object} options - Configuration options.
-   * @param {string} options.nodeId - Node ID (optional, will be generated if not provided).
-   * @param {string} options.nodeAddress - Node address.
-   * @param {number} options.wsPort - WebSocket port.
+   * @param {Object} options - Phase options.
+   * @param {string} [options.nodeId] - Node ID.
+   * @param {string} [options.nodeAddress] - Node address.
+   * @param {number} [options.wsPort] - WebSocket port.
+   * @param {Function} [options.executeOwner] - Canonical owner execute function.
+   * @param {Function} [options.cleanupOwner] - Canonical owner cleanup function.
    */
   constructor(options = {}) {
     super();
@@ -47,19 +44,25 @@ class InfrastructurePhase extends EventEmitter {
     this.nodeAddress = options.nodeAddress || null;
     this.wsPort = options.wsPort || null;
 
-    // Services created during this phase
+    this.executeOwner = typeof options.executeOwner === TYPEOF.FUNCTION ?
+      options.executeOwner :
+      null;
+    this.cleanupOwner = typeof options.cleanupOwner === TYPEOF.FUNCTION ?
+      options.cleanupOwner :
+      null;
+
     this.nodeService = null;
     this.messageRouter = null;
 
-    // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE) : console;
+      loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE) :
+      console;
   }
 
   /**
-   * Execute the infrastructure phase.
-   * @return {Promise<Object>} Phase result with created services.
+   * Execute via canonical owner callback.
+   * @return {Promise<Object>} Phase result.
    */
   async execute() {
     const startTime = Date.now();
@@ -69,130 +72,59 @@ class InfrastructurePhase extends EventEmitter {
     });
 
     try {
-      // Initialize configuration if not already done
-      const configManager = ConfigurationManager.getInstance();
-      if (!configManager.isInitialized()) {
-        configManager.initialize({
-          node: {id: this.nodeId},
-        });
+      if (typeof this.executeOwner !== TYPEOF.FUNCTION) {
+        throw new Error(PHASE_ERROR.EXECUTE_OWNER_REQUIRED);
       }
 
-      // Get or generate node ID
-      this.nodeId = this.nodeId || configManager.get(NODE_CONFIG_KEY.ID) || uuidv4();
+      const ownerResult = await this.executeOwner(this);
+      const result = ownerResult && typeof ownerResult === TYPEOF.OBJECT ?
+        ownerResult :
+        {};
 
-      // Initialize node service
-      this.nodeService = NodeService.getInstance();
-      if (!this.nodeService.isInitialized()) {
-        this.nodeService.initialize({
-          nodeId: this.nodeId,
-          nodeAddress: this.nodeAddress,
-        });
+      if (result.services && typeof result.services === TYPEOF.OBJECT) {
+        this.nodeService = result.services.nodeService || this.nodeService;
+        this.messageRouter = result.services.messageRouter || this.messageRouter;
       }
 
-      this.nodeId = this.nodeService.getNodeId();
-      this.nodeAddress = this.nodeService.getNodeAddress();
-
-      // Create MessageRouter for unified local/remote message routing
-      this.messageRouter = new MessageRouter({
-        nodeId: this.nodeId,
-        nodeAddress: this.nodeAddress,
-        wsPort: this.wsPort,
-      });
-
-      // Set up resolver to extract nodeId from address pattern "${nodeId}/..."
-      this.messageRouter.setServiceNodeResolver((address) => {
-        const match = address.match(/^([^/]+)\//);
-        return match ? match[NUM.ONE] : null;
-      });
-
-      // Initialize message router
-      if (this.wsPort) {
-        try {
-          await this.messageRouter.initialize({startServer: true});
-
-          this.logger.info(BOOTSTRAP_LOG_MSG.WS_SELF_CONNECTED, {
-            nodeId: this.nodeId,
-            wsPort: this.wsPort,
-            hasSelfConnection: this.messageRouter.hasSelfConnection(),
-          });
-        } catch (error) {
-          this.logger.error(BOOTSTRAP_LOG_MSG.ROUTER_INIT_FAILED, {
-            nodeId: this.nodeId,
-            wsPort: this.wsPort,
-            error: error.message,
-            stack: error.stack,
-          });
-          throw new Error(BOOTSTRAP_ERROR.routerInitFailed(error.message));
-        }
-      } else {
-        // No wsPort - initialize without server (for testing or single-node scenarios)
-        try {
-          await this.messageRouter.initialize({startServer: false});
-        } catch (error) {
-          this.logger.error(BOOTSTRAP_LOG_MSG.ROUTER_INIT_FAILED, {
-            nodeId: this.nodeId,
-            error: error.message,
-            stack: error.stack,
-          });
-          throw new Error(BOOTSTRAP_ERROR.routerInitFailed(error.message));
-        }
-      }
-
-      const duration = Date.now() - startTime;
-
-      this.logger.debug(BOOTSTRAP_LOG_MSG.INFRA_READY, {
-        nodeId: this.nodeId,
-        nodeAddress: this.nodeAddress,
-        wsPort: this.wsPort,
-        hasMessageRouter: !!this.messageRouter,
-        hasSelfConnection: this.wsPort ? this.messageRouter.hasSelfConnection() : false,
-      });
-
-      const result = {
-        phaseName: INFRASTRUCTURE_PHASE.NAME,
-        duration,
-        services: {
+      const phaseResult = {
+        phaseName: result.phaseName || INFRASTRUCTURE_PHASE.NAME,
+        duration: typeof result.duration === TYPEOF.NUMBER ?
+          result.duration :
+          Date.now() - startTime,
+        services: result.services || {
           nodeService: this.nodeService,
           messageRouter: this.messageRouter,
         },
-        metadata: {
+        metadata: result.metadata || {
           nodeId: this.nodeId,
           nodeAddress: this.nodeAddress,
           wsPort: this.wsPort,
         },
       };
 
-      this.emit(INFRASTRUCTURE_PHASE.EVENT_COMPLETE, result);
-
-      return result;
+      this.emit(INFRASTRUCTURE_PHASE.EVENT_COMPLETE, phaseResult);
+      return phaseResult;
     } catch (error) {
-      const duration = Date.now() - startTime;
-
       this.emit(INFRASTRUCTURE_PHASE.EVENT_FAILED, {
         phaseName: INFRASTRUCTURE_PHASE.NAME,
-        duration,
+        duration: Date.now() - startTime,
         error: error.message,
       });
-
       throw error;
     }
   }
 
   /**
-   * Clean up resources on failure.
+   * Cleanup via canonical owner callback.
    * @return {Promise<void>}
    */
   async cleanup() {
-    if (this.messageRouter) {
-      try {
-        await this.messageRouter.shutdown();
-      } catch (error) {
-        this.logger.warn('Failed to shutdown message router during cleanup', {
-          error: error.message,
-        });
-      }
-      this.messageRouter = null;
+    if (typeof this.cleanupOwner === TYPEOF.FUNCTION) {
+      await this.cleanupOwner(this);
     }
+
+    this.messageRouter = null;
+    this.nodeService = null;
   }
 }
 

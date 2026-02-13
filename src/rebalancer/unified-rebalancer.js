@@ -247,11 +247,19 @@ class UnifiedRebalancer extends EventEmitter {
     this.currentInterval = this.periodicCheckIntervalMs;
     this.maxInterval = this.periodicCheckIntervalMs * 2;
 
+    // Storage capacity services (optional, for capacity-aware placement)
+    this.storageAdmissionService =
+      options.storageAdmissionService || null;
+    this.storageAccountingService =
+      options.storageAccountingService || null;
+
     // Planning is delegated to MovePlanner (single-path planning).
     this.movePlanner = new MovePlanner({
       entityId: this.entityId,
       entityType: this.entityType,
       moveStateProvider: this,
+      storageAdmissionService: this.storageAdmissionService,
+      accountingService: this.storageAccountingService,
     });
 
     this.isShuttingDown = false;
@@ -346,8 +354,8 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {Object} Message group policy.
    */
   getMessageGroupPolicy() {
-    // Message groups use a fixed policy
-    return {...DEFAULT_MESSAGE_GROUP_POLICY};
+    // Delegate to TablePolicyService for canonical validation/merge
+    return this.tablePolicyService.getMessageGroupPolicy(this.entityId);
   }
 
   /**
@@ -761,7 +769,7 @@ class UnifiedRebalancer extends EventEmitter {
    * @param {Object} policy - Applicable policy.
    * @return {Object} Target state with replica count and placement.
    */
-  calculateTargetState(currentReplicas, policy) {
+  async calculateTargetState(currentReplicas, policy) {
     return this.movePlanner.calculateTargetState(currentReplicas, policy);
   }
 
@@ -1185,7 +1193,7 @@ class UnifiedRebalancer extends EventEmitter {
       return {success: false, reason: 'no_available_nodes'};
     }
 
-    const targetState = this.movePlanner.calculateTargetState(
+    const targetState = await this.movePlanner.calculateTargetState(
       currentReplicas,
       effectivePolicy,
     );

@@ -51,7 +51,7 @@ TAP version 14
     ok 49 - queryOnMiss should be tracked
     ok 50 - Miss should be tracked
     1..50
-ok 1 - Property 28: Cache miss triggers system partition query # time=10.144ms
+ok 1 - Property 28: Cache miss triggers system partition query # time=9.554ms
 
 # Subtest: Property 28: Query result is cached
     ok 1 - First access should query
@@ -95,7 +95,7 @@ ok 1 - Property 28: Cache miss triggers system partition query # time=10.144ms
     ok 39 - Should return cached result
     ok 40 - Second access should be a hit
     1..40
-ok 2 - Property 28: Query result is cached # time=4.102ms
+ok 2 - Property 28: Query result is cached # time=3.503ms
 
 # Subtest: Property 28: Expired entries trigger fresh query
     ok 1 - First query should return version 1
@@ -139,7 +139,7 @@ ok 2 - Property 28: Query result is cached # time=4.102ms
     ok 39 - Second query should return version 2
     ok 40 - Should have queried twice
     1..40
-ok 3 - Property 28: Expired entries trigger fresh query # time=714.903ms
+ok 3 - Property 28: Expired entries trigger fresh query # time=706.01ms
 
 # Subtest: Property 28: Consecutive failures trigger refresh
     ok 1 - Entry should exist below threshold
@@ -183,7 +183,7 @@ ok 3 - Property 28: Expired entries trigger fresh query # time=714.903ms
     ok 39 - Refresh query should be triggered
     ok 40 - Refresh should be tracked
     1..40
-ok 4 - Property 28: Consecutive failures trigger refresh # time=3.458ms
+ok 4 - Property 28: Consecutive failures trigger refresh # time=3.811ms
 
 # Subtest: Property 28: Null results are not cached
     ok 1 - Should return null
@@ -237,41 +237,41 @@ ok 4 - Property 28: Consecutive failures trigger refresh # time=3.458ms
     ok 49 - Should query again for null result
     ok 50 - Null result should not be cached
     1..50
-ok 5 - Property 28: Null results are not cached # time=3.736ms
+ok 5 - Property 28: Null results are not cached # time=3.177ms
 
-{"level":50,"time":"2026-02-09T20:54:31.595Z","nodeId":"test-node","pid":448082,"subsystem":"metadata-cache","key":"v[+9tsl\\zU/je","error":"cskW+_q2&=","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-02-11T07:46:39.928Z","nodeId":"test-node","pid":878226,"subsystem":"metadata-cache","key":"name","error":"$5OW&&5~%V#NE#`jC","nodeId":"test-node","msg":"Failed to query system partition"}
 # Subtest: Property 28: Query errors propagate
     ok 1 - Error should be thrown
     ok 2 - Error message should be preserved
-{"level":50,"time":"2026-02-09T20:54:31.596Z","nodeId":"test-node","pid":448082,"subsystem":"metadata-cache","key":":,>","error":"q}i|&bS0. p","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-02-11T07:46:39.929Z","nodeId":"test-node","pid":878226,"subsystem":"metadata-cache","key":" \"HP#v?@A@%&u*1","error":"mcHvQ%37O","nodeId":"test-node","msg":"Failed to query system partition"}
     ok 3 - Error should be thrown
     ok 4 - Error message should be preserved
-{"level":50,"time":"2026-02-09T20:54:31.596Z","nodeId":"test-node","pid":448082,"subsystem":"metadata-cache","key":"9S\\gzo","error":"B!~}`\"zzz","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-02-11T07:46:39.929Z","nodeId":"test-node","pid":878226,"subsystem":"metadata-cache","key":"-y'F<2\\S","error":"y%#%;","nodeId":"test-node","msg":"Failed to query system partition"}
     ok 5 - Error should be thrown
     ok 6 - Error message should be preserved
-{"level":50,"time":"2026-02-09T20:54:31.596Z","nodeId":"test-node","pid":448082,"subsystem":"metadata-cache","key":"R$H%.!O$\" H/!T","error":"$(__def","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-02-11T07:46:39.929Z","nodeId":"test-node","pid":878226,"subsystem":"metadata-cache","key":"KZA3LV`)geNl","error":"<@y{*#p","nodeId":"test-node","msg":"Failed to query system partition"}
     ok 7 - Error should be thrown
     ok 8 - Error message should be preserved
-{"level":50,"time":"2026-02-09T20:54:31.597Z","nodeId":"test-node","pid":448082,"subsystem":"metadata-cache","key":"stru","error":"7_\"#<","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-02-11T07:46:39.929Z","nodeId":"test-node","pid":878226,"subsystem":"metadata-cache","key":"AVvTIC","error":"l\".~!t ","nodeId":"test-node","msg":"Failed to query system partition"}
     ok 9 - Error should be thrown
     ok 10 - Error message should be preserved
-{"level":50,"time":"2026-02-09T20:54:31.597Z","nodeId":"test-node","pid":448082,"subsystem":"metadata-cache","key":"67saH#0K@Z","error":"3GJMIYu%\"}EjYn8]Cr7k","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-02-11T07:46:39.929Z","nodeId":"test-node","pid":878226,"subsystem":"metadata-cache","key":"}9{","error":"prototypeOa","nodeId":"test-node","msg":"Failed to query system partition"}
     ok 11 - Error should be thrown
     ok 12 - Error message should be preserved
-{"level":50,"time":"2026-02-09T20:54:31.597Z","nodeId":"test-node","pid":448082,"subsystem":"metadata-cache","key":"4472L j:O","error":"8|\\&a-9,xE","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-02-11T07:46:39.929Z","nodeId":"test-node","pid":878226,"subsystem":"metadata-cache","key":"apply","error":"%vo;!,","nodeId":"test-node","msg":"Failed to query system partition"}
     ok 13 - Error should be thrown
     ok 14 - Error message should be preserved
-{"level":50,"time":"2026-02-09T20:54:31.597Z","nodeId":"test-node","pid":448082,"subsystem":"metadata-cache","key":"2igWPB>ZHxM..","error":"a#%__prot","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-02-11T07:46:39.930Z","nodeId":"test-node","pid":878226,"subsystem":"metadata-cache","key":"X\\[NzU?wm","error":"&gCQi!&H","nodeId":"test-node","msg":"Failed to query system partition"}
     ok 15 - Error should be thrown
     ok 16 - Error message should be preserved
-{"level":50,"time":"2026-02-09T20:54:31.598Z","nodeId":"test-node","pid":448082,"subsystem":"metadata-cache","key":"{;}VkKeU;jQ0","error":"Uo_h*","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-02-11T07:46:39.930Z","nodeId":"test-node","pid":878226,"subsystem":"metadata-cache","key":"sj$6)8>Q|V","error":"Zj$3bq:i","nodeId":"test-node","msg":"Failed to query system partition"}
     ok 17 - Error should be thrown
     ok 18 - Error message should be preserved
-{"level":50,"time":"2026-02-09T20:54:31.598Z","nodeId":"test-node","pid":448082,"subsystem":"metadata-cache","key":")pI_Si","error":"-R0lYS/f<`ohWMnUeOCD","nodeId":"test-node","msg":"Failed to query system partition"}
+{"level":50,"time":"2026-02-11T07:46:39.930Z","nodeId":"test-node","pid":878226,"subsystem":"metadata-cache","key":"!O .q}Xj`<IE","error":"x'Er$R%'Q%","nodeId":"test-node","msg":"Failed to query system partition"}
     ok 19 - Error should be thrown
     ok 20 - Error message should be preserved
     1..20
-ok 6 - Property 28: Query errors propagate # time=3.198ms
+ok 6 - Property 28: Query errors propagate # time=2.689ms
 
 # Subtest: Property 28: Partition getters use query-on-miss
     ok 1 - Should query for partition
@@ -305,7 +305,7 @@ ok 6 - Property 28: Query errors propagate # time=3.198ms
     ok 29 - Should query partitions table
     ok 30 - Should return partition data
     1..30
-ok 7 - Property 28: Partition getters use query-on-miss # time=3.417ms
+ok 7 - Property 28: Partition getters use query-on-miss # time=2.983ms
 
 # Subtest: Property 28: No query function returns null on miss
     ok 1 - Should return null without query function
@@ -319,7 +319,7 @@ ok 7 - Property 28: Partition getters use query-on-miss # time=3.417ms
     ok 9 - Should return null without query function
     ok 10 - Should return null without query function
     1..10
-ok 8 - Property 28: No query function returns null on miss # time=1.692ms
+ok 8 - Property 28: No query function returns null on miss # time=1.501ms
 
 # Subtest: Property 28: Dynamic query function setting
     ok 1 - Should return null initially
@@ -343,7 +343,7 @@ ok 8 - Property 28: No query function returns null on miss # time=1.692ms
     ok 19 - Should return null initially
     ok 20 - Should return query result
     1..20
-ok 9 - Property 28: Dynamic query function setting # time=2.642ms
+ok 9 - Property 28: Dynamic query function setting # time=2.627ms
 
 # Subtest: Property 28: Failure counter resets on success
     ok 1 - No refresh after counter reset
@@ -367,8 +367,8 @@ ok 9 - Property 28: Dynamic query function setting # time=2.642ms
     ok 19 - No refresh after counter reset
     ok 20 - Entry should still exist
     1..20
-ok 10 - Property 28: Failure counter resets on success # time=1.894ms
+ok 10 - Property 28: Failure counter resets on success # time=1.787ms
 
 1..10
 # { total: 320, pass: 320 }
-# time=955.115ms
+# time=902.893ms

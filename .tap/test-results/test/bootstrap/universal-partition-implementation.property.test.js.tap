@@ -48,19 +48,34 @@ TAP version 14
     ok 46 - System table service_timers partition initialized
     ok 47 - System table service_timers query succeeded
     ok 48 - System table service_timers exists in SQLite
-    1..48
-ok 1 - Property 32: System tables use same PartitionService as user tables # time=4864.215ms
+    ok 49 - System table module_manifests partition initialized
+    ok 50 - System table module_manifests query succeeded
+    ok 51 - System table module_manifests exists in SQLite
+    ok 52 - System table package_registry_mappings partition initialized
+    ok 53 - System table package_registry_mappings query succeeded
+    ok 54 - System table package_registry_mappings exists in SQLite
+    ok 55 - System table package_registry_overrides partition initialized
+    ok 56 - System table package_registry_overrides query succeeded
+    ok 57 - System table package_registry_overrides exists in SQLite
+    ok 58 - System table module_dependency_locks partition initialized
+    ok 59 - System table module_dependency_locks query succeeded
+    ok 60 - System table module_dependency_locks exists in SQLite
+    ok 61 - System table wasm_operations partition initialized
+    ok 62 - System table wasm_operations query succeeded
+    ok 63 - System table wasm_operations exists in SQLite
+    1..63
+ok 1 - Property 32: System tables use same PartitionService as user tables # time=6351.12ms
 
 # Subtest: Property 32: User tables use same PartitionService as system tables
     ok 1 - User tables use same PartitionService infrastructure as system tables
     1..1
-ok 2 - Property 32: User tables use same PartitionService as system tables # time=3039.578ms
+ok 2 - Property 32: User tables use same PartitionService as system tables # time=3036.757ms
 
 # Subtest: Property 32: No infrastructure distinction between system and user tables
     ok 1 - No infrastructure distinction between system and user tables
     1..1
-ok 3 - Property 32: No infrastructure distinction between system and user tables # time=3056.807ms
+ok 3 - Property 32: No infrastructure distinction between system and user tables # time=3016.341ms
 
 1..3
-# { total: 50, pass: 50 }
-# time=11056.562ms
+# { total: 65, pass: 65 }
+# time=12477.487ms

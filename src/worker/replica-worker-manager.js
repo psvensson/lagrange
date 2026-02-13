@@ -26,6 +26,9 @@ import {
   LEADERSHIP_MESSAGE_TYPE,
 } from './worker-constants.js';
 import {NUM} from '../constants/index.js';
+import {
+  ReplicaCreationProgressReporter,
+} from '../utils/replica-creation-progress-reporter.js';
 
 /**
  * Error messages for ReplicaWorkerManager.
@@ -90,6 +93,22 @@ const MANAGER_DEFAULT = Object.freeze({
   IDLE_TIMEOUT_MS: 30000,
   /** Default CREATE_REPLICA operation timeout in milliseconds */
   CREATE_REPLICA_TIMEOUT_MS: 30000,
+});
+
+/**
+ * Replica creation progress constants.
+ * @type {Readonly<Object>}
+ */
+const REPLICA_CREATE_PROGRESS = Object.freeze({
+  PREFIX: '[replica-create]',
+  SPINNER_IDLE: '|',
+  STATE_STARTING: 'starting',
+  STATE_SPAWNING: 'spawning_worker',
+  STATE_WORKER_READY: 'worker_ready',
+  STATE_REGISTERING: 'registering_router',
+  STATE_RUNNING: 'running',
+  STATE_TIMEOUT: 'timeout',
+  STATE_FAILED: 'failed',
 });
 
 /**
@@ -170,6 +189,129 @@ class ReplicaWorkerManager extends EventEmitter {
 
     /** @type {boolean} Whether the manager is shutting down */
     this.shuttingDown = false;
+
+    /** @type {ReplicaCreationProgressReporter} Replica creation progress reporter */
+    this.creationProgressReporter = new ReplicaCreationProgressReporter({
+      logger: this.logger,
+      formatLine: (progress, status, error) =>
+        this.formatReplicaCreationProgressLine(progress, status, error),
+      buildContext: (progress, status, error) =>
+        this.buildReplicaCreationProgressContext(progress, status, error),
+    });
+  }
+
+  /**
+   * Start a replica creation progress line.
+   * Falls back to structured logs when terminal control is unavailable.
+   * @param {Object} details - Progress details.
+   * @param {string} details.entityType - Replica entity type.
+   * @param {string} details.replicaId - Replica ID.
+   * @param {string} details.serviceId - Parent service ID.
+   * @return {Object} Progress context.
+   * @private
+   */
+  startReplicaCreationProgress(details) {
+    return this.creationProgressReporter.start({
+      ...details,
+      state: REPLICA_CREATE_PROGRESS.STATE_STARTING,
+    });
+  }
+
+  /**
+   * Update the state of an existing replica creation progress line.
+   * @param {Object|null} progress - Progress context.
+   * @param {string} nextState - Next state label.
+   * @private
+   */
+  updateReplicaCreationProgress(progress, nextState) {
+    this.creationProgressReporter.update(progress, {state: nextState});
+  }
+
+  /**
+   * Complete a replica creation progress line.
+   * @param {Object|null} progress - Progress context.
+   * @param {string} finalState - Final state label.
+   * @private
+   */
+  finishReplicaCreationProgress(progress, finalState) {
+    this.creationProgressReporter.finish(progress, {state: finalState});
+  }
+
+  /**
+   * Mark a replica creation progress line as failed.
+   * @param {Object|null} progress - Progress context.
+   * @param {string} finalState - Final state label.
+   * @param {Error|string|null} error - Failure reason.
+   * @private
+   */
+  failReplicaCreationProgress(progress, finalState, error) {
+    this.creationProgressReporter.fail(progress, error, {state: finalState});
+  }
+
+  /**
+   * Build the formatted line shown in interactive and fallback modes.
+   * @param {Object} progress - Progress context.
+   * @param {string|null} status - Optional terminal status.
+   * @param {Error|string|null} error - Optional error.
+   * @return {string} Formatted progress line.
+   * @private
+   */
+  formatReplicaCreationProgressLine(progress, status, error) {
+    const spinner = progress.spinnerFrame || REPLICA_CREATE_PROGRESS.SPINNER_IDLE;
+    const totalLocal = this.getWorkerCount();
+    const localByType = this.getWorkersByType(progress.entityType).length;
+    const statusText = status ? ` status=${status}` : '';
+    const errorText = error ?
+      ` error=${this.formatReplicaCreationError(error)}` :
+      '';
+
+    return (
+      `${REPLICA_CREATE_PROGRESS.PREFIX} ${spinner} ` +
+      `service=${progress.serviceId} replica=${progress.replicaId} ` +
+      `type=${progress.entityType} state=${progress.state} ` +
+      `local_replicas=${totalLocal} type_replicas=${localByType}` +
+      `${statusText}${errorText}`
+    );
+  }
+
+  /**
+   * Build structured context for fallback log output.
+   * @param {Object} progress - Progress context.
+   * @param {string|null} status - Optional terminal status.
+   * @param {Error|string|null} error - Optional error.
+   * @return {Object} Structured context object.
+   * @private
+   */
+  buildReplicaCreationProgressContext(progress, status = null, error = null) {
+    const context = {
+      nodeId: this.nodeId,
+      serviceId: progress.serviceId,
+      replicaId: progress.replicaId,
+      entityType: progress.entityType,
+      state: progress.state,
+      localReplicas: this.getWorkerCount(),
+      typeReplicas: this.getWorkersByType(progress.entityType).length,
+    };
+    if (status) {
+      context.status = status;
+    }
+    if (error) {
+      context.error = this.formatReplicaCreationError(error);
+    }
+    return context;
+  }
+
+  /**
+   * Normalize replica creation errors for display.
+   * @param {Error|string|null} error - Error value.
+   * @return {string} Error message.
+   * @private
+   */
+  formatReplicaCreationError(error) {
+    if (!error) {
+      return '';
+    }
+    return typeof error === 'string' ? error : error.message;
   }
 
   /**
@@ -570,12 +712,6 @@ class ReplicaWorkerManager extends EventEmitter {
       throw new Error(MANAGER_ERROR_MSG.REPLICA_ALREADY_EXISTS);
     }
 
-    this.logger.info(MANAGER_LOG_MSG.CREATING_PARTITION_REPLICA, {
-      nodeId: this.nodeId,
-      partitionId: options.partitionId,
-      replicaId: options.replicaId,
-    });
-
     const now = Date.now();
     const unifiedAddress = `${this.nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${options.replicaId}`;
     const timeoutMs = options.timeoutMs || MANAGER_DEFAULT.CREATE_REPLICA_TIMEOUT_MS;
@@ -597,13 +733,24 @@ class ReplicaWorkerManager extends EventEmitter {
 
     // Store handle before spawning
     this.workers.set(options.replicaId, handle);
+    const creationProgress = this.startReplicaCreationProgress({
+      entityType: WORKER_ENTITY_TYPE.PARTITION,
+      replicaId: options.replicaId,
+      serviceId: options.partitionId,
+    });
+    this.updateReplicaCreationProgress(
+      creationProgress,
+      REPLICA_CREATE_PROGRESS.STATE_SPAWNING,
+    );
 
-    const dedicatedPool = this.usesDedicatedReplicaPools() ?
-      this.createDedicatedReplicaPool(options.replicaId) :
-      null;
-    const executionPool = dedicatedPool || this.pool;
+    let dedicatedPool = null;
 
     try {
+      dedicatedPool = this.usesDedicatedReplicaPools() ?
+        this.createDedicatedReplicaPool(options.replicaId) :
+        null;
+      const executionPool = dedicatedPool || this.pool;
+
       // Spawn worker and create replica with timeout
       const result = await this.withTimeout(
         executionPool.run({
@@ -624,21 +771,22 @@ class ReplicaWorkerManager extends EventEmitter {
       handle.workerId = result.workerId || NUM.ZERO;
       handle.status = WORKER_STATUS.RUNNING;
       handle.healthStatus = WORKER_HEALTH_STATUS.HEALTHY;
+      this.updateReplicaCreationProgress(
+        creationProgress,
+        REPLICA_CREATE_PROGRESS.STATE_WORKER_READY,
+      );
 
       if (dedicatedPool) {
         this.replicaPools.set(options.replicaId, dedicatedPool);
       }
 
+      this.updateReplicaCreationProgress(
+        creationProgress,
+        REPLICA_CREATE_PROGRESS.STATE_REGISTERING,
+      );
       // Register handler with MessageRouter to forward messages to this worker
       // Requirements 11.1, 11.2 - Manager-based registration
       this.registerWorkerWithRouter(options.replicaId, unifiedAddress);
-
-      this.logger.info(MANAGER_LOG_MSG.PARTITION_REPLICA_CREATED, {
-        nodeId: this.nodeId,
-        partitionId: options.partitionId,
-        replicaId: options.replicaId,
-        unifiedAddress,
-      });
 
       this.emit(WORKER_EVENT.REPLICA_CREATED, {
         replicaId: options.replicaId,
@@ -646,12 +794,21 @@ class ReplicaWorkerManager extends EventEmitter {
         unifiedAddress,
       });
 
+      this.finishReplicaCreationProgress(
+        creationProgress,
+        REPLICA_CREATE_PROGRESS.STATE_RUNNING,
+      );
       return handle;
     } catch (error) {
       // Check if this is a timeout error - Requirements 7.1, 7.2, 7.3
       if (error.message.includes('timeout')) {
         // Clean up any partially created resources
         await this.cleanupPartialReplica(options.replicaId);
+        this.failReplicaCreationProgress(
+          creationProgress,
+          REPLICA_CREATE_PROGRESS.STATE_TIMEOUT,
+          error,
+        );
 
         return {
           success: false,
@@ -665,6 +822,11 @@ class ReplicaWorkerManager extends EventEmitter {
       if (dedicatedPool) {
         await dedicatedPool.destroy().catch(() => {});
       }
+      this.failReplicaCreationProgress(
+        creationProgress,
+        REPLICA_CREATE_PROGRESS.STATE_FAILED,
+        error,
+      );
 
       this.logger.error(MANAGER_ERROR_MSG.WORKER_SPAWN_FAILED, {
         nodeId: this.nodeId,
@@ -705,12 +867,6 @@ class ReplicaWorkerManager extends EventEmitter {
       throw new Error(MANAGER_ERROR_MSG.REPLICA_ALREADY_EXISTS);
     }
 
-    this.logger.info(MANAGER_LOG_MSG.CREATING_MESSAGE_GROUP_REPLICA, {
-      nodeId: this.nodeId,
-      groupId: options.groupId,
-      replicaId: options.replicaId,
-    });
-
     const now = Date.now();
     const unifiedAddress =
       `${this.nodeId}/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${options.replicaId}`;
@@ -731,13 +887,24 @@ class ReplicaWorkerManager extends EventEmitter {
 
     // Store handle before spawning
     this.workers.set(options.replicaId, handle);
+    const creationProgress = this.startReplicaCreationProgress({
+      entityType: WORKER_ENTITY_TYPE.MESSAGE_GROUP,
+      replicaId: options.replicaId,
+      serviceId: options.groupId,
+    });
+    this.updateReplicaCreationProgress(
+      creationProgress,
+      REPLICA_CREATE_PROGRESS.STATE_SPAWNING,
+    );
 
-    const dedicatedPool = this.usesDedicatedReplicaPools() ?
-      this.createDedicatedReplicaPool(options.replicaId) :
-      null;
-    const executionPool = dedicatedPool || this.pool;
+    let dedicatedPool = null;
 
     try {
+      dedicatedPool = this.usesDedicatedReplicaPools() ?
+        this.createDedicatedReplicaPool(options.replicaId) :
+        null;
+      const executionPool = dedicatedPool || this.pool;
+
       // Spawn worker and create replica with timeout
       const result = await this.withTimeout(
         executionPool.run({
@@ -754,21 +921,22 @@ class ReplicaWorkerManager extends EventEmitter {
       handle.workerId = result.workerId || NUM.ZERO;
       handle.status = WORKER_STATUS.RUNNING;
       handle.healthStatus = WORKER_HEALTH_STATUS.HEALTHY;
+      this.updateReplicaCreationProgress(
+        creationProgress,
+        REPLICA_CREATE_PROGRESS.STATE_WORKER_READY,
+      );
 
       if (dedicatedPool) {
         this.replicaPools.set(options.replicaId, dedicatedPool);
       }
 
+      this.updateReplicaCreationProgress(
+        creationProgress,
+        REPLICA_CREATE_PROGRESS.STATE_REGISTERING,
+      );
       // Register handler with MessageRouter to forward messages to this worker
       // Requirements 11.1, 11.2 - Manager-based registration
       this.registerWorkerWithRouter(options.replicaId, unifiedAddress);
-
-      this.logger.info(MANAGER_LOG_MSG.MESSAGE_GROUP_REPLICA_CREATED, {
-        nodeId: this.nodeId,
-        groupId: options.groupId,
-        replicaId: options.replicaId,
-        unifiedAddress,
-      });
 
       this.emit(WORKER_EVENT.REPLICA_CREATED, {
         replicaId: options.replicaId,
@@ -776,12 +944,21 @@ class ReplicaWorkerManager extends EventEmitter {
         unifiedAddress,
       });
 
+      this.finishReplicaCreationProgress(
+        creationProgress,
+        REPLICA_CREATE_PROGRESS.STATE_RUNNING,
+      );
       return handle;
     } catch (error) {
       // Check if this is a timeout error - Requirements 7.1, 7.2, 7.3
       if (error.message.includes('timeout')) {
         // Clean up any partially created resources
         await this.cleanupPartialReplica(options.replicaId);
+        this.failReplicaCreationProgress(
+          creationProgress,
+          REPLICA_CREATE_PROGRESS.STATE_TIMEOUT,
+          error,
+        );
 
         return {
           success: false,
@@ -795,6 +972,11 @@ class ReplicaWorkerManager extends EventEmitter {
       if (dedicatedPool) {
         await dedicatedPool.destroy().catch(() => {});
       }
+      this.failReplicaCreationProgress(
+        creationProgress,
+        REPLICA_CREATE_PROGRESS.STATE_FAILED,
+        error,
+      );
 
       this.logger.error(MANAGER_ERROR_MSG.WORKER_SPAWN_FAILED, {
         nodeId: this.nodeId,

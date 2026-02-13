@@ -98,6 +98,7 @@ function createMockPolicyService(partitions = [], tables = []) {
         return {...DEFAULT_TABLE_POLICY};
       }
     },
+    getMessageGroupPolicy: async () => ({...DEFAULT_MESSAGE_GROUP_POLICY}),
   };
 }
 
@@ -1624,7 +1625,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
 
     const currentReplicas = rebalancer.getCurrentReplicas();
     const policy = await rebalancer.getPolicy();
-    const targetState = rebalancer.calculateTargetState(currentReplicas, policy);
+    const targetState = await rebalancer.calculateTargetState(currentReplicas, policy);
     const moves = rebalancer.calculateMoves(currentReplicas, targetState);
 
     // Should have remove move for failed replica

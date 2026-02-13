@@ -3,31 +3,31 @@ TAP version 14
     # Subtest: track and resolve returns ACK to promise
         ok 1 - track and resolve returns ACK to promise
         1..1
-    ok 1 - track and resolve returns ACK to promise # time=6.252ms
+    ok 1 - track and resolve returns ACK to promise # time=10.681ms
     
     # Subtest: pending count changes correctly on track and resolve
         ok 1 - pending count changes correctly on track and resolve
         1..1
-    ok 2 - pending count changes correctly on track and resolve # time=2.033ms
+    ok 2 - pending count changes correctly on track and resolve # time=3.037ms
     
     # Subtest: resolve with wrong requestId does not affect original
         ok 1 - resolve with wrong requestId does not affect original
         1..1
-    ok 3 - resolve with wrong requestId does not affect original # time=1.489ms
+    ok 3 - resolve with wrong requestId does not affect original # time=1.38ms
     
     # Subtest: metadata is preserved for pending requests
         ok 1 - metadata is preserved for pending requests
         1..1
-    ok 4 - metadata is preserved for pending requests # time=1.872ms
+    ok 4 - metadata is preserved for pending requests # time=3.048ms
     
     # Subtest: hasPending returns false after resolve
         ok 1 - hasPending returns false after resolve
         1..1
-    ok 5 - hasPending returns false after resolve # time=1.13ms
+    ok 5 - hasPending returns false after resolve # time=2.416ms
     
     1..5
-ok 1 - Property 7: Pending Request Tracking Round-Trip # time=133.811ms
+ok 1 - Property 7: Pending Request Tracking Round-Trip # time=195.273ms
 
 1..1
 # { total: 5, pass: 5 }
-# time=141.56ms
+# time=213.485ms
