@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-02-13T16:39:25.197Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 51960
+  },
+  "scenarios": [
+    {
+      "scenario": "admin-query-smoke",
+      "passed": false,
+      "duration": 51960,
+      "startedAt": "2026-02-13T16:37:41.035Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Admin query failed for SQL \"INSERT INTO _load_test_data (id, value) VALUES (1, 'smoke')\": Admin API query failed for node 8bcaa487-cc0a-4c57-8075-0a4ef6a7fb8f: Table not found: _load_test_data",
+      "stackTrace": "Error: Admin query failed for SQL \"INSERT INTO _load_test_data (id, value) VALUES (1, 'smoke')\": Admin API query failed for node 8bcaa487-cc0a-4c57-8075-0a4ef6a7fb8f: Table not found: _load_test_data\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/admin-query-smoke.js:42:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:104:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:247:33)",
+      "logs": null,
+      "loadMetrics": null
+    }
+  ]
+}

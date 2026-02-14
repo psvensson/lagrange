@@ -6,8 +6,17 @@ const ADMIN_SUBSYSTEM = Object.freeze({
 });
 
 const ADMIN_ROUTE = Object.freeze({
+  ROOT: '/',
   HEALTH: '/health',
   STREAM: '/api/admin/stream',
+  TEST_DASHBOARD: '/ui/tests',
+  TESTS: '/api/admin/tests',
+  TEST_RUNS: '/api/admin/test-runs',
+  TEST_RUN_BY_ID: '/api/admin/test-runs/:runId',
+  TEST_RUN_STOP: '/api/admin/test-runs/:runId/stop',
+  TEST_RUN_STREAM: '/api/admin/test-runs/:runId/stream',
+  PLAYBACK_VIEWER: '/ui/playback-viewer',
+  OUTPUT_FILES: '/ui/test-output/*',
 });
 
 const ADMIN_STATUS = Object.freeze({
@@ -37,6 +46,84 @@ const ADMIN_DEFAULT = Object.freeze({
   CACHE_DUMP_TIMEOUT_MS: 5000,
   HOST: '0.0.0.0',
   ENFORCEMENT_MODE: 'observe',
+});
+
+const ADMIN_STANDALONE_DEFAULT = Object.freeze({
+  HOST: '127.0.0.1',
+  PORT: 8181,
+  NODE_ID: 'standalone-test-run-server',
+});
+
+const ADMIN_CONTENT_TYPE = Object.freeze({
+  HTML: 'text/html; charset=utf-8',
+  JSON: 'application/json; charset=utf-8',
+  NDJSON: 'application/x-ndjson; charset=utf-8',
+  JAVASCRIPT: 'application/javascript; charset=utf-8',
+  CSS: 'text/css; charset=utf-8',
+  TEXT: 'text/plain; charset=utf-8',
+  EVENT_STREAM: 'text/event-stream; charset=utf-8',
+});
+
+const ADMIN_TEST_RUN_PATH = Object.freeze({
+  SCENARIOS_DIR: 'test/distributed/scenarios',
+  CONFIG_DIR: 'test/distributed/config',
+  RUNNER_SCRIPT: 'test/distributed/run.js',
+  OUTPUT_DIR: 'test-output',
+  METADATA_DIR: '.run-metadata',
+  DASHBOARD_PAGE: 'src/admin/static/test-run-dashboard.html',
+  PLAYBACK_VIEWER: 'test/distributed/harness/playback-viewer.html',
+});
+
+const ADMIN_TEST_RUN_STATUS = Object.freeze({
+  PENDING: 'pending',
+  RUNNING: 'running',
+  STOPPING: 'stopping',
+  STOPPED: 'stopped',
+  PASSED: 'passed',
+  FAILED: 'failed',
+});
+
+const ADMIN_TEST_LOG_STREAM = Object.freeze({
+  STDOUT: 'stdout',
+  STDERR: 'stderr',
+  SYSTEM: 'system',
+  ARCHIVE: 'archive',
+});
+
+const ADMIN_TEST_STREAM_EVENT = Object.freeze({
+  LOG: 'log',
+  STATUS: 'status',
+  PROGRESS: 'progress',
+});
+
+const ADMIN_TEST_DEFAULT = Object.freeze({
+  CONFIG_FILE: 'local.json',
+  LOG_LINE_LIMIT: 2000,
+  ARCHIVE_LOG_LINE_LIMIT: 500,
+  STREAM_RETRY_MS: 1000,
+  REPORT_EXTENSION: '.report.json',
+  SCENARIO_EXTENSION: '.js',
+  CONFIG_EXTENSION: '.json',
+  TIMELINE_FILENAME: '_timeline.log',
+  PLAYBACK_EVENTS_FILENAME: 'events.ndjson',
+  PLAYBACK_SAMPLES_FILENAME: 'samples.ndjson',
+  PLAYBACK_SNAPSHOTS_FILENAME: 'snapshots.ndjson',
+  PLAYBACK_MANIFEST_FILENAME: 'playback-manifest.json',
+  GIT_HASH_UNKNOWN: 'unknown',
+  SIGNAL_TERM: 'SIGTERM',
+});
+
+const ADMIN_TEST_ERROR_MSG = Object.freeze({
+  RUN_NOT_FOUND: 'Test run not found',
+  RUN_NOT_ACTIVE: 'Test run is not active',
+  RUN_DELETE_ACTIVE: 'Cannot delete an active test run',
+  SCENARIO_REQUIRED: 'Scenario is required',
+  SCENARIO_NOT_FOUND: 'Scenario not found',
+  CONFIG_NOT_FOUND: 'Config not found',
+  CONFIG_PREFLIGHT_FAILED: 'Config preflight failed',
+  OUTPUT_PATH_INVALID: 'Output path is invalid',
+  DASHBOARD_NOT_FOUND: 'Admin test dashboard page not found',
+  PLAYBACK_VIEWER_NOT_FOUND: 'Playback viewer page not found',
 });
 
 const ADMIN_ENFORCEMENT_MODE = Object.freeze({
@@ -105,6 +192,12 @@ const ADMIN_LOG_MSG = Object.freeze({
   QUERY_RESULT_SENT: 'Query result sent',
   REFRESH_REQUESTED: 'Refresh requested',
   SEND_FAILED: 'Failed to send message to client',
+  TEST_RUN_STARTED: 'Admin test run started',
+  TEST_RUN_FINISHED: 'Admin test run finished',
+  TEST_RUN_STOP_REQUESTED: 'Admin test run stop requested',
+  TEST_RUN_DELETED: 'Admin test run deleted',
+  TEST_RUN_LOG_STREAM_SUBSCRIBED: 'Admin test run log stream subscribed',
+  TEST_RUN_LOG_STREAM_UNSUBSCRIBED: 'Admin test run log stream unsubscribed',
   SHUTDOWN: 'Admin WebSocket API shutdown',
   SERVER_CLOSE_ERROR: 'Error closing HTTP server',
 });
@@ -119,10 +212,12 @@ const ADMIN_QUERY_RESULT = Object.freeze({
 });
 
 export {
+  ADMIN_CONTENT_TYPE,
   ADMIN_CONFIG_KEY,
   ADMIN_CLIENT,
   ADMIN_CACHE_DUMP,
   ADMIN_DEFAULT,
+  ADMIN_STANDALONE_DEFAULT,
   ADMIN_ENFORCEMENT_MODE,
   ADMIN_ERROR_CODE,
   ADMIN_ERROR_HINT,
@@ -135,4 +230,10 @@ export {
   ADMIN_ROUTE,
   ADMIN_STATUS,
   ADMIN_SUBSYSTEM,
+  ADMIN_TEST_DEFAULT,
+  ADMIN_TEST_ERROR_MSG,
+  ADMIN_TEST_LOG_STREAM,
+  ADMIN_TEST_RUN_PATH,
+  ADMIN_TEST_RUN_STATUS,
+  ADMIN_TEST_STREAM_EVENT,
 };

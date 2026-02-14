@@ -1,0 +1,10 @@
+{"timestamp":1771095030287,"type":"cluster.start","scope":"cluster","entityId":"cluster","details":{"scenarioName":"timed"}}
+{"timestamp":1771095030288,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.creating","networkName":"ddb-test-net-d592a68c"}}
+{"timestamp":1771095030303,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.created","networkName":"ddb-test-net-d592a68c","networkId":"b681729ce3a3376e4a122f6e19d439c4b150922cfb1e1f9d64b6ed3cb5e34896"}}
+{"timestamp":1771095030303,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.starting","nodeId":"76eacd78-2ffb-46a5-8d53-b4aa4e087452"}}
+{"timestamp":1771095030304,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.starting","nodeCount":0}}
+{"timestamp":1771095030304,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.network.removing","networkId":"b681729ce3a3376e4a122f6e19d439c4b150922cfb1e1f9d64b6ed3cb5e34896","networkName":"ddb-test-net-d592a68c"}}
+{"timestamp":1771095030622,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.network.removed","networkId":"b681729ce3a3376e4a122f6e19d439c4b150922cfb1e1f9d64b6ed3cb5e34896","networkName":"ddb-test-net-d592a68c"}}
+{"timestamp":1771095030622,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.complete","nodeCount":0}}
+{"timestamp":1771095030622,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.capture.finalizing"}}
+{"timestamp":1771095030622,"type":"cluster.stop","scope":"cluster","entityId":"cluster","details":{"clusterId":"d592a68c-1361-4d82-acfe-37c56a2b7e12","nodeCount":0}}

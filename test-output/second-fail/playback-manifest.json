@@ -1,0 +1,19 @@
+{
+  "scenarioName": "second-fail",
+  "startedAt": 1771095029944,
+  "endedAt": 1771095030286,
+  "durationMs": 342,
+  "files": {
+    "events": "test-output/second-fail/events.ndjson",
+    "samples": "test-output/second-fail/samples.ndjson",
+    "snapshots": "test-output/second-fail/snapshots.ndjson",
+    "manifest": "test-output/second-fail/playback-manifest.json",
+    "viewer": "test-output/second-fail/playback-viewer.html"
+  },
+  "counts": {
+    "events": 10,
+    "samples": 0,
+    "snapshots": 0
+  },
+  "warnings": []
+}

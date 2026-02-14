@@ -78,7 +78,7 @@ test('Property 16: Replica dispatch forwards to correct leader',
           nodeStore.set(opRow.target_node_id, {
             node_id: opRow.target_node_id,
             status: STATE.ACTIVE,
-            ws_connection_state: STATE.READY,
+            connection_state: STATE.READY,
             ready_lease_expires_at: now + 60000,
           });
 
@@ -125,7 +125,7 @@ test('Property 16: Replica dispatch forwards to correct leader',
           };
 
           const mockSqlQueryEngine = {
-            executeQuery: async (sql, params) => {
+            executeQuery: async (sql, _params) => {
               if (sql.includes('FROM services')) {
                 return {
                   success: true,

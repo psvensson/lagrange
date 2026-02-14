@@ -14,7 +14,7 @@ import {
 function createReadyNode(nodeId) {
   return {
     node_id: nodeId,
-    ws_connection_state: 'ready',
+    connection_state: 'ready',
     ready_lease_expires_at: Date.now() + 60000,
     status: 'active',
   };

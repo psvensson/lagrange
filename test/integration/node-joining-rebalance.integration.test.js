@@ -49,19 +49,38 @@ async function waitForReplicaOperationsToSettle(systemTableCache, timeoutMs = 50
 }
 
 /**
+ * Promote all syncing partition replicas to active in the cache.
+ * After single-node bootstrap, r2/r3 remain syncing because there is no
+ * second node to sync from. Tests that need the rebalancer to generate
+ * moves must clear this transitional state first.
+ * @param {Object} systemTableCache - System table cache.
+ * @param {string} partitionId - Partition to stabilize.
+ */
+function promoteReplicasToActive(systemTableCache, partitionId) {
+  const services = systemTableCache.filter(
+    SystemTableName.SERVICES,
+    (s) => s.service_type === EntityType.PARTITION &&
+      s.partition_id === partitionId,
+  ) || [];
+  for (const svc of services) {
+    if (svc.status !== ReplicaStatus.ACTIVE) {
+      systemTableCache.applySystemTableChange(
+        SystemTableName.SERVICES, 'UPDATE', {
+          ...svc,
+          status: ReplicaStatus.ACTIVE,
+        },
+      );
+    }
+  }
+}
+
+/**
  * Pick a partition that has only stable replica service states.
  * @param {Object} systemTableCache - System table cache.
  * @param {number} timeoutMs - Timeout in milliseconds.
  * @return {Promise<string|null>} Stable partition ID or null.
  */
 async function waitForStablePartitionId(systemTableCache, timeoutMs = 5000) {
-  const disallowedStatuses = new Set([
-    ReplicaStatus.CREATING,
-    ReplicaStatus.SYNCING,
-    ReplicaStatus.REMOVING,
-    ReplicaStatus.PENDING,
-  ]);
-
   let selectedPartitionId = null;
   const found = await waitFor(() => {
     const partitions = systemTableCache.getAll(SystemTableName.PARTITIONS) || [];
@@ -76,13 +95,13 @@ async function waitForStablePartitionId(systemTableCache, timeoutMs = 5000) {
           service.service_type === EntityType.PARTITION &&
           service.partition_id === partitionId,
       ) || [];
-      if (services.length === 0) {
-        continue;
-      }
-      const hasDisallowedStatus = services.some((service) => {
-        return disallowedStatuses.has(String(service.status || '').toLowerCase());
-      });
-      if (!hasDisallowedStatus) {
+      // Need at least one active replica (leader) to be usable.
+      // In single-node bootstrap, r2/r3 remain syncing which is expected.
+      const hasActiveReplica = services.some(
+        (service) => String(service.status || '').toLowerCase() ===
+          ReplicaStatus.ACTIVE,
+      );
+      if (hasActiveReplica) {
         selectedPartitionId = partitionId;
         return true;
       }
@@ -388,7 +407,7 @@ test('Node joining rebalancing integration', async (t) => {
         memory_usage_percent: 10,
         disk_usage_percent: 10,
         status: NodeStatus.ACTIVE,
-        ws_connection_state: 'ready',
+        connection_state: 'ready',
         capabilities: '[]',
         last_heartbeat: now,
         ready_lease_expires_at: now + 10000,
@@ -397,6 +416,9 @@ test('Node joining rebalancing integration', async (t) => {
 
       const partitionId = await waitForStablePartitionId(systemTableCache);
       t.ok(partitionId, 'should have a stable partition for rebalancing');
+
+      // Promote syncing replicas to active so the rebalancer can generate moves.
+      promoteReplicasToActive(systemTableCache, partitionId);
 
       // Create real UnifiedRebalancer with real dependencies
       const rebalancer = new UnifiedRebalancer({
@@ -584,7 +606,7 @@ test('Node joining rebalancing integration', async (t) => {
         memory_usage_percent: 20,
         disk_usage_percent: 20,
         status: NodeStatus.ACTIVE,
-        ws_connection_state: 'ready',
+        connection_state: 'ready',
         capabilities: '[]',
         last_heartbeat: now,
         ready_lease_expires_at: now + 10000,
@@ -593,6 +615,9 @@ test('Node joining rebalancing integration', async (t) => {
 
       const partitionId = await waitForStablePartitionId(systemTableCache);
       t.ok(partitionId, 'should have a stable partition for rebalancing');
+
+      // Promote syncing replicas to active so the rebalancer can generate moves.
+      promoteReplicasToActive(systemTableCache, partitionId);
 
       // Create real UnifiedRebalancer with real dependencies
       const rebalancer = new UnifiedRebalancer({

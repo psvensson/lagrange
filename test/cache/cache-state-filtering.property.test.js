@@ -43,7 +43,7 @@ const ALL_NODE_STATES = Object.values(NodeState);
  */
 const nodeRecordArbitrary = fc.record({
   node_id: fc.uuid(),
-  ws_connection_state: fc.constantFrom(...ALL_NODE_STATES),
+  connection_state: fc.constantFrom(...ALL_NODE_STATES),
   ready_lease_expires_at: fc.integer({min: 0, max: 2_000_000_000_000}),
   address: fc.webUrl(),
   lastStateChange: fc.date().map((d) => d.toISOString()),
@@ -83,7 +83,7 @@ test('Property 10: getReadyNodes returns exactly nodes with ready state', async 
         const now = Date.now();
         const expectedReadyNodeIds = nodes
           .filter((node) =>
-            node.ws_connection_state === 'ready' &&
+            node.connection_state === 'ready' &&
             node.ready_lease_expires_at > now,
           )
           .map((node) => node.node_id);
@@ -140,7 +140,7 @@ test('Property 10: getReadyNodes excludes all non-ready nodes', async (t) => {
 
         // Verify: no non-ready nodes are included
         const nonReadyNodes = nodes.filter((node) =>
-          node.ws_connection_state !== 'ready' ||
+          node.connection_state !== 'ready' ||
           node.ready_lease_expires_at <= now,
         );
         for (const node of nonReadyNodes) {
@@ -180,7 +180,7 @@ test('Property 10: getReadyNodes includes all ready nodes', async (t) => {
 
         // Verify: all ready nodes are included
         const expectedReadyNodes = nodes.filter((node) =>
-          node.ws_connection_state === 'ready' &&
+          node.connection_state === 'ready' &&
           node.ready_lease_expires_at > now,
         );
         for (const node of expectedReadyNodes) {
@@ -223,7 +223,7 @@ test('Property 10: State filtering reflects node state updates', async (t) => {
         for (const nodeId of nodeIds) {
           const node = {
             node_id: nodeId,
-            ws_connection_state: 'joining',
+            connection_state: 'joining',
             ready_lease_expires_at: now - 1000,
             address: 'ws://localhost:3000',
           };
@@ -241,7 +241,7 @@ test('Property 10: State filtering reflects node state updates', async (t) => {
           const leaseExpiry = update.newState === 'ready' ? now + 10_000 : now - 1000;
           const updateData = {
             node_id: nodeId,
-            ws_connection_state: update.newState,
+            connection_state: update.newState,
             ready_lease_expires_at: leaseExpiry,
           };
           cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, updateData);
@@ -295,7 +295,7 @@ test('Property 10: Cache with only non-ready nodes returns empty array', async (
       fc.array(
         fc.record({
           node_id: fc.uuid(),
-          ws_connection_state: fc.constantFrom(...nonReadyStates),
+          connection_state: fc.constantFrom(...nonReadyStates),
           ready_lease_expires_at: fc.integer({min: 0, max: 2_000_000_000_000}),
           address: fc.webUrl(),
         }),

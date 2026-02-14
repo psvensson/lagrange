@@ -1,0 +1,23 @@
+{
+  "cluster": {
+    "nodeCount": 3,
+    "basePort": 7000,
+    "rpcPort": 7001,
+    "httpPort": 8080,
+    "healthCheckPath": "/health",
+    "startupTimeoutMs": 60000,
+    "docker": {
+      "enabled": true,
+      "image": "distributed-db:test-local-rebalance-fix2",
+      "network": "distributed-db-test",
+      "reuseExistingByGitHash": true,
+      "buildContext": ".",
+      "dockerfile": "Dockerfile"
+    }
+  },
+  "run": {
+    "defaultScenario": "three-node-seed-rebalance",
+    "outputFile": "test-output/three-node-seed-rebalance-after-shared-coordinator-fix.report.json",
+    "verbose": true
+  }
+}

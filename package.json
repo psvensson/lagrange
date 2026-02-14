@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "node src/index.js",
+    "start:test-dashboard": "node scripts/start-test-run-dashboard.js",
     "cli": "node src/cli/bin/ddb-admin.js",
     "test": "tap",
     "test:coverage": "tap --coverage",

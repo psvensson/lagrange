@@ -138,11 +138,56 @@ const DEFAULT_CLUSTER_SIZE = 5;
 const DEFAULT_OUTPUT_DIR = 'test-output';
 const TIMELINE_FILENAME = '_timeline.log';
 const ANALYSIS_FILENAME = '_analysis.json';
+const PLAYBACK_EVENTS_FILENAME = 'events.ndjson';
+const PLAYBACK_SAMPLES_FILENAME = 'samples.ndjson';
+const PLAYBACK_SNAPSHOTS_FILENAME = 'snapshots.ndjson';
+const PLAYBACK_MANIFEST_FILENAME = 'playback-manifest.json';
+const PLAYBACK_VIEWER_FILENAME = 'playback-viewer.html';
 
 const OUTPUT = Object.freeze({
   DEFAULT_DIR: DEFAULT_OUTPUT_DIR,
   TIMELINE_FILENAME: TIMELINE_FILENAME,
   ANALYSIS_FILENAME: ANALYSIS_FILENAME,
+  PLAYBACK_EVENTS_FILENAME,
+  PLAYBACK_SAMPLES_FILENAME,
+  PLAYBACK_SNAPSHOTS_FILENAME,
+  PLAYBACK_MANIFEST_FILENAME,
+  PLAYBACK_VIEWER_FILENAME,
+});
+
+// --- Playback Defaults ---
+const PLAYBACK_TOPOLOGY_POLL_INTERVAL_MS = 1000;
+const PLAYBACK_RESOURCE_POLL_INTERVAL_MS = 1000;
+
+const PLAYBACK = Object.freeze({
+  topologyPollIntervalMs: PLAYBACK_TOPOLOGY_POLL_INTERVAL_MS,
+  resourcePollIntervalMs: PLAYBACK_RESOURCE_POLL_INTERVAL_MS,
+});
+
+// --- Playback Event Types ---
+const PLAYBACK_EVENT_TYPE = Object.freeze({
+  CLUSTER_START: 'cluster.start',
+  CLUSTER_STAGE: 'cluster.stage',
+  CLUSTER_READY: 'cluster.ready',
+  CLUSTER_STOP: 'cluster.stop',
+  NODE_CREATED: 'node.created',
+  NODE_STARTED: 'node.started',
+  NODE_STOPPED: 'node.stopped',
+  NODE_REMOVED: 'node.removed',
+  NODE_STATUS_CHANGED: 'node.status.changed',
+  CHAOS_ACTION_STARTED: 'chaos.action.started',
+  CHAOS_ACTION_COMPLETED: 'chaos.action.completed',
+  LOAD_STARTED: 'load.started',
+  LOAD_PROGRESS: 'load.progress',
+  LOAD_COMPLETED: 'load.completed',
+  PARTITION_CREATED: 'partition.created',
+  PARTITION_REMOVED: 'partition.removed',
+  PARTITION_SPLIT: 'partition.split',
+  PARTITION_MERGE: 'partition.merge',
+  REPLICA_CREATED: 'replica.created',
+  REPLICA_REMOVED: 'replica.removed',
+  REPLICA_MOVED: 'replica.moved',
+  WARNING: 'capture.warning',
 });
 
 // --- CLI Runner Constants ---
@@ -185,6 +230,8 @@ export {
   NODE_ROLES,
   DEFAULT_CLUSTER_SIZE,
   OUTPUT,
+  PLAYBACK,
+  PLAYBACK_EVENT_TYPE,
   CLI,
   EXIT_CODES,
 };

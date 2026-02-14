@@ -121,14 +121,14 @@ class SystemTableCache {
       now,
       nodes: allNodes.map((n) => ({
         nodeId: n?.[COLUMN.NODE_ID],
-        wsState: n?.[COLUMN.WS_CONNECTION_STATE],
+        wsState: n?.[COLUMN.CONNECTION_STATE],
         leaseExpiry: n?.[COLUMN.READY_LEASE_EXPIRES_AT],
         leaseValid: n?.[COLUMN.READY_LEASE_EXPIRES_AT] > now,
       })),
     });
 
     const readyNodes = this.filter(TABLES.NODES, (node) => {
-      const wsState = node?.[COLUMN.WS_CONNECTION_STATE];
+      const wsState = node?.[COLUMN.CONNECTION_STATE];
       const leaseExpiry = node?.[COLUMN.READY_LEASE_EXPIRES_AT];
       return wsState === STATE.READY && leaseExpiry && leaseExpiry > now;
     });

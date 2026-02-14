@@ -17,6 +17,20 @@ const CONTAINER_RUNNING_STATE = 'running';
 const START_POLL_INTERVAL_MS = 250;
 const LOG_TAIL_ON_FAILURE = 50;
 const STOP_TIMEOUT_SECONDS = 10;
+const PERCENT_MULTIPLIER = 100;
+const MIN_CPU_COUNT = 1;
+const ZERO = 0;
+const TYPEOF_FUNCTION = 'function';
+const DOCKER_OP_CREATE_NETWORK = 'network.create';
+const DOCKER_OP_REMOVE_NETWORK = 'network.remove';
+const DOCKER_OP_BUILD_IMAGE = 'image.build';
+const DOCKER_OP_CREATE_CONTAINER = 'container.create';
+const DOCKER_OP_START_CONTAINER = 'container.start';
+const DOCKER_OP_STOP_CONTAINER = 'container.stop';
+const DOCKER_OP_REMOVE_CONTAINER = 'container.remove';
+const DOCKER_OP_CONNECT_NETWORK = 'network.connect';
+const DOCKER_OP_DISCONNECT_NETWORK = 'network.disconnect';
+const DEFAULT_BUILD_LABELS = Object.freeze({});
 
 class DockerProvider {
   /**
@@ -25,6 +39,9 @@ class DockerProvider {
    * @param {string} [config.host] - Remote Docker host (tcp://host:port)
    */
   constructor(config = {}) {
+    this._operationSink = typeof config.operationSink === TYPEOF_FUNCTION ?
+      config.operationSink :
+      null;
     if (config.host) {
       const {hostname, port} = this._parseTcpHost(config.host);
       this._docker = new Docker({
@@ -46,10 +63,20 @@ class DockerProvider {
    * @returns {Promise<{id: string, name: string}>}
    */
   async createNetwork(name, labels = {}) {
+    this._emitOperation(DOCKER_OP_CREATE_NETWORK, {
+      stage: 'starting',
+      name,
+      labels,
+    });
     const network = await this._docker.createNetwork({
       Name: name,
       Driver: 'bridge',
       Labels: labels,
+    });
+    this._emitOperation(DOCKER_OP_CREATE_NETWORK, {
+      stage: 'completed',
+      name,
+      networkId: network.id,
     });
     return {id: network.id, name};
   }
@@ -60,31 +87,111 @@ class DockerProvider {
    * @param {string} contextPath - Build context directory
    * @param {string} tag - Image tag
    * @param {string} [dockerfile] - Dockerfile path relative to context
+   * @param {Object} [labels] - Image labels to embed at build time
    * @returns {Promise<void>}
    */
-  async buildImage(contextPath, tag, dockerfile = DOCKER_DEFAULTS.dockerfile) {
+  async buildImage(
+    contextPath,
+    tag,
+    dockerfile = DOCKER_DEFAULTS.dockerfile,
+    onProgress = null,
+    labels = DEFAULT_BUILD_LABELS,
+  ) {
+    this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
+      stage: 'starting',
+      contextPath,
+      tag,
+      dockerfile,
+      labels,
+    });
     let stream;
     try {
       stream = await this._docker.buildImage(
         {context: contextPath, src: ['.']},
-        {t: tag, dockerfile},
+        {t: tag, dockerfile, labels},
       );
     } catch (err) {
+      this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
+        stage: 'failed',
+        contextPath,
+        tag,
+        dockerfile,
+        error: err.message,
+      });
       throw new Error(
         `Docker image build failed for tag "${tag}": ${err.message}`,
       );
     }
-    const output = await this._collectBuildOutput(stream);
+    const output = await this._collectBuildOutput(stream, onProgress);
     const errorLine = output.find((line) => line.error);
     if (errorLine) {
       const buildLog = output
         .map((line) => line.stream || line.error || '')
         .join('');
+      this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
+        stage: 'failed',
+        contextPath,
+        tag,
+        dockerfile,
+        error: errorLine.error,
+      });
       throw new Error(
         `Docker image build failed for tag "${tag}": ` +
         `${errorLine.error}\nBuild output:\n${buildLog}`,
       );
     }
+    this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
+      stage: 'completed',
+      contextPath,
+      tag,
+      dockerfile,
+      labels,
+    });
+  }
+
+  /**
+   * Inspect an image by tag.
+   * @param {string} tag
+   * @returns {Promise<Object|null>} Image inspect result, or null if missing.
+   */
+  async inspectImage(tag) {
+    try {
+      return await this._docker.getImage(tag).inspect();
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  /**
+   * Check whether an image tag exists locally.
+   * @param {string} tag
+   * @returns {Promise<boolean>}
+   */
+  async imageExists(tag) {
+    const inspect = await this.inspectImage(tag);
+    return !!inspect;
+  }
+
+  /**
+   * Read an image label value by key.
+   * @param {string} tag
+   * @param {string} labelKey
+   * @returns {Promise<string|null>}
+   */
+  async getImageLabel(tag, labelKey) {
+    if (!tag || !labelKey) {
+      return null;
+    }
+    const inspect = await this.inspectImage(tag);
+    const labels = inspect?.Config?.Labels;
+    if (!labels || typeof labels !== 'object') {
+      return null;
+    }
+    const value = labels[labelKey];
+    if (typeof value !== 'string' || value.length === ZERO) {
+      return null;
+    }
+    return value;
   }
 
   /**
@@ -92,7 +199,7 @@ class DockerProvider {
    * @param {Object} stream - Docker build stream
    * @returns {Promise<Array<Object>>}
    */
-  _collectBuildOutput(stream) {
+  _collectBuildOutput(stream, onProgress = null) {
     return new Promise((resolve, reject) => {
       const output = [];
       this._docker.modem.followProgress(
@@ -106,6 +213,13 @@ class DockerProvider {
         },
         (event) => {
           output.push(event);
+          if (typeof onProgress === TYPEOF_FUNCTION) {
+            try {
+              onProgress(event);
+            } catch (_err) {
+              // Best-effort progress callback isolation.
+            }
+          }
         },
       );
     });
@@ -135,6 +249,13 @@ class DockerProvider {
       startTimeout = TIMEOUTS.NODE_STARTUP,
     } = options;
 
+    this._emitOperation(DOCKER_OP_CREATE_CONTAINER, {
+      stage: 'starting',
+      name,
+      image,
+      network,
+      startTimeout,
+    });
     const envArray = this._buildEnvArray(env);
     const hostConfig = this._buildHostConfig(resourceLimits, network);
 
@@ -158,10 +279,27 @@ class DockerProvider {
 
     const containerId = container.id;
     try {
+      this._emitOperation(DOCKER_OP_START_CONTAINER, {
+        stage: 'starting',
+        name,
+        containerId,
+        startTimeout,
+      });
       await container.start();
       await this._waitForRunning(containerId, startTimeout);
+      this._emitOperation(DOCKER_OP_START_CONTAINER, {
+        stage: 'completed',
+        name,
+        containerId,
+      });
     } catch (err) {
       await this._cleanupFailedContainer(containerId);
+      this._emitOperation(DOCKER_OP_START_CONTAINER, {
+        stage: 'failed',
+        name,
+        containerId,
+        error: err.message,
+      });
       throw new Error(
         `Container "${name}" failed to start within ` +
         `${startTimeout}ms: ${err.message}`,
@@ -171,6 +309,14 @@ class DockerProvider {
     const info = await this.inspectContainer(containerId);
     const ip = info.NetworkSettings?.Networks?.[network]?.IPAddress || '';
 
+    this._emitOperation(DOCKER_OP_CREATE_CONTAINER, {
+      stage: 'completed',
+      name,
+      image,
+      network,
+      containerId,
+      ip,
+    });
     return {containerId, ip, name};
   }
 
@@ -269,8 +415,16 @@ class DockerProvider {
    * @param {string} containerId
    */
   async stopContainer(containerId) {
+    this._emitOperation(DOCKER_OP_STOP_CONTAINER, {
+      stage: 'starting',
+      containerId,
+    });
     const container = this._docker.getContainer(containerId);
     await container.stop({t: STOP_TIMEOUT_SECONDS});
+    this._emitOperation(DOCKER_OP_STOP_CONTAINER, {
+      stage: 'completed',
+      containerId,
+    });
   }
 
   /**
@@ -427,13 +581,32 @@ class DockerProvider {
   }
 
   /**
+   * Read one-shot container stats and normalize metrics.
+   * @param {string} containerId
+   * @returns {Promise<Object>}
+   */
+  async getContainerStats(containerId) {
+    const container = this._docker.getContainer(containerId);
+    const raw = await container.stats({stream: false});
+    return parseContainerStats(raw);
+  }
+
+  /**
    * Remove a container and its associated volumes.
    * Req 1.5
    * @param {string} containerId
    */
   async removeContainer(containerId) {
+    this._emitOperation(DOCKER_OP_REMOVE_CONTAINER, {
+      stage: 'starting',
+      containerId,
+    });
     const container = this._docker.getContainer(containerId);
     await container.remove({force: true, v: true});
+    this._emitOperation(DOCKER_OP_REMOVE_CONTAINER, {
+      stage: 'completed',
+      containerId,
+    });
   }
 
   /**
@@ -441,8 +614,16 @@ class DockerProvider {
    * @param {string} networkId
    */
   async removeNetwork(networkId) {
+    this._emitOperation(DOCKER_OP_REMOVE_NETWORK, {
+      stage: 'starting',
+      networkId,
+    });
     const network = this._docker.getNetwork(networkId);
     await network.remove();
+    this._emitOperation(DOCKER_OP_REMOVE_NETWORK, {
+      stage: 'completed',
+      networkId,
+    });
   }
 
   /**
@@ -451,8 +632,18 @@ class DockerProvider {
    * @param {string} containerId
    */
   async disconnectFromNetwork(networkId, containerId) {
+    this._emitOperation(DOCKER_OP_DISCONNECT_NETWORK, {
+      stage: 'starting',
+      networkId,
+      containerId,
+    });
     const network = this._docker.getNetwork(networkId);
     await network.disconnect({Container: containerId, Force: true});
+    this._emitOperation(DOCKER_OP_DISCONNECT_NETWORK, {
+      stage: 'completed',
+      networkId,
+      containerId,
+    });
   }
 
   /**
@@ -461,8 +652,18 @@ class DockerProvider {
    * @param {string} containerId
    */
   async connectToNetwork(networkId, containerId) {
+    this._emitOperation(DOCKER_OP_CONNECT_NETWORK, {
+      stage: 'starting',
+      networkId,
+      containerId,
+    });
     const network = this._docker.getNetwork(networkId);
     await network.connect({Container: containerId});
+    this._emitOperation(DOCKER_OP_CONNECT_NETWORK, {
+      stage: 'completed',
+      networkId,
+      containerId,
+    });
   }
 
   /**
@@ -501,6 +702,28 @@ class DockerProvider {
   _sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+
+  /**
+   * Emit structured docker operation log entry.
+   * @param {string} operation
+   * @param {Object} details
+   * @private
+   */
+  _emitOperation(operation, details) {
+    if (typeof this._operationSink !== TYPEOF_FUNCTION) {
+      return;
+    }
+    try {
+      this._operationSink({
+        timestamp: Date.now(),
+        operation,
+        ...(details || {}),
+      });
+    } catch (_err) {
+      // Best-effort operation callback isolation.
+    }
+  }
+
   /**
    * Parse a tcp://host:port string into hostname and port.
    * @param {string} hostStr - e.g. 'tcp://192.168.1.1:2376'
@@ -523,4 +746,69 @@ class DockerProvider {
   }
 }
 
-export {DockerProvider};
+function safeNumber(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : ZERO;
+}
+
+function parseCpuPercent(stats) {
+  const cpuStats = stats?.cpu_stats || {};
+  const preCpuStats = stats?.precpu_stats || {};
+  const cpuTotal = safeNumber(cpuStats.cpu_usage?.total_usage);
+  const preCpuTotal = safeNumber(preCpuStats.cpu_usage?.total_usage);
+  const systemTotal = safeNumber(cpuStats.system_cpu_usage);
+  const preSystemTotal = safeNumber(preCpuStats.system_cpu_usage);
+
+  const cpuDelta = cpuTotal - preCpuTotal;
+  const systemDelta = systemTotal - preSystemTotal;
+  if (cpuDelta <= ZERO || systemDelta <= ZERO) {
+    return ZERO;
+  }
+
+  const percpuUsage = cpuStats.cpu_usage?.percpu_usage;
+  const cpuCount = safeNumber(cpuStats.online_cpus) ||
+    (Array.isArray(percpuUsage) ? percpuUsage.length : MIN_CPU_COUNT);
+  const normalizedCount = Math.max(cpuCount, MIN_CPU_COUNT);
+
+  return (cpuDelta / systemDelta) * normalizedCount * PERCENT_MULTIPLIER;
+}
+
+function parseNetworks(stats) {
+  const networks = stats?.networks;
+  if (!networks || typeof networks !== 'object') {
+    return {rxBytes: ZERO, txBytes: ZERO};
+  }
+
+  let rxBytes = ZERO;
+  let txBytes = ZERO;
+  for (const networkStats of Object.values(networks)) {
+    rxBytes += safeNumber(networkStats?.rx_bytes);
+    txBytes += safeNumber(networkStats?.tx_bytes);
+  }
+  return {rxBytes, txBytes};
+}
+
+function parseTimestamp(readValue) {
+  if (typeof readValue !== 'string' || readValue.length === ZERO) {
+    return Date.now();
+  }
+  const parsed = Date.parse(readValue);
+  if (Number.isFinite(parsed)) {
+    return parsed;
+  }
+  return Date.now();
+}
+
+function parseContainerStats(stats) {
+  const {rxBytes, txBytes} = parseNetworks(stats);
+  return {
+    timestamp: parseTimestamp(stats?.read),
+    cpuPercent: parseCpuPercent(stats),
+    memoryUsageBytes: safeNumber(stats?.memory_stats?.usage),
+    memoryLimitBytes: safeNumber(stats?.memory_stats?.limit),
+    rxBytes,
+    txBytes,
+  };
+}
+
+export {DockerProvider, parseContainerStats};

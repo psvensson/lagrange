@@ -76,7 +76,7 @@ test('Message-group operation routing integration', async (t) => {
               return {
                 node_id: 'node-2',
                 status: STATE.ACTIVE,
-                ws_connection_state: STATE.READY,
+                connection_state: STATE.READY,
                 ready_lease_expires_at: Date.now() + 30000,
               };
             }

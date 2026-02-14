@@ -40,6 +40,11 @@ const nodeSetArb = fc.array(
     node_id: fc.string({minLength: 3, maxLength: 10})
       .map((s) => `node-${s.replace(/[^a-zA-Z0-9]/g, 'x')}`),
     expired: fc.boolean(),
+    connectionState: fc.constantFrom(
+      STATE.READY,
+      STATE.CONNECTED,
+      STATE.DISCONNECTED,
+    ),
   }),
   {minLength: 1, maxLength: 8},
 ).map((nodes) => {
@@ -67,7 +72,7 @@ test('Property 14: Lease sweep removes expired leases',
           const nodeRows = nodeSet.map((n) => ({
             node_id: n.node_id,
             node_address: `ws://localhost:${8080}`,
-            ws_connection_state: STATE.READY,
+            connection_state: n.connectionState,
             ready_lease_expires_at: n.expired ?
               now - 1000 : now + 60000,
             last_heartbeat: now - 5000,
@@ -128,9 +133,12 @@ test('Property 14: Lease sweep removes expired leases',
           // All expired nodes should have been updated
           for (const n of expectedExpired) {
             const updated = updatedNodes.get(n.node_id);
-            t.ok(updated, `${n.node_id} should be updated`);
+            if (!updated) {
+              t.fail(`${n.node_id} should be updated`);
+              continue;
+            }
             t.equal(
-              updated.ws_connection_state, STATE.DISCONNECTED,
+              updated.connection_state, STATE.DISCONNECTED,
               `${n.node_id} should be disconnected`,
             );
             t.equal(

@@ -13,7 +13,7 @@ function createReadyNode(nodeId) {
   return {
     node_id: nodeId,
     status: NODE_STATE.ACTIVE,
-    ws_connection_state: NODE_STATE.READY,
+    connection_state: NODE_STATE.READY,
     ready_lease_expires_at: Date.now() + 60000,
   };
 }

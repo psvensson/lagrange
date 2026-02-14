@@ -191,7 +191,7 @@ test('Control plane dispatch integration', async (t) => {
         memory_usage_percent: 10,
         disk_usage_percent: 10,
         status: NodeStatus.ACTIVE,
-        ws_connection_state: STATE.READY,
+        connection_state: STATE.READY,
         capabilities: '[]',
         last_heartbeat: now,
         ready_lease_expires_at: now + 10000,

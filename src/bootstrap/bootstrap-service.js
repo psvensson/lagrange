@@ -101,6 +101,7 @@ import {
   NodeLifecycleStateMachine,
   NodeState,
 } from '../node/node-lifecycle-state-machine.js';
+import {isNodeRecordReady} from '../node/node-readiness-policy.js';
 import {BOOTSTRAP_SUB_PHASE} from '../node/node-constants.js';
 import {
   ADDRESS,
@@ -838,9 +839,7 @@ class BootstrapService extends EventEmitter {
     while (Date.now() - startTime < timeoutMs) {
       const now = Date.now();
       const node = cache.get(TABLES.NODES, nodeId);
-      const leaseValid = node?.ready_lease_expires_at &&
-        node.ready_lease_expires_at > now;
-      if (node && node.ws_connection_state === STATE.READY && leaseValid) {
+      if (isNodeRecordReady(node, {now})) {
         return;
       }
 
@@ -1016,6 +1015,21 @@ class BootstrapService extends EventEmitter {
       }
     }
     return null;
+  }
+
+  /**
+   * Resolve the message-group service to use for partition CDC propagation.
+   * Prefers the current local leader when available and falls back to
+   * the captured message-group service.
+   * @param {Object|null} preferredMessageGroupService
+   * @return {Object|null}
+   */
+  resolveCdcPropagationMessageGroup(preferredMessageGroupService) {
+    const leaderMessageGroupService = this.getLeaderMessageGroupService();
+    if (leaderMessageGroupService) {
+      return leaderMessageGroupService;
+    }
+    return preferredMessageGroupService || null;
   }
 
   /**
@@ -1239,6 +1253,7 @@ class BootstrapService extends EventEmitter {
             messageGroupService: this.getLeaderMessageGroupService(),
             // Pass MessageRouter for cross-node lifecycle messages
             messageRouter: this.messageRouter,
+            rebalanceCoordinator: this.rebalanceCoordinator,
             // Defer election until ALL partitions are created to prevent election storms
             deferElection: true,
             // Collapse per-replica startup chatter into one staged progress line.
@@ -1487,26 +1502,28 @@ class BootstrapService extends EventEmitter {
               operation: cdcEvent.operation,
               sourceReplica: replicaId,
             });
-            const nodeId = cdcEvent.data?.node_id;
-            let previousState = null;
+            const cdcData = cdcEvent?.data && typeof cdcEvent.data === 'object' ?
+              cdcEvent.data :
+              {};
+            const nodeId = cdcData[COLUMN.NODE_ID] || cdcData.id || null;
+            let previousNodeRow = null;
             if (tableName === TABLES.NODES && nodeId) {
               const systemTableCache = this.getSystemTableCache();
-              previousState =
-                systemTableCache.get(TABLES.NODES, nodeId)?.ws_connection_state ||
-                null;
+              const cachedNodeRow = systemTableCache.get(TABLES.NODES, nodeId);
+              previousNodeRow = cachedNodeRow ? {...cachedNodeRow} : null;
             }
 
             // Only apply CDC event if this message group is the leader
             // This ensures CDC events are replicated through Raft to all nodes
+            if (tableName === TABLES.NODES) {
+              this.handleNodeReadyRebalanceTrigger(cdcEvent, previousNodeRow);
+            }
+
             if (messageGroup.isLeaderReplica()) {
               await this.propagatePartitionCDCEvent(messageGroup, cdcEvent);
 
               if (tableName === TABLES.CONFIG) {
                 this.applyCurrentEpochFromCache();
-              }
-
-              if (tableName === TABLES.NODES) {
-                this.handleNodeReadyRebalanceTrigger(cdcEvent, previousState);
               }
             }
           }
@@ -1542,29 +1559,96 @@ class BootstrapService extends EventEmitter {
   /**
    * Handle node state CDC and schedule one rebalance trigger per node-ready join.
    * @param {Object} cdcEvent - CDC event from nodes table.
-   * @param {string|null} previousState - Previous ws connection state.
+   * @param {Object|null} previousNodeRow - Previous nodes table row from cache.
    * @return {boolean} True when a new rebalance trigger was scheduled.
    */
-  handleNodeReadyRebalanceTrigger(cdcEvent, previousState) {
-    const nodeId = cdcEvent?.data?.node_id;
-    const newState = cdcEvent?.data?.ws_connection_state;
-    const readyLeaseExpiresAt = Number(
-      cdcEvent?.data?.ready_lease_expires_at || NUM.ZERO,
-    );
-    const leaseIsValid = readyLeaseExpiresAt > Date.now();
-    const isReadyTransition = Boolean(
-      nodeId &&
-      newState === STATE.READY &&
-      previousState !== STATE.READY &&
-      previousState !== newState &&
-      leaseIsValid,
-    );
+  handleNodeReadyRebalanceTrigger(cdcEvent, previousNodeRow) {
+    const rawNodeRow = cdcEvent?.data || null;
+    const previousRow = previousNodeRow &&
+      typeof previousNodeRow === 'object' ?
+      previousNodeRow :
+      {};
+    const incomingRow = rawNodeRow &&
+      typeof rawNodeRow === 'object' ?
+      rawNodeRow :
+      {};
+    const nodeRow = {
+      ...previousRow,
+      ...incomingRow,
+      node_id:
+        incomingRow.node_id ??
+        incomingRow.nodeId ??
+        previousRow.node_id ??
+        previousRow.nodeId ??
+        null,
+      status:
+        incomingRow.status ??
+        incomingRow.nodeStatus ??
+        incomingRow.state ??
+        incomingRow.lifecycle_state ??
+        incomingRow.lifecycleState ??
+        previousRow.status ??
+        previousRow.nodeStatus ??
+        previousRow.state ??
+        previousRow.lifecycle_state ??
+        previousRow.lifecycleState ??
+        null,
+      ready_lease_expires_at:
+        incomingRow.ready_lease_expires_at ??
+        incomingRow.readyLeaseExpiresAt ??
+        incomingRow.readyLeaseExpiresAtMs ??
+        incomingRow.readyLeaseExpires ??
+        previousRow.ready_lease_expires_at ??
+        previousRow.readyLeaseExpiresAt ??
+        previousRow.readyLeaseExpiresAtMs ??
+        previousRow.readyLeaseExpires ??
+        null,
+    };
+    const nodeId = nodeRow?.node_id;
+    if (!nodeId) {
+      this.logger.info('Skipping node-ready rebalance trigger: missing node_id', {
+        operation: cdcEvent?.operation || null,
+      });
+      return false;
+    }
 
-    if (!isReadyTransition) {
+    const now = Date.now();
+    const isReady = isNodeRecordReady(nodeRow, {now});
+    const wasReady = isNodeRecordReady(previousRow, {now});
+
+    if (!isReady) {
+      this.logger.info('Skipping node-ready rebalance trigger: node not ready', {
+        nodeId,
+        status: nodeRow.status || null,
+        readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
+        operation: cdcEvent?.operation || null,
+      });
+      const existingTimer = this.pendingNodeReadyRebalanceTimers.get(nodeId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.pendingNodeReadyRebalanceTimers.delete(nodeId);
+      }
+      this.rebalanceTriggeredNodeIds.delete(nodeId);
+      return false;
+    }
+
+    if (wasReady) {
+      this.logger.info(
+        'Skipping node-ready rebalance trigger: no not-ready to ready transition',
+        {
+          nodeId,
+          status: nodeRow.status || null,
+          readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
+          operation: cdcEvent?.operation || null,
+        },
+      );
       return false;
     }
 
     if (this.rebalanceTriggeredNodeIds.has(nodeId)) {
+      this.logger.info('Skipping node-ready rebalance trigger: already scheduled', {
+        nodeId,
+      });
       return false;
     }
     this.rebalanceTriggeredNodeIds.add(nodeId);
@@ -1573,15 +1657,49 @@ class BootstrapService extends EventEmitter {
       return false;
     }
 
+    this.logger.info('Scheduling node-ready rebalance trigger', {
+      nodeId,
+      reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
+      delayMs: this.nodeReadyRebalanceDelayMs,
+      status: nodeRow.status || null,
+      readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
+    });
+
     const timer = setTimeout(() => {
-      this.pendingNodeReadyRebalanceTimers.delete(nodeId);
-      this.triggerRebalancingOnAllPartitions(BOOTSTRAP_REBALANCE_REASON.NODE_READY);
+      void this.executeNodeReadyRebalanceTrigger(nodeId);
     }, this.nodeReadyRebalanceDelayMs);
     if (typeof timer.unref === 'function') {
       timer.unref();
     }
     this.pendingNodeReadyRebalanceTimers.set(nodeId, timer);
     return true;
+  }
+
+  /**
+   * Execute one cache-gated node-ready rebalance trigger.
+   * @param {string} nodeId - Node that transitioned to ready.
+   * @return {Promise<void>}
+   * @private
+   */
+  async executeNodeReadyRebalanceTrigger(nodeId) {
+    this.pendingNodeReadyRebalanceTimers.delete(nodeId);
+
+    try {
+      await this.waitForReadyNodeInCache(nodeId);
+    } catch (error) {
+      this.rebalanceTriggeredNodeIds.delete(nodeId);
+      this.logger.warn(
+        'Skipping node-ready rebalance trigger: node not ready in cache before timeout',
+        {
+          nodeId,
+          reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
+          error: error.message,
+        },
+      );
+      return;
+    }
+
+    this.triggerRebalancingOnAllPartitions(BOOTSTRAP_REBALANCE_REASON.NODE_READY);
   }
 
   /**
@@ -2387,6 +2505,7 @@ class BootstrapService extends EventEmitter {
         transport: this.transport,
         messageGroupService: messageGroupService,
         messageRouter: this.messageRouter,
+        rebalanceCoordinator: this.rebalanceCoordinator,
         replicaStateMachine: this.replicaStateMachine,
         systemTableCache: systemTableCache,
         cdcIntegrationService: cdcIntegrationService,
@@ -2414,17 +2533,19 @@ class BootstrapService extends EventEmitter {
               partitionId: options.partitionId,
               replicaId: options.replicaId,
             });
-            // Only apply CDC event if this message group is the leader
-            // This ensures CDC events are replicated through Raft to all nodes
-            if (messageGroupService.isLeaderReplica()) {
-              await this.propagatePartitionCDCEvent(
-                messageGroupService,
-                cdcEvent,
-              );
+            const propagationMessageGroupService =
+              this.resolveCdcPropagationMessageGroup(messageGroupService);
+            if (!propagationMessageGroupService) {
+              return;
+            }
 
-              if (tableName === TABLES.CONFIG) {
-                this.applyCurrentEpochFromCache();
-              }
+            await this.propagatePartitionCDCEvent(
+              propagationMessageGroupService,
+              cdcEvent,
+            );
+
+            if (tableName === TABLES.CONFIG) {
+              this.applyCurrentEpochFromCache();
             }
           }
         });
@@ -2536,6 +2657,15 @@ class BootstrapService extends EventEmitter {
       }
     }
 
+    for (const partition of this.partitionServices.values()) {
+      if (partition.setTablePolicyService) {
+        partition.setTablePolicyService(this.tablePolicyService);
+      }
+      if (partition.setRebalanceCoordinator) {
+        partition.setRebalanceCoordinator(this.rebalanceCoordinator);
+      }
+    }
+
     this.logger.info(BootstrapLog.CONTROL_PLANE_READY, {
       nodeId: this.nodeId,
       messageGroupCount: this.messageGroupServices.size,
@@ -2581,7 +2711,7 @@ class BootstrapService extends EventEmitter {
           Number.isFinite(stats?.diskUsagePercent) ?
             stats.diskUsagePercent : NUM.ZERO,
         [COLUMN.STATUS]: STATE.ACTIVE,
-        [COLUMN.WS_CONNECTION_STATE]: STATE.CONNECTED,
+        [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
         [COLUMN.CAPABILITIES]: JSON.stringify([]),
         [COLUMN.LAST_HEARTBEAT]: now,
         [COLUMN.CREATED_AT]: now,
@@ -2738,7 +2868,7 @@ class BootstrapService extends EventEmitter {
    * @param {Object} options
    * @param {string} options.nodeId
    * @param {string} options.nodeAddress
-   * @param {string} options.wsConnectionState
+   * @param {string} options.connectionState
    * @param {Array<string>} [options.capabilities]
    * @return {Promise<void>}
    */
@@ -2756,7 +2886,7 @@ class BootstrapService extends EventEmitter {
     if (existing) {
       await nodesPartition.updateData(TABLES.NODES, {node_id: options.nodeId}, {
         node_address: options.nodeAddress,
-        ws_connection_state: options.wsConnectionState,
+        connection_state: options.connectionState,
         capabilities: JSON.stringify(capabilities),
         // Preserve last heartbeat if present to avoid clobbering liveness tracking.
         last_heartbeat: existing.last_heartbeat,
@@ -2765,7 +2895,7 @@ class BootstrapService extends EventEmitter {
       await nodesPartition.upsertData(TABLES.NODES, {
         node_id: options.nodeId,
         node_address: options.nodeAddress,
-        ws_connection_state: options.wsConnectionState,
+        connection_state: options.connectionState,
         capabilities: JSON.stringify(capabilities),
       });
     }
@@ -2788,7 +2918,7 @@ class BootstrapService extends EventEmitter {
         await this.upsertNodeConnectionState({
           nodeId: payload.nodeId,
           nodeAddress: payload.nodeAddress,
-          wsConnectionState: STATE.READY,
+          connectionState: STATE.READY,
           capabilities: payload.capabilities,
         });
       }

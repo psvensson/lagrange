@@ -154,6 +154,34 @@ function waitForMessage(ws, timeout = 2000) {
   });
 }
 
+/**
+ * Create a mock test-run service for HTTP route tests.
+ * @param {Object} [overrides]
+ * @return {Object}
+ */
+function createMockTestRunService(overrides = {}) {
+  return {
+    readDashboardPage: async () => '<html><body>dashboard</body></html>',
+    readPlaybackViewer: async () => '<html><body>viewer</body></html>',
+    listAvailableTests: async () => [],
+    listAvailableConfigs: async () => [],
+    listSavedRuns: async () => [],
+    getRun: async (_runId) => null,
+    startRun: async (_payload) => {
+      throw new Error('startRun not mocked');
+    },
+    stopRun: async (_runId) => {
+      throw new Error('stopRun not mocked');
+    },
+    deleteRun: async (_runId) => {
+      throw new Error('deleteRun not mocked');
+    },
+    subscribeToRun: (_runId, _listener) => null,
+    readOutputAsset: async (_path) => null,
+    ...overrides,
+  };
+}
+
 test('AdminWebSocketAPI - initialization', async (t) => {
   const api = new AdminWebSocketAPI({nodeId: 'test-node'});
 
@@ -569,5 +597,198 @@ test('AdminWebSocketAPI - query without sql', async (t) => {
   t.equal(result.errorCode, ErrorCode.SYNTAX_ERROR, 'should have error code');
 
   ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - dashboard landing page', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    testRunService: createMockTestRunService({
+      readDashboardPage: async () => '<html><body>landing-page</body></html>',
+    }),
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const response = await api.getFastify().inject({method: 'GET', url: '/'});
+  t.equal(response.statusCode, 200, 'should return 200');
+  t.equal(
+    response.headers['content-type'],
+    'text/html; charset=utf-8',
+    'should return html content type',
+  );
+  t.equal(
+    response.headers['cache-control'],
+    'no-store',
+    'should disable dashboard page caching',
+  );
+  t.match(response.body, /landing-page/, 'should return dashboard html');
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - test catalog endpoint', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    testRunService: createMockTestRunService({
+      listAvailableTests: async () => [
+        {id: 'alpha', file: 'test/distributed/scenarios/alpha.js'},
+      ],
+      listAvailableConfigs: async () => [
+        {id: 'local.json', file: 'test/distributed/config/local.json'},
+      ],
+    }),
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const response = await api.getFastify().inject({
+    method: 'GET',
+    url: '/api/admin/tests',
+  });
+  const payload = response.json();
+  t.equal(response.statusCode, 200, 'should return 200');
+  t.equal(payload.tests.length, 1, 'should include test entries');
+  t.equal(payload.tests[0].id, 'alpha', 'should return scenario id');
+  t.equal(payload.configs.length, 1, 'should include config entries');
+  t.equal(payload.defaultConfig, 'local.json',
+    'should publish default config for UI selection');
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - start/stop test run endpoints', async (t) => {
+  const run = {
+    runId: 'run-1',
+    scenario: 'alpha',
+    status: 'running',
+  };
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    testRunService: createMockTestRunService({
+      startRun: async (_payload) => run,
+      stopRun: async (_runId) => ({...run, status: 'stopping'}),
+    }),
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const startResponse = await api.getFastify().inject({
+    method: 'POST',
+    url: '/api/admin/test-runs',
+    payload: {scenario: 'alpha', config: 'local.json'},
+  });
+  t.equal(startResponse.statusCode, 200, 'should start run');
+  t.equal(startResponse.json().run.runId, 'run-1', 'should return run id');
+
+  const stopResponse = await api.getFastify().inject({
+    method: 'POST',
+    url: '/api/admin/test-runs/run-1/stop',
+  });
+  t.equal(stopResponse.statusCode, 200, 'should stop run');
+  t.equal(stopResponse.json().run.status, 'stopping', 'should return stop status');
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - delete test run endpoint', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    testRunService: createMockTestRunService({
+      deleteRun: async (runId) => ({
+        runId,
+        deleted: true,
+        removed: {metadata: true, report: true},
+      }),
+    }),
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const response = await api.getFastify().inject({
+    method: 'DELETE',
+    url: '/api/admin/test-runs/run-to-delete',
+  });
+  const payload = response.json();
+  t.equal(response.statusCode, 200, 'should delete run');
+  t.equal(payload.deleted, true, 'should return deleted flag');
+  t.equal(payload.runId, 'run-to-delete', 'should return deleted run id');
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - output asset endpoint', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    testRunService: createMockTestRunService({
+      readOutputAsset: async (_path) => ({
+        contentType: 'application/json; charset=utf-8',
+        body: Buffer.from('{"ok":true}', 'utf8'),
+      }),
+    }),
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const response = await api.getFastify().inject({
+    method: 'GET',
+    url: '/ui/test-output/alpha/report.json',
+  });
+  t.equal(response.statusCode, 200, 'should return output file');
+  t.equal(response.headers['content-type'], 'application/json; charset=utf-8');
+  t.same(response.json(), {ok: true}, 'should return requested payload');
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - stream endpoint returns 404 for unknown run', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    testRunService: createMockTestRunService({
+      getRun: async (_runId) => null,
+    }),
+  });
+
+  await api.initialize(0, {listen: false});
+  const response = await api.getFastify().inject({
+    method: 'GET',
+    url: '/api/admin/test-runs/missing/stream',
+  });
+  t.equal(response.statusCode, 404, 'should return not found');
+  t.equal(response.json().error, 'Test run not found');
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - stream endpoint serves archived run backlog', async (t) => {
+  const archivedRun = {
+    runId: 'archive-run',
+    scenario: 'alpha',
+    status: 'passed',
+    logs: [{
+      timestamp: '2026-02-14T12:00:00.000Z',
+      stream: 'archive',
+      line: 'archived line',
+    }],
+  };
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    testRunService: createMockTestRunService({
+      getRun: async (_runId) => archivedRun,
+      subscribeToRun: (_runId, _listener) => null,
+    }),
+  });
+
+  await api.initialize(0, {listen: false});
+  const response = await api.getFastify().inject({
+    method: 'GET',
+    url: '/api/admin/test-runs/archive-run/stream',
+  });
+
+  t.equal(response.statusCode, 200, 'should return stream response for archived run');
+  t.match(response.body, /"type":"status"/, 'should include status frame');
+  t.match(response.body, /"type":"log"/, 'should include archived log frame');
+  t.match(response.body, /archived line/, 'should include archived log content');
+
   await api.shutdown();
 });

@@ -16,8 +16,12 @@ const PERCENTILE_P95 = 0.95;
 const PERCENTILE_P99 = 0.99;
 const ZERO = 0;
 const ONE = 1;
+const IN_FLIGHT_PER_NODE = 2;
+const DRAIN_WAIT_MS = 10;
 
-const LOAD_TABLE_NAME = '_load_test_data';
+const LOAD_TABLE_NAME = 'logs';
+const LOAD_NODE_ID = 'load-generator';
+const LOG_LEVEL_INFO = 'info';
 const INSERT_OP = 'INSERT';
 const SELECT_OP = 'SELECT';
 const UPDATE_OP = 'UPDATE';
@@ -56,17 +60,24 @@ function parseDuration(duration) {
  * @returns {string} SQL statement
  */
 function buildSqlStatement(operation, counter) {
+  const logId = `load-${counter}`;
+  const timestamp = Date.now();
   switch (operation) {
   case INSERT_OP:
     return `INSERT INTO ${LOAD_TABLE_NAME} ` +
-      `(id, value) VALUES (${counter}, 'load-${counter}')`;
+      `(log_id, timestamp, level, node_id, message, created_at) VALUES (` +
+      `'${logId}', ${timestamp}, '${LOG_LEVEL_INFO}', ` +
+      `'${LOAD_NODE_ID}', 'load-${counter}', ${timestamp})`;
   case SELECT_OP:
-    return `SELECT * FROM ${LOAD_TABLE_NAME} LIMIT 1`;
+    return `SELECT * FROM ${LOAD_TABLE_NAME} ` +
+      `WHERE log_id = '${logId}' LIMIT 1`;
   case UPDATE_OP:
     return `UPDATE ${LOAD_TABLE_NAME} ` +
-      `SET value = 'updated-${counter}' WHERE id = ${counter}`;
+      `SET message = 'updated-${counter}' ` +
+      `WHERE log_id = '${logId}'`;
   case DELETE_OP:
-    return `DELETE FROM ${LOAD_TABLE_NAME} WHERE id = ${counter}`;
+    return `DELETE FROM ${LOAD_TABLE_NAME} ` +
+      `WHERE log_id = '${logId}'`;
   default:
     return 'SELECT 1';
   }
@@ -133,12 +144,16 @@ class LoadRun {
     this._opsPerSec = options.opsPerSec;
     this._durationMs = options.durationMs;
     this._operations = options.operations;
+    this._maxInFlight = options.maxInFlight ||
+      this._availableNodes.length * IN_FLIGHT_PER_NODE;
 
     this._latencies = [];
     this._successCount = ZERO;
     this._failedCount = ZERO;
     this._errorCount = ZERO;
     this._counter = ZERO;
+    this._nextNodeIndex = ZERO;
+    this._inFlight = ZERO;
     this._cancelled = false;
     this._startTime = null;
     this._intervalId = null;
@@ -174,12 +189,18 @@ class LoadRun {
     if (this._cancelled) {
       return;
     }
+    if (this._inFlight >= this._maxInFlight) {
+      return;
+    }
     const opIndex = this._counter % this._operations.length;
     const operation = this._operations[opIndex];
     const sql = buildSqlStatement(operation, this._counter);
     this._counter++;
 
-    this._executeWithFailover(sql);
+    this._inFlight++;
+    this._executeWithFailover(sql).finally(() => {
+      this._inFlight = Math.max(ZERO, this._inFlight - ONE);
+    });
   }
 
   /**
@@ -190,9 +211,19 @@ class LoadRun {
   async _executeWithFailover(sql) {
     const startTs = Date.now();
     let lastError = null;
+    const nodeCount = this._availableNodes.length;
+    if (nodeCount === ZERO) {
+      this._failedCount++;
+      return;
+    }
 
-    for (let i = ZERO; i < this._availableNodes.length; i++) {
-      const node = this._availableNodes[i];
+    const startIndex = this._nextNodeIndex;
+    this._nextNodeIndex =
+      (this._nextNodeIndex + ONE) % nodeCount;
+
+    for (let attempt = ZERO; attempt < nodeCount; attempt++) {
+      const nodeIndex = (startIndex + attempt) % nodeCount;
+      const node = this._availableNodes[nodeIndex];
       try {
         await node.query(sql);
         const latency = Date.now() - startTs;
@@ -202,7 +233,6 @@ class LoadRun {
       } catch (err) {
         lastError = err;
         this._errorCount++;
-        this._rotateNode(i);
       }
     }
 
@@ -210,15 +240,6 @@ class LoadRun {
     if (lastError) {
       this._errorCount++;
     }
-  }
-
-  /**
-   * Rotate a failed node to the end of the available list.
-   * @param {number} index
-   */
-  _rotateNode(index) {
-    const [node] = this._availableNodes.splice(index, ONE);
-    this._availableNodes.push(node);
   }
 
   /**
@@ -232,6 +253,10 @@ class LoadRun {
     if (this._durationTimeoutId !== null) {
       clearTimeout(this._durationTimeoutId);
       this._durationTimeoutId = null;
+    }
+    if (this._inFlight > ZERO) {
+      setTimeout(() => this._finish(), DRAIN_WAIT_MS);
+      return;
     }
     if (this._resolveComplete) {
       this._resolveComplete(this.getMetrics());

@@ -10,7 +10,7 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
 import fc from 'fast-check';
-import {DockerProvider} from '../docker-provider.js';
+import {DockerProvider, parseContainerStats} from '../docker-provider.js';
 import {CONTAINER_ENV_KEYS} from '../constants.js';
 
 test('Property 2: Container Environment Configuration', async (t) => {
@@ -361,4 +361,143 @@ test('Unit: buildImage reports errors with build output', async (t) => {
       );
     },
   );
+});
+
+test('Unit: buildImage passes labels to docker build options', async (t) => {
+  await t.test(
+    'forwards labels to docker buildImage options',
+    async () => {
+      const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+
+      let capturedBuildOptions = null;
+      provider._docker.buildImage = async (_context, options) => {
+        capturedBuildOptions = options;
+        return {};
+      };
+      provider._collectBuildOutput = async () => [];
+
+      await provider.buildImage(
+        '/project',
+        'myimage:labeled',
+        'Dockerfile',
+        null,
+        {'ddb.git-hash': 'abc1234'},
+      );
+
+      assert.ok(capturedBuildOptions, 'docker build options should be captured');
+      assert.deepStrictEqual(
+        capturedBuildOptions.labels,
+        {'ddb.git-hash': 'abc1234'},
+      );
+    },
+  );
+});
+
+test('Unit: image metadata helpers read inspect labels', async (t) => {
+  await t.test(
+    'getImageLabel and imageExists return expected values',
+    async () => {
+      const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+
+      provider._docker.getImage = () => ({
+        inspect: async () => ({
+          Config: {
+            Labels: {
+              'ddb.git-hash': 'abc1234',
+            },
+          },
+        }),
+      });
+
+      const label = await provider.getImageLabel(
+        'distributed-db:test',
+        'ddb.git-hash',
+      );
+      const exists = await provider.imageExists('distributed-db:test');
+
+      assert.strictEqual(label, 'abc1234');
+      assert.strictEqual(exists, true);
+    },
+  );
+});
+
+test('Unit: parseContainerStats computes cpu/memory/network metrics', async () => {
+  const stats = {
+    read: '2026-02-14T00:00:00.000Z',
+    cpu_stats: {
+      cpu_usage: {
+        total_usage: 2000000000,
+        percpu_usage: [100, 100],
+      },
+      system_cpu_usage: 4000000000,
+      online_cpus: 2,
+    },
+    precpu_stats: {
+      cpu_usage: {
+        total_usage: 1000000000,
+      },
+      system_cpu_usage: 2000000000,
+    },
+    memory_stats: {
+      usage: 123456,
+      limit: 654321,
+    },
+    networks: {
+      eth0: {
+        rx_bytes: 1000,
+        tx_bytes: 2000,
+      },
+      eth1: {
+        rx_bytes: 3000,
+        tx_bytes: 4000,
+      },
+    },
+  };
+
+  const parsed = parseContainerStats(stats);
+  assert.equal(parsed.timestamp, Date.parse(stats.read));
+  assert.equal(parsed.memoryUsageBytes, 123456);
+  assert.equal(parsed.memoryLimitBytes, 654321);
+  assert.equal(parsed.rxBytes, 4000);
+  assert.equal(parsed.txBytes, 6000);
+  assert.ok(parsed.cpuPercent > 0);
+});
+
+test('Unit: getContainerStats reads non-stream docker stats', async () => {
+  const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+  let capturedOptions = null;
+
+  provider._docker.getContainer = () => ({
+    stats: async (options) => {
+      capturedOptions = options;
+      return {
+        cpu_stats: {
+          cpu_usage: {total_usage: 2},
+          system_cpu_usage: 4,
+          online_cpus: 1,
+        },
+        precpu_stats: {
+          cpu_usage: {total_usage: 1},
+          system_cpu_usage: 2,
+        },
+        memory_stats: {
+          usage: 10,
+          limit: 20,
+        },
+        networks: {
+          eth0: {
+            rx_bytes: 30,
+            tx_bytes: 40,
+          },
+        },
+      };
+    },
+  });
+
+  const result = await provider.getContainerStats('container-1');
+  assert.deepStrictEqual(capturedOptions, {stream: false});
+  assert.equal(result.memoryUsageBytes, 10);
+  assert.equal(result.memoryLimitBytes, 20);
+  assert.equal(result.rxBytes, 30);
+  assert.equal(result.txBytes, 40);
 });

@@ -49,7 +49,7 @@ test('Multi-node cluster integration tests', async (t) => {
       memory_usage_percent: 0,
       disk_usage_percent: 0,
       status: 'active',
-      ws_connection_state: 'ready',
+      connection_state: 'ready',
       capabilities: '[]',
       last_heartbeat: now,
       ready_lease_expires_at: now + 1000,
@@ -138,7 +138,7 @@ test('Multi-node cluster integration tests', async (t) => {
         status: 'active',
         cpu_usage_percent: 25,
         memory_usage_percent: 35,
-        ws_connection_state: 'ready',
+        connection_state: 'ready',
         ready_lease_expires_at: readyLeaseExpiresAt,
         created_at: Date.now(),
       });
@@ -325,7 +325,7 @@ test('Multi-node cluster integration tests', async (t) => {
           status: 'active',
           cpu_usage_percent: 10 * i,
           memory_usage_percent: 15 * i,
-          ws_connection_state: 'ready',
+          connection_state: 'ready',
           ready_lease_expires_at: readyLeaseExpiresAt,
           created_at: Date.now(),
         });

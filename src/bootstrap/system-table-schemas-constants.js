@@ -156,7 +156,7 @@ const NODES_SCHEMA = {
     {name: 'disk_usage_percent', type: ColumnType.REAL, defaultValue: 0},
     {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
     {
-      name: 'ws_connection_state',
+      name: 'connection_state',
       type: ColumnType.TEXT,
       notNull: true,
       defaultValue: '\'disconnected\'',

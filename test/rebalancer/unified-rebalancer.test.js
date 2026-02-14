@@ -46,8 +46,8 @@ function createMockCache(
 ) {
   const now = Date.now();
   const normalizedNodes = nodes.map((node) => ({
-    ws_connection_state: Object.hasOwn(node, 'ws_connection_state') ?
-      node.ws_connection_state : 'ready',
+    connection_state: Object.hasOwn(node, 'connection_state') ?
+      node.connection_state : 'ready',
     ready_lease_expires_at: Object.hasOwn(node, 'ready_lease_expires_at') ?
       node.ready_lease_expires_at : now + 10000,
     ...node,
@@ -322,7 +322,7 @@ test('UnifiedRebalancer - Readiness Checks', async (t) => {
       entityType: EntityType.PARTITION,
       nodeId: 'node-0',
       nodes: [
-        {node_id: 'node-1', status: NodeStatus.ACTIVE, ws_connection_state: 'ready'},
+        {node_id: 'node-1', status: NodeStatus.ACTIVE, connection_state: 'ready'},
       ],
       connectionState: 'connected',
     });
@@ -339,7 +339,7 @@ test('UnifiedRebalancer - Readiness Checks', async (t) => {
       entityType: EntityType.PARTITION,
       nodeId: 'node-0',
       nodes: [
-        {node_id: 'node-1', status: NodeStatus.ACTIVE, ws_connection_state: 'ready'},
+        {node_id: 'node-1', status: NodeStatus.ACTIVE, connection_state: 'ready'},
       ],
       connectionState: 'disconnected',
     });
@@ -352,7 +352,7 @@ test('UnifiedRebalancer - Readiness Checks', async (t) => {
 
   await t.test('returns false when readiness ping fails', async (t) => {
     const mockCache = createMockCache([
-      {node_id: 'node-1', status: NodeStatus.ACTIVE, ws_connection_state: 'ready'},
+      {node_id: 'node-1', status: NodeStatus.ACTIVE, connection_state: 'ready'},
     ]);
     const mockCdcService = createMockCdcService();
     const mockPolicyService = createMockPolicyService();
@@ -456,6 +456,68 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
     t.ok(addMoves.some((m) => m.nodeId === 'node-2'));
     t.ok(addMoves.some((m) => m.nodeId === 'node-3'));
   });
+
+  await t.test(
+    'does not block rebalance on stale syncing replicas without in-flight operations',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      const currentReplicas = [
+        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+        {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.SYNCING},
+        {replica_id: 'r3', node_id: 'node-1', status: ReplicaStatus.SYNCING},
+      ];
+
+      const targetState = {
+        targetReplicaCount: 3,
+        targetNodes: ['node-1', 'node-2', 'node-3'],
+      };
+
+      const moves = rebalancer.calculateMoves(currentReplicas, targetState);
+      const addMoves = moves.filter((m) => m.type === MoveType.ADD);
+
+      t.equal(addMoves.length, 2, 'should still produce ADD moves');
+      t.ok(addMoves.some((m) => m.nodeId === 'node-2'));
+      t.ok(addMoves.some((m) => m.nodeId === 'node-3'));
+    },
+  );
+
+  await t.test(
+    'does not schedule local ADD in degraded single-node placement when replicas already occupy node',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      const currentReplicas = [
+        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.SYNCING},
+        {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.SYNCING},
+        {replica_id: 'r3', node_id: 'node-1', status: ReplicaStatus.SYNCING},
+      ];
+
+      const targetState = {
+        targetReplicaCount: 3,
+        targetNodes: ['node-1'],
+        degraded: true,
+        degradedReason: 'insufficient_nodes',
+        availableNodeCount: 1,
+      };
+
+      const moves = rebalancer.calculateMoves(currentReplicas, targetState);
+      const addMoves = moves.filter((m) => m.type === MoveType.ADD);
+      t.equal(
+        addMoves.length,
+        0,
+        'should not create local ADD when node is already occupied by syncing replicas',
+      );
+    },
+  );
 
   await t.test('calculates remove moves for failed replicas', async (t) => {
     const rebalancer = createTestRebalancer({
@@ -602,6 +664,45 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
     t.equal(addMoves[0].nodeId, 'node-3', 'ADD should target missing node');
   });
 
+  await t.test(
+    'does not emit degraded ADDs for critical partitions already at replica target',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        ],
+      });
+
+      // All replicas are present and active, but intentionally lack routability
+      // metadata to simulate transient bootstrap/service-row lag.
+      const currentReplicas = [
+        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+        {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+        {replica_id: 'r3', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+      ];
+
+      const targetState = {
+        targetReplicaCount: 3,
+        targetNodes: ['node-1'],
+        degraded: true,
+        degradedReason: 'insufficient_nodes',
+        availableNodeCount: 1,
+      };
+
+      const moves = rebalancer.calculateMoves(currentReplicas, targetState);
+      const addMoves = moves.filter((m) => m.type === MoveType.ADD);
+
+      t.equal(
+        addMoves.length,
+        0,
+        'degraded planning should not create local ADDs when replica count is already met',
+      );
+    },
+  );
+
   await t.test('converts spread_replicas + add into REPLACE move', async (t) => {
     // When a node has excess replicas and there is a missing target node,
     // planner should emit REPLACE to keep replica count bounded.
@@ -634,7 +735,11 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
     const replaceMoves = moves.filter((m) => m.type === MoveType.REPLACE);
     t.equal(replaceMoves.length, 1, 'should emit one REPLACE move');
     t.equal(replaceMoves[0].nodeId, 'node-3', 'REPLACE should target node-3');
-    t.equal(replaceMoves[0].sourceNodeId, 'node-1', 'REPLACE should remove from overrepresented node');
+    t.equal(
+      replaceMoves[0].sourceNodeId,
+      'node-1',
+      'REPLACE should remove from overrepresented node',
+    );
   });
 
   await t.test('calculates remove moves when no add moves needed', async (t) => {
@@ -1527,7 +1632,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
       nodes: [
         {node_id: 'node-1', status: NodeStatus.ACTIVE},
         {node_id: 'node-2', status: NodeStatus.ACTIVE},
-        {node_id: 'node-3', status: NodeStatus.ACTIVE, ws_connection_state: 'disconnected'},
+        {
+          node_id: 'node-3',
+          status: NodeStatus.ACTIVE,
+          ready_lease_expires_at: Date.now() - 1,
+        },
       ],
     });
 

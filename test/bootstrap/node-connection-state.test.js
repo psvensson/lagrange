@@ -67,7 +67,7 @@ test('BootstrapService - node connection state updates', async (t) => {
     await bootstrap.upsertNodeConnectionState({
       nodeId: 'node-1',
       nodeAddress: 'ws://node-1:9001',
-      wsConnectionState: 'connected',
+      connectionState: 'connected',
     });
 
     t.equal(nodesPartition.upsertCalls.length, 1);
@@ -75,7 +75,7 @@ test('BootstrapService - node connection state updates', async (t) => {
     t.equal(call.tableName, 'nodes');
     t.equal(call.data.node_id, 'node-1');
     t.equal(call.data.node_address, 'ws://node-1:9001');
-    t.equal(call.data.ws_connection_state, 'connected');
+    t.equal(call.data.connection_state, 'connected');
     t.equal(call.data.capabilities, '[]');
   });
 
@@ -101,7 +101,7 @@ test('BootstrapService - node connection state updates', async (t) => {
     await bootstrap.upsertNodeConnectionState({
       nodeId: 'node-2',
       nodeAddress: 'ws://node-2:9002',
-      wsConnectionState: 'ready',
+      connectionState: 'ready',
       capabilities: ['partition_replica'],
     });
 
@@ -109,7 +109,7 @@ test('BootstrapService - node connection state updates', async (t) => {
     const call = nodesPartition.updateCalls[0];
     t.equal(call.tableName, 'nodes');
     t.equal(call.where.node_id, 'node-2');
-    t.equal(call.data.ws_connection_state, 'ready');
+    t.equal(call.data.connection_state, 'ready');
     t.equal(call.data.node_address, 'ws://node-2:9002');
     t.equal(call.data.capabilities, '["partition_replica"]');
     t.equal(call.data.last_heartbeat, 123);
@@ -154,7 +154,7 @@ test('BootstrapService - node connection state updates', async (t) => {
     t.equal(response.acknowledged, true);
     t.equal(capturedOptions.nodeId, 'node-3');
     t.equal(capturedOptions.nodeAddress, 'ws://node-3:9003');
-    t.equal(capturedOptions.wsConnectionState, 'ready');
+    t.equal(capturedOptions.connectionState, 'ready');
     t.same(capturedOptions.capabilities, ['partition_replica']);
   });
 });

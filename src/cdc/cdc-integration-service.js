@@ -785,8 +785,8 @@ class CDCIntegrationService extends EventEmitter {
     if (!rowData.status) {
       rowData.status = STATE.ACTIVE;
     }
-    if (!rowData.ws_connection_state) {
-      rowData.ws_connection_state = STATE.DISCONNECTED;
+    if (!rowData.connection_state) {
+      rowData.connection_state = STATE.DISCONNECTED;
     }
     if (rowData.capabilities == null) {
       rowData.capabilities = '[]';

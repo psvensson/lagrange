@@ -1101,6 +1101,66 @@ test('PartitionService - setCdcIntegrationService sets service on partition and 
     await partition.shutdown();
   });
 
+test('PartitionService - setRebalanceCoordinator replaces local coordinator',
+  async (t) => {
+    const partition = new PartitionService({
+      partitionId: 'test-partition-24',
+      tableId: 'services',
+      tableName: 'services',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      nodeId: 'test-node',
+      dbPath: ':memory:',
+    });
+
+    await partition.initialize();
+
+    const previousCoordinator = {
+      shutdownCalled: false,
+      shutdown: async function() {
+        this.shutdownCalled = true;
+      },
+    };
+    const sharedCoordinator = {shared: true};
+    let rebalancerCoordinator = null;
+
+    partition.ownsRebalanceCoordinator = true;
+    partition.rebalanceCoordinator = previousCoordinator;
+    partition.rebalancer = {
+      setRebalanceCoordinator: (coordinator) => {
+        rebalancerCoordinator = coordinator;
+      },
+      shutdown: () => {},
+      setLeader: () => {},
+    };
+
+    partition.setRebalanceCoordinator(sharedCoordinator);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    t.equal(
+      partition.rebalanceCoordinator,
+      sharedCoordinator,
+      'Should use shared coordinator',
+    );
+    t.equal(
+      partition.ownsRebalanceCoordinator,
+      false,
+      'Shared coordinator should not be owned by partition',
+    );
+    t.equal(
+      rebalancerCoordinator,
+      sharedCoordinator,
+      'Rebalancer should receive shared coordinator',
+    );
+    t.equal(
+      previousCoordinator.shutdownCalled,
+      true,
+      'Owned coordinator should be shutdown when replaced',
+    );
+
+    await partition.shutdown();
+  });
+
 test('PartitionService - learner promotion deferred for even voter count', async (t) => {
   // Create a mock system table cache with 3 active voters
   const mockCache = {

@@ -8,8 +8,11 @@
  */
 
 import {test} from '../../../../src/test-helpers/tap.js';
+import http from 'node:http';
 import assert from 'node:assert';
 import fc from 'fast-check';
+import {validate as uuidValidate} from 'uuid';
+import {WebSocketServer} from 'ws';
 import {distributeNodes} from '../cluster.js';
 
 /**
@@ -83,7 +86,12 @@ test('Property 5: Multi-Host Container Distribution', async (t) => {
 // --- Unit Tests for Cluster ---
 
 import {createCluster, Cluster, NodeHandle} from '../cluster.js';
-import {LABELS, NODE_ROLES} from '../constants.js';
+import {
+  LABELS,
+  NODE_ROLES,
+  CONTAINER_ENV_KEYS,
+  PORTS,
+} from '../constants.js';
 
 /**
  * Unit: createCluster returns object with all required methods (Req 2.4)
@@ -135,6 +143,61 @@ test('Unit: createCluster returns a Cluster instance', async () => {
   assert.ok(
     cluster instanceof Cluster,
     'createCluster should return a Cluster instance',
+  );
+});
+
+test('Unit: startLoad emits progress and completion playback events', async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  const playbackEvents = [];
+  cluster._recordPlaybackEvent = (type, scope, entityId, details) => {
+    playbackEvents.push({
+      type,
+      scope,
+      entityId,
+      details,
+    });
+  };
+
+  const run = cluster.startLoad({
+    opsPerSec: 5,
+    duration: 2200,
+  });
+  const metrics = await run.waitComplete();
+  assert.ok(metrics, 'waitComplete should resolve metrics');
+
+  const started = playbackEvents.filter((event) =>
+    event.type === 'load.started',
+  );
+  const progress = playbackEvents.filter((event) =>
+    event.type === 'load.progress',
+  );
+  const completed = playbackEvents.filter((event) =>
+    event.type === 'load.completed',
+  );
+
+  assert.strictEqual(
+    started.length,
+    1,
+    'startLoad should emit one load.started event',
+  );
+  assert.ok(
+    progress.length >= 2,
+    'startLoad should emit periodic load.progress events while running',
+  );
+  assert.strictEqual(
+    completed.length,
+    1,
+    'startLoad should emit one load.completed event',
+  );
+  assert.ok(
+    completed[0].details &&
+      completed[0].details.metrics,
+    'load.completed should include final metrics',
   );
 });
 
@@ -227,6 +290,368 @@ test('Unit: remote config distributes nodes across hosts', async () => {
     perHost[0] + perHost[1],
     6,
     'total assignments should equal cluster size',
+  );
+});
+
+test('Unit: NodeHandle.isReachable checks bootstrap health endpoint', async () => {
+  const node = new NodeHandle(
+    'node-1',
+    'container-1',
+    '127.0.0.1',
+    NODE_ROLES.SEED,
+    {getContainerLogs: async () => ''},
+  );
+
+  const originalGet = http.get;
+  const calledUrls = [];
+  http.get = (url, _options, callback) => {
+    calledUrls.push(String(url));
+    const req = {
+      on: () => req,
+      destroy: () => {},
+    };
+    process.nextTick(() => {
+      callback({
+        statusCode: String(url).endsWith('/health') ? 200 : 404,
+        resume: () => {},
+      });
+    });
+    return req;
+  };
+
+  try {
+    const reachable = await node.isReachable();
+    assert.strictEqual(reachable, true, 'health endpoint should be reachable');
+    assert.ok(calledUrls[0].endsWith('/health'), 'should probe /health endpoint');
+  } finally {
+    http.get = originalGet;
+  }
+});
+
+test('Unit: NodeHandle.query sends queryId and ignores initial cache dump', async () => {
+  const server = new WebSocketServer({
+    host: '127.0.0.1',
+    port: 0,
+  });
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === 'object', 'server should expose listen address');
+  const adminApiPort = address.port;
+
+  let capturedQuery = null;
+  server.on('connection', (socket) => {
+    socket.send(JSON.stringify({
+      type: 'cache_dump',
+      data: {},
+    }));
+    socket.once('message', (data) => {
+      capturedQuery = JSON.parse(data.toString());
+      socket.send(JSON.stringify({
+        type: 'query_result',
+        queryId: capturedQuery.queryId,
+        results: [{node_id: 'node-1', status: 'active'}],
+        count: 1,
+      }));
+    });
+  });
+
+  const node = new NodeHandle(
+    'node-1',
+    'container-1',
+    '127.0.0.1',
+    NODE_ROLES.SEED,
+    {getContainerLogs: async () => ''},
+    adminApiPort,
+  );
+
+  try {
+    const result = await node.query(
+      'SELECT * FROM nodes WHERE node_id = \'node-1\'',
+    );
+    assert.strictEqual(capturedQuery.type, 'query', 'should send query message');
+    assert.ok(capturedQuery.queryId, 'should include queryId');
+    assert.deepStrictEqual(
+      result.rows,
+      [{node_id: 'node-1', status: 'active'}],
+      'should return rows from query_result message',
+    );
+  } finally {
+    node.closeQueryConnection();
+    await new Promise((resolve, reject) => {
+      server.close((err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+});
+
+test('Unit: NodeHandle.query reuses one Admin API connection', async () => {
+  const server = new WebSocketServer({
+    host: '127.0.0.1',
+    port: 0,
+  });
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === 'object', 'server should expose listen address');
+  const adminApiPort = address.port;
+
+  let connectionCount = 0;
+  server.on('connection', (socket) => {
+    connectionCount++;
+    socket.send(JSON.stringify({
+      type: 'cache_dump',
+      data: {},
+    }));
+    socket.on('message', (data) => {
+      const query = JSON.parse(data.toString());
+      socket.send(JSON.stringify({
+        type: 'query_result',
+        queryId: query.queryId,
+        results: [{ok: true}],
+      }));
+    });
+  });
+
+  const node = new NodeHandle(
+    'node-1',
+    'container-1',
+    '127.0.0.1',
+    NODE_ROLES.SEED,
+    {getContainerLogs: async () => ''},
+    adminApiPort,
+  );
+
+  try {
+    await node.query('SELECT 1');
+    await node.query('SELECT 2');
+    assert.strictEqual(
+      connectionCount,
+      1,
+      'query client should reuse a single websocket connection',
+    );
+  } finally {
+    node.closeQueryConnection();
+    await new Promise((resolve, reject) => {
+      server.close((err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+});
+
+test('Unit: NodeHandle.subscribeLogStream receives log CDC events', async () => {
+  const server = new WebSocketServer({
+    host: '127.0.0.1',
+    port: 0,
+  });
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === 'object', 'server should expose listen address');
+  const adminApiPort = address.port;
+
+  const expectedEntry = {
+    log_id: 'log-1',
+    node_id: 'node-1',
+    level: 'error',
+    message: 'streamed log',
+    timestamp: Date.now(),
+  };
+
+  server.on('connection', (socket) => {
+    socket.send(JSON.stringify({
+      type: 'cache_dump',
+      data: {},
+    }));
+    socket.send(JSON.stringify({
+      type: 'cdc_event',
+      table: 'logs',
+      operation: 'insert',
+      record: expectedEntry,
+    }));
+  });
+
+  const node = new NodeHandle(
+    'node-1',
+    'container-1',
+    '127.0.0.1',
+    NODE_ROLES.SEED,
+    {getContainerLogs: async () => ''},
+    adminApiPort,
+  );
+
+  let removeListener = () => {};
+  try {
+    const received = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('timed out waiting for streamed log event'));
+      }, 500);
+
+      Promise.resolve(
+        node.subscribeLogStream((entry) => {
+          clearTimeout(timeout);
+          resolve(entry);
+        }),
+      ).then((unsubscribe) => {
+        if (typeof unsubscribe === 'function') {
+          removeListener = unsubscribe;
+        }
+      }).catch((err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+    });
+
+    assert.deepStrictEqual(
+      received,
+      expectedEntry,
+      'should stream logs table CDC record to subscribers',
+    );
+  } finally {
+    removeListener();
+    node.closeQueryConnection();
+    await new Promise((resolve, reject) => {
+      server.close((err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+});
+
+test('Unit: _isNodeActive matches active status case-insensitively', async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  assert.strictEqual(
+    cluster._isNodeActive({rows: [{status: 'active'}]}),
+    true,
+    'lowercase active should be treated as active',
+  );
+  assert.strictEqual(
+    cluster._isNodeActive({rows: [{status: 'ACTIVE'}]}),
+    true,
+    'uppercase active should be treated as active',
+  );
+  assert.strictEqual(
+    cluster._isNodeActive({status: 'active'}),
+    true,
+    'top-level lowercase active should be treated as active',
+  );
+  assert.strictEqual(
+    cluster._isNodeActive({rows: [{status: 'ready'}]}),
+    false,
+    'non-active status should remain false',
+  );
+});
+
+test('Unit: Cluster.start generates UUID node IDs', async () => {
+  const cluster = createCluster({
+    size: 3,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  const generatedIds = [];
+  const mockProvider = {
+    createNetwork: async () => ({id: 'net-1', name: 'net-1'}),
+    removeNetwork: async () => {},
+    stopContainer: async () => {},
+    removeContainer: async () => {},
+  };
+
+  cluster._providers = [mockProvider];
+  cluster._hostAssignment = [0, 0, 0];
+  cluster._startNode = async (nodeId, role, _seedIp, _nodeIndex) => {
+    generatedIds.push(nodeId);
+    const containerId = 'container-' + generatedIds.length;
+    const ip = '10.0.0.' + generatedIds.length;
+    return new NodeHandle(nodeId, containerId, ip, role, mockProvider);
+  };
+  cluster._waitForBootstrapApi = async () => {};
+  cluster._waitForAllActive = async () => {};
+  cluster._logCollector.startLiveSubscription = async () => {};
+  cluster._logCollector.collectFinalSnapshot = async () => {};
+  cluster._logCollector.stopSubscription = async () => {};
+
+  await cluster.start();
+
+  assert.strictEqual(generatedIds.length, 3, 'should generate one node ID per node');
+  for (const nodeId of generatedIds) {
+    assert.ok(
+      uuidValidate(nodeId),
+      'generated node ID must be a UUID: ' + nodeId,
+    );
+  }
+
+  await cluster.stop();
+});
+
+test('Unit: _startNode sets NODE_ADDRESS to routable host:port', async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  cluster._networkName = 'test-net';
+
+  let capturedCreateOptions = null;
+  const provider = cluster._providers[0];
+  provider.createContainer = async (options) => {
+    capturedCreateOptions = options;
+    return {
+      containerId: 'container-1',
+      ip: '10.0.0.10',
+      name: options.name,
+    };
+  };
+
+  const nodeId = 'test-node-id';
+  await cluster._startNode(nodeId, NODE_ROLES.SEED, null, 0);
+
+  const env = capturedCreateOptions.env;
+  assert.ok(env, 'container env should be set');
+  assert.notStrictEqual(
+    env[CONTAINER_ENV_KEYS.NODE_ADDRESS],
+    nodeId,
+    'node address should not be raw nodeId',
+  );
+  assert.ok(
+    env[CONTAINER_ENV_KEYS.NODE_ADDRESS].endsWith(
+      ':' + PORTS.REST,
+    ),
+    'node address should include rest port',
+  );
+  assert.strictEqual(
+    env.TRANSPORT_WS_HOST,
+    '0.0.0.0',
+    'transport ws host should bind on all interfaces in containers',
   );
 });
 

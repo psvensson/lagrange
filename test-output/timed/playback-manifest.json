@@ -1,0 +1,19 @@
+{
+  "scenarioName": "timed",
+  "startedAt": 1771095030287,
+  "endedAt": 1771095030622,
+  "durationMs": 335,
+  "files": {
+    "events": "test-output/timed/events.ndjson",
+    "samples": "test-output/timed/samples.ndjson",
+    "snapshots": "test-output/timed/snapshots.ndjson",
+    "manifest": "test-output/timed/playback-manifest.json",
+    "viewer": "test-output/timed/playback-viewer.html"
+  },
+  "counts": {
+    "events": 10,
+    "samples": 0,
+    "snapshots": 0
+  },
+  "warnings": []
+}

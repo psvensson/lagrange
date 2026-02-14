@@ -1,0 +1,48 @@
+{
+  "timestamp": "2026-02-14T19:11:18.243Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 47251
+  },
+  "scenarios": [
+    {
+      "scenario": "three-node-seed-rebalance",
+      "passed": false,
+      "duration": 47251,
+      "startedAt": "2026-02-14T19:09:59.893Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Expected at least one partition rebalanced off seed node 60cc80de-3e30-435b-9e7d-6b9e338d6fa5, found 0 after 77 placement query attempts",
+      "stackTrace": "AssertionError [ERR_ASSERTION]: Expected at least one partition rebalanced off seed node 60cc80de-3e30-435b-9e7d-6b9e338d6fa5, found 0 after 77 placement query attempts\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/three-node-seed-rebalance.js:168:10)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:433:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:766:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "three-node-seed-rebalance",
+        "startedAt": 1771096199894,
+        "endedAt": 1771096278243,
+        "durationMs": 78349,
+        "files": {
+          "events": "test-output/.playback/three-node-seed-rebalance-flake-2-20260214T200933/three-node-seed-rebalance/events.ndjson",
+          "samples": "test-output/.playback/three-node-seed-rebalance-flake-2-20260214T200933/three-node-seed-rebalance/samples.ndjson",
+          "snapshots": "test-output/.playback/three-node-seed-rebalance-flake-2-20260214T200933/three-node-seed-rebalance/snapshots.ndjson",
+          "manifest": "test-output/.playback/three-node-seed-rebalance-flake-2-20260214T200933/three-node-seed-rebalance/playback-manifest.json",
+          "viewer": "test-output/.playback/three-node-seed-rebalance-flake-2-20260214T200933/three-node-seed-rebalance/playback-viewer.html"
+        },
+        "counts": {
+          "events": 35,
+          "samples": 123,
+          "snapshots": 38
+        },
+        "warnings": [
+          {
+            "code": "query-node-unavailable",
+            "message": "No reachable node available for topology snapshot query",
+            "timestamp": 1771096200896
+          }
+        ]
+      },
+      "loadMetrics": null
+    }
+  ]
+}

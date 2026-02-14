@@ -1,0 +1,19 @@
+{
+  "scenarioName": "fail-test",
+  "startedAt": 1771095029218,
+  "endedAt": 1771095029605,
+  "durationMs": 387,
+  "files": {
+    "events": "test-output/fail-test/events.ndjson",
+    "samples": "test-output/fail-test/samples.ndjson",
+    "snapshots": "test-output/fail-test/snapshots.ndjson",
+    "manifest": "test-output/fail-test/playback-manifest.json",
+    "viewer": "test-output/fail-test/playback-viewer.html"
+  },
+  "counts": {
+    "events": 10,
+    "samples": 0,
+    "snapshots": 0
+  },
+  "warnings": []
+}

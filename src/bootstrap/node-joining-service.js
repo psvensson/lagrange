@@ -840,6 +840,21 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
+   * Resolve the message-group service to use for partition CDC propagation.
+   * Prefers the current local leader when available and falls back to
+   * the captured message-group service.
+   * @param {Object|null} preferredMessageGroupService
+   * @return {Object|null}
+   */
+  resolveCdcPropagationMessageGroup(preferredMessageGroupService) {
+    const leaderMessageGroupService = this.getLeaderMessageGroupService();
+    if (leaderMessageGroupService) {
+      return leaderMessageGroupService;
+    }
+    return preferredMessageGroupService || null;
+  }
+
+  /**
    * Phase 3b: Join existing message group by moving a replica.
    * Requirements: 8.3 - Services created AFTER self-connection established.
    * @param {Object} assignment - Assignment instructions.
@@ -2096,7 +2111,7 @@ class NodeJoiningService extends EventEmitter {
       [COLUMN.MEMORY_USAGE_PERCENT]: NUM.ZERO,
       [COLUMN.DISK_USAGE_PERCENT]: NUM.ZERO,
       [COLUMN.STATUS]: STATE.ACTIVE,
-      [COLUMN.WS_CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
       [COLUMN.CAPABILITIES]: JSON.stringify([]),
       [COLUMN.LAST_HEARTBEAT]: now,
       [COLUMN.CREATED_AT]: now,
@@ -2872,6 +2887,7 @@ class NodeJoiningService extends EventEmitter {
         transport: this.transport,
         messageGroupService: messageGroupService,
         messageRouter: this.messageRouter,
+        rebalanceCoordinator: this.rebalanceCoordinator,
         replicaStateMachine: this.replicaStateMachine,
         systemTableCache: cacheForPartition,
         cdcIntegrationService: cdcIntegrationService,
@@ -2899,14 +2915,16 @@ class NodeJoiningService extends EventEmitter {
               partitionId: options.partitionId,
               replicaId: options.replicaId,
             });
-            // Only apply CDC event if this message group is the leader
-            // This ensures CDC events are replicated through Raft to all nodes
-            if (messageGroupService.isLeaderReplica()) {
-              await this.propagatePartitionCDCEvent(
-                messageGroupService,
-                cdcEvent,
-              );
+            const propagationMessageGroupService =
+              this.resolveCdcPropagationMessageGroup(messageGroupService);
+            if (!propagationMessageGroupService) {
+              return;
             }
+
+            await this.propagatePartitionCDCEvent(
+              propagationMessageGroupService,
+              cdcEvent,
+            );
           }
         });
 
@@ -3024,6 +3042,15 @@ class NodeJoiningService extends EventEmitter {
         messageGroupService.setRebalanceCoordinator(
           this.rebalanceCoordinator,
         );
+      }
+    }
+
+    for (const partition of this.partitionServices.values()) {
+      if (partition.setTablePolicyService) {
+        partition.setTablePolicyService(this.tablePolicyService);
+      }
+      if (partition.setRebalanceCoordinator) {
+        partition.setRebalanceCoordinator(this.rebalanceCoordinator);
       }
     }
 

@@ -373,8 +373,8 @@ class PartitionService extends EventEmitter {
     this.suppressLifecycleLogs = Boolean(options.suppressLifecycleLogs);
     this.onInitializationStage =
       typeof options.onInitializationStage === PARTITION_SERVICE_TYPE.FUNCTION ?
-      options.onInitializationStage :
-      null;
+        options.onInitializationStage :
+        null;
 
     // State
     this.initialized = false;
@@ -388,7 +388,8 @@ class PartitionService extends EventEmitter {
 
     // Rebalancer - manages replica placement when this partition is leader
     this.rebalancer = null;
-    this.rebalanceCoordinator = null;
+    this.rebalanceCoordinator = options.rebalanceCoordinator || null;
+    this.ownsRebalanceCoordinator = false;
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.tablePolicyService = options.tablePolicyService || null;
@@ -1012,7 +1013,7 @@ class PartitionService extends EventEmitter {
   }
 
   /**
-   * Ensure nodes table includes ws_connection_state column for readiness tracking.
+   * Ensure nodes table includes connection_state column for readiness tracking.
    * @private
    */
   ensureNodesTableColumns() {
@@ -1022,7 +1023,10 @@ class PartitionService extends EventEmitter {
 
     const columns = this.db.prepare(`PRAGMA table_info(${this.tableName})`).all();
     const hasConnectionState = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.WS_CONNECTION_STATE,
+      (col) => col.name === PARTITION_SERVICE_COLUMN.CONNECTION_STATE,
+    );
+    const hasLegacyWsConnectionState = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.LEGACY_WS_CONNECTION_STATE,
     );
     const hasCapabilities = columns.some(
       (col) => col.name === PARTITION_SERVICE_COLUMN.CAPABILITIES,
@@ -1031,16 +1035,33 @@ class PartitionService extends EventEmitter {
       (col) => col.name === PARTITION_SERVICE_COLUMN.READY_LEASE_EXPIRES_AT,
     );
 
+    let connectionStateAdded = false;
     if (!hasConnectionState) {
       this.db.exec(
         `ALTER TABLE ${this.tableName} ` +
-        PARTITION_SERVICE_COLUMN_SQL.ADD_WS_CONNECTION_STATE,
+        PARTITION_SERVICE_COLUMN_SQL.ADD_CONNECTION_STATE,
       );
+      connectionStateAdded = true;
 
-      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_WS_CONNECTION_STATE, {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_CONNECTION_STATE, {
         tableName: this.tableName,
         partitionId: this.partitionId,
       });
+    }
+
+    if (connectionStateAdded && hasLegacyWsConnectionState) {
+      this.db.exec(
+        `UPDATE ${this.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.BACKFILL_CONNECTION_STATE_FROM_LEGACY_WS,
+      );
+
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG.MIGRATED_CONNECTION_STATE_FROM_LEGACY_WS,
+        {
+          tableName: this.tableName,
+          partitionId: this.partitionId,
+        },
+      );
     }
 
     if (!hasCapabilities) {
@@ -2964,6 +2985,51 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Set rebalance coordinator for partition rebalancing.
+   * Allows partitions to bind to the shared control-plane coordinator.
+   * @param {Object} rebalanceCoordinator - Rebalance coordinator.
+   */
+  setRebalanceCoordinator(rebalanceCoordinator) {
+    if (!rebalanceCoordinator) {
+      return;
+    }
+
+    const previousCoordinator = this.rebalanceCoordinator;
+    const shouldShutdownPrevious =
+      this.ownsRebalanceCoordinator &&
+      previousCoordinator &&
+      previousCoordinator !== rebalanceCoordinator &&
+      typeof previousCoordinator.shutdown === PARTITION_SERVICE_TYPE.FUNCTION;
+
+    this.rebalanceCoordinator = rebalanceCoordinator;
+    this.ownsRebalanceCoordinator = false;
+
+    if (this.rebalancer) {
+      if (typeof this.rebalancer.setRebalanceCoordinator ===
+          PARTITION_SERVICE_TYPE.FUNCTION) {
+        this.rebalancer.setRebalanceCoordinator(rebalanceCoordinator);
+      } else {
+        this.rebalancer.rebalanceCoordinator = rebalanceCoordinator;
+      }
+    }
+
+    if (shouldShutdownPrevious) {
+      previousCoordinator.shutdown().catch((error) => {
+        this.logger.warn(
+          PARTITION_SERVICE_ERROR_MSG.REBALANCE_COORDINATOR_SHUTDOWN_FAILED,
+          {
+            partitionId: this.partitionId,
+            replicaId: this.replicaId,
+            error: error.message,
+          },
+        );
+      });
+    }
+
+    this.maybeInitializeRebalancer();
+  }
+
+  /**
    * Set SQL query engine for rebalancer operations.
    * @param {Object} sqlQueryEngine - SQL query engine instance.
    */
@@ -2980,7 +3046,23 @@ class PartitionService extends EventEmitter {
    * @private
    */
   maybeInitializeRebalancer() {
-    if (this.rebalancer || this.rebalanceCoordinator) {
+    if (this.rebalancer) {
+      this.rebalancer.systemTableCache = this.systemTableCache;
+      this.rebalancer.cdcIntegrationService = this.cdcIntegrationService;
+      this.rebalancer.tablePolicyService = this.tablePolicyService;
+      this.rebalancer.messageRouter = this.messageRouter;
+      this.rebalancer.sqlQueryEngine = this.sqlQueryEngine;
+      if (this.rebalanceCoordinator) {
+        if (typeof this.rebalancer.setRebalanceCoordinator ===
+            PARTITION_SERVICE_TYPE.FUNCTION) {
+          this.rebalancer.setRebalanceCoordinator(this.rebalanceCoordinator);
+        } else {
+          this.rebalancer.rebalanceCoordinator = this.rebalanceCoordinator;
+        }
+      }
+      if (typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION) {
+        this.rebalancer.setLeader(this.isLeader);
+      }
       return;
     }
 
@@ -3021,16 +3103,27 @@ class PartitionService extends EventEmitter {
       PARTITION_SERVICE_ERROR_MSG.REBALANCER_SQL_ENGINE_REQUIRED,
     );
 
-    this.rebalanceCoordinator = new RebalanceCoordinator({
-      nodeId: this.nodeId,
-      systemTableCache: systemTableCache,
-      cdcIntegrationService: cdcIntegrationService,
-      messageRouter: messageRouter,
-      tablePolicyService: tablePolicyService,
-      sqlQueryEngine: sqlQueryEngine,
-      enableTimeouts: false,
-    });
-    this.rebalanceCoordinator.initialize();
+    if (!this.rebalanceCoordinator) {
+      this.rebalanceCoordinator = new RebalanceCoordinator({
+        nodeId: this.nodeId,
+        systemTableCache: systemTableCache,
+        cdcIntegrationService: cdcIntegrationService,
+        messageRouter: messageRouter,
+        tablePolicyService: tablePolicyService,
+        sqlQueryEngine: sqlQueryEngine,
+        enableTimeouts: false,
+      });
+      this.ownsRebalanceCoordinator = true;
+    }
+
+    this.rebalanceCoordinator.systemTableCache = systemTableCache;
+    this.rebalanceCoordinator.cdcIntegrationService = cdcIntegrationService;
+    this.rebalanceCoordinator.tablePolicyService = tablePolicyService;
+    this.rebalanceCoordinator.sqlQueryEngine = sqlQueryEngine;
+    if (typeof this.rebalanceCoordinator.initialize ===
+        PARTITION_SERVICE_TYPE.FUNCTION) {
+      this.rebalanceCoordinator.initialize();
+    }
 
     this.rebalancer = new UnifiedRebalancer({
       entityId: this.partitionId,
@@ -3642,7 +3735,7 @@ class PartitionService extends EventEmitter {
       }
       this.rebalancer = null;
     }
-    if (this.rebalanceCoordinator) {
+    if (this.rebalanceCoordinator && this.ownsRebalanceCoordinator) {
       try {
         await this.rebalanceCoordinator.shutdown();
       } catch (error) {
@@ -3655,8 +3748,9 @@ class PartitionService extends EventEmitter {
           },
         );
       }
-      this.rebalanceCoordinator = null;
     }
+    this.rebalanceCoordinator = null;
+    this.ownsRebalanceCoordinator = false;
   }
 
   /**

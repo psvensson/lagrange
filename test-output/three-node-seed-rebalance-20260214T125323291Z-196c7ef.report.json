@@ -1,0 +1,48 @@
+{
+  "timestamp": "2026-02-14T12:55:48.223Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 48449
+  },
+  "scenarios": [
+    {
+      "scenario": "three-node-seed-rebalance",
+      "passed": false,
+      "duration": 48449,
+      "startedAt": "2026-02-14T12:54:07.905Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Convergence timeout after 20000ms. Leader changes: 0. Max over-target: 0ms. Voter counts: {}. Leaders: {}. Over-target durations: {}",
+      "stackTrace": "Error: Convergence timeout after 20000ms. Leader changes: 0. Max over-target: 0ms. Voter counts: {}. Leaders: {}. Over-target durations: {}\n    at waitForConvergence (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/assertions.js:293:15)\n    at async Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/three-node-seed-rebalance.js:72:23)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:180:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:504:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "three-node-seed-rebalance",
+        "startedAt": 1771073647907,
+        "endedAt": 1771073748222,
+        "durationMs": 100315,
+        "files": {
+          "events": "test-output/three-node-seed-rebalance/events.ndjson",
+          "samples": "test-output/three-node-seed-rebalance/samples.ndjson",
+          "snapshots": "test-output/three-node-seed-rebalance/snapshots.ndjson",
+          "manifest": "test-output/three-node-seed-rebalance/playback-manifest.json",
+          "viewer": "test-output/three-node-seed-rebalance/playback-viewer.html"
+        },
+        "counts": {
+          "events": 48,
+          "samples": 194,
+          "snapshots": 37
+        },
+        "warnings": [
+          {
+            "code": "query-node-unavailable",
+            "message": "No reachable node available for topology snapshot query",
+            "timestamp": 1771073648908
+          }
+        ]
+      },
+      "loadMetrics": null
+    }
+  ]
+}

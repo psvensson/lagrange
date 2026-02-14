@@ -21,10 +21,6 @@ function isNodeRecordReady(nodeRow, options = {}) {
     return false;
   }
 
-  if (nodeRow.ws_connection_state !== STATE.READY) {
-    return false;
-  }
-
   const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
   if (!Number.isFinite(leaseExpiry) || leaseExpiry <= now) {
     return false;

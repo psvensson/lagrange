@@ -134,11 +134,10 @@ class LeaseService extends EventEmitter {
       nodes = result.rows || [];
     }
 
-    const expired = nodes.filter((node) =>
-      node.ws_connection_state === STATE.READY &&
-      node.ready_lease_expires_at &&
-      node.ready_lease_expires_at <= now,
-    );
+    const expired = nodes.filter((node) => {
+      const leaseExpiry = Number(node.ready_lease_expires_at);
+      return Number.isFinite(leaseExpiry) && leaseExpiry <= now;
+    });
 
     const expiredIds = [];
     for (const node of expired) {
@@ -152,7 +151,7 @@ class LeaseService extends EventEmitter {
         memory_usage_percent: node.memory_usage_percent || NUM.ZERO,
         disk_usage_percent: node.disk_usage_percent || NUM.ZERO,
         status: node.status || STATE.ACTIVE,
-        ws_connection_state: STATE.DISCONNECTED,
+        connection_state: STATE.DISCONNECTED,
         capabilities: node.capabilities || STRING.EMPTY_JSON_ARRAY,
         last_heartbeat: node.last_heartbeat || now,
         ready_lease_expires_at: null,

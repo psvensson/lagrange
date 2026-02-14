@@ -58,6 +58,7 @@ function mergeWithDefaults(partial = {}) {
       defaultDuration: LOAD_DEFAULTS.defaultDuration,
       ...partial.load,
     },
+    ...(partial.outputDir ? {outputDir: partial.outputDir} : {}),
     ...(partial.gcp ? {gcp: partial.gcp} : {}),
   };
 }

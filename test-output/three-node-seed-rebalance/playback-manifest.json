@@ -1,0 +1,25 @@
+{
+  "scenarioName": "three-node-seed-rebalance",
+  "startedAt": 1771094540381,
+  "endedAt": 1771094644378,
+  "durationMs": 103997,
+  "files": {
+    "events": "test-output/three-node-seed-rebalance/events.ndjson",
+    "samples": "test-output/three-node-seed-rebalance/samples.ndjson",
+    "snapshots": "test-output/three-node-seed-rebalance/snapshots.ndjson",
+    "manifest": "test-output/three-node-seed-rebalance/playback-manifest.json",
+    "viewer": "test-output/three-node-seed-rebalance/playback-viewer.html"
+  },
+  "counts": {
+    "events": 118,
+    "samples": 219,
+    "snapshots": 42
+  },
+  "warnings": [
+    {
+      "code": "query-node-unavailable",
+      "message": "No reachable node available for topology snapshot query",
+      "timestamp": 1771094541382
+    }
+  ]
+}

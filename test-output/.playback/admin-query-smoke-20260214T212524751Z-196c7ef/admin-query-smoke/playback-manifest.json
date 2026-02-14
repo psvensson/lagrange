@@ -1,0 +1,25 @@
+{
+  "scenarioName": "admin-query-smoke",
+  "startedAt": 1771104408590,
+  "endedAt": 1771104488241,
+  "durationMs": 79651,
+  "files": {
+    "events": "test-output/.playback/admin-query-smoke-20260214T212524751Z-196c7ef/admin-query-smoke/events.ndjson",
+    "samples": "test-output/.playback/admin-query-smoke-20260214T212524751Z-196c7ef/admin-query-smoke/samples.ndjson",
+    "snapshots": "test-output/.playback/admin-query-smoke-20260214T212524751Z-196c7ef/admin-query-smoke/snapshots.ndjson",
+    "manifest": "test-output/.playback/admin-query-smoke-20260214T212524751Z-196c7ef/admin-query-smoke/playback-manifest.json",
+    "viewer": "test-output/.playback/admin-query-smoke-20260214T212524751Z-196c7ef/admin-query-smoke/playback-viewer.html"
+  },
+  "counts": {
+    "events": 142,
+    "samples": 91,
+    "snapshots": 16
+  },
+  "warnings": [
+    {
+      "code": "query-node-unavailable",
+      "message": "No reachable node available for topology snapshot query",
+      "timestamp": 1771104409593
+    }
+  ]
+}

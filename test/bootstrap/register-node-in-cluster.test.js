@@ -41,12 +41,20 @@ test('registerNodeInCluster() - should execute UPSERT writes with correct data',
   t.ok(nodeCall.rowData.memory_mb > 0, 'should have memory_mb > 0');
   t.ok(nodeCall.rowData.disk_gb > 0, 'should have disk_gb > 0');
   t.equal(nodeCall.rowData.status, STATE.ACTIVE, 'should set status to ACTIVE');
-  t.equal(nodeCall.rowData.ws_connection_state, STATE.CONNECTED,
-    'should set ws_connection_state to CONNECTED');
+  t.equal(nodeCall.rowData.connection_state, STATE.CONNECTED,
+    'should set connection_state to CONNECTED');
 
   const endpointCall = upsertCalls[1];
-  t.equal(endpointCall.tableName, TABLES.NODE_ENDPOINTS, 'should upsert node_endpoints table');
-  t.equal(endpointCall.rowData.endpoint_id, 'ep-test-node-123-ws', 'should use correct endpoint_id');
+  t.equal(
+    endpointCall.tableName,
+    TABLES.NODE_ENDPOINTS,
+    'should upsert node_endpoints table',
+  );
+  t.equal(
+    endpointCall.rowData.endpoint_id,
+    'ep-test-node-123-ws',
+    'should use correct endpoint_id',
+  );
   t.equal(endpointCall.rowData.node_id, 'test-node-123', 'should use correct node_id');
   t.equal(endpointCall.rowData.transport_type, TRANSPORT_TYPE.WEBSOCKET,
     'should use ws transport type');

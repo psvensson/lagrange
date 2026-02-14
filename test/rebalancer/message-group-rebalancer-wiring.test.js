@@ -12,7 +12,6 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
-import {TABLES} from '../../src/constants/tables.js';
 
 function createMockCache({
   nodes = [],
@@ -226,7 +225,7 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
         {
           node_id: 'node-1',
           status: 'active',
-          ws_connection_state: 'ready',
+          connection_state: 'ready',
           ready_lease_expires_at: Date.now() + 60000,
         },
       ],

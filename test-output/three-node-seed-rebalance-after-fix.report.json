@@ -1,0 +1,48 @@
+{
+  "timestamp": "2026-02-14T16:59:34.723Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 33826
+  },
+  "scenarios": [
+    {
+      "scenario": "three-node-seed-rebalance",
+      "passed": false,
+      "duration": 33826,
+      "startedAt": "2026-02-14T16:58:29.664Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Expected at least one partition rebalanced off seed node 316a6421-e86d-4188-a7c6-8f05287ed847, found 0",
+      "stackTrace": "AssertionError [ERR_ASSERTION]: Expected at least one partition rebalanced off seed node 316a6421-e86d-4188-a7c6-8f05287ed847, found 0\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/three-node-seed-rebalance.js:100:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:366:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:691:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "three-node-seed-rebalance",
+        "startedAt": 1771088309665,
+        "endedAt": 1771088374722,
+        "durationMs": 65057,
+        "files": {
+          "events": "test-output/three-node-seed-rebalance/events.ndjson",
+          "samples": "test-output/three-node-seed-rebalance/samples.ndjson",
+          "snapshots": "test-output/three-node-seed-rebalance/snapshots.ndjson",
+          "manifest": "test-output/three-node-seed-rebalance/playback-manifest.json",
+          "viewer": "test-output/three-node-seed-rebalance/playback-viewer.html"
+        },
+        "counts": {
+          "events": 58,
+          "samples": 77,
+          "snapshots": 22
+        },
+        "warnings": [
+          {
+            "code": "query-node-unavailable",
+            "message": "No reachable node available for topology snapshot query",
+            "timestamp": 1771088310670
+          }
+        ]
+      },
+      "loadMetrics": null
+    }
+  ]
+}

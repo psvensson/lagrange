@@ -41,7 +41,7 @@ function nodeRecordArb() {
     memory_mb: fc.integer({min: 512, max: 1048576}),
     disk_gb: fc.integer({min: 10, max: 10000}),
     status: fc.constantFrom('active', 'inactive', 'draining'),
-    ws_connection_state: fc.constantFrom('connected', 'disconnected'),
+    connection_state: fc.constantFrom('connected', 'disconnected'),
     last_heartbeat: fc.integer({min: 0, max: Date.now()}),
     created_at: fc.integer({min: 0, max: Date.now()}),
   });

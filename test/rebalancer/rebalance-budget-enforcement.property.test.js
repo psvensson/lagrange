@@ -98,7 +98,7 @@ function createCriticalRebalancer({budget, inFlightCount, neededMoves}) {
     nodes.push({
       node_id: `node-${i + 1}`,
       status: 'active',
-      ws_connection_state: 'ready',
+      connection_state: 'ready',
       ready_lease_expires_at: Date.now() + 60000,
     });
   }
@@ -324,7 +324,7 @@ test('Property 11: Rebalance budget enforcement', async (t) => {
           nodes: [{
             node_id: 'node-1',
             status: 'active',
-            ws_connection_state: 'ready',
+            connection_state: 'ready',
             ready_lease_expires_at: Date.now() + 60000,
           }],
         }),

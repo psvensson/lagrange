@@ -87,7 +87,7 @@ test('Property 12: Critical moves prioritized over optimization', async (t) => {
               availableNodes.push({
                 node_id: `node-${i + 1}`,
                 status: 'active',
-                ws_connection_state: 'ready',
+                connection_state: 'ready',
                 ready_lease_expires_at: Date.now() + 60000,
                 replica_count: i === 0 ? replicasOnFirst : 0,
               });
@@ -177,11 +177,11 @@ test('Property 12: Critical moves prioritized over optimization', async (t) => {
        */
       const entityId = 'partition-1';
       const nodes = [
-        {node_id: 'node-1', status: 'active', ws_connection_state: 'ready',
+        {node_id: 'node-1', status: 'active', connection_state: 'ready',
           ready_lease_expires_at: Date.now() + 60000, replica_count: 1},
-        {node_id: 'node-2', status: 'active', ws_connection_state: 'ready',
+        {node_id: 'node-2', status: 'active', connection_state: 'ready',
           ready_lease_expires_at: Date.now() + 60000, replica_count: 0},
-        {node_id: 'node-3', status: 'active', ws_connection_state: 'ready',
+        {node_id: 'node-3', status: 'active', connection_state: 'ready',
           ready_lease_expires_at: Date.now() + 60000, replica_count: 0},
       ];
 

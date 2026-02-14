@@ -13,8 +13,7 @@ import {CONVERGENCE_DEFAULTS} from './constants.js';
 
 // --- SQL Queries ---
 const SERVICES_QUERY =
-  'SELECT * FROM services WHERE service_type = \'partition\'' +
-  ' AND status = \'ACTIVE\'';
+  'SELECT * FROM services WHERE service_type = \'partition\'';
 const NODES_QUERY =
   'SELECT * FROM nodes WHERE status = \'active\'';
 const PARTITIONS_QUERY = 'SELECT * FROM partitions';
@@ -26,7 +25,7 @@ const RAFT_ROLE_LEARNER = 'learner';
  * Check whether a services row represents a voter-ready
  * partition replica. Mirrors the SLO integration test logic:
  *   - service_type === 'partition'
- *   - status === 'ACTIVE'
+ *   - status === 'active' (case-insensitive)
  *   - explicit raft_role that is not 'learner'
  *   - address is present
  *
@@ -37,7 +36,10 @@ const RAFT_ROLE_LEARNER = 'learner';
 function isVoterReady(row) {
   if (!row) return false;
   if (row.service_type !== 'partition') return false;
-  if (row.status !== 'ACTIVE') return false;
+  const status = typeof row.status === 'string'
+    ? row.status.toLowerCase()
+    : '';
+  if (status !== 'active') return false;
   const role = typeof row.raft_role === 'string'
     ? row.raft_role.toLowerCase()
     : null;

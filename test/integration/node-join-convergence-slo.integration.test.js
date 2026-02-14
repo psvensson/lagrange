@@ -249,7 +249,7 @@ test('Node join convergence SLO', {timeout: 30000}, async (t) => {
         const nodeRow = systemTableCache.get(SystemTableName.NODES, joiningNodeId);
         return !!nodeRow &&
           nodeRow.status === 'active' &&
-          nodeRow.ws_connection_state === 'ready';
+          nodeRow.connection_state === 'ready';
       }, 10000, 100);
       t.equal(nodeReadyObserved, true, 'joining node should become ready in cache');
 
@@ -295,7 +295,7 @@ test('Node join convergence SLO', {timeout: 30000}, async (t) => {
       );
       t.ok(
         maxObservedOverTargetMs <= MAX_SUSTAINED_OVERTARGET_MS,
-        `over-target voter duration should stay bounded (` +
+        'over-target voter duration should stay bounded (' +
           `${maxObservedOverTargetMs}ms <= ${MAX_SUSTAINED_OVERTARGET_MS}ms)`,
       );
       t.notOk(

@@ -227,6 +227,38 @@ test('waitComplete resolves after duration with metrics', async () => {
   }
 });
 
+test('load dispatch is spread across nodes', async () => {
+  const calls = {
+    n1: ZERO,
+    n2: ZERO,
+    n3: ZERO,
+  };
+  const nodes = ['n1', 'n2', 'n3'].map((id) => ({
+    id,
+    async query(_sql) {
+      calls[id]++;
+      return {rows: []};
+    },
+  }));
+
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 120,
+    duration: 200,
+  });
+  const run = gen.start();
+  try {
+    await run.waitComplete();
+    assert.ok(
+      calls.n1 > ZERO &&
+      calls.n2 > ZERO &&
+      calls.n3 > ZERO,
+      'expected all nodes to receive load queries',
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
 test('node failover records failure and retries', async () => {
   const failNode = createFailingNode('fail-1');
   const goodNode = createMockNode('good-1');

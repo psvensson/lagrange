@@ -1,0 +1,48 @@
+{
+  "timestamp": "2026-02-14T19:28:42.847Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 34033
+  },
+  "scenarios": [
+    {
+      "scenario": "three-node-seed-rebalance",
+      "passed": true,
+      "duration": 34033,
+      "startedAt": "2026-02-14T19:27:37.878Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "three-node-seed-rebalance",
+        "startedAt": 1771097257879,
+        "endedAt": 1771097322846,
+        "durationMs": 64967,
+        "files": {
+          "events": "test-output/.playback/three-node-seed-rebalance-postfix-1/three-node-seed-rebalance/events.ndjson",
+          "samples": "test-output/.playback/three-node-seed-rebalance-postfix-1/three-node-seed-rebalance/samples.ndjson",
+          "snapshots": "test-output/.playback/three-node-seed-rebalance-postfix-1/three-node-seed-rebalance/snapshots.ndjson",
+          "manifest": "test-output/.playback/three-node-seed-rebalance-postfix-1/three-node-seed-rebalance/playback-manifest.json",
+          "viewer": "test-output/.playback/three-node-seed-rebalance-postfix-1/three-node-seed-rebalance/playback-viewer.html"
+        },
+        "counts": {
+          "events": 84,
+          "samples": 80,
+          "snapshots": 23
+        },
+        "warnings": [
+          {
+            "code": "query-node-unavailable",
+            "message": "No reachable node available for topology snapshot query",
+            "timestamp": 1771097258882
+          }
+        ]
+      },
+      "loadMetrics": null
+    }
+  ]
+}

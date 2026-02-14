@@ -25,7 +25,7 @@ test('RebalanceCoordinator - readiness requires ACTIVE node status', async (t) =
         {
           node_id: 'node-2',
           status: NODE_STATE.FAILED,
-          ws_connection_state: NODE_STATE.READY,
+          connection_state: NODE_STATE.READY,
           ready_lease_expires_at: now + 60000,
         },
       ],

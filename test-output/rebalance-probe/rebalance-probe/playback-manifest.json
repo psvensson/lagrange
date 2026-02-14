@@ -1,0 +1,25 @@
+{
+  "scenarioName": "rebalance-probe",
+  "startedAt": 1771064526238,
+  "endedAt": 1771064660171,
+  "durationMs": 133933,
+  "files": {
+    "events": "test-output/rebalance-probe/rebalance-probe/events.ndjson",
+    "samples": "test-output/rebalance-probe/rebalance-probe/samples.ndjson",
+    "snapshots": "test-output/rebalance-probe/rebalance-probe/snapshots.ndjson",
+    "manifest": "test-output/rebalance-probe/rebalance-probe/playback-manifest.json",
+    "viewer": "test-output/rebalance-probe/rebalance-probe/playback-viewer.html"
+  },
+  "counts": {
+    "events": 24,
+    "samples": 370,
+    "snapshots": 73
+  },
+  "warnings": [
+    {
+      "code": "query-node-unavailable",
+      "message": "No reachable node available for topology snapshot query",
+      "timestamp": 1771064527243
+    }
+  ]
+}

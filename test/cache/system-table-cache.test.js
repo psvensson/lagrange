@@ -668,22 +668,22 @@ test('SystemTableCache - getReadyNodes returns only ready nodes', async (t) => {
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-1',
-    ws_connection_state: 'ready',
+    connection_state: 'ready',
     ready_lease_expires_at: now + 1000,
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-2',
-    ws_connection_state: 'joining',
+    connection_state: 'joining',
     ready_lease_expires_at: now + 1000,
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-3',
-    ws_connection_state: 'ready',
+    connection_state: 'ready',
     ready_lease_expires_at: now + 2000,
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-4',
-    ws_connection_state: 'draining',
+    connection_state: 'draining',
     ready_lease_expires_at: now + 1000,
   });
 
@@ -701,12 +701,12 @@ test('SystemTableCache - getReadyNodes returns empty when no ready nodes', async
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-1',
-    ws_connection_state: 'joining',
+    connection_state: 'joining',
     ready_lease_expires_at: now + 1000,
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     node_id: 'node-2',
-    ws_connection_state: 'draining',
+    connection_state: 'draining',
     ready_lease_expires_at: now + 1000,
   });
 
@@ -720,7 +720,7 @@ test('SystemTableCache - getReadyNodes rejects missing node_id', async (t) => {
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
     id: 'node-1',
-    ws_connection_state: 'ready',
+    connection_state: 'ready',
     ready_lease_expires_at: now + 1000,
   });
 

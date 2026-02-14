@@ -42,7 +42,7 @@ test('ReplicaDispatchService persists NODE_STATE_UPDATE ready heartbeats', async
     memory_usage_percent: 20,
     disk_usage_percent: 30,
     status: STATE.ACTIVE,
-    ws_connection_state: STATE.CONNECTED,
+    connection_state: STATE.CONNECTED,
     capabilities: '[]',
     last_heartbeat: now - 1000,
     ready_lease_expires_at: null,
@@ -97,7 +97,7 @@ test('ReplicaDispatchService persists NODE_STATE_UPDATE ready heartbeats', async
   }
   t.equal(upserts[0].tableName, 'nodes', 'writes to nodes table');
   t.equal(
-    upserts[0].row.ws_connection_state,
+    upserts[0].row.connection_state,
     STATE.READY,
     'marks node as ready',
   );

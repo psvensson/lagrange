@@ -1,0 +1,25 @@
+{
+  "scenarioName": "network-partition-split-brain",
+  "startedAt": 1771093704671,
+  "endedAt": 1771093848100,
+  "durationMs": 143429,
+  "files": {
+    "events": "test-output/network-partition-split-brain/events.ndjson",
+    "samples": "test-output/network-partition-split-brain/samples.ndjson",
+    "snapshots": "test-output/network-partition-split-brain/snapshots.ndjson",
+    "manifest": "test-output/network-partition-split-brain/playback-manifest.json",
+    "viewer": "test-output/network-partition-split-brain/playback-viewer.html"
+  },
+  "counts": {
+    "events": 99,
+    "samples": 461,
+    "snapshots": 20
+  },
+  "warnings": [
+    {
+      "code": "query-node-unavailable",
+      "message": "No reachable node available for topology snapshot query",
+      "timestamp": 1771093705672
+    }
+  ]
+}

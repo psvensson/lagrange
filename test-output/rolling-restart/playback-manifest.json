@@ -1,0 +1,35 @@
+{
+  "scenarioName": "rolling-restart",
+  "startedAt": 1771094075094,
+  "endedAt": 1771094278802,
+  "durationMs": 203708,
+  "files": {
+    "events": "test-output/rolling-restart/events.ndjson",
+    "samples": "test-output/rolling-restart/samples.ndjson",
+    "snapshots": "test-output/rolling-restart/snapshots.ndjson",
+    "manifest": "test-output/rolling-restart/playback-manifest.json",
+    "viewer": "test-output/rolling-restart/playback-viewer.html"
+  },
+  "counts": {
+    "events": 257,
+    "samples": 326,
+    "snapshots": 31
+  },
+  "warnings": [
+    {
+      "code": "query-node-unavailable",
+      "message": "No reachable node available for topology snapshot query",
+      "timestamp": 1771094076094
+    },
+    {
+      "code": "service-query-failed-e38034da-3958-4ff3-bd4b-46702723a2f8",
+      "message": "Failed to query services on node e38034da-3958-4ff3-bd4b-46702723a2f8: Admin API query failed for node e38034da-3958-4ff3-bd4b-46702723a2f8: connect ETIMEDOUT 172.19.0.2:8081",
+      "timestamp": 1771094247810
+    },
+    {
+      "code": "topology-capture-failed",
+      "message": "Failed to capture topology snapshot: Admin API query failed for node e38034da-3958-4ff3-bd4b-46702723a2f8: connect ETIMEDOUT 172.19.0.2:8081",
+      "timestamp": 1771094247810
+    }
+  ]
+}

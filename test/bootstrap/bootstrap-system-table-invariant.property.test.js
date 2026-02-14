@@ -83,7 +83,7 @@ const nodeDataArb = fc.record({
   memory_mb: fc.integer({min: 1024, max: 1048576}),
   disk_gb: fc.integer({min: 10, max: 10000}),
   status: fc.constantFrom('active', 'inactive', 'joining'),
-  ws_connection_state: fc.constantFrom('connected', 'disconnected', 'connecting'),
+  connection_state: fc.constantFrom('connected', 'disconnected', 'connecting'),
   last_heartbeat: fc.integer({min: 0, max: Date.now()}),
   created_at: fc.integer({min: 0, max: Date.now()}),
 });

@@ -23,6 +23,8 @@ const DISPATCH_LOG_MSG = Object.freeze({
   MESSAGE_HANDLING_FAILED: 'Message handling failed',
   NO_HANDLER_ON_TARGET:
     'No active handler for entity type on target node',
+  RETRY_PENDING_READY_NODE:
+    'Retrying pending replica operations for ready node',
 });
 
 const DISPATCH_ERROR_MSG = Object.freeze({

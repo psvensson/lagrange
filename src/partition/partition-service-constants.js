@@ -131,15 +131,16 @@ const PARTITION_SERVICE_DB = Object.freeze({
 });
 
 const PARTITION_SERVICE_COLUMN = Object.freeze({
-  WS_CONNECTION_STATE: 'ws_connection_state',
+  CONNECTION_STATE: 'connection_state',
+  LEGACY_WS_CONNECTION_STATE: 'ws_connection_state',
   CAPABILITIES: 'capabilities',
   READY_LEASE_EXPIRES_AT: 'ready_lease_expires_at',
   TABLE_NAME: 'table_name',
 });
 
 const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
-  ADD_WS_CONNECTION_STATE:
-    'ADD COLUMN ws_connection_state TEXT DEFAULT \'disconnected\'',
+  ADD_CONNECTION_STATE:
+    'ADD COLUMN connection_state TEXT DEFAULT \'disconnected\'',
   ADD_CAPABILITIES:
     'ADD COLUMN capabilities TEXT DEFAULT \'[]\'',
   ADD_READY_LEASE_EXPIRES_AT:
@@ -148,6 +149,9 @@ const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
     'ADD COLUMN leader_node_id TEXT',
   ADD_TABLE_NAME:
     'ADD COLUMN table_name TEXT',
+  BACKFILL_CONNECTION_STATE_FROM_LEGACY_WS:
+    'SET connection_state = ws_connection_state ' +
+    'WHERE ws_connection_state IS NOT NULL',
 });
 
 const PARTITION_SERVICE_LIFERAFT_TIMER = Object.freeze({
@@ -196,7 +200,9 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   INITIALIZED: 'Partition service initialized',
   STARTING_ELECTION_TIMER: 'Starting Raft election timer',
   CREATED_TABLE: 'Created table',
-  ADDED_WS_CONNECTION_STATE: 'Added ws_connection_state column to nodes table',
+  ADDED_CONNECTION_STATE: 'Added connection_state column to nodes table',
+  MIGRATED_CONNECTION_STATE_FROM_LEGACY_WS:
+    'Migrated connection_state values from legacy ws_connection_state column',
   ADDED_CAPABILITIES: 'Added capabilities column to nodes table',
   ADDED_READY_LEASE: 'Added ready_lease_expires_at column to nodes table',
   ADDED_MESSAGE_GROUP_LEADER: 'Added leader_node_id column to message_groups table',

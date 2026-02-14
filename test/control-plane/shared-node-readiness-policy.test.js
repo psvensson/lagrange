@@ -57,7 +57,7 @@ function createDispatchService(systemTableCache, messageRouter) {
   });
 }
 
-test('dispatch and rebalancer share consistent node readiness decisions', async (t) => {
+test('dispatch readiness is lease-based while rebalancer keeps transport checks', async (t) => {
   ConfigurationManager.resetInstance();
   const config = ConfigurationManager.getInstance();
   config.initialize();
@@ -67,7 +67,7 @@ test('dispatch and rebalancer share consistent node readiness decisions', async 
   const nodeRow = {
     node_id: nodeId,
     status: STATE.ACTIVE,
-    ws_connection_state: STATE.READY,
+    connection_state: STATE.READY,
     ready_lease_expires_at: now + 1000,
   };
 
@@ -80,13 +80,28 @@ test('dispatch and rebalancer share consistent node readiness decisions', async 
   t.equal(await rebalancer.isNodeReady(nodeId), true,
     'rebalancer should treat ready node as ready');
 
-  nodeRow.ws_connection_state = STATE.DISCONNECTED;
-  t.equal(dispatch.isNodeReady(nodeId), false,
-    'dispatch should reject disconnected node');
-  t.equal(await rebalancer.isNodeReady(nodeId), false,
-    'rebalancer should reject disconnected node');
+  nodeRow.connection_state = STATE.DISCONNECTED;
+  t.equal(dispatch.isNodeReady(nodeId), true,
+    'dispatch readiness should not depend on connection_state');
+  t.equal(await rebalancer.isNodeReady(nodeId), true,
+    'rebalancer readiness should not depend on connection_state');
 
-  nodeRow.ws_connection_state = STATE.READY;
+  const disconnectedRouter = createSharedRouter(STATE.DISCONNECTED);
+  const disconnectedDispatch = createDispatchService(
+    systemTableCache,
+    disconnectedRouter,
+  );
+  const disconnectedRebalancer = createRebalancer(
+    systemTableCache,
+    disconnectedRouter,
+  );
+  t.equal(disconnectedDispatch.isNodeReady(nodeId), true,
+    'dispatch should allow lease-ready nodes without transport-specific gating');
+  t.equal(await disconnectedRebalancer.isNodeReady(nodeId), false,
+    'rebalancer should reject nodes without transport connectivity');
+  disconnectedRebalancer.shutdown();
+
+  nodeRow.connection_state = STATE.READY;
   nodeRow.ready_lease_expires_at = now - 1;
   t.equal(dispatch.isNodeReady(nodeId), false,
     'dispatch should reject expired lease');

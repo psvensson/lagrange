@@ -339,9 +339,19 @@ Under the unified runtime target, these services are runtime-selected via
 ### AdminWebSocketAPI
 - Node-local compatibility adapter for administrative SQL/cache operations
 - WebSocket endpoint: `/api/admin/stream`
+- HTTP landing and test admin endpoints:
+  - `/` and `/ui/tests` for operator dashboard
+  - `/api/admin/tests` and `/api/admin/test-runs*` for test administration
+  - `/ui/playback-viewer` and `/ui/test-output/*` for run artifact access
 - Fixed listening port: `8081` on every node
 - Port is intentionally fixed for operator predictability and is not
   configuration-driven in node startup
+- Live run output stream uses SSE endpoint:
+  `/api/admin/test-runs/:runId/stream`
+- Test-run process orchestration and saved-run indexing is owned by
+  `AdminTestRunService` (`src/admin/admin-test-run-service.js`)
+- Standalone userland launcher (`scripts/start-test-run-dashboard.js`) starts
+  the same HTTP test admin surface without bootstrap/node lifecycle coupling
 
 ### NodeService (Singleton)
 - Administrative component present on every node

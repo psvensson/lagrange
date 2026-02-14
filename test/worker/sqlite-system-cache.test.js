@@ -59,7 +59,7 @@ test('SQLiteSystemCache - applyCDCEvent INSERT and get()', async (t) => {
     memory_usage_percent: 50.0,
     disk_usage_percent: 30.0,
     status: 'active',
-    ws_connection_state: 'connected',
+    connection_state: 'connected',
     capabilities: '[]',
     last_heartbeat: Date.now(),
     created_at: Date.now(),
@@ -89,7 +89,7 @@ test('SQLiteSystemCache - applyCDCEvent UPDATE', async (t) => {
     memory_mb: 8192,
     disk_gb: 100,
     status: 'active',
-    ws_connection_state: 'connected',
+    connection_state: 'connected',
     last_heartbeat: Date.now(),
     created_at: Date.now(),
   };
@@ -123,7 +123,7 @@ test('SQLiteSystemCache - applyCDCEvent DELETE', async (t) => {
     memory_mb: 8192,
     disk_gb: 100,
     status: 'active',
-    ws_connection_state: 'connected',
+    connection_state: 'connected',
     last_heartbeat: Date.now(),
     created_at: Date.now(),
   };
@@ -152,7 +152,7 @@ test('SQLiteSystemCache - applyCDCEvent UPSERT', async (t) => {
     memory_mb: 8192,
     disk_gb: 100,
     status: 'active',
-    ws_connection_state: 'connected',
+    connection_state: 'connected',
     last_heartbeat: Date.now(),
     created_at: Date.now(),
   };
@@ -185,17 +185,17 @@ test('SQLiteSystemCache - query() with SQL', async (t) => {
     {
       node_id: 'node-1', node_address: 'ws://host1:8080', cpu_cores: 4,
       memory_mb: 8192, disk_gb: 100, status: 'active',
-      ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+      connection_state: 'connected', last_heartbeat: now, created_at: now,
     },
     {
       node_id: 'node-2', node_address: 'ws://host2:8080', cpu_cores: 8,
       memory_mb: 16384, disk_gb: 200, status: 'active',
-      ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+      connection_state: 'connected', last_heartbeat: now, created_at: now,
     },
     {
       node_id: 'node-3', node_address: 'ws://host3:8080', cpu_cores: 2,
       memory_mb: 4096, disk_gb: 50, status: 'inactive',
-      ws_connection_state: 'disconnected', last_heartbeat: now, created_at: now,
+      connection_state: 'disconnected', last_heartbeat: now, created_at: now,
     },
   ];
 
@@ -235,12 +235,12 @@ test('SQLiteSystemCache - filter() with predicate', async (t) => {
     {
       node_id: 'node-1', node_address: 'ws://host1:8080', cpu_cores: 4,
       memory_mb: 8192, disk_gb: 100, status: 'active',
-      ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+      connection_state: 'connected', last_heartbeat: now, created_at: now,
     },
     {
       node_id: 'node-2', node_address: 'ws://host2:8080', cpu_cores: 8,
       memory_mb: 16384, disk_gb: 200, status: 'active',
-      ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+      connection_state: 'connected', last_heartbeat: now, created_at: now,
     },
   ];
 
@@ -269,12 +269,12 @@ test('SQLiteSystemCache - getAll()', async (t) => {
   cache.applyCDCEvent('nodes', CDC_OPERATION.INSERT, {
     node_id: 'node-1', node_address: 'ws://host1:8080', cpu_cores: 4,
     memory_mb: 8192, disk_gb: 100, status: 'active',
-    ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+    connection_state: 'connected', last_heartbeat: now, created_at: now,
   });
   cache.applyCDCEvent('nodes', CDC_OPERATION.INSERT, {
     node_id: 'node-2', node_address: 'ws://host2:8080', cpu_cores: 8,
     memory_mb: 16384, disk_gb: 200, status: 'active',
-    ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+    connection_state: 'connected', last_heartbeat: now, created_at: now,
   });
 
   allNodes = cache.getAll('nodes');
@@ -292,7 +292,7 @@ test('SQLiteSystemCache - getReplicationState() and applyReplicationState()', as
   sourceCache.applyCDCEvent('nodes', CDC_OPERATION.INSERT, {
     node_id: 'node-1', node_address: 'ws://host1:8080', cpu_cores: 4,
     memory_mb: 8192, disk_gb: 100, status: 'active',
-    ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+    connection_state: 'connected', last_heartbeat: now, created_at: now,
   });
   sourceCache.applyCDCEvent('partitions', CDC_OPERATION.INSERT, {
     partition_id: 'part-1', table_id: 'table-1', replica_count: 3,
@@ -341,7 +341,7 @@ test('SQLiteSystemCache - applyReplicationState() clears existing data', async (
   cache.applyCDCEvent('nodes', CDC_OPERATION.INSERT, {
     node_id: 'old-node', node_address: 'ws://old:8080', cpu_cores: 2,
     memory_mb: 4096, disk_gb: 50, status: 'active',
-    ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+    connection_state: 'connected', last_heartbeat: now, created_at: now,
   });
 
   t.equal(cache.getAll('nodes').length, 1, 'has 1 node initially');
@@ -351,7 +351,7 @@ test('SQLiteSystemCache - applyReplicationState() clears existing data', async (
     nodes: [{
       node_id: 'new-node', node_address: 'ws://new:8080', cpu_cores: 8,
       memory_mb: 16384, disk_gb: 200, status: 'active',
-      ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+      connection_state: 'connected', last_heartbeat: now, created_at: now,
     }],
     partitions: [],
     tables: [],
@@ -401,7 +401,7 @@ test('SQLiteSystemCache - getStats()', async (t) => {
   cache.applyCDCEvent('nodes', CDC_OPERATION.INSERT, {
     node_id: 'node-1', node_address: 'ws://host1:8080', cpu_cores: 4,
     memory_mb: 8192, disk_gb: 100, status: 'active',
-    ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+    connection_state: 'connected', last_heartbeat: now, created_at: now,
   });
 
   stats = cache.getStats();
@@ -535,7 +535,7 @@ test('SQLiteSystemCache - supports all system tables', async (t) => {
     nodes: {
       node_id: 'node-1', node_address: 'ws://host:8080', cpu_cores: 4,
       memory_mb: 8192, disk_gb: 100, status: 'active',
-      ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+      connection_state: 'connected', last_heartbeat: now, created_at: now,
     },
     services: {
       service_id: 'svc-1', service_type: 'partition', node_id: 'node-1',
@@ -579,7 +579,7 @@ test('SQLiteSystemCache - cache isolation (multiple instances)', async (t) => {
   cache1.applyCDCEvent('nodes', CDC_OPERATION.INSERT, {
     node_id: 'node-1', node_address: 'ws://host1:8080', cpu_cores: 4,
     memory_mb: 8192, disk_gb: 100, status: 'active',
-    ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+    connection_state: 'connected', last_heartbeat: now, created_at: now,
   });
 
   // Verify cache1 has the data
@@ -592,7 +592,7 @@ test('SQLiteSystemCache - cache isolation (multiple instances)', async (t) => {
   cache2.applyCDCEvent('nodes', CDC_OPERATION.INSERT, {
     node_id: 'node-2', node_address: 'ws://host2:8080', cpu_cores: 8,
     memory_mb: 16384, disk_gb: 200, status: 'active',
-    ws_connection_state: 'connected', last_heartbeat: now, created_at: now,
+    connection_state: 'connected', last_heartbeat: now, created_at: now,
   });
 
   // Verify each cache has only its own data

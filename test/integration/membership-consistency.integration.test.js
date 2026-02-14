@@ -387,7 +387,7 @@ function createNodeEntry(nodeId, overrides = {}) {
     memory_usage_percent: 20,
     disk_usage_percent: 30,
     status: NODE_STATUS.ACTIVE,
-    ws_connection_state: STATE.READY,
+    connection_state: STATE.READY,
     capabilities: '[]',
     last_heartbeat: now,
     ready_lease_expires_at: now + TEST_TIMEOUTS.READY_LEASE_DURATION,
@@ -653,7 +653,7 @@ test('Membership Consistency Integration Tests', async (t) => {
       systemTableCache.onCacheChange((tableName, _operation, record) => {
         if (tableName === SystemTableName.NODES && record.node_id === nodeId) {
           stateChanges.push({
-            state: record.ws_connection_state,
+            state: record.connection_state,
             timestamp: Date.now(),
           });
         }
@@ -673,7 +673,7 @@ test('Membership Consistency Integration Tests', async (t) => {
           SystemTableName.NODES,
           {node_id: nodeId},
           {
-            ws_connection_state: state,
+            connection_state: state,
             ready_lease_expires_at: state === STATE.READY ?
               Date.now() + TEST_TIMEOUTS.READY_LEASE_DURATION : null,
           },
@@ -698,7 +698,7 @@ test('Membership Consistency Integration Tests', async (t) => {
       // Final value can be re-reconciled to READY by control-plane services.
       const finalNode = systemTableCache.get(SystemTableName.NODES, nodeId);
       t.ok(
-        [STATE.DISCONNECTED, STATE.READY].includes(finalNode.ws_connection_state),
+        [STATE.DISCONNECTED, STATE.READY].includes(finalNode.connection_state),
         'final state should be disconnected or reconciled ready',
       );
     } finally {
@@ -852,7 +852,7 @@ test('Membership Consistency Integration Tests', async (t) => {
 
       // Leader cache should have node marked as disconnected
       const leaderNode = leaderCache.get(SystemTableName.NODES, nodeId);
-      t.equal(leaderNode.ws_connection_state, STATE.DISCONNECTED,
+      t.equal(leaderNode.connection_state, STATE.DISCONNECTED,
         'leader should mark node as disconnected');
 
       // Follower cache may still show ready (CDC latency)
@@ -863,7 +863,7 @@ test('Membership Consistency Integration Tests', async (t) => {
 
       // Now follower should also show disconnected
       const followerNodeAfter = followerCache.get(SystemTableName.NODES, nodeId);
-      t.equal(followerNodeAfter.ws_connection_state, STATE.DISCONNECTED,
+      t.equal(followerNodeAfter.connection_state, STATE.DISCONNECTED,
         'follower should see disconnected after CDC propagation');
 
       heartbeatSvc.stop();
@@ -996,7 +996,7 @@ test('Membership Consistency Integration Tests', async (t) => {
       SystemTableName.NODES,
       CDC_OPERATIONS.INSERT,
       createNodeEntry(nodeId, {
-        ws_connection_state: STATE.READY,
+        connection_state: STATE.READY,
         ready_lease_expires_at: now + TEST_TIMEOUTS.READY_LEASE_DURATION,
       }),
     );
@@ -1050,7 +1050,7 @@ test('Membership Consistency Integration Tests', async (t) => {
 
       // Cache shows node as ready
       const cachedNode = cache.get(SystemTableName.NODES, nodeId);
-      t.equal(cachedNode.ws_connection_state, STATE.READY,
+      t.equal(cachedNode.connection_state, STATE.READY,
         'cache should show node as ready');
 
       // But isNodeReady should return false (WebSocket disconnected)
@@ -1268,7 +1268,7 @@ test('Membership Consistency Integration Tests', async (t) => {
         createNodeEntry('failing-node', {
           last_heartbeat: now - TEST_TIMEOUTS.FAILURE_THRESHOLD - 100,
           status: NODE_STATUS.SUSPECTED,
-          ws_connection_state: STATE.READY,
+          connection_state: STATE.READY,
           ready_lease_expires_at: now + TEST_TIMEOUTS.READY_LEASE_DURATION,
         }),
       );
@@ -1479,19 +1479,19 @@ test('Membership Consistency Integration Tests', async (t) => {
     // Add same nodes to both caches
     const nodes = [
       createNodeEntry('ready-node-1', {
-        ws_connection_state: STATE.READY,
+        connection_state: STATE.READY,
         ready_lease_expires_at: now + TEST_TIMEOUTS.READY_LEASE_DURATION,
       }),
       createNodeEntry('ready-node-2', {
-        ws_connection_state: STATE.READY,
+        connection_state: STATE.READY,
         ready_lease_expires_at: now + TEST_TIMEOUTS.READY_LEASE_DURATION,
       }),
       createNodeEntry('not-ready-node', {
-        ws_connection_state: STATE.CONNECTED, // Not ready
+        connection_state: STATE.CONNECTED, // Not ready
         ready_lease_expires_at: now + TEST_TIMEOUTS.READY_LEASE_DURATION,
       }),
       createNodeEntry('expired-lease-node', {
-        ws_connection_state: STATE.READY,
+        connection_state: STATE.READY,
         ready_lease_expires_at: now - 100, // Expired
       }),
     ];

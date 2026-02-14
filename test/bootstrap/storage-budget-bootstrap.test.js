@@ -293,7 +293,7 @@ describe('Heartbeat budget preservation (Req 9.2)', () => {
       memory_usage_percent: NUM.ZERO,
       disk_usage_percent: NUM.ZERO,
       status: STATE.ACTIVE,
-      ws_connection_state: 'ready',
+      connection_state: 'ready',
       capabilities: '[]',
       last_heartbeat: Date.now(),
       ready_lease_expires_at: Date.now() + 30000,

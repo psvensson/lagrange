@@ -127,6 +127,35 @@ async function connectLogsTablePersistence(cdcIntegrationService, logger) {
 }
 
 /**
+ * Start logs table persistence hookup in the background.
+ * Avoids blocking node readiness on buffered log flush duration.
+ * @param {Object|null} cdcIntegrationService - CDC integration service.
+ * @param {Object} logger - Entrypoint logger.
+ * @return {{getService: Function, promise: Promise<LogsTableService|null>}}
+ */
+function startLogsTablePersistence(cdcIntegrationService, logger) {
+  let connectedService = null;
+
+  const promise = connectLogsTablePersistence(
+    cdcIntegrationService,
+    logger,
+  ).then((service) => {
+    connectedService = service;
+    return service;
+  }).catch((error) => {
+    logger.warn('Background logs table persistence setup failed', {
+      error: error.message,
+    });
+    return null;
+  });
+
+  return {
+    getService: () => connectedService,
+    promise,
+  };
+}
+
+/**
  * Shutdown logs table persistence with best-effort semantics.
  * @param {LogsTableService|null} logsTableService - Logs table service instance.
  * @param {Object} logger - Entrypoint logger.
@@ -245,7 +274,7 @@ async function main() {
       process.exit(1);
     }
 
-    const joinLogsTableService = await connectLogsTablePersistence(
+    const joinLogsPersistence = startLogsTablePersistence(
       nodeJoiningService.cdcIntegrationService,
       mainLogger,
     );
@@ -313,6 +342,9 @@ async function main() {
 
       mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
       try {
+        const joinLogsTableService =
+          joinLogsPersistence.getService() ||
+          await joinLogsPersistence.promise;
         await shutdownLogsTablePersistence(joinLogsTableService, mainLogger);
         await nodeJoiningService.cleanup();
         await adminAPI.shutdown();
@@ -362,7 +394,7 @@ async function main() {
       process.exit(1);
     }
 
-    const seedLogsTableService = await connectLogsTablePersistence(
+    const seedLogsPersistence = startLogsTablePersistence(
       bootstrapService.cdcIntegrationService,
       mainLogger,
     );
@@ -446,6 +478,9 @@ async function main() {
 
       mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
       try {
+        const seedLogsTableService =
+          seedLogsPersistence.getService() ||
+          await seedLogsPersistence.promise;
         await shutdownLogsTablePersistence(seedLogsTableService, mainLogger);
         await bootstrapService.shutdown();
         await bootstrapAPI.shutdown();

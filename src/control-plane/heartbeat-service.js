@@ -200,7 +200,7 @@ class HeartbeatService extends EventEmitter {
         stats.diskUsagePercent :
         (existing?.disk_usage_percent || NUM.ZERO),
       status: existing?.status || STATE.ACTIVE,
-      ws_connection_state: STATE.READY,
+      connection_state: STATE.READY,
       capabilities: capabilities ? JSON.stringify(capabilities) :
         (existing?.capabilities || STRING.EMPTY_JSON_ARRAY),
       last_heartbeat: now,

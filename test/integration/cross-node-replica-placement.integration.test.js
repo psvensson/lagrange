@@ -223,7 +223,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           status: 'active',
           cpu_usage_percent: 20,
           memory_usage_percent: 30,
-          ws_connection_state: 'ready',
+          connection_state: 'ready',
           ready_lease_expires_at: readyLeaseExpiresAt,
         });
 
@@ -369,7 +369,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           status: 'active',
           cpu_usage_percent: 15,
           memory_usage_percent: 25,
-          ws_connection_state: 'ready',
+          connection_state: 'ready',
           ready_lease_expires_at: readyLeaseExpiresAt,
         });
 
@@ -587,7 +587,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         status: 'active',
         cpu_usage_percent: 20,
         memory_usage_percent: 30,
-        ws_connection_state: 'ready',
+        connection_state: 'ready',
         ready_lease_expires_at: readyLeaseExpiresAt,
       });
 
@@ -646,7 +646,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         status: 'active',
         cpu_usage_percent: 15,
         memory_usage_percent: 25,
-        ws_connection_state: 'ready',
+        connection_state: 'ready',
         ready_lease_expires_at: readyLeaseExpiresAt,
       });
 

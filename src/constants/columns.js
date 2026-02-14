@@ -35,7 +35,7 @@ const COLUMN = Object.freeze({
   FUNCTION_ID: 'function_id',
   ADDRESS: 'address',
   REPLICA_ID: 'replica_id',
-  WS_CONNECTION_STATE: 'ws_connection_state',
+  CONNECTION_STATE: 'connection_state',
   CAPABILITIES: 'capabilities',
   LAST_HEARTBEAT: 'last_heartbeat',
   READY_LEASE_EXPIRES_AT: 'ready_lease_expires_at',

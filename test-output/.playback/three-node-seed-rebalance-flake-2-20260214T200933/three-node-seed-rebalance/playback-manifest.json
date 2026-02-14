@@ -1,0 +1,25 @@
+{
+  "scenarioName": "three-node-seed-rebalance",
+  "startedAt": 1771096199894,
+  "endedAt": 1771096278243,
+  "durationMs": 78349,
+  "files": {
+    "events": "test-output/.playback/three-node-seed-rebalance-flake-2-20260214T200933/three-node-seed-rebalance/events.ndjson",
+    "samples": "test-output/.playback/three-node-seed-rebalance-flake-2-20260214T200933/three-node-seed-rebalance/samples.ndjson",
+    "snapshots": "test-output/.playback/three-node-seed-rebalance-flake-2-20260214T200933/three-node-seed-rebalance/snapshots.ndjson",
+    "manifest": "test-output/.playback/three-node-seed-rebalance-flake-2-20260214T200933/three-node-seed-rebalance/playback-manifest.json",
+    "viewer": "test-output/.playback/three-node-seed-rebalance-flake-2-20260214T200933/three-node-seed-rebalance/playback-viewer.html"
+  },
+  "counts": {
+    "events": 35,
+    "samples": 123,
+    "snapshots": 38
+  },
+  "warnings": [
+    {
+      "code": "query-node-unavailable",
+      "message": "No reachable node available for topology snapshot query",
+      "timestamp": 1771096200896
+    }
+  ]
+}

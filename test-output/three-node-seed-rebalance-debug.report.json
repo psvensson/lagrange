@@ -1,0 +1,48 @@
+{
+  "timestamp": "2026-02-14T17:55:57.251Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 47011
+  },
+  "scenarios": [
+    {
+      "scenario": "three-node-seed-rebalance",
+      "passed": false,
+      "duration": 47011,
+      "startedAt": "2026-02-14T17:54:39.121Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Expected at least one partition rebalanced off seed node 4023c7a2-1020-4469-85e7-518ebcd3f1cf, found 0 after 74 placement query attempts",
+      "stackTrace": "AssertionError [ERR_ASSERTION]: Expected at least one partition rebalanced off seed node 4023c7a2-1020-4469-85e7-518ebcd3f1cf, found 0 after 74 placement query attempts\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/three-node-seed-rebalance.js:168:10)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:366:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:691:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "three-node-seed-rebalance",
+        "startedAt": 1771091679122,
+        "endedAt": 1771091757250,
+        "durationMs": 78128,
+        "files": {
+          "events": "test-output/three-node-seed-rebalance/events.ndjson",
+          "samples": "test-output/three-node-seed-rebalance/samples.ndjson",
+          "snapshots": "test-output/three-node-seed-rebalance/snapshots.ndjson",
+          "manifest": "test-output/three-node-seed-rebalance/playback-manifest.json",
+          "viewer": "test-output/three-node-seed-rebalance/playback-viewer.html"
+        },
+        "counts": {
+          "events": 42,
+          "samples": 123,
+          "snapshots": 38
+        },
+        "warnings": [
+          {
+            "code": "query-node-unavailable",
+            "message": "No reachable node available for topology snapshot query",
+            "timestamp": 1771091680125
+          }
+        ]
+      },
+      "loadMetrics": null
+    }
+  ]
+}

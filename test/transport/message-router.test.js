@@ -320,6 +320,33 @@ t.test('MessageRouter unit tests', async (t) => {
     t.equal(RouterMessageType.PONG, 'pong');
   });
 
+  t.test('connectToSelf uses bound server address', async (t) => {
+    const router = new MessageRouter({
+      nodeId: 'self-bound-host-test',
+      wsPort: 9882,
+    });
+
+    router.server = {
+      address: () => ({address: '::1', family: 'IPv6', port: 9882}),
+    };
+
+    const calls = [];
+    router.connectToNode = async (nodeId, address, options) => {
+      calls.push({nodeId, address, options});
+    };
+
+    await router.connectToSelf();
+
+    t.equal(calls.length, 1, 'should make one self-connect attempt');
+    t.equal(calls[0].nodeId, 'self-bound-host-test', 'should target local node ID');
+    t.equal(calls[0].address, 'ws://[::1]:9882', 'should use bound IPv6 host');
+    t.same(
+      calls[0].options,
+      {isSelfConnection: true},
+      'should mark connection as self-connection',
+    );
+  });
+
   t.test('should emit nodeConnected on identification', async (t) => {
     const router = new MessageRouter({nodeId: 'local-node'});
     await router.initialize({startServer: false});

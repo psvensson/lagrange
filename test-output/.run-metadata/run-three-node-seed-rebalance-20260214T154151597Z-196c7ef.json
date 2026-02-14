@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "runId": "three-node-seed-rebalance-20260214T154151597Z-196c7ef",
+  "scenario": "three-node-seed-rebalance",
+  "config": "local.json",
+  "gitHash": "196c7ef",
+  "startedAt": "2026-02-14T15:41:51.597Z",
+  "endedAt": "2026-02-14T15:44:48.423Z",
+  "status": "failed",
+  "outputReportPath": "test-output/three-node-seed-rebalance-20260214T154151597Z-196c7ef.report.json",
+  "exitCode": 1,
+  "signal": null,
+  "playbackManifestPath": "test-output/three-node-seed-rebalance/playback-manifest.json",
+  "playbackEventsPath": "test-output/three-node-seed-rebalance/events.ndjson",
+  "playbackSamplesPath": "test-output/three-node-seed-rebalance/samples.ndjson",
+  "playbackSnapshotsPath": "test-output/three-node-seed-rebalance/snapshots.ndjson",
+  "progress": {
+    "phase": "failed",
+    "message": "Run failed",
+    "percent": 100,
+    "updatedAt": "2026-02-14T15:44:48.423Z"
+  }
+}

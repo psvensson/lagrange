@@ -727,12 +727,12 @@ test('BootstrapAPI - getReadyNodes includes seed node when lease expired', async
         return [
           {
             node_id: 'seed-node-1',
-            ws_connection_state: STATE.READY,
+            connection_state: STATE.READY,
             ready_lease_expires_at: expiredLease, // Expired
           },
           {
             node_id: 'other-node',
-            ws_connection_state: STATE.READY,
+            connection_state: STATE.READY,
             ready_lease_expires_at: now + 10000, // Valid
           },
         ];
@@ -748,7 +748,7 @@ test('BootstrapAPI - getReadyNodes includes seed node when lease expired', async
       // Simulate the real getReadyNodes which filters by lease
       const currentTime = Date.now();
       return this.filter(TABLES.NODES, (node) => {
-        return node.ws_connection_state === STATE.READY &&
+        return node.connection_state === STATE.READY &&
           node.ready_lease_expires_at &&
           node.ready_lease_expires_at > currentTime;
       }).map((n) => n.node_id);
@@ -789,7 +789,7 @@ test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
         return [
           {
             node_id: 'seed-node-1',
-            ws_connection_state: STATE.READY,
+            connection_state: STATE.READY,
             ready_lease_expires_at: validLease, // Valid
           },
         ];
@@ -804,7 +804,7 @@ test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
     getReadyNodes: function() {
       const currentTime = Date.now();
       return this.filter(TABLES.NODES, (node) => {
-        return node.ws_connection_state === STATE.READY &&
+        return node.connection_state === STATE.READY &&
           node.ready_lease_expires_at &&
           node.ready_lease_expires_at > currentTime;
       }).map((n) => n.node_id);

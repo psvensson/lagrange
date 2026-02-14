@@ -51,8 +51,8 @@ function createMockCache(options = {}) {
 
   const now = Date.now();
   const normalizedNodes = nodes.map((node) => ({
-    ws_connection_state: Object.hasOwn(node, 'ws_connection_state') ?
-      node.ws_connection_state : 'ready',
+    connection_state: Object.hasOwn(node, 'connection_state') ?
+      node.connection_state : 'ready',
     ready_lease_expires_at: Object.hasOwn(node, 'ready_lease_expires_at') ?
       node.ready_lease_expires_at : now + 10000,
     ...node,

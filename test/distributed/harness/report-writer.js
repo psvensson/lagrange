@@ -29,6 +29,7 @@ function buildScenarioEntry(scenarioName, result) {
     error: result.error || null,
     stackTrace: result.stackTrace || null,
     logs: result.logs || null,
+    playback: result.playback || null,
   };
 
   if (result.loadMetrics) {
@@ -111,7 +112,7 @@ class ReportWriter {
     await writeFile(
       this.outputPath,
       JSON.stringify(report, null, JSON_INDENT),
-      'utf8'
+      'utf8',
     );
   }
 }

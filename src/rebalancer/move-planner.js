@@ -29,6 +29,12 @@ import {
 const EntityType = REBALANCER_ENTITY_TYPE;
 const MoveType = REBALANCER_MOVE_TYPE;
 const DegradedReason = PLACEMENT_DEGRADED_REASON;
+const PLACEMENT_OCCUPIED_STATUSES = new Set([
+  ReplicaStatus.PENDING,
+  ReplicaStatus.CREATING,
+  ReplicaStatus.SYNCING,
+  ReplicaStatus.ACTIVE,
+]);
 const MOVE_PLANNER_TOPOLOGY_SCORE = Object.freeze({
   SAME_GROUP_BONUS: 5,
   SAME_GROUP_PENALTY: 2,
@@ -632,6 +638,19 @@ class MovePlanner {
     const moves = [];
     const healthyReplicas =
       this.moveStateProvider.getHealthyReplicas(currentReplicas);
+    const placementReplicas = currentReplicas.filter((replica) => {
+      const status = (
+        typeof replica?.status === 'string' ?
+          replica.status.toLowerCase() :
+          ReplicaStatus.ACTIVE
+      );
+      return !!replica?.node_id &&
+        PLACEMENT_OCCUPIED_STATUSES.has(status);
+    });
+    const activePlacementReplicas = currentReplicas.filter((replica) => {
+      const status = replica?.status || ReplicaStatus.ACTIVE;
+      return status === ReplicaStatus.ACTIVE && !!replica?.node_id;
+    });
     const targetNodeIds = targetState.targetNodes;
     const isDegradedPlacement = !!targetState?.degraded;
 
@@ -664,22 +683,11 @@ class MovePlanner {
       }
     }
 
-    // Count replicas in transition
-    const transitioningReplicas = currentReplicas.filter((r) =>
-      r.status === ReplicaStatus.CREATING ||
-      r.status === ReplicaStatus.SYNCING ||
-      r.status === ReplicaStatus.REMOVING);
-
-    if (transitioningReplicas.length > NUM.ZERO) {
-      this.logger.debug(REBALANCER_LOG_MSG.SKIP_TRANSITIONAL, {
-        entityId: this.entityId,
-        transitioningCount: transitioningReplicas.length,
-      });
-      return [];
-    }
-
     const pendingCount = inFlightOperations.length;
     if (pendingCount > NUM.ZERO) {
+      // Operation lifecycle is owned by replica_operations. Service-row status
+      // can be stale (for example bootstrap-local syncing followers), so we only
+      // treat in-flight operations as authoritative transitional state.
       this.logger.debug(REBALANCER_LOG_MSG.SKIP_PENDING, {
         entityId: this.entityId,
         pendingCount,
@@ -697,7 +705,7 @@ class MovePlanner {
 
     // Count current replicas per node
     const currentCounts = new Map();
-    for (const replica of healthyReplicas) {
+    for (const replica of placementReplicas) {
       if (replica && replica.node_id) {
         currentCounts.set(
           replica.node_id,
@@ -732,9 +740,9 @@ class MovePlanner {
       }
     }
 
-    // Group healthy replicas by node for removal selection
+    // Group active placement replicas by node for removal selection
     const replicasByNode = new Map();
-    for (const replica of healthyReplicas) {
+    for (const replica of activePlacementReplicas) {
       if (replica && replica.node_id) {
         if (!replicasByNode.has(replica.node_id)) {
           replicasByNode.set(replica.node_id, []);
@@ -772,11 +780,11 @@ class MovePlanner {
 
     const targetReplicaCount = targetState.targetReplicaCount;
     const shouldDeferAddsInDegraded = isDegradedPlacement &&
-      healthyReplicas.length >= targetReplicaCount &&
+      activePlacementReplicas.length >= targetReplicaCount &&
       addMoves.length > NUM.ZERO;
 
     const totalHealthyAfterAdds =
-      healthyReplicas.length + addMoves.length;
+      activePlacementReplicas.length + addMoves.length;
     const candidateRemoves = [];
 
     // Generate REMOVE moves for over-represented nodes
@@ -854,6 +862,7 @@ class MovePlanner {
       this.logger.debug(REBALANCER_LOG_MSG.DEFER_ADD_DEGRADED, {
         entityId: this.entityId,
         healthyReplicaCount: healthyReplicas.length,
+        activePlacementReplicaCount: activePlacementReplicas.length,
         targetReplicaCount,
         deferredAddCount: addMoves.length,
         availableNodeCount:
@@ -896,6 +905,7 @@ class MovePlanner {
           this.logger.debug(REBALANCER_LOG_MSG.DEFER_ADD_DEGRADED, {
             entityId: this.entityId,
             healthyReplicaCount: healthyReplicas.length,
+            activePlacementReplicaCount: activePlacementReplicas.length,
             targetReplicaCount,
             deferredAddCount,
             replaceMoveCount: replaceMoves.length,

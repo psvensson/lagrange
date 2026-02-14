@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "runId": "admin-query-smoke-20260214T212524751Z-196c7ef",
+  "scenario": "admin-query-smoke",
+  "config": "local.json",
+  "gitHash": "196c7ef",
+  "startedAt": "2026-02-14T21:25:24.751Z",
+  "endedAt": "2026-02-14T21:28:08.247Z",
+  "status": "passed",
+  "outputReportPath": "test-output/admin-query-smoke-20260214T212524751Z-196c7ef.report.json",
+  "exitCode": 0,
+  "signal": null,
+  "playbackManifestPath": "test-output/.playback/admin-query-smoke-20260214T212524751Z-196c7ef/admin-query-smoke/playback-manifest.json",
+  "playbackEventsPath": "test-output/.playback/admin-query-smoke-20260214T212524751Z-196c7ef/admin-query-smoke/events.ndjson",
+  "playbackSamplesPath": "test-output/.playback/admin-query-smoke-20260214T212524751Z-196c7ef/admin-query-smoke/samples.ndjson",
+  "playbackSnapshotsPath": "test-output/.playback/admin-query-smoke-20260214T212524751Z-196c7ef/admin-query-smoke/snapshots.ndjson",
+  "progress": {
+    "phase": "completed",
+    "message": "Run completed successfully",
+    "percent": 100,
+    "updatedAt": "2026-02-14T21:28:08.247Z"
+  }
+}

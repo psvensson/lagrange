@@ -43,7 +43,7 @@ function buildMockNode(entries) {
   return {
     id: 'mock-node',
     containerId: 'mock-container',
-    query: async () => entries,
+    query: async () => ({rows: entries}),
     isReachable: async () => true,
   };
 }
@@ -303,7 +303,7 @@ test('startLiveSubscription passes filter to node query',
       containerId: 'c1',
       query: async (sql) => {
         capturedQuery = sql;
-        return [];
+        return {rows: []};
       },
       isReachable: async () => true,
     };
@@ -371,7 +371,7 @@ test('collectFinalSnapshot queries and appends to buffer',
       containerId: 'c1',
       query: async (sql) => {
         capturedQuery = sql;
-        return snapshotEntries;
+        return {rows: snapshotEntries};
       },
     };
 
@@ -402,6 +402,56 @@ test('collectFinalSnapshot queries and appends to buffer',
     assert.deepStrictEqual(buffer[0], liveEntries[0]);
     assert.deepStrictEqual(buffer[1], snapshotEntries[0]);
     assert.deepStrictEqual(buffer[2], snapshotEntries[1]);
+  });
+
+test('startLiveSubscription buffers streamed log entries',
+  async (_t) => {
+    const initialEntries = [
+      {
+        node_id: 'node-1',
+        level: 'info',
+        message: 'initial',
+        timestamp: '2024-01-01T00:00:00Z',
+      },
+    ];
+    const streamedEntry = {
+      node_id: 'node-2',
+      level: 'error',
+      message: 'streamed',
+      timestamp: '2024-01-01T00:00:01Z',
+    };
+
+    let streamListener = null;
+    let unsubscribed = false;
+    const mockNode = {
+      id: 'node-1',
+      containerId: 'c1',
+      query: async () => ({rows: initialEntries}),
+      subscribeLogStream: async (listener) => {
+        streamListener = listener;
+        return () => {
+          unsubscribed = true;
+        };
+      },
+      isReachable: async () => true,
+    };
+
+    const collector = new LogCollector(tempDir());
+    await collector.startLiveSubscription(mockNode);
+
+    assert.equal(typeof streamListener, 'function');
+    streamListener(streamedEntry);
+
+    const buffer = collector.getBuffer();
+    assert.equal(buffer.length, 2);
+    assert.deepStrictEqual(buffer[0], initialEntries[0]);
+    assert.deepStrictEqual(buffer[1], {
+      ...streamedEntry,
+      source: 'live',
+    });
+
+    await collector.stopSubscription();
+    assert.equal(unsubscribed, true);
   });
 
 /**

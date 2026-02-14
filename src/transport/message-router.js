@@ -26,13 +26,16 @@ import {
   TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
 } from '../constants/transport.js';
-import {COLUMN, ERRNO} from '../constants/index.js';
+import {COLUMN, ERRNO, HOST} from '../constants/index.js';
 
 // queueMicrotask is a global in Node.js, but ESLint doesn't know about it
 const queueMicrotaskFn = globalThis.queueMicrotask;
 
 const ConnectionState = CONNECTION_STATE;
 const RouterMessageType = ROUTER_MESSAGE_TYPE;
+const IPV6_ANY_HOST = '::';
+const IPV6_HOST_PREFIX = '[';
+const IPV6_HOST_SUFFIX = ']';
 
 // In-process transport for test environments. This is only enabled when explicitly
 // requested via options.inProcess to avoid hidden behavior in production.
@@ -515,12 +518,73 @@ class MessageRouter extends EventEmitter {
    * @return {Promise<void>}
    */
   async connectToSelf() {
-    const selfAddress = TRANSPORT_FORMAT.buildDefaultNodeAddress(this.wsPort);
+    const selfAddress = this.buildSelfConnectionAddress();
     this.logger.debug(ROUTER_LOG_MSG.SELF_CONNECTION_START, {
       nodeId: this.nodeId,
       address: selfAddress,
     });
     await this.connectToNode(this.nodeId, selfAddress, {isSelfConnection: true});
+  }
+
+  /**
+   * Build WebSocket address for self-connection.
+   * Uses bound server address when available to avoid localhost DNS family mismatch.
+   * @return {string}
+   * @private
+   */
+  buildSelfConnectionAddress() {
+    const host = this.resolveSelfConnectionHost();
+    const normalizedHost = this.normalizeWebSocketHost(host);
+    return TRANSPORT_FORMAT.buildWebSocketAddress(normalizedHost, this.wsPort);
+  }
+
+  /**
+   * Resolve host used for self-connection.
+   * @return {string}
+   * @private
+   */
+  resolveSelfConnectionHost() {
+    const configuredHost = this.wsHost || TRANSPORT_DEFAULT.WS_HOST;
+    const defaultHost =
+      configuredHost === HOST.ANY || configuredHost === IPV6_ANY_HOST ?
+        HOST.LOCALHOST :
+        configuredHost;
+    if (!this.server || typeof this.server.address !== TRANSPORT_TYPEOF.FUNCTION) {
+      return defaultHost;
+    }
+
+    const serverAddress = this.server.address();
+    if (!serverAddress || typeof serverAddress !== TRANSPORT_TYPEOF.OBJECT) {
+      return defaultHost;
+    }
+
+    const boundHost = serverAddress.address;
+    if (typeof boundHost !== TRANSPORT_TYPEOF.STRING ||
+      boundHost.length === TRANSPORT_NUM.ZERO) {
+      return defaultHost;
+    }
+
+    if (boundHost === HOST.ANY || boundHost === IPV6_ANY_HOST) {
+      return defaultHost;
+    }
+
+    return boundHost;
+  }
+
+  /**
+   * Normalize host for URL usage.
+   * @param {string} host - Hostname or IP.
+   * @return {string}
+   * @private
+   */
+  normalizeWebSocketHost(host) {
+    if (!host.includes(':')) {
+      return host;
+    }
+    if (host.startsWith(IPV6_HOST_PREFIX) && host.endsWith(IPV6_HOST_SUFFIX)) {
+      return host;
+    }
+    return `${IPV6_HOST_PREFIX}${host}${IPV6_HOST_SUFFIX}`;
   }
 
   /**
@@ -1452,7 +1516,13 @@ class MessageRouter extends EventEmitter {
    * @return {Promise<Object>} Delivery result with transportUsed or attempts array.
    * @private
    */
-  async deliverViaTransportRegistry(targetAddress, messageId, payload, targetNodeId, correlationId) {
+  async deliverViaTransportRegistry(
+    targetAddress,
+    messageId,
+    payload,
+    targetNodeId,
+    correlationId,
+  ) {
     this.logger.debug(ROUTER_LOG_MSG.TRANSPORT_DELIVERY_START, {
       messageId,
       targetAddress,

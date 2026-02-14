@@ -1,0 +1,19 @@
+{
+  "scenarioName": "first-fail",
+  "startedAt": 1771095029607,
+  "endedAt": 1771095029942,
+  "durationMs": 335,
+  "files": {
+    "events": "test-output/first-fail/events.ndjson",
+    "samples": "test-output/first-fail/samples.ndjson",
+    "snapshots": "test-output/first-fail/snapshots.ndjson",
+    "manifest": "test-output/first-fail/playback-manifest.json",
+    "viewer": "test-output/first-fail/playback-viewer.html"
+  },
+  "counts": {
+    "events": 10,
+    "samples": 0,
+    "snapshots": 0
+  },
+  "warnings": []
+}

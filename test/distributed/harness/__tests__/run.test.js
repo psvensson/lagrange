@@ -5,10 +5,20 @@
  * Requirements: 9.3, 9.6
  */
 
-import {describe, it, beforeEach} from 'node:test';
+import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import {parseArgs, runScenarios} from '../../run.js';
+import {relative} from 'node:path';
+import {URL} from 'node:url';
+import {
+  parseArgs,
+  runScenarios,
+  buildImage,
+  deriveRunOutputDir,
+  loadScenarioModule,
+  shouldPrintLiveLogEntry,
+} from '../../run.js';
 import {CLI} from '../constants.js';
+import {DockerProvider} from '../docker-provider.js';
 
 describe('parseArgs', () => {
   it('returns defaults when no args provided', () => {
@@ -150,5 +160,173 @@ describe('runScenarios', () => {
 
     assert.equal(hasFailures, false);
     assert.equal(report.scenarios.length, 0);
+  });
+});
+
+describe('buildImage', () => {
+  it('passes positional DockerProvider arguments and commit label', async () => {
+    const originalBuildImage = DockerProvider.prototype.buildImage;
+    const originalGetImageLabel = DockerProvider.prototype.getImageLabel;
+    const calls = [];
+
+    DockerProvider.prototype.buildImage =
+      async function(contextPath, tag, dockerfile, _progressSink, labels) {
+        calls.push({contextPath, tag, dockerfile, labels});
+      };
+    DockerProvider.prototype.getImageLabel = async function() {
+      return null;
+    };
+
+    try {
+      await buildImage({
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+        dockerfile: 'Dockerfile',
+      }, false, null, {gitHash: 'abc1234', gitDirty: false});
+    } finally {
+      DockerProvider.prototype.buildImage = originalBuildImage;
+      DockerProvider.prototype.getImageLabel = originalGetImageLabel;
+    }
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].contextPath, '.');
+    assert.equal(calls[0].tag, 'distributed-db:test');
+    assert.equal(calls[0].dockerfile, 'Dockerfile');
+    assert.deepEqual(calls[0].labels, {'ddb.git-hash': 'abc1234'});
+  });
+
+  it('reuses existing image when git hash label matches', async () => {
+    const originalBuildImage = DockerProvider.prototype.buildImage;
+    const originalGetImageLabel = DockerProvider.prototype.getImageLabel;
+    let buildCallCount = 0;
+
+    DockerProvider.prototype.buildImage = async function() {
+      buildCallCount++;
+    };
+    DockerProvider.prototype.getImageLabel = async function() {
+      return 'abc1234';
+    };
+
+    let result;
+    try {
+      result = await buildImage({
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+        dockerfile: 'Dockerfile',
+      }, false, null, {gitHash: 'abc1234', gitDirty: false});
+    } finally {
+      DockerProvider.prototype.buildImage = originalBuildImage;
+      DockerProvider.prototype.getImageLabel = originalGetImageLabel;
+    }
+
+    assert.equal(buildCallCount, 0);
+    assert.equal(result.reused, true);
+  });
+
+  it('does not reuse git-hash image when workspace is dirty', async () => {
+    const originalBuildImage = DockerProvider.prototype.buildImage;
+    const originalGetImageLabel = DockerProvider.prototype.getImageLabel;
+    let buildCallCount = 0;
+
+    DockerProvider.prototype.buildImage = async function() {
+      buildCallCount++;
+    };
+    DockerProvider.prototype.getImageLabel = async function() {
+      return 'abc1234';
+    };
+
+    let result;
+    try {
+      result = await buildImage({
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+        dockerfile: 'Dockerfile',
+      }, false, null, {gitHash: 'abc1234', gitDirty: true});
+    } finally {
+      DockerProvider.prototype.buildImage = originalBuildImage;
+      DockerProvider.prototype.getImageLabel = originalGetImageLabel;
+    }
+
+    assert.equal(buildCallCount, 1);
+    assert.equal(result.reused, false);
+  });
+});
+
+describe('deriveRunOutputDir', () => {
+  it('derives run-scoped playback directory from report path', () => {
+    const outputDir = deriveRunOutputDir('test-output/my-run.report.json');
+    assert.equal(outputDir, 'test-output/.playback/my-run');
+  });
+
+  it('falls back to output basename when report extension differs', () => {
+    const outputDir = deriveRunOutputDir('test-output/results.json');
+    assert.equal(outputDir, 'test-output/.playback/results');
+  });
+});
+
+describe('loadScenarioModule', () => {
+  it('loads workspace-relative scenario path', async () => {
+    const fixtureAbsolutePath = new URL(
+      '../__fixtures__/failing-scenario.js',
+      import.meta.url,
+    ).pathname;
+    const fixtureRelativePath = relative(
+      process.cwd(),
+      fixtureAbsolutePath,
+    );
+
+    const module = await loadScenarioModule(fixtureRelativePath);
+    assert.equal(typeof module.run, 'function');
+  });
+});
+
+describe('shouldPrintLiveLogEntry', () => {
+  it('returns false for load-generator entries', () => {
+    assert.equal(
+      shouldPrintLiveLogEntry({
+        node_id: 'load-generator',
+        level: 'error',
+        message: 'error',
+      }),
+      false,
+    );
+  });
+
+  it('returns true for warn/error levels', () => {
+    assert.equal(
+      shouldPrintLiveLogEntry({
+        node_id: 'node-1',
+        level: 'warn',
+        message: 'slow follower',
+      }),
+      true,
+    );
+    assert.equal(
+      shouldPrintLiveLogEntry({
+        node_id: 'node-2',
+        level: 'error',
+        message: 'timeout',
+      }),
+      true,
+    );
+  });
+
+  it('returns true for error-like messages at info level', () => {
+    assert.equal(
+      shouldPrintLiveLogEntry({
+        node_id: 'node-1',
+        level: 'info',
+        message: 'delivery timeout',
+      }),
+      true,
+    );
+    assert.equal(
+      shouldPrintLiveLogEntry({
+        node_id: 'node-1',
+        level: 'info',
+        message: 'all good',
+      }),
+      false,
+    );
   });
 });

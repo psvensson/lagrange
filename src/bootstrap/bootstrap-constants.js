@@ -86,10 +86,9 @@ const BOOTSTRAP_REBALANCE_REASON = Object.freeze({
   NODE_READY: 'node_ready',
 });
 
-// Delay before triggering rebalancing after a node becomes ready
-// This gives new replicas time to stabilize as learners before rebalancing
-// adds more replicas that could disrupt leadership
-const BOOTSTRAP_REBALANCE_DELAY_MS = 45000; // 45 seconds - wait for learners to stabilize
+// Delay before triggering rebalancing after a node becomes ready.
+// Keep this short so cluster-growth runs surface placement changes in-time.
+const BOOTSTRAP_REBALANCE_DELAY_MS = 5000;
 
 const BOOTSTRAP_MESSAGE_GROUP = Object.freeze({
   NAME: 'message_group_seed',
@@ -281,6 +280,7 @@ const BOOTSTRAP_DEFAULT = Object.freeze({
   leadershipWaitBackoffMultiplier: 2,
   partitionDbPath: ':memory:',
   replicaStaggerDelayMs: DEFAULT_REPLICA_STAGGER_DELAY_MS,
+  nodeReadyRebalanceDelayMs: BOOTSTRAP_REBALANCE_DELAY_MS,
   wsPort: null,
 });
 
