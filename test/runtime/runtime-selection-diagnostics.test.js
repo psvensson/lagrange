@@ -88,6 +88,27 @@ class StubOciDriver extends RuntimeDriver {
   }
 }
 
+class FailingNativeDriver extends RuntimeDriver {
+  constructor() {
+    super(RUNTIME_KIND.NATIVE_JS);
+  }
+  validateDescriptor(_def) {
+    return {valid: true, errors: []};
+  }
+  async prepare(_def, _ctx) {
+    throw new Error('prepare boom');
+  }
+  async start(_ctx) {
+    return {status: START_STATUS.RUNNING};
+  }
+  async stop(_ctx) {
+    return undefined;
+  }
+  async health(_ctx) {
+    return {status: HEALTH_STATUS.HEALTHY};
+  }
+}
+
 // --- Helpers ---
 
 function makeRegistry(...drivers) {
@@ -202,7 +223,7 @@ describe('Lifecycle selection diagnostics', () => {
     assert.equal(events[0].runtimeKind, RUNTIME_KIND.NATIVE_JS);
   });
 
-  it('PREPARE_FAILURE surfaces runtimeKind on unknown kind', async () => {
+  it('unknown runtime kind fails before lifecycle failure event', async () => {
     const registry = makeRegistry(new StubNativeDriver());
     const lifecycle = new ServiceRuntimeLifecycle(registry);
     const failures = [];
@@ -213,11 +234,8 @@ describe('Lifecycle selection diagnostics', () => {
       runtime_kind: 'nonexistent_kind',
       service_id: 'svc-bad',
     };
-    await assert.rejects(
-      () => lifecycle.prepare(definition, {}),
-    );
-    assert.equal(failures.length, 1);
-    assert.equal(failures[0].runtimeKind, 'nonexistent_kind');
+    await assert.rejects(() => lifecycle.prepare(definition, {}));
+    assert.equal(failures.length, 0);
   });
 
   it('lifecycle events provide enough info to diagnose selection',
@@ -249,20 +267,21 @@ describe('Lifecycle selection diagnostics', () => {
       assert.equal(successes[0].serviceId, 'svc-diag');
       assert.ok(successes[0].result);
 
-      // Failure events include error — verify via a failing call
+      // Failure events include error when driver.prepare throws.
+      const failRegistry = makeRegistry(new FailingNativeDriver());
+      const failLifecycle = new ServiceRuntimeLifecycle(failRegistry);
       const failureEvents = [];
-      lifecycle.on(LIFECYCLE_EVENT.PREPARE_FAILURE, (evt) => {
+      failLifecycle.on(LIFECYCLE_EVENT.PREPARE_FAILURE, (evt) => {
         failureEvents.push(evt);
       });
       const badDef = {
-        runtime_kind: 'bad_kind',
+        runtime_kind: RUNTIME_KIND.NATIVE_JS,
         service_id: 'svc-fail',
       };
-      await assert.rejects(
-        () => lifecycle.prepare(badDef, {}),
-      );
+      await assert.rejects(() => failLifecycle.prepare(badDef, {}));
+      assert.equal(failureEvents.length, 1);
       assert.equal(
-        failureEvents[0].runtimeKind, 'bad_kind',
+        failureEvents[0].runtimeKind, RUNTIME_KIND.NATIVE_JS,
       );
       assert.equal(failureEvents[0].serviceId, 'svc-fail');
       assert.ok(failureEvents[0].error);

@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: no duplicate ADD moves for same node
         ok 1 - no duplicate ADD moves for same node
         1..1
-    ok 1 - no duplicate ADD moves for same node # time=6.451ms
+    ok 1 - no duplicate ADD moves for same node # time=8.571ms
     
     # Subtest: no duplicate REMOVE moves for same replica
         ok 1 - no duplicate REMOVE moves for same replica
         1..1
-    ok 2 - no duplicate REMOVE moves for same replica # time=1.975ms
+    ok 2 - no duplicate REMOVE moves for same replica # time=3.219ms
     
     # Subtest: pending operations block new move generation
         ok 1 - pending operations block new move generation
         1..1
-    ok 3 - pending operations block new move generation # time=1.568ms
+    ok 3 - pending operations block new move generation # time=1.603ms
     
-    # Subtest: transitioning replicas block move generation
-        ok 1 - transitioning replicas block move generation
+    # Subtest: service-row transitioning replicas do not block move generation
+        ok 1 - service-row transitioning replicas do not block move generation
         1..1
-    ok 4 - transitioning replicas block move generation # time=1.406ms
+    ok 4 - service-row transitioning replicas do not block move generation # time=1.57ms
     
     # Subtest: completed operations do not block new moves
         ok 1 - completed operations do not block new moves
         1..1
-    ok 5 - completed operations do not block new moves # time=1.501ms
+    ok 5 - completed operations do not block new moves # time=2.085ms
     
     # Subtest: hasPendingAddForNode identifies pending ADD moves
         ok 1 - hasPendingAddForNode identifies pending ADD moves
         1..1
-    ok 6 - hasPendingAddForNode identifies pending ADD moves # time=1.41ms
+    ok 6 - hasPendingAddForNode identifies pending ADD moves # time=1.073ms
     
     1..6
-ok 1 - Property 81: Duplicate Move Prevention # time=142.105ms
+ok 1 - Property 81: Duplicate Move Prevention # time=172.011ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=157.206ms
+# time=189.866ms

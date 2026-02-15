@@ -41,6 +41,7 @@ import {
   REPLICA_HANDLER_WORKFLOW,
 } from './replica-handler-constants.js';
 import {PARTITION_SERVICE_INIT_STAGE} from '../partition/partition-service-constants.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
@@ -49,7 +50,6 @@ const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
   Object.values(SystemTableName).map((tableName) => `${tableName}-p1`),
 );
 
-const LEARNER_ROLE = 'learner';
 const VOTER_READY_CHECK_INTERVAL_MS = 250;
 
 /**
@@ -1089,7 +1089,7 @@ class ReplicaHandler extends EventEmitter {
       role.toLowerCase() :
       null;
 
-    if (!normalizedRole || normalizedRole === LEARNER_ROLE) {
+    if (!normalizedRole || normalizedRole === RAFT_ROLE.LEARNER) {
       return false;
     }
 

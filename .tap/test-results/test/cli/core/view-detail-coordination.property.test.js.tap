@@ -3,7 +3,7 @@ TAP version 14
     # Subtest: selection change updates detail for views with details
         ok 1 - selection change updates detail for views with details
         1..1
-    ok 1 - selection change updates detail for views with details # time=3.978ms
+    ok 1 - selection change updates detail for views with details # time=4.152ms
     
     # Subtest: selection change ignored for views without details
         ok 1 - selection change ignored for views without details
@@ -18,17 +18,17 @@ TAP version 14
     # Subtest: view switch updates layout from config
         ok 1 - view switch updates layout from config
         1..1
-    ok 4 - view switch updates layout from config # time=0.406ms
+    ok 4 - view switch updates layout from config # time=0.4ms
     
     # Subtest: custom getDetailData function is used
         ok 1 - custom getDetailData function is used
         1..1
-    ok 5 - custom getDetailData function is used # time=0.746ms
+    ok 5 - custom getDetailData function is used # time=0.768ms
     
     # Subtest: unregistered view selection is ignored
         ok 1 - unregistered view selection is ignored
         1..1
-    ok 6 - unregistered view selection is ignored # time=0.667ms
+    ok 6 - unregistered view selection is ignored # time=0.582ms
     
     # Subtest: detail preserved on switch when configured
         ok 1 - detail preserved on switch when configured
@@ -38,11 +38,11 @@ TAP version 14
     # Subtest: detail cleared on switch when not preserving
         ok 1 - detail cleared on switch when not preserving
         1..1
-    ok 8 - detail cleared on switch when not preserving # time=0.615ms
+    ok 8 - detail cleared on switch when not preserving # time=0.661ms
     
     1..8
-ok 1 - Property 36: View-Detail Coordination Correctness # time=12.829ms
+ok 1 - Property 36: View-Detail Coordination Correctness # time=13.047ms
 
 1..1
 # { total: 8, pass: 8 }
-# time=19.617ms
+# time=17.673ms

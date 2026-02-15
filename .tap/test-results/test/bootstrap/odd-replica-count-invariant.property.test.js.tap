@@ -4,85 +4,91 @@ TAP version 14
     ok 2 - System table tables has at least 3 replicas: 3
     ok 3 - System table nodes has odd replica count: 3
     ok 4 - System table nodes has at least 3 replicas: 3
-    ok 5 - System table message_groups has odd replica count: 3
-    ok 6 - System table message_groups has at least 3 replicas: 3
-    ok 7 - System table partitions has odd replica count: 3
-    ok 8 - System table partitions has at least 3 replicas: 3
-    ok 9 - System table services has odd replica count: 3
-    ok 10 - System table services has at least 3 replicas: 3
-    ok 11 - System table indices has odd replica count: 3
-    ok 12 - System table indices has at least 3 replicas: 3
-    ok 13 - System table logs has odd replica count: 3
-    ok 14 - System table logs has at least 3 replicas: 3
-    ok 15 - System table config has odd replica count: 3
-    ok 16 - System table config has at least 3 replicas: 3
-    ok 17 - System table live_queries has odd replica count: 3
-    ok 18 - System table live_queries has at least 3 replicas: 3
-    ok 19 - System table contexts has odd replica count: 3
-    ok 20 - System table contexts has at least 3 replicas: 3
-    ok 21 - System table code has odd replica count: 3
-    ok 22 - System table code has at least 3 replicas: 3
-    ok 23 - System table replica_operations has odd replica count: 3
-    ok 24 - System table replica_operations has at least 3 replicas: 3
-    ok 25 - System table node_endpoints has odd replica count: 3
-    ok 26 - System table node_endpoints has at least 3 replicas: 3
-    ok 27 - System table service_definitions has odd replica count: 3
-    ok 28 - System table service_definitions has at least 3 replicas: 3
-    ok 29 - System table service_endpoints has odd replica count: 3
-    ok 30 - System table service_endpoints has at least 3 replicas: 3
-    ok 31 - System table service_timers has odd replica count: 3
-    ok 32 - System table service_timers has at least 3 replicas: 3
-    ok 33 - System table module_manifests has odd replica count: 3
-    ok 34 - System table module_manifests has at least 3 replicas: 3
-    ok 35 - System table package_registry_mappings has odd replica count: 3
-    ok 36 - System table package_registry_mappings has at least 3 replicas: 3
-    ok 37 - System table package_registry_overrides has odd replica count: 3
-    ok 38 - System table package_registry_overrides has at least 3 replicas: 3
-    ok 39 - System table module_dependency_locks has odd replica count: 3
-    ok 40 - System table module_dependency_locks has at least 3 replicas: 3
-    ok 41 - System table wasm_operations has odd replica count: 3
-    ok 42 - System table wasm_operations has at least 3 replicas: 3
-    1..42
-ok 1 - Property 33: All system table partitions have odd replica counts # time=4.295ms
+    ok 5 - System table latency_groups has odd replica count: 3
+    ok 6 - System table latency_groups has at least 3 replicas: 3
+    ok 7 - System table inter_group_latencies has odd replica count: 3
+    ok 8 - System table inter_group_latencies has at least 3 replicas: 3
+    ok 9 - System table message_groups has odd replica count: 3
+    ok 10 - System table message_groups has at least 3 replicas: 3
+    ok 11 - System table partitions has odd replica count: 3
+    ok 12 - System table partitions has at least 3 replicas: 3
+    ok 13 - System table services has odd replica count: 3
+    ok 14 - System table services has at least 3 replicas: 3
+    ok 15 - System table indices has odd replica count: 3
+    ok 16 - System table indices has at least 3 replicas: 3
+    ok 17 - System table logs has odd replica count: 3
+    ok 18 - System table logs has at least 3 replicas: 3
+    ok 19 - System table config has odd replica count: 3
+    ok 20 - System table config has at least 3 replicas: 3
+    ok 21 - System table live_queries has odd replica count: 3
+    ok 22 - System table live_queries has at least 3 replicas: 3
+    ok 23 - System table contexts has odd replica count: 3
+    ok 24 - System table contexts has at least 3 replicas: 3
+    ok 25 - System table code has odd replica count: 3
+    ok 26 - System table code has at least 3 replicas: 3
+    ok 27 - System table replica_operations has odd replica count: 3
+    ok 28 - System table replica_operations has at least 3 replicas: 3
+    ok 29 - System table node_endpoints has odd replica count: 3
+    ok 30 - System table node_endpoints has at least 3 replicas: 3
+    ok 31 - System table service_definitions has odd replica count: 3
+    ok 32 - System table service_definitions has at least 3 replicas: 3
+    ok 33 - System table service_endpoints has odd replica count: 3
+    ok 34 - System table service_endpoints has at least 3 replicas: 3
+    ok 35 - System table service_timers has odd replica count: 3
+    ok 36 - System table service_timers has at least 3 replicas: 3
+    ok 37 - System table module_manifests has odd replica count: 3
+    ok 38 - System table module_manifests has at least 3 replicas: 3
+    ok 39 - System table package_registry_mappings has odd replica count: 3
+    ok 40 - System table package_registry_mappings has at least 3 replicas: 3
+    ok 41 - System table package_registry_overrides has odd replica count: 3
+    ok 42 - System table package_registry_overrides has at least 3 replicas: 3
+    ok 43 - System table module_dependency_locks has odd replica count: 3
+    ok 44 - System table module_dependency_locks has at least 3 replicas: 3
+    ok 45 - System table wasm_operations has odd replica count: 3
+    ok 46 - System table wasm_operations has at least 3 replicas: 3
+    ok 47 - System table storage_reservations has odd replica count: 3
+    ok 48 - System table storage_reservations has at least 3 replicas: 3
+    1..48
+ok 1 - Property 33: All system table partitions have odd replica counts # time=4.555ms
 
 # Subtest: Property 33: Initial message group has odd replica count
     ok 1 - Initial message group has odd replica count: 3
     ok 2 - Initial message group has at least 3 replicas: 3
     1..2
-ok 2 - Property 33: Initial message group has odd replica count # time=0.39ms
+ok 2 - Property 33: Initial message group has odd replica count # time=0.377ms
 
 # Subtest: Property 33: Default partition replica count is odd
     ok 1 - Default partition replica count is odd: 3
     ok 2 - Default partition replica count is at least 3: 3
     1..2
-ok 3 - Property 33: Default partition replica count is odd # time=0.338ms
+ok 3 - Property 33: Default partition replica count is odd # time=0.362ms
 
 # Subtest: Property 33: Default message group replica count is odd
     ok 1 - Default message group replica count is odd: 3
     ok 2 - Default message group replica count is at least 3: 3
     1..2
-ok 4 - Property 33: Default message group replica count is odd # time=0.337ms
+ok 4 - Property 33: Default message group replica count is odd # time=0.331ms
 
 # Subtest: Property 33: Valid replica counts are always odd
     ok 1 - Valid replica counts are always odd
     1..1
-ok 5 - Property 33: Valid replica counts are always odd # time=1.764ms
+ok 5 - Property 33: Valid replica counts are always odd # time=1.703ms
 
 # Subtest: Property 33: Replica count growth maintains odd invariant
     ok 1 - Replica count growth maintains odd invariant
     1..1
-ok 6 - Property 33: Replica count growth maintains odd invariant # time=0.727ms
+ok 6 - Property 33: Replica count growth maintains odd invariant # time=0.658ms
 
 # Subtest: Property 33: Replica count shrink maintains odd invariant
     ok 1 - Replica count shrink maintains odd invariant
     1..1
-ok 7 - Property 33: Replica count shrink maintains odd invariant # time=0.65ms
+ok 7 - Property 33: Replica count shrink maintains odd invariant # time=0.605ms
 
 # Subtest: Property 33: Quorum calculation requires odd replica count
     ok 1 - Quorum calculation requires odd replica count
     1..1
-ok 8 - Property 33: Quorum calculation requires odd replica count # time=0.427ms
+ok 8 - Property 33: Quorum calculation requires odd replica count # time=0.445ms
 
 1..8
-# { total: 52, pass: 52 }
-# time=137.338ms
+# { total: 58, pass: 58 }
+# time=156.459ms

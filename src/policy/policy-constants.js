@@ -3,16 +3,11 @@ import {
   STORAGE_PLACEMENT_CONSTRAINT,
   STORAGE_PLACEMENT_DEFAULT,
 } from '../rebalancer/storage-capacity-constants.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 
 const POLICY_SUBSYSTEM = Object.freeze({
   TABLE_POLICY: 'table-policy',
   RAFT_ROLE_TRACKER: 'raft-role-tracker',
-});
-
-const RAFT_ROLE = Object.freeze({
-  LEADER: 'leader',
-  FOLLOWER: 'follower',
-  CANDIDATE: 'candidate',
 });
 
 const POLICY_EVENT = Object.freeze({

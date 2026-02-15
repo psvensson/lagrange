@@ -22,6 +22,7 @@ import {
   isNodeRecordReady,
   isNodeReadyWithTransport,
 } from '../node/node-readiness-policy.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {
   REBALANCER_CONFIG_KEY,
   REBALANCER_DEFAULT,
@@ -57,8 +58,6 @@ const SQL_BUDGET = Object.freeze({
     `SELECT COUNT(*) AS total_count FROM replica_operations
      WHERE status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`,
 });
-
-const LEARNER_ROLE = 'learner';
 
 const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
   Object.values(SystemTableName).map((tableName) => `${tableName}-p1`),
@@ -592,7 +591,7 @@ class UnifiedRebalancer extends EventEmitter {
    */
   getAvailableNodes() {
     const now = Date.now();
-    return this.systemTableCache.filter('nodes', (node) => {
+    return this.systemTableCache.filter(SystemTableName.NODES, (node) => {
       return isNodeRecordReady(node, {
         now,
         requireActiveStatus: true,
@@ -623,17 +622,19 @@ class UnifiedRebalancer extends EventEmitter {
    */
   getCurrentReplicas() {
     if (this.entityType === EntityType.MESSAGE_GROUP) {
-      return this.systemTableCache.filter('services', (service) => {
-        return service.group_id === this.entityId &&
-          service.service_type === EntityType.MESSAGE_GROUP;
-      });
+      return this.systemTableCache.filter(
+        SystemTableName.SERVICES, (service) => {
+          return service.group_id === this.entityId &&
+            service.service_type === EntityType.MESSAGE_GROUP;
+        });
     }
 
     // For partitions, get services with matching partition_id
-    return this.systemTableCache.filter('services', (service) => {
-      return service.partition_id === this.entityId &&
-        service.service_type === EntityType.PARTITION;
-    });
+    return this.systemTableCache.filter(
+      SystemTableName.SERVICES, (service) => {
+        return service.partition_id === this.entityId &&
+          service.service_type === EntityType.PARTITION;
+      });
   }
 
   /**
@@ -756,7 +757,7 @@ class UnifiedRebalancer extends EventEmitter {
       const role = typeof replica.raft_role === 'string' ?
         replica.raft_role.toLowerCase() :
         null;
-      if (!role || role === LEARNER_ROLE) {
+      if (!role || role === RAFT_ROLE.LEARNER) {
         return false;
       }
       return readyNodeIds.has(replica.node_id);

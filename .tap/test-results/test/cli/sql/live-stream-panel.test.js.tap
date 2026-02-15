@@ -6,14 +6,14 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equivalent
         1..4
-    ok 1 - constructor initializes with defaults # time=3.839ms
+    ok 1 - constructor initializes with defaults # time=2.267ms
     
     # Subtest: constructor accepts custom options
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 2 - constructor accepts custom options # time=0.633ms
+    ok 2 - constructor accepts custom options # time=0.367ms
     
     # Subtest: addEvent adds event to the list
         ok 1 - should be equal
@@ -21,14 +21,14 @@ TAP version 14
         ok 3 - should be equivalent
         ok 4 - should be equal
         1..4
-    ok 3 - addEvent adds event to the list # time=1.477ms
+    ok 3 - addEvent adds event to the list # time=0.853ms
     
     # Subtest: addEvent trims events when exceeding max
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 4 - addEvent trims events when exceeding max # time=0.558ms
+    ok 4 - addEvent trims events when exceeding max # time=2.144ms
     
     # Subtest: getEventColor returns correct colors
         ok 1 - should be equal
@@ -36,89 +36,89 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 5 - getEventColor returns correct colors # time=0.618ms
+    ok 5 - getEventColor returns correct colors # time=0.372ms
     
     # Subtest: EVENT_COLORS constant has correct values
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 6 - EVENT_COLORS constant has correct values # time=0.49ms
+    ok 6 - EVENT_COLORS constant has correct values # time=0.281ms
     
     # Subtest: formatEvent includes timestamp, type, and data
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 7 - formatEvent includes timestamp, type, and data # time=0.645ms
+    ok 7 - formatEvent includes timestamp, type, and data # time=0.403ms
     
     # Subtest: formatEventData truncates long data
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 8 - formatEventData truncates long data # time=0.432ms
+    ok 8 - formatEventData truncates long data # time=0.296ms
     
     # Subtest: getVisibleEvents returns correct events
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 9 - getVisibleEvents returns correct events # time=0.573ms
+    ok 9 - getVisibleEvents returns correct events # time=0.327ms
     
     # Subtest: scrollUp shows older events
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 10 - scrollUp shows older events # time=0.512ms
+    ok 10 - scrollUp shows older events # time=0.274ms
     
     # Subtest: scrollDown shows newer events
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 11 - scrollDown shows newer events # time=0.485ms
+    ok 11 - scrollDown shows newer events # time=0.285ms
     
     # Subtest: scrollUp returns false at top
         ok 1 - should be equal
         1..1
-    ok 12 - scrollUp returns false at top # time=0.342ms
+    ok 12 - scrollUp returns false at top # time=0.202ms
     
     # Subtest: scrollDown returns false at bottom
         ok 1 - should be equal
         1..1
-    ok 13 - scrollDown returns false at bottom # time=0.349ms
+    ok 13 - scrollDown returns false at bottom # time=0.212ms
     
     # Subtest: scrollToBottom resets scroll position
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 14 - scrollToBottom resets scroll position # time=0.556ms
+    ok 14 - scrollToBottom resets scroll position # time=0.271ms
     
     # Subtest: scrollToTop scrolls to oldest events
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 15 - scrollToTop scrolls to oldest events # time=0.599ms
+    ok 15 - scrollToTop scrolls to oldest events # time=0.368ms
     
     # Subtest: clear removes all events
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 16 - clear removes all events # time=0.439ms
+    ok 16 - clear removes all events # time=0.264ms
     
     # Subtest: setVisibleHeight updates height
         ok 1 - should be equal
         1..1
-    ok 17 - setVisibleHeight updates height # time=0.38ms
+    ok 17 - setVisibleHeight updates height # time=0.199ms
     
     # Subtest: setVisibleHeight adjusts scroll position
         ok 1 - should be equal
         1..1
-    ok 18 - setVisibleHeight adjusts scroll position # time=0.378ms
+    ok 18 - setVisibleHeight adjusts scroll position # time=0.257ms
     
     # Subtest: getMaxScrollPosition returns correct value
         ok 1 - should be equal
         1..1
-    ok 19 - getMaxScrollPosition returns correct value # time=0.345ms
+    ok 19 - getMaxScrollPosition returns correct value # time=0.203ms
     
     # Subtest: getPlainTextLines returns lines without color codes
         ok 1 - should be equal
@@ -126,17 +126,17 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 20 - getPlainTextLines returns lines without color codes # time=0.858ms
+    ok 20 - getPlainTextLines returns lines without color codes # time=0.396ms
     
     # Subtest: emits events via event bus
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 21 - emits events via event bus # time=0.724ms
+    ok 21 - emits events via event bus # time=0.428ms
     
     1..21
-ok 1 - LiveStreamPanel # time=29.652ms
+ok 1 - LiveStreamPanel # time=17.996ms
 
 1..1
 # { total: 50, pass: 50 }
-# time=44.733ms
+# time=30.743ms

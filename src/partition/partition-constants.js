@@ -1,4 +1,5 @@
 import {NUM, SERVICE_TYPE} from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 
 const PARTITION_SUBSYSTEM = Object.freeze({
   PARTITION: 'partition',
@@ -15,12 +16,7 @@ const PARTITION_STATE = Object.freeze({
   MERGING: 'MERGING',
 });
 
-const PARTITION_RAFT_ROLE = Object.freeze({
-  FOLLOWER: 'follower',
-  CANDIDATE: 'candidate',
-  LEADER: 'leader',
-  LEARNER: 'learner', // Non-voting member during catch-up phase
-});
+const PARTITION_RAFT_ROLE = RAFT_ROLE;
 
 const PARTITION_REQUEST_TYPE = Object.freeze({
   QUERY: 'QUERY',

@@ -92,7 +92,14 @@ function buildFailRegistry() {
  * @return {Object}
  */
 function makeDef(kind) {
-  return {runtime_kind: kind, serviceId: `svc-${kind}`};
+  const serviceId = `svc-${kind}`;
+  const definition = {runtime_kind: kind, serviceId};
+  if (kind === RUNTIME_KIND.WASM_COMPONENT) {
+    definition.runtime_ref = `${serviceId}-module@sha256:test`;
+  } else if (kind === RUNTIME_KIND.OCI_CONTAINER) {
+    definition.runtime_ref = `registry.example/${serviceId}@sha256:test`;
+  }
+  return definition;
 }
 
 /**

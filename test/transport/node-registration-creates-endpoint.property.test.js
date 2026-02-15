@@ -29,6 +29,26 @@ const logging = LoggingService.getInstance();
 logging.initialize({level: 'error'});
 
 /**
+ * Create a CDC mock that supports both SQL execution and
+ * table upsert calls used by node storage budget setup.
+ * @param {Object} mockQueryEngine
+ * @return {Object}
+ */
+function createMockCDCService(mockQueryEngine) {
+  return {
+    sqlQueryEngine: mockQueryEngine,
+    async upsertSystemTableRow(tableName, rowData) {
+      const columns = Object.keys(rowData);
+      const placeholders = columns.map(() => '?').join(', ');
+      const sql = `INSERT INTO ${tableName} (${columns.join(', ')})` +
+        ` VALUES (${placeholders})`;
+      const params = columns.map((column) => rowData[column]);
+      return mockQueryEngine.executeQuery(sql, params);
+    },
+  };
+}
+
+/**
  * Feature: transport-abstraction-layer
  * Property 11: Node Registration Creates Endpoint
  *
@@ -58,9 +78,7 @@ test('Property 11: Node Registration Creates Endpoint', async (t) => {
             },
           };
 
-          const mockCDCService = {
-            sqlQueryEngine: mockQueryEngine,
-          };
+          const mockCDCService = createMockCDCService(mockQueryEngine);
 
           const service = new NodeJoiningService({
             nodeId,
@@ -114,9 +132,7 @@ test('Property 11: Node Registration Creates Endpoint', async (t) => {
             },
           };
 
-          const mockCDCService = {
-            sqlQueryEngine: mockQueryEngine,
-          };
+          const mockCDCService = createMockCDCService(mockQueryEngine);
 
           const service = new NodeJoiningService({
             nodeId,
@@ -157,9 +173,7 @@ test('Property 11: Node Registration Creates Endpoint', async (t) => {
             },
           };
 
-          const mockCDCService = {
-            sqlQueryEngine: mockQueryEngine,
-          };
+          const mockCDCService = createMockCDCService(mockQueryEngine);
 
           const service = new NodeJoiningService({
             nodeId,
@@ -210,9 +224,7 @@ test('Property 11: Node Registration Creates Endpoint', async (t) => {
             },
           };
 
-          const mockCDCService = {
-            sqlQueryEngine: mockQueryEngine,
-          };
+          const mockCDCService = createMockCDCService(mockQueryEngine);
 
           const service = new NodeJoiningService({
             nodeId,
@@ -265,9 +277,7 @@ test('Property 11: Node Registration Creates Endpoint', async (t) => {
             },
           };
 
-          const mockCDCService = {
-            sqlQueryEngine: mockQueryEngine,
-          };
+          const mockCDCService = createMockCDCService(mockQueryEngine);
 
           const service = new NodeJoiningService({
             nodeId,
@@ -322,9 +332,7 @@ test('Property 11: Node Registration Creates Endpoint', async (t) => {
               },
             };
 
-            const mockCDCService = {
-              sqlQueryEngine: mockQueryEngine,
-            };
+            const mockCDCService = createMockCDCService(mockQueryEngine);
 
             const service = new NodeJoiningService({
               nodeId,
@@ -383,9 +391,7 @@ test('Property 11: Node Registration Creates Endpoint', async (t) => {
             },
           };
 
-          const mockCDCService = {
-            sqlQueryEngine: mockQueryEngine,
-          };
+          const mockCDCService = createMockCDCService(mockQueryEngine);
 
           const service = new NodeJoiningService({
             nodeId,

@@ -250,13 +250,22 @@ const REBALANCER_ERROR_MSG = Object.freeze({
   SQL_ENGINE_REQUIRED: 'UnifiedRebalancer requires sqlQueryEngine',
 });
 
+const MOVE_REASON = Object.freeze({
+  REPLICA_FAILED: 'replica_failed',
+  INCREASE_REPLICA_COUNT: 'increase_replica_count',
+  NODE_NOT_IN_TARGET: 'node_not_in_target',
+  SPREAD_REPLICAS: 'spread_replicas',
+  REPLACE_REPLICA: 'replace_replica',
+});
+
 const STABILIZATION_RESET_TRIGGER = Object.freeze({
   NODE_JOINED: 'node_joined',
   NODE_LEFT: 'node_left',
   NODE_FAILED: 'node_failed',
-  REPLICA_FAILED: 'replica_failed',
+  REPLICA_FAILED: MOVE_REASON.REPLICA_FAILED,
   POLICY_CHANGED: 'policy_changed',
 });
+
 
 const PLACEMENT_DEGRADED_REASON = Object.freeze({
   INSUFFICIENT_NODES: 'insufficient_nodes',
@@ -276,6 +285,7 @@ const REBALANCER_SKIP_REASON = Object.freeze({
 });
 
 export {
+  MOVE_REASON,
   PLACEMENT_DEGRADED_REASON,
   REBALANCER_SUBSYSTEM,
   REBALANCER_ENTITY_TYPE,

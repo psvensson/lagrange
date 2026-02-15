@@ -64,8 +64,18 @@ function makeRegistry(...drivers) {
   return registry;
 }
 
+function runtimeDef(kind, serviceId = 'svc-1') {
+  const definition = {runtime_kind: kind, serviceId};
+  if (kind === RUNTIME_KIND.WASM_COMPONENT) {
+    definition.runtime_ref = `${serviceId}-module@sha256:test`;
+  } else if (kind === RUNTIME_KIND.OCI_CONTAINER) {
+    definition.runtime_ref = `registry.example/${serviceId}@sha256:test`;
+  }
+  return definition;
+}
+
 function nativeDef(serviceId = 'svc-1') {
-  return {runtime_kind: RUNTIME_KIND.NATIVE_JS, serviceId};
+  return runtimeDef(RUNTIME_KIND.NATIVE_JS, serviceId);
 }
 
 function replicaCtx(definition) {
@@ -501,7 +511,7 @@ describe('Idempotency property-based tests', () => {
             const {lifecycle, writes} = lifecycleWithIdempotency(
               [existingOp], driver,
             );
-            const def = {runtime_kind: kind, serviceId: 'prop-svc'};
+            const def = runtimeDef(kind, 'prop-svc');
             const ctx = replicaCtx(def);
             const opts = {idempotencyKey: idemKey};
 

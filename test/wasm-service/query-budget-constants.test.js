@@ -58,35 +58,35 @@ describe('query-budget-constants', () => {
 
     it('should match individual constants', () => {
       assert.equal(
-        DEFAULT_QUERY_BUDGET.LOOKUP_MAX_KEYS, LOOKUP_MAX_KEYS
+        DEFAULT_QUERY_BUDGET.LOOKUP_MAX_KEYS, LOOKUP_MAX_KEYS,
       );
       assert.equal(
-        DEFAULT_QUERY_BUDGET.LOOKUP_MAX_BYTES, LOOKUP_MAX_BYTES
+        DEFAULT_QUERY_BUDGET.LOOKUP_MAX_BYTES, LOOKUP_MAX_BYTES,
       );
       assert.equal(
-        DEFAULT_QUERY_BUDGET.EMIT_MAX_BYTES, EMIT_MAX_BYTES
+        DEFAULT_QUERY_BUDGET.EMIT_MAX_BYTES, EMIT_MAX_BYTES,
       );
       assert.equal(
         DEFAULT_QUERY_BUDGET.BROADCAST_MAX_PAYLOAD_BYTES,
-        BROADCAST_MAX_PAYLOAD_BYTES
+        BROADCAST_MAX_PAYLOAD_BYTES,
       );
       assert.equal(
         DEFAULT_QUERY_BUDGET.CPU_TIME_LIMIT_MS,
-        QUERY_CPU_TIME_LIMIT_MS
+        QUERY_CPU_TIME_LIMIT_MS,
       );
       assert.equal(
         DEFAULT_QUERY_BUDGET.MEMORY_LIMIT_BYTES,
-        QUERY_MEMORY_LIMIT_BYTES
+        QUERY_MEMORY_LIMIT_BYTES,
       );
       assert.equal(
         DEFAULT_QUERY_BUDGET.WALL_TIME_LIMIT_MS,
-        QUERY_WALL_TIME_LIMIT_MS
+        QUERY_WALL_TIME_LIMIT_MS,
       );
     });
 
-    it('should have exactly nine keys', () => {
+    it('should have expected budget keys', () => {
       assert.equal(
-        Object.keys(DEFAULT_QUERY_BUDGET).length, 9
+        Object.keys(DEFAULT_QUERY_BUDGET).length, 10,
       );
     });
   });
@@ -102,19 +102,19 @@ describe('query-budget-constants', () => {
       assert.equal(QB_FIELD.EMIT_MAX_BYTES, 'emitMaxBytes');
       assert.equal(
         QB_FIELD.BROADCAST_MAX_PAYLOAD_BYTES,
-        'broadcastMaxPayloadBytes'
+        'broadcastMaxPayloadBytes',
       );
       assert.equal(QB_FIELD.CPU_TIME_LIMIT_MS, 'cpuTimeLimitMs');
       assert.equal(
-        QB_FIELD.MEMORY_LIMIT_BYTES, 'memoryLimitBytes'
+        QB_FIELD.MEMORY_LIMIT_BYTES, 'memoryLimitBytes',
       );
       assert.equal(
-        QB_FIELD.WALL_TIME_LIMIT_MS, 'wallTimeLimitMs'
+        QB_FIELD.WALL_TIME_LIMIT_MS, 'wallTimeLimitMs',
       );
     });
 
-    it('should have exactly nine fields', () => {
-      assert.equal(Object.keys(QB_FIELD).length, 9);
+    it('should have all expected field constants', () => {
+      assert.equal(Object.keys(QB_FIELD).length, 14);
     });
   });
 
@@ -128,14 +128,14 @@ describe('query-budget-constants', () => {
         Object.entries(QUERY_BUDGET_ERROR_MSG)) {
         assert.equal(
           typeof value, 'string',
-          `Error message ${key} should be a string`
+          `Error message ${key} should be a string`,
         );
       }
     });
 
-    it('should have exactly nine error messages', () => {
+    it('should have expected error messages', () => {
       assert.equal(
-        Object.keys(QUERY_BUDGET_ERROR_MSG).length, 9
+        Object.keys(QUERY_BUDGET_ERROR_MSG).length, 10,
       );
     });
   });

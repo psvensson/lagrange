@@ -3,71 +3,71 @@ TAP version 14
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 1 - DataDirectoryManager - initializes with configured data directory # time=5.95ms
+ok 1 - DataDirectoryManager - initializes with configured data directory # time=7.469ms
 
 # Subtest: DataDirectoryManager - creates data directory if not exists
     ok 1 - should be equal
     1..1
-ok 2 - DataDirectoryManager - creates data directory if not exists # time=23.757ms
+ok 2 - DataDirectoryManager - creates data directory if not exists # time=17.712ms
 
 # Subtest: DataDirectoryManager - validates directory is writable
     ok 1 - should be equal
     1..1
-ok 3 - DataDirectoryManager - validates directory is writable # time=0.482ms
+ok 3 - DataDirectoryManager - validates directory is writable # time=0.409ms
 
 # Subtest: DataDirectoryManager - getPartitionDbPath generates correct path
     ok 1 - should be equal
     1..1
-ok 4 - DataDirectoryManager - getPartitionDbPath generates correct path # time=0.616ms
+ok 4 - DataDirectoryManager - getPartitionDbPath generates correct path # time=0.457ms
 
 # Subtest: DataDirectoryManager - getPartitionsDir returns correct path
     ok 1 - should be equal
     1..1
-ok 5 - DataDirectoryManager - getPartitionsDir returns correct path # time=0.727ms
+ok 5 - DataDirectoryManager - getPartitionsDir returns correct path # time=0.454ms
 
 # Subtest: DataDirectoryManager - ensurePartitionDirExists creates directory
     ok 1 - should be equal
     1..1
-ok 6 - DataDirectoryManager - ensurePartitionDirExists creates directory # time=0.507ms
+ok 6 - DataDirectoryManager - ensurePartitionDirExists creates directory # time=0.551ms
 
 # Subtest: DataDirectoryManager - throws if not initialized
     ok 1 - expected to throw
     1..1
-ok 7 - DataDirectoryManager - throws if not initialized # time=0.911ms
+ok 7 - DataDirectoryManager - throws if not initialized # time=1.444ms
 
 # Subtest: DataDirectoryManager - getPartitionDbPath requires partitionId
     ok 1 - expected to throw
     1..1
-ok 8 - DataDirectoryManager - getPartitionDbPath requires partitionId # time=0.492ms
+ok 8 - DataDirectoryManager - getPartitionDbPath requires partitionId # time=0.913ms
 
 # Subtest: DataDirectoryManager - getPartitionDbPath requires replicaId
     ok 1 - expected to throw
     1..1
-ok 9 - DataDirectoryManager - getPartitionDbPath requires replicaId # time=0.584ms
+ok 9 - DataDirectoryManager - getPartitionDbPath requires replicaId # time=0.76ms
 
 # Subtest: getPartitionDbPath standalone function generates correct path
     ok 1 - should be equal
     1..1
-ok 10 - getPartitionDbPath standalone function generates correct path # time=0.578ms
+ok 10 - getPartitionDbPath standalone function generates correct path # time=0.515ms
 
 # Subtest: getPartitionDbPath standalone function requires all parameters
     ok 1 - expected to throw
     ok 2 - expected to throw
     ok 3 - expected to throw
     1..3
-ok 11 - getPartitionDbPath standalone function requires all parameters # time=0.871ms
+ok 11 - getPartitionDbPath standalone function requires all parameters # time=0.805ms
 
 # Subtest: DataDirectoryManager - singleton returns same instance
     ok 1 - should be equal
     1..1
-ok 12 - DataDirectoryManager - singleton returns same instance # time=0.6ms
+ok 12 - DataDirectoryManager - singleton returns same instance # time=0.564ms
 
 # Subtest: DataDirectoryManager - resetInstance clears singleton
     ok 1 - should not be equal
     ok 2 - should be equal
     1..2
-ok 13 - DataDirectoryManager - resetInstance clears singleton # time=0.816ms
+ok 13 - DataDirectoryManager - resetInstance clears singleton # time=0.97ms
 
 1..13
 # { total: 17, pass: 17 }
-# time=362.25ms
+# time=416.96ms

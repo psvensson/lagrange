@@ -10,9 +10,10 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {NUM} from '../constants/index.js';
+import {NUM, WORKFLOW_STEP} from '../constants/index.js';
 import {ReplicaStatus} from './replica-status.js';
 import {
+  MOVE_REASON,
   PLACEMENT_DEGRADED_REASON,
   REBALANCER_ENTITY_TYPE,
   REBALANCER_LOG_MSG,
@@ -661,6 +662,7 @@ class MovePlanner {
         replicaId: op.replica_id,
         partitionId: op.partition_id,
         nodeId: op.target_node_id,
+        step: op.workflow_step || null,
         state: op.workflow_step ?
           op.workflow_step.toLowerCase() : op.status,
       })),
@@ -671,14 +673,20 @@ class MovePlanner {
     const replicasInRemoving = new Set();
 
     for (const replica of transitionalReplicas) {
-      if (['pending', 'sending', 'creating', 'syncing']
-        .includes(replica.state)) {
+      const isAddTransitional =
+        replica.state === ReplicaStatus.PENDING ||
+        replica.state === ReplicaStatus.CREATING ||
+        replica.state === ReplicaStatus.SYNCING ||
+        (replica.step &&
+          replica.step === WORKFLOW_STEP.SENDING);
+      if (isAddTransitional) {
         if (replica.partitionId === this.entityId) {
           nodesWithAddTransitional.add(replica.nodeId);
         }
       }
-      if (replica.state === 'removing' ||
-          replica.state === 'stopping') {
+      if (replica.state === ReplicaStatus.REMOVING ||
+          (replica.step &&
+            replica.step === WORKFLOW_STEP.STOPPING)) {
         replicasInRemoving.add(replica.replicaId);
       }
     }
@@ -735,7 +743,7 @@ class MovePlanner {
           type: MoveType.REMOVE,
           replicaId,
           nodeId: replica.node_id,
-          reason: 'replica_failed',
+          reason: MOVE_REASON.REPLICA_FAILED,
         });
       }
     }
@@ -773,7 +781,7 @@ class MovePlanner {
         addMoves.push({
           type: MoveType.ADD,
           nodeId,
-          reason: 'increase_replica_count',
+          reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
         });
       }
     }
@@ -810,7 +818,8 @@ class MovePlanner {
         }
 
         const reason = targetCount === NUM.ZERO ?
-          'node_not_in_target' : 'spread_replicas';
+          MOVE_REASON.NODE_NOT_IN_TARGET :
+          MOVE_REASON.SPREAD_REPLICAS;
 
         if (isDegradedPlacement && !shouldDeferAddsInDegraded) {
           this.logger.debug(REBALANCER_LOG_MSG.DEFER_REMOVE_DETAIL, {
@@ -826,9 +835,9 @@ class MovePlanner {
           continue;
         }
 
-        if (reason === 'spread_replicas') {
+        if (reason === MOVE_REASON.SPREAD_REPLICAS) {
           const existingRemoves = candidateRemoves.filter(
-            (m) => m.reason === 'spread_replicas',
+            (m) => m.reason === MOVE_REASON.SPREAD_REPLICAS,
           ).length;
 
           if (totalHealthyAfterAdds - existingRemoves <=
@@ -875,8 +884,8 @@ class MovePlanner {
         candidateRemoves.length > NUM.ZERO &&
         (!isDegradedPlacement || canUseDegradedReplace)) {
       const replaceCandidates = candidateRemoves.filter((move) => {
-        return move.reason === 'node_not_in_target' ||
-          move.reason === 'spread_replicas';
+        return move.reason === MOVE_REASON.NODE_NOT_IN_TARGET ||
+          move.reason === MOVE_REASON.SPREAD_REPLICAS;
       });
       const replaceCount =
         Math.min(addMoves.length, replaceCandidates.length);
@@ -891,7 +900,7 @@ class MovePlanner {
           nodeId: addMove.nodeId,
           sourceNodeId: removeMove.nodeId,
           replicaId: removeMove.replicaId,
-          reason: 'replace_replica',
+          reason: MOVE_REASON.REPLACE_REPLICA,
         });
       }
 
@@ -926,9 +935,9 @@ class MovePlanner {
     if (addMoves.length > NUM.ZERO) {
       const criticalRemoves = moves.filter(
         (m) => m.type === MoveType.REMOVE &&
-          (m.reason === 'replica_failed' ||
+          (m.reason === MOVE_REASON.REPLICA_FAILED ||
             (!isDegradedPlacement &&
-              m.reason === 'node_not_in_target')),
+              m.reason === MOVE_REASON.NODE_NOT_IN_TARGET)),
       );
       const filteredMoves = [
         ...replaceMoves, ...addMoves, ...criticalRemoves,
@@ -936,8 +945,8 @@ class MovePlanner {
 
       const deferredCount = moves.filter(
         (m) => m.type === MoveType.REMOVE &&
-          m.reason !== 'replica_failed' &&
-          m.reason !== 'node_not_in_target',
+          m.reason !== MOVE_REASON.REPLICA_FAILED &&
+          m.reason !== MOVE_REASON.NODE_NOT_IN_TARGET,
       ).length;
 
       if (criticalRemoves.length > NUM.ZERO ||
@@ -961,7 +970,7 @@ class MovePlanner {
     moves.sort((a, b) => {
       const getPriority = (move) => {
         if (move.type === MoveType.REMOVE &&
-            move.reason === 'replica_failed') {
+            move.reason === MOVE_REASON.REPLICA_FAILED) {
           return NUM.ZERO;
         }
         if (move.type === MoveType.REPLACE) {
@@ -1050,8 +1059,8 @@ class MovePlanner {
    * @private
    */
   classifyMoveCriticality(move) {
-    if (move.reason === 'replica_failed' ||
-        move.reason === 'increase_replica_count') {
+    if (move.reason === MOVE_REASON.REPLICA_FAILED ||
+        move.reason === MOVE_REASON.INCREASE_REPLICA_COUNT) {
       return MOVE_CRITICALITY.CRITICAL;
     }
     return MOVE_CRITICALITY.NON_CRITICAL;

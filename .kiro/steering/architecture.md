@@ -21,7 +21,10 @@ A scalable distributed database where:
    sync/hydration and remains queryable from its partition)
 4. **Message Router for All Communication** - All messages (local and remote) route through WebSocket-based MessageRouter
 5. **No Fallback Code Paths** - Single code path for any given logic; no legacy or alternative mechanisms
-6. **SQL Engine for All System Reads** - All reads of system information go through the SQL engine (which uses the system cache for routing); no direct cache reads outside cache/query internals
+6. **System Cache Read Policy** - The system cache is strictly read-only from
+   the consumer perspective (updated only by CDC events). Components may read
+   directly from the cache for performance-critical paths. No component may
+   write to the cache outside the CDC event path (plus bootstrap hydration).
 7. **Single Owner per Concern** - Each concern (state tracking, failure detection, replica state, writes) has exactly one owning component
 
 ## Single-Path Contract

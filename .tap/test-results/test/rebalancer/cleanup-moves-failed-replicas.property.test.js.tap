@@ -3,21 +3,21 @@ TAP version 14
     # Subtest: cleanup moves generated for failed replicas
         ok 1 - cleanup moves generated for failed replicas
         1..1
-    ok 1 - cleanup moves generated for failed replicas # time=6.175ms
+    ok 1 - cleanup moves generated for failed replicas # time=12.615ms
     
     # Subtest: state machine identifies failed replicas
         ok 1 - state machine identifies failed replicas
         1..1
-    ok 2 - state machine identifies failed replicas # time=2.071ms
+    ok 2 - state machine identifies failed replicas # time=4.071ms
     
     # Subtest: cleanup moves have replica_failed reason
         ok 1 - cleanup moves have replica_failed reason
         1..1
-    ok 3 - cleanup moves have replica_failed reason # time=2.957ms
+    ok 3 - cleanup moves have replica_failed reason # time=3.207ms
     
     1..3
-ok 1 - Property 5: Cleanup Moves for Failed Replicas # time=83.267ms
+ok 1 - Property 5: Cleanup Moves for Failed Replicas # time=164.896ms
 
 1..1
 # { total: 3, pass: 3 }
-# time=86.647ms
+# time=170.792ms

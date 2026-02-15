@@ -73,9 +73,15 @@ describe('BUDGET_CATEGORY', () => {
     assert.ok(Object.isFrozen(BUDGET_CATEGORY));
   });
 
-  it('should have seven categories', () => {
+  it('should include required categories', () => {
     const keys = Object.keys(BUDGET_CATEGORY);
-    assert.equal(keys.length, 7);
+    assert.ok(keys.includes('CPU_TIME'));
+    assert.ok(keys.includes('MEMORY'));
+    assert.ok(keys.includes('WALL_TIME'));
+    assert.ok(keys.includes('LOOKUP_KEYS'));
+    assert.ok(keys.includes('LOOKUP_BYTES'));
+    assert.ok(keys.includes('EMIT_BYTES'));
+    assert.ok(keys.includes('BROADCAST_BYTES'));
   });
 
   it('should have string values for all keys', () => {

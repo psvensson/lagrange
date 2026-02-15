@@ -5,42 +5,42 @@ TAP version 14
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - constructor initializes with default state # time=16.362ms
+    ok 1 - constructor initializes with default state # time=13.618ms
     
     # Subtest: setData stores data and invalidates cache
         ok 1 - should be equivalent
         ok 2 - should be equal
         1..2
-    ok 2 - setData stores data and invalidates cache # time=0.769ms
+    ok 2 - setData stores data and invalidates cache # time=0.801ms
     
     # Subtest: defineComputed registers computed property
         ok 1 - should be equal
         1..1
-    ok 3 - defineComputed registers computed property # time=0.683ms
+    ok 3 - defineComputed registers computed property # time=0.555ms
     
     # Subtest: getComputed returns computed value
         ok 1 - should be equal
         1..1
-    ok 4 - getComputed returns computed value # time=0.504ms
+    ok 4 - getComputed returns computed value # time=0.478ms
     
     # Subtest: getComputed caches result
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 5 - getComputed caches result # time=0.589ms
+    ok 5 - getComputed caches result # time=0.578ms
     
     # Subtest: isComputedCached returns correct value
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 6 - isComputedCached returns correct value # time=0.624ms
+    ok 6 - isComputedCached returns correct value # time=0.586ms
     
     # Subtest: getComputed returns undefined for unknown property
         ok 1 - should be equal
         1..1
-    ok 7 - getComputed returns undefined for unknown property # time=0.327ms
+    ok 7 - getComputed returns undefined for unknown property # time=0.307ms
     
     # Subtest: invalidateComputed clears specific properties
         ok 1 - should be equal
@@ -48,24 +48,24 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 8 - invalidateComputed clears specific properties # time=0.764ms
+    ok 8 - invalidateComputed clears specific properties # time=0.755ms
     
     # Subtest: transform applies transformation to data
         ok 1 - should be equivalent
         1..1
-    ok 9 - transform applies transformation to data # time=0.664ms
+    ok 9 - transform applies transformation to data # time=0.671ms
     
     # Subtest: filter filters data
         ok 1 - should be equal
         ok 2 - should be equivalent
         1..2
-    ok 10 - filter filters data # time=1.199ms
+    ok 10 - filter filters data # time=1.245ms
     
     # Subtest: sort sorts data without mutating original
         ok 1 - should be equivalent
         ok 2 - should be equivalent
         1..2
-    ok 11 - sort sorts data without mutating original # time=0.622ms
+    ok 11 - sort sorts data without mutating original # time=0.587ms
     
     # Subtest: formatValue handles null and undefined
         ok 1 - should be equal
@@ -73,7 +73,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 12 - formatValue handles null and undefined # time=1.133ms
+    ok 12 - formatValue handles null and undefined # time=0.623ms
     
     # Subtest: formatSize formats bytes correctly
         ok 1 - should be equal
@@ -83,79 +83,79 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 13 - formatSize formats bytes correctly # time=1.007ms
+    ok 13 - formatSize formats bytes correctly # time=0.85ms
     
     # Subtest: formatPercent formats percentages
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 14 - formatPercent formats percentages # time=0.588ms
+    ok 14 - formatPercent formats percentages # time=0.564ms
     
     # Subtest: formatTimestamp formats dates
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 15 - formatTimestamp formats dates # time=0.731ms
+    ok 15 - formatTimestamp formats dates # time=0.59ms
     
     # Subtest: getSummary returns count
         ok 1 - should be equal
         1..1
-    ok 16 - getSummary returns count # time=0.545ms
+    ok 16 - getSummary returns count # time=0.352ms
     
     # Subtest: validate returns valid by default
         ok 1 - should be equal
         ok 2 - should be equivalent
         1..2
-    ok 17 - validate returns valid by default # time=0.565ms
+    ok 17 - validate returns valid by default # time=0.477ms
     
     # Subtest: isEmpty returns correct value
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 18 - isEmpty returns correct value # time=0.587ms
+    ok 18 - isEmpty returns correct value # time=0.53ms
     
     # Subtest: getItem returns item by index
         ok 1 - should be equivalent
         ok 2 - should be equivalent
         ok 3 - should be equal
         1..3
-    ok 19 - getItem returns item by index # time=0.719ms
+    ok 19 - getItem returns item by index # time=0.668ms
     
     # Subtest: findItem finds item by predicate
         ok 1 - should be equivalent
         ok 2 - should be equal
         1..2
-    ok 20 - findItem finds item by predicate # time=0.6ms
+    ok 20 - findItem finds item by predicate # time=0.647ms
     
     # Subtest: clear removes data and invalidates cache
         ok 1 - should be equivalent
         ok 2 - should be equal
         1..2
-    ok 21 - clear removes data and invalidates cache # time=0.91ms
+    ok 21 - clear removes data and invalidates cache # time=0.601ms
     
     # Subtest: destroy cleans up everything
         ok 1 - should be equivalent
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 22 - destroy cleans up everything # time=0.673ms
+    ok 22 - destroy cleans up everything # time=0.625ms
     
     # Subtest: emits events via event bus
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 23 - emits events via event bus # time=0.92ms
+    ok 23 - emits events via event bus # time=0.877ms
     
     # Subtest: computed property receives viewModel as second arg
         ok 1 - should be equal
         1..1
-    ok 24 - computed property receives viewModel as second arg # time=0.403ms
+    ok 24 - computed property receives viewModel as second arg # time=0.374ms
     
     1..24
-ok 1 - BaseViewModel # time=41.628ms
+ok 1 - BaseViewModel # time=36.718ms
 
 1..1
 # { total: 57, pass: 57 }
-# time=58.845ms
+# time=53.481ms

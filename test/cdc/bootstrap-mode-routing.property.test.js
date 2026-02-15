@@ -18,6 +18,9 @@ import {
 import {
   SystemTableName,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  getSystemCachePrimaryKeyFieldOrFallback,
+} from '../../src/cache/system-cache-key-descriptor.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -133,7 +136,7 @@ function getValidUpdateData(tableName) {
  * @return {Promise<Object>} Write result.
  */
 async function executeWrite(cdc, operation, tableName, primaryKey) {
-  const pkField = getPrimaryKeyField(tableName);
+  const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
   const data = {[pkField]: primaryKey};
 
   if (tableName === SystemTableName.NODES) {
@@ -194,39 +197,6 @@ async function executeWrite(cdc, operation, tableName, primaryKey) {
   default:
     throw new Error(`Unknown operation: ${operation}`);
   }
-}
-
-/**
- * Get the primary key field name for a system table.
- * Mirrors CDCIntegrationService.getPrimaryKeyField().
- * @param {string} tableName - System table name.
- * @return {string} Primary key field name.
- */
-function getPrimaryKeyField(tableName) {
-  const map = {
-    [SystemTableName.TABLES]: 'table_id',
-    [SystemTableName.PARTITIONS]: 'partition_id',
-    [SystemTableName.INDICES]: 'index_id',
-    [SystemTableName.MESSAGE_GROUPS]: 'group_id',
-    [SystemTableName.NODES]: 'node_id',
-    [SystemTableName.SERVICES]: 'service_id',
-    [SystemTableName.LOGS]: 'log_id',
-    [SystemTableName.CONFIG]: 'config_key',
-    [SystemTableName.LIVE_QUERIES]: 'query_id',
-    [SystemTableName.CONTEXTS]: 'context_id',
-    [SystemTableName.CODE]: 'function_id',
-    [SystemTableName.REPLICA_OPERATIONS]: 'operation_id',
-    [SystemTableName.NODE_ENDPOINTS]: 'endpoint_id',
-    [SystemTableName.SERVICE_DEFINITIONS]: 'service_id',
-    [SystemTableName.SERVICE_ENDPOINTS]: 'endpoint_id',
-    [SystemTableName.SERVICE_TIMERS]: 'timer_id',
-    [SystemTableName.MODULE_MANIFESTS]: 'namespace',
-    [SystemTableName.PACKAGE_REGISTRY_MAPPINGS]: 'namespace',
-    [SystemTableName.PACKAGE_REGISTRY_OVERRIDES]: 'namespace',
-    [SystemTableName.MODULE_DEPENDENCY_LOCKS]: 'lock_id',
-    [SystemTableName.WASM_OPERATIONS]: 'operation_id',
-  };
-  return map[tableName] || 'id';
 }
 
 beforeEach(() => {

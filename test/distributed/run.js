@@ -789,8 +789,9 @@ async function main() {
 // Run main only when executed directly (not when imported by tests)
 const __filename = fileURLToPath(import.meta.url);
 const isDirectRun = resolve(process.argv[1] || '') === __filename;
+const isTapRun = process.env.TAP === '1';
 
-if (isDirectRun) {
+if (isDirectRun && !isTapRun) {
   main().catch((err) => {
     process.stderr.write('Fatal error: ' + err.message + '\n');
     process.exit(EXIT_CODES.FAILURE);

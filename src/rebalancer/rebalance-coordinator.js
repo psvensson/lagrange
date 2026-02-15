@@ -34,6 +34,7 @@ import {
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
 } from './replica-operation-constants.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
@@ -115,7 +116,6 @@ const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
   Object.values(SystemTableName).map((tableName) => `${tableName}-p1`),
 );
 
-const LEARNER_ROLE = 'learner';
 const DEFAULT_MIN_REPLICA_COUNT = NUM.THREE;
 const REPLICA_ID_SEPARATOR = '-r';
 const REPLICA_ID_START_INDEX = NUM.ONE;
@@ -1659,7 +1659,7 @@ class RebalanceCoordinator extends EventEmitter {
       replicaRow.raft_role.toLowerCase() :
       null;
 
-    if (!raftRole || raftRole === LEARNER_ROLE) {
+    if (!raftRole || raftRole === RAFT_ROLE.LEARNER) {
       return false;
     }
 

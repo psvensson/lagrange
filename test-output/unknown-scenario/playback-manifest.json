@@ -1,8 +1,8 @@
 {
   "scenarioName": "unknown-scenario",
-  "startedAt": 1771092470367,
-  "endedAt": 1771092550334,
-  "durationMs": 79967,
+  "startedAt": 1771144657058,
+  "endedAt": 1771144657058,
+  "durationMs": 0,
   "files": {
     "events": "test-output/unknown-scenario/events.ndjson",
     "samples": "test-output/unknown-scenario/samples.ndjson",
@@ -11,15 +11,9 @@
     "viewer": "test-output/unknown-scenario/playback-viewer.html"
   },
   "counts": {
-    "events": 62,
-    "samples": 122,
-    "snapshots": 37
+    "events": 33,
+    "samples": 0,
+    "snapshots": 0
   },
-  "warnings": [
-    {
-      "code": "query-node-unavailable",
-      "message": "No reachable node available for topology snapshot query",
-      "timestamp": 1771092471371
-    }
-  ]
+  "warnings": []
 }

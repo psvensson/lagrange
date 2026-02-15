@@ -3,41 +3,41 @@ TAP version 14
     # Subtest: most recently added query is at index 0
         ok 1 - most recently added query is at index 0
         1..1
-    ok 1 - most recently added query is at index 0 # time=7.288ms
+    ok 1 - most recently added query is at index 0 # time=5.829ms
     
     # Subtest: duplicate queries are moved to front not duplicated
         ok 1 - duplicate queries are moved to front not duplicated
         1..1
-    ok 2 - duplicate queries are moved to front not duplicated # time=1.501ms
+    ok 2 - duplicate queries are moved to front not duplicated # time=3.774ms
     
     # Subtest: getAt returns queries in correct order
         ok 1 - getAt returns queries in correct order
         1..1
-    ok 3 - getAt returns queries in correct order # time=1.183ms
+    ok 3 - getAt returns queries in correct order # time=1.429ms
     
     # Subtest: selecting history item returns exact query
         ok 1 - selecting history item returns exact query
         1..1
-    ok 4 - selecting history item returns exact query # time=0.895ms
+    ok 4 - selecting history item returns exact query # time=1.215ms
     
     # Subtest: history length never exceeds maxEntries
         ok 1 - history length never exceeds maxEntries
         1..1
-    ok 5 - history length never exceeds maxEntries # time=0.827ms
+    ok 5 - history length never exceeds maxEntries # time=1.187ms
     
     # Subtest: contains is consistent with getAll
         ok 1 - contains is consistent with getAll
         1..1
-    ok 6 - contains is consistent with getAll # time=0.907ms
+    ok 6 - contains is consistent with getAll # time=1.335ms
     
     # Subtest: add then getAt(0) returns the added query
         ok 1 - add then getAt(0) returns the added query
         1..1
-    ok 7 - add then getAt(0) returns the added query # time=0.456ms
+    ok 7 - add then getAt(0) returns the added query # time=0.399ms
     
     1..7
-ok 1 - Property 17: Query History Consistency # time=17.598ms
+ok 1 - Property 17: Query History Consistency # time=18.977ms
 
 1..1
 # { total: 7, pass: 7 }
-# time=22.576ms
+# time=22.481ms

@@ -41,77 +41,79 @@ TAP version 14
     ok 39 - Should have 1 message group
     ok 40 - Seed node should have 3 replicas
     1..40
-ok 1 - Property 8: Message Group Replica Distribution - seed node # time=6.22ms
+ok 1 - Property 8: Message Group Replica Distribution - seed node # time=7.665ms
 
 # Subtest: Property 8: Message Group Replica Distribution - node joining
     ok 1 - After node 2 joins, every node should have local replica
     ok 2 - After node 3 joins, every node should have local replica
-    ok 3 - After node 4 joins, every node should have local replica
-    ok 4 - After node 5 joins, every node should have local replica
-    ok 5 - After node 2 joins, every node should have local replica
-    ok 6 - After node 2 joins, every node should have local replica
-    ok 7 - After node 3 joins, every node should have local replica
-    ok 8 - After node 4 joins, every node should have local replica
-    ok 9 - After node 5 joins, every node should have local replica
-    ok 10 - After node 2 joins, every node should have local replica
-    ok 11 - After node 3 joins, every node should have local replica
+    ok 3 - After node 2 joins, every node should have local replica
+    ok 4 - After node 3 joins, every node should have local replica
+    ok 5 - After node 4 joins, every node should have local replica
+    ok 6 - After node 5 joins, every node should have local replica
+    ok 7 - After node 2 joins, every node should have local replica
+    ok 8 - After node 2 joins, every node should have local replica
+    ok 9 - After node 3 joins, every node should have local replica
+    ok 10 - After node 4 joins, every node should have local replica
+    ok 11 - After node 5 joins, every node should have local replica
     ok 12 - After node 2 joins, every node should have local replica
     ok 13 - After node 3 joins, every node should have local replica
     ok 14 - After node 4 joins, every node should have local replica
-    ok 15 - After node 2 joins, every node should have local replica
-    ok 16 - After node 3 joins, every node should have local replica
-    ok 17 - After node 4 joins, every node should have local replica
-    ok 18 - After node 5 joins, every node should have local replica
-    ok 19 - After node 2 joins, every node should have local replica
-    ok 20 - After node 3 joins, every node should have local replica
-    ok 21 - After node 4 joins, every node should have local replica
-    ok 22 - After node 5 joins, every node should have local replica
-    1..22
-ok 2 - Property 8: Message Group Replica Distribution - node joining # time=2.734ms
+    ok 15 - After node 5 joins, every node should have local replica
+    ok 16 - After node 2 joins, every node should have local replica
+    ok 17 - After node 3 joins, every node should have local replica
+    ok 18 - After node 4 joins, every node should have local replica
+    ok 19 - After node 5 joins, every node should have local replica
+    ok 20 - After node 2 joins, every node should have local replica
+    ok 21 - After node 3 joins, every node should have local replica
+    ok 22 - After node 4 joins, every node should have local replica
+    ok 23 - After node 2 joins, every node should have local replica
+    ok 24 - After node 2 joins, every node should have local replica
+    ok 25 - After node 3 joins, every node should have local replica
+    ok 26 - After node 4 joins, every node should have local replica
+    ok 27 - After node 5 joins, every node should have local replica
+    1..27
+ok 2 - Property 8: Message Group Replica Distribution - node joining # time=2.904ms
 
 # Subtest: Property 8: Message Group Replica Distribution - replica count
     ok 1 - Message group mg-1 should have 3 replicas
     ok 2 - Message group mg-node-3 should have 3 replicas
-    ok 3 - Message group mg-node-6 should have 3 replicas
+    ok 3 - Message group mg-1 should have 3 replicas
     ok 4 - Message group mg-1 should have 3 replicas
-    ok 5 - Message group mg-1 should have 3 replicas
+    ok 5 - Message group mg-node-3 should have 3 replicas
     ok 6 - Message group mg-1 should have 3 replicas
     ok 7 - Message group mg-1 should have 3 replicas
-    ok 8 - Message group mg-1 should have 3 replicas
+    ok 8 - Message group mg-node-3 should have 3 replicas
     ok 9 - Message group mg-1 should have 3 replicas
-    ok 10 - Message group mg-node-3 should have 3 replicas
+    ok 10 - Message group mg-1 should have 3 replicas
     ok 11 - Message group mg-1 should have 3 replicas
-    ok 12 - Message group mg-node-3 should have 3 replicas
-    ok 13 - Message group mg-node-6 should have 3 replicas
-    ok 14 - Message group mg-1 should have 3 replicas
-    ok 15 - Message group mg-1 should have 3 replicas
-    ok 16 - Message group mg-node-3 should have 3 replicas
-    1..16
-ok 3 - Property 8: Message Group Replica Distribution - replica count # time=1.591ms
+    ok 12 - Message group mg-1 should have 3 replicas
+    ok 13 - Message group mg-1 should have 3 replicas
+    1..13
+ok 3 - Property 8: Message Group Replica Distribution - replica count # time=1.912ms
 
 # Subtest: Property 8: Message Group Replica Distribution - scaling
-    ok 1 - Should have at least 3 message groups for 7 nodes
+    ok 1 - Should have at least 2 message groups for 4 nodes
     ok 2 - Every node should have local replica after scaling
-    ok 3 - Should have at least 2 message groups for 4 nodes
+    ok 3 - Should have at least 1 message groups for 1 nodes
     ok 4 - Every node should have local replica after scaling
     ok 5 - Should have at least 2 message groups for 4 nodes
     ok 6 - Every node should have local replica after scaling
-    ok 7 - Should have at least 1 message groups for 1 nodes
+    ok 7 - Should have at least 3 message groups for 8 nodes
     ok 8 - Every node should have local replica after scaling
-    ok 9 - Should have at least 1 message groups for 2 nodes
+    ok 9 - Should have at least 1 message groups for 1 nodes
     ok 10 - Every node should have local replica after scaling
-    ok 11 - Should have at least 1 message groups for 3 nodes
+    ok 11 - Should have at least 4 message groups for 10 nodes
     ok 12 - Every node should have local replica after scaling
-    ok 13 - Should have at least 2 message groups for 5 nodes
+    ok 13 - Should have at least 1 message groups for 1 nodes
     ok 14 - Every node should have local replica after scaling
-    ok 15 - Should have at least 3 message groups for 7 nodes
+    ok 15 - Should have at least 1 message groups for 1 nodes
     ok 16 - Every node should have local replica after scaling
-    ok 17 - Should have at least 2 message groups for 6 nodes
+    ok 17 - Should have at least 4 message groups for 10 nodes
     ok 18 - Every node should have local replica after scaling
-    ok 19 - Should have at least 2 message groups for 5 nodes
+    ok 19 - Should have at least 2 message groups for 4 nodes
     ok 20 - Every node should have local replica after scaling
     1..20
-ok 4 - Property 8: Message Group Replica Distribution - scaling # time=2.384ms
+ok 4 - Property 8: Message Group Replica Distribution - scaling # time=1.586ms
 
 # Subtest: Property 8: Message Group Replica Distribution - service instantiation
     ok 1 - Service should be created
@@ -165,8 +167,8 @@ ok 4 - Property 8: Message Group Replica Distribution - scaling # time=2.384ms
     ok 49 - Should have correct nodeId
     ok 50 - Service should be initialized
     1..50
-ok 5 - Property 8: Message Group Replica Distribution - service instantiation # time=33.067ms
+ok 5 - Property 8: Message Group Replica Distribution - service instantiation # time=284.199ms
 
 1..5
-# { total: 148, pass: 148 }
-# time=139.809ms
+# { total: 150, pass: 150 }
+# time=404.6ms

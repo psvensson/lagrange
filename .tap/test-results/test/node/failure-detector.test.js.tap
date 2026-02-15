@@ -4,28 +4,28 @@ TAP version 14
     ok 2 - should not be initialized
     ok 3 - should not be running
     1..3
-ok 1 - FailureDetector - constructor # time=3.529ms
+ok 1 - FailureDetector - constructor # time=2.009ms
 
 # Subtest: FailureDetector - initialize
     ok 1 - should be initialized
     1..1
-ok 2 - FailureDetector - initialize # time=0.573ms
+ok 2 - FailureDetector - initialize # time=0.66ms
 
 # Subtest: FailureDetector - initialize requires nodeId
     ok 1 - should have error message
     1..1
-ok 3 - FailureDetector - initialize requires nodeId # time=0.326ms
+ok 3 - FailureDetector - initialize requires nodeId # time=0.562ms
 
 # Subtest: FailureDetector - start and stop
     ok 1 - should be running after start
     ok 2 - should not be running after stop
     1..2
-ok 4 - FailureDetector - start and stop # time=0.849ms
+ok 4 - FailureDetector - start and stop # time=0.529ms
 
 # Subtest: FailureDetector - start requires initialization
     ok 1 - should have error message
     1..1
-ok 5 - FailureDetector - start requires initialization # time=0.438ms
+ok 5 - FailureDetector - start requires initialization # time=0.298ms
 
 # Subtest: FailureDetector - detects node suspicion
     ok 1 - should emit nodeSuspected event
@@ -33,46 +33,46 @@ ok 5 - FailureDetector - start requires initialization # time=0.438ms
     ok 3 - should have one CDC operation
     ok 4 - should update status to suspected
     1..4
-ok 6 - FailureDetector - detects node suspicion # time=0.752ms
+ok 6 - FailureDetector - detects node suspicion # time=0.732ms
 
-{"level":50,"time":"2026-02-11T07:46:43.187Z","nodeId":"1bc73196-c195-4e4d-860c-30ff3a167497","pid":878440,"subsystem":"failure-detector","nodeId":"1bc73196-c195-4e4d-860c-30ff3a167497","lastHeartbeat":"2026-02-11T07:46:23.187Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-02-15T08:43:14.126Z","nodeId":"60238bc6-4617-4b8e-8a70-976062364cdb","pid":1808287,"subsystem":"failure-detector","nodeId":"60238bc6-4617-4b8e-8a70-976062364cdb","lastHeartbeat":"2026-02-15T08:42:54.126Z","threshold":15000,"msg":"Node failure detected"}
 # Subtest: FailureDetector - detects node failure
     ok 1 - should emit nodeFailure event
     ok 2 - should have correct nodeId
     ok 3 - should update status to failed
     1..3
-ok 7 - FailureDetector - detects node failure # time=1.087ms
+ok 7 - FailureDetector - detects node failure # time=1.152ms
 
-{"level":50,"time":"2026-02-11T07:46:43.201Z","nodeId":"8014c55b-1a23-45de-add1-a8a4d02ce2d7","pid":878440,"subsystem":"failure-detector","nodeId":"8014c55b-1a23-45de-add1-a8a4d02ce2d7","lastHeartbeat":"2026-02-11T07:46:23.200Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-02-15T08:43:14.142Z","nodeId":"2dfbd604-e676-4c62-b1c9-bbbd800465f4","pid":1808287,"subsystem":"failure-detector","nodeId":"2dfbd604-e676-4c62-b1c9-bbbd800465f4","lastHeartbeat":"2026-02-15T08:42:54.142Z","threshold":15000,"msg":"Node failure detected"}
 # Subtest: FailureDetector - marks replicas as failed on node failure
     ok 1 - should emit 2 replicaFailed events
     ok 2 - should mark partition replica as failed
     ok 3 - should mark message group replica as failed
     ok 4 - should have 2 replica status updates
     1..4
-ok 8 - FailureDetector - marks replicas as failed on node failure # time=0.758ms
+ok 8 - FailureDetector - marks replicas as failed on node failure # time=0.749ms
 
 # Subtest: FailureDetector - detects node recovery
     ok 1 - should emit nodeRecovery event
     ok 2 - should have correct nodeId
     ok 3 - should update status to recovering
     1..3
-ok 9 - FailureDetector - detects node recovery # time=0.586ms
+ok 9 - FailureDetector - detects node recovery # time=0.635ms
 
 # Subtest: FailureDetector - skips self node
     ok 1 - should not update self node
     1..1
-ok 10 - FailureDetector - skips self node # time=0.323ms
+ok 10 - FailureDetector - skips self node # time=0.357ms
 
 # Subtest: FailureDetector - skips already failed nodes
     ok 1 - should not update already failed node
     1..1
-ok 11 - FailureDetector - skips already failed nodes # time=0.345ms
+ok 11 - FailureDetector - skips already failed nodes # time=0.349ms
 
 # Subtest: FailureDetector - healthy nodes are not affected
     ok 1 - should not update healthy node
     1..1
-ok 12 - FailureDetector - healthy nodes are not affected # time=0.361ms
+ok 12 - FailureDetector - healthy nodes are not affected # time=0.352ms
 
 # Subtest: FailureDetector - getStats
     ok 1 - should have nodeId
@@ -81,14 +81,14 @@ ok 12 - FailureDetector - healthy nodes are not affected # time=0.361ms
     ok 4 - should not be running
     ok 5 - should be initialized
     1..5
-ok 13 - FailureDetector - getStats # time=0.453ms
+ok 13 - FailureDetector - getStats # time=0.454ms
 
 # Subtest: FailureDetector - shutdown
     ok 1 - should be running
     ok 2 - should not be running
     ok 3 - should not be initialized
     1..3
-ok 14 - FailureDetector - shutdown # time=0.478ms
+ok 14 - FailureDetector - shutdown # time=0.519ms
 
 # Subtest: FailureDetector - NodeStatus values
     ok 1 - should have active
@@ -96,7 +96,7 @@ ok 14 - FailureDetector - shutdown # time=0.478ms
     ok 3 - should have failed
     ok 4 - should have recovering
     1..4
-ok 15 - FailureDetector - NodeStatus values # time=0.384ms
+ok 15 - FailureDetector - NodeStatus values # time=0.385ms
 
 # Subtest: FailureDetector - ReplicaStatus values
     ok 1 - should have pending
@@ -107,8 +107,8 @@ ok 15 - FailureDetector - NodeStatus values # time=0.384ms
     ok 6 - should have removed
     ok 7 - should have failed
     1..7
-ok 16 - FailureDetector - ReplicaStatus values # time=0.641ms
+ok 16 - FailureDetector - ReplicaStatus values # time=0.469ms
 
 1..16
 # { total: 44, pass: 44 }
-# time=292.068ms
+# time=287.133ms

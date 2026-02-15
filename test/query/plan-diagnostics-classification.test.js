@@ -9,7 +9,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   PlanDiagnostics,
 } from '../../src/query/plan-diagnostics.js';
-import {buildStageContext} from '../../src/query/call-stage.js';
 import {ExecutionContext} from '../../src/query/execution-context.js';
 import {CancellationToken} from '../../src/query/cancellation-token.js';
 import {BudgetEnforcer} from '../../src/query/budget-enforcer.js';
@@ -203,7 +202,7 @@ test('stage context records bounded classification in diagnostics',
       query: 'SELECT * FROM outer WHERE id = ?',
       params: [1],
       handler: async (_batch, stageCtx) => {
-        stageCtx.call(
+        await stageCtx.call(
           'SELECT * FROM users WHERE id = ?', [1],
         );
       },
@@ -231,7 +230,7 @@ test('diagnostics recorded even when unbounded rejection throws',
         query: 'SELECT * FROM outer WHERE id = ?',
         params: [1],
         handler: async (_batch, stageCtx) => {
-          stageCtx.call('SELECT * FROM users');
+          await stageCtx.call('SELECT * FROM users');
         },
         opts: {},
         queryExecutor: mockExecutor,
@@ -258,7 +257,7 @@ test('stage context without diagnostics still works', async (t) => {
     query: 'SELECT * FROM outer WHERE id = ?',
     params: [1],
     handler: async (_batch, stageCtx) => {
-      stageCtx.call(
+      await stageCtx.call(
         'SELECT * FROM users WHERE id = ?', [1],
       );
     },

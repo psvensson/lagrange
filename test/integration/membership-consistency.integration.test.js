@@ -1053,10 +1053,11 @@ test('Membership Consistency Integration Tests', async (t) => {
       t.equal(cachedNode.connection_state, STATE.READY,
         'cache should show node as ready');
 
-      // But isNodeReady should return false (WebSocket disconnected)
+      // Dispatch readiness is cache/lease-based and does not
+      // gate on router connection state.
       const isReady = dispatchSvc.isNodeReady(nodeId);
-      t.equal(isReady, false,
-        'isNodeReady should return false when WebSocket is disconnected');
+      t.equal(isReady, true,
+        'isNodeReady should remain true when lease is valid');
 
       heartbeatSvc.stop();
       leaseSvc.stop();

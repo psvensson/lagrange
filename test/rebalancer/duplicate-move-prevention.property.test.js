@@ -228,60 +228,63 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
     t.pass('pending operations block new move generation');
   });
 
-  t.test('transitioning replicas block move generation', async (t) => {
-    const transitioningStatuses = [
-      ReplicaStatus.CREATING,
-      ReplicaStatus.SYNCING,
-      ReplicaStatus.REMOVING,
-    ];
+  t.test('service-row transitioning replicas do not block move generation',
+    async (t) => {
+      const transitioningStatuses = [
+        ReplicaStatus.CREATING,
+        ReplicaStatus.SYNCING,
+        ReplicaStatus.REMOVING,
+      ];
 
-    await fc.assert(
-      fc.asyncProperty(
-        fc.uuid(),
-        fc.constantFrom(...transitioningStatuses),
-        async (entityId, transitionStatus) => {
-          const rebalancer = createTestRebalancer({
-            entityId,
-            entityType: EntityType.PARTITION,
-            nodeId: 'test-node',
-            cacheData: {
-              nodes: [
-                {node_id: 'node-1', status: 'active'},
-                {node_id: 'node-2', status: 'active'},
-              ],
-              partitions: [{partition_id: entityId, table_id: 'table-1'}],
-            },
-          });
+      await fc.assert(
+        fc.asyncProperty(
+          fc.uuid(),
+          fc.constantFrom(...transitioningStatuses),
+          async (entityId, transitionStatus) => {
+            const rebalancer = createTestRebalancer({
+              entityId,
+              entityType: EntityType.PARTITION,
+              nodeId: 'test-node',
+              cacheData: {
+                nodes: [
+                  {node_id: 'node-1', status: 'active'},
+                  {node_id: 'node-2', status: 'active'},
+                ],
+                partitions: [{partition_id: entityId, table_id: 'table-1'}],
+              },
+            });
 
-          rebalancer.initialize();
-          rebalancer.setLeader(true);
+            rebalancer.initialize();
+            rebalancer.setLeader(true);
 
-          const currentReplicas = [
-            {
-              service_id: 'replica-1',
-              replica_id: 'replica-1',
-              node_id: 'node-1',
-              status: transitionStatus,
-            },
-          ];
+            const currentReplicas = [
+              {
+                service_id: 'replica-1',
+                replica_id: 'replica-1',
+                node_id: 'node-1',
+                status: transitionStatus,
+              },
+            ];
 
-          const targetState = {
-            targetReplicaCount: 3,
-            targetNodes: ['node-1', 'node-2', 'node-2'],
-          };
+            const targetState = {
+              targetReplicaCount: 3,
+              targetNodes: ['node-1', 'node-2', 'node-2'],
+            };
 
-          const moves = rebalancer.calculateMoves(currentReplicas, targetState);
+            const moves = rebalancer.calculateMoves(currentReplicas, targetState);
 
-          rebalancer.shutdown();
+            rebalancer.shutdown();
 
-          return moves.length === 0;
-        },
-      ),
-      {numRuns: 10},
-    );
+            return moves.length > 0;
+          },
+        ),
+        {numRuns: 10},
+      );
 
-    t.pass('transitioning replicas block move generation');
-  });
+      t.pass(
+        'service-row transitioning replicas do not block move generation',
+      );
+    });
 
   t.test('completed operations do not block new moves', async (t) => {
     await fc.assert(

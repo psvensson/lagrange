@@ -2,23 +2,23 @@ TAP version 14
 # Subtest: Property 3: Raft messages are delivered to correct handler
     ok 1 - Raft messages are delivered to correct handler
     1..1
-ok 1 - Property 3: Raft messages are delivered to correct handler # time=54.51ms
+ok 1 - Property 3: Raft messages are delivered to correct handler # time=337.218ms
 
 # Subtest: Property 3: Co-located replicas receive messages via router
     ok 1 - Co-located replicas receive messages via router
     1..1
-ok 2 - Property 3: Co-located replicas receive messages via router # time=22.463ms
+ok 2 - Property 3: Co-located replicas receive messages via router # time=319.98ms
 
 # Subtest: Property 3: isRaftPacket correctly identifies Raft packets
     ok 1 - isRaftPacket correctly identifies Raft packets
     1..1
-ok 3 - Property 3: isRaftPacket correctly identifies Raft packets # time=0.958ms
+ok 3 - Property 3: isRaftPacket correctly identifies Raft packets # time=1.228ms
 
 # Subtest: Property 3: Message delivery preserves all packet fields
     ok 1 - Message delivery preserves all packet fields
     1..1
-ok 4 - Property 3: Message delivery preserves all packet fields # time=17.686ms
+ok 4 - Property 3: Message delivery preserves all packet fields # time=278.416ms
 
 1..4
 # { total: 4, pass: 4 }
-# time=223.675ms
+# time=1068.963ms

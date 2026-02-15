@@ -95,6 +95,22 @@ function buildLifecycle() {
   return {lifecycle, registry};
 }
 
+/**
+ * Build a runtime definition valid for descriptor checks.
+ * @param {string} kind
+ * @param {string} serviceId
+ * @return {Object}
+ */
+function makeDefinition(kind, serviceId) {
+  const definition = {runtime_kind: kind, serviceId};
+  if (kind === RUNTIME_KIND.WASM_COMPONENT) {
+    definition.runtime_ref = `${serviceId}-module@sha256:test`;
+  } else if (kind === RUNTIME_KIND.OCI_CONTAINER) {
+    definition.runtime_ref = `registry.example/${serviceId}@sha256:test`;
+  }
+  return definition;
+}
+
 // --- 1. Lifecycle resolves callback-compatible runtime kinds ---
 
 describe('Lifecycle resolves callback-compatible kinds', () => {
@@ -115,7 +131,7 @@ describe('Lifecycle resolves callback-compatible kinds', () => {
   it('prepare succeeds for native_js definition', async () => {
     const {lifecycle} = buildLifecycle();
     const result = await lifecycle.prepare(
-      {runtime_kind: RUNTIME_KIND.NATIVE_JS, serviceId: 'svc-1'},
+      makeDefinition(RUNTIME_KIND.NATIVE_JS, 'svc-1'),
       {},
     );
     assert.equal(result.status, 'ready');
@@ -124,7 +140,7 @@ describe('Lifecycle resolves callback-compatible kinds', () => {
   it('prepare succeeds for wasm_component definition', async () => {
     const {lifecycle} = buildLifecycle();
     const result = await lifecycle.prepare(
-      {runtime_kind: RUNTIME_KIND.WASM_COMPONENT, serviceId: 'svc-2'},
+      makeDefinition(RUNTIME_KIND.WASM_COMPONENT, 'svc-2'),
       {},
     );
     assert.equal(result.status, 'ready');
@@ -279,7 +295,7 @@ describe('Lifecycle telemetry runtimeKind matches callback kinds', () => {
     );
 
     await lifecycle.prepare(
-      {runtime_kind: RUNTIME_KIND.NATIVE_JS, serviceId: 'svc-t1'},
+      makeDefinition(RUNTIME_KIND.NATIVE_JS, 'svc-t1'),
       {},
     );
 
@@ -298,10 +314,10 @@ describe('Lifecycle telemetry runtimeKind matches callback kinds', () => {
     );
 
     await lifecycle.start({
-      definition: {
-        runtime_kind: RUNTIME_KIND.WASM_COMPONENT,
-        serviceId: 'svc-t2',
-      },
+      definition: makeDefinition(
+        RUNTIME_KIND.WASM_COMPONENT,
+        'svc-t2',
+      ),
     });
 
     assert.ok(events.length >= 2);
@@ -322,10 +338,7 @@ describe('Lifecycle telemetry runtimeKind matches callback kinds', () => {
     );
 
     await lifecycle.stop({
-      definition: {
-        runtime_kind: RUNTIME_KIND.NATIVE_JS,
-        serviceId: 'svc-t3',
-      },
+      definition: makeDefinition(RUNTIME_KIND.NATIVE_JS, 'svc-t3'),
     });
 
     assert.ok(events.length >= 2);
@@ -345,10 +358,10 @@ describe('Lifecycle telemetry runtimeKind matches callback kinds', () => {
     );
 
     await lifecycle.health({
-      definition: {
-        runtime_kind: RUNTIME_KIND.WASM_COMPONENT,
-        serviceId: 'svc-t4',
-      },
+      definition: makeDefinition(
+        RUNTIME_KIND.WASM_COMPONENT,
+        'svc-t4',
+      ),
     });
 
     assert.ok(events.length >= 2);

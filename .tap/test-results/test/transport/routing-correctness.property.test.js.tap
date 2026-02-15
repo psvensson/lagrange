@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: registered handler is invoked for matching address
         ok 1 - registered handler is invoked for matching address
         1..1
-    ok 1 - registered handler is invoked for matching address # time=30.617ms
+    ok 1 - registered handler is invoked for matching address # time=315.082ms
     
     # Subtest: only exact matching handler is invoked
         ok 1 - only exact matching handler is invoked
         1..1
-    ok 2 - only exact matching handler is invoked # time=11.724ms
+    ok 2 - only exact matching handler is invoked # time=339.694ms
     
     # Subtest: handler response is returned in ACK
         ok 1 - handler response is returned in ACK
         1..1
-    ok 3 - handler response is returned in ACK # time=11.705ms
+    ok 3 - handler response is returned in ACK # time=336.494ms
     
     # Subtest: unregistered address returns noHandler flag
         ok 1 - unregistered address returns noHandler flag
         1..1
-    ok 4 - unregistered address returns noHandler flag # time=10.603ms
+    ok 4 - unregistered address returns noHandler flag # time=335.117ms
     
     # Subtest: handler errors are returned in ACK
         ok 1 - handler errors are returned in ACK
         1..1
-    ok 5 - handler errors are returned in ACK # time=20.203ms
+    ok 5 - handler errors are returned in ACK # time=288.113ms
     
     # Subtest: async handler results are awaited
         ok 1 - async handler results are awaited
         1..1
-    ok 6 - async handler results are awaited # time=14.501ms
+    ok 6 - async handler results are awaited # time=324.373ms
     
     1..6
-ok 1 - Property 4: Routing Correctness # time=102.739ms
+ok 1 - Property 4: Routing Correctness # time=1943.443ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=144.159ms
+# time=1989.711ms

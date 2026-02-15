@@ -2,49 +2,49 @@ TAP version 14
 # Subtest: CDCHandler - constructor requires cache
     ok 1 - Should throw without cache
     1..1
-ok 1 - CDCHandler - constructor requires cache # time=4ms
+ok 1 - CDCHandler - constructor requires cache # time=5.564ms
 
 # Subtest: CDCHandler - constructor initializes correctly
     ok 1 - Should create handler
     ok 2 - Should not be initialized
     ok 3 - Should have no subscriptions
     1..3
-ok 2 - CDCHandler - constructor initializes correctly # time=0.802ms
+ok 2 - CDCHandler - constructor initializes correctly # time=0.74ms
 
 # Subtest: CDCHandler - initialize starts handler
     ok 1 - Should be initialized
     1..1
-ok 3 - CDCHandler - initialize starts handler # time=0.711ms
+ok 3 - CDCHandler - initialize starts handler # time=0.977ms
 
 # Subtest: CDCHandler - subscribe adds subscription
     ok 1 - Should be subscribed to nodes
     ok 2 - Should emit subscribed event
     ok 3 - Event should have tableName
     1..3
-ok 4 - CDCHandler - subscribe adds subscription # time=0.503ms
+ok 4 - CDCHandler - subscribe adds subscription # time=0.707ms
 
 # Subtest: CDCHandler - unsubscribe removes subscription
     ok 1 - Should be subscribed
     ok 2 - Should not be subscribed
     ok 3 - Should emit unsubscribed event
     1..3
-ok 5 - CDCHandler - unsubscribe removes subscription # time=0.587ms
+ok 5 - CDCHandler - unsubscribe removes subscription # time=0.847ms
 
 # Subtest: CDCHandler - handleEvent buffers events
     ok 1 - Should accept event
     ok 2 - Should buffer event
     1..2
-ok 6 - CDCHandler - handleEvent buffers events # time=0.864ms
+ok 6 - CDCHandler - handleEvent buffers events # time=0.866ms
 
 # Subtest: CDCHandler - handleEvent ignores unsubscribed tables
     ok 1 - Should reject event for unsubscribed table
     1..1
-ok 7 - CDCHandler - handleEvent ignores unsubscribed tables # time=0.49ms
+ok 7 - CDCHandler - handleEvent ignores unsubscribed tables # time=0.448ms
 
 # Subtest: CDCHandler - handleEvent deduplicates events
     ok 1 - Should reject duplicate event
     1..1
-ok 8 - CDCHandler - handleEvent deduplicates events # time=0.672ms
+ok 8 - CDCHandler - handleEvent deduplicates events # time=0.389ms
 
 # Subtest: CDCHandler - flushBuffer applies events to cache
     ok 1 - Should emit eventApplied
@@ -53,18 +53,18 @@ ok 8 - CDCHandler - handleEvent deduplicates events # time=0.672ms
     ok 4 - Should find record in cache
     ok 5 - Should have correct status
     1..5
-ok 9 - CDCHandler - flushBuffer applies events to cache # time=0.856ms
+ok 9 - CDCHandler - flushBuffer applies events to cache # time=0.645ms
 
 # Subtest: CDCHandler - events applied in timestamp order
     ok 1 - Last applied should be highest timestamp
     1..1
-ok 10 - CDCHandler - events applied in timestamp order # time=0.639ms
+ok 10 - CDCHandler - events applied in timestamp order # time=0.561ms
 
 # Subtest: CDCHandler - applyImmediate bypasses buffer
     ok 1 - Should not buffer
     ok 2 - Should find record in cache
     1..2
-ok 11 - CDCHandler - applyImmediate bypasses buffer # time=0.595ms
+ok 11 - CDCHandler - applyImmediate bypasses buffer # time=0.486ms
 
 # Subtest: CDCHandler - auto-flush when buffer full
     ok 1 - Should have 1 buffered
@@ -72,7 +72,7 @@ ok 11 - CDCHandler - applyImmediate bypasses buffer # time=0.595ms
     ok 3 - Should have node-1
     ok 4 - Should have node-2
     1..4
-ok 12 - CDCHandler - auto-flush when buffer full # time=0.73ms
+ok 12 - CDCHandler - auto-flush when buffer full # time=0.574ms
 
 # Subtest: CDCHandler - getStatus returns complete status
     ok 1 - Should be initialized
@@ -81,13 +81,13 @@ ok 12 - CDCHandler - auto-flush when buffer full # time=0.73ms
     ok 4 - Should include partitions
     ok 5 - Should have totalBuffered
     1..5
-ok 13 - CDCHandler - getStatus returns complete status # time=0.745ms
+ok 13 - CDCHandler - getStatus returns complete status # time=0.615ms
 
 # Subtest: CDCHandler - shutdown flushes remaining events
     ok 1 - Should have buffered event
     ok 2 - Should have applied event during shutdown
     1..2
-ok 14 - CDCHandler - shutdown flushes remaining events # time=0.482ms
+ok 14 - CDCHandler - shutdown flushes remaining events # time=0.5ms
 
 # Subtest: CDCEvent - constructor creates event
     ok 1 - Should have tableName
@@ -95,15 +95,15 @@ ok 14 - CDCHandler - shutdown flushes remaining events # time=0.482ms
     ok 3 - Should return key
     ok 4 - Should have sourcePartition
     1..4
-ok 15 - CDCEvent - constructor creates event # time=0.404ms
+ok 15 - CDCEvent - constructor creates event # time=0.762ms
 
 # Subtest: CDCEvent - compareTimestamp orders events
     ok 1 - event1 should be before event2
     ok 2 - event2 should be after event1
     ok 3 - Same event should be equal
     1..3
-ok 16 - CDCEvent - compareTimestamp orders events # time=4.437ms
+ok 16 - CDCEvent - compareTimestamp orders events # time=5.436ms
 
 1..16
 # { total: 41, pass: 41 }
-# time=257.182ms
+# time=346.514ms

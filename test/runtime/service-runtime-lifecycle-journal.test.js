@@ -84,8 +84,18 @@ function makeRegistry(...drivers) {
   return registry;
 }
 
+function runtimeDef(kind, serviceId = 'svc-1') {
+  const definition = {runtime_kind: kind, serviceId};
+  if (kind === RUNTIME_KIND.WASM_COMPONENT) {
+    definition.runtime_ref = `${serviceId}-module@sha256:test`;
+  } else if (kind === RUNTIME_KIND.OCI_CONTAINER) {
+    definition.runtime_ref = `registry.example/${serviceId}@sha256:test`;
+  }
+  return definition;
+}
+
 function nativeDef(serviceId = 'svc-1') {
-  return {runtime_kind: RUNTIME_KIND.NATIVE_JS, serviceId};
+  return runtimeDef(RUNTIME_KIND.NATIVE_JS, serviceId);
 }
 
 function replicaCtx(definition) {
@@ -362,13 +372,13 @@ describe('Operation journaling across runtime kinds', () => {
       const nativeWrites = writes.length;
 
       await lifecycle.prepare(
-        {runtime_kind: RUNTIME_KIND.WASM_COMPONENT, serviceId: 'w-svc'},
+        runtimeDef(RUNTIME_KIND.WASM_COMPONENT, 'w-svc'),
         {},
       );
       const wasmWrites = writes.length - nativeWrites;
 
       await lifecycle.prepare(
-        {runtime_kind: RUNTIME_KIND.OCI_CONTAINER, serviceId: 'o-svc'},
+        runtimeDef(RUNTIME_KIND.OCI_CONTAINER, 'o-svc'),
         {},
       );
       const ociWrites = writes.length - nativeWrites - wasmWrites;
@@ -473,9 +483,9 @@ describe('Operation journaling property-based tests', () => {
         fc.asyncProperty(
           fc.boolean(),
           async (shouldFail) => {
-            const driver = shouldFail
-              ? new FailingDriver()
-              : new StubDriver();
+            const driver = shouldFail ?
+              new FailingDriver() :
+              new StubDriver();
             const {lifecycle, writes} = lifecycleWithJournal(driver);
             const def = nativeDef('prop-svc');
 
@@ -529,7 +539,7 @@ describe('Operation journaling property-based tests', () => {
         async (kind) => {
           const driver = new StubDriver(kind);
           const {lifecycle, writes} = lifecycleWithJournal(driver);
-          const def = {runtime_kind: kind, serviceId: 'h-prop'};
+          const def = runtimeDef(kind, 'h-prop');
 
           await lifecycle.health(replicaCtx(def));
 

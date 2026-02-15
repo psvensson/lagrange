@@ -3,46 +3,46 @@ TAP version 14
     # Subtest: successful delivery returns acknowledged true with response
         ok 1 - successful delivery returns acknowledged true with response
         1..1
-    ok 1 - successful delivery returns acknowledged true with response # time=32.176ms
+    ok 1 - successful delivery returns acknowledged true with response # time=351.664ms
     
     # Subtest: delivery to unregistered address returns noHandler flag
         ok 1 - delivery to unregistered address returns noHandler flag
         1..1
-    ok 2 - delivery to unregistered address returns noHandler flag # time=11.139ms
+    ok 2 - delivery to unregistered address returns noHandler flag # time=323.013ms
     
     # Subtest: handler exception rejects with error
         ok 1 - handler exception rejects with error
         1..1
-    ok 3 - handler exception rejects with error # time=13.377ms
+    ok 3 - handler exception rejects with error # time=327.742ms
     
     # Subtest: result always includes messageId
         ok 1 - result always includes messageId
         1..1
-    ok 4 - result always includes messageId # time=10.211ms
+    ok 4 - result always includes messageId # time=289.405ms
     
     # Subtest: no silent failures - result is always defined
         ok 1 - no silent failures - result is always defined
         1..1
-    ok 5 - no silent failures - result is always defined # time=11.032ms
+    ok 5 - no silent failures - result is always defined # time=359.484ms
     
     # Subtest: acknowledged is strictly boolean in result
         ok 1 - acknowledged is strictly boolean in result
         1..1
-    ok 6 - acknowledged is strictly boolean in result # time=10.934ms
+    ok 6 - acknowledged is strictly boolean in result # time=330.391ms
     
     # Subtest: error handling is consistent
         ok 1 - error handling is consistent
         1..1
-    ok 7 - error handling is consistent # time=11.475ms
+    ok 7 - error handling is consistent # time=287.095ms
     
     # Subtest: handler response fields are preserved
         ok 1 - handler response fields are preserved
         1..1
-    ok 8 - handler response fields are preserved # time=10.381ms
+    ok 8 - handler response fields are preserved # time=303.812ms
     
     1..8
-ok 1 - Property 5: Delivery Semantics # time=114.76ms
+ok 1 - Property 5: Delivery Semantics # time=2579.062ms
 
 1..1
 # { total: 8, pass: 8 }
-# time=161.238ms
+# time=2657.073ms

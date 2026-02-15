@@ -98,6 +98,7 @@ import {
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
+import {CDC_EVENT} from '../cdc/cdc-constants.js';
 import {createJoiningPhaseOwners} from './owners/join-phase-owners.js';
 
 const JoiningPhase = JOINING_PHASE;
@@ -2269,7 +2270,12 @@ class NodeJoiningService extends EventEmitter {
       };
 
       // Subscribe to each event type using constants
-      const eventTypes = ['insert', 'update', 'delete', 'upsert'];
+      const eventTypes = [
+        CDC_EVENT.INSERT,
+        CDC_EVENT.UPDATE,
+        CDC_EVENT.DELETE,
+        CDC_EVENT.UPSERT,
+      ];
       for (const eventType of eventTypes) {
         this.cdcIntegrationService.on(eventType, cdcEventHandler);
       }
