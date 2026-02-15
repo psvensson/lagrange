@@ -44,6 +44,10 @@ import {
 import {
   DedupeRegistry,
 } from '../../src/query/dedupe-registry.js';
+import {
+  BROADCAST_FIELD,
+  PRIMITIVE_ERROR_MSG,
+} from '../../src/query/distributed-context-constants.js';
 
 /**
  * Create a minimal ExecutionContext for testing.
@@ -320,7 +324,7 @@ describe('ExecutionContext', () => {
     });
   });
 
-  describe('stub methods throw', () => {
+  describe('distributed primitives', () => {
     it('ctx.emit should route through exchange manager',
       async () => {
         const ctx = createCtx();
@@ -378,33 +382,64 @@ describe('ExecutionContext', () => {
       );
     });
 
-    it('ctx.lookup should throw not-yet-wired', async () => {
+    it('ctx.lookup executes through queryExecutor', async () => {
+      let capturedQuery = null;
+      let capturedParams = null;
+      const ctx = createCtx({
+        queryExecutor: async (query, params) => {
+          capturedQuery = query;
+          capturedParams = params;
+          return {
+            rows: [{id: 1, name: 'alice'}],
+          };
+        },
+      });
+      const result = await ctx.lookup('users', [
+        {column: 'id', value: 1},
+      ]);
+      assert.deepEqual(result.rows, [{id: 1, name: 'alice'}]);
+      assert.equal(result.keyCount, 1);
+      assert.equal(result.partitionCount, 1);
+      assert.equal(
+        capturedQuery,
+        'SELECT * FROM users WHERE id IN (?)',
+      );
+      assert.deepEqual(capturedParams, [1]);
+    });
+
+    it('ctx.lookup validates key input through lookup primitive', async () => {
       const ctx = createCtx();
       await assert.rejects(
-        () => ctx.lookup('t', []),
-        (err) => err.message ===
-          'ctx.lookup is not yet wired',
+        () => ctx.lookup('users', []),
+        (err) => err.message === PRIMITIVE_ERROR_MSG.LOOKUP_KEYS_EMPTY,
       );
     });
 
-    it('ctx.broadcast should throw not-yet-wired', async () => {
-      const ctx = createCtx();
-      await assert.rejects(
-        () => ctx.broadcast('ref', {}),
-        (err) => err.message ===
-          'ctx.broadcast is not yet wired',
-      );
-    });
-
-    it('ctx.useBroadcast should throw not-yet-wired',
+    it('ctx.broadcast publishes and useBroadcast retrieves dataset',
       async () => {
         const ctx = createCtx();
-        await assert.rejects(
-          () => ctx.useBroadcast('ref'),
-          (err) => err.message ===
-            'ctx.useBroadcast is not yet wired',
+        const publish = await ctx.broadcast('shared-users', {
+          version: 1,
+          rows: [{id: 1}],
+        });
+        assert.equal(publish.ref, 'shared-users');
+        assert.equal(publish.version, 1);
+        const view = await ctx.useBroadcast('shared-users');
+        assert.equal(view[BROADCAST_FIELD.REF], 'shared-users');
+        assert.equal(view[BROADCAST_FIELD.VERSION], 1);
+        assert.deepEqual(
+          view[BROADCAST_FIELD.PAYLOAD].rows,
+          [{id: 1}],
         );
       });
+
+    it('ctx.useBroadcast returns not found for unknown reference', async () => {
+      const ctx = createCtx();
+      await assert.rejects(
+        () => ctx.useBroadcast('missing-ref'),
+        (err) => err.message === PRIMITIVE_ERROR_MSG.BROADCAST_REF_NOT_FOUND,
+      );
+    });
   });
 
   describe('ctx.out budget enforcement', () => {

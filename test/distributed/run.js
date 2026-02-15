@@ -82,6 +82,11 @@ const IMAGE_BUILD_WITH_COMMIT_PREFIX = ' for commit ';
 const RUN_OUTPUT_DIRNAME = '.playback';
 const REPORT_JSON_EXTENSION = '.report.json';
 const FALLBACK_OUTPUT_BASENAME = 'report';
+const TRACE_ASSERTION_ERROR_PREFIX = 'Trace assertion failed: ';
+const TRACE_ASSERTION_MISSING_ARTIFACT = 'trace artifact missing';
+const TRACE_ASSERTION_NO_EVENTS = 'no trace events captured';
+const TRACE_ASSERTION_LINEAGE_PREFIX_MISSING =
+  'required lineage prefix not found: ';
 
 /**
  * Parse CLI arguments from argv.
@@ -430,7 +435,9 @@ async function runScenarios(config, scenarios, options) {
       }
 
       const scenarioModule = await loadScenarioModule(scenario.path);
-      await scenarioModule.run(cluster);
+      const scenarioPayload = normalizeScenarioPayload(
+        await scenarioModule.run(cluster),
+      );
 
       // Run log analysis before teardown
       const analyzer = cluster.getLogAnalyzer();
@@ -460,11 +467,15 @@ async function runScenarios(config, scenarios, options) {
 
       const duration = Date.now() - startMs;
       scenarioResult = {
+        ...(scenarioPayload || {}),
         passed: true,
         duration,
         startedAt,
         analysisSummary,
       };
+      if (scenarioPayload) {
+        scenarioResult.details = scenarioPayload;
+      }
 
       if (options.verbose) {
         process.stdout.write(
@@ -516,6 +527,7 @@ async function runScenarios(config, scenarios, options) {
     } finally {
       let playback = null;
       let playbackWarning = null;
+      let trace = null;
       if (cluster) {
         try {
           await cluster.stop();
@@ -528,6 +540,13 @@ async function runScenarios(config, scenarios, options) {
           }
         } catch (_manifestErr) {
           playbackWarning = 'Unable to read playback manifest';
+        }
+        try {
+          if (typeof cluster.getTraceManifest === 'function') {
+            trace = cluster.getTraceManifest();
+          }
+        } catch (_traceErr) {
+          trace = {warning: 'Unable to read trace manifest'};
         }
       }
 
@@ -548,6 +567,20 @@ async function runScenarios(config, scenarios, options) {
         };
       } else {
         scenarioResult.playback = playback;
+      }
+      scenarioResult.trace = trace;
+
+      const traceAssertion = evaluateTraceAssertions(
+        trace,
+        config.debugTrace,
+      );
+      if (traceAssertion) {
+        scenarioResult.traceAssertion = traceAssertion;
+        if (scenarioResult.passed && !traceAssertion.passed) {
+          scenarioResult.passed = false;
+          scenarioResult.error = `${TRACE_ASSERTION_ERROR_PREFIX}${traceAssertion.error}`;
+          hasFailures = true;
+        }
       }
       report.addResult(scenario.name, scenarioResult);
     }
@@ -581,6 +614,75 @@ function shouldPrintLiveLogEntry(entry) {
 
   const message = String(entry?.message || '').toLowerCase();
   return hasProblemPattern(message);
+}
+
+/**
+ * Normalize scenario payload returned by run(cluster).
+ * Non-object payloads are ignored.
+ * @param {*} payload
+ * @returns {Object|null}
+ */
+function normalizeScenarioPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return null;
+  }
+  return payload;
+}
+
+/**
+ * Evaluate required trace assertions for a scenario run.
+ * @param {Object|null} traceArtifact
+ * @param {Object} debugTraceConfig
+ * @return {Object|null}
+ */
+function evaluateTraceAssertions(traceArtifact, debugTraceConfig) {
+  if (!debugTraceConfig ||
+    debugTraceConfig.enabled !== true ||
+    debugTraceConfig.required !== true) {
+    return null;
+  }
+
+  const assertion = {
+    required: true,
+    passed: true,
+    eventCount: Number(traceArtifact?.eventCount || 0),
+    requiredLineagePrefix: debugTraceConfig.requiredLineagePrefix || null,
+    matchedRequiredLineagePrefix: true,
+    error: null,
+  };
+
+  if (!traceArtifact || typeof traceArtifact !== 'object') {
+    assertion.passed = false;
+    assertion.matchedRequiredLineagePrefix = false;
+    assertion.error = TRACE_ASSERTION_MISSING_ARTIFACT;
+    return assertion;
+  }
+
+  if (!Number.isInteger(assertion.eventCount) ||
+    assertion.eventCount <= 0) {
+    assertion.passed = false;
+    assertion.matchedRequiredLineagePrefix = false;
+    assertion.error = TRACE_ASSERTION_NO_EVENTS;
+    return assertion;
+  }
+
+  const requiredPrefix = assertion.requiredLineagePrefix;
+  if (requiredPrefix) {
+    const lineageIds = Array.isArray(traceArtifact.lineageIds) ?
+      traceArtifact.lineageIds :
+      [];
+    const matched = lineageIds.some((lineageId) =>
+      String(lineageId || '').startsWith(requiredPrefix),
+    );
+    assertion.matchedRequiredLineagePrefix = matched;
+    if (!matched) {
+      assertion.passed = false;
+      assertion.error =
+        TRACE_ASSERTION_LINEAGE_PREFIX_MISSING + requiredPrefix;
+    }
+  }
+
+  return assertion;
 }
 
 function formatLiveLogEntry(entry) {
@@ -801,6 +903,8 @@ if (isDirectRun && !isTapRun) {
 export {
   parseArgs,
   runScenarios,
+  normalizeScenarioPayload,
+  evaluateTraceAssertions,
   buildImage,
   loadScenarioModule,
   shouldPrintLiveLogEntry,

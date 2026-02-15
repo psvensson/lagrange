@@ -3,56 +3,56 @@ TAP version 14
     # Subtest: configs with matching default return NORMAL status
         ok 1 - configs with matching default return NORMAL status
         1..1
-    ok 1 - configs with matching default return NORMAL status # time=7.059ms
+    ok 1 - configs with matching default return NORMAL status # time=7.972ms
     
     # Subtest: configs with different default return WARNING status
         ok 1 - configs with different default return WARNING status
         1..1
-    ok 2 - configs with different default return WARNING status # time=2.275ms
+    ok 2 - configs with different default return WARNING status # time=2.903ms
     
     # Subtest: isDifferentFromDefault returns false for matching values
         ok 1 - isDifferentFromDefault returns false for matching values
         1..1
-    ok 3 - isDifferentFromDefault returns false for matching values # time=2.039ms
+    ok 3 - isDifferentFromDefault returns false for matching values # time=1.662ms
     
     # Subtest: isDifferentFromDefault returns true for different values
         ok 1 - isDifferentFromDefault returns true for different values
         1..1
-    ok 4 - isDifferentFromDefault returns true for different values # time=1.949ms
+    ok 4 - isDifferentFromDefault returns true for different values # time=1.762ms
     
     # Subtest: configs without default_value property return NORMAL
         ok 1 - configs without default_value property return NORMAL
         1..1
-    ok 5 - configs without default_value property return NORMAL # time=1.402ms
+    ok 5 - configs without default_value property return NORMAL # time=1.158ms
     
     # Subtest: pending_restart configs return WARNING regardless of default
         ok 1 - pending_restart configs return WARNING regardless of default
         1..1
-    ok 6 - pending_restart configs return WARNING regardless of default # time=1.388ms
+    ok 6 - pending_restart configs return WARNING regardless of default # time=1.472ms
     
     # Subtest: rendered rows have correct status based on default comparison
         ok 1 - rendered rows have correct status based on default comparison
         1..1
-    ok 7 - rendered rows have correct status based on default comparison # time=3.197ms
+    ok 7 - rendered rows have correct status based on default comparison # time=4.707ms
     
     # Subtest: null value vs non-null default returns WARNING
         ok 1 - null value vs non-null default returns WARNING
         1..1
-    ok 8 - null value vs non-null default returns WARNING # time=0.864ms
+    ok 8 - null value vs non-null default returns WARNING # time=1.191ms
     
     # Subtest: non-null value vs null default returns WARNING
         ok 1 - non-null value vs null default returns WARNING
         1..1
-    ok 9 - non-null value vs null default returns WARNING # time=1.289ms
+    ok 9 - non-null value vs null default returns WARNING # time=1.03ms
     
     # Subtest: both null value and default returns NORMAL
         ok 1 - both null value and default returns NORMAL
         1..1
-    ok 10 - both null value and default returns NORMAL # time=1.08ms
+    ok 10 - both null value and default returns NORMAL # time=1.114ms
     
     1..10
-ok 1 - Property 45: Config Default Highlighting # time=31.795ms
+ok 1 - Property 45: Config Default Highlighting # time=34.149ms
 
 1..1
 # { total: 10, pass: 10 }
-# time=39.529ms
+# time=42.137ms

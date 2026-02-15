@@ -14,6 +14,8 @@ import {
   MODULE_MANIFEST_FIELD as MF,
   MODULE_DEPENDENCY_FIELD as DF,
   MODULE_MANIFEST_COL as COL,
+  DEBUG_ARTIFACT_FIELD as DAF,
+  DEBUG_ARTIFACT_MODE as DAM,
   DIGEST_PREFIX,
   DIGEST_HEX_LENGTH,
   MODULE_MANIFEST_ERROR_MSG as ERR,
@@ -58,12 +60,12 @@ function validateModuleManifest(manifest) {
       manifest[MF.NAME] + '@' + manifest[MF.VERSION];
     if (!PACKAGE_ID_PATTERN.test(pkgId)) {
       if (!/^[a-z][a-z0-9-]{0,127}$/.test(
-        manifest[MF.NAMESPACE]
+        manifest[MF.NAMESPACE],
       )) {
         errors.push(ERR.NAMESPACE_INVALID_FORMAT);
       }
       if (!/^[a-z][a-z0-9-]{0,127}$/.test(
-        manifest[MF.NAME]
+        manifest[MF.NAME],
       )) {
         errors.push(ERR.NAME_INVALID_FORMAT);
       }
@@ -93,6 +95,7 @@ function validateModuleManifest(manifest) {
 
   validateDependencies(manifest[MF.DEPENDENCIES], errors);
   validateCapabilities(manifest[MF.CAPABILITIES], errors);
+  validateDebugArtifact(manifest, errors);
 
   return {valid: errors.length === NUM.ZERO, errors};
 }
@@ -137,6 +140,54 @@ function validateCapabilities(caps, errors) {
 }
 
 /**
+ * Validate debug artifact declaration shape when provided.
+ *
+ * Supported declarations:
+ * - {mode: 'embedded', embeddedSection?: string}
+ * - {mode: 'sidecar', sidecarUri: string}
+ *
+ * For sidecar mode, a legacy artifactPointer fallback is accepted.
+ *
+ * @param {Object} manifest - Module manifest object.
+ * @param {string[]} errors - Errors array to append to.
+ */
+function validateDebugArtifact(manifest, errors) {
+  const debugArtifact = manifest[MF.DEBUG_ARTIFACT];
+  if (debugArtifact === undefined || debugArtifact === null) {
+    return;
+  }
+
+  if (typeof debugArtifact !== TYPEOF.OBJECT ||
+      Array.isArray(debugArtifact)) {
+    errors.push(ERR.DEBUG_ARTIFACT_INVALID);
+    return;
+  }
+
+  const mode = debugArtifact[DAF.MODE];
+  if (mode !== DAM.EMBEDDED && mode !== DAM.SIDECAR) {
+    errors.push(ERR.DEBUG_ARTIFACT_MODE_INVALID);
+    return;
+  }
+
+  if (mode === DAM.SIDECAR) {
+    const sidecarUri = debugArtifact[DAF.SIDECAR_URI] ||
+      manifest[MF.ARTIFACT_POINTER] ||
+      null;
+    if (typeof sidecarUri !== TYPEOF.STRING ||
+        sidecarUri.trim().length === NUM.ZERO) {
+      errors.push(ERR.DEBUG_ARTIFACT_SIDECAR_URI_REQUIRED);
+    }
+  }
+
+  const embeddedSection = debugArtifact[DAF.EMBEDDED_SECTION];
+  if (embeddedSection !== undefined &&
+      (typeof embeddedSection !== TYPEOF.STRING ||
+      embeddedSection.trim().length === NUM.ZERO)) {
+    errors.push(ERR.DEBUG_ARTIFACT_EMBEDDED_SECTION_INVALID);
+  }
+}
+
+/**
  * Serialize a module manifest object to a table row.
  * Uses composite key (namespace, name, version).
  * Arrays (exports, dependencies, capabilities) are JSON-encoded.
@@ -152,13 +203,13 @@ function serializeModuleManifest(manifest) {
     [COL.DIGEST]: manifest[MF.DIGEST],
     [COL.RUN_EXPORT]: manifest[MF.RUN_EXPORT],
     [COL.EXPORTS]: JSON.stringify(
-      manifest[MF.EXPORTS] || []
+      manifest[MF.EXPORTS] || [],
     ),
     [COL.DEPENDENCIES]: JSON.stringify(
-      manifest[MF.DEPENDENCIES] || []
+      manifest[MF.DEPENDENCIES] || [],
     ),
     [COL.CAPABILITIES]: JSON.stringify(
-      manifest[MF.CAPABILITIES] || []
+      manifest[MF.CAPABILITIES] || [],
     ),
     [COL.SOURCE_REFERENCE]:
       manifest[MF.SOURCE_REFERENCE] ?? null,
@@ -182,13 +233,13 @@ function deserializeModuleManifest(row) {
     [MF.DIGEST]: row[COL.DIGEST],
     [MF.RUN_EXPORT]: row[COL.RUN_EXPORT],
     [MF.EXPORTS]: JSON.parse(
-      row[COL.EXPORTS] || STRING.EMPTY_JSON_ARRAY
+      row[COL.EXPORTS] || STRING.EMPTY_JSON_ARRAY,
     ),
     [MF.DEPENDENCIES]: JSON.parse(
-      row[COL.DEPENDENCIES] || STRING.EMPTY_JSON_ARRAY
+      row[COL.DEPENDENCIES] || STRING.EMPTY_JSON_ARRAY,
     ),
     [MF.CAPABILITIES]: JSON.parse(
-      row[COL.CAPABILITIES] || STRING.EMPTY_JSON_ARRAY
+      row[COL.CAPABILITIES] || STRING.EMPTY_JSON_ARRAY,
     ),
     [MF.SOURCE_REFERENCE]: row[COL.SOURCE_REFERENCE] ?? null,
     [MF.ARTIFACT_POINTER]: row[COL.ARTIFACT_POINTER] ?? null,

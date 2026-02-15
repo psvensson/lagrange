@@ -1,0 +1,77 @@
+import {describe, it} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {run} from '../../scenarios/examples-catalog.js';
+
+const OUTPUT_PREFIX = 'examples-catalog-scenario-';
+
+function buildCallbackRows(callbackModuleRef) {
+  if (callbackModuleRef.includes('01-basic-iterator')) {
+    return [{ok: true}];
+  }
+  if (callbackModuleRef.includes('02-stage-batching')) {
+    return [{stageBatchSize: 2}];
+  }
+  if (callbackModuleRef.includes('03-plan-reduce-by-key')) {
+    return [{nodeCount: 1}];
+  }
+  if (callbackModuleRef.includes('04-nested-bounded-call')) {
+    return [{configRowsSeen: 1}];
+  }
+  if (callbackModuleRef.includes('05-guardrail-failure')) {
+    return [{ok: true, error: 'blocked unbounded nested call'}];
+  }
+  return [];
+}
+
+describe('examples-catalog scenario', () => {
+  it('executes shared runner and returns artifact payload', async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), OUTPUT_PREFIX));
+
+    try {
+      const cluster = {
+        _config: {outputDir},
+        getNodes: () => [{
+          query: async () => ({ok: true}),
+          partitionCallback: async (payload) => ({
+            hostResult: {
+              partitionResults: [{
+                rows: buildCallbackRows(payload.callbackModuleRef),
+              }],
+            },
+          }),
+        }],
+      };
+
+      const result = await run(cluster);
+
+      assert.equal(result.exampleResults.total, 5);
+      assert.equal(result.exampleResults.passed, 5);
+      assert.equal(result.exampleResults.failed, 0);
+      assert.equal(result.exampleResults.requiredFailed, 0);
+      assert.equal(Array.isArray(result.examples), true);
+      assert.equal(result.examples.length, 5);
+
+      const artifact = JSON.parse(
+        await readFile(result.artifactPath, 'utf8'),
+      );
+      assert.equal(artifact.summary.total, 5);
+      assert.equal(artifact.summary.failed, 0);
+    } finally {
+      await rm(outputDir, {recursive: true, force: true});
+    }
+  });
+
+  it('fails when no active nodes are available', async () => {
+    const cluster = {
+      getNodes: () => [],
+    };
+
+    await assert.rejects(
+      run(cluster),
+      /requires at least one active node/,
+    );
+  });
+});

@@ -143,6 +143,8 @@ const PLAYBACK_SAMPLES_FILENAME = 'samples.ndjson';
 const PLAYBACK_SNAPSHOTS_FILENAME = 'snapshots.ndjson';
 const PLAYBACK_MANIFEST_FILENAME = 'playback-manifest.json';
 const PLAYBACK_VIEWER_FILENAME = 'playback-viewer.html';
+const DEBUG_TRACE_EVENTS_FILENAME = 'debug-trace.ndjson';
+const DEBUG_TRACE_MANIFEST_FILENAME = 'debug-trace-manifest.json';
 
 const OUTPUT = Object.freeze({
   DEFAULT_DIR: DEFAULT_OUTPUT_DIR,
@@ -153,6 +155,31 @@ const OUTPUT = Object.freeze({
   PLAYBACK_SNAPSHOTS_FILENAME,
   PLAYBACK_MANIFEST_FILENAME,
   PLAYBACK_VIEWER_FILENAME,
+  DEBUG_TRACE_EVENTS_FILENAME,
+  DEBUG_TRACE_MANIFEST_FILENAME,
+});
+
+// --- Debug Trace Harness Defaults ---
+const DEBUG_TRACE_DEFAULT_SERVICE_NAME = 'svc-debug';
+const DEBUG_TRACE_DEFAULT_TENANT_ID = 'system';
+const DEBUG_TRACE_DEFAULT_PRINCIPAL = 'distributed-harness';
+const DEBUG_TRACE_DEFAULT_ROLES =
+  'debug_admin,debug_write,debug_read,debug_attach';
+const DEBUG_TRACE_CONNECT_TIMEOUT_MS = 2000;
+const DEBUG_TRACE_REQUEST_TIMEOUT_MS = 5000;
+
+const DEBUG_TRACE_DEFAULTS = Object.freeze({
+  enabled: false,
+  required: false,
+  serviceName: DEBUG_TRACE_DEFAULT_SERVICE_NAME,
+  lineagePrefix: null,
+  requiredLineagePrefix: null,
+  levels: null,
+  tenantId: DEBUG_TRACE_DEFAULT_TENANT_ID,
+  principal: DEBUG_TRACE_DEFAULT_PRINCIPAL,
+  roles: DEBUG_TRACE_DEFAULT_ROLES,
+  connectTimeoutMs: DEBUG_TRACE_CONNECT_TIMEOUT_MS,
+  requestTimeoutMs: DEBUG_TRACE_REQUEST_TIMEOUT_MS,
 });
 
 // --- Playback Defaults ---
@@ -230,6 +257,7 @@ export {
   NODE_ROLES,
   DEFAULT_CLUSTER_SIZE,
   OUTPUT,
+  DEBUG_TRACE_DEFAULTS,
   PLAYBACK,
   PLAYBACK_EVENT_TYPE,
   CLI,

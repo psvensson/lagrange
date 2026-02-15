@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: message delivery is location-independent
         ok 1 - message delivery is location-independent
         1..1
-    ok 1 - message delivery is location-independent # time=669.223ms
+    ok 1 - message delivery is location-independent # time=628.034ms
     
     # Subtest: messages are delivered to registered handlers
         ok 1 - messages are delivered to registered handlers
         1..1
-    ok 2 - messages are delivered to registered handlers # time=310.257ms
+    ok 2 - messages are delivered to registered handlers # time=284.74ms
     
     # Subtest: local delivery via self-connection calls handler
         ok 1 - local delivery via self-connection calls handler
         1..1
-    ok 3 - local delivery via self-connection calls handler # time=312.821ms
+    ok 3 - local delivery via self-connection calls handler # time=292.432ms
     
     # Subtest: handler response determines acknowledgment
         ok 1 - handler response determines acknowledgment
         1..1
-    ok 4 - handler response determines acknowledgment # time=323.828ms
+    ok 4 - handler response determines acknowledgment # time=301.572ms
     
     # Subtest: transport abstraction hides protocol details
         ok 1 - transport abstraction hides protocol details
         1..1
-    ok 5 - transport abstraction hides protocol details # time=262.931ms
+    ok 5 - transport abstraction hides protocol details # time=328.4ms
     
     # Subtest: router has consistent API
         ok 1 - router has consistent API
         1..1
-    ok 6 - router has consistent API # time=341.178ms
+    ok 6 - router has consistent API # time=337.54ms
     
     1..6
-ok 1 - Property 20: Location Transparent Communication # time=2225.343ms
+ok 1 - Property 20: Location Transparent Communication # time=2178.785ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=2268.482ms
+# time=2256.249ms

@@ -3,26 +3,26 @@ TAP version 14
     # Subtest: event rate equals count of recent events
         ok 1 - Event rate equals count of recent events
         1..1
-    ok 1 - event rate equals count of recent events # time=7.955ms
+    ok 1 - event rate equals count of recent events # time=5.243ms
     
     # Subtest: event rate is zero when no events received
         ok 1 - Event rate is zero when no events received
         1..1
-    ok 2 - event rate is zero when no events received # time=1.405ms
+    ok 2 - event rate is zero when no events received # time=0.919ms
     
     # Subtest: event rate updates with each new event
         ok 1 - Event rate updates with each new event
         1..1
-    ok 3 - event rate updates with each new event # time=3.717ms
+    ok 3 - event rate updates with each new event # time=1.682ms
     
     # Subtest: event rate is consistent with events array length
         ok 1 - Event rate is consistent with events array length
         1..1
-    ok 4 - event rate is consistent with events array length # time=2.68ms
+    ok 4 - event rate is consistent with events array length # time=1.886ms
     
     1..4
-ok 1 - Property 51: Live Query Event Rate Calculation # time=20.698ms
+ok 1 - Property 51: Live Query Event Rate Calculation # time=13.05ms
 
 1..1
 # { total: 4, pass: 4 }
-# time=28.619ms
+# time=18.991ms

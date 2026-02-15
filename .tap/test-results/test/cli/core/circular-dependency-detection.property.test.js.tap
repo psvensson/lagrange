@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: direct circular dependency is detected
         ok 1 - Direct circular dependency is detected
         1..1
-    ok 1 - direct circular dependency is detected # time=4.526ms
+    ok 1 - direct circular dependency is detected # time=7.045ms
     
     # Subtest: self-referencing dependency is detected
         ok 1 - Self-referencing dependency is detected
         1..1
-    ok 2 - self-referencing dependency is detected # time=0.582ms
+    ok 2 - self-referencing dependency is detected # time=0.773ms
     
     # Subtest: indirect circular dependency is detected
         ok 1 - Indirect circular dependency is detected
         1..1
-    ok 3 - indirect circular dependency is detected # time=0.411ms
+    ok 3 - indirect circular dependency is detected # time=0.594ms
     
     # Subtest: non-circular dependencies do not throw
         ok 1 - Non-circular dependencies do not throw
         1..1
-    ok 4 - non-circular dependencies do not throw # time=0.558ms
+    ok 4 - non-circular dependencies do not throw # time=0.936ms
     
     # Subtest: detectCircularDependency returns cycle path
         ok 1 - detectCircularDependency returns cycle path
         1..1
-    ok 5 - detectCircularDependency returns cycle path # time=1.045ms
+    ok 5 - detectCircularDependency returns cycle path # time=1.541ms
     
     # Subtest: no cycle returns null from detectCircularDependency
         ok 1 - No cycle returns null from detectCircularDependency
         1..1
-    ok 6 - no cycle returns null from detectCircularDependency # time=0.658ms
+    ok 6 - no cycle returns null from detectCircularDependency # time=0.987ms
     
     1..6
-ok 1 - Property 40: Circular Dependency Detection # time=12.315ms
+ok 1 - Property 40: Circular Dependency Detection # time=18.627ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=20.823ms
+# time=29.123ms

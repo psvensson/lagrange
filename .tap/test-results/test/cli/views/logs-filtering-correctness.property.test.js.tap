@@ -3,46 +3,46 @@ TAP version 14
     # Subtest: level filter shows only logs of that level
         ok 1 - level filter shows only logs of that level
         1..1
-    ok 1 - level filter shows only logs of that level # time=7.523ms
+    ok 1 - level filter shows only logs of that level # time=6.492ms
     
     # Subtest: node filter shows only logs from that node
         ok 1 - node filter shows only logs from that node
         1..1
-    ok 2 - node filter shows only logs from that node # time=2.473ms
+    ok 2 - node filter shows only logs from that node # time=2.4ms
     
     # Subtest: service filter shows only logs from that service
         ok 1 - service filter shows only logs from that service
         1..1
-    ok 3 - service filter shows only logs from that service # time=5.756ms
+    ok 3 - service filter shows only logs from that service # time=2.379ms
     
     # Subtest: time range filter shows only logs within range
         ok 1 - time range filter shows only logs within range
         1..1
-    ok 4 - time range filter shows only logs within range # time=2.779ms
+    ok 4 - time range filter shows only logs within range # time=3.538ms
     
     # Subtest: message filter shows only logs containing pattern
         ok 1 - message filter shows only logs containing pattern
         1..1
-    ok 5 - message filter shows only logs containing pattern # time=2.719ms
+    ok 5 - message filter shows only logs containing pattern # time=2.447ms
     
     # Subtest: combined filters are conjunctive (AND)
         ok 1 - combined filters are conjunctive (AND)
         1..1
-    ok 6 - combined filters are conjunctive (AND) # time=2.977ms
+    ok 6 - combined filters are conjunctive (AND) # time=1.974ms
     
     # Subtest: clearing filters restores all data
         ok 1 - clearing filters restores all data
         1..1
-    ok 7 - clearing filters restores all data # time=1.042ms
+    ok 7 - clearing filters restores all data # time=1.938ms
     
     # Subtest: filtered count is subset of total
         ok 1 - filtered count is subset of total
         1..1
-    ok 8 - filtered count is subset of total # time=1.942ms
+    ok 8 - filtered count is subset of total # time=10.147ms
     
     1..8
-ok 1 - Property 41: Logs View Filtering Correctness # time=33.189ms
+ok 1 - Property 41: Logs View Filtering Correctness # time=36.989ms
 
 1..1
 # { total: 8, pass: 8 }
-# time=37.938ms
+# time=44.205ms

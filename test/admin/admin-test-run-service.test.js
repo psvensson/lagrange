@@ -115,6 +115,15 @@ test('AdminTestRunService - discovers tests, configs, and saved runs', async (t)
       scenarios: [{
         scenario: 'alpha',
         startedAt: RUN_STARTED_AT,
+        details: {
+          artifactPath: 'test-output/examples/example-run.json',
+          exampleResults: {
+            total: 5,
+            passed: 5,
+            failed: 0,
+            requiredFailed: 0,
+          },
+        },
         playback: {
           manifestPath: 'test-output/alpha/playback-manifest.json',
         },
@@ -160,6 +169,21 @@ test('AdminTestRunService - discovers tests, configs, and saved runs', async (t)
     t.ok(
       String(runs[0].playbackViewerUrl).includes('/ui/playback-viewer?manifest='),
       'should provide playback viewer URL',
+    );
+    t.same(
+      runs[0].examplesSummary,
+      {
+        total: 5,
+        passed: 5,
+        failed: 0,
+        requiredFailed: 0,
+      },
+      'should include examples summary extracted from report details',
+    );
+    t.equal(
+      runs[0].examplesArtifactUrl,
+      '/ui/test-output/examples/example-run.json',
+      'should expose examples artifact url',
     );
   } finally {
     await rm(workspace, {recursive: true, force: true});

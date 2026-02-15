@@ -8,20 +8,20 @@ TAP version 14
         ok 5 - should have message group assignment
         ok 6 - should have valid assignment strategy
         ok 7 - should have system table snapshots
-{"level":50,"time":"2026-02-15T08:36:01.005Z","nodeId":"test-node","pid":1802683,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO node_endpoints (endpoint_id, node_id, transport_type, address, priority, meta","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-02-15T08:36:01.005Z","nodeId":"test-node","pid":1802683,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-8df0086a-1574-47ab-a129-0c4f7e95865c-ws","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
+{"level":50,"time":"2026-02-15T13:09:56.063Z","nodeId":"test-node","pid":1878469,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO node_endpoints (endpoint_id, node_id, transport_type, address, priority, meta","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-15T13:09:56.063Z","nodeId":"test-node","pid":1878469,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-301a109d-53f1-4778-b9fd-2057477f3b6e-ws","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
         1..7
-    ok 1 - new node with UUID receives valid bootstrap response # time=3573.657ms
+    ok 1 - new node with UUID receives valid bootstrap response # time=3457.991ms
     
     # Subtest: duplicate node ID is rejected
         ok 1 - seed bootstrap should succeed
         ok 2 - first registration should succeed
         ok 3 - idempotent second registration should return a response
         ok 4 - response should target same seed
-{"level":50,"time":"2026-02-15T08:36:04.152Z","nodeId":"test-node","pid":1802683,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO node_endpoints (endpoint_id, node_id, transport_type, address, priority, meta","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-02-15T08:36:04.153Z","nodeId":"test-node","pid":1802683,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-614cd268-3ebd-47d4-b442-3891f53fa81a-ws","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
+{"level":50,"time":"2026-02-15T13:09:59.328Z","nodeId":"test-node","pid":1878469,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO node_endpoints (endpoint_id, node_id, transport_type, address, priority, meta","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-15T13:09:59.328Z","nodeId":"test-node","pid":1878469,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-d3603d4a-e576-4006-8884-fa6b46dc94f9-ws","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
         1..4
-    ok 2 - duplicate node ID is rejected # time=3100.689ms
+    ok 2 - duplicate node ID is rejected # time=3224.989ms
     
     # Subtest: bootstrap response contains required fields
         ok 1 - seed bootstrap should succeed
@@ -30,14 +30,14 @@ TAP version 14
         ok 4 - should have messageGroupAssignment
         ok 5 - should have systemTableSnapshots
         ok 6 - should have currentEpoch
-{"level":50,"time":"2026-02-15T08:36:07.439Z","nodeId":"test-node","pid":1802683,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO node_endpoints (endpoint_id, node_id, transport_type, address, priority, meta","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
-{"level":50,"time":"2026-02-15T08:36:07.439Z","nodeId":"test-node","pid":1802683,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-ba84d736-8786-443c-ba33-8b552a45702a-ws","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
+{"level":50,"time":"2026-02-15T13:10:02.618Z","nodeId":"test-node","pid":1878469,"subsystem":"sql-query-engine","sql":"INSERT OR REPLACE INTO node_endpoints (endpoint_id, node_id, transport_type, address, priority, meta","error":"Router shutdown","nodeId":"test-node","msg":"Query execution failed"}
+{"level":50,"time":"2026-02-15T13:10:02.618Z","nodeId":"test-node","pid":1878469,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-3986633f-110a-4f70-a5b7-aa7313a7cb33-ws","error":"Router shutdown","nodeId":"test-node","msg":"Failed to upsert system table row"}
         1..6
-    ok 3 - bootstrap response contains required fields # time=3253.04ms
+    ok 3 - bootstrap response contains required fields # time=3254.429ms
     
     1..3
-ok 1 - Property 11: Node Bootstrap Consistency # time=10063.999ms
+ok 1 - Property 11: Node Bootstrap Consistency # time=10059.049ms
 
 1..1
 # { total: 17, pass: 17 }
-# time=10067.714ms
+# time=10063.766ms

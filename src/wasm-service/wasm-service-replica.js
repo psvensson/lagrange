@@ -9,6 +9,9 @@
 
 import {RaftReplicaBase} from '../raft/raft-replica-base.js';
 import {SERVICE_TYPE} from '../constants/service.js';
+import {COLUMN, TABLES, TYPEOF} from '../constants/index.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {SessionKVStore} from './session-kv-store.js';
 import {SafetyInterval} from './safety-interval.js';
 import {TimerManager} from './timer-manager.js';
@@ -39,6 +42,13 @@ const ENTRY_TYPE = Object.freeze({
 const MESSAGE_OP = Object.freeze({
   READ: 'read',
   WRITE: 'write',
+});
+
+const METADATA_FLUSH_RETRY_DELAY_MS = 250;
+
+const METADATA_FLUSH_LOG_MSG = Object.freeze({
+  ROLE_RETRY_FAILED: 'WASM role update retry failed',
+  LEADER_RETRY_FAILED: 'WASM leader-node update retry failed',
 });
 
 /**
@@ -85,6 +95,9 @@ class WasmServiceReplica extends RaftReplicaBase {
     this.wasmExecutor = null;
     this.portAllocation = null;
     this.onTimerCallback = null;
+    this.roleUpdateWriter = options.roleUpdateWriter || null;
+    this.leaderNodeUpdateWriter =
+      options.leaderNodeUpdateWriter || null;
 
     this._safetyBroadcastTimer = null;
 
@@ -331,20 +344,211 @@ class WasmServiceReplica extends RaftReplicaBase {
 
   /**
    * Persist the raft role update to the services table.
-   * Stub implementation — full CDC integration deferred.
+   * Uses canonical owner callbacks (or CDC integration).
    * @return {Promise<void>}
    */
   async flushRoleUpdate() {
-    // Stub: full CDC integration in a later task
+    if (this.roleUpdateInFlight) {
+      return;
+    }
+
+    if (!this.pendingRoleUpdate ||
+      this.pendingRoleUpdate === this.persistedRole) {
+      return;
+    }
+
+    if (!this.isServicesLeaderAvailable()) {
+      this.scheduleRoleUpdateRetry();
+      return;
+    }
+
+    this.roleUpdateInFlight = true;
+    const role = this.pendingRoleUpdate;
+
+    try {
+      await this.writeRoleUpdate(role);
+      this.persistedRole = role;
+      if (this.pendingRoleUpdate === role) {
+        this.pendingRoleUpdate = null;
+      }
+    } catch (error) {
+      this.scheduleRoleUpdateRetry();
+      throw error;
+    } finally {
+      this.roleUpdateInFlight = false;
+    }
   }
 
   /**
    * Persist the leader node update to the services table.
-   * Stub implementation — full CDC integration deferred.
+   * Uses canonical owner callbacks (or CDC integration).
    * @return {Promise<void>}
    */
   async flushLeaderNodeUpdate() {
-    // Stub: full CDC integration in a later task
+    if (this.leaderNodeUpdateInFlight) {
+      return;
+    }
+
+    if (!this.isLeader) {
+      this.pendingLeaderNodeUpdate = null;
+      return;
+    }
+
+    if (!this.pendingLeaderNodeUpdate ||
+      this.pendingLeaderNodeUpdate === this.persistedLeaderNodeId) {
+      return;
+    }
+
+    if (!this.isServicesLeaderAvailable()) {
+      this.scheduleLeaderNodeUpdateRetry();
+      return;
+    }
+
+    this.leaderNodeUpdateInFlight = true;
+    const leaderNodeId = this.pendingLeaderNodeUpdate;
+
+    try {
+      await this.writeLeaderNodeUpdate(leaderNodeId);
+      this.persistedLeaderNodeId = leaderNodeId;
+      if (this.pendingLeaderNodeUpdate === leaderNodeId) {
+        this.pendingLeaderNodeUpdate = null;
+      }
+    } catch (error) {
+      this.scheduleLeaderNodeUpdateRetry();
+      throw error;
+    } finally {
+      this.leaderNodeUpdateInFlight = false;
+    }
+  }
+
+  /**
+   * Write raft role update through owner callback or CDC owner.
+   * @param {string} role
+   * @return {Promise<void>}
+   * @private
+   */
+  async writeRoleUpdate(role) {
+    const updatedAt = Date.now();
+    const writerPayload = {
+      serviceId: this.replicaId,
+      serviceDefinitionId: this.serviceDefinitionId,
+      role,
+      nodeId: this.nodeId,
+      updatedAt,
+    };
+
+    if (this.roleUpdateWriter &&
+      typeof this.roleUpdateWriter === TYPEOF.FUNCTION) {
+      await this.roleUpdateWriter(writerPayload);
+      return;
+    }
+
+    if (!this.cdcIntegrationService ||
+      typeof this.cdcIntegrationService.updateSystemTableRow !==
+        TYPEOF.FUNCTION) {
+      return;
+    }
+
+    await this.cdcIntegrationService.updateSystemTableRow(
+      TABLES.SERVICES,
+      {[COLUMN.SERVICE_ID]: this.replicaId},
+      {
+        [COLUMN.RAFT_ROLE]: role,
+        [COLUMN.UPDATED_AT]: updatedAt,
+      },
+    );
+  }
+
+  /**
+   * Write leader-node update through owner callback or CDC owner.
+   * @param {string} leaderNodeId
+   * @return {Promise<void>}
+   * @private
+   */
+  async writeLeaderNodeUpdate(leaderNodeId) {
+    const updatedAt = Date.now();
+    const writerPayload = {
+      serviceId: this.replicaId,
+      serviceDefinitionId: this.serviceDefinitionId,
+      leaderNodeId,
+      role: this.role,
+      nodeId: this.nodeId,
+      updatedAt,
+    };
+
+    if (this.leaderNodeUpdateWriter &&
+      typeof this.leaderNodeUpdateWriter === TYPEOF.FUNCTION) {
+      await this.leaderNodeUpdateWriter(writerPayload);
+      return;
+    }
+
+    if (!this.cdcIntegrationService ||
+      typeof this.cdcIntegrationService.updateSystemTableRow !==
+        TYPEOF.FUNCTION) {
+      return;
+    }
+
+    await this.cdcIntegrationService.updateSystemTableRow(
+      TABLES.SERVICES,
+      {[COLUMN.SERVICE_ID]: this.replicaId},
+      {
+        [COLUMN.NODE_ID]: leaderNodeId,
+        [COLUMN.RAFT_ROLE]: this.role,
+        [COLUMN.UPDATED_AT]: updatedAt,
+      },
+    );
+  }
+
+  /**
+   * Check whether services system table writes are routable.
+   * @return {boolean}
+   * @private
+   */
+  isServicesLeaderAvailable() {
+    return isSystemTableWriteReady(
+      this.systemTableCache,
+      SystemTableName.SERVICES,
+    );
+  }
+
+  /**
+   * Schedule retry for pending role update.
+   * @private
+   */
+  scheduleRoleUpdateRetry() {
+    if (this.roleUpdateRetryTimer) {
+      return;
+    }
+
+    this.roleUpdateRetryTimer = setTimeout(() => {
+      this.roleUpdateRetryTimer = null;
+      this.flushRoleUpdate().catch((error) => {
+        this.logger.warn(METADATA_FLUSH_LOG_MSG.ROLE_RETRY_FAILED, {
+          replicaId: this.replicaId,
+          error: error.message,
+        });
+      });
+    }, METADATA_FLUSH_RETRY_DELAY_MS);
+  }
+
+  /**
+   * Schedule retry for pending leader-node update.
+   * @private
+   */
+  scheduleLeaderNodeUpdateRetry() {
+    if (this.leaderNodeUpdateRetryTimer) {
+      return;
+    }
+
+    this.leaderNodeUpdateRetryTimer = setTimeout(() => {
+      this.leaderNodeUpdateRetryTimer = null;
+      this.flushLeaderNodeUpdate().catch((error) => {
+        this.logger.warn(METADATA_FLUSH_LOG_MSG.LEADER_RETRY_FAILED, {
+          replicaId: this.replicaId,
+          error: error.message,
+        });
+      });
+    }, METADATA_FLUSH_RETRY_DELAY_MS);
   }
 
   /**
@@ -391,6 +595,14 @@ class WasmServiceReplica extends RaftReplicaBase {
   async shutdown() {
     this.timerManager.stopAll();
     this._stopSafetyBroadcasts();
+    if (this.roleUpdateRetryTimer) {
+      clearTimeout(this.roleUpdateRetryTimer);
+      this.roleUpdateRetryTimer = null;
+    }
+    if (this.leaderNodeUpdateRetryTimer) {
+      clearTimeout(this.leaderNodeUpdateRetryTimer);
+      this.leaderNodeUpdateRetryTimer = null;
+    }
 
     if (this.kvStore) {
       this.kvStore.close();

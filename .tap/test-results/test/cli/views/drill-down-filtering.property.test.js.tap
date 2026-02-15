@@ -3,41 +3,41 @@ TAP version 14
     # Subtest: node filter shows only services for that node
         ok 1 - node filter shows only services for that node
         1..1
-    ok 1 - node filter shows only services for that node # time=12.454ms
+    ok 1 - node filter shows only services for that node # time=12.271ms
     
     # Subtest: type filter shows only services of that type
         ok 1 - type filter shows only services of that type
         1..1
-    ok 2 - type filter shows only services of that type # time=5.468ms
+    ok 2 - type filter shows only services of that type # time=3.304ms
     
     # Subtest: combined filters are conjunctive (AND)
         ok 1 - combined filters are conjunctive (AND)
         1..1
-    ok 3 - combined filters are conjunctive (AND) # time=4.984ms
+    ok 3 - combined filters are conjunctive (AND) # time=3.269ms
     
     # Subtest: clearing filters restores all data
         ok 1 - clearing filters restores all data
         1..1
-    ok 4 - clearing filters restores all data # time=4.138ms
+    ok 4 - clearing filters restores all data # time=3.645ms
     
     # Subtest: filtered count is subset of total
         ok 1 - filtered count is subset of total
         1..1
-    ok 5 - filtered count is subset of total # time=3.488ms
+    ok 5 - filtered count is subset of total # time=2.355ms
     
     # Subtest: drill-down returns correct parent reference
         ok 1 - drill-down returns correct parent reference
         1..1
-    ok 6 - drill-down returns correct parent reference # time=2.126ms
+    ok 6 - drill-down returns correct parent reference # time=1.637ms
     
     # Subtest: message group drill-down returns correct reference
         ok 1 - message group drill-down returns correct reference
         1..1
-    ok 7 - message group drill-down returns correct reference # time=1.544ms
+    ok 7 - message group drill-down returns correct reference # time=1.389ms
     
     1..7
-ok 1 - Property 3: Drill-Down Filtering # time=41.853ms
+ok 1 - Property 3: Drill-Down Filtering # time=35.082ms
 
 1..1
 # { total: 7, pass: 7 }
-# time=51.29ms
+# time=43.078ms

@@ -23,6 +23,23 @@ The page provides:
 - saved run list (with timestamp and git hash when available)
 - live log streaming for active runs
 - report and playback links
+- examples summary and artifact links when scenario output includes
+  `exampleResults`
+
+## Example Results Visibility
+
+When a scenario returns examples payload details (for example,
+`examples-catalog`), the dashboard surfaces:
+
+1. Summary counters (`total`, `passed`, `failed`, `requiredFailed`)
+2. Artifact JSON link for the detailed per-example report
+3. A per-run `Examples` button in the runs table when artifact URL is available
+
+The run API payload now carries:
+
+- `examplesSummary`
+- `examplesArtifactPath`
+- `examplesArtifactUrl`
 
 ## HTTP API
 
@@ -35,6 +52,7 @@ The page provides:
   - request body: `{"scenario":"sustained-write-throughput","config":"local.json","verbose":true}`
 - `GET /api/admin/test-runs/:runId`
   - returns details for one run
+  - includes example summary/artifact fields when present
 - `POST /api/admin/test-runs/:runId/stop`
   - requests stop on an active run
 - `GET /api/admin/test-runs/:runId/stream`
@@ -54,3 +72,4 @@ Example:
 
 - `/ui/test-output/sustained-write-throughput.live-stream.report.json`
 - `/ui/test-output/sustained-write-throughput/playback-manifest.json`
+- `/ui/test-output/examples/examples-catalog-<timestamp>.json`

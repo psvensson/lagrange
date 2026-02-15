@@ -3,51 +3,51 @@ TAP version 14
     # Subtest: SELECT queries are allowed in read-only mode
         ok 1 - SELECT queries are allowed in read-only mode
         1..1
-    ok 1 - SELECT queries are allowed in read-only mode # time=7.098ms
+    ok 1 - SELECT queries are allowed in read-only mode # time=8.812ms
     
     # Subtest: INSERT queries are rejected in read-only mode
         ok 1 - INSERT queries are rejected in read-only mode
         1..1
-    ok 2 - INSERT queries are rejected in read-only mode # time=2.575ms
+    ok 2 - INSERT queries are rejected in read-only mode # time=3.731ms
     
     # Subtest: UPDATE queries with WHERE are rejected in read-only mode
         ok 1 - UPDATE queries with WHERE are rejected in read-only mode
         1..1
-    ok 3 - UPDATE queries with WHERE are rejected in read-only mode # time=1.842ms
+    ok 3 - UPDATE queries with WHERE are rejected in read-only mode # time=2.039ms
     
     # Subtest: DELETE queries with WHERE are rejected in read-only mode
         ok 1 - DELETE queries with WHERE are rejected in read-only mode
         1..1
-    ok 4 - DELETE queries with WHERE are rejected in read-only mode # time=1.035ms
+    ok 4 - DELETE queries with WHERE are rejected in read-only mode # time=1.575ms
     
     # Subtest: write queries allowed when read-only mode disabled
         ok 1 - write queries allowed when read-only mode disabled
         1..1
-    ok 5 - write queries allowed when read-only mode disabled # time=1.98ms
+    ok 5 - write queries allowed when read-only mode disabled # time=3.581ms
     
     # Subtest: read-only error includes clear message
         ok 1 - read-only error includes clear message
         1..1
-    ok 6 - read-only error includes clear message # time=2.261ms
+    ok 6 - read-only error includes clear message # time=2.091ms
     
     # Subtest: toggling read-only mode affects enforcement
         ok 1 - toggling read-only mode affects enforcement
         1..1
-    ok 7 - toggling read-only mode affects enforcement # time=2.089ms
+    ok 7 - toggling read-only mode affects enforcement # time=1.528ms
     
     # Subtest: case insensitive SELECT detection
         ok 1 - case insensitive SELECT detection
         1..1
-    ok 8 - case insensitive SELECT detection # time=0.933ms
+    ok 8 - case insensitive SELECT detection # time=0.975ms
     
     # Subtest: whitespace before SELECT is handled
         ok 1 - whitespace before SELECT is handled
         1..1
-    ok 9 - whitespace before SELECT is handled # time=4.04ms
+    ok 9 - whitespace before SELECT is handled # time=1.067ms
     
     1..9
-ok 1 - Property 20: Read-Only Mode Enforcement # time=28.965ms
+ok 1 - Property 20: Read-Only Mode Enforcement # time=32.196ms
 
 1..1
 # { total: 9, pass: 9 }
-# time=33.352ms
+# time=36.153ms

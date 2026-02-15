@@ -3,31 +3,31 @@ TAP version 14
     # Subtest: add operations blocked when limit exceeded
         ok 1 - add operations blocked when limit exceeded
         1..1
-    ok 1 - add operations blocked when limit exceeded # time=7.569ms
+    ok 1 - add operations blocked when limit exceeded # time=3.916ms
     
     # Subtest: add operations allowed when below limit
         ok 1 - add operations allowed when below limit
         1..1
-    ok 2 - add operations allowed when below limit # time=1.475ms
+    ok 2 - add operations allowed when below limit # time=0.934ms
     
     # Subtest: remove operations blocked when limit exceeded
         ok 1 - remove operations blocked when limit exceeded
         1..1
-    ok 3 - remove operations blocked when limit exceeded # time=2.629ms
+    ok 3 - remove operations blocked when limit exceeded # time=3.507ms
     
     # Subtest: remove operations allowed when below limit
         ok 1 - remove operations allowed when below limit
         1..1
-    ok 4 - remove operations allowed when below limit # time=3.247ms
+    ok 4 - remove operations allowed when below limit # time=1.525ms
     
     # Subtest: add limit considers all add transitional states
         ok 1 - add limit considers all add transitional states
         1..1
-    ok 5 - add limit considers all add transitional states # time=1.13ms
+    ok 5 - add limit considers all add transitional states # time=2.869ms
     
     1..5
-ok 1 - Property 12: Concurrent Operation Limits # time=194.429ms
+ok 1 - Property 12: Concurrent Operation Limits # time=130.091ms
 
 1..1
 # { total: 5, pass: 5 }
-# time=201.587ms
+# time=143.903ms

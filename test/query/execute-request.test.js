@@ -21,7 +21,23 @@ config.initialize();
 
 function createMockMessageRouter() {
   return {
-    deliver: async function(_address, _message) {
+    deliver: async function(_address, message) {
+      const sql = String(message?.sql || '').toLowerCase();
+      if (sql.includes('from code')) {
+        return {
+          acknowledged: true,
+          success: true,
+          rows: [{
+            function_id: 'mod-1',
+            function_name: 'mod-1',
+            code_blob: '\'use strict\';\n' +
+              'module.exports.run_batch = async function runBatch(_ctx, batch) {\n' +
+              '  return (batch.rows || []).map((row) => ({...row, nativeLoaded: true}));\n' +
+              '};\n',
+          }],
+          changes: 0,
+        };
+      }
       return {
         acknowledged: true,
         success: true,
@@ -40,6 +56,12 @@ function createMockSystemCache() {
       partition_key_start: null,
       partition_key_end: null,
     },
+    {
+      partition_id: 'code-p1',
+      table_name: 'code',
+      partition_key_start: null,
+      partition_key_end: null,
+    },
   ];
   const services = [
     {
@@ -51,11 +73,25 @@ function createMockSystemCache() {
       address: 'test-node/partition/p1',
       status: 'active',
     },
+    {
+      service_id: 'code-p1',
+      service_type: 'partition',
+      partition_id: 'code-p1',
+      node_id: 'test-node',
+      raft_role: 'leader',
+      address: 'test-node/partition/code-p1',
+      status: 'active',
+    },
   ];
   return {
     get: function(type, _key) {
       if (type === 'tables') {
-        return {table_name: 'users', primaryKey: 'id'};
+        if (_key === 'users') {
+          return {table_name: 'users', primaryKey: 'id'};
+        }
+        if (_key === 'code') {
+          return {table_name: 'code', primaryKey: 'function_id'};
+        }
       }
       return null;
     },
@@ -160,6 +196,27 @@ test('executeRequest - dispatches PARTITION_CALLBACK to dedicated path',
     t.equal(result.executionMode, EXECUTION_MODE.PARTITION_CALLBACK);
     t.equal(result.callbackModuleRef, 'mod-1');
     t.equal(result.callbackExport, 'run_batch');
+    t.equal(result.hostResult.state, 'completed');
+  });
+
+test('executeRequest - native_js partition callback loads handler from code table',
+  async (t) => {
+    const engine = createEngine();
+    const req = createSqlRequest({
+      statement: 'SELECT * FROM users',
+      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
+      callbackModuleRef: 'mod-1',
+      callbackExport: 'run_batch',
+      runtimeKind: CALLBACK_RUNTIME_KIND.NATIVE_JS,
+    });
+
+    const result = await engine.executeRequest(req);
+    t.equal(result.hostResult.state, 'completed');
+    t.equal(result.hostResult.failedPartitions, 0);
+    t.equal(result.hostResult.totalRows, 1);
+    t.same(result.hostResult.partitionResults[0].rows, [
+      {id: 1, name: 'Alice', nativeLoaded: true},
+    ]);
   });
 
 test('executeRequest - PARTITION_CALLBACK returns different shape ' +

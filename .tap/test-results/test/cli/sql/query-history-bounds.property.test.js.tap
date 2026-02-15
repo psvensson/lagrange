@@ -3,41 +3,41 @@ TAP version 14
     # Subtest: history never exceeds maxEntries
         ok 1 - history never exceeds maxEntries
         1..1
-    ok 1 - history never exceeds maxEntries # time=5.763ms
+    ok 1 - history never exceeds maxEntries # time=5.723ms
     
     # Subtest: oldest entries are removed when limit reached
         ok 1 - oldest entries are removed when limit reached
         1..1
-    ok 2 - oldest entries are removed when limit reached # time=1.711ms
+    ok 2 - oldest entries are removed when limit reached # time=1.61ms
     
     # Subtest: getAt returns null for negative indices
         ok 1 - getAt returns null for negative indices
         1..1
-    ok 3 - getAt returns null for negative indices # time=0.971ms
+    ok 3 - getAt returns null for negative indices # time=0.68ms
     
     # Subtest: getAt returns null for indices >= length
         ok 1 - getAt returns null for indices >= length
         1..1
-    ok 4 - getAt returns null for indices >= length # time=1.254ms
+    ok 4 - getAt returns null for indices >= length # time=0.883ms
     
     # Subtest: default maxEntries is 100
         ok 1 - default maxEntries is 100
         1..1
-    ok 5 - default maxEntries is 100 # time=17.428ms
+    ok 5 - default maxEntries is 100 # time=15.728ms
     
     # Subtest: most recent entries are preserved when limit reached
         ok 1 - most recent entries are preserved when limit reached
         1..1
-    ok 6 - most recent entries are preserved when limit reached # time=0.654ms
+    ok 6 - most recent entries are preserved when limit reached # time=0.628ms
     
     # Subtest: length is always non-negative
         ok 1 - length is always non-negative
         1..1
-    ok 7 - length is always non-negative # time=0.478ms
+    ok 7 - length is always non-negative # time=0.532ms
     
     1..7
-ok 1 - Property 18: Query History Bounds # time=31.773ms
+ok 1 - Property 18: Query History Bounds # time=29.516ms
 
 1..1
 # { total: 7, pass: 7 }
-# time=35.033ms
+# time=32.875ms

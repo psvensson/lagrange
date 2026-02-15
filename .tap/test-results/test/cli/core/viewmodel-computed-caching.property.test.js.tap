@@ -3,41 +3,41 @@ TAP version 14
     # Subtest: computed value is cached after first call
         ok 1 - computed value is cached after first call
         1..1
-    ok 1 - computed value is cached after first call # time=4.619ms
+    ok 1 - computed value is cached after first call # time=4.268ms
     
     # Subtest: cache is invalidated on data change
         ok 1 - cache is invalidated on data change
         1..1
-    ok 2 - cache is invalidated on data change # time=1.518ms
+    ok 2 - cache is invalidated on data change # time=2.061ms
     
     # Subtest: cache is invalidated on explicit invalidation
         ok 1 - cache is invalidated on explicit invalidation
         1..1
-    ok 3 - cache is invalidated on explicit invalidation # time=0.95ms
+    ok 3 - cache is invalidated on explicit invalidation # time=1.027ms
     
     # Subtest: multiple computed properties cache independently
         ok 1 - multiple computed properties cache independently
         1..1
-    ok 4 - multiple computed properties cache independently # time=0.698ms
+    ok 4 - multiple computed properties cache independently # time=1.142ms
     
     # Subtest: isComputedCached reflects cache state
         ok 1 - isComputedCached reflects cache state
         1..1
-    ok 5 - isComputedCached reflects cache state # time=0.828ms
+    ok 5 - isComputedCached reflects cache state # time=1.01ms
     
     # Subtest: cached value equals recomputed value
         ok 1 - cached value equals recomputed value
         1..1
-    ok 6 - cached value equals recomputed value # time=1.61ms
+    ok 6 - cached value equals recomputed value # time=1.742ms
     
     # Subtest: clear invalidates all caches
         ok 1 - clear invalidates all caches
         1..1
-    ok 7 - clear invalidates all caches # time=1.044ms
+    ok 7 - clear invalidates all caches # time=1.084ms
     
     1..7
-ok 1 - Property 38: ViewModel Computed Property Caching # time=15.316ms
+ok 1 - Property 38: ViewModel Computed Property Caching # time=16.841ms
 
 1..1
 # { total: 7, pass: 7 }
-# time=20.011ms
+# time=21.507ms

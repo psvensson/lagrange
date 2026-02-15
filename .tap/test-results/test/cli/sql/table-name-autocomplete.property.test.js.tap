@@ -3,46 +3,46 @@ TAP version 14
     # Subtest: all suggestions start with the given prefix
         ok 1 - all suggestions start with the given prefix
         1..1
-    ok 1 - all suggestions start with the given prefix # time=13.255ms
+    ok 1 - all suggestions start with the given prefix # time=12.48ms
     
     # Subtest: suggestions are sorted alphabetically
         ok 1 - suggestions are sorted alphabetically
         1..1
-    ok 2 - suggestions are sorted alphabetically # time=10.534ms
+    ok 2 - suggestions are sorted alphabetically # time=9.773ms
     
     # Subtest: suggestions are limited to 10 results
         ok 1 - suggestions are limited to 10 results
         1..1
-    ok 3 - suggestions are limited to 10 results # time=5.814ms
+    ok 3 - suggestions are limited to 10 results # time=3.903ms
     
     # Subtest: all suggestions exist in the cache
         ok 1 - all suggestions exist in the cache
         1..1
-    ok 4 - all suggestions exist in the cache # time=1.56ms
+    ok 4 - all suggestions exist in the cache # time=2.012ms
     
     # Subtest: empty prefix returns tables from cache
         ok 1 - empty prefix returns tables from cache
         1..1
-    ok 5 - empty prefix returns tables from cache # time=1.25ms
+    ok 5 - empty prefix returns tables from cache # time=1.225ms
     
     # Subtest: getSuggestions only triggers in table contexts
         ok 1 - getSuggestions only triggers in table contexts
         1..1
-    ok 6 - getSuggestions only triggers in table contexts # time=1.716ms
+    ok 6 - getSuggestions only triggers in table contexts # time=1.558ms
     
     # Subtest: non-table contexts return empty suggestions
         ok 1 - non-table contexts return empty suggestions
         1..1
-    ok 7 - non-table contexts return empty suggestions # time=1.036ms
+    ok 7 - non-table contexts return empty suggestions # time=1.476ms
     
     # Subtest: isValidTableName is consistent with cache
         ok 1 - isValidTableName is consistent with cache
         1..1
-    ok 8 - isValidTableName is consistent with cache # time=1.365ms
+    ok 8 - isValidTableName is consistent with cache # time=1.296ms
     
     1..8
-ok 1 - Property 23: Table Name Autocomplete # time=43.302ms
+ok 1 - Property 23: Table Name Autocomplete # time=40.512ms
 
 1..1
 # { total: 8, pass: 8 }
-# time=49.515ms
+# time=49.328ms

@@ -12,7 +12,7 @@ TAP version 14
     ok 10 - lastUpdate is null
     ok 11 - cdcLag is 0
     1..11
-ok 1 - RemoteCache - constructor initializes empty tables # time=5.529ms
+ok 1 - RemoteCache - constructor initializes empty tables # time=3.962ms
 
 # Subtest: RemoteCache - loadFromDump initializes cache from dump
     ok 1 - loaded 2 nodes
@@ -20,56 +20,56 @@ ok 1 - RemoteCache - constructor initializes empty tables # time=5.529ms
     ok 3 - loaded 1 table
     ok 4 - lastUpdate is set
     1..4
-ok 2 - RemoteCache - loadFromDump initializes cache from dump # time=0.549ms
+ok 2 - RemoteCache - loadFromDump initializes cache from dump # time=0.521ms
 
 # Subtest: RemoteCache - applyCDCEvent INSERT adds record
     ok 1 - event was applied
     ok 2 - node was added
     ok 3 - node has correct status
     1..3
-ok 3 - RemoteCache - applyCDCEvent INSERT adds record # time=0.347ms
+ok 3 - RemoteCache - applyCDCEvent INSERT adds record # time=0.329ms
 
 # Subtest: RemoteCache - applyCDCEvent UPDATE modifies record
     ok 1 - node status was updated
     1..1
-ok 4 - RemoteCache - applyCDCEvent UPDATE modifies record # time=0.18ms
+ok 4 - RemoteCache - applyCDCEvent UPDATE modifies record # time=0.189ms
 
 # Subtest: RemoteCache - applyCDCEvent DELETE removes record
     ok 1 - node was removed
     ok 2 - node is undefined
     1..2
-ok 5 - RemoteCache - applyCDCEvent DELETE removes record # time=0.223ms
+ok 5 - RemoteCache - applyCDCEvent DELETE removes record # time=0.211ms
 
 # Subtest: RemoteCache - getServices filters by nodeId
     ok 1 - filtered to 2 services
     ok 2 - all have node-1
     1..2
-ok 6 - RemoteCache - getServices filters by nodeId # time=0.232ms
+ok 6 - RemoteCache - getServices filters by nodeId # time=0.221ms
 
 # Subtest: RemoteCache - getServices filters by type
     ok 1 - filtered to 2 services
     ok 2 - all partitions
     1..2
-ok 7 - RemoteCache - getServices filters by type # time=0.224ms
+ok 7 - RemoteCache - getServices filters by type # time=0.207ms
 
 # Subtest: RemoteCache - getPartitions filters by tableId
     ok 1 - filtered to 2 partitions
     ok 2 - all for tbl-1
     1..2
-ok 8 - RemoteCache - getPartitions filters by tableId # time=0.256ms
+ok 8 - RemoteCache - getPartitions filters by tableId # time=0.231ms
 
 # Subtest: RemoteCache - getLogs filters by multiple criteria
     ok 1 - filtered by level
     ok 2 - filtered by nodeId
     ok 3 - filtered by startTime
     1..3
-ok 9 - RemoteCache - getLogs filters by multiple criteria # time=0.514ms
+ok 9 - RemoteCache - getLogs filters by multiple criteria # time=0.333ms
 
 # Subtest: RemoteCache - getContexts filters by type and namePattern
     ok 1 - filtered by type
     ok 2 - filtered by namePattern
     1..2
-ok 10 - RemoteCache - getContexts filters by type and namePattern # time=0.451ms
+ok 10 - RemoteCache - getContexts filters by type and namePattern # time=0.285ms
 
 # Subtest: RemoteCache - serialize and deserialize round-trip
     ok 1 - nodes restored
@@ -77,14 +77,14 @@ ok 10 - RemoteCache - getContexts filters by type and namePattern # time=0.451ms
     ok 3 - tables restored
     ok 4 - node data correct
     1..4
-ok 11 - RemoteCache - serialize and deserialize round-trip # time=0.403ms
+ok 11 - RemoteCache - serialize and deserialize round-trip # time=0.379ms
 
 # Subtest: RemoteCache - clear removes all data
     ok 1 - nodes cleared
     ok 2 - services cleared
     ok 3 - lastUpdate cleared
     1..3
-ok 12 - RemoteCache - clear removes all data # time=0.268ms
+ok 12 - RemoteCache - clear removes all data # time=0.254ms
 
 # Subtest: RemoteCache - getStats returns cache statistics
     ok 1 - lastUpdate is set
@@ -97,24 +97,24 @@ ok 13 - RemoteCache - getStats returns cache statistics # time=0.272ms
     ok 1 - not initialized initially
     ok 2 - initialized after loadFromDump
     1..2
-ok 14 - RemoteCache - isInitialized returns correct state # time=0.211ms
+ok 14 - RemoteCache - isInitialized returns correct state # time=0.192ms
 
 # Subtest: RemoteCache - isStale checks CDC lag
     ok 1 - not stale with low lag
     ok 2 - stale with high lag
     1..2
-ok 15 - RemoteCache - isStale checks CDC lag # time=0.198ms
+ok 15 - RemoteCache - isStale checks CDC lag # time=0.235ms
 
 # Subtest: RemoteCache - applyCDCEvent handles unknown table
     ok 1 - event was not applied
     1..1
-ok 16 - RemoteCache - applyCDCEvent handles unknown table # time=0.151ms
+ok 16 - RemoteCache - applyCDCEvent handles unknown table # time=0.149ms
 
 # Subtest: RemoteCache - applyCDCEvent handles unknown operation
     ok 1 - event was not applied
     1..1
-ok 17 - RemoteCache - applyCDCEvent handles unknown operation # time=0.145ms
+ok 17 - RemoteCache - applyCDCEvent handles unknown operation # time=0.144ms
 
 1..17
 # { total: 48, pass: 48 }
-# time=30.546ms
+# time=19.03ms

@@ -17,6 +17,9 @@ import {
   MODULE_MANIFEST_FIELD as MF,
   MODULE_DEPENDENCY_FIELD as DF,
 } from './module-manifest-constants.js';
+import {
+  DEBUG_CAPABILITY,
+} from '../debug-runtime/debug-runtime-constants.js';
 
 /**
  * Validation step name constants.
@@ -25,6 +28,7 @@ import {
 const VALIDATION_STEP = Object.freeze({
   MANIFEST: 'manifest',
   CAPABILITIES: 'capabilities',
+  DEBUG_ARTIFACTS: 'debugArtifacts',
   DEPENDENCIES: 'dependencies',
 });
 
@@ -35,6 +39,8 @@ const VALIDATION_STEP = Object.freeze({
 const VALIDATION_PIPELINE_ERROR_MSG = Object.freeze({
   MANIFEST_INVALID: 'Manifest validation failed',
   CAPABILITIES_DENIED: 'Capability enforcement failed',
+  DEBUG_ARTIFACT_REQUIRED:
+    'Debug artifact metadata required for debug capabilities',
   DEPENDENCIES_INVALID: 'Dependency validation failed',
 });
 
@@ -51,7 +57,7 @@ const VALIDATION_PIPELINE_ERROR_MSG = Object.freeze({
  * @return {{valid: boolean, errors: string[]}} Result.
  */
 function validateCapabilities(
-  manifest, capabilityPolicy, tenantAllowlist
+  manifest, capabilityPolicy, tenantAllowlist,
 ) {
   const caps = manifest ? manifest[MF.CAPABILITIES] : null;
   if (!caps || !Array.isArray(caps) ||
@@ -95,7 +101,7 @@ function validateResolvedDependencies(resolvedDependencies) {
   for (const dep of resolvedDependencies) {
     if (!dep[DF.MODULE_ID] || !dep[DF.DIGEST]) {
       errors.push(
-        VALIDATION_PIPELINE_ERROR_MSG.DEPENDENCIES_INVALID
+        VALIDATION_PIPELINE_ERROR_MSG.DEPENDENCIES_INVALID,
       );
       break;
     }
@@ -105,6 +111,53 @@ function validateResolvedDependencies(resolvedDependencies) {
     valid: errors.length === NUM.ZERO,
     errors,
   };
+}
+
+/**
+ * Validate debug artifact availability policy for debug capabilities.
+ *
+ * By default, debug capabilities require either:
+ * - `manifest.debugArtifact`, or
+ * - legacy `manifest.artifactPointer` declaration.
+ *
+ * Policy hook:
+ * - `capabilityPolicy.requireDebugArtifacts === false` downgrades
+ *   enforcement for transitional rollouts.
+ *
+ * @param {Object} manifest - Module manifest object.
+ * @param {Object|null} capabilityPolicy - Capability policy options.
+ * @return {{valid: boolean, errors: string[]}} Result.
+ */
+function validateDebugArtifactPolicy(manifest, capabilityPolicy) {
+  const caps = manifest ? manifest[MF.CAPABILITIES] : null;
+  if (!caps || !Array.isArray(caps) ||
+      caps.length === NUM.ZERO) {
+    return {valid: true, errors: []};
+  }
+
+  const debugRequested = caps.includes(
+    DEBUG_CAPABILITY.BREAKPOINT,
+  ) || caps.includes(DEBUG_CAPABILITY.SNAPSHOT);
+  if (!debugRequested) {
+    return {valid: true, errors: []};
+  }
+
+  const requireDebugArtifacts =
+    capabilityPolicy?.requireDebugArtifacts !== false;
+  if (!requireDebugArtifacts) {
+    return {valid: true, errors: []};
+  }
+
+  const hasDebugArtifact = Boolean(manifest[MF.DEBUG_ARTIFACT]) ||
+    Boolean(manifest[MF.ARTIFACT_POINTER]);
+  if (!hasDebugArtifact) {
+    return {
+      valid: false,
+      errors: [VALIDATION_PIPELINE_ERROR_MSG.DEBUG_ARTIFACT_REQUIRED],
+    };
+  }
+
+  return {valid: true, errors: []};
 }
 
 /**
@@ -137,13 +190,20 @@ function buildPublishValidationChain() {
       validate: (params) => validateCapabilities(
         params.manifest,
         params.capabilityPolicy || null,
-        params.tenantAllowlist || []
+        params.tenantAllowlist || [],
+      ),
+    },
+    {
+      name: VALIDATION_STEP.DEBUG_ARTIFACTS,
+      validate: (params) => validateDebugArtifactPolicy(
+        params.manifest,
+        params.capabilityPolicy || null,
       ),
     },
     {
       name: VALIDATION_STEP.DEPENDENCIES,
       validate: (params) => validateResolvedDependencies(
-        params.resolvedDependencies || null
+        params.resolvedDependencies || null,
       ),
     },
   ];
@@ -178,6 +238,7 @@ export {
   VALIDATION_STEP,
   VALIDATION_PIPELINE_ERROR_MSG,
   validateCapabilities,
+  validateDebugArtifactPolicy,
   validateResolvedDependencies,
   buildPublishValidationChain,
   validatePublishPipeline,

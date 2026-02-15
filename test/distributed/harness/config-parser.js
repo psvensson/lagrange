@@ -13,6 +13,7 @@ import {
   CONVERGENCE_DEFAULTS,
   RESOURCE_DEFAULTS,
   LOAD_DEFAULTS,
+  DEBUG_TRACE_DEFAULTS,
 } from './constants.js';
 
 /**
@@ -57,6 +58,20 @@ function mergeWithDefaults(partial = {}) {
       defaultOpsPerSec: LOAD_DEFAULTS.defaultOpsPerSec,
       defaultDuration: LOAD_DEFAULTS.defaultDuration,
       ...partial.load,
+    },
+    debugTrace: {
+      enabled: DEBUG_TRACE_DEFAULTS.enabled,
+      required: DEBUG_TRACE_DEFAULTS.required,
+      serviceName: DEBUG_TRACE_DEFAULTS.serviceName,
+      lineagePrefix: DEBUG_TRACE_DEFAULTS.lineagePrefix,
+      requiredLineagePrefix: DEBUG_TRACE_DEFAULTS.requiredLineagePrefix,
+      levels: DEBUG_TRACE_DEFAULTS.levels,
+      tenantId: DEBUG_TRACE_DEFAULTS.tenantId,
+      principal: DEBUG_TRACE_DEFAULTS.principal,
+      roles: DEBUG_TRACE_DEFAULTS.roles,
+      connectTimeoutMs: DEBUG_TRACE_DEFAULTS.connectTimeoutMs,
+      requestTimeoutMs: DEBUG_TRACE_DEFAULTS.requestTimeoutMs,
+      ...(partial.debugTrace || {}),
     },
     ...(partial.outputDir ? {outputDir: partial.outputDir} : {}),
     ...(partial.gcp ? {gcp: partial.gcp} : {}),

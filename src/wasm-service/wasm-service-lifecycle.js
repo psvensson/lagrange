@@ -11,6 +11,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {TYPEOF} from '../constants/index.js';
 import {WasmServiceReplica} from './wasm-service-replica.js';
 import {buildEndpointRecord} from './service-endpoint-builder.js';
 import {
@@ -18,6 +19,28 @@ import {
   WASM_SERVICE_LOG_MSG,
   WASM_SERVICE_ERROR_MSG,
 } from './wasm-service-constants.js';
+
+const START_RESULT_FIELD = Object.freeze({
+  STARTED: 'started',
+  PORT: 'port',
+  ENDPOINT: 'endpoint',
+  ERROR: 'error',
+  DIAGNOSTIC: 'diagnostic',
+});
+
+const START_DIAGNOSTIC_FIELD = Object.freeze({
+  CODE: 'code',
+  SERVICE_ID: 'serviceId',
+  HANDLER_FUNCTION_ID: 'handlerFunctionId',
+  MODULE_VERSION: 'moduleVersion',
+  NODE_ID: 'nodeId',
+  TIMESTAMP: 'timestamp',
+});
+
+const START_DIAGNOSTIC_CODE = Object.freeze({
+  MODULE_UNAVAILABLE: 'module_unavailable',
+  MODULE_MIRROR_MISSING: 'module_mirror_missing',
+});
 
 /**
  * Lifecycle states for a managed replica.
@@ -52,15 +75,31 @@ class WasmServiceLifecycle {
     this.moduleMirror = options.moduleMirror;
     this.messageRouter = options.messageRouter;
     this.nodeId = options.nodeId;
+    this.cdcIntegrationService =
+      options.cdcIntegrationService || null;
+    this.roleUpdateWriter = options.roleUpdateWriter || null;
+    this.leaderNodeUpdateWriter =
+      options.leaderNodeUpdateWriter || null;
 
     /** @type {Map<string, WasmServiceReplica>} */
     this.activeReplicas = new Map();
+
+    /** @type {Map<string, Object>} */
+    this.startDiagnostics = new Map();
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(
         WASM_SERVICE_SUBSYSTEM.LIFECYCLE,
       ) : console;
+
+    if (this.moduleMirror &&
+      typeof this.moduleMirror.bindCdcIntegrationService === TYPEOF.FUNCTION &&
+      this.cdcIntegrationService) {
+      this.moduleMirror.bindCdcIntegrationService(
+        this.cdcIntegrationService,
+      );
+    }
   }
 
   /**
@@ -86,6 +125,9 @@ class WasmServiceLifecycle {
       readConsistency: serviceDefinition.readConsistency,
       writeConsistency: serviceDefinition.writeConsistency,
       safetyIntervalMs: serviceDefinition.safetyIntervalMs,
+      cdcIntegrationService: this.cdcIntegrationService,
+      roleUpdateWriter: this.roleUpdateWriter,
+      leaderNodeUpdateWriter: this.leaderNodeUpdateWriter,
     });
 
     this.activeReplicas.set(
@@ -116,9 +158,13 @@ class WasmServiceLifecycle {
    *   for endpoint registration.
    * @param {Object} [startOptions.serviceDefinition] -
    *   Service definition for endpoint building.
-   * @return {{port: number, endpoint: Object}|null} Startup
-   *   result with allocated port and endpoint record, or
-   *   null if the replica is not found.
+   * @return {{
+   *   started: boolean,
+   *   port?: number,
+   *   endpoint?: Object|null,
+   *   error?: string,
+   *   diagnostic?: Object|null,
+   * }|null} Startup result, or null when not found.
    */
   startReplica(serviceId, startOptions = {}) {
     const replica = this.activeReplicas.get(serviceId);
@@ -126,21 +172,34 @@ class WasmServiceLifecycle {
       return null;
     }
 
-    if (startOptions.handlerFunctionId) {
-      const hasModule = this.moduleMirror.hasModule(
-        startOptions.handlerFunctionId,
-        startOptions.moduleVersion,
-      );
-      if (!hasModule) {
-        this.logger.info(
-          WASM_SERVICE_ERROR_MSG.MODULE_NOT_AVAILABLE, {
-            serviceId,
-            handlerFunctionId:
-              startOptions.handlerFunctionId,
-          },
-        );
-      }
+    const moduleFailure = this.resolveModuleFailure(startOptions);
+    if (moduleFailure) {
+      const diagnostic = this.recordStartDiagnostic(serviceId, {
+        [START_DIAGNOSTIC_FIELD.CODE]: moduleFailure.code,
+        [START_DIAGNOSTIC_FIELD.SERVICE_ID]: serviceId,
+        [START_DIAGNOSTIC_FIELD.HANDLER_FUNCTION_ID]:
+          startOptions.handlerFunctionId,
+        [START_DIAGNOSTIC_FIELD.MODULE_VERSION]:
+          startOptions.moduleVersion || null,
+        [START_DIAGNOSTIC_FIELD.NODE_ID]: this.nodeId,
+        [START_DIAGNOSTIC_FIELD.TIMESTAMP]: Date.now(),
+      });
+
+      this.logger.error(WASM_SERVICE_ERROR_MSG.MODULE_NOT_AVAILABLE, {
+        serviceId,
+        handlerFunctionId: startOptions.handlerFunctionId,
+        moduleVersion: startOptions.moduleVersion || null,
+        diagnosticCode: moduleFailure.code,
+      });
+
+      return {
+        [START_RESULT_FIELD.STARTED]: false,
+        [START_RESULT_FIELD.ERROR]: WASM_SERVICE_ERROR_MSG.MODULE_NOT_AVAILABLE,
+        [START_RESULT_FIELD.DIAGNOSTIC]: diagnostic,
+      };
     }
+
+    this.clearStartDiagnostic(serviceId);
 
     const port = this.portAllocator.allocate(serviceId);
 
@@ -174,7 +233,12 @@ class WasmServiceLifecycle {
       port,
     });
 
-    return {port, endpoint};
+    return {
+      [START_RESULT_FIELD.STARTED]: true,
+      [START_RESULT_FIELD.PORT]: port,
+      [START_RESULT_FIELD.ENDPOINT]: endpoint,
+      [START_RESULT_FIELD.DIAGNOSTIC]: null,
+    };
   }
 
   /**
@@ -200,6 +264,7 @@ class WasmServiceLifecycle {
     await replica.shutdown();
 
     this.activeReplicas.delete(serviceId);
+    this.clearStartDiagnostic(serviceId);
 
     this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_STOPPED, {
       serviceId,
@@ -230,6 +295,72 @@ class WasmServiceLifecycle {
   }
 
   /**
+   * Return the latest startup diagnostic for a service.
+   * @param {string} serviceId
+   * @return {Object|null}
+   */
+  getStartDiagnostic(serviceId) {
+    return this.startDiagnostics.get(serviceId) || null;
+  }
+
+  /**
+   * Resolve missing module failures for fail-closed startup.
+   * @param {Object} startOptions
+   * @return {{code: string}|null}
+   * @private
+   */
+  resolveModuleFailure(startOptions) {
+    const handlerFunctionId = startOptions.handlerFunctionId;
+    if (!handlerFunctionId) {
+      return null;
+    }
+
+    if (!this.moduleMirror) {
+      return {code: START_DIAGNOSTIC_CODE.MODULE_MIRROR_MISSING};
+    }
+
+    const moduleVersion = startOptions.moduleVersion;
+    if (moduleVersion) {
+      const hasModule = this.moduleMirror.hasModule(
+        handlerFunctionId,
+        moduleVersion,
+      );
+      if (!hasModule) {
+        return {code: START_DIAGNOSTIC_CODE.MODULE_UNAVAILABLE};
+      }
+      return null;
+    }
+
+    const moduleEntry = this.moduleMirror.getModule(handlerFunctionId);
+    if (!moduleEntry) {
+      return {code: START_DIAGNOSTIC_CODE.MODULE_UNAVAILABLE};
+    }
+
+    return null;
+  }
+
+  /**
+   * Persist startup diagnostic state.
+   * @param {string} serviceId
+   * @param {Object} diagnostic
+   * @return {Object}
+   * @private
+   */
+  recordStartDiagnostic(serviceId, diagnostic) {
+    this.startDiagnostics.set(serviceId, diagnostic);
+    return diagnostic;
+  }
+
+  /**
+   * Clear startup diagnostic for service.
+   * @param {string} serviceId
+   * @private
+   */
+  clearStartDiagnostic(serviceId) {
+    this.startDiagnostics.delete(serviceId);
+  }
+
+  /**
    * Shutdown all active replicas. Releases ports and calls
    * shutdown on each replica.
    *
@@ -239,6 +370,11 @@ class WasmServiceLifecycle {
     const serviceIds = [...this.activeReplicas.keys()];
     for (const serviceId of serviceIds) {
       await this.stopReplica(serviceId);
+    }
+
+    if (this.moduleMirror &&
+      typeof this.moduleMirror.unbindCdcIntegrationService === TYPEOF.FUNCTION) {
+      this.moduleMirror.unbindCdcIntegrationService();
     }
   }
 }

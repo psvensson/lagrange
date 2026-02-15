@@ -17,6 +17,7 @@ import {
   CONVERGENCE_DEFAULTS,
   RESOURCE_DEFAULTS,
   LOAD_DEFAULTS,
+  DEBUG_TRACE_DEFAULTS,
 } from '../constants.js';
 
 // --- Unit Tests ---
@@ -74,6 +75,19 @@ test('Unit: mergeWithDefaults fills all fields from empty object', async (t) => 
       assert.strictEqual(
         config.load.defaultDuration, LOAD_DEFAULTS.defaultDuration,
       );
+
+      assert.strictEqual(
+        config.debugTrace.enabled,
+        DEBUG_TRACE_DEFAULTS.enabled,
+      );
+      assert.strictEqual(
+        config.debugTrace.required,
+        DEBUG_TRACE_DEFAULTS.required,
+      );
+      assert.strictEqual(
+        config.debugTrace.serviceName,
+        DEBUG_TRACE_DEFAULTS.serviceName,
+      );
     },
   );
 });
@@ -87,6 +101,12 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
       convergence: {targetVoterCount: 5},
       resourceLimits: {memory: '1g'},
       load: {defaultOpsPerSec: 500},
+      debugTrace: {
+        enabled: true,
+        required: true,
+        serviceName: 'svc-orders',
+        requiredLineagePrefix: 'lineage-orders',
+      },
     };
 
     const config = mergeWithDefaults(partial);
@@ -106,6 +126,13 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
     assert.strictEqual(config.load.defaultOpsPerSec, 500);
     assert.strictEqual(
       config.load.defaultDuration, LOAD_DEFAULTS.defaultDuration,
+    );
+    assert.strictEqual(config.debugTrace.enabled, true);
+    assert.strictEqual(config.debugTrace.required, true);
+    assert.strictEqual(config.debugTrace.serviceName, 'svc-orders');
+    assert.strictEqual(
+      config.debugTrace.requiredLineagePrefix,
+      'lineage-orders',
     );
   });
 });

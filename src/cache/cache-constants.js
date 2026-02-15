@@ -53,51 +53,127 @@ const CACHE_DEFAULT = Object.freeze({
   CACHE_ID_LENGTH: 9,
 });
 
-const CACHE_SYSTEM_TABLES = Object.freeze([
-  TABLES.NODES,
-  TABLES.PARTITIONS,
-  TABLES.TABLES,
-  TABLES.SERVICES,
-  TABLES.REPLICA_OPERATIONS,
-  TABLES.MESSAGE_GROUPS,
-  TABLES.INDICES,
+// ---------------------------------------------------------------------------
+// CDC-Propagated vs Non-Propagated Table Classification
+// ---------------------------------------------------------------------------
+//
+// A system table is CDC-propagated when every node in the cluster must hold
+// an up-to-date copy of its rows in the local SystemTableCache so that
+// routing, placement, rebalancing, and topology decisions can be made
+// without cross-node queries.
+//
+// Classification rules (a table MUST be propagated when ANY rule applies):
+//
+//   1. MEMBERSHIP — the table describes which nodes, partitions, message
+//      groups, or replicated services exist and where they live.
+//   2. ROUTING — the table is consulted during query routing, leader
+//      discovery, or endpoint resolution.
+//   3. PLACEMENT — the table is read by the rebalancer, move planner,
+//      or admission service to decide replica placement.
+//   4. CLUSTER CONFIG — the table carries cluster-wide configuration
+//      (epoch, budgets, feature flags) that every node must observe.
+//   5. TOPOLOGY — the table defines network topology, latency groups,
+//      or inter-group measurements used for CDC fanout or routing.
+//
+// A table MUST NOT be propagated when ALL of the following hold:
+//
+//   a. It is high-cardinality or high-write-rate (e.g. logs, operations).
+//   b. It is scoped to a specific service, session, or execution context
+//      rather than cluster-wide topology.
+//   c. It can be queried on demand from its owning partition without
+//      affecting routing, placement, or cluster-health decisions.
+//
+// Any new system table MUST be classified here. Tables not listed in
+// CDC_PROPAGATED_TABLES are non-propagated by default and will not be
+// included in cache hydration snapshots or CDC subscriptions.
+// ---------------------------------------------------------------------------
+
+/**
+ * Tables whose CDC events propagate to every node's SystemTableCache.
+ * These define cluster topology, routing, placement, and configuration.
+ */
+const CDC_PROPAGATED_TABLES = Object.freeze([
+  // Membership
+  TABLES.NODES, // node registry and state
+  TABLES.PARTITIONS, // partition key ranges and replica counts
+  TABLES.SERVICES, // replica locations and raft roles
+  TABLES.MESSAGE_GROUPS, // message group membership
+  TABLES.TABLES, // table schemas and policies
+  TABLES.INDICES, // secondary index definitions
+
+  // Routing and endpoints
+  TABLES.NODE_ENDPOINTS, // node transport endpoints
+  TABLES.SERVICE_DEFINITIONS, // service runtime definitions
+  TABLES.SERVICE_ENDPOINTS, // replicated service endpoints
+
+  // Placement and rebalancing
+  TABLES.REPLICA_OPERATIONS, // in-flight rebalancing operations
+  TABLES.STORAGE_RESERVATIONS, // in-flight storage reservations
+
+  // Cluster-wide configuration
+  TABLES.CONFIG, // epoch, budgets, feature flags
+
+  // Debug session control plane state
+  TABLES.DEBUG_SESSIONS, // trace session activation + lineage scope
+
+  // Network topology
+  TABLES.LATENCY_GROUPS, // latency group assignments
+  TABLES.INTER_GROUP_LATENCIES, // inter-group RTT measurements
+]);
+
+/**
+ * Tables that are NOT CDC-propagated. They remain queryable from their
+ * owning partition via SQL but are not cached on every node.
+ *
+ * Rationale per table:
+ *   logs                     — high cardinality, append-only
+ *   contexts                 — per-execution, transient
+ *   code                     — stored procedures, query on demand
+ *   live_queries             — per-session subscriptions
+ *   service_timers           — WASM service-scoped timers
+ *   module_manifests         — WASM module metadata, query on demand
+ *   package_registry_mappings — namespace mappings, query on demand
+ *   package_registry_overrides — per-package overrides, query on demand
+ *   module_dependency_locks  — immutable locks, query on demand
+ *   wasm_operations          — async workflow journal, transient
+ *   debug_breakpoints        — debug breakpoint state, transient
+ *   debug_snapshots          — debug snapshot state, transient
+ */
+const CDC_NON_PROPAGATED_TABLES = Object.freeze([
+  TABLES.LOGS,
   TABLES.CONTEXTS,
   TABLES.CODE,
-  TABLES.CONFIG,
-  TABLES.LOGS,
   TABLES.LIVE_QUERIES,
-  TABLES.NODE_ENDPOINTS,
-  TABLES.SERVICE_DEFINITIONS,
-  TABLES.SERVICE_ENDPOINTS,
   TABLES.SERVICE_TIMERS,
   TABLES.MODULE_MANIFESTS,
   TABLES.PACKAGE_REGISTRY_MAPPINGS,
   TABLES.PACKAGE_REGISTRY_OVERRIDES,
   TABLES.MODULE_DEPENDENCY_LOCKS,
   TABLES.WASM_OPERATIONS,
-  TABLES.STORAGE_RESERVATIONS,
-  TABLES.LATENCY_GROUPS,
-  TABLES.INTER_GROUP_LATENCIES,
+  TABLES.DEBUG_BREAKPOINTS,
+  TABLES.DEBUG_SNAPSHOTS,
 ]);
 
-const CACHE_DEFAULT_SYNC_EXCLUDED_TABLES = Object.freeze([
-  // Logs are intentionally excluded from default cache sync due high cardinality.
-  TABLES.LOGS,
+/**
+ * Complete list of all system tables (propagated + non-propagated).
+ * Used by SystemTableCache for schema validation and by bootstrap for
+ * partition creation. Every system table MUST appear in exactly one of
+ * CDC_PROPAGATED_TABLES or CDC_NON_PROPAGATED_TABLES.
+ */
+const CACHE_SYSTEM_TABLES = Object.freeze([
+  ...CDC_PROPAGATED_TABLES,
+  ...CDC_NON_PROPAGATED_TABLES,
 ]);
 
 const CACHE_PRIMARY_KEY_FIELDS = SYSTEM_CACHE_KEY_DESCRIPTOR;
 
 const CACHE_CDC_OPERATIONS = CDC_OPERATION;
 
-// Explicit default hydration/subscription treatment:
-// all system tables are synced except CACHE_DEFAULT_SYNC_EXCLUDED_TABLES.
-// Latency topology tables remain included by default so join/bootstrap flows
-// always receive topology metadata snapshots through the canonical path.
-const CACHE_HYDRATION_TABLES = Object.freeze(
-  CACHE_SYSTEM_TABLES.filter((tableName) =>
-    !CACHE_DEFAULT_SYNC_EXCLUDED_TABLES.includes(tableName),
-  ),
-);
+/**
+ * Tables included in cache hydration snapshots and CDC subscriptions.
+ * This is the CDC-propagated set: every node receives and caches these.
+ */
+const CACHE_HYDRATION_TABLES = CDC_PROPAGATED_TABLES;
 
 const CACHE_HYDRATION_LOG_MSG = Object.freeze({
   STARTING: 'Starting cache hydration',
@@ -134,4 +210,6 @@ export {
   CACHE_READ_ONLY,
   CACHE_SUBSYSTEM,
   CACHE_SYSTEM_TABLES,
+  CDC_NON_PROPAGATED_TABLES,
+  CDC_PROPAGATED_TABLES,
 };

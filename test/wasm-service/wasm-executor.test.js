@@ -19,7 +19,7 @@ function createMockModule(handler) {
   return {
     version: '1.0',
     wasmBytes: Buffer.alloc(0),
-    manifest: {runExport: RUN_EXPORT_NAME},
+    manifest: {runExport: RUN_EXPORT_NAME, capabilities: []},
     exports: {[RUN_EXPORT_NAME]: fn},
   };
 }
@@ -192,6 +192,71 @@ describe('WasmExecutor', () => {
             return true;
           },
         );
+      });
+
+    it('should attach trace API when session active and capability declared',
+      async () => {
+        const traceEvents = [];
+        const modules = new Map();
+        modules.set('func-trace', createMockModule((ctx, args) => {
+          const emitted = ctx.debug.trace('info', 'trace active', {ok: true});
+          assert.equal(emitted, true);
+          return args;
+        }));
+        modules.get('func-trace').manifest.capabilities = ['debug.trace'];
+        const ex = new WasmExecutor({
+          moduleMirror: createMockMirror(modules),
+          debugSessionResolver: {
+            isTraceActive: (scope) =>
+              scope.serviceDefinitionId === 'svc-trace',
+          },
+          traceCollector: {
+            emit: (event) => traceEvents.push(event),
+          },
+          nodeId: 'node-a',
+          replicaId: 'replica-a',
+        });
+
+        const result = await ex.execute(
+          {function_id: 'func-trace'},
+          {},
+          {ok: 1},
+          {debugScope: {serviceDefinitionId: 'svc-trace'}},
+        );
+        assert.deepStrictEqual(result.result, {ok: 1});
+        assert.equal(traceEvents.length, 1);
+        assert.equal(traceEvents[0].message, 'trace active');
+        assert.equal(traceEvents[0].serviceDefinitionId, 'svc-trace');
+      });
+
+    it('should keep normal path unchanged when trace inactive',
+      async () => {
+        const modules = new Map();
+        let sawDebug = false;
+        modules.set('func-no-trace', createMockModule((ctx, args) => {
+          sawDebug = Boolean(ctx.debug);
+          return args;
+        }));
+        modules.get('func-no-trace').manifest.capabilities = ['debug.trace'];
+        const ex = new WasmExecutor({
+          moduleMirror: createMockMirror(modules),
+          debugSessionResolver: {
+            isTraceActive: () => false,
+          },
+          traceCollector: {
+            emit: () => {
+              throw new Error('trace should not be emitted');
+            },
+          },
+        });
+
+        const result = await ex.execute(
+          {function_id: 'func-no-trace'},
+          {},
+          {ok: true},
+        );
+        assert.deepStrictEqual(result.result, {ok: true});
+        assert.equal(sawDebug, false);
       });
   });
 

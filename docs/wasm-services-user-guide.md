@@ -62,6 +62,38 @@ Outgoing messages (server -> client):
 3. `cdc_event`
 4. `error`
 
+### 3.1 Partition Callback Invocation
+
+The admin stream also supports distributed callback execution through a typed
+`partition_callback` envelope:
+
+```json
+{
+  "type": "partition_callback",
+  "queryId": "cb-1",
+  "statement": "SELECT * FROM logs WHERE level = ?",
+  "parameters": ["info"],
+  "callbackModuleRef": "example-01-basic-iterator-v1_0_0",
+  "callbackExport": "run",
+  "runtimeKind": "native_js"
+}
+```
+
+Response shape (`query_result`) includes callback execution metadata:
+
+```json
+{
+  "type": "query_result",
+  "queryId": "cb-1",
+  "operation": "partition_callback",
+  "hostResult": {
+    "state": "completed",
+    "processedPartitions": 3,
+    "failedPartitions": 0
+  }
+}
+```
+
 ## 4. Artifact Upload Workflow
 
 The practical artifact workflow is:
@@ -268,7 +300,138 @@ SET status = 'inactive',
 WHERE service_id = 'svc-acme-hello';
 ```
 
-## 7. Operational Queries
+## 7. Distributed SQL Examples Packaging and Run Flow
+
+The repository includes copyable examples under:
+
+- `examples/distributed-sql/`
+
+Run the full package -> upload -> execute pipeline with:
+
+```bash
+node scripts/examples/build-upload-run.js \
+  --target ws://127.0.0.1:8081/api/admin/stream \
+  --out test-output/examples/examples-run.json
+```
+
+Useful flags:
+
+- `--examplesDir <path>`: use a custom examples directory
+- `--include id1,id2`: run only selected examples
+- `--exclude id1,id2`: skip selected examples
+
+Behavior:
+
+1. Discovers ordered examples (`01-*`, `02-*`, ...).
+2. Validates each `example.manifest.json`.
+3. Uploads code and module metadata via canonical SQL writes (`code`,
+   `module_manifests`).
+4. Executes each example with `partition_callback`.
+5. Validates results against `expected.json` contracts.
+6. Writes a JSON artifact (`test-output/examples/<runId>.json`).
+7. Returns non-zero exit code if any required example fails.
+
+## 8. Debug Session and DAP APIs
+
+Debug ingress is adapter-owned at `AdminWebSocketAPI`, but debug metadata
+ownership is SQL/CDC-only through `DebugMetadataStore`:
+
+1. All session/breakpoint/snapshot writes go through `SqlRequest` execution.
+2. Tenant scope is enforced from debug headers.
+3. Attach/read/write authorization is role-gated per request.
+
+Required headers on all debug HTTP routes:
+
+- `x-tenant-id`: tenant scope
+- `x-principal`: calling principal
+- `x-roles`: comma-separated roles (`debug_admin`, `debug_attach`,
+  `debug_read`, `debug_write`)
+
+Debug routes:
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/admin/debug/sessions` | `POST` | Create session metadata |
+| `/api/admin/debug/sessions/:sessionId` | `GET` | Read one session |
+| `/api/admin/debug/sessions/:sessionId/attach` | `POST` | Attach authorization + session lookup |
+| `/api/admin/debug/sessions/:sessionId/breakpoints` | `POST` | Upsert session breakpoints |
+| `/api/admin/debug/sessions/:sessionId/breakpoints` | `GET` | List session breakpoints |
+| `/api/admin/debug/sessions/:sessionId/snapshots` | `POST` | Write snapshot metadata/artifact envelope |
+| `/api/admin/debug/sessions/:sessionId/snapshots` | `GET` | List snapshots for session |
+| `/api/admin/debug/snapshots/:snapshotId` | `GET` | Read one snapshot (`sessionId` query optional) |
+| `/api/admin/debug/dap/request` | `POST` | Route one DAP envelope |
+
+Create session:
+
+```bash
+curl -X POST http://127.0.0.1:8081/api/admin/debug/sessions \
+  -H 'x-tenant-id: tenant-a' \
+  -H 'x-principal: debugger-user' \
+  -H 'x-roles: debug_write,debug_attach,debug_read' \
+  -H 'content-type: application/json' \
+  -d '{
+    "sessionId": "session-2",
+    "serviceName": "svc-debug",
+    "lineageId": "lineage-2",
+    "stageId": 1,
+    "endpoint": "ws://node-a/debug"
+  }'
+```
+
+Write breakpoints:
+
+```json
+{
+  "moduleRef": "svc:debug@1.0.0",
+  "sourceFileUrl": "file:///src/service.ts",
+  "breakpoints": [
+    {"lineNumber": 10, "columnNumber": 0, "condition": null}
+  ]
+}
+```
+
+Write snapshot (envelope can be byte array, base64, or Buffer-like JSON):
+
+```json
+{
+  "snapshotArtifact": {
+    "manifest": {
+      "snapshotId": "snapshot-1",
+      "moduleRef": "svc:debug@1.0.0",
+      "moduleDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "snapshot": {
+      "moduleRef": "svc:debug@1.0.0",
+      "moduleDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "envelope": [1, 2, 3]
+  }
+}
+```
+
+Snapshot responses expose envelope data as `envelopeBase64` for transport-safe
+JSON payloads.
+
+DAP request pass-through:
+
+```json
+{
+  "sessionId": "session-2",
+  "request": {
+    "seq": 1,
+    "command": "threads"
+  }
+}
+```
+
+Common status codes:
+
+1. `401` missing/invalid tenant+principal headers
+2. `403` authorization denied for requested debug action
+3. `404` unknown session/snapshot
+4. `503` debug metadata service or debug DAP router unavailable
+
+## 9. Operational Queries
 
 List modules:
 
@@ -303,7 +466,7 @@ ORDER BY created_at DESC
 LIMIT 100;
 ```
 
-## 8. Internal Meta Command Surface (For Embedders)
+## 10. Internal Meta Command Surface (For Embedders)
 
 The command names owned by `sys-wasm-meta` are:
 
@@ -327,7 +490,7 @@ In-process adapter code can dispatch admin actions through:
 If no meta leader is routable, routing fails with
 `META_SERVICE_UNAVAILABLE`.
 
-## 9. Troubleshooting
+## 11. Troubleshooting
 
 1. Error: `Replica count must be an odd number >= 3`
    - Fix `replica_count` to odd values (`3`, `5`, `7`, ...).
@@ -339,8 +502,13 @@ If no meta leader is routable, routing fails with
    - Check `services` for `sys-wasm-meta` leader row with non-empty `address`.
 5. Admin query timeout
    - Increase `admin.queryTimeoutMs` config or simplify query.
+6. Error: `Debug route requires tenant and principal headers`
+   - Include `x-tenant-id` and `x-principal` on debug routes.
+7. Error: debug route returns `403`
+   - Ensure `x-roles` includes one of `debug_admin`, `debug_attach`,
+     `debug_read`, `debug_write` for the requested operation.
 
-## 10. Current Implementation Notes
+## 12. Current Implementation Notes
 
 1. The external node API exposes SQL/refresh over WebSocket on fixed port
    `8081` as the stable user ingress.
@@ -349,8 +517,11 @@ If no meta leader is routable, routing fails with
 3. `streamOperations` exists in command constants; polling `wasm_operations` is
    the practical operator workflow unless stream wiring is enabled in your
    branch.
+4. Debug metadata tables (`debug_sessions`, `debug_breakpoints`,
+   `debug_snapshots`) follow SQL/CDC ownership; no direct cache writes are
+   allowed in debug paths.
 
-## 11. Related Docs
+## 13. Related Docs
 
 1. `docs/component-distribution.md` (package identity, OCI refs, dependency locks)
 2. `docs/admin-migration-guide.md` (migration to meta-service owned admin paths)

@@ -11,8 +11,20 @@ const MODULE_MANIFEST_FIELD = Object.freeze({
   EXPORTS: 'exports',
   DEPENDENCIES: 'dependencies',
   CAPABILITIES: 'capabilities',
+  DEBUG_ARTIFACT: 'debugArtifact',
   SOURCE_REFERENCE: 'sourceReference',
   ARTIFACT_POINTER: 'artifactPointer',
+});
+
+const DEBUG_ARTIFACT_FIELD = Object.freeze({
+  MODE: 'mode',
+  SIDECAR_URI: 'sidecarUri',
+  EMBEDDED_SECTION: 'embeddedSection',
+});
+
+const DEBUG_ARTIFACT_MODE = Object.freeze({
+  EMBEDDED: 'embedded',
+  SIDECAR: 'sidecar',
 });
 
 const MODULE_DEPENDENCY_FIELD = Object.freeze({
@@ -64,6 +76,14 @@ const MODULE_MANIFEST_ERROR_MSG = Object.freeze({
     'Dependency digest must start with sha256: followed by 64 hex chars',
   CAPABILITIES_NOT_ARRAY:
     'Module capabilities must be an array of strings',
+  DEBUG_ARTIFACT_INVALID:
+    'debugArtifact must be an object when declared',
+  DEBUG_ARTIFACT_MODE_INVALID:
+    'debugArtifact.mode must be one of: embedded, sidecar',
+  DEBUG_ARTIFACT_SIDECAR_URI_REQUIRED:
+    'debugArtifact.sidecarUri or artifactPointer is required for sidecar mode',
+  DEBUG_ARTIFACT_EMBEDDED_SECTION_INVALID:
+    'debugArtifact.embeddedSection must be a non-empty string when provided',
   UNDECLARED_CAPABILITY:
     'Module declares capability not in tenant allowlist',
   RUN_EXPORT_MISSING_IN_MODULE:
@@ -146,6 +166,8 @@ export {
   MODULE_MANIFEST_FIELD,
   MODULE_DEPENDENCY_FIELD,
   MODULE_MANIFEST_COL,
+  DEBUG_ARTIFACT_FIELD,
+  DEBUG_ARTIFACT_MODE,
   DIGEST_PREFIX,
   DIGEST_HEX_LENGTH,
   MODULE_MANIFEST_ERROR_MSG,

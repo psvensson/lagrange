@@ -5,7 +5,7 @@ TAP version 14
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - constructor initializes with default state # time=19.87ms
+    ok 1 - constructor initializes with default state # time=16.857ms
     
     # Subtest: displaySelectResult sets result state
         ok 1 - should be equal
@@ -13,49 +13,49 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equivalent
         1..4
-    ok 2 - displaySelectResult sets result state # time=2.038ms
+    ok 2 - displaySelectResult sets result state # time=1.728ms
     
     # Subtest: displaySelectResult handles empty results
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 3 - displaySelectResult handles empty results # time=0.532ms
+    ok 3 - displaySelectResult handles empty results # time=0.493ms
     
     # Subtest: displaySelectResult extracts columns from rows
         ok 1 - should be equivalent
         1..1
-    ok 4 - displaySelectResult extracts columns from rows # time=0.452ms
+    ok 4 - displaySelectResult extracts columns from rows # time=0.271ms
     
     # Subtest: displayWriteResult handles INSERT
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 5 - displayWriteResult handles INSERT # time=0.629ms
+    ok 5 - displayWriteResult handles INSERT # time=0.383ms
     
     # Subtest: displayWriteResult handles UPDATE
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 6 - displayWriteResult handles UPDATE # time=0.457ms
+    ok 6 - displayWriteResult handles UPDATE # time=0.428ms
     
     # Subtest: displayWriteResult handles DELETE
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 7 - displayWriteResult handles DELETE # time=0.433ms
+    ok 7 - displayWriteResult handles DELETE # time=0.391ms
     
     # Subtest: displayError sets error state
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 8 - displayError sets error state # time=0.575ms
+    ok 8 - displayError sets error state # time=0.507ms
     
     # Subtest: displayError handles missing message
         ok 1 - should be equal
         1..1
-    ok 9 - displayError handles missing message # time=0.36ms
+    ok 9 - displayError handles missing message # time=0.283ms
     
     # Subtest: clear resets all state
         ok 1 - should be equal
@@ -63,157 +63,157 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 10 - clear resets all state # time=0.702ms
+    ok 10 - clear resets all state # time=0.559ms
     
     # Subtest: getTableData returns formatted data
         ok 1 - should be equivalent
         ok 2 - should be equal
         1..2
-    ok 11 - getTableData returns formatted data # time=0.705ms
+    ok 11 - getTableData returns formatted data # time=0.578ms
     
     # Subtest: getTableData returns empty for error
         ok 1 - should be equivalent
         ok 2 - should be equivalent
         1..2
-    ok 12 - getTableData returns empty for error # time=0.548ms
+    ok 12 - getTableData returns empty for error # time=0.331ms
     
     # Subtest: formatCell handles null
         ok 1 - should be equal
         1..1
-    ok 13 - formatCell handles null # time=0.321ms
+    ok 13 - formatCell handles null # time=0.179ms
     
     # Subtest: formatCell handles undefined
         ok 1 - should be equal
         1..1
-    ok 14 - formatCell handles undefined # time=0.327ms
+    ok 14 - formatCell handles undefined # time=0.183ms
     
     # Subtest: formatCell handles objects
         ok 1 - should be equal
         1..1
-    ok 15 - formatCell handles objects # time=0.413ms
+    ok 15 - formatCell handles objects # time=0.268ms
     
     # Subtest: formatCell truncates long objects
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 16 - formatCell truncates long objects # time=0.52ms
+    ok 16 - formatCell truncates long objects # time=0.302ms
     
     # Subtest: formatCell handles booleans
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 17 - formatCell handles booleans # time=0.408ms
+    ok 17 - formatCell handles booleans # time=0.231ms
     
     # Subtest: formatCell handles strings and numbers
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 18 - formatCell handles strings and numbers # time=0.45ms
+    ok 18 - formatCell handles strings and numbers # time=0.228ms
     
     # Subtest: getStatusLine for SELECT result
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 19 - getStatusLine for SELECT result # time=0.636ms
+    ok 19 - getStatusLine for SELECT result # time=0.397ms
     
     # Subtest: getStatusLine for single row
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 20 - getStatusLine for single row # time=0.516ms
+    ok 20 - getStatusLine for single row # time=0.31ms
     
     # Subtest: getStatusLine for INSERT result
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 21 - getStatusLine for INSERT result # time=0.422ms
+    ok 21 - getStatusLine for INSERT result # time=0.29ms
     
     # Subtest: getStatusLine for error
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 22 - getStatusLine for error # time=0.434ms
+    ok 22 - getStatusLine for error # time=0.228ms
     
     # Subtest: getStatusLine truncates many partitions
         ok 1 - should be equal
         1..1
-    ok 23 - getStatusLine truncates many partitions # time=0.347ms
+    ok 23 - getStatusLine truncates many partitions # time=0.197ms
     
     # Subtest: getMessageContent for write result
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 24 - getMessageContent for write result # time=0.502ms
+    ok 24 - getMessageContent for write result # time=0.283ms
     
     # Subtest: getMessageContent for empty result
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 25 - getMessageContent for empty result # time=0.478ms
+    ok 25 - getMessageContent for empty result # time=0.265ms
     
     # Subtest: getErrorMessage includes all error details
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 26 - getErrorMessage includes all error details # time=0.649ms
+    ok 26 - getErrorMessage includes all error details # time=0.305ms
     
     # Subtest: scrollUp decreases scroll position
         ok 1 - should be equal
         1..1
-    ok 27 - scrollUp decreases scroll position # time=0.402ms
+    ok 27 - scrollUp decreases scroll position # time=0.193ms
     
     # Subtest: scrollUp stops at 0
         ok 1 - should be equal
         1..1
-    ok 28 - scrollUp stops at 0 # time=0.452ms
+    ok 28 - scrollUp stops at 0 # time=0.175ms
     
     # Subtest: scrollDown increases scroll position
         ok 1 - should be equal
         1..1
-    ok 29 - scrollDown increases scroll position # time=0.431ms
+    ok 29 - scrollDown increases scroll position # time=0.225ms
     
     # Subtest: scrollDown stops at max
         ok 1 - should be equal
         1..1
-    ok 30 - scrollDown stops at max # time=0.34ms
+    ok 30 - scrollDown stops at max # time=0.17ms
     
     # Subtest: getSelectedRow returns current row
         ok 1 - should be equivalent
         1..1
-    ok 31 - getSelectedRow returns current row # time=1.096ms
+    ok 31 - getSelectedRow returns current row # time=0.648ms
     
     # Subtest: getSelectedRow returns null for no results
         ok 1 - should be equal
         1..1
-    ok 32 - getSelectedRow returns null for no results # time=0.398ms
+    ok 32 - getSelectedRow returns null for no results # time=0.236ms
     
     # Subtest: hasResults returns true for valid results
         ok 1 - should be equal
         1..1
-    ok 33 - hasResults returns true for valid results # time=0.373ms
+    ok 33 - hasResults returns true for valid results # time=0.202ms
     
     # Subtest: hasResults returns false for error
         ok 1 - should be equal
         1..1
-    ok 34 - hasResults returns false for error # time=0.344ms
+    ok 34 - hasResults returns false for error # time=0.173ms
     
     # Subtest: hasError returns true for error
         ok 1 - should be equal
         1..1
-    ok 35 - hasError returns true for error # time=0.398ms
+    ok 35 - hasError returns true for error # time=0.27ms
     
     # Subtest: hasError returns false for valid results
         ok 1 - should be equal
         1..1
-    ok 36 - hasError returns false for valid results # time=0.337ms
+    ok 36 - hasError returns false for valid results # time=0.203ms
     
     # Subtest: emits update events
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 37 - emits update events # time=0.597ms
+    ok 37 - emits update events # time=0.329ms
     
     # Subtest: RESULT_TYPE constants are correct
         ok 1 - should be equal
@@ -223,11 +223,11 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 38 - RESULT_TYPE constants are correct # time=0.794ms
+    ok 38 - RESULT_TYPE constants are correct # time=0.43ms
     
     1..38
-ok 1 - ResultsPanel # time=51.775ms
+ok 1 - ResultsPanel # time=37.512ms
 
 1..1
 # { total: 73, pass: 73 }
-# time=66.236ms
+# time=51.455ms

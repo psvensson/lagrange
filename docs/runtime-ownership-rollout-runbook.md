@@ -94,3 +94,105 @@ Source: `src/admin/admin-constants.js`,
    `.kiro/specs/runtime-ownership-closure/completion-gates.md` are complete.
 2. `closure-matrix.md` includes evidence for all `S1..S10`.
 3. Admin mode state and OCI gate state are explicitly recorded for release.
+
+## 6. Ownership Notes for Examples Runtime Closure
+
+### 6.1 Partition Callback Invocation Contract
+
+Callback execution ownership is now explicit and single-path:
+
+1. Admin ingress accepts `partition_callback` envelopes.
+2. Admin maps payload into canonical `createSqlRequest(...)` with
+   `executionMode: PARTITION_CALLBACK`.
+3. SQL dispatch uses `SqlQueryEngine.executeRequest(...)` callback mode.
+4. Callback invocation is owned by `CallbackExecutionHost` (no parallel executor
+   path).
+
+Primary sources:
+
+- `src/admin/admin-websocket-api.js`
+- `src/query/sql-query-engine.js`
+- `src/query/callback-execution-host.js`
+
+### 6.2 WASM Stub Closure Ownership
+
+WASM stub closures follow existing ownership boundaries:
+
+1. `ModuleMirror` owns local module cache entries only.
+2. Cache invalidation is wired from canonical CDC events on `code` table
+   updates (no parallel cache owner).
+3. `WasmServiceLifecycle.startReplica(...)` is fail-closed when required module
+   artifacts are unavailable and records startup diagnostics.
+4. `WasmServiceReplica.flushRoleUpdate()` and
+   `flushLeaderNodeUpdate()` write through owner callbacks or
+   `cdcIntegrationService.updateSystemTableRow(...)` only.
+5. No direct `SystemTableCache` mutations are allowed in these paths.
+
+Primary sources:
+
+- `src/wasm-service/module-mirror.js`
+- `src/wasm-service/wasm-service-lifecycle.js`
+- `src/wasm-service/wasm-service-replica.js`
+
+## 7. Ownership Notes for Debug Runtime Foundation Closure
+
+### 7.1 Debug Metadata Ownership
+
+Debug metadata ownership is now explicit and SQL/CDC-only:
+
+1. `debug_sessions`, `debug_breakpoints`, and `debug_snapshots` are system
+   tables with canonical schema registration.
+2. `DebugMetadataStore` is the single owner for debug metadata read/write
+   behavior.
+3. The store persists and reads through `SqlQueryEngine.executeRequest(...)`
+   using canonical `SqlRequest` envelopes only.
+4. Cross-tenant reads are prevented by tenant-scoped filters on all metadata
+   queries.
+5. No direct `SystemTableCache` mutation is allowed for debug metadata.
+
+Primary sources:
+
+- `src/bootstrap/system-table-schemas-constants.js`
+- `src/debug-runtime/debug-metadata-service.js`
+- `src/cache/cache-constants.js`
+- `src/admin/admin-websocket-api.js`
+
+### 7.2 Debug Ingress Ownership and Security Contract
+
+Admin ingress routes are compatibility adapters; debug ownership remains in the
+metadata store and DAP router components:
+
+1. Debug routes are exposed under `/api/admin/debug/*` on existing admin
+   ingress.
+2. Required headers on debug routes:
+   - `x-tenant-id`
+   - `x-principal`
+   - `x-roles` (comma-separated debug roles)
+3. Error mapping expectations:
+   - `401`: missing/invalid security context
+   - `403`: role authorization denied
+   - `404`: session/snapshot not found
+   - `503`: debug metadata store or DAP router unavailable
+
+Primary sources:
+
+- `src/admin/admin-constants.js`
+- `src/admin/admin-websocket-api.js`
+- `src/debug-runtime/debug-metadata-service-constants.js`
+
+### 7.3 Rollout Validation and Rollback Guidance
+
+Validation checklist before promotion:
+
+1. `test/debug-runtime/debug-metadata-service.test.js` is green.
+2. `test/admin/admin-websocket-api.test.js` debug ingress tests are green.
+3. `test/debug-runtime/distributed-debug-e2e.integration.test.js` is green.
+4. `test/debug-runtime/debug-overhead-regression.test.js` is green.
+
+If production issues appear after rollout:
+
+1. Keep metadata schemas and rows in place (non-destructive rollback).
+2. Temporarily disable debug attach clients or debug ingress routing while
+   preserving SQL/CDC metadata ownership.
+3. Investigate route-level failures by checking error code mapping first
+   (security-context, authorization, not-found, unavailable).

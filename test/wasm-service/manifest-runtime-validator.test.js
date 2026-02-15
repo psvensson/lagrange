@@ -7,9 +7,11 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  RUNTIME_VALIDATION_ERROR_MSG,
   validateRunExportExists,
   validateRunExportSignature,
   validateManifestRuntime,
+  validateManifestRuntimeWithAdapter,
 } from '../../src/wasm-service/manifest-runtime-validator.js';
 import {
   MODULE_MANIFEST_ERROR_MSG as ERR,
@@ -40,6 +42,34 @@ function makeModuleExports(overrides = {}) {
     run_batch: function runBatch(_ctx, _batch) {},
     init: function init() {},
     teardown: function teardown() {},
+    ...overrides,
+  };
+}
+
+function makeModuleEntry(overrides = {}) {
+  return {
+    manifest: makeValidManifest(),
+    exports: makeModuleExports(),
+    ...overrides,
+  };
+}
+
+function makeRuntimeAdapter(overrides = {}) {
+  return {
+    async createInstance() {
+      return {
+        instanceHandle: {
+          instanceId: 'inst-1',
+          moduleRef: 'mod-1',
+        },
+      };
+    },
+    async inspect() {
+      return {exportNames: ['run_batch', 'init', 'teardown']};
+    },
+    async destroyInstance() {
+      return {destroyed: true};
+    },
     ...overrides,
   };
 }
@@ -197,6 +227,59 @@ test('validateManifestRuntime - 3-param export passes', (t) => {
   const result = validateManifestRuntime(manifest, exports_);
   t.ok(result.valid);
   t.equal(result.errors.length, 0);
+  t.end();
+});
+
+test('validateManifestRuntimeWithAdapter - valid runtime instance' +
+  ' verification', async (t) => {
+  const manifest = makeValidManifest();
+  const moduleEntry = makeModuleEntry({manifest});
+  const runtimeAdapter = makeRuntimeAdapter();
+  const result = await validateManifestRuntimeWithAdapter(
+    manifest,
+    moduleEntry,
+    runtimeAdapter,
+    'mod-runtime',
+  );
+  t.ok(result.valid);
+  t.equal(result.errors.length, 0);
+  t.end();
+});
+
+test('validateManifestRuntimeWithAdapter - rejects missing adapter' +
+  ' methods', async (t) => {
+  const manifest = makeValidManifest();
+  const moduleEntry = makeModuleEntry({manifest});
+  const result = await validateManifestRuntimeWithAdapter(
+    manifest,
+    moduleEntry,
+    {},
+    'mod-runtime',
+  );
+  t.notOk(result.valid);
+  t.ok(result.errors.includes(
+    RUNTIME_VALIDATION_ERROR_MSG.ADAPTER_REQUIRED,
+  ));
+  t.end();
+});
+
+test('validateManifestRuntimeWithAdapter - rejects when inspect' +
+  ' export list misses run_export', async (t) => {
+  const manifest = makeValidManifest();
+  const moduleEntry = makeModuleEntry({manifest});
+  const runtimeAdapter = makeRuntimeAdapter({
+    async inspect() {
+      return {exportNames: ['init', 'teardown']};
+    },
+  });
+  const result = await validateManifestRuntimeWithAdapter(
+    manifest,
+    moduleEntry,
+    runtimeAdapter,
+    'mod-runtime',
+  );
+  t.notOk(result.valid);
+  t.ok(result.errors.includes(ERR.RUN_EXPORT_MISSING_IN_MODULE));
   t.end();
 });
 

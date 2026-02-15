@@ -18,6 +18,7 @@ import {
 import {LogCollector} from './log-collector.js';
 import {LogAnalyzer} from './log-analyzer.js';
 import {PlaybackRecorder} from './playback-recorder.js';
+import {TraceArtifactRecorder} from './trace-artifact-recorder.js';
 import {
   PORTS,
   TIMEOUTS,
@@ -41,6 +42,7 @@ const BOOTSTRAP_HEALTH_PATH = '/health';
 const WS_HOST_ENV_KEY = 'TRANSPORT_WS_HOST';
 const WS_BIND_ALL_HOST = '0.0.0.0';
 const QUERY_MESSAGE_TYPE = 'query';
+const PARTITION_CALLBACK_MESSAGE_TYPE = 'partition_callback';
 const QUERY_RESULT_MESSAGE_TYPE = 'query_result';
 const CDC_EVENT_MESSAGE_TYPE = 'cdc_event';
 const LIVE_QUERY_EVENT_MESSAGE_TYPE = 'live_query_event';
@@ -125,17 +127,66 @@ class NodeHandle {
    * Connects to ws://{ip}:8081/api/admin/stream, sends SQL,
    * returns results.
    */
-  async query(sql) {
+  async query(sql, params = []) {
+    return this._sendAdminRequest(
+      {
+        type: QUERY_MESSAGE_TYPE,
+        sql,
+        params: Array.isArray(params) ? params : [],
+      },
+      'query',
+    );
+  }
+
+  /**
+   * Execute a partition callback via Admin API WebSocket.
+   * @param {Object} payload
+   * @param {string} payload.statement - SELECT statement.
+   * @param {Array<*>} [payload.parameters] - Bind parameters.
+   * @param {string} payload.callbackModuleRef - Module reference.
+   * @param {string} payload.callbackExport - Callback export.
+   * @param {string} payload.runtimeKind - Runtime kind.
+   * @returns {Promise<Object>} Callback execution result payload.
+   */
+  async partitionCallback(payload) {
+    if (!payload || typeof payload !== 'object') {
+      throw new Error(
+        'Partition callback payload must be an object for node ' +
+        this.id,
+      );
+    }
+    return this._sendAdminRequest(
+      {
+        type: PARTITION_CALLBACK_MESSAGE_TYPE,
+        statement: payload.statement,
+        parameters: Array.isArray(payload.parameters) ?
+          payload.parameters :
+          [],
+        callbackModuleRef: payload.callbackModuleRef,
+        callbackExport: payload.callbackExport,
+        runtimeKind: payload.runtimeKind,
+      },
+      'partition callback',
+    );
+  }
+
+  /**
+   * Send one request over the shared admin socket and await query_result.
+   * @param {Object} requestPayload
+   * @param {string} operationLabel
+   * @returns {Promise<Object>}
+   * @private
+   */
+  async _sendAdminRequest(requestPayload, operationLabel) {
     const ws = await this._getAdminSocket();
-    const queryId = 'q-' + Date.now() + '-' +
-      Math.random().toString(36).slice(2);
+    const queryId = this._nextQueryId();
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this._pendingQueries.delete(queryId);
         reject(new Error(
-          'Admin API query timed out for node ' + this.id +
-          ' after ' + ADMIN_QUERY_TIMEOUT_MS + 'ms',
+          'Admin API ' + operationLabel + ' timed out for node ' +
+          this.id + ' after ' + ADMIN_QUERY_TIMEOUT_MS + 'ms',
         ));
       }, ADMIN_QUERY_TIMEOUT_MS);
 
@@ -143,13 +194,13 @@ class NodeHandle {
         resolve,
         reject,
         timeout,
+        operationLabel,
       });
 
       try {
         ws.send(JSON.stringify({
-          type: QUERY_MESSAGE_TYPE,
+          ...requestPayload,
           queryId,
-          sql,
         }));
       } catch (err) {
         this._pendingQueries.delete(queryId);
@@ -161,11 +212,21 @@ class NodeHandle {
           // Best-effort cleanup
         }
         reject(new Error(
-          'Admin API query failed for node ' +
+          'Admin API ' + operationLabel + ' failed for node ' +
           this.id + ': ' + err.message,
         ));
       }
     });
+  }
+
+  /**
+   * Build stable request IDs for admin socket requests.
+   * @returns {string}
+   * @private
+   */
+  _nextQueryId() {
+    return 'q-' + Date.now() + '-' +
+      Math.random().toString(36).slice(2);
   }
 
   /**
@@ -311,7 +372,8 @@ class NodeHandle {
 
     if (parsed.error) {
       pending.reject(new Error(
-        'Admin API query failed for node ' +
+        'Admin API ' + (pending.operationLabel || 'request') +
+        ' failed for node ' +
         this.id + ': ' + parsed.error,
       ));
       return;
@@ -326,6 +388,9 @@ class NodeHandle {
       tableName: parsed.tableName,
       operation: parsed.operation,
       affectedRows: parsed.affectedRows,
+      hostResult: parsed.hostResult,
+      callbackModuleRef: parsed.callbackModuleRef,
+      callbackExport: parsed.callbackExport,
       warning: parsed.warning,
     });
   }
@@ -475,6 +540,9 @@ class Cluster {
     });
     this._playbackManifest = null;
     this._playbackStartWarning = null;
+    this._traceRecorder = null;
+    this._traceManifest = null;
+    this._traceStartWarning = null;
   }
 
   /**
@@ -633,6 +701,26 @@ class Cluster {
       },
     );
 
+    if (this._config.debugTrace &&
+      this._config.debugTrace.enabled === true) {
+      try {
+        this._traceRecorder = new TraceArtifactRecorder({
+          outputDir: this._config.outputDir,
+        });
+        await this._traceRecorder.start({
+          scenarioName: this._scenarioName,
+          node: seedNode,
+          debugTrace: this._config.debugTrace,
+        });
+        this._traceManifest = null;
+        this._traceStartWarning = null;
+      } catch (error) {
+        this._traceStartWarning =
+          'Failed to initialize trace capture: ' +
+          error.message;
+      }
+    }
+
     // Initialize chaos primitives now that nodes and network exist
     const primaryProvider =
       this._providers[this._hostAssignment[0]];
@@ -693,6 +781,16 @@ class Cluster {
       await this._logCollector.stopSubscription();
     } catch (_err) {
       // Best-effort cleanup
+    }
+
+    if (this._traceRecorder) {
+      try {
+        this._traceManifest = await this._traceRecorder.stop();
+      } catch (err) {
+        this._traceManifest = {
+          warning: 'Failed to finalize trace artifacts: ' + err.message,
+        };
+      }
     }
 
     for (const [nodeId, node] of this._nodes) {
@@ -780,6 +878,9 @@ class Cluster {
       }, {
         skipFinalCapture: true,
       });
+      if (this._traceManifest && this._playbackManifest) {
+        this._playbackManifest.trace = this._traceManifest;
+      }
       if (this._playbackStartWarning && this._playbackManifest) {
         this._playbackManifest.warning = this._playbackStartWarning;
       } else if (this._playbackStartWarning &&
@@ -787,6 +888,9 @@ class Cluster {
         this._playbackManifest = {
           warning: this._playbackStartWarning,
         };
+      }
+      if (this._traceStartWarning && this._playbackManifest) {
+        this._playbackManifest.traceWarning = this._traceStartWarning;
       }
     } catch (err) {
       errors.push(
@@ -1034,6 +1138,20 @@ class Cluster {
    */
   getPlaybackManifest() {
     return this._playbackManifest;
+  }
+
+  /**
+   * Get finalized trace manifest generated on stop().
+   * @returns {Object|null}
+   */
+  getTraceManifest() {
+    if (this._traceManifest) {
+      return this._traceManifest;
+    }
+    if (this._traceStartWarning) {
+      return {warning: this._traceStartWarning};
+    }
+    return null;
   }
 
   // --- Internal helpers ---

@@ -1,53 +1,47 @@
 TAP version 14
 Executing distributed SELECT {
-  partitionCount: 1,
-  timestamp: '1771145020337-0-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1771145020340-0-query-executor',
+  partitionCount: 3,
+  timestamp: '1771161438070-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1771145020341-0-query-executor',
+  timestamp: '1771161438072-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1771161438072-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020341-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1771145020342-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1771145020343-1-query-executor',
+  timestamp: '1771161438073-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1771161438073-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020344-0-query-executor',
+  timestamp: '1771161438074-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -55,14 +49,21 @@ Routing query to partition service { partitionId: 'p0', address: 'test-node/part
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1771145020344-1-query-executor',
+  timestamp: '1771161438074-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Executing distributed SELECT {
+  partitionCount: 1,
+  timestamp: '1771161438075-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020345-1-query-executor',
+  timestamp: '1771161438075-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -70,7 +71,7 @@ Routing query to partition service { partitionId: 'p0', address: 'test-node/part
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020346-1-query-executor',
+  timestamp: '1771161438076-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -79,11 +80,11 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 # Subtest: Property 10: SQL Query Distribution
     ok 1 - SQL query distribution preserves all rows across partitions
     1..1
-ok 1 - Property 10: SQL Query Distribution # time=23.523ms
+ok 1 - Property 10: SQL Query Distribution # time=15.802ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020356-0-query-executor',
+  timestamp: '1771161438083-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -91,7 +92,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020357-1-query-executor',
+  timestamp: '1771161438084-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -99,7 +100,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020358-1-query-executor',
+  timestamp: '1771161438084-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -107,7 +108,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020359-1-query-executor',
+  timestamp: '1771161438085-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -115,7 +116,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020360-1-query-executor',
+  timestamp: '1771161438085-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -123,7 +124,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020361-1-query-executor',
+  timestamp: '1771161438086-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -131,7 +132,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020362-1-query-executor',
+  timestamp: '1771161438086-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -139,7 +140,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020363-1-query-executor',
+  timestamp: '1771161438087-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -147,7 +148,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020364-0-query-executor',
+  timestamp: '1771161438088-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -155,7 +156,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020365-1-query-executor',
+  timestamp: '1771161438088-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -164,11 +165,11 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
 # Subtest: Property 10b: ORDER BY preserves ordering
     ok 1 - ORDER BY correctly sorts results from multiple partitions
     1..1
-ok 2 - Property 10b: ORDER BY preserves ordering # time=14.747ms
+ok 2 - Property 10b: ORDER BY preserves ordering # time=8.98ms
 
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020368-0-query-executor',
+  timestamp: '1771161438090-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -176,7 +177,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020369-1-query-executor',
+  timestamp: '1771161438090-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -184,7 +185,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020370-1-query-executor',
+  timestamp: '1771161438091-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -192,7 +193,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020370-1-query-executor',
+  timestamp: '1771161438091-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -200,7 +201,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020371-1-query-executor',
+  timestamp: '1771161438092-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -208,7 +209,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020372-1-query-executor',
+  timestamp: '1771161438092-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -216,7 +217,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020373-1-query-executor',
+  timestamp: '1771161438093-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -224,7 +225,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020376-1-query-executor',
+  timestamp: '1771161438093-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -232,7 +233,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020377-0-query-executor',
+  timestamp: '1771161438094-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -240,7 +241,7 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771145020377-1-query-executor',
+  timestamp: '1771161438094-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
@@ -249,18 +250,18 @@ Routing query to partition service { partitionId: 'p2', address: 'test-node/part
 # Subtest: Property 10c: LIMIT respects count
     ok 1 - LIMIT correctly limits results from multiple partitions
     1..1
-ok 3 - Property 10c: LIMIT respects count # time=11.841ms
+ok 3 - Property 10c: LIMIT respects count # time=6.1ms
 
 # Subtest: Property 41: Query Routing by Key Range
     ok 1 - Query routing places keys in correct partition ranges
     1..1
-ok 4 - Property 41: Query Routing by Key Range # time=9.588ms
+ok 4 - Property 41: Query Routing by Key Range # time=5.546ms
 
 Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'bgggras' ],
+    values: [ 'huf' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -273,7 +274,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'r' ],
+    values: [ 'hey' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -286,7 +287,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'c' ],
+    values: [ 'mxmyuicvh' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -299,7 +300,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'ew' ],
+    values: [ 'nm' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -312,7 +313,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'ck' ],
+    values: [ 'vibdjbrz' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -325,7 +326,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'isy' ],
+    values: [ 'ip' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -338,7 +339,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'z' ],
+    values: [ 'prototype' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -351,7 +352,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'ncrdivs' ],
+    values: [ 'swdyhaobxe' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -364,7 +365,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'hjpk' ],
+    values: [ 'nevh' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -377,7 +378,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'lviwiaoi' ],
+    values: [ 'odam' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -389,48 +390,48 @@ Resolved partitions for query {
 # Subtest: Property 41b: Equals filter routes to single partition
     ok 1 - Equals filter routes to exactly one partition
     1..1
-ok 5 - Property 41b: Equals filter routes to single partition # time=3.786ms
+ok 5 - Property 41b: Equals filter routes to single partition # time=2.55ms
 
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 2 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 4 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 3 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 3 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 5 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 4 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 2 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 5 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 2 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 4 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 3 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 2 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 3 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 4 }
 # Subtest: Property 42: Scatter-Gather for Non-Key Queries
     ok 1 - Non-key queries scatter to all partitions
     1..1
-ok 6 - Property 42: Scatter-Gather for Non-Key Queries # time=2.789ms
+ok 6 - Property 42: Scatter-Gather for Non-Key Queries # time=3.069ms
 
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 1 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 1 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 3 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 10 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 4 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 6 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 1 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 3 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 10 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 2 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 9 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 7 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 6 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 4 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 8 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 10 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 3 }
 # Subtest: Property 42b: No WHERE clause queries all partitions
     ok 1 - Queries without WHERE clause go to all partitions
     1..1
-ok 7 - Property 42b: No WHERE clause queries all partitions # time=2.075ms
+ok 7 - Property 42b: No WHERE clause queries all partitions # time=1.26ms
 
 # Subtest: Property 18: Write Operation Durability - INSERT routing
     ok 1 - INSERT operations route to correct partition
     1..1
-ok 8 - Property 18: Write Operation Durability - INSERT routing # time=0.702ms
+ok 8 - Property 18: Write Operation Durability - INSERT routing # time=0.668ms
 
 Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'pvj' ],
+    values: [ 'c' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -443,7 +444,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'gsslogz' ],
+    values: [ 'wwhlzbnhv' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -456,7 +457,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'szrasux' ],
+    values: [ 'bind' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -469,7 +470,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'gi' ],
+    values: [ 'psly' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -482,7 +483,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'fb' ],
+    values: [ 'calargu' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -495,7 +496,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'rtzlem' ],
+    values: [ 'mpfyukelm' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -508,7 +509,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'bi' ],
+    values: [ 'bivbdd' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -521,7 +522,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'z' ],
+    values: [ 'jn' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -534,7 +535,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'hjnl' ],
+    values: [ 'dorueqnc' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -547,7 +548,7 @@ Resolved partitions for query {
   tableName: 'test',
   keyConditions: {
     type: 'equals',
-    values: [ 'zcfhnxo' ],
+    values: [ 'zxmewqulq' ],
     low: null,
     high: null,
     lowInclusive: true,
@@ -559,23 +560,23 @@ Resolved partitions for query {
 # Subtest: Property 18b: UPDATE with key filter routes correctly
     ok 1 - UPDATE with key filter routes to single partition
     1..1
-ok 9 - Property 18b: UPDATE with key filter routes correctly # time=2.585ms
+ok 9 - Property 18b: UPDATE with key filter routes correctly # time=1.669ms
 
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 3 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 2 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 2 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 5 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 3 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 2 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 5 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 2 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 3 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 4 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 5 }
 No key conditions, using scatter-gather { tableName: 'test', partitionCount: 2 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 2 }
-No key conditions, using scatter-gather { tableName: 'test', partitionCount: 5 }
+No key conditions, using scatter-gather { tableName: 'test', partitionCount: 3 }
 # Subtest: Property 18c: DELETE without key filter affects all partitions
     ok 1 - DELETE without key filter affects all partitions
     1..1
-ok 10 - Property 18c: DELETE without key filter affects all partitions # time=2.666ms
+ok 10 - Property 18c: DELETE without key filter affects all partitions # time=1.392ms
 
 1..10
 # { total: 10, pass: 10 }
-# time=155.526ms
+# time=93.645ms

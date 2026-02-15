@@ -4,10 +4,14 @@ import {
   VALIDATION_STEP,
   VALIDATION_PIPELINE_ERROR_MSG,
   validateCapabilities,
+  validateDebugArtifactPolicy,
   validateResolvedDependencies,
   buildPublishValidationChain,
   validatePublishPipeline,
 } from '../../src/wasm-service/meta-validation-pipeline.js';
+import {
+  DEBUG_CAPABILITY,
+} from '../../src/debug-runtime/debug-runtime-constants.js';
 
 /**
  * Build a minimal valid manifest for testing.
@@ -98,6 +102,43 @@ describe('meta-validation-pipeline', () => {
       });
       assert.equal(result.valid, true);
     });
+
+    it('fails when debug capability is requested without artifact metadata',
+      () => {
+        const manifest = buildValidManifest({
+          capabilities: [DEBUG_CAPABILITY.BREAKPOINT],
+        });
+        const result = validatePublishPipeline({
+          manifest,
+        });
+        assert.equal(result.valid, false);
+        assert.ok(result.errors.includes(
+          VALIDATION_PIPELINE_ERROR_MSG.DEBUG_ARTIFACT_REQUIRED,
+        ));
+      });
+
+    it('passes when debug capability has legacy artifactPointer',
+      () => {
+        const manifest = buildValidManifest({
+          capabilities: [DEBUG_CAPABILITY.SNAPSHOT],
+          artifactPointer: 'oci://debug/test@sha256:def',
+        });
+        const result = validatePublishPipeline({manifest});
+        assert.equal(result.valid, true);
+      });
+
+    it('allows debug artifact downgrade when policy disables requirement',
+      () => {
+        const manifest = buildValidManifest({
+          capabilities: [DEBUG_CAPABILITY.BREAKPOINT],
+        });
+        const result = validatePublishPipeline({
+          manifest,
+          capabilityPolicy: {requireDebugArtifacts: false},
+          tenantAllowlist: [DEBUG_CAPABILITY.BREAKPOINT],
+        });
+        assert.equal(result.valid, true);
+      });
   });
 
   describe('validateCapabilities', () => {
@@ -148,7 +189,7 @@ describe('meta-validation-pipeline', () => {
     it('returns array of step descriptors', () => {
       const chain = buildPublishValidationChain();
       assert.ok(Array.isArray(chain));
-      assert.equal(chain.length, 3);
+      assert.equal(chain.length, 4);
     });
 
     it('each step has name and validate function', () => {
@@ -163,7 +204,8 @@ describe('meta-validation-pipeline', () => {
       const chain = buildPublishValidationChain();
       assert.equal(chain[0].name, VALIDATION_STEP.MANIFEST);
       assert.equal(chain[1].name, VALIDATION_STEP.CAPABILITIES);
-      assert.equal(chain[2].name, VALIDATION_STEP.DEPENDENCIES);
+      assert.equal(chain[2].name, VALIDATION_STEP.DEBUG_ARTIFACTS);
+      assert.equal(chain[3].name, VALIDATION_STEP.DEPENDENCIES);
     });
 
     it('manifest step delegates to validateModuleManifest',
@@ -181,6 +223,40 @@ describe('meta-validation-pipeline', () => {
         assert.equal(invalidResult.valid, false);
         assert.ok(invalidResult.errors.length > 0);
       });
+  });
+
+  describe('validateDebugArtifactPolicy', () => {
+    it('passes when no debug capabilities are declared', () => {
+      const result = validateDebugArtifactPolicy(
+        buildValidManifest(),
+        {},
+      );
+      assert.equal(result.valid, true);
+    });
+
+    it('fails when debug capability has no artifact declaration',
+      () => {
+        const result = validateDebugArtifactPolicy(
+          buildValidManifest({
+            capabilities: [DEBUG_CAPABILITY.BREAKPOINT],
+          }),
+          {},
+        );
+        assert.equal(result.valid, false);
+        assert.ok(result.errors.includes(
+          VALIDATION_PIPELINE_ERROR_MSG.DEBUG_ARTIFACT_REQUIRED,
+        ));
+      });
+
+    it('passes when policy disables debug artifact requirement', () => {
+      const result = validateDebugArtifactPolicy(
+        buildValidManifest({
+          capabilities: [DEBUG_CAPABILITY.SNAPSHOT],
+        }),
+        {requireDebugArtifacts: false},
+      );
+      assert.equal(result.valid, true);
+    });
   });
 
   describe('validateResolvedDependencies', () => {
@@ -224,6 +300,9 @@ describe('meta-validation-pipeline', () => {
       assert.equal(VALIDATION_STEP.MANIFEST, 'manifest');
       assert.equal(
         VALIDATION_STEP.CAPABILITIES, 'capabilities',
+      );
+      assert.equal(
+        VALIDATION_STEP.DEBUG_ARTIFACTS, 'debugArtifacts',
       );
       assert.equal(
         VALIDATION_STEP.DEPENDENCIES, 'dependencies',

@@ -67,6 +67,8 @@ describe('ReportWriter', () => {
       });
       assert.equal(entry.error, null);
       assert.equal(entry.stackTrace, null);
+      assert.equal(entry.trace, null);
+      assert.equal(entry.traceAssertion, null);
     });
 
     it('includes load metrics with latency and throughput', () => {
@@ -201,7 +203,65 @@ describe('ReportWriter', () => {
       assert.equal(entry.convergenceTiming, null);
       assert.equal(entry.error, null);
       assert.equal(entry.stackTrace, null);
+      assert.equal(entry.details, null);
+      assert.equal(entry.exampleResults, null);
       assert.equal(entry.loadMetrics, null);
+      assert.equal(entry.trace, null);
+      assert.equal(entry.traceAssertion, null);
+    });
+
+    it('persists scenario details and exampleResults payload', () => {
+      const entry = buildScenarioEntry('examples-catalog', {
+        passed: true,
+        duration: 1234,
+        details: {
+          artifactPath: 'test-output/examples/run-1.json',
+          exampleResults: {
+            total: 5,
+            passed: 5,
+            failed: 0,
+          },
+        },
+      });
+      assert.deepEqual(entry.details, {
+        artifactPath: 'test-output/examples/run-1.json',
+        exampleResults: {
+          total: 5,
+          passed: 5,
+          failed: 0,
+        },
+      });
+      assert.deepEqual(entry.exampleResults, {
+        total: 5,
+        passed: 5,
+        failed: 0,
+      });
+    });
+
+    it('persists trace artifact summary and assertion metadata', () => {
+      const entry = buildScenarioEntry('trace-scenario', {
+        passed: true,
+        duration: 100,
+        trace: {
+          eventCount: 3,
+          lineageIds: ['lineage-1'],
+        },
+        traceAssertion: {
+          required: true,
+          passed: true,
+          eventCount: 3,
+        },
+      });
+
+      assert.deepEqual(entry.trace, {
+        eventCount: 3,
+        lineageIds: ['lineage-1'],
+      });
+      assert.deepEqual(entry.traceAssertion, {
+        required: true,
+        passed: true,
+        eventCount: 3,
+      });
     });
   });
 

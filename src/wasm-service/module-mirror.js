@@ -11,6 +11,31 @@
  * @module wasm-service/module-mirror
  */
 
+import {COLUMN, TABLES, TYPEOF} from '../constants/index.js';
+import {CDC_EVENT} from '../cdc/cdc-constants.js';
+import {validateManifestRuntimeWithAdapter} from
+  './manifest-runtime-validator.js';
+import {InProcessWasmRuntimeAdapter} from
+  '../debug-runtime/wasm-runtime-adapter.js';
+
+const CODE_CDC_EVENTS = Object.freeze([
+  CDC_EVENT.INSERT,
+  CDC_EVENT.UPDATE,
+  CDC_EVENT.UPSERT,
+  CDC_EVENT.DELETE,
+]);
+
+const MODULE_MIRROR_ERROR_MSG = Object.freeze({
+  PROVIDER_REQUIRED: 'ModuleMirror moduleProvider is required',
+  INVALID_PAYLOAD:
+    'ModuleMirror provider returned invalid module payload',
+  MANIFEST_REQUIRED: 'ModuleMirror provider missing module manifest',
+  EXPORTS_REQUIRED: 'ModuleMirror provider missing module exports',
+  WASM_BYTES_REQUIRED: 'ModuleMirror provider missing wasm bytes',
+  RUNTIME_VALIDATION_FAILED:
+    'ModuleMirror runtime manifest validation failed',
+});
+
 /**
  * Local WASM module cache with version-aware invalidation.
  */
@@ -19,11 +44,29 @@ class ModuleMirror {
    * @param {Object} [options] - Configuration options.
    * @param {Object} [options.messageRouter] - MessageRouter
    *   instance for pulling modules from peer nodes.
+   * @param {Function} [options.moduleProvider] - Async
+   *   provider function (functionId, version, sourceNodeId)
+   *   => {version, wasmBytes, manifest, exports}.
    */
   constructor(options = {}) {
-    /** @type {Map<string, {version: string, wasmBytes: Buffer}>} */
+    /** @type {Map<string, {version: string, wasmBytes: Buffer,
+     *   manifest: Object, exports: Object, updatedAt: number}>} */
     this.localCache = new Map();
     this.messageRouter = options.messageRouter ?? null;
+    this.moduleProvider = options.moduleProvider ?? null;
+    this.runtimeAdapter = options.runtimeAdapter ||
+      new InProcessWasmRuntimeAdapter();
+    this.runtimeManifestValidator =
+      options.runtimeManifestValidator ||
+      validateManifestRuntimeWithAdapter;
+    this.cdcIntegrationService = null;
+    this.boundCdcHandlers = new Map();
+
+    if (options.cdcIntegrationService) {
+      this.bindCdcIntegrationService(
+        options.cdcIntegrationService,
+      );
+    }
   }
 
   /**
@@ -47,7 +90,8 @@ class ModuleMirror {
    * Get the cached module data for a function.
    *
    * @param {string} functionId - The function identifier.
-   * @return {{version: string, wasmBytes: Buffer}|null} The
+   * @return {{version: string, wasmBytes: Buffer,
+   *   manifest: Object, exports: Object, updatedAt: number}|null} The
    *   cached module or null if not present.
    */
   getModule(functionId) {
@@ -57,22 +101,91 @@ class ModuleMirror {
 
   /**
    * Pull a module from a peer node and store it in the local
-   * cache. For now the actual message routing is stubbed —
-   * the module is stored directly in the cache since the full
-   * message protocol is not yet implemented.
+   * cache via the configured module provider.
    *
    * @param {string} functionId - The function identifier.
    * @param {string} version - The module version to pull.
-   * @param {string} _sourceNodeId - The node to pull from
-   *   (unused until message protocol is wired).
+   * @param {string} sourceNodeId - The node to pull from.
    * @return {Promise<void>}
    */
-  async pullModule(functionId, version, _sourceNodeId) {
-    // TODO: Use messageRouter to pull wasmBytes from the
-    // source node once the message protocol is implemented.
-    // For now, store a placeholder entry in the cache.
-    const wasmBytes = Buffer.alloc(0);
-    this.localCache.set(functionId, {version, wasmBytes});
+  async pullModule(functionId, version, sourceNodeId) {
+    if (!this.moduleProvider ||
+      typeof this.moduleProvider !== 'function') {
+      throw new Error(MODULE_MIRROR_ERROR_MSG.PROVIDER_REQUIRED);
+    }
+
+    const modulePayload = await this.moduleProvider(
+      functionId,
+      version,
+      sourceNodeId,
+    );
+    if (!modulePayload || typeof modulePayload !== 'object') {
+      throw new Error(MODULE_MIRROR_ERROR_MSG.INVALID_PAYLOAD);
+    }
+
+    const payloadVersion = modulePayload.version ?? version;
+    const payloadManifest = modulePayload.manifest;
+    const payloadExports = modulePayload.exports;
+    if (!payloadManifest || typeof payloadManifest !== 'object') {
+      throw new Error(MODULE_MIRROR_ERROR_MSG.MANIFEST_REQUIRED);
+    }
+    if (!payloadExports || typeof payloadExports !== 'object') {
+      throw new Error(MODULE_MIRROR_ERROR_MSG.EXPORTS_REQUIRED);
+    }
+
+    let wasmBytes = modulePayload.wasmBytes;
+    if (Buffer.isBuffer(wasmBytes)) {
+      wasmBytes = Buffer.from(wasmBytes);
+    } else if (wasmBytes instanceof Uint8Array) {
+      wasmBytes = Buffer.from(wasmBytes);
+    } else if (typeof wasmBytes === 'string') {
+      wasmBytes = Buffer.from(wasmBytes, 'base64');
+    } else {
+      throw new Error(MODULE_MIRROR_ERROR_MSG.WASM_BYTES_REQUIRED);
+    }
+
+    const moduleEntry = {
+      version: payloadVersion,
+      wasmBytes,
+      manifest: payloadManifest,
+      exports: payloadExports,
+    };
+
+    await this._validateRuntimeManifest(functionId, moduleEntry);
+
+    this.localCache.set(functionId, {
+      ...moduleEntry,
+      updatedAt: Date.now(),
+    });
+  }
+
+  /**
+   * Validate manifest/export runtime contract using the runtime adapter.
+   *
+   * @param {string} functionId - Function identifier.
+   * @param {Object} moduleEntry - Module entry candidate.
+   * @return {Promise<void>}
+   * @private
+   */
+  async _validateRuntimeManifest(functionId, moduleEntry) {
+    const validation = await this.runtimeManifestValidator(
+      moduleEntry.manifest,
+      moduleEntry,
+      this.runtimeAdapter,
+      functionId,
+    );
+
+    if (validation.valid) {
+      return;
+    }
+
+    const detail = Array.isArray(validation.errors) ?
+      validation.errors.join('; ') :
+      'unknown runtime validation failure';
+
+    throw new Error(
+      `${MODULE_MIRROR_ERROR_MSG.RUNTIME_VALIDATION_FAILED}: ${detail}`,
+    );
   }
 
   /**
@@ -92,10 +205,85 @@ class ModuleMirror {
     if (!entry) {
       return;
     }
+    if (!version) {
+      this.localCache.delete(functionId);
+      return;
+    }
     if (entry.version === version) {
       return;
     }
     this.localCache.delete(functionId);
+  }
+
+  /**
+   * Bind module cache invalidation to CDC code-table events.
+   * Uses the existing CDC owner without introducing parallel
+   * cache owners.
+   *
+   * @param {Object} cdcIntegrationService - CDC event emitter.
+   * @return {boolean} True when binding was applied.
+   */
+  bindCdcIntegrationService(cdcIntegrationService) {
+    if (!cdcIntegrationService ||
+      typeof cdcIntegrationService.on !== TYPEOF.FUNCTION ||
+      typeof cdcIntegrationService.off !== TYPEOF.FUNCTION) {
+      return false;
+    }
+
+    this.unbindCdcIntegrationService();
+
+    this.cdcIntegrationService = cdcIntegrationService;
+    for (const eventName of CODE_CDC_EVENTS) {
+      const handler = (event) => this._handleCodeCdcEvent(event);
+      this.boundCdcHandlers.set(eventName, handler);
+      cdcIntegrationService.on(eventName, handler);
+    }
+
+    return true;
+  }
+
+  /**
+   * Remove previously bound CDC listeners.
+   */
+  unbindCdcIntegrationService() {
+    if (!this.cdcIntegrationService ||
+      typeof this.cdcIntegrationService.off !== TYPEOF.FUNCTION) {
+      this.cdcIntegrationService = null;
+      this.boundCdcHandlers.clear();
+      return;
+    }
+
+    for (const [eventName, handler] of this.boundCdcHandlers) {
+      this.cdcIntegrationService.off(eventName, handler);
+    }
+
+    this.cdcIntegrationService = null;
+    this.boundCdcHandlers.clear();
+  }
+
+  /**
+   * Handle a CDC event and invalidate cached module entries
+   * for code-table changes.
+   *
+   * @param {Object} event - CDC event payload.
+   * @private
+   */
+  _handleCodeCdcEvent(event) {
+    if (!event || event.tableName !== TABLES.CODE) {
+      return;
+    }
+
+    const functionId = event.data?.[COLUMN.FUNCTION_ID] ||
+      event.whereClause?.[COLUMN.FUNCTION_ID] ||
+      null;
+    if (!functionId) {
+      return;
+    }
+
+    const version = event.data?.[COLUMN.VERSION] ||
+      event.whereClause?.[COLUMN.VERSION] ||
+      null;
+    this.onCodeUpdate(functionId, version);
   }
 }
 

@@ -3,51 +3,51 @@ TAP version 14
     # Subtest: delay doubles with each attempt
         ok 1 - Delay doubles with each attempt
         1..1
-    ok 1 - delay doubles with each attempt # time=4.127ms
+    ok 1 - delay doubles with each attempt # time=3.242ms
     
     # Subtest: delay is capped at maxDelay
         ok 1 - Delay is capped at maxDelay
         1..1
-    ok 2 - delay is capped at maxDelay # time=0.852ms
+    ok 2 - delay is capped at maxDelay # time=0.676ms
     
     # Subtest: delay is at least baseDelay for first attempt
         ok 1 - Delay is at least baseDelay for first attempt
         1..1
-    ok 3 - delay is at least baseDelay for first attempt # time=0.615ms
+    ok 3 - delay is at least baseDelay for first attempt # time=0.571ms
     
     # Subtest: consecutive delays are monotonically increasing until cap
         ok 1 - Consecutive delays are monotonically increasing until cap
         1..1
-    ok 4 - consecutive delays are monotonically increasing until cap # time=0.474ms
+    ok 4 - consecutive delays are monotonically increasing until cap # time=0.414ms
     
     # Subtest: delay is always positive
         ok 1 - Delay is always positive
         1..1
-    ok 5 - delay is always positive # time=0.423ms
+    ok 5 - delay is always positive # time=0.377ms
     
     # Subtest: scheduleReconnect increments attempt counter
         ok 1 - scheduleReconnect increments attempt counter
         1..1
-    ok 6 - scheduleReconnect increments attempt counter # time=0.601ms
+    ok 6 - scheduleReconnect increments attempt counter # time=2.492ms
     
     # Subtest: scheduleReconnect sets status to failed after max attempts
         ok 1 - scheduleReconnect sets status to failed after max attempts
         1..1
-    ok 7 - scheduleReconnect sets status to failed after max attempts # time=0.443ms
+    ok 7 - scheduleReconnect sets status to failed after max attempts # time=0.637ms
     
     # Subtest: scheduleReconnect sets status to reconnecting
         ok 1 - scheduleReconnect sets status to reconnecting
         1..1
-    ok 8 - scheduleReconnect sets status to reconnecting # time=0.506ms
+    ok 8 - scheduleReconnect sets status to reconnecting # time=0.717ms
     
     # Subtest: resetReconnectAttempts resets counter to zero
         ok 1 - resetReconnectAttempts resets counter to zero
         1..1
-    ok 9 - resetReconnectAttempts resets counter to zero # time=0.458ms
+    ok 9 - resetReconnectAttempts resets counter to zero # time=0.621ms
     
     1..9
-ok 1 - Property 12: Reconnection Backoff # time=13.583ms
+ok 1 - Property 12: Reconnection Backoff # time=15.192ms
 
 1..1
 # { total: 9, pass: 9 }
-# time=16.804ms
+# time=18.829ms

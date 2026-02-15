@@ -69,10 +69,10 @@ class WasmComponentCallbackDriver {
    * @param {object} batch - {partitionId, rows}.
    * @param {object} descriptor - Callback descriptor with
    *   callbackModuleRef and callbackExport.
-   * @param {object} _options - Execution options (unused).
+   * @param {object} options - Execution options.
    * @return {Promise<Array>} Result rows.
    */
-  async invokeCallback(batch, descriptor, _options) {
+  async invokeCallback(batch, descriptor, options) {
     if (!this.wasmExecutor) {
       throw new Error(
         ADAPTER_ERROR_MSG.CALLBACK_HOST_UNSUPPORTED_RUNTIME +
@@ -86,11 +86,14 @@ class WasmComponentCallbackDriver {
     const context = {
       partitionId: batch.partitionId,
       callbackExport: descriptor.callbackExport,
+      callbackContext: options?.callbackContext || null,
+      debugScope: options?.debugScope || null,
+      debug: options?.debug || null,
     };
     const args = {rows: batch.rows};
 
     const execResult = await this.wasmExecutor.execute(
-      func, context, args,
+      func, context, args, options || {},
     );
 
     const result = execResult.result;

@@ -1,0 +1,9 @@
+test/integration/node-join-replica-activation.integration.test.js
+test/integration/three-node-seed-rebalance.integration.test.js
+test/integration/seed-node-bootstrap.integration.test.js
+test/integration/cdc-propagation.integration.test.js
+test/integration/multi-node-raft-replication.integration.test.js
+test/integration/multi-node-cluster.integration.test.js
+test/integration/critical-partition-learner-safety.integration.test.js
+test/integration/leader-routable-system-writes.integration.test.js
+test/integration/cross-node-replica-placement.integration.test.js

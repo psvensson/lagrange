@@ -3,66 +3,66 @@ TAP version 14
     # Subtest: SELECT results include row count
         ok 1 - SELECT results include row count
         1..1
-    ok 1 - SELECT results include row count # time=14.128ms
+    ok 1 - SELECT results include row count # time=9.475ms
     
     # Subtest: SELECT results include execution time
         ok 1 - SELECT results include execution time
         1..1
-    ok 2 - SELECT results include execution time # time=2.629ms
+    ok 2 - SELECT results include execution time # time=1.624ms
     
     # Subtest: SELECT results include partition information
         ok 1 - SELECT results include partition information
         1..1
-    ok 3 - SELECT results include partition information # time=3.695ms
+    ok 3 - SELECT results include partition information # time=2.023ms
     
     # Subtest: INSERT results include affected rows
         ok 1 - INSERT results include affected rows
         1..1
-    ok 4 - INSERT results include affected rows # time=0.81ms
+    ok 4 - INSERT results include affected rows # time=0.483ms
     
     # Subtest: UPDATE results include affected rows
         ok 1 - UPDATE results include affected rows
         1..1
-    ok 5 - UPDATE results include affected rows # time=0.806ms
+    ok 5 - UPDATE results include affected rows # time=0.532ms
     
     # Subtest: DELETE results include affected rows
         ok 1 - DELETE results include affected rows
         1..1
-    ok 6 - DELETE results include affected rows # time=0.798ms
+    ok 6 - DELETE results include affected rows # time=0.557ms
     
     # Subtest: write results include execution time
         ok 1 - write results include execution time
         1..1
-    ok 7 - write results include execution time # time=0.694ms
+    ok 7 - write results include execution time # time=0.595ms
     
     # Subtest: write results include partition information
         ok 1 - write results include partition information
         1..1
-    ok 8 - write results include partition information # time=1.134ms
+    ok 8 - write results include partition information # time=0.612ms
     
     # Subtest: status line includes row count for SELECT
         ok 1 - status line includes row count for SELECT
         1..1
-    ok 9 - status line includes row count for SELECT # time=2.185ms
+    ok 9 - status line includes row count for SELECT # time=1.424ms
     
     # Subtest: status line includes execution time
         ok 1 - status line includes execution time
         1..1
-    ok 10 - status line includes execution time # time=1.988ms
+    ok 10 - status line includes execution time # time=0.889ms
     
     # Subtest: status line includes partition info when present
         ok 1 - status line includes partition info when present
         1..1
-    ok 11 - status line includes partition info when present # time=1.422ms
+    ok 11 - status line includes partition info when present # time=0.821ms
     
     # Subtest: status line includes affected rows for write ops
         ok 1 - status line includes affected rows for write ops
         1..1
-    ok 12 - status line includes affected rows for write ops # time=0.62ms
+    ok 12 - status line includes affected rows for write ops # time=0.34ms
     
     1..12
-ok 1 - Property 15: Query Result Completeness # time=39.682ms
+ok 1 - Property 15: Query Result Completeness # time=25.563ms
 
 1..1
 # { total: 12, pass: 12 }
-# time=49.52ms
+# time=33.31ms

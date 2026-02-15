@@ -10,6 +10,7 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
+import {TraceCollector} from '../../src/debug/trace-collector.js';
 
 // Initialize services for tests
 ConfigurationManager.getInstance().initialize();
@@ -155,6 +156,26 @@ function waitForMessage(ws, timeout = 2000) {
 }
 
 /**
+ * Assert no additional message arrives within timeout.
+ * @param {Object} ws
+ * @param {number} timeout
+ * @return {Promise<void>}
+ */
+function waitForNoMessage(ws, timeout = 50) {
+  return new Promise((resolve, reject) => {
+    const onMessage = () => {
+      clearTimeout(timer);
+      reject(new Error('Unexpected message received'));
+    };
+    const timer = setTimeout(() => {
+      ws.off('message', onMessage);
+      resolve();
+    }, timeout);
+    ws.once('message', onMessage);
+  });
+}
+
+/**
  * Create a mock test-run service for HTTP route tests.
  * @param {Object} [overrides]
  * @return {Object}
@@ -178,6 +199,101 @@ function createMockTestRunService(overrides = {}) {
     },
     subscribeToRun: (_runId, _listener) => null,
     readOutputAsset: async (_path) => null,
+    ...overrides,
+  };
+}
+
+/**
+ * Create a mock debug metadata store for debug ingress route tests.
+ * @param {Object} [overrides]
+ * @return {Object}
+ */
+function createMockDebugMetadataStore(overrides = {}) {
+  return {
+    createSession: async (request) => ({
+      sessionId: request.sessionId || 'session-1',
+      tenantId: request.securityContext.tenantId,
+      serviceName: request.serviceName || 'svc-debug',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }),
+    getSession: async (request) => ({
+      sessionId: request.sessionId,
+      tenantId: request.securityContext.tenantId,
+      serviceName: 'svc-debug',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }),
+    attachSession: async (request) => ({
+      sessionId: request.sessionId,
+      tenantId: request.securityContext.tenantId,
+      serviceName: 'svc-debug',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }),
+    updateSession: async (request) => ({
+      sessionId: request.sessionId,
+      tenantId: request.securityContext.tenantId,
+      serviceName: request.serviceName || 'svc-debug',
+      lineageId: request.lineageId || null,
+      stageId: request.stageId || null,
+      endpoint: request.endpoint || null,
+      nodeId: request.nodeId || null,
+      status: request.status || 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }),
+    detachSession: async (request) => ({
+      sessionId: request.sessionId,
+      tenantId: request.securityContext.tenantId,
+      serviceName: 'svc-debug',
+      lineageId: null,
+      stageId: null,
+      endpoint: null,
+      nodeId: null,
+      status: 'detached',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }),
+    writeBreakpoints: async (_request) => ([
+      {
+        breakpointId: 'bp-1',
+        lineNumber: 10,
+        resolved: true,
+      },
+    ]),
+    listBreakpoints: async (_request) => ([
+      {
+        breakpointId: 'bp-1',
+        lineNumber: 10,
+        resolved: true,
+      },
+    ]),
+    writeSnapshot: async (_request) => ({
+      snapshotId: 'snapshot-1',
+      sessionId: 'session-1',
+      frameCount: 2,
+      hostCallCount: 1,
+      envelope: Buffer.from([1, 2, 3]),
+    }),
+    listSnapshots: async (_request) => ([
+      {
+        snapshotId: 'snapshot-1',
+        sessionId: 'session-1',
+        frameCount: 2,
+        hostCallCount: 1,
+      },
+    ]),
+    getSnapshot: async (_request) => ({
+      snapshotId: 'snapshot-1',
+      sessionId: 'session-1',
+      frameCount: 2,
+      hostCallCount: 1,
+      envelope: Buffer.from([1, 2, 3]),
+    }),
     ...overrides,
   };
 }
@@ -359,6 +475,99 @@ test('AdminWebSocketAPI - query execution DELETE', async (t) => {
   ws.close();
   await api.shutdown();
 });
+
+test('AdminWebSocketAPI - partition callback execution route', async (t) => {
+  let capturedRequest = null;
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: {
+      executeRequest: async (request) => {
+        capturedRequest = request;
+        return {
+          success: true,
+          executionMode: request.executionMode,
+          callbackModuleRef: request.callbackModuleRef,
+          callbackExport: request.callbackExport,
+          results: [],
+          hostResult: {
+            state: 'completed',
+            processedPartitions: 2,
+            failedPartitions: 0,
+            totalRows: 4,
+          },
+        };
+      },
+    },
+  });
+
+  await api.initialize(0, {listen: false});
+  const {ws} = await connectAndReceive(api);
+
+  ws.send(JSON.stringify({
+    type: MessageType.PARTITION_CALLBACK,
+    queryId: 'cb1',
+    statement: 'SELECT * FROM test_table',
+    parameters: [],
+    callbackModuleRef: 'mod-1',
+    callbackExport: 'run',
+    runtimeKind: 'wasm_component',
+  }));
+
+  const result = await waitForMessage(ws);
+
+  t.equal(result.type, MessageType.QUERY_RESULT, 'should receive query_result');
+  t.equal(result.queryId, 'cb1', 'should include callback queryId');
+  t.equal(result.operation, 'partition_callback',
+    'should label operation as partition_callback');
+  t.same(result.hostResult, {
+    state: 'completed',
+    processedPartitions: 2,
+    failedPartitions: 0,
+    totalRows: 4,
+  }, 'should include structured host result');
+  t.equal(capturedRequest.executionMode, 'partition_callback',
+    'should route request through partition_callback mode');
+  t.equal(capturedRequest.callbackModuleRef, 'mod-1',
+    'should pass callbackModuleRef to SqlRequest');
+  t.equal(capturedRequest.callbackExport, 'run',
+    'should pass callbackExport to SqlRequest');
+  t.equal(capturedRequest.runtimeKind, 'wasm_component',
+    'should pass runtimeKind to SqlRequest');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - partition callback validation requires callback fields',
+  async (t) => {
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createPopulatedCache(),
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const {ws} = await connectAndReceive(api);
+
+    ws.send(JSON.stringify({
+      type: MessageType.PARTITION_CALLBACK,
+      queryId: 'cb-invalid',
+      statement: 'SELECT * FROM test_table',
+      callbackExport: 'run',
+      runtimeKind: 'wasm_component',
+    }));
+
+    const result = await waitForMessage(ws);
+    t.equal(result.type, MessageType.QUERY_RESULT, 'should return query_result envelope');
+    t.equal(result.queryId, 'cb-invalid', 'should preserve query id');
+    t.equal(result.errorCode, ErrorCode.MALFORMED_JSON,
+      'should return malformed error for missing module ref');
+    t.ok(result.error, 'should include validation error');
+
+    ws.close();
+    await api.shutdown();
+  });
 
 test('AdminWebSocketAPI - error handling TABLE_NOT_FOUND', async (t) => {
   const api = new AdminWebSocketAPI({
@@ -789,6 +998,364 @@ test('AdminWebSocketAPI - stream endpoint serves archived run backlog', async (t
   t.match(response.body, /"type":"status"/, 'should include status frame');
   t.match(response.body, /"type":"log"/, 'should include archived log frame');
   t.match(response.body, /archived line/, 'should include archived log content');
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - debug routes require security headers', async (t) => {
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    debugMetadataStore: createMockDebugMetadataStore(),
+  });
+
+  await api.initialize(0, {listen: false});
+  const response = await api.getFastify().inject({
+    method: 'POST',
+    url: '/api/admin/debug/sessions',
+    payload: {sessionId: 'session-1', serviceName: 'svc-debug'},
+  });
+
+  t.equal(response.statusCode, 401, 'should reject missing security context');
+  t.match(response.json().error, /requires tenant and principal headers/);
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - debug session create/get/attach routes', async (t) => {
+  const calls = [];
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    debugMetadataStore: createMockDebugMetadataStore({
+      createSession: async (request) => {
+        calls.push({method: 'createSession', request});
+        return {
+          sessionId: request.sessionId,
+          tenantId: request.securityContext.tenantId,
+          serviceName: request.serviceName,
+          status: 'active',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+      },
+      getSession: async (request) => {
+        calls.push({method: 'getSession', request});
+        return {
+          sessionId: request.sessionId,
+          tenantId: request.securityContext.tenantId,
+          serviceName: 'svc-debug',
+          status: 'active',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+      },
+      attachSession: async (request) => {
+        calls.push({method: 'attachSession', request});
+        return {
+          sessionId: request.sessionId,
+          tenantId: request.securityContext.tenantId,
+          serviceName: 'svc-debug',
+          status: 'active',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+      },
+    }),
+  });
+
+  await api.initialize(0, {listen: false});
+  const headers = {
+    'x-tenant-id': 'tenant-a',
+    'x-principal': 'debug-user',
+    'x-roles': 'debug_write,debug_read,debug_attach',
+  };
+
+  const createResponse = await api.getFastify().inject({
+    method: 'POST',
+    url: '/api/admin/debug/sessions',
+    headers,
+    payload: {
+      sessionId: 'session-2',
+      serviceName: 'svc-debug',
+      lineageId: 'lineage-2',
+      endpoint: 'ws://node-a/debug',
+    },
+  });
+  t.equal(createResponse.statusCode, 200, 'should create debug session');
+  t.equal(createResponse.json().session.sessionId, 'session-2');
+
+  const getResponse = await api.getFastify().inject({
+    method: 'GET',
+    url: '/api/admin/debug/sessions/session-2',
+    headers,
+  });
+  t.equal(getResponse.statusCode, 200, 'should fetch debug session');
+  t.equal(getResponse.json().session.tenantId, 'tenant-a');
+
+  const attachResponse = await api.getFastify().inject({
+    method: 'POST',
+    url: '/api/admin/debug/sessions/session-2/attach',
+    headers,
+  });
+  t.equal(attachResponse.statusCode, 200, 'should attach debug session');
+  t.equal(attachResponse.json().session.sessionId, 'session-2');
+
+  t.equal(calls.length, 3, 'should route to metadata store methods');
+  t.equal(calls[0].request.securityContext.tenantId, 'tenant-a');
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - debug session update/detach routes', async (t) => {
+  const calls = [];
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    debugMetadataStore: createMockDebugMetadataStore({
+      updateSession: async (request) => {
+        calls.push({method: 'updateSession', request});
+        return {
+          sessionId: request.sessionId,
+          tenantId: request.securityContext.tenantId,
+          serviceName: request.serviceName || 'svc-debug',
+          lineageId: request.lineageId || null,
+          stageId: request.stageId || null,
+          endpoint: request.endpoint || null,
+          nodeId: request.nodeId || null,
+          status: request.status || 'active',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+      },
+      detachSession: async (request) => {
+        calls.push({method: 'detachSession', request});
+        return {
+          sessionId: request.sessionId,
+          tenantId: request.securityContext.tenantId,
+          serviceName: 'svc-debug',
+          lineageId: null,
+          stageId: null,
+          endpoint: null,
+          nodeId: null,
+          status: 'detached',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+      },
+    }),
+  });
+
+  await api.initialize(0, {listen: false});
+  const headers = {
+    'x-tenant-id': 'tenant-a',
+    'x-principal': 'debug-user',
+    'x-roles': 'debug_write,debug_read,debug_attach',
+  };
+
+  const updateResponse = await api.getFastify().inject({
+    method: 'PATCH',
+    url: '/api/admin/debug/sessions/session-2',
+    headers,
+    payload: {
+      endpoint: 'ws://node-b/debug',
+      nodeId: 'node-b',
+      lineageId: 'lineage-2',
+      stageId: 2,
+    },
+  });
+  t.equal(updateResponse.statusCode, 200, 'should update debug session');
+  t.equal(updateResponse.json().session.endpoint, 'ws://node-b/debug');
+  t.equal(updateResponse.json().session.nodeId, 'node-b');
+
+  const detachResponse = await api.getFastify().inject({
+    method: 'PATCH',
+    url: '/api/admin/debug/sessions/session-2',
+    headers,
+    payload: {
+      detach: true,
+    },
+  });
+  t.equal(detachResponse.statusCode, 200, 'should detach debug session');
+  t.equal(detachResponse.json().session.status, 'detached');
+  t.equal(detachResponse.json().session.endpoint, null);
+
+  t.equal(calls.length, 2, 'should route to update/detach metadata methods');
+  t.equal(calls[0].method, 'updateSession');
+  t.equal(calls[1].method, 'detachSession');
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - debug breakpoints/snapshots and DAP routes', async (t) => {
+  const calls = [];
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    debugMetadataStore: createMockDebugMetadataStore({
+      writeBreakpoints: async (request) => {
+        calls.push({method: 'writeBreakpoints', request});
+        return [{breakpointId: 'bp-1', lineNumber: 10, resolved: true}];
+      },
+      listBreakpoints: async (request) => {
+        calls.push({method: 'listBreakpoints', request});
+        return [{breakpointId: 'bp-1', lineNumber: 10, resolved: true}];
+      },
+      writeSnapshot: async (request) => {
+        calls.push({method: 'writeSnapshot', request});
+        return {
+          snapshotId: 'snapshot-1',
+          sessionId: request.sessionId,
+          frameCount: 2,
+          hostCallCount: 1,
+          envelope: Buffer.from([1, 2, 3]),
+        };
+      },
+      getSnapshot: async (request) => {
+        calls.push({method: 'getSnapshot', request});
+        return {
+          snapshotId: request.snapshotId,
+          sessionId: request.sessionId || 'session-3',
+          frameCount: 2,
+          hostCallCount: 1,
+          envelope: Buffer.from([1, 2, 3]),
+        };
+      },
+      listSnapshots: async (request) => {
+        calls.push({method: 'listSnapshots', request});
+        return [{
+          snapshotId: 'snapshot-1',
+          sessionId: request.sessionId,
+          frameCount: 2,
+          hostCallCount: 1,
+        }];
+      },
+    }),
+    debugDapRouter: {
+      async handleRequest(request) {
+        calls.push({method: 'dap', request});
+        return {ok: true, sessionId: request.sessionId};
+      },
+    },
+  });
+
+  await api.initialize(0, {listen: false});
+  const headers = {
+    'x-tenant-id': 'tenant-a',
+    'x-principal': 'debug-user',
+    'x-roles': 'debug_write,debug_read,debug_attach',
+  };
+
+  const writeBreakpoints = await api.getFastify().inject({
+    method: 'POST',
+    url: '/api/admin/debug/sessions/session-3/breakpoints',
+    headers,
+    payload: {
+      moduleRef: 'svc:debug@1.0.0',
+      sourceFileUrl: 'file:///src/service.ts',
+      breakpoints: [{lineNumber: 10}],
+    },
+  });
+  t.equal(writeBreakpoints.statusCode, 200, 'should write breakpoints');
+  t.equal(writeBreakpoints.json().breakpoints.length, 1);
+
+  const listBreakpoints = await api.getFastify().inject({
+    method: 'GET',
+    url: '/api/admin/debug/sessions/session-3/breakpoints',
+    headers,
+  });
+  t.equal(listBreakpoints.statusCode, 200, 'should list breakpoints');
+  t.equal(listBreakpoints.json().breakpoints[0].breakpointId, 'bp-1');
+
+  const writeSnapshot = await api.getFastify().inject({
+    method: 'POST',
+    url: '/api/admin/debug/sessions/session-3/snapshots',
+    headers,
+    payload: {
+      snapshotArtifact: {
+        manifest: {
+          snapshotId: 'snapshot-1',
+          moduleRef: 'svc:debug@1.0.0',
+          moduleDigest: 'sha256:' + 'b'.repeat(64),
+        },
+        snapshot: {
+          moduleRef: 'svc:debug@1.0.0',
+          moduleDigest: 'sha256:' + 'b'.repeat(64),
+        },
+        envelope: [1, 2, 3],
+      },
+    },
+  });
+  t.equal(writeSnapshot.statusCode, 200, 'should write snapshot metadata');
+  t.equal(writeSnapshot.json().snapshot.envelopeBase64, 'AQID');
+
+  const listSnapshots = await api.getFastify().inject({
+    method: 'GET',
+    url: '/api/admin/debug/sessions/session-3/snapshots',
+    headers,
+  });
+  t.equal(listSnapshots.statusCode, 200, 'should list snapshots');
+  t.equal(listSnapshots.json().snapshots.length, 1);
+
+  const getSnapshot = await api.getFastify().inject({
+    method: 'GET',
+    url: '/api/admin/debug/snapshots/snapshot-1?sessionId=session-3',
+    headers,
+  });
+  t.equal(getSnapshot.statusCode, 200, 'should fetch snapshot by id');
+  t.equal(getSnapshot.json().snapshot.envelopeBase64, 'AQID');
+
+  const dapResponse = await api.getFastify().inject({
+    method: 'POST',
+    url: '/api/admin/debug/dap/request',
+    headers,
+    payload: {
+      sessionId: 'session-3',
+      request: {seq: 1, command: 'threads'},
+    },
+  });
+  t.equal(dapResponse.statusCode, 200, 'should route DAP request');
+  t.equal(dapResponse.json().response.ok, true);
+  t.equal(calls.some((entry) => entry.method === 'dap'), true);
+
+  await api.shutdown();
+});
+
+test('AdminWebSocketAPI - debug trace stream route wiring and filtering', async (t) => {
+  const traceCollector = new TraceCollector();
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    traceCollector,
+  });
+
+  await api.initialize(0, {listen: false});
+  const routes = api.getFastify().printRoutes();
+  t.match(routes, /trace \(GET, HEAD\)/,
+    'should register debug trace websocket route');
+
+  const {clientSocket, serverSocket} = createInProcWebSocketPair();
+  api.handleDebugTraceConnection(serverSocket, {
+    query: {lineagePrefix: 'lineage-allow'},
+  });
+
+  traceCollector.emit({
+    level: 'info',
+    message: 'allowed',
+    lineageId: 'lineage-allow-1',
+    source: 'service',
+  });
+  traceCollector.emit({
+    level: 'info',
+    message: 'blocked',
+    lineageId: 'lineage-deny-1',
+    source: 'service',
+  });
+
+  const first = await waitForMessage(clientSocket);
+  t.equal(first.message, 'allowed', 'should receive matching lineage event');
+  await waitForNoMessage(clientSocket, 80);
+
+  t.equal(traceCollector.getSubscriberCount(), 1);
+  clientSocket.close();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  t.equal(traceCollector.getSubscriberCount(), 0,
+    'should cleanup subscription on disconnect');
 
   await api.shutdown();
 });

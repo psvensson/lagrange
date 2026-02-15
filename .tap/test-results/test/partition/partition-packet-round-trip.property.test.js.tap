@@ -2,33 +2,33 @@ TAP version 14
 # Subtest: Property 4: Partition packet round-trip preserves all fields
     ok 1 - Partition packet round-trip preserves all fields
     1..1
-ok 1 - Property 4: Partition packet round-trip preserves all fields # time=8.575ms
+ok 1 - Property 4: Partition packet round-trip preserves all fields # time=10.885ms
 
 # Subtest: Property 4: No type conversion during partition round-trip
     ok 1 - No type conversion during partition round-trip
     1..1
-ok 2 - Property 4: No type conversion during partition round-trip # time=2.946ms
+ok 2 - Property 4: No type conversion during partition round-trip # time=2.857ms
 
 # Subtest: Property 4: All partition packet fields preserved exactly
     ok 1 - All partition packet fields preserved exactly
     1..1
-ok 3 - Property 4: All partition packet fields preserved exactly # time=1.386ms
+ok 3 - Property 4: All partition packet fields preserved exactly # time=1.1ms
 
 # Subtest: Property 4: Full partition send/receive cycle preserves packet
     ok 1 - Full partition send/receive cycle preserves packet
     1..1
-ok 4 - Property 4: Full partition send/receive cycle preserves packet # time=1.378ms
+ok 4 - Property 4: Full partition send/receive cycle preserves packet # time=1.49ms
 
 # Subtest: Property 4: Partition uses shared isRaftPacket() for detection
     ok 1 - Partition uses shared isRaftPacket() for detection
     1..1
-ok 5 - Property 4: Partition uses shared isRaftPacket() for detection # time=1.138ms
+ok 5 - Property 4: Partition uses shared isRaftPacket() for detection # time=1.028ms
 
 # Subtest: Property 4: Non-Raft messages not detected as Raft packets
     ok 1 - Non-Raft messages not detected as Raft packets
     1..1
-ok 6 - Property 4: Non-Raft messages not detected as Raft packets # time=0.832ms
+ok 6 - Property 4: Non-Raft messages not detected as Raft packets # time=1.444ms
 
 1..6
 # { total: 6, pass: 6 }
-# time=24.141ms
+# time=29.65ms

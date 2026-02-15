@@ -1,0 +1,13 @@
+{
+  "id": "05-guardrail-failure",
+  "title": "Guardrail rejection example",
+  "level": "advanced",
+  "version": "1.0.0",
+  "entry": "index.js",
+  "runtimeKind": "native_js",
+  "callbackExport": "run",
+  "select": "SELECT * FROM nodes LIMIT 1",
+  "params": [],
+  "required": true,
+  "expectedFile": "expected.json"
+}

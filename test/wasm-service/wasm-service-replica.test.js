@@ -6,6 +6,10 @@ import {
   MESSAGE_OP,
 } from '../../src/wasm-service/wasm-service-replica.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {COLUMN, STATE, TABLES} from '../../src/constants/index.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {INITIAL_PARTITION_IDS} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   WASM_SERVICE_SUBSYSTEM,
   WASM_SERVICE_ERROR_MSG,
@@ -64,6 +68,30 @@ function defaultOpts(overrides = {}) {
     serviceDefinitionId: 'svc-def-1',
     dbPath: ':memory:',
     ...overrides,
+  };
+}
+
+function createWriteReadySystemTableCache() {
+  const servicesPartitionId = INITIAL_PARTITION_IDS[TABLES.SERVICES];
+  const records = {
+    [TABLES.PARTITIONS]: [
+      {[COLUMN.PARTITION_ID]: servicesPartitionId},
+    ],
+    [TABLES.SERVICES]: [
+      {
+        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+        [COLUMN.PARTITION_ID]: servicesPartitionId,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+        [COLUMN.STATUS]: STATE.ACTIVE,
+      },
+    ],
+  };
+
+  return {
+    filter(tableName, predicate) {
+      const rows = records[tableName] || [];
+      return rows.filter(predicate);
+    },
   };
 }
 
@@ -450,19 +478,156 @@ describe('WasmServiceReplica', () => {
   });
 
   describe('flushRoleUpdate', () => {
-    it('should resolve without error (stub)', async () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+    it('writes role updates through owner callback', async () => {
+      let writePayload = null;
+      const replica = new WasmServiceReplica(defaultOpts({
+        systemTableCache: createWriteReadySystemTableCache(),
+        roleUpdateWriter: async (payload) => {
+          writePayload = payload;
+        },
+      }));
+      replica.pendingRoleUpdate = RAFT_ROLE.LEADER;
+      replica.persistedRole = RAFT_ROLE.FOLLOWER;
+
       await replica.flushRoleUpdate();
+
+      assert.equal(writePayload.serviceId, 'wsr-1');
+      assert.equal(writePayload.serviceDefinitionId, 'svc-def-1');
+      assert.equal(writePayload.role, RAFT_ROLE.LEADER);
+      assert.equal(replica.persistedRole, RAFT_ROLE.LEADER);
+      assert.equal(replica.pendingRoleUpdate, null);
       replica.kvStore.close();
     });
+
+    it('writes role updates through CDC owner when no callback',
+      async () => {
+        let updateArgs = null;
+        const replica = new WasmServiceReplica(defaultOpts({
+          systemTableCache: createWriteReadySystemTableCache(),
+          cdcIntegrationService: {
+            updateSystemTableRow: async (...args) => {
+              updateArgs = args;
+            },
+          },
+        }));
+        replica.pendingRoleUpdate = RAFT_ROLE.LEADER;
+        replica.persistedRole = RAFT_ROLE.FOLLOWER;
+
+        await replica.flushRoleUpdate();
+
+        assert.deepEqual(updateArgs[0], TABLES.SERVICES);
+        assert.deepEqual(updateArgs[1], {[COLUMN.SERVICE_ID]: 'wsr-1'});
+        assert.equal(updateArgs[2][COLUMN.RAFT_ROLE], RAFT_ROLE.LEADER);
+        assert.equal(replica.persistedRole, RAFT_ROLE.LEADER);
+        assert.equal(replica.pendingRoleUpdate, null);
+        replica.kvStore.close();
+      });
   });
 
   describe('flushLeaderNodeUpdate', () => {
-    it('should resolve without error (stub)', async () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+    it('writes leader updates through owner callback', async () => {
+      let writePayload = null;
+      const replica = new WasmServiceReplica(defaultOpts({
+        systemTableCache: createWriteReadySystemTableCache(),
+        leaderNodeUpdateWriter: async (payload) => {
+          writePayload = payload;
+        },
+      }));
+      replica.isLeader = true;
+      replica.role = RAFT_ROLE.LEADER;
+      replica.pendingLeaderNodeUpdate = 'node-1';
+      replica.persistedLeaderNodeId = null;
+
       await replica.flushLeaderNodeUpdate();
+
+      assert.equal(writePayload.serviceId, 'wsr-1');
+      assert.equal(writePayload.serviceDefinitionId, 'svc-def-1');
+      assert.equal(writePayload.leaderNodeId, 'node-1');
+      assert.equal(replica.persistedLeaderNodeId, 'node-1');
+      assert.equal(replica.pendingLeaderNodeUpdate, null);
       replica.kvStore.close();
     });
+
+    it('writes leader updates through CDC owner when no callback',
+      async () => {
+        let updateArgs = null;
+        const replica = new WasmServiceReplica(defaultOpts({
+          systemTableCache: createWriteReadySystemTableCache(),
+          cdcIntegrationService: {
+            updateSystemTableRow: async (...args) => {
+              updateArgs = args;
+            },
+          },
+        }));
+        replica.isLeader = true;
+        replica.role = RAFT_ROLE.LEADER;
+        replica.pendingLeaderNodeUpdate = 'node-2';
+        replica.persistedLeaderNodeId = null;
+
+        await replica.flushLeaderNodeUpdate();
+
+        assert.deepEqual(updateArgs[0], TABLES.SERVICES);
+        assert.deepEqual(updateArgs[1], {[COLUMN.SERVICE_ID]: 'wsr-1'});
+        assert.equal(updateArgs[2][COLUMN.NODE_ID], 'node-2');
+        assert.equal(updateArgs[2][COLUMN.RAFT_ROLE], RAFT_ROLE.LEADER);
+        assert.equal(replica.persistedLeaderNodeId, 'node-2');
+        assert.equal(replica.pendingLeaderNodeUpdate, null);
+        replica.kvStore.close();
+      });
+
+    it('clears pending update when replica is not leader',
+      async () => {
+        const replica = new WasmServiceReplica(defaultOpts({
+          systemTableCache: createWriteReadySystemTableCache(),
+        }));
+        replica.isLeader = false;
+        replica.pendingLeaderNodeUpdate = 'node-2';
+
+        await replica.flushLeaderNodeUpdate();
+
+        assert.equal(replica.pendingLeaderNodeUpdate, null);
+        assert.equal(replica.persistedLeaderNodeId, null);
+        replica.kvStore.close();
+      });
+  });
+
+  describe('retry timers', () => {
+    it('schedules role retry when services table is not write-ready',
+      async () => {
+        const replica = new WasmServiceReplica(defaultOpts({
+          systemTableCache: {
+            filter: () => [],
+          },
+        }));
+        replica.pendingRoleUpdate = RAFT_ROLE.LEADER;
+        replica.persistedRole = RAFT_ROLE.FOLLOWER;
+
+        await replica.flushRoleUpdate();
+
+        assert.notEqual(replica.roleUpdateRetryTimer, null);
+        clearTimeout(replica.roleUpdateRetryTimer);
+        replica.roleUpdateRetryTimer = null;
+        replica.kvStore.close();
+      });
+
+    it('schedules leader retry when services table is not write-ready',
+      async () => {
+        const replica = new WasmServiceReplica(defaultOpts({
+          systemTableCache: {
+            filter: () => [],
+          },
+        }));
+        replica.isLeader = true;
+        replica.role = RAFT_ROLE.LEADER;
+        replica.pendingLeaderNodeUpdate = 'node-2';
+
+        await replica.flushLeaderNodeUpdate();
+
+        assert.notEqual(replica.leaderNodeUpdateRetryTimer, null);
+        clearTimeout(replica.leaderNodeUpdateRetryTimer);
+        replica.leaderNodeUpdateRetryTimer = null;
+        replica.kvStore.close();
+      });
   });
 
   describe('shutdown', () => {

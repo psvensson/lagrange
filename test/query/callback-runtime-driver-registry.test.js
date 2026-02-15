@@ -168,6 +168,37 @@ test('wasm driver - delegates to wasmExecutor',
     t.same(result, [{processed: true}]);
   });
 
+test('wasm driver - forwards execution options to wasmExecutor',
+  async (t) => {
+    let receivedOptions = null;
+    const wasmExecutor = {
+      execute: async (_func, context, _args, options) => {
+        receivedOptions = options;
+        t.equal(context.callbackContext.tenantId, 'tenant-a');
+        t.equal(context.debugScope.lineageId, 'lineage-1');
+        t.equal(typeof context.debug.trace, 'function');
+        return {result: [{ok: true}], mutations: []};
+      },
+    };
+
+    const driver = new WasmComponentCallbackDriver({
+      wasmExecutor,
+    });
+    const result = await driver.invokeCallback(
+      makeBatch('p0', [{id: 1}]),
+      makeDescriptor(),
+      {
+        callbackContext: {tenantId: 'tenant-a'},
+        debugScope: {lineageId: 'lineage-1'},
+        debug: {trace: () => true},
+        runtimeOptions: {someFlag: true},
+      },
+    );
+
+    t.same(result, [{ok: true}]);
+    t.equal(receivedOptions.runtimeOptions.someFlag, true);
+  });
+
 test('wasm driver - wraps non-array result in array',
   async (t) => {
     const wasmExecutor = {

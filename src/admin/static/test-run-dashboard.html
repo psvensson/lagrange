@@ -92,6 +92,7 @@
     }
 
     select,
+    input,
     button {
       width: 100%;
       border: 1px solid var(--line);
@@ -225,12 +226,24 @@
       grid-template-columns: 2fr 1fr;
     }
 
+    .trace-toolbar {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr auto auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 10px;
+    }
+
     @media (max-width: 920px) {
       .toolbar {
         grid-template-columns: 1fr;
       }
 
       .two-col {
+        grid-template-columns: 1fr;
+      }
+
+      .trace-toolbar {
         grid-template-columns: 1fr;
       }
     }
@@ -294,6 +307,7 @@
         <div class="body">
           <div id="streamInfo" class="muted">Select a run to inspect logs or visualization.</div>
           <div id="visualizationInfo" class="muted"></div>
+          <div id="examplesInfo" class="muted"></div>
           <pre id="logBox" class="logs"></pre>
         </div>
       </article>
@@ -308,14 +322,40 @@
         </div>
       </article>
     </section>
+
+    <section class="card">
+      <header>Debug Trace Stream</header>
+      <div class="body">
+        <div class="trace-toolbar">
+          <div>
+            <label for="traceLineageInput">Lineage Prefix</label>
+            <input id="traceLineageInput" type="text" placeholder="lineage-..." />
+          </div>
+          <div>
+            <label for="traceNodeInput">Node ID</label>
+            <input id="traceNodeInput" type="text" placeholder="node-..." />
+          </div>
+          <div>
+            <label for="traceLevelsInput">Levels</label>
+            <input id="traceLevelsInput" type="text" placeholder="error,warn,info" />
+          </div>
+          <button id="traceConnectBtn" class="ghost">Connect</button>
+          <button id="traceClearBtn" class="ghost">Clear</button>
+        </div>
+        <div id="traceInfo" class="muted">Trace stream disconnected.</div>
+        <pre id="traceBox" class="logs"></pre>
+      </div>
+    </section>
   </main>
 
   <script>
     const ENDPOINT = {
       tests: '/api/admin/tests',
       runs: '/api/admin/test-runs',
+      traceWs: '/api/admin/debug/trace',
     };
     const ARCHIVE_DISPLAY_LIMIT = 200;
+    const TRACE_DISPLAY_LIMIT = 2000;
     const CONTROL_CHAR_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
     const REQUEST_TIMEOUT_MS = 15000;
     const DEBUG_CONSOLE = true;
@@ -324,6 +364,8 @@
       selectedRunId: null,
       runs: [],
       source: null,
+      traceSocket: null,
+      traceLines: [],
       lastProgressSignature: null,
       selectedConfigId: null,
     };
@@ -337,7 +379,15 @@
       logBox: document.getElementById('logBox'),
       streamInfo: document.getElementById('streamInfo'),
       visualizationInfo: document.getElementById('visualizationInfo'),
+      examplesInfo: document.getElementById('examplesInfo'),
       runProgress: document.getElementById('runProgress'),
+      traceLineageInput: document.getElementById('traceLineageInput'),
+      traceNodeInput: document.getElementById('traceNodeInput'),
+      traceLevelsInput: document.getElementById('traceLevelsInput'),
+      traceConnectBtn: document.getElementById('traceConnectBtn'),
+      traceClearBtn: document.getElementById('traceClearBtn'),
+      traceInfo: document.getElementById('traceInfo'),
+      traceBox: document.getElementById('traceBox'),
     };
 
     function debug(message, details) {
@@ -402,6 +452,35 @@
       ui.visualizationInfo.appendChild(link);
     }
 
+    function setExamplesInfo(run) {
+      ui.examplesInfo.innerHTML = '';
+      const summary = run?.examplesSummary;
+      if (!summary || typeof summary !== 'object') {
+        return;
+      }
+
+      const parts = [
+        `Examples: ${summary.passed || 0}/${summary.total || 0} passed`,
+        `failed=${summary.failed || 0}`,
+        `requiredFailed=${summary.requiredFailed || 0}`,
+      ];
+      const label = document.createElement('span');
+      label.textContent = parts.join(' • ');
+      ui.examplesInfo.appendChild(label);
+
+      if (run?.examplesArtifactUrl) {
+        const separator = document.createElement('span');
+        separator.textContent = ' • ';
+        const link = document.createElement('a');
+        link.href = run.examplesArtifactUrl;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = 'Artifact';
+        ui.examplesInfo.appendChild(separator);
+        ui.examplesInfo.appendChild(link);
+      }
+    }
+
     function resolveVisualizationUrl(run) {
       if (!run) {
         return null;
@@ -455,6 +534,119 @@
         String(line ?? '').replace(CONTROL_CHAR_REGEX, ''));
       ui.logBox.textContent += `${safeLines.join('\n')}\n`;
       ui.logBox.scrollTop = ui.logBox.scrollHeight;
+    }
+
+    function clearTraceLines() {
+      state.traceLines = [];
+      ui.traceBox.textContent = '';
+    }
+
+    function appendTraceLine(line) {
+      const safeLine = String(line ?? '').replace(CONTROL_CHAR_REGEX, '');
+      state.traceLines.push(safeLine);
+      if (state.traceLines.length > TRACE_DISPLAY_LIMIT) {
+        const overflow = state.traceLines.length - TRACE_DISPLAY_LIMIT;
+        state.traceLines.splice(0, overflow);
+      }
+      ui.traceBox.textContent = `${state.traceLines.join('\n')}\n`;
+      ui.traceBox.scrollTop = ui.traceBox.scrollHeight;
+    }
+
+    function formatTraceEvent(event) {
+      const timestamp = String(event?.timestamp || '');
+      const level = String(event?.level || 'info');
+      const nodeId = String(event?.nodeId || '-');
+      const lineage = String(event?.lineageId || '-');
+      const source = String(event?.source || '-');
+      const message = String(event?.message || '');
+      return `[${timestamp}] [${level}] [node=${nodeId}] [lineage=${lineage}] [${source}] ${message}`;
+    }
+
+    function setTraceStatus(message, connected) {
+      ui.traceInfo.textContent = message;
+      ui.traceConnectBtn.textContent = connected ? 'Disconnect' : 'Connect';
+      ui.traceConnectBtn.className = connected ? 'danger' : 'ghost';
+    }
+
+    function disconnectTraceStream() {
+      if (!state.traceSocket) {
+        setTraceStatus('Trace stream disconnected.', false);
+        return;
+      }
+      try {
+        state.traceSocket.close();
+      } catch (_error) {
+        // Best-effort socket close.
+      }
+      state.traceSocket = null;
+      setTraceStatus('Trace stream disconnected.', false);
+    }
+
+    function buildTraceStreamUrl() {
+      const params = new URLSearchParams();
+      const lineagePrefix = String(ui.traceLineageInput.value || '').trim();
+      const nodeId = String(ui.traceNodeInput.value || '').trim();
+      const levels = String(ui.traceLevelsInput.value || '').trim();
+      if (lineagePrefix) {
+        params.set('lineagePrefix', lineagePrefix);
+      }
+      if (nodeId) {
+        params.set('nodeId', nodeId);
+      }
+      if (levels) {
+        params.set('levels', levels);
+      }
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const query = params.toString();
+      const path = query ?
+        `${ENDPOINT.traceWs}?${query}` :
+        ENDPOINT.traceWs;
+      return `${protocol}://${window.location.host}${path}`;
+    }
+
+    function connectTraceStream() {
+      disconnectTraceStream();
+      const url = buildTraceStreamUrl();
+      debug('trace:connect:start', {url});
+      setTraceStatus(`Connecting trace stream: ${url}`, false);
+
+      const socket = new WebSocket(url);
+      socket.onopen = () => {
+        state.traceSocket = socket;
+        setTraceStatus(`Trace stream connected: ${url}`, true);
+        debug('trace:connect:open', {url});
+      };
+      socket.onmessage = (event) => {
+        let payload = null;
+        try {
+          payload = JSON.parse(event.data);
+        } catch (error) {
+          appendTraceLine(`[trace-parse-error] ${error.message}`);
+          return;
+        }
+        appendTraceLine(formatTraceEvent(payload));
+      };
+      socket.onerror = () => {
+        appendTraceLine('[trace] stream error');
+        if (state.traceSocket === socket) {
+          state.traceSocket = null;
+        }
+        setTraceStatus('Trace stream error/disconnected.', false);
+      };
+      socket.onclose = () => {
+        if (state.traceSocket === socket) {
+          state.traceSocket = null;
+        }
+        setTraceStatus('Trace stream disconnected.', false);
+      };
+    }
+
+    function toggleTraceStream() {
+      if (state.traceSocket) {
+        disconnectTraceStream();
+      } else {
+        connectTraceStream();
+      }
     }
 
     function isRunLive(status) {
@@ -526,6 +718,7 @@
         if (selected) {
           setRunProgressInfo(selected.progress, selected.status);
           setVisualizationInfo(resolveVisualizationUrl(selected));
+          setExamplesInfo(selected);
         }
       }
       debug('loadRuns:done', {runCount: state.runs.length});
@@ -578,6 +771,14 @@
           reportBtn.className = 'ghost';
           reportBtn.onclick = () => window.open(run.outputReportUrl, '_blank');
           actionCell.appendChild(reportBtn);
+        }
+
+        if (run.examplesArtifactUrl) {
+          const examplesBtn = document.createElement('button');
+          examplesBtn.textContent = 'Examples';
+          examplesBtn.className = 'ghost';
+          examplesBtn.onclick = () => window.open(run.examplesArtifactUrl, '_blank');
+          actionCell.appendChild(examplesBtn);
         }
 
         if (run.status === 'running' || run.status === 'stopping') {
@@ -699,6 +900,7 @@
       const selectedRun = state.runs.find((entry) => entry.runId === runId) || null;
       let playbackViewerUrl = resolveVisualizationUrl(selectedRun);
       setVisualizationInfo(playbackViewerUrl);
+      setExamplesInfo(selectedRun);
       setRunProgressInfo(selectedRun?.progress || null, selectedRun?.status || 'running');
       ui.streamInfo.textContent = `Loading run: ${runId}`;
       appendLog(`[system] loading run ${runId}`);
@@ -718,6 +920,7 @@
           runStatus = detail.run?.status || null;
           playbackViewerUrl = resolveVisualizationUrl(detailRun) || playbackViewerUrl;
           setVisualizationInfo(playbackViewerUrl);
+          setExamplesInfo(detailRun);
           setRunProgressInfo(detailRun.progress || null, detailRun.status || runStatus);
           maybeAppendProgressLog(detailRun.progress || null);
           appendedCount = appendRunLogEntries(detail.run?.logs || []);
@@ -802,6 +1005,7 @@
           if (statusVisualizationUrl) {
             setVisualizationInfo(statusVisualizationUrl);
           }
+          setExamplesInfo(payload.data);
           debug('connectStream:liveStream:status', {
             runId,
             status: payload.data.status,
@@ -955,6 +1159,7 @@
         ui.logBox.textContent = '';
         ui.streamInfo.textContent = 'Select a run to inspect logs or visualization.';
         setVisualizationInfo(null);
+        setExamplesInfo(null);
         setRunProgressInfo(null, 'idle');
       }
       await loadRuns();
@@ -986,6 +1191,17 @@
         appendLog(`[system] start failed: ${error.message}`);
       });
     };
+    ui.traceConnectBtn.onclick = () => {
+      toggleTraceStream();
+    };
+    ui.traceClearBtn.onclick = () => {
+      clearTraceLines();
+    };
+
+    window.addEventListener('beforeunload', () => {
+      disconnectTraceStream();
+      disconnectStream();
+    });
 
     setInterval(() => {
       loadRuns().catch(() => {});

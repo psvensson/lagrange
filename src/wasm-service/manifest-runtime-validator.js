@@ -21,6 +21,13 @@ import {
 } from './module-manifest-constants.js';
 import {validateModuleManifest} from './module-manifest-models.js';
 
+const RUNTIME_VALIDATION_ERROR_MSG = Object.freeze({
+  ADAPTER_REQUIRED:
+    'Runtime adapter with createInstance/inspect/destroyInstance is required',
+  MODULE_ENTRY_REQUIRED:
+    'Module entry with exports is required for runtime validation',
+});
+
 /**
  * Validate that run_export exists in the module instance
  * and resolves to a callable function.
@@ -129,8 +136,97 @@ function validateManifestRuntime(manifest, moduleExports) {
   return {valid: allErrors.length === NUM.ZERO, errors: allErrors};
 }
 
+/**
+ * Full manifest runtime validation pipeline using a runtime adapter
+ * instance for export presence verification.
+ *
+ * This validates run_export presence through runtime-owned inspection
+ * data (`inspect().exportNames`) rather than relying only on a raw
+ * exports object.
+ *
+ * @param {Object} manifest - Module manifest object.
+ * @param {Object} moduleEntry - Module entry containing at least `exports`.
+ * @param {Object} runtimeAdapter - Runtime adapter contract owner.
+ * @param {string} [moduleRef='runtime-validation'] - Module reference.
+ * @return {Promise<{valid: boolean, errors: string[]}>} Combined result.
+ */
+async function validateManifestRuntimeWithAdapter(
+  manifest,
+  moduleEntry,
+  runtimeAdapter,
+  moduleRef = 'runtime-validation',
+) {
+  const allErrors = [];
+
+  if (!manifest) {
+    allErrors.push(ERR.MANIFEST_REQUIRED);
+    return {valid: false, errors: allErrors};
+  }
+
+  if (!moduleEntry || typeof moduleEntry !== TYPEOF.OBJECT) {
+    allErrors.push(RUNTIME_VALIDATION_ERROR_MSG.MODULE_ENTRY_REQUIRED);
+    return {valid: false, errors: allErrors};
+  }
+
+  if (!runtimeAdapter ||
+    typeof runtimeAdapter.createInstance !== TYPEOF.FUNCTION ||
+    typeof runtimeAdapter.inspect !== TYPEOF.FUNCTION ||
+    typeof runtimeAdapter.destroyInstance !== TYPEOF.FUNCTION) {
+    allErrors.push(RUNTIME_VALIDATION_ERROR_MSG.ADAPTER_REQUIRED);
+    return {valid: false, errors: allErrors};
+  }
+
+  const structResult = validateModuleManifest(manifest);
+  allErrors.push(...structResult.errors);
+  if (!structResult.valid) {
+    return {valid: false, errors: allErrors};
+  }
+
+  const runExportName = manifest[MF.RUN_EXPORT];
+  let instanceHandle = null;
+  let inspectResult = null;
+  try {
+    const created = await runtimeAdapter.createInstance({
+      moduleRef,
+      moduleEntry,
+    });
+    instanceHandle = created.instanceHandle;
+    inspectResult = await runtimeAdapter.inspect({instanceHandle});
+  } finally {
+    if (instanceHandle) {
+      await runtimeAdapter.destroyInstance(instanceHandle);
+    }
+  }
+
+  const exportNames = Array.isArray(inspectResult?.exportNames) ?
+    inspectResult.exportNames :
+    [];
+  if (!exportNames.includes(runExportName)) {
+    allErrors.push(ERR.RUN_EXPORT_MISSING_IN_MODULE);
+    return {valid: false, errors: allErrors};
+  }
+
+  const moduleExports = moduleEntry.exports;
+  const existResult = validateRunExportExists(
+    moduleExports,
+    runExportName,
+  );
+  allErrors.push(...existResult.errors);
+  if (!existResult.valid) {
+    return {valid: false, errors: allErrors};
+  }
+
+  const exportFn = moduleExports[runExportName];
+  const sigResult = validateRunExportSignature(exportFn);
+  allErrors.push(...sigResult.errors);
+
+  return {valid: allErrors.length === NUM.ZERO, errors: allErrors};
+}
+
 export {
+  RUNTIME_VALIDATION_ERROR_MSG,
   validateRunExportExists,
   validateRunExportSignature,
   validateManifestRuntime,
+  validateManifestRuntimeWithAdapter,
 };

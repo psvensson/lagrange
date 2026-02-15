@@ -15,6 +15,14 @@ const ADMIN_ROUTE = Object.freeze({
   TEST_RUN_BY_ID: '/api/admin/test-runs/:runId',
   TEST_RUN_STOP: '/api/admin/test-runs/:runId/stop',
   TEST_RUN_STREAM: '/api/admin/test-runs/:runId/stream',
+  DEBUG_SESSIONS: '/api/admin/debug/sessions',
+  DEBUG_SESSION_BY_ID: '/api/admin/debug/sessions/:sessionId',
+  DEBUG_SESSION_ATTACH: '/api/admin/debug/sessions/:sessionId/attach',
+  DEBUG_SESSION_BREAKPOINTS: '/api/admin/debug/sessions/:sessionId/breakpoints',
+  DEBUG_SESSION_SNAPSHOTS: '/api/admin/debug/sessions/:sessionId/snapshots',
+  DEBUG_SNAPSHOT_BY_ID: '/api/admin/debug/snapshots/:snapshotId',
+  DEBUG_DAP_REQUEST: '/api/admin/debug/dap/request',
+  DEBUG_TRACE_STREAM: '/api/admin/debug/trace',
   PLAYBACK_VIEWER: '/ui/playback-viewer',
   OUTPUT_FILES: '/ui/test-output/*',
 });
@@ -62,6 +70,12 @@ const ADMIN_CONTENT_TYPE = Object.freeze({
   CSS: 'text/css; charset=utf-8',
   TEXT: 'text/plain; charset=utf-8',
   EVENT_STREAM: 'text/event-stream; charset=utf-8',
+});
+
+const ADMIN_HEADER = Object.freeze({
+  TENANT_ID: 'x-tenant-id',
+  PRINCIPAL: 'x-principal',
+  ROLES: 'x-roles',
 });
 
 const ADMIN_TEST_RUN_PATH = Object.freeze({
@@ -126,6 +140,12 @@ const ADMIN_TEST_ERROR_MSG = Object.freeze({
   PLAYBACK_VIEWER_NOT_FOUND: 'Playback viewer page not found',
 });
 
+const ADMIN_DEBUG_ERROR_MSG = Object.freeze({
+  SECURITY_CONTEXT_REQUIRED: 'Debug route requires tenant and principal headers',
+  SERVICE_UNAVAILABLE: 'Debug metadata service is not available',
+  DAP_UNAVAILABLE: 'Debug DAP router is not available',
+});
+
 const ADMIN_ENFORCEMENT_MODE = Object.freeze({
   OBSERVE: 'observe',
   ENFORCE: 'enforce',
@@ -140,6 +160,7 @@ const ADMIN_MESSAGE_TYPE = Object.freeze({
   ERROR: 'error',
   // Incoming
   QUERY: 'query',
+  PARTITION_CALLBACK: 'partition_callback',
   REFRESH: 'refresh',
   LIVE_QUERY_SUBSCRIBE: 'live_query_subscribe',
   LIVE_QUERY_UNSUBSCRIBE: 'live_query_unsubscribe',
@@ -158,6 +179,14 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
   MISSING_TYPE: 'Message must have a "type" field',
   MISSING_QUERY_ID: 'Query message must include queryId',
   MISSING_SQL: 'Query message must include sql string',
+  MISSING_CALLBACK_STATEMENT:
+    'Partition callback message must include statement string',
+  MISSING_CALLBACK_MODULE_REF:
+    'Partition callback message must include callbackModuleRef',
+  MISSING_CALLBACK_EXPORT:
+    'Partition callback message must include callbackExport',
+  MISSING_CALLBACK_RUNTIME_KIND:
+    'Partition callback message must include runtimeKind',
   QUERY_ENGINE_UNAVAILABLE: 'SQL query engine not available',
   queryTimeout: (timeoutMs) => `Query timeout after ${timeoutMs}ms`,
 });
@@ -167,6 +196,10 @@ const ADMIN_ERROR_HINT = Object.freeze({
   MISSING_TYPE: 'Include type field in message',
   MISSING_QUERY_ID: 'Include queryId field',
   MISSING_SQL: 'Include sql field',
+  MISSING_CALLBACK_STATEMENT: 'Include statement field',
+  MISSING_CALLBACK_MODULE_REF: 'Include callbackModuleRef field',
+  MISSING_CALLBACK_EXPORT: 'Include callbackExport field',
+  MISSING_CALLBACK_RUNTIME_KIND: 'Include runtimeKind field',
 });
 
 const ADMIN_ERROR_MATCH = Object.freeze({
@@ -198,6 +231,8 @@ const ADMIN_LOG_MSG = Object.freeze({
   TEST_RUN_DELETED: 'Admin test run deleted',
   TEST_RUN_LOG_STREAM_SUBSCRIBED: 'Admin test run log stream subscribed',
   TEST_RUN_LOG_STREAM_UNSUBSCRIBED: 'Admin test run log stream unsubscribed',
+  TRACE_STREAM_SUBSCRIBED: 'Admin debug trace stream subscribed',
+  TRACE_STREAM_UNSUBSCRIBED: 'Admin debug trace stream unsubscribed',
   SHUTDOWN: 'Admin WebSocket API shutdown',
   SERVER_CLOSE_ERROR: 'Error closing HTTP server',
 });
@@ -214,6 +249,7 @@ const ADMIN_QUERY_RESULT = Object.freeze({
 export {
   ADMIN_CONTENT_TYPE,
   ADMIN_CONFIG_KEY,
+  ADMIN_DEBUG_ERROR_MSG,
   ADMIN_CLIENT,
   ADMIN_CACHE_DUMP,
   ADMIN_DEFAULT,
@@ -226,6 +262,7 @@ export {
   ADMIN_LIMIT,
   ADMIN_LOG_MSG,
   ADMIN_MESSAGE_TYPE,
+  ADMIN_HEADER,
   ADMIN_QUERY_RESULT,
   ADMIN_ROUTE,
   ADMIN_STATUS,

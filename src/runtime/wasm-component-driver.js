@@ -50,6 +50,8 @@ const WASM_COMPONENT_ERROR = Object.freeze({
     'wasmLifecycle must be a non-null object',
   CREATE_REPLICA_FAILED: 'failed to create WASM replica',
   START_REPLICA_FAILED: 'failed to start WASM replica',
+  START_REPLICA_NO_RESULT:
+    'failed to start WASM replica: lifecycle returned no startup result',
   STOP_REPLICA_FAILED: 'failed to stop WASM replica',
   VALIDATION_PIPELINE_FAILED:
     'WASM validation pipeline failed',
@@ -273,6 +275,26 @@ class WasmComponentDriver extends RuntimeDriver {
         const startResult = lifecycle.startReplica(
           serviceId, replicaContext.startOptions,
         );
+
+        if (!startResult) {
+          return {
+            status: START_STATUS.FAILED,
+            error: WASM_COMPONENT_ERROR.START_REPLICA_NO_RESULT,
+          };
+        }
+
+        if (startResult.started === false) {
+          const result = {
+            status: START_STATUS.FAILED,
+            error: `${WASM_COMPONENT_ERROR.START_REPLICA_FAILED}: ` +
+              `${startResult.error || 'unknown lifecycle failure'}`,
+          };
+          if (startResult.diagnostic) {
+            result.diagnostic = startResult.diagnostic;
+          }
+          return result;
+        }
+
         this._running.add(serviceId);
 
         const result = {status: START_STATUS.RUNNING};

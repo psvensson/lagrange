@@ -89,12 +89,18 @@ If the answer to any of 4/5/6 is yes, you are violating this contract.
 
 ### 2.2 System Cache
 
-- Every node uses exactly ONE system cache instance (`SystemTableCache`) on a selected Messaeg Group.
+- Every node uses exactly ONE system cache instance (`SystemTableCache`) on a selected Message Group.
 - All nodes must have at least one Message Group replica, but can host more to let sparse message groups form quorum.
 - The system cache on each Message Group is updated ONLY by CDC events from table partitions.
+- Only CDC-propagated tables are cached. Non-propagated tables remain
+  queryable from their owning partition via SQL. See `CDC_PROPAGATED_TABLES`
+  and `CDC_NON_PROPAGATED_TABLES` in `src/cache/cache-constants.js` and
+  the classification rules in `architecture.md § System Tables`.
 - There must be NO other caches of system information. None. Zero.
 - Do not create ad-hoc Maps, Sets, or objects that cache system data outside
   the system cache. If you need system data, read it from the cache or SQL.
+- Any new system table MUST be classified in exactly one of
+  `CDC_PROPAGATED_TABLES` or `CDC_NON_PROPAGATED_TABLES`.
 
 ### 2.3 Reads and Writes
 

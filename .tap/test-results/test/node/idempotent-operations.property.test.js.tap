@@ -3,26 +3,26 @@ TAP version 14
     # Subtest: CREATE_REPLICA for active replica returns already_exists
         ok 1 - CREATE_REPLICA for active replica returns already_exists
         1..1
-    ok 1 - CREATE_REPLICA for active replica returns already_exists # time=9.75ms
+    ok 1 - CREATE_REPLICA for active replica returns already_exists # time=13.05ms
     
     # Subtest: CREATE_REPLICA for creating/syncing replica returns in_progress
         ok 1 - CREATE_REPLICA for creating/syncing replica returns in_progress
         1..1
-    ok 2 - CREATE_REPLICA for creating/syncing replica returns in_progress # time=2.119ms
+    ok 2 - CREATE_REPLICA for creating/syncing replica returns in_progress # time=4.057ms
     
     # Subtest: REMOVE_REPLICA for non-existent replica returns not_found
         ok 1 - REMOVE_REPLICA for non-existent replica returns not_found
         1..1
-    ok 3 - REMOVE_REPLICA for non-existent replica returns not_found # time=2.411ms
+    ok 3 - REMOVE_REPLICA for non-existent replica returns not_found # time=3.261ms
     
     # Subtest: REMOVE_REPLICA for removing replica returns in_progress
         ok 1 - REMOVE_REPLICA for removing replica returns in_progress
         1..1
-    ok 4 - REMOVE_REPLICA for removing replica returns in_progress # time=1.899ms
+    ok 4 - REMOVE_REPLICA for removing replica returns in_progress # time=4.239ms
     
     1..4
-ok 1 - Property 13: Idempotent Operations # time=131.836ms
+ok 1 - Property 13: Idempotent Operations # time=198.346ms
 
 1..1
 # { total: 4, pass: 4 }
-# time=135.427ms
+# time=204.37ms

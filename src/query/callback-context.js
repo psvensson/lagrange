@@ -42,11 +42,12 @@ import {
  * @param {import('./plan-diagnostics.js').PlanDiagnostics}
  *   [planDiagnostics] - Optional diagnostics collector for
  *   nested call classification decisions.
+ * @param {Object} [debugApi] - Optional debug API surface.
  * @return {Readonly<Object>} Frozen callback context.
  */
-function buildCallbackContext(execCtx, planDiagnostics) {
+function buildCallbackContext(execCtx, planDiagnostics, debugApi) {
   const budgetEnforcer = execCtx.getBudgetEnforcer();
-  return Object.freeze({
+  const callbackContext = {
     emit: (key, value, meta) =>
       execCtx.emit(key, value, meta),
     out: (value, meta) =>
@@ -86,7 +87,13 @@ function buildCallbackContext(execCtx, planDiagnostics) {
     },
     isCancelled: () => execCtx.isCancelled(),
     throwIfCancelled: () => execCtx.throwIfCancelled(),
-  });
+  };
+  if (debugApi && typeof debugApi.trace === TYPEOF.FUNCTION) {
+    callbackContext.debug = Object.freeze({
+      trace: debugApi.trace,
+    });
+  }
+  return Object.freeze(callbackContext);
 }
 
 export {buildCallbackContext};

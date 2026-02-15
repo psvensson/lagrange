@@ -30,7 +30,20 @@ function buildScenarioEntry(scenarioName, result) {
     stackTrace: result.stackTrace || null,
     logs: result.logs || null,
     playback: result.playback || null,
+    trace: result.trace || null,
+    traceAssertion: result.traceAssertion || null,
+    details: result.details || null,
   };
+
+  if (result.exampleResults) {
+    entry.exampleResults = result.exampleResults;
+  } else if (result.details &&
+    typeof result.details === 'object' &&
+    result.details.exampleResults) {
+    entry.exampleResults = result.details.exampleResults;
+  } else {
+    entry.exampleResults = null;
+  }
 
   if (result.loadMetrics) {
     entry.loadMetrics = {

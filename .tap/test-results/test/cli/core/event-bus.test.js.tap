@@ -4,65 +4,65 @@ TAP version 14
     ok 2 - should be equivalent
     ok 3 - should be equivalent
     1..3
-ok 1 - EventBus - basic subscription and emission # time=4ms
+ok 1 - EventBus - basic subscription and emission # time=4.013ms
 
 # Subtest: EventBus - once() auto-unregisters after first call
     ok 1 - should be equal
     ok 2 - should be equivalent
     1..2
-ok 2 - EventBus - once() auto-unregisters after first call # time=0.418ms
+ok 2 - EventBus - once() auto-unregisters after first call # time=0.41ms
 
 # Subtest: EventBus - off() removes handler
     ok 1 - should be equal
     1..1
-ok 3 - EventBus - off() removes handler # time=0.227ms
+ok 3 - EventBus - off() removes handler # time=0.188ms
 
 # Subtest: EventBus - unsubscribe function works
     ok 1 - should be equal
     1..1
-ok 4 - EventBus - unsubscribe function works # time=0.275ms
+ok 4 - EventBus - unsubscribe function works # time=0.183ms
 
 # Subtest: EventBus - wildcard subscriptions
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 5 - EventBus - wildcard subscriptions # time=0.326ms
+ok 5 - EventBus - wildcard subscriptions # time=0.268ms
 
 # Subtest: EventBus - global wildcard
     ok 1 - should be equal
     1..1
-ok 6 - EventBus - global wildcard # time=0.199ms
+ok 6 - EventBus - global wildcard # time=0.168ms
 
 # Subtest: EventBus - priority ordering
     ok 1 - should be equivalent
     1..1
-ok 7 - EventBus - priority ordering # time=0.67ms
+ok 7 - EventBus - priority ordering # time=0.458ms
 
 # Subtest: EventBus - debug mode logs events
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 8 - EventBus - debug mode logs events # time=0.456ms
+ok 8 - EventBus - debug mode logs events # time=0.405ms
 
 # Subtest: EventBus - handler errors do not break other handlers
     ok 1 - should be equal
     1..1
-ok 9 - EventBus - handler errors do not break other handlers # time=0.278ms
+ok 9 - EventBus - handler errors do not break other handlers # time=0.236ms
 
 # Subtest: EventBus - clear() removes all handlers
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 10 - EventBus - clear() removes all handlers # time=0.261ms
+ok 10 - EventBus - clear() removes all handlers # time=0.26ms
 
 # Subtest: EventBus - listenerCount returns correct count
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 11 - EventBus - listenerCount returns correct count # time=0.215ms
+ok 11 - EventBus - listenerCount returns correct count # time=0.214ms
 
 1..11
 # { total: 20, pass: 20 }
-# time=25.7ms
+# time=13.362ms

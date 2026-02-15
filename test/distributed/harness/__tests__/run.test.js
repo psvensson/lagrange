@@ -12,6 +12,8 @@ import {URL} from 'node:url';
 import {
   parseArgs,
   runScenarios,
+  normalizeScenarioPayload,
+  evaluateTraceAssertions,
   buildImage,
   deriveRunOutputDir,
   loadScenarioModule,
@@ -160,6 +162,92 @@ describe('runScenarios', () => {
 
     assert.equal(hasFailures, false);
     assert.equal(report.scenarios.length, 0);
+  });
+});
+
+describe('normalizeScenarioPayload', () => {
+  it('returns null for non-object payloads', () => {
+    assert.equal(normalizeScenarioPayload(null), null);
+    assert.equal(normalizeScenarioPayload(undefined), null);
+    assert.equal(normalizeScenarioPayload('x'), null);
+    assert.equal(normalizeScenarioPayload(42), null);
+    assert.equal(normalizeScenarioPayload([]), null);
+  });
+
+  it('returns object payload for merge into scenario result', () => {
+    const payload = {
+      exampleResults: {
+        total: 2,
+        passed: 2,
+        failed: 0,
+      },
+      artifactPath: 'test-output/examples/run-1.json',
+    };
+    assert.deepEqual(normalizeScenarioPayload(payload), payload);
+  });
+});
+
+describe('evaluateTraceAssertions', () => {
+  it('returns null when trace assertions are not required', () => {
+    const result = evaluateTraceAssertions(
+      {eventCount: 1, lineageIds: ['lineage-1']},
+      {enabled: true, required: false},
+    );
+    assert.equal(result, null);
+  });
+
+  it('fails when required trace artifact is missing', () => {
+    const result = evaluateTraceAssertions(
+      null,
+      {enabled: true, required: true},
+    );
+    assert.equal(result.required, true);
+    assert.equal(result.passed, false);
+    assert.equal(result.error, 'trace artifact missing');
+  });
+
+  it('fails when required trace has no captured events', () => {
+    const result = evaluateTraceAssertions(
+      {eventCount: 0, lineageIds: []},
+      {enabled: true, required: true},
+    );
+    assert.equal(result.passed, false);
+    assert.equal(result.error, 'no trace events captured');
+  });
+
+  it('enforces required lineage prefix when configured', () => {
+    const result = evaluateTraceAssertions(
+      {
+        eventCount: 2,
+        lineageIds: ['lineage-a', 'lineage-b'],
+      },
+      {
+        enabled: true,
+        required: true,
+        requiredLineagePrefix: 'lineage-z',
+      },
+    );
+    assert.equal(result.passed, false);
+    assert.equal(
+      result.error,
+      'required lineage prefix not found: lineage-z',
+    );
+  });
+
+  it('passes when required lineage prefix is present', () => {
+    const result = evaluateTraceAssertions(
+      {
+        eventCount: 2,
+        lineageIds: ['lineage-z-1', 'lineage-b'],
+      },
+      {
+        enabled: true,
+        required: true,
+        requiredLineagePrefix: 'lineage-z',
+      },
+    );
+    assert.equal(result.passed, true);
+    assert.equal(result.matchedRequiredLineagePrefix, true);
   });
 });
 

@@ -49,6 +49,9 @@ const SystemTableName = {
   PACKAGE_REGISTRY_OVERRIDES: TABLES.PACKAGE_REGISTRY_OVERRIDES,
   MODULE_DEPENDENCY_LOCKS: TABLES.MODULE_DEPENDENCY_LOCKS,
   WASM_OPERATIONS: TABLES.WASM_OPERATIONS,
+  DEBUG_SESSIONS: TABLES.DEBUG_SESSIONS,
+  DEBUG_BREAKPOINTS: TABLES.DEBUG_BREAKPOINTS,
+  DEBUG_SNAPSHOTS: TABLES.DEBUG_SNAPSHOTS,
   STORAGE_RESERVATIONS: TABLES.STORAGE_RESERVATIONS,
   LATENCY_GROUPS: TABLES.LATENCY_GROUPS,
   INTER_GROUP_LATENCIES: TABLES.INTER_GROUP_LATENCIES,
@@ -800,6 +803,132 @@ const WASM_OPERATIONS_SCHEMA = {
 };
 
 /**
+ * Debug sessions system table schema.
+ * Stores tenant-scoped distributed debug session metadata.
+ */
+const DEBUG_SESSIONS_SCHEMA = {
+  tableName: SystemTableName.DEBUG_SESSIONS,
+  columns: [
+    {name: 'session_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'tenant_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'service_name', type: ColumnType.TEXT, notNull: true},
+    {name: 'lineage_id', type: ColumnType.TEXT},
+    {name: 'stage_id', type: ColumnType.INTEGER},
+    {name: 'node_id', type: ColumnType.TEXT},
+    {name: 'endpoint', type: ColumnType.TEXT},
+    {
+      name: 'status',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'active\'',
+    },
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {
+      name: 'idx_debug_sessions_tenant',
+      columns: ['tenant_id'],
+    },
+    {
+      name: 'idx_debug_sessions_lineage_stage',
+      columns: ['lineage_id', 'stage_id'],
+    },
+    {
+      name: 'idx_debug_sessions_service_name',
+      columns: ['service_name'],
+    },
+  ],
+};
+
+/**
+ * Debug breakpoints system table schema.
+ * Stores resolved source breakpoints for a debug session.
+ */
+const DEBUG_BREAKPOINTS_SCHEMA = {
+  tableName: SystemTableName.DEBUG_BREAKPOINTS,
+  columns: [
+    {name: 'breakpoint_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'session_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'tenant_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'module_ref', type: ColumnType.TEXT, notNull: true},
+    {name: 'source_file_url', type: ColumnType.TEXT, notNull: true},
+    {name: 'line_number', type: ColumnType.INTEGER, notNull: true},
+    {
+      name: 'column_number',
+      type: ColumnType.INTEGER,
+      notNull: true,
+      defaultValue: 0,
+    },
+    {name: 'condition', type: ColumnType.TEXT},
+    {
+      name: 'resolved',
+      type: ColumnType.INTEGER,
+      notNull: true,
+      defaultValue: 0,
+    },
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {
+      name: 'idx_debug_breakpoints_session',
+      columns: ['session_id'],
+    },
+    {
+      name: 'idx_debug_breakpoints_tenant_session',
+      columns: ['tenant_id', 'session_id'],
+    },
+    {
+      name: 'idx_debug_breakpoints_module_source_line',
+      columns: ['module_ref', 'source_file_url', 'line_number'],
+    },
+  ],
+};
+
+/**
+ * Debug snapshots system table schema.
+ * Stores serialized deterministic snapshot artifacts.
+ */
+const DEBUG_SNAPSHOTS_SCHEMA = {
+  tableName: SystemTableName.DEBUG_SNAPSHOTS,
+  columns: [
+    {name: 'snapshot_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'session_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'tenant_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'module_ref', type: ColumnType.TEXT, notNull: true},
+    {name: 'module_digest', type: ColumnType.TEXT, notNull: true},
+    {name: 'captured_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'format_version', type: ColumnType.INTEGER, notNull: true},
+    {
+      name: 'snapshot_bytes_base64',
+      type: ColumnType.TEXT,
+      notNull: true,
+    },
+    {name: 'manifest_json', type: ColumnType.TEXT, notNull: true},
+    {name: 'total_bytes', type: ColumnType.INTEGER, notNull: true},
+    {name: 'frame_count', type: ColumnType.INTEGER, notNull: true},
+    {name: 'host_call_count', type: ColumnType.INTEGER, notNull: true},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {
+      name: 'idx_debug_snapshots_session',
+      columns: ['session_id'],
+    },
+    {
+      name: 'idx_debug_snapshots_tenant_session',
+      columns: ['tenant_id', 'session_id'],
+    },
+    {
+      name: 'idx_debug_snapshots_captured_at',
+      columns: ['captured_at'],
+    },
+  ],
+};
+
+/**
  * Storage reservations system table schema.
  * Tracks in-flight storage reservations for admission control.
  * Requirements: 1.2, 2.1, 12.1
@@ -877,6 +1006,9 @@ const SYSTEM_TABLE_SCHEMAS = [
   PACKAGE_REGISTRY_OVERRIDES_SCHEMA,
   MODULE_DEPENDENCY_LOCKS_SCHEMA,
   WASM_OPERATIONS_SCHEMA,
+  DEBUG_SESSIONS_SCHEMA,
+  DEBUG_BREAKPOINTS_SCHEMA,
+  DEBUG_SNAPSHOTS_SCHEMA,
   STORAGE_RESERVATIONS_SCHEMA,
 ];
 
@@ -909,6 +1041,9 @@ const INITIAL_PARTITION_IDS = {
   [SystemTableName.MODULE_DEPENDENCY_LOCKS]:
     'module_dependency_locks-p1',
   [SystemTableName.WASM_OPERATIONS]: 'wasm_operations-p1',
+  [SystemTableName.DEBUG_SESSIONS]: 'debug_sessions-p1',
+  [SystemTableName.DEBUG_BREAKPOINTS]: 'debug_breakpoints-p1',
+  [SystemTableName.DEBUG_SNAPSHOTS]: 'debug_snapshots-p1',
   [SystemTableName.STORAGE_RESERVATIONS]: 'storage_reservations-p1',
   [SystemTableName.LATENCY_GROUPS]: 'latency_groups-p1',
   [SystemTableName.INTER_GROUP_LATENCIES]: 'inter_group_latencies-p1',
@@ -973,6 +1108,21 @@ const INITIAL_REPLICA_IDS = {
     'wasm_operations-p1-r1',
     'wasm_operations-p1-r2',
     'wasm_operations-p1-r3',
+  ],
+  [SystemTableName.DEBUG_SESSIONS]: [
+    'debug_sessions-p1-r1',
+    'debug_sessions-p1-r2',
+    'debug_sessions-p1-r3',
+  ],
+  [SystemTableName.DEBUG_BREAKPOINTS]: [
+    'debug_breakpoints-p1-r1',
+    'debug_breakpoints-p1-r2',
+    'debug_breakpoints-p1-r3',
+  ],
+  [SystemTableName.DEBUG_SNAPSHOTS]: [
+    'debug_snapshots-p1-r1',
+    'debug_snapshots-p1-r2',
+    'debug_snapshots-p1-r3',
   ],
   [SystemTableName.STORAGE_RESERVATIONS]: [
     'storage_reservations-p1-r1',
@@ -1104,6 +1254,9 @@ export {
   PACKAGE_REGISTRY_OVERRIDES_SCHEMA,
   MODULE_DEPENDENCY_LOCKS_SCHEMA,
   WASM_OPERATIONS_SCHEMA,
+  DEBUG_SESSIONS_SCHEMA,
+  DEBUG_BREAKPOINTS_SCHEMA,
+  DEBUG_SNAPSHOTS_SCHEMA,
   STORAGE_RESERVATIONS_SCHEMA,
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_PARTITION_IDS,

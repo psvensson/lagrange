@@ -393,6 +393,90 @@ test('Unit: NodeHandle.query sends queryId and ignores initial cache dump', asyn
   }
 });
 
+test('Unit: NodeHandle.partitionCallback sends callback envelope and returns hostResult',
+  async () => {
+    const server = new WebSocketServer({
+      host: '127.0.0.1',
+      port: 0,
+    });
+    await new Promise((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+
+    const address = server.address();
+    assert.ok(address && typeof address === 'object',
+      'server should expose listen address');
+    const adminApiPort = address.port;
+
+    let capturedMessage = null;
+    server.on('connection', (socket) => {
+      socket.send(JSON.stringify({
+        type: 'cache_dump',
+        data: {},
+      }));
+      socket.once('message', (data) => {
+        capturedMessage = JSON.parse(data.toString());
+        socket.send(JSON.stringify({
+          type: 'query_result',
+          queryId: capturedMessage.queryId,
+          operation: 'partition_callback',
+          results: [],
+          hostResult: {
+            state: 'completed',
+            processedPartitions: 3,
+            failedPartitions: 0,
+            totalRows: 7,
+          },
+          callbackModuleRef: capturedMessage.callbackModuleRef,
+          callbackExport: capturedMessage.callbackExport,
+        }));
+      });
+    });
+
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.SEED,
+      {getContainerLogs: async () => ''},
+      adminApiPort,
+    );
+
+    try {
+      const result = await node.partitionCallback({
+        statement: 'SELECT * FROM nodes',
+        parameters: [],
+        callbackModuleRef: 'mod-1',
+        callbackExport: 'run',
+        runtimeKind: 'wasm_component',
+      });
+      assert.strictEqual(capturedMessage.type, 'partition_callback');
+      assert.strictEqual(capturedMessage.statement, 'SELECT * FROM nodes');
+      assert.strictEqual(capturedMessage.callbackModuleRef, 'mod-1');
+      assert.strictEqual(capturedMessage.callbackExport, 'run');
+      assert.strictEqual(capturedMessage.runtimeKind, 'wasm_component');
+      assert.equal(result.operation, 'partition_callback');
+      assert.deepStrictEqual(result.hostResult, {
+        state: 'completed',
+        processedPartitions: 3,
+        failedPartitions: 0,
+        totalRows: 7,
+      });
+    } finally {
+      node.closeQueryConnection();
+      await new Promise((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+  });
+
 test('Unit: NodeHandle.query reuses one Admin API connection', async () => {
   const server = new WebSocketServer({
     host: '127.0.0.1',

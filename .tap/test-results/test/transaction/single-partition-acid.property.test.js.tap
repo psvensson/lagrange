@@ -1,6 +1,6 @@
 TAP version 14
 Initializing partition service {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
+  partitionId: 'test-partition-1771161458403-0.4504693086441651',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -9,81 +9,41 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040622-0.2771106097165206'
+  partitionId: 'test-partition-1771161458403-0.4504693086441651'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040622-0.2771106097165206'
+  partitionId: 'test-partition-1771161458403-0.4504693086441651'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
+  partitionId: 'test-partition-1771161458403-0.4504693086441651',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
+  partitionId: 'test-partition-1771161458403-0.4504693086441651',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040622-0.2771106097165206' }
+Beginning transaction { partitionId: 'test-partition-1771161458403-0.4504693086441651' }
 Executing query {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
-  sql: "INSERT INTO test_table (id, value) VALUES (1768, '3753')"
+  partitionId: 'test-partition-1771161458403-0.4504693086441651',
+  sql: "INSERT INTO test_table (id, value) VALUES (2, '8')"
 }
-Executing query {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
-  sql: "INSERT INTO test_table (id, value) VALUES (150, 'sovwwl')"
-}
-Executing query {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
-  sql: "INSERT INTO test_table (id, value) VALUES (3484, 'ztzmncqslvv')"
+Rolling back transaction {
+  partitionId: 'test-partition-1771161458403-0.4504693086441651',
+  operationCount: 1
 }
 Executing query {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
-  sql: "INSERT INTO test_table (id, value) VALUES (1759, '8607')"
-}
-Committing transaction {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
-  operationCount: 4
-}
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (1768, '3753')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040622-0.2771106097165206' }
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (150, 'sovwwl')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040622-0.2771106097165206' }
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (3484, 'ztzmncqslvv')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040622-0.2771106097165206' }
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (1759, '8607')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040622-0.2771106097165206' }
-Executing query {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
+  partitionId: 'test-partition-1771161458403-0.4504693086441651',
   sql: 'SELECT COUNT(*) as cnt FROM test_table'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040622-0.2771106097165206',
+  partitionId: 'test-partition-1771161458403-0.4504693086441651',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -92,70 +52,70 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040629-0.9878207228500906'
+  partitionId: 'test-partition-1771161458410-0.0364322838997293'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040629-0.9878207228500906'
+  partitionId: 'test-partition-1771161458410-0.0364322838997293'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040629-0.9878207228500906' }
+Beginning transaction { partitionId: 'test-partition-1771161458410-0.0364322838997293' }
 Executing query {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
-  sql: "INSERT INTO test_table (id, value) VALUES (4018, '8779')"
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
+  sql: "INSERT INTO test_table (id, value) VALUES (2735, 'goca')"
 }
 Executing query {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
-  sql: "INSERT INTO test_table (id, value) VALUES (7139, 'dau')"
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
+  sql: "INSERT INTO test_table (id, value) VALUES (8827, 'pft')"
 }
 Executing query {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
-  sql: "INSERT INTO test_table (id, value) VALUES (7, 'e')"
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
+  sql: "INSERT INTO test_table (id, value) VALUES (2785, 'gbpdzvrvbtmw')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
   operationCount: 3
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (4018, '8779')",
+  sql: "INSERT INTO test_table (id, value) VALUES (2735, 'goca')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040629-0.9878207228500906' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458410-0.0364322838997293' }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (7139, 'dau')",
+  sql: "INSERT INTO test_table (id, value) VALUES (8827, 'pft')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040629-0.9878207228500906' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458410-0.0364322838997293' }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (7, 'e')",
+  sql: "INSERT INTO test_table (id, value) VALUES (2785, 'gbpdzvrvbtmw')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040629-0.9878207228500906' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458410-0.0364322838997293' }
 Executing query {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
   sql: 'SELECT COUNT(*) as cnt FROM test_table'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040629-0.9878207228500906',
+  partitionId: 'test-partition-1771161458410-0.0364322838997293',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040631-0.037189451674803475',
+  partitionId: 'test-partition-1771161458413-0.14890732334684853',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -164,107 +124,141 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040631-0.037189451674803475'
+  partitionId: 'test-partition-1771161458413-0.14890732334684853'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040631-0.037189451674803475'
+  partitionId: 'test-partition-1771161458413-0.14890732334684853'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040631-0.037189451674803475',
+  partitionId: 'test-partition-1771161458413-0.14890732334684853',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040631-0.037189451674803475',
+  partitionId: 'test-partition-1771161458413-0.14890732334684853',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040631-0.037189451674803475' }
+Beginning transaction { partitionId: 'test-partition-1771161458413-0.14890732334684853' }
 Executing query {
-  partitionId: 'test-partition-1771145040631-0.037189451674803475',
-  sql: "INSERT INTO test_table (id, value) VALUES (13, 'ref')"
+  partitionId: 'test-partition-1771161458413-0.14890732334684853',
+  sql: "INSERT INTO test_table (id, value) VALUES (6739, 'wdbag')"
 }
-Executing query {
-  partitionId: 'test-partition-1771145040631-0.037189451674803475',
-  sql: "INSERT INTO test_table (id, value) VALUES (7306, '9953')"
+Committing transaction {
+  partitionId: 'test-partition-1771161458413-0.14890732334684853',
+  operationCount: 1
 }
-Executing query {
-  partitionId: 'test-partition-1771145040631-0.037189451674803475',
-  sql: "INSERT INTO test_table (id, value) VALUES (3707, 'rjffa')"
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458413-0.14890732334684853',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (6739, 'wdbag')",
+  subscriberCount: 0
 }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458413-0.14890732334684853' }
 Executing query {
-  partitionId: 'test-partition-1771145040631-0.037189451674803475',
-  sql: "INSERT INTO test_table (id, value) VALUES (6, 'kuguu')"
+  partitionId: 'test-partition-1771161458413-0.14890732334684853',
+  sql: 'SELECT COUNT(*) as cnt FROM test_table'
 }
+Shutting down partition service {
+  partitionId: 'test-partition-1771161458413-0.14890732334684853',
+  replicaId: 'replica-1'
+}
+Initializing partition service {
+  partitionId: 'test-partition-1771161458415-0.5708324332111923',
+  tableId: 'test_table',
+  replicaId: 'replica-1',
+  nodeId: 'unknown',
+  replicaCount: 1,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'test_table',
+  partitionId: 'test-partition-1771161458415-0.5708324332111923'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'replica-1',
+  partitionId: 'test-partition-1771161458415-0.5708324332111923'
+}
+Partition size updated {
+  partitionId: 'test-partition-1771161458415-0.5708324332111923',
+  sizeBytes: 20480,
+  sizeMB: '0.02'
+}
+Partition service initialized {
+  partitionId: 'test-partition-1771161458415-0.5708324332111923',
+  replicaId: 'replica-1',
+  sizeBytes: 20480
+}
+Beginning transaction { partitionId: 'test-partition-1771161458415-0.5708324332111923' }
 Executing query {
-  partitionId: 'test-partition-1771145040631-0.037189451674803475',
-  sql: "INSERT INTO test_table (id, value) VALUES (6557, 'gifpbebquvko')"
+  partitionId: 'test-partition-1771161458415-0.5708324332111923',
+  sql: "INSERT INTO test_table (id, value) VALUES (939, '4221')"
+}
+Committing transaction {
+  partitionId: 'test-partition-1771161458415-0.5708324332111923',
+  operationCount: 1
+}
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458415-0.5708324332111923',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (939, '4221')",
+  subscriberCount: 0
+}
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458415-0.5708324332111923' }
+Executing query {
+  partitionId: 'test-partition-1771161458415-0.5708324332111923',
+  sql: 'SELECT COUNT(*) as cnt FROM test_table'
+}
+Shutting down partition service {
+  partitionId: 'test-partition-1771161458415-0.5708324332111923',
+  replicaId: 'replica-1'
+}
+Initializing partition service {
+  partitionId: 'test-partition-1771161458417-0.05475578148130844',
+  tableId: 'test_table',
+  replicaId: 'replica-1',
+  nodeId: 'unknown',
+  replicaCount: 1,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'test_table',
+  partitionId: 'test-partition-1771161458417-0.05475578148130844'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'replica-1',
+  partitionId: 'test-partition-1771161458417-0.05475578148130844'
+}
+Partition size updated {
+  partitionId: 'test-partition-1771161458417-0.05475578148130844',
+  sizeBytes: 20480,
+  sizeMB: '0.02'
+}
+Partition service initialized {
+  partitionId: 'test-partition-1771161458417-0.05475578148130844',
+  replicaId: 'replica-1',
+  sizeBytes: 20480
+}
+Beginning transaction { partitionId: 'test-partition-1771161458417-0.05475578148130844' }
+Executing query {
+  partitionId: 'test-partition-1771161458417-0.05475578148130844',
+  sql: "INSERT INTO test_table (id, value) VALUES (1156, 'x')"
 }
 Rolling back transaction {
-  partitionId: 'test-partition-1771145040631-0.037189451674803475',
-  operationCount: 5
-}
-Executing query {
-  partitionId: 'test-partition-1771145040631-0.037189451674803475',
-  sql: 'SELECT COUNT(*) as cnt FROM test_table'
-}
-Shutting down partition service {
-  partitionId: 'test-partition-1771145040631-0.037189451674803475',
-  replicaId: 'replica-1'
-}
-Initializing partition service {
-  partitionId: 'test-partition-1771145040633-0.08106759694885945',
-  tableId: 'test_table',
-  replicaId: 'replica-1',
-  nodeId: 'unknown',
-  replicaCount: 1,
-  dbPath: ':memory:'
-}
-Created table {
-  tableName: 'test_table',
-  partitionId: 'test-partition-1771145040633-0.08106759694885945'
-}
-Single replica - becoming leader immediately {
-  replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040633-0.08106759694885945'
-}
-Partition size updated {
-  partitionId: 'test-partition-1771145040633-0.08106759694885945',
-  sizeBytes: 20480,
-  sizeMB: '0.02'
-}
-Partition service initialized {
-  partitionId: 'test-partition-1771145040633-0.08106759694885945',
-  replicaId: 'replica-1',
-  sizeBytes: 20480
-}
-Beginning transaction { partitionId: 'test-partition-1771145040633-0.08106759694885945' }
-Executing query {
-  partitionId: 'test-partition-1771145040633-0.08106759694885945',
-  sql: "INSERT INTO test_table (id, value) VALUES (6933, '5637')"
-}
-Committing transaction {
-  partitionId: 'test-partition-1771145040633-0.08106759694885945',
+  partitionId: 'test-partition-1771161458417-0.05475578148130844',
   operationCount: 1
 }
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040633-0.08106759694885945',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (6933, '5637')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040633-0.08106759694885945' }
 Executing query {
-  partitionId: 'test-partition-1771145040633-0.08106759694885945',
+  partitionId: 'test-partition-1771161458417-0.05475578148130844',
   sql: 'SELECT COUNT(*) as cnt FROM test_table'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040633-0.08106759694885945',
+  partitionId: 'test-partition-1771161458417-0.05475578148130844',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040634-0.6737207952909727',
+  partitionId: 'test-partition-1771161458418-0.27049853052474115',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -273,210 +267,59 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040634-0.6737207952909727'
+  partitionId: 'test-partition-1771161458418-0.27049853052474115'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040634-0.6737207952909727'
+  partitionId: 'test-partition-1771161458418-0.27049853052474115'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040634-0.6737207952909727',
+  partitionId: 'test-partition-1771161458418-0.27049853052474115',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040634-0.6737207952909727',
+  partitionId: 'test-partition-1771161458418-0.27049853052474115',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040634-0.6737207952909727' }
+Beginning transaction { partitionId: 'test-partition-1771161458418-0.27049853052474115' }
 Executing query {
-  partitionId: 'test-partition-1771145040634-0.6737207952909727',
-  sql: "INSERT INTO test_table (id, value) VALUES (12, '14')"
-}
-Executing query {
-  partitionId: 'test-partition-1771145040634-0.6737207952909727',
-  sql: "INSERT INTO test_table (id, value) VALUES (4755, 'wo')"
+  partitionId: 'test-partition-1771161458418-0.27049853052474115',
+  sql: "INSERT INTO test_table (id, value) VALUES (12, 'bind')"
 }
 Executing query {
-  partitionId: 'test-partition-1771145040634-0.6737207952909727',
-  sql: "INSERT INTO test_table (id, value) VALUES (9995, 'svzapvmk')"
-}
-Rolling back transaction {
-  partitionId: 'test-partition-1771145040634-0.6737207952909727',
-  operationCount: 3
-}
-Executing query {
-  partitionId: 'test-partition-1771145040634-0.6737207952909727',
-  sql: 'SELECT COUNT(*) as cnt FROM test_table'
-}
-Shutting down partition service {
-  partitionId: 'test-partition-1771145040634-0.6737207952909727',
-  replicaId: 'replica-1'
-}
-Initializing partition service {
-  partitionId: 'test-partition-1771145040635-0.9155092415933213',
-  tableId: 'test_table',
-  replicaId: 'replica-1',
-  nodeId: 'unknown',
-  replicaCount: 1,
-  dbPath: ':memory:'
-}
-Created table {
-  tableName: 'test_table',
-  partitionId: 'test-partition-1771145040635-0.9155092415933213'
-}
-Single replica - becoming leader immediately {
-  replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040635-0.9155092415933213'
-}
-Partition size updated {
-  partitionId: 'test-partition-1771145040635-0.9155092415933213',
-  sizeBytes: 20480,
-  sizeMB: '0.02'
-}
-Partition service initialized {
-  partitionId: 'test-partition-1771145040635-0.9155092415933213',
-  replicaId: 'replica-1',
-  sizeBytes: 20480
-}
-Beginning transaction { partitionId: 'test-partition-1771145040635-0.9155092415933213' }
-Executing query {
-  partitionId: 'test-partition-1771145040635-0.9155092415933213',
-  sql: "INSERT INTO test_table (id, value) VALUES (1012, '353')"
+  partitionId: 'test-partition-1771161458418-0.27049853052474115',
+  sql: "INSERT INTO test_table (id, value) VALUES (14, 'f')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040635-0.9155092415933213',
-  operationCount: 1
-}
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040635-0.9155092415933213',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (1012, '353')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040635-0.9155092415933213' }
-Executing query {
-  partitionId: 'test-partition-1771145040635-0.9155092415933213',
-  sql: 'SELECT COUNT(*) as cnt FROM test_table'
-}
-Shutting down partition service {
-  partitionId: 'test-partition-1771145040635-0.9155092415933213',
-  replicaId: 'replica-1'
-}
-Initializing partition service {
-  partitionId: 'test-partition-1771145040637-0.44139887726147786',
-  tableId: 'test_table',
-  replicaId: 'replica-1',
-  nodeId: 'unknown',
-  replicaCount: 1,
-  dbPath: ':memory:'
-}
-Created table {
-  tableName: 'test_table',
-  partitionId: 'test-partition-1771145040637-0.44139887726147786'
-}
-Single replica - becoming leader immediately {
-  replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040637-0.44139887726147786'
-}
-Partition size updated {
-  partitionId: 'test-partition-1771145040637-0.44139887726147786',
-  sizeBytes: 20480,
-  sizeMB: '0.02'
-}
-Partition service initialized {
-  partitionId: 'test-partition-1771145040637-0.44139887726147786',
-  replicaId: 'replica-1',
-  sizeBytes: 20480
-}
-Beginning transaction { partitionId: 'test-partition-1771145040637-0.44139887726147786' }
-Executing query {
-  partitionId: 'test-partition-1771145040637-0.44139887726147786',
-  sql: "INSERT INTO test_table (id, value) VALUES (9995, '8934')"
-}
-Committing transaction {
-  partitionId: 'test-partition-1771145040637-0.44139887726147786',
-  operationCount: 1
-}
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040637-0.44139887726147786',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (9995, '8934')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040637-0.44139887726147786' }
-Executing query {
-  partitionId: 'test-partition-1771145040637-0.44139887726147786',
-  sql: 'SELECT COUNT(*) as cnt FROM test_table'
-}
-Shutting down partition service {
-  partitionId: 'test-partition-1771145040637-0.44139887726147786',
-  replicaId: 'replica-1'
-}
-Initializing partition service {
-  partitionId: 'test-partition-1771145040639-0.05378152476023246',
-  tableId: 'test_table',
-  replicaId: 'replica-1',
-  nodeId: 'unknown',
-  replicaCount: 1,
-  dbPath: ':memory:'
-}
-Created table {
-  tableName: 'test_table',
-  partitionId: 'test-partition-1771145040639-0.05378152476023246'
-}
-Single replica - becoming leader immediately {
-  replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040639-0.05378152476023246'
-}
-Partition size updated {
-  partitionId: 'test-partition-1771145040639-0.05378152476023246',
-  sizeBytes: 20480,
-  sizeMB: '0.02'
-}
-Partition service initialized {
-  partitionId: 'test-partition-1771145040639-0.05378152476023246',
-  replicaId: 'replica-1',
-  sizeBytes: 20480
-}
-Beginning transaction { partitionId: 'test-partition-1771145040639-0.05378152476023246' }
-Executing query {
-  partitionId: 'test-partition-1771145040639-0.05378152476023246',
-  sql: "INSERT INTO test_table (id, value) VALUES (8690, '2091')"
-}
-Executing query {
-  partitionId: 'test-partition-1771145040639-0.05378152476023246',
-  sql: "INSERT INTO test_table (id, value) VALUES (6, 'w')"
-}
-Committing transaction {
-  partitionId: 'test-partition-1771145040639-0.05378152476023246',
+  partitionId: 'test-partition-1771161458418-0.27049853052474115',
   operationCount: 2
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040639-0.05378152476023246',
+  partitionId: 'test-partition-1771161458418-0.27049853052474115',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (8690, '2091')",
+  sql: "INSERT INTO test_table (id, value) VALUES (12, 'bind')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040639-0.05378152476023246' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458418-0.27049853052474115' }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040639-0.05378152476023246',
+  partitionId: 'test-partition-1771161458418-0.27049853052474115',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (6, 'w')",
+  sql: "INSERT INTO test_table (id, value) VALUES (14, 'f')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040639-0.05378152476023246' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458418-0.27049853052474115' }
 Executing query {
-  partitionId: 'test-partition-1771145040639-0.05378152476023246',
+  partitionId: 'test-partition-1771161458418-0.27049853052474115',
   sql: 'SELECT COUNT(*) as cnt FROM test_table'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040639-0.05378152476023246',
+  partitionId: 'test-partition-1771161458418-0.27049853052474115',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040641-0.17147151500381352',
+  partitionId: 'test-partition-1771161458420-0.33284210497947186',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -485,49 +328,57 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040641-0.17147151500381352'
+  partitionId: 'test-partition-1771161458420-0.33284210497947186'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040641-0.17147151500381352'
+  partitionId: 'test-partition-1771161458420-0.33284210497947186'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040641-0.17147151500381352',
+  partitionId: 'test-partition-1771161458420-0.33284210497947186',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040641-0.17147151500381352',
+  partitionId: 'test-partition-1771161458420-0.33284210497947186',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040641-0.17147151500381352' }
+Beginning transaction { partitionId: 'test-partition-1771161458420-0.33284210497947186' }
 Executing query {
-  partitionId: 'test-partition-1771145040641-0.17147151500381352',
-  sql: "INSERT INTO test_table (id, value) VALUES (6239, 'w')"
+  partitionId: 'test-partition-1771161458420-0.33284210497947186',
+  sql: "INSERT INTO test_table (id, value) VALUES (7, '2567')"
 }
 Executing query {
-  partitionId: 'test-partition-1771145040641-0.17147151500381352',
-  sql: "INSERT INTO test_table (id, value) VALUES (3241, '6649')"
+  partitionId: 'test-partition-1771161458420-0.33284210497947186',
+  sql: "INSERT INTO test_table (id, value) VALUES (9730, 'xv')"
 }
 Executing query {
-  partitionId: 'test-partition-1771145040641-0.17147151500381352',
-  sql: "INSERT INTO test_table (id, value) VALUES (9418, '8370')"
+  partitionId: 'test-partition-1771161458420-0.33284210497947186',
+  sql: "INSERT INTO test_table (id, value) VALUES (6891, '7882')"
+}
+Executing query {
+  partitionId: 'test-partition-1771161458420-0.33284210497947186',
+  sql: "INSERT INTO test_table (id, value) VALUES (2704, '2547')"
+}
+Executing query {
+  partitionId: 'test-partition-1771161458420-0.33284210497947186',
+  sql: "INSERT INTO test_table (id, value) VALUES (9997, '8574')"
 }
 Rolling back transaction {
-  partitionId: 'test-partition-1771145040641-0.17147151500381352',
-  operationCount: 3
+  partitionId: 'test-partition-1771161458420-0.33284210497947186',
+  operationCount: 5
 }
 Executing query {
-  partitionId: 'test-partition-1771145040641-0.17147151500381352',
+  partitionId: 'test-partition-1771161458420-0.33284210497947186',
   sql: 'SELECT COUNT(*) as cnt FROM test_table'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040641-0.17147151500381352',
+  partitionId: 'test-partition-1771161458420-0.33284210497947186',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040642-0.7577719969768666',
+  partitionId: 'test-partition-1771161458421-0.007361045274472566',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -536,46 +387,175 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040642-0.7577719969768666'
+  partitionId: 'test-partition-1771161458421-0.007361045274472566'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040642-0.7577719969768666'
+  partitionId: 'test-partition-1771161458421-0.007361045274472566'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040642-0.7577719969768666',
+  partitionId: 'test-partition-1771161458421-0.007361045274472566',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040642-0.7577719969768666',
+  partitionId: 'test-partition-1771161458421-0.007361045274472566',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040642-0.7577719969768666' }
+Beginning transaction { partitionId: 'test-partition-1771161458421-0.007361045274472566' }
 Executing query {
-  partitionId: 'test-partition-1771145040642-0.7577719969768666',
-  sql: "INSERT INTO test_table (id, value) VALUES (8060, 'vkikyygtiibn')"
+  partitionId: 'test-partition-1771161458421-0.007361045274472566',
+  sql: "INSERT INTO test_table (id, value) VALUES (7382, 'yybznez')"
 }
-Rolling back transaction {
-  partitionId: 'test-partition-1771145040642-0.7577719969768666',
+Committing transaction {
+  partitionId: 'test-partition-1771161458421-0.007361045274472566',
   operationCount: 1
 }
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458421-0.007361045274472566',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (7382, 'yybznez')",
+  subscriberCount: 0
+}
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458421-0.007361045274472566' }
 Executing query {
-  partitionId: 'test-partition-1771145040642-0.7577719969768666',
+  partitionId: 'test-partition-1771161458421-0.007361045274472566',
   sql: 'SELECT COUNT(*) as cnt FROM test_table'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040642-0.7577719969768666',
+  partitionId: 'test-partition-1771161458421-0.007361045274472566',
+  replicaId: 'replica-1'
+}
+Initializing partition service {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  tableId: 'test_table',
+  replicaId: 'replica-1',
+  nodeId: 'unknown',
+  replicaCount: 1,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'test_table',
+  partitionId: 'test-partition-1771161458422-0.3021955784197896'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'replica-1',
+  partitionId: 'test-partition-1771161458422-0.3021955784197896'
+}
+Partition size updated {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  sizeBytes: 20480,
+  sizeMB: '0.02'
+}
+Partition service initialized {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  replicaId: 'replica-1',
+  sizeBytes: 20480
+}
+Beginning transaction { partitionId: 'test-partition-1771161458422-0.3021955784197896' }
+Executing query {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  sql: "INSERT INTO test_table (id, value) VALUES (5060, 'nk')"
+}
+Executing query {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  sql: "INSERT INTO test_table (id, value) VALUES (5654, '12')"
+}
+Executing query {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  sql: "INSERT INTO test_table (id, value) VALUES (9989, '9988')"
+}
+Committing transaction {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  operationCount: 3
+}
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (5060, 'nk')",
+  subscriberCount: 0
+}
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458422-0.3021955784197896' }
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (5654, '12')",
+  subscriberCount: 0
+}
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458422-0.3021955784197896' }
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (9989, '9988')",
+  subscriberCount: 0
+}
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458422-0.3021955784197896' }
+Executing query {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  sql: 'SELECT COUNT(*) as cnt FROM test_table'
+}
+Shutting down partition service {
+  partitionId: 'test-partition-1771161458422-0.3021955784197896',
+  replicaId: 'replica-1'
+}
+Initializing partition service {
+  partitionId: 'test-partition-1771161458424-0.3654719397211683',
+  tableId: 'test_table',
+  replicaId: 'replica-1',
+  nodeId: 'unknown',
+  replicaCount: 1,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'test_table',
+  partitionId: 'test-partition-1771161458424-0.3654719397211683'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'replica-1',
+  partitionId: 'test-partition-1771161458424-0.3654719397211683'
+}
+Partition size updated {
+  partitionId: 'test-partition-1771161458424-0.3654719397211683',
+  sizeBytes: 20480,
+  sizeMB: '0.02'
+}
+Partition service initialized {
+  partitionId: 'test-partition-1771161458424-0.3654719397211683',
+  replicaId: 'replica-1',
+  sizeBytes: 20480
+}
+Beginning transaction { partitionId: 'test-partition-1771161458424-0.3654719397211683' }
+Executing query {
+  partitionId: 'test-partition-1771161458424-0.3654719397211683',
+  sql: "INSERT INTO test_table (id, value) VALUES (3057, '709')"
+}
+Committing transaction {
+  partitionId: 'test-partition-1771161458424-0.3654719397211683',
+  operationCount: 1
+}
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458424-0.3654719397211683',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (3057, '709')",
+  subscriberCount: 0
+}
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458424-0.3654719397211683' }
+Executing query {
+  partitionId: 'test-partition-1771161458424-0.3654719397211683',
+  sql: 'SELECT COUNT(*) as cnt FROM test_table'
+}
+Shutting down partition service {
+  partitionId: 'test-partition-1771161458424-0.3654719397211683',
   replicaId: 'replica-1'
 }
 # Subtest: Property 46: Single-Partition ACID - Atomicity
     ok 1 - Atomicity property holds
     1..1
-ok 1 - Property 46: Single-Partition ACID - Atomicity # time=27.016ms
+ok 1 - Property 46: Single-Partition ACID - Atomicity # time=26.231ms
 
 Initializing partition service {
-  partitionId: 'test-partition-1771145040647-0.4217438421809878',
+  partitionId: 'test-partition-1771161458428-0.11027012808111403',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -584,48 +564,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040647-0.4217438421809878'
+  partitionId: 'test-partition-1771161458428-0.11027012808111403'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040647-0.4217438421809878'
+  partitionId: 'test-partition-1771161458428-0.11027012808111403'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040647-0.4217438421809878',
+  partitionId: 'test-partition-1771161458428-0.11027012808111403',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040647-0.4217438421809878',
+  partitionId: 'test-partition-1771161458428-0.11027012808111403',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040647-0.4217438421809878' }
+Beginning transaction { partitionId: 'test-partition-1771161458428-0.11027012808111403' }
 Executing query {
-  partitionId: 'test-partition-1771145040647-0.4217438421809878',
-  sql: "INSERT INTO test_table (id, value) VALUES (98, 'valid')"
+  partitionId: 'test-partition-1771161458428-0.11027012808111403',
+  sql: "INSERT INTO test_table (id, value) VALUES (21, 'valid')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040647-0.4217438421809878',
+  partitionId: 'test-partition-1771161458428-0.11027012808111403',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040647-0.4217438421809878',
+  partitionId: 'test-partition-1771161458428-0.11027012808111403',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (98, 'valid')",
+  sql: "INSERT INTO test_table (id, value) VALUES (21, 'valid')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040647-0.4217438421809878' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458428-0.11027012808111403' }
 Executing query {
-  partitionId: 'test-partition-1771145040647-0.4217438421809878',
-  sql: 'SELECT * FROM test_table WHERE id = 98'
+  partitionId: 'test-partition-1771161458428-0.11027012808111403',
+  sql: 'SELECT * FROM test_table WHERE id = 21'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040647-0.4217438421809878',
+  partitionId: 'test-partition-1771161458428-0.11027012808111403',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040649-0.39380318015034543',
+  partitionId: 'test-partition-1771161458430-0.3418477409599099',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -634,48 +614,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040649-0.39380318015034543'
+  partitionId: 'test-partition-1771161458430-0.3418477409599099'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040649-0.39380318015034543'
+  partitionId: 'test-partition-1771161458430-0.3418477409599099'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040649-0.39380318015034543',
+  partitionId: 'test-partition-1771161458430-0.3418477409599099',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040649-0.39380318015034543',
+  partitionId: 'test-partition-1771161458430-0.3418477409599099',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040649-0.39380318015034543' }
+Beginning transaction { partitionId: 'test-partition-1771161458430-0.3418477409599099' }
 Executing query {
-  partitionId: 'test-partition-1771145040649-0.39380318015034543',
-  sql: "INSERT INTO test_table (id, value) VALUES (88, 'valid')"
+  partitionId: 'test-partition-1771161458430-0.3418477409599099',
+  sql: "INSERT INTO test_table (id, value) VALUES (5, 'valid')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040649-0.39380318015034543',
+  partitionId: 'test-partition-1771161458430-0.3418477409599099',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040649-0.39380318015034543',
+  partitionId: 'test-partition-1771161458430-0.3418477409599099',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (88, 'valid')",
+  sql: "INSERT INTO test_table (id, value) VALUES (5, 'valid')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040649-0.39380318015034543' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458430-0.3418477409599099' }
 Executing query {
-  partitionId: 'test-partition-1771145040649-0.39380318015034543',
-  sql: 'SELECT * FROM test_table WHERE id = 88'
+  partitionId: 'test-partition-1771161458430-0.3418477409599099',
+  sql: 'SELECT * FROM test_table WHERE id = 5'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040649-0.39380318015034543',
+  partitionId: 'test-partition-1771161458430-0.3418477409599099',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040650-0.9142450121974124',
+  partitionId: 'test-partition-1771161458431-0.6422653905412683',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -684,48 +664,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040650-0.9142450121974124'
+  partitionId: 'test-partition-1771161458431-0.6422653905412683'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040650-0.9142450121974124'
+  partitionId: 'test-partition-1771161458431-0.6422653905412683'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040650-0.9142450121974124',
+  partitionId: 'test-partition-1771161458431-0.6422653905412683',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040650-0.9142450121974124',
+  partitionId: 'test-partition-1771161458431-0.6422653905412683',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040650-0.9142450121974124' }
+Beginning transaction { partitionId: 'test-partition-1771161458431-0.6422653905412683' }
 Executing query {
-  partitionId: 'test-partition-1771145040650-0.9142450121974124',
-  sql: "INSERT INTO test_table (id, value) VALUES (66, 'valid')"
+  partitionId: 'test-partition-1771161458431-0.6422653905412683',
+  sql: "INSERT INTO test_table (id, value) VALUES (3, 'valid')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040650-0.9142450121974124',
+  partitionId: 'test-partition-1771161458431-0.6422653905412683',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040650-0.9142450121974124',
+  partitionId: 'test-partition-1771161458431-0.6422653905412683',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (66, 'valid')",
+  sql: "INSERT INTO test_table (id, value) VALUES (3, 'valid')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040650-0.9142450121974124' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458431-0.6422653905412683' }
 Executing query {
-  partitionId: 'test-partition-1771145040650-0.9142450121974124',
-  sql: 'SELECT * FROM test_table WHERE id = 66'
+  partitionId: 'test-partition-1771161458431-0.6422653905412683',
+  sql: 'SELECT * FROM test_table WHERE id = 3'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040650-0.9142450121974124',
+  partitionId: 'test-partition-1771161458431-0.6422653905412683',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040652-0.27233284228897325',
+  partitionId: 'test-partition-1771161458433-0.2317085067617064',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -734,48 +714,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040652-0.27233284228897325'
+  partitionId: 'test-partition-1771161458433-0.2317085067617064'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040652-0.27233284228897325'
+  partitionId: 'test-partition-1771161458433-0.2317085067617064'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040652-0.27233284228897325',
+  partitionId: 'test-partition-1771161458433-0.2317085067617064',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040652-0.27233284228897325',
+  partitionId: 'test-partition-1771161458433-0.2317085067617064',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040652-0.27233284228897325' }
+Beginning transaction { partitionId: 'test-partition-1771161458433-0.2317085067617064' }
 Executing query {
-  partitionId: 'test-partition-1771145040652-0.27233284228897325',
-  sql: "INSERT INTO test_table (id, value) VALUES (6, 'valid')"
+  partitionId: 'test-partition-1771161458433-0.2317085067617064',
+  sql: "INSERT INTO test_table (id, value) VALUES (5, 'valid')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040652-0.27233284228897325',
+  partitionId: 'test-partition-1771161458433-0.2317085067617064',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040652-0.27233284228897325',
+  partitionId: 'test-partition-1771161458433-0.2317085067617064',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (6, 'valid')",
+  sql: "INSERT INTO test_table (id, value) VALUES (5, 'valid')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040652-0.27233284228897325' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458433-0.2317085067617064' }
 Executing query {
-  partitionId: 'test-partition-1771145040652-0.27233284228897325',
-  sql: 'SELECT * FROM test_table WHERE id = 6'
+  partitionId: 'test-partition-1771161458433-0.2317085067617064',
+  sql: 'SELECT * FROM test_table WHERE id = 5'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040652-0.27233284228897325',
+  partitionId: 'test-partition-1771161458433-0.2317085067617064',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040653-0.11787703982213649',
+  partitionId: 'test-partition-1771161458434-0.6137087630740219',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -784,48 +764,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040653-0.11787703982213649'
+  partitionId: 'test-partition-1771161458434-0.6137087630740219'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040653-0.11787703982213649'
+  partitionId: 'test-partition-1771161458434-0.6137087630740219'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040653-0.11787703982213649',
+  partitionId: 'test-partition-1771161458434-0.6137087630740219',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040653-0.11787703982213649',
+  partitionId: 'test-partition-1771161458434-0.6137087630740219',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040653-0.11787703982213649' }
+Beginning transaction { partitionId: 'test-partition-1771161458434-0.6137087630740219' }
 Executing query {
-  partitionId: 'test-partition-1771145040653-0.11787703982213649',
-  sql: "INSERT INTO test_table (id, value) VALUES (22, 'valid')"
+  partitionId: 'test-partition-1771161458434-0.6137087630740219',
+  sql: "INSERT INTO test_table (id, value) VALUES (5, 'valid')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040653-0.11787703982213649',
+  partitionId: 'test-partition-1771161458434-0.6137087630740219',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040653-0.11787703982213649',
+  partitionId: 'test-partition-1771161458434-0.6137087630740219',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (22, 'valid')",
+  sql: "INSERT INTO test_table (id, value) VALUES (5, 'valid')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040653-0.11787703982213649' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458434-0.6137087630740219' }
 Executing query {
-  partitionId: 'test-partition-1771145040653-0.11787703982213649',
-  sql: 'SELECT * FROM test_table WHERE id = 22'
+  partitionId: 'test-partition-1771161458434-0.6137087630740219',
+  sql: 'SELECT * FROM test_table WHERE id = 5'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040653-0.11787703982213649',
+  partitionId: 'test-partition-1771161458434-0.6137087630740219',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040655-0.34916307589249507',
+  partitionId: 'test-partition-1771161458435-0.6457419036634919',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -834,48 +814,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040655-0.34916307589249507'
+  partitionId: 'test-partition-1771161458435-0.6457419036634919'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040655-0.34916307589249507'
+  partitionId: 'test-partition-1771161458435-0.6457419036634919'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040655-0.34916307589249507',
+  partitionId: 'test-partition-1771161458435-0.6457419036634919',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040655-0.34916307589249507',
+  partitionId: 'test-partition-1771161458435-0.6457419036634919',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040655-0.34916307589249507' }
+Beginning transaction { partitionId: 'test-partition-1771161458435-0.6457419036634919' }
 Executing query {
-  partitionId: 'test-partition-1771145040655-0.34916307589249507',
-  sql: "INSERT INTO test_table (id, value) VALUES (6, 'valid')"
+  partitionId: 'test-partition-1771161458435-0.6457419036634919',
+  sql: "INSERT INTO test_table (id, value) VALUES (94, 'valid')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040655-0.34916307589249507',
+  partitionId: 'test-partition-1771161458435-0.6457419036634919',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040655-0.34916307589249507',
+  partitionId: 'test-partition-1771161458435-0.6457419036634919',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (6, 'valid')",
+  sql: "INSERT INTO test_table (id, value) VALUES (94, 'valid')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040655-0.34916307589249507' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458435-0.6457419036634919' }
 Executing query {
-  partitionId: 'test-partition-1771145040655-0.34916307589249507',
-  sql: 'SELECT * FROM test_table WHERE id = 6'
+  partitionId: 'test-partition-1771161458435-0.6457419036634919',
+  sql: 'SELECT * FROM test_table WHERE id = 94'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040655-0.34916307589249507',
+  partitionId: 'test-partition-1771161458435-0.6457419036634919',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040656-0.15133162454170668',
+  partitionId: 'test-partition-1771161458437-0.11880903446340296',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -884,48 +864,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040656-0.15133162454170668'
+  partitionId: 'test-partition-1771161458437-0.11880903446340296'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040656-0.15133162454170668'
+  partitionId: 'test-partition-1771161458437-0.11880903446340296'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040656-0.15133162454170668',
+  partitionId: 'test-partition-1771161458437-0.11880903446340296',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040656-0.15133162454170668',
+  partitionId: 'test-partition-1771161458437-0.11880903446340296',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040656-0.15133162454170668' }
+Beginning transaction { partitionId: 'test-partition-1771161458437-0.11880903446340296' }
 Executing query {
-  partitionId: 'test-partition-1771145040656-0.15133162454170668',
-  sql: "INSERT INTO test_table (id, value) VALUES (6, 'valid')"
+  partitionId: 'test-partition-1771161458437-0.11880903446340296',
+  sql: "INSERT INTO test_table (id, value) VALUES (3, 'valid')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040656-0.15133162454170668',
+  partitionId: 'test-partition-1771161458437-0.11880903446340296',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040656-0.15133162454170668',
+  partitionId: 'test-partition-1771161458437-0.11880903446340296',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (6, 'valid')",
+  sql: "INSERT INTO test_table (id, value) VALUES (3, 'valid')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040656-0.15133162454170668' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458437-0.11880903446340296' }
 Executing query {
-  partitionId: 'test-partition-1771145040656-0.15133162454170668',
-  sql: 'SELECT * FROM test_table WHERE id = 6'
+  partitionId: 'test-partition-1771161458437-0.11880903446340296',
+  sql: 'SELECT * FROM test_table WHERE id = 3'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040656-0.15133162454170668',
+  partitionId: 'test-partition-1771161458437-0.11880903446340296',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040658-0.7957768640610094',
+  partitionId: 'test-partition-1771161458438-0.5749564703525103',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -934,48 +914,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040658-0.7957768640610094'
+  partitionId: 'test-partition-1771161458438-0.5749564703525103'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040658-0.7957768640610094'
+  partitionId: 'test-partition-1771161458438-0.5749564703525103'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040658-0.7957768640610094',
+  partitionId: 'test-partition-1771161458438-0.5749564703525103',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040658-0.7957768640610094',
+  partitionId: 'test-partition-1771161458438-0.5749564703525103',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040658-0.7957768640610094' }
+Beginning transaction { partitionId: 'test-partition-1771161458438-0.5749564703525103' }
 Executing query {
-  partitionId: 'test-partition-1771145040658-0.7957768640610094',
+  partitionId: 'test-partition-1771161458438-0.5749564703525103',
   sql: "INSERT INTO test_table (id, value) VALUES (4, 'valid')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040658-0.7957768640610094',
+  partitionId: 'test-partition-1771161458438-0.5749564703525103',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040658-0.7957768640610094',
+  partitionId: 'test-partition-1771161458438-0.5749564703525103',
   entryType: 'QUERY',
   sql: "INSERT INTO test_table (id, value) VALUES (4, 'valid')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040658-0.7957768640610094' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458438-0.5749564703525103' }
 Executing query {
-  partitionId: 'test-partition-1771145040658-0.7957768640610094',
+  partitionId: 'test-partition-1771161458438-0.5749564703525103',
   sql: 'SELECT * FROM test_table WHERE id = 4'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040658-0.7957768640610094',
+  partitionId: 'test-partition-1771161458438-0.5749564703525103',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040659-0.09412471533638356',
+  partitionId: 'test-partition-1771161458440-0.05291576195239567',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -984,48 +964,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040659-0.09412471533638356'
+  partitionId: 'test-partition-1771161458440-0.05291576195239567'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040659-0.09412471533638356'
+  partitionId: 'test-partition-1771161458440-0.05291576195239567'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040659-0.09412471533638356',
+  partitionId: 'test-partition-1771161458440-0.05291576195239567',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040659-0.09412471533638356',
+  partitionId: 'test-partition-1771161458440-0.05291576195239567',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040659-0.09412471533638356' }
+Beginning transaction { partitionId: 'test-partition-1771161458440-0.05291576195239567' }
 Executing query {
-  partitionId: 'test-partition-1771145040659-0.09412471533638356',
-  sql: "INSERT INTO test_table (id, value) VALUES (5, 'valid')"
+  partitionId: 'test-partition-1771161458440-0.05291576195239567',
+  sql: "INSERT INTO test_table (id, value) VALUES (2, 'valid')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040659-0.09412471533638356',
+  partitionId: 'test-partition-1771161458440-0.05291576195239567',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040659-0.09412471533638356',
+  partitionId: 'test-partition-1771161458440-0.05291576195239567',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (5, 'valid')",
+  sql: "INSERT INTO test_table (id, value) VALUES (2, 'valid')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040659-0.09412471533638356' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458440-0.05291576195239567' }
 Executing query {
-  partitionId: 'test-partition-1771145040659-0.09412471533638356',
-  sql: 'SELECT * FROM test_table WHERE id = 5'
+  partitionId: 'test-partition-1771161458440-0.05291576195239567',
+  sql: 'SELECT * FROM test_table WHERE id = 2'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040659-0.09412471533638356',
+  partitionId: 'test-partition-1771161458440-0.05291576195239567',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040660-0.11083923295504428',
+  partitionId: 'test-partition-1771161458441-0.010097724823851184',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1034,53 +1014,53 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040660-0.11083923295504428'
+  partitionId: 'test-partition-1771161458441-0.010097724823851184'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040660-0.11083923295504428'
+  partitionId: 'test-partition-1771161458441-0.010097724823851184'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040660-0.11083923295504428',
+  partitionId: 'test-partition-1771161458441-0.010097724823851184',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040660-0.11083923295504428',
+  partitionId: 'test-partition-1771161458441-0.010097724823851184',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040660-0.11083923295504428' }
+Beginning transaction { partitionId: 'test-partition-1771161458441-0.010097724823851184' }
 Executing query {
-  partitionId: 'test-partition-1771145040660-0.11083923295504428',
-  sql: "INSERT INTO test_table (id, value) VALUES (5, 'valid')"
+  partitionId: 'test-partition-1771161458441-0.010097724823851184',
+  sql: "INSERT INTO test_table (id, value) VALUES (86, 'valid')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040660-0.11083923295504428',
+  partitionId: 'test-partition-1771161458441-0.010097724823851184',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040660-0.11083923295504428',
+  partitionId: 'test-partition-1771161458441-0.010097724823851184',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (5, 'valid')",
+  sql: "INSERT INTO test_table (id, value) VALUES (86, 'valid')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040660-0.11083923295504428' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458441-0.010097724823851184' }
 Executing query {
-  partitionId: 'test-partition-1771145040660-0.11083923295504428',
-  sql: 'SELECT * FROM test_table WHERE id = 5'
+  partitionId: 'test-partition-1771161458441-0.010097724823851184',
+  sql: 'SELECT * FROM test_table WHERE id = 86'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040660-0.11083923295504428',
+  partitionId: 'test-partition-1771161458441-0.010097724823851184',
   replicaId: 'replica-1'
 }
 # Subtest: Property 46: Single-Partition ACID - Consistency
     ok 1 - Consistency property holds
     1..1
-ok 2 - Property 46: Single-Partition ACID - Consistency # time=15.035ms
+ok 2 - Property 46: Single-Partition ACID - Consistency # time=14.497ms
 
 Initializing partition service {
-  partitionId: 'test-partition-1771145040662-0.10638716014985827',
+  partitionId: 'test-partition-1771161458443-0.9998899443219227',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1089,48 +1069,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040662-0.10638716014985827'
+  partitionId: 'test-partition-1771161458443-0.9998899443219227'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040662-0.10638716014985827'
+  partitionId: 'test-partition-1771161458443-0.9998899443219227'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040662-0.10638716014985827',
+  partitionId: 'test-partition-1771161458443-0.9998899443219227',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040662-0.10638716014985827',
+  partitionId: 'test-partition-1771161458443-0.9998899443219227',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040662-0.10638716014985827' }
+Beginning transaction { partitionId: 'test-partition-1771161458443-0.9998899443219227' }
 Executing query {
-  partitionId: 'test-partition-1771145040662-0.10638716014985827',
-  sql: "INSERT INTO test_table (id, value) VALUES (8, 'test')"
+  partitionId: 'test-partition-1771161458443-0.9998899443219227',
+  sql: "INSERT INTO test_table (id, value) VALUES (1, 'test')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040662-0.10638716014985827',
+  partitionId: 'test-partition-1771161458443-0.9998899443219227',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040662-0.10638716014985827',
+  partitionId: 'test-partition-1771161458443-0.9998899443219227',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (8, 'test')",
+  sql: "INSERT INTO test_table (id, value) VALUES (1, 'test')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040662-0.10638716014985827' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458443-0.9998899443219227' }
 Executing query {
-  partitionId: 'test-partition-1771145040662-0.10638716014985827',
-  sql: 'SELECT * FROM test_table WHERE id = 8'
+  partitionId: 'test-partition-1771161458443-0.9998899443219227',
+  sql: 'SELECT * FROM test_table WHERE id = 1'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040662-0.10638716014985827',
+  partitionId: 'test-partition-1771161458443-0.9998899443219227',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040664-0.8929781380909163',
+  partitionId: 'test-partition-1771161458444-0.52426453534656',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1139,48 +1119,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040664-0.8929781380909163'
+  partitionId: 'test-partition-1771161458444-0.52426453534656'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040664-0.8929781380909163'
+  partitionId: 'test-partition-1771161458444-0.52426453534656'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040664-0.8929781380909163',
+  partitionId: 'test-partition-1771161458444-0.52426453534656',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040664-0.8929781380909163',
+  partitionId: 'test-partition-1771161458444-0.52426453534656',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040664-0.8929781380909163' }
+Beginning transaction { partitionId: 'test-partition-1771161458444-0.52426453534656' }
 Executing query {
-  partitionId: 'test-partition-1771145040664-0.8929781380909163',
-  sql: "INSERT INTO test_table (id, value) VALUES (98, 'test')"
+  partitionId: 'test-partition-1771161458444-0.52426453534656',
+  sql: "INSERT INTO test_table (id, value) VALUES (95, 'test')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040664-0.8929781380909163',
+  partitionId: 'test-partition-1771161458444-0.52426453534656',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040664-0.8929781380909163',
+  partitionId: 'test-partition-1771161458444-0.52426453534656',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (98, 'test')",
+  sql: "INSERT INTO test_table (id, value) VALUES (95, 'test')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040664-0.8929781380909163' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458444-0.52426453534656' }
 Executing query {
-  partitionId: 'test-partition-1771145040664-0.8929781380909163',
-  sql: 'SELECT * FROM test_table WHERE id = 98'
+  partitionId: 'test-partition-1771161458444-0.52426453534656',
+  sql: 'SELECT * FROM test_table WHERE id = 95'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040664-0.8929781380909163',
+  partitionId: 'test-partition-1771161458444-0.52426453534656',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040665-0.7318479481642852',
+  partitionId: 'test-partition-1771161458445-0.3905102985785609',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1189,48 +1169,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040665-0.7318479481642852'
+  partitionId: 'test-partition-1771161458445-0.3905102985785609'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040665-0.7318479481642852'
+  partitionId: 'test-partition-1771161458445-0.3905102985785609'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040665-0.7318479481642852',
+  partitionId: 'test-partition-1771161458445-0.3905102985785609',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040665-0.7318479481642852',
+  partitionId: 'test-partition-1771161458445-0.3905102985785609',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040665-0.7318479481642852' }
+Beginning transaction { partitionId: 'test-partition-1771161458445-0.3905102985785609' }
 Executing query {
-  partitionId: 'test-partition-1771145040665-0.7318479481642852',
-  sql: "INSERT INTO test_table (id, value) VALUES (89, 'test')"
+  partitionId: 'test-partition-1771161458445-0.3905102985785609',
+  sql: "INSERT INTO test_table (id, value) VALUES (97, 'test')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040665-0.7318479481642852',
+  partitionId: 'test-partition-1771161458445-0.3905102985785609',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040665-0.7318479481642852',
+  partitionId: 'test-partition-1771161458445-0.3905102985785609',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (89, 'test')",
+  sql: "INSERT INTO test_table (id, value) VALUES (97, 'test')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040665-0.7318479481642852' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458445-0.3905102985785609' }
 Executing query {
-  partitionId: 'test-partition-1771145040665-0.7318479481642852',
-  sql: 'SELECT * FROM test_table WHERE id = 89'
+  partitionId: 'test-partition-1771161458445-0.3905102985785609',
+  sql: 'SELECT * FROM test_table WHERE id = 97'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040665-0.7318479481642852',
+  partitionId: 'test-partition-1771161458445-0.3905102985785609',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040666-0.747844574890675',
+  partitionId: 'test-partition-1771161458446-0.41943635608507157',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1239,48 +1219,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040666-0.747844574890675'
+  partitionId: 'test-partition-1771161458446-0.41943635608507157'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040666-0.747844574890675'
+  partitionId: 'test-partition-1771161458446-0.41943635608507157'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040666-0.747844574890675',
+  partitionId: 'test-partition-1771161458446-0.41943635608507157',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040666-0.747844574890675',
+  partitionId: 'test-partition-1771161458446-0.41943635608507157',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040666-0.747844574890675' }
+Beginning transaction { partitionId: 'test-partition-1771161458446-0.41943635608507157' }
 Executing query {
-  partitionId: 'test-partition-1771145040666-0.747844574890675',
-  sql: "INSERT INTO test_table (id, value) VALUES (100, 'test')"
+  partitionId: 'test-partition-1771161458446-0.41943635608507157',
+  sql: "INSERT INTO test_table (id, value) VALUES (3, 'test')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040666-0.747844574890675',
+  partitionId: 'test-partition-1771161458446-0.41943635608507157',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040666-0.747844574890675',
+  partitionId: 'test-partition-1771161458446-0.41943635608507157',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (100, 'test')",
+  sql: "INSERT INTO test_table (id, value) VALUES (3, 'test')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040666-0.747844574890675' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458446-0.41943635608507157' }
 Executing query {
-  partitionId: 'test-partition-1771145040666-0.747844574890675',
-  sql: 'SELECT * FROM test_table WHERE id = 100'
+  partitionId: 'test-partition-1771161458446-0.41943635608507157',
+  sql: 'SELECT * FROM test_table WHERE id = 3'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040666-0.747844574890675',
+  partitionId: 'test-partition-1771161458446-0.41943635608507157',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040667-0.5657566522398068',
+  partitionId: 'test-partition-1771161458448-0.6228054679704607',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1289,48 +1269,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040667-0.5657566522398068'
+  partitionId: 'test-partition-1771161458448-0.6228054679704607'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040667-0.5657566522398068'
+  partitionId: 'test-partition-1771161458448-0.6228054679704607'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040667-0.5657566522398068',
+  partitionId: 'test-partition-1771161458448-0.6228054679704607',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040667-0.5657566522398068',
+  partitionId: 'test-partition-1771161458448-0.6228054679704607',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040667-0.5657566522398068' }
+Beginning transaction { partitionId: 'test-partition-1771161458448-0.6228054679704607' }
 Executing query {
-  partitionId: 'test-partition-1771145040667-0.5657566522398068',
-  sql: "INSERT INTO test_table (id, value) VALUES (30, 'test')"
+  partitionId: 'test-partition-1771161458448-0.6228054679704607',
+  sql: "INSERT INTO test_table (id, value) VALUES (7, 'test')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040667-0.5657566522398068',
+  partitionId: 'test-partition-1771161458448-0.6228054679704607',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040667-0.5657566522398068',
+  partitionId: 'test-partition-1771161458448-0.6228054679704607',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (30, 'test')",
+  sql: "INSERT INTO test_table (id, value) VALUES (7, 'test')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040667-0.5657566522398068' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458448-0.6228054679704607' }
 Executing query {
-  partitionId: 'test-partition-1771145040667-0.5657566522398068',
-  sql: 'SELECT * FROM test_table WHERE id = 30'
+  partitionId: 'test-partition-1771161458448-0.6228054679704607',
+  sql: 'SELECT * FROM test_table WHERE id = 7'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040667-0.5657566522398068',
+  partitionId: 'test-partition-1771161458448-0.6228054679704607',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040669-0.21805404861283595',
+  partitionId: 'test-partition-1771161458450-0.5286459546505411',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1339,48 +1319,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040669-0.21805404861283595'
+  partitionId: 'test-partition-1771161458450-0.5286459546505411'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040669-0.21805404861283595'
+  partitionId: 'test-partition-1771161458450-0.5286459546505411'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040669-0.21805404861283595',
+  partitionId: 'test-partition-1771161458450-0.5286459546505411',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040669-0.21805404861283595',
+  partitionId: 'test-partition-1771161458450-0.5286459546505411',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040669-0.21805404861283595' }
+Beginning transaction { partitionId: 'test-partition-1771161458450-0.5286459546505411' }
 Executing query {
-  partitionId: 'test-partition-1771145040669-0.21805404861283595',
-  sql: "INSERT INTO test_table (id, value) VALUES (76, 'test')"
+  partitionId: 'test-partition-1771161458450-0.5286459546505411',
+  sql: "INSERT INTO test_table (id, value) VALUES (60, 'test')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040669-0.21805404861283595',
+  partitionId: 'test-partition-1771161458450-0.5286459546505411',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040669-0.21805404861283595',
+  partitionId: 'test-partition-1771161458450-0.5286459546505411',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (76, 'test')",
+  sql: "INSERT INTO test_table (id, value) VALUES (60, 'test')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040669-0.21805404861283595' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458450-0.5286459546505411' }
 Executing query {
-  partitionId: 'test-partition-1771145040669-0.21805404861283595',
-  sql: 'SELECT * FROM test_table WHERE id = 76'
+  partitionId: 'test-partition-1771161458450-0.5286459546505411',
+  sql: 'SELECT * FROM test_table WHERE id = 60'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040669-0.21805404861283595',
+  partitionId: 'test-partition-1771161458450-0.5286459546505411',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040671-0.8436253638062725',
+  partitionId: 'test-partition-1771161458451-0.42974876333599044',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1389,48 +1369,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040671-0.8436253638062725'
+  partitionId: 'test-partition-1771161458451-0.42974876333599044'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040671-0.8436253638062725'
+  partitionId: 'test-partition-1771161458451-0.42974876333599044'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040671-0.8436253638062725',
+  partitionId: 'test-partition-1771161458451-0.42974876333599044',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040671-0.8436253638062725',
+  partitionId: 'test-partition-1771161458451-0.42974876333599044',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040671-0.8436253638062725' }
+Beginning transaction { partitionId: 'test-partition-1771161458451-0.42974876333599044' }
 Executing query {
-  partitionId: 'test-partition-1771145040671-0.8436253638062725',
-  sql: "INSERT INTO test_table (id, value) VALUES (5, 'test')"
+  partitionId: 'test-partition-1771161458451-0.42974876333599044',
+  sql: "INSERT INTO test_table (id, value) VALUES (79, 'test')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040671-0.8436253638062725',
+  partitionId: 'test-partition-1771161458451-0.42974876333599044',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040671-0.8436253638062725',
+  partitionId: 'test-partition-1771161458451-0.42974876333599044',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (5, 'test')",
+  sql: "INSERT INTO test_table (id, value) VALUES (79, 'test')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040671-0.8436253638062725' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458451-0.42974876333599044' }
 Executing query {
-  partitionId: 'test-partition-1771145040671-0.8436253638062725',
-  sql: 'SELECT * FROM test_table WHERE id = 5'
+  partitionId: 'test-partition-1771161458451-0.42974876333599044',
+  sql: 'SELECT * FROM test_table WHERE id = 79'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040671-0.8436253638062725',
+  partitionId: 'test-partition-1771161458451-0.42974876333599044',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040672-0.8831221529457853',
+  partitionId: 'test-partition-1771161458452-0.25412801010428376',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1439,48 +1419,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040672-0.8831221529457853'
+  partitionId: 'test-partition-1771161458452-0.25412801010428376'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040672-0.8831221529457853'
+  partitionId: 'test-partition-1771161458452-0.25412801010428376'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040672-0.8831221529457853',
+  partitionId: 'test-partition-1771161458452-0.25412801010428376',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040672-0.8831221529457853',
+  partitionId: 'test-partition-1771161458452-0.25412801010428376',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040672-0.8831221529457853' }
+Beginning transaction { partitionId: 'test-partition-1771161458452-0.25412801010428376' }
 Executing query {
-  partitionId: 'test-partition-1771145040672-0.8831221529457853',
-  sql: "INSERT INTO test_table (id, value) VALUES (94, 'test')"
+  partitionId: 'test-partition-1771161458452-0.25412801010428376',
+  sql: "INSERT INTO test_table (id, value) VALUES (23, 'test')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040672-0.8831221529457853',
+  partitionId: 'test-partition-1771161458452-0.25412801010428376',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040672-0.8831221529457853',
+  partitionId: 'test-partition-1771161458452-0.25412801010428376',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (94, 'test')",
+  sql: "INSERT INTO test_table (id, value) VALUES (23, 'test')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040672-0.8831221529457853' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458452-0.25412801010428376' }
 Executing query {
-  partitionId: 'test-partition-1771145040672-0.8831221529457853',
-  sql: 'SELECT * FROM test_table WHERE id = 94'
+  partitionId: 'test-partition-1771161458452-0.25412801010428376',
+  sql: 'SELECT * FROM test_table WHERE id = 23'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040672-0.8831221529457853',
+  partitionId: 'test-partition-1771161458452-0.25412801010428376',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040673-0.16932776698402208',
+  partitionId: 'test-partition-1771161458453-0.009843122497033008',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1489,48 +1469,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040673-0.16932776698402208'
+  partitionId: 'test-partition-1771161458453-0.009843122497033008'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040673-0.16932776698402208'
+  partitionId: 'test-partition-1771161458453-0.009843122497033008'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040673-0.16932776698402208',
+  partitionId: 'test-partition-1771161458453-0.009843122497033008',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040673-0.16932776698402208',
+  partitionId: 'test-partition-1771161458453-0.009843122497033008',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040673-0.16932776698402208' }
+Beginning transaction { partitionId: 'test-partition-1771161458453-0.009843122497033008' }
 Executing query {
-  partitionId: 'test-partition-1771145040673-0.16932776698402208',
-  sql: "INSERT INTO test_table (id, value) VALUES (67, 'test')"
+  partitionId: 'test-partition-1771161458453-0.009843122497033008',
+  sql: "INSERT INTO test_table (id, value) VALUES (97, 'test')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040673-0.16932776698402208',
+  partitionId: 'test-partition-1771161458453-0.009843122497033008',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040673-0.16932776698402208',
+  partitionId: 'test-partition-1771161458453-0.009843122497033008',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (67, 'test')",
+  sql: "INSERT INTO test_table (id, value) VALUES (97, 'test')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040673-0.16932776698402208' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458453-0.009843122497033008' }
 Executing query {
-  partitionId: 'test-partition-1771145040673-0.16932776698402208',
-  sql: 'SELECT * FROM test_table WHERE id = 67'
+  partitionId: 'test-partition-1771161458453-0.009843122497033008',
+  sql: 'SELECT * FROM test_table WHERE id = 97'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040673-0.16932776698402208',
+  partitionId: 'test-partition-1771161458453-0.009843122497033008',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040674-0.5566137299512803',
+  partitionId: 'test-partition-1771161458454-0.1832874451105404',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1539,53 +1519,53 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040674-0.5566137299512803'
+  partitionId: 'test-partition-1771161458454-0.1832874451105404'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040674-0.5566137299512803'
+  partitionId: 'test-partition-1771161458454-0.1832874451105404'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040674-0.5566137299512803',
+  partitionId: 'test-partition-1771161458454-0.1832874451105404',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040674-0.5566137299512803',
+  partitionId: 'test-partition-1771161458454-0.1832874451105404',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040674-0.5566137299512803' }
+Beginning transaction { partitionId: 'test-partition-1771161458454-0.1832874451105404' }
 Executing query {
-  partitionId: 'test-partition-1771145040674-0.5566137299512803',
-  sql: "INSERT INTO test_table (id, value) VALUES (35, 'test')"
+  partitionId: 'test-partition-1771161458454-0.1832874451105404',
+  sql: "INSERT INTO test_table (id, value) VALUES (96, 'test')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040674-0.5566137299512803',
+  partitionId: 'test-partition-1771161458454-0.1832874451105404',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040674-0.5566137299512803',
+  partitionId: 'test-partition-1771161458454-0.1832874451105404',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (35, 'test')",
+  sql: "INSERT INTO test_table (id, value) VALUES (96, 'test')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040674-0.5566137299512803' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458454-0.1832874451105404' }
 Executing query {
-  partitionId: 'test-partition-1771145040674-0.5566137299512803',
-  sql: 'SELECT * FROM test_table WHERE id = 35'
+  partitionId: 'test-partition-1771161458454-0.1832874451105404',
+  sql: 'SELECT * FROM test_table WHERE id = 96'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040674-0.5566137299512803',
+  partitionId: 'test-partition-1771161458454-0.1832874451105404',
   replicaId: 'replica-1'
 }
 # Subtest: Property 46: Single-Partition ACID - Isolation
     ok 1 - Isolation property holds
     1..1
-ok 3 - Property 46: Single-Partition ACID - Isolation # time=13.716ms
+ok 3 - Property 46: Single-Partition ACID - Isolation # time=12.783ms
 
 Initializing partition service {
-  partitionId: 'test-partition-1771145040677-0.6200207313121504',
+  partitionId: 'test-partition-1771161458456-0.46364008891084985',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1594,48 +1574,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040677-0.6200207313121504'
+  partitionId: 'test-partition-1771161458456-0.46364008891084985'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040677-0.6200207313121504'
+  partitionId: 'test-partition-1771161458456-0.46364008891084985'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040677-0.6200207313121504',
+  partitionId: 'test-partition-1771161458456-0.46364008891084985',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040677-0.6200207313121504',
+  partitionId: 'test-partition-1771161458456-0.46364008891084985',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040677-0.6200207313121504' }
+Beginning transaction { partitionId: 'test-partition-1771161458456-0.46364008891084985' }
 Executing query {
-  partitionId: 'test-partition-1771145040677-0.6200207313121504',
-  sql: "INSERT INTO test_table (id, value) VALUES (33, 'cgaefg')"
+  partitionId: 'test-partition-1771161458456-0.46364008891084985',
+  sql: "INSERT INTO test_table (id, value) VALUES (100, 'dfchf')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040677-0.6200207313121504',
+  partitionId: 'test-partition-1771161458456-0.46364008891084985',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040677-0.6200207313121504',
+  partitionId: 'test-partition-1771161458456-0.46364008891084985',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (33, 'cgaefg')",
+  sql: "INSERT INTO test_table (id, value) VALUES (100, 'dfchf')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040677-0.6200207313121504' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458456-0.46364008891084985' }
 Executing query {
-  partitionId: 'test-partition-1771145040677-0.6200207313121504',
-  sql: 'SELECT * FROM test_table WHERE id = 33'
+  partitionId: 'test-partition-1771161458456-0.46364008891084985',
+  sql: 'SELECT * FROM test_table WHERE id = 100'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040677-0.6200207313121504',
+  partitionId: 'test-partition-1771161458456-0.46364008891084985',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040678-0.9540777473792965',
+  partitionId: 'test-partition-1771161458457-0.024224373385380193',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1644,48 +1624,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040678-0.9540777473792965'
+  partitionId: 'test-partition-1771161458457-0.024224373385380193'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040678-0.9540777473792965'
+  partitionId: 'test-partition-1771161458457-0.024224373385380193'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040678-0.9540777473792965',
+  partitionId: 'test-partition-1771161458457-0.024224373385380193',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040678-0.9540777473792965',
+  partitionId: 'test-partition-1771161458457-0.024224373385380193',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040678-0.9540777473792965' }
+Beginning transaction { partitionId: 'test-partition-1771161458457-0.024224373385380193' }
 Executing query {
-  partitionId: 'test-partition-1771145040678-0.9540777473792965',
-  sql: "INSERT INTO test_table (id, value) VALUES (2, 'hh')"
+  partitionId: 'test-partition-1771161458457-0.024224373385380193',
+  sql: "INSERT INTO test_table (id, value) VALUES (1, 'icfhaghdeb')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040678-0.9540777473792965',
+  partitionId: 'test-partition-1771161458457-0.024224373385380193',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040678-0.9540777473792965',
+  partitionId: 'test-partition-1771161458457-0.024224373385380193',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (2, 'hh')",
+  sql: "INSERT INTO test_table (id, value) VALUES (1, 'icfhaghdeb')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040678-0.9540777473792965' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458457-0.024224373385380193' }
 Executing query {
-  partitionId: 'test-partition-1771145040678-0.9540777473792965',
-  sql: 'SELECT * FROM test_table WHERE id = 2'
+  partitionId: 'test-partition-1771161458457-0.024224373385380193',
+  sql: 'SELECT * FROM test_table WHERE id = 1'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040678-0.9540777473792965',
+  partitionId: 'test-partition-1771161458457-0.024224373385380193',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040679-0.27106910159604714',
+  partitionId: 'test-partition-1771161458458-0.10151784656145746',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1694,298 +1674,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040679-0.27106910159604714'
+  partitionId: 'test-partition-1771161458458-0.10151784656145746'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040679-0.27106910159604714'
+  partitionId: 'test-partition-1771161458458-0.10151784656145746'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040679-0.27106910159604714',
+  partitionId: 'test-partition-1771161458458-0.10151784656145746',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040679-0.27106910159604714',
+  partitionId: 'test-partition-1771161458458-0.10151784656145746',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040679-0.27106910159604714' }
+Beginning transaction { partitionId: 'test-partition-1771161458458-0.10151784656145746' }
 Executing query {
-  partitionId: 'test-partition-1771145040679-0.27106910159604714',
-  sql: "INSERT INTO test_table (id, value) VALUES (7, 'cfjjaajed')"
+  partitionId: 'test-partition-1771161458458-0.10151784656145746',
+  sql: "INSERT INTO test_table (id, value) VALUES (98, 'hafjfhhaj')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040679-0.27106910159604714',
+  partitionId: 'test-partition-1771161458458-0.10151784656145746',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040679-0.27106910159604714',
+  partitionId: 'test-partition-1771161458458-0.10151784656145746',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (7, 'cfjjaajed')",
+  sql: "INSERT INTO test_table (id, value) VALUES (98, 'hafjfhhaj')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040679-0.27106910159604714' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458458-0.10151784656145746' }
 Executing query {
-  partitionId: 'test-partition-1771145040679-0.27106910159604714',
-  sql: 'SELECT * FROM test_table WHERE id = 7'
-}
-Shutting down partition service {
-  partitionId: 'test-partition-1771145040679-0.27106910159604714',
-  replicaId: 'replica-1'
-}
-Initializing partition service {
-  partitionId: 'test-partition-1771145040680-0.3926615388041226',
-  tableId: 'test_table',
-  replicaId: 'replica-1',
-  nodeId: 'unknown',
-  replicaCount: 1,
-  dbPath: ':memory:'
-}
-Created table {
-  tableName: 'test_table',
-  partitionId: 'test-partition-1771145040680-0.3926615388041226'
-}
-Single replica - becoming leader immediately {
-  replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040680-0.3926615388041226'
-}
-Partition size updated {
-  partitionId: 'test-partition-1771145040680-0.3926615388041226',
-  sizeBytes: 20480,
-  sizeMB: '0.02'
-}
-Partition service initialized {
-  partitionId: 'test-partition-1771145040680-0.3926615388041226',
-  replicaId: 'replica-1',
-  sizeBytes: 20480
-}
-Beginning transaction { partitionId: 'test-partition-1771145040680-0.3926615388041226' }
-Executing query {
-  partitionId: 'test-partition-1771145040680-0.3926615388041226',
-  sql: "INSERT INTO test_table (id, value) VALUES (4, 'ajbd')"
-}
-Committing transaction {
-  partitionId: 'test-partition-1771145040680-0.3926615388041226',
-  operationCount: 1
-}
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040680-0.3926615388041226',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (4, 'ajbd')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040680-0.3926615388041226' }
-Executing query {
-  partitionId: 'test-partition-1771145040680-0.3926615388041226',
-  sql: 'SELECT * FROM test_table WHERE id = 4'
-}
-Shutting down partition service {
-  partitionId: 'test-partition-1771145040680-0.3926615388041226',
-  replicaId: 'replica-1'
-}
-Initializing partition service {
-  partitionId: 'test-partition-1771145040681-0.32741012402038905',
-  tableId: 'test_table',
-  replicaId: 'replica-1',
-  nodeId: 'unknown',
-  replicaCount: 1,
-  dbPath: ':memory:'
-}
-Created table {
-  tableName: 'test_table',
-  partitionId: 'test-partition-1771145040681-0.32741012402038905'
-}
-Single replica - becoming leader immediately {
-  replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040681-0.32741012402038905'
-}
-Partition size updated {
-  partitionId: 'test-partition-1771145040681-0.32741012402038905',
-  sizeBytes: 20480,
-  sizeMB: '0.02'
-}
-Partition service initialized {
-  partitionId: 'test-partition-1771145040681-0.32741012402038905',
-  replicaId: 'replica-1',
-  sizeBytes: 20480
-}
-Beginning transaction { partitionId: 'test-partition-1771145040681-0.32741012402038905' }
-Executing query {
-  partitionId: 'test-partition-1771145040681-0.32741012402038905',
-  sql: "INSERT INTO test_table (id, value) VALUES (94, 'gf')"
-}
-Committing transaction {
-  partitionId: 'test-partition-1771145040681-0.32741012402038905',
-  operationCount: 1
-}
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040681-0.32741012402038905',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (94, 'gf')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040681-0.32741012402038905' }
-Executing query {
-  partitionId: 'test-partition-1771145040681-0.32741012402038905',
-  sql: 'SELECT * FROM test_table WHERE id = 94'
-}
-Shutting down partition service {
-  partitionId: 'test-partition-1771145040681-0.32741012402038905',
-  replicaId: 'replica-1'
-}
-Initializing partition service {
-  partitionId: 'test-partition-1771145040682-0.017669376914072554',
-  tableId: 'test_table',
-  replicaId: 'replica-1',
-  nodeId: 'unknown',
-  replicaCount: 1,
-  dbPath: ':memory:'
-}
-Created table {
-  tableName: 'test_table',
-  partitionId: 'test-partition-1771145040682-0.017669376914072554'
-}
-Single replica - becoming leader immediately {
-  replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040682-0.017669376914072554'
-}
-Partition size updated {
-  partitionId: 'test-partition-1771145040682-0.017669376914072554',
-  sizeBytes: 20480,
-  sizeMB: '0.02'
-}
-Partition service initialized {
-  partitionId: 'test-partition-1771145040682-0.017669376914072554',
-  replicaId: 'replica-1',
-  sizeBytes: 20480
-}
-Beginning transaction { partitionId: 'test-partition-1771145040682-0.017669376914072554' }
-Executing query {
-  partitionId: 'test-partition-1771145040682-0.017669376914072554',
-  sql: "INSERT INTO test_table (id, value) VALUES (95, 'cgj')"
-}
-Committing transaction {
-  partitionId: 'test-partition-1771145040682-0.017669376914072554',
-  operationCount: 1
-}
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040682-0.017669376914072554',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (95, 'cgj')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040682-0.017669376914072554' }
-Executing query {
-  partitionId: 'test-partition-1771145040682-0.017669376914072554',
-  sql: 'SELECT * FROM test_table WHERE id = 95'
-}
-Shutting down partition service {
-  partitionId: 'test-partition-1771145040682-0.017669376914072554',
-  replicaId: 'replica-1'
-}
-Initializing partition service {
-  partitionId: 'test-partition-1771145040684-0.2853340573630172',
-  tableId: 'test_table',
-  replicaId: 'replica-1',
-  nodeId: 'unknown',
-  replicaCount: 1,
-  dbPath: ':memory:'
-}
-Created table {
-  tableName: 'test_table',
-  partitionId: 'test-partition-1771145040684-0.2853340573630172'
-}
-Single replica - becoming leader immediately {
-  replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040684-0.2853340573630172'
-}
-Partition size updated {
-  partitionId: 'test-partition-1771145040684-0.2853340573630172',
-  sizeBytes: 20480,
-  sizeMB: '0.02'
-}
-Partition service initialized {
-  partitionId: 'test-partition-1771145040684-0.2853340573630172',
-  replicaId: 'replica-1',
-  sizeBytes: 20480
-}
-Beginning transaction { partitionId: 'test-partition-1771145040684-0.2853340573630172' }
-Executing query {
-  partitionId: 'test-partition-1771145040684-0.2853340573630172',
-  sql: "INSERT INTO test_table (id, value) VALUES (95, 'heaf')"
-}
-Committing transaction {
-  partitionId: 'test-partition-1771145040684-0.2853340573630172',
-  operationCount: 1
-}
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040684-0.2853340573630172',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (95, 'heaf')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040684-0.2853340573630172' }
-Executing query {
-  partitionId: 'test-partition-1771145040684-0.2853340573630172',
-  sql: 'SELECT * FROM test_table WHERE id = 95'
-}
-Shutting down partition service {
-  partitionId: 'test-partition-1771145040684-0.2853340573630172',
-  replicaId: 'replica-1'
-}
-Initializing partition service {
-  partitionId: 'test-partition-1771145040689-0.15205046729324168',
-  tableId: 'test_table',
-  replicaId: 'replica-1',
-  nodeId: 'unknown',
-  replicaCount: 1,
-  dbPath: ':memory:'
-}
-Created table {
-  tableName: 'test_table',
-  partitionId: 'test-partition-1771145040689-0.15205046729324168'
-}
-Single replica - becoming leader immediately {
-  replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040689-0.15205046729324168'
-}
-Partition size updated {
-  partitionId: 'test-partition-1771145040689-0.15205046729324168',
-  sizeBytes: 20480,
-  sizeMB: '0.02'
-}
-Partition service initialized {
-  partitionId: 'test-partition-1771145040689-0.15205046729324168',
-  replicaId: 'replica-1',
-  sizeBytes: 20480
-}
-Beginning transaction { partitionId: 'test-partition-1771145040689-0.15205046729324168' }
-Executing query {
-  partitionId: 'test-partition-1771145040689-0.15205046729324168',
-  sql: "INSERT INTO test_table (id, value) VALUES (98, 'f')"
-}
-Committing transaction {
-  partitionId: 'test-partition-1771145040689-0.15205046729324168',
-  operationCount: 1
-}
-generateCDCEvent called {
-  partitionId: 'test-partition-1771145040689-0.15205046729324168',
-  entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (98, 'f')",
-  subscriberCount: 0
-}
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040689-0.15205046729324168' }
-Executing query {
-  partitionId: 'test-partition-1771145040689-0.15205046729324168',
+  partitionId: 'test-partition-1771161458458-0.10151784656145746',
   sql: 'SELECT * FROM test_table WHERE id = 98'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040689-0.15205046729324168',
+  partitionId: 'test-partition-1771161458458-0.10151784656145746',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040690-0.12699007357845837',
+  partitionId: 'test-partition-1771161458460-0.48085030193374334',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -1994,48 +1724,48 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040690-0.12699007357845837'
+  partitionId: 'test-partition-1771161458460-0.48085030193374334'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040690-0.12699007357845837'
+  partitionId: 'test-partition-1771161458460-0.48085030193374334'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040690-0.12699007357845837',
+  partitionId: 'test-partition-1771161458460-0.48085030193374334',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040690-0.12699007357845837',
+  partitionId: 'test-partition-1771161458460-0.48085030193374334',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040690-0.12699007357845837' }
+Beginning transaction { partitionId: 'test-partition-1771161458460-0.48085030193374334' }
 Executing query {
-  partitionId: 'test-partition-1771145040690-0.12699007357845837',
-  sql: "INSERT INTO test_table (id, value) VALUES (70, 'gh')"
+  partitionId: 'test-partition-1771161458460-0.48085030193374334',
+  sql: "INSERT INTO test_table (id, value) VALUES (97, 'daig')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040690-0.12699007357845837',
+  partitionId: 'test-partition-1771161458460-0.48085030193374334',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040690-0.12699007357845837',
+  partitionId: 'test-partition-1771161458460-0.48085030193374334',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (70, 'gh')",
+  sql: "INSERT INTO test_table (id, value) VALUES (97, 'daig')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040690-0.12699007357845837' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458460-0.48085030193374334' }
 Executing query {
-  partitionId: 'test-partition-1771145040690-0.12699007357845837',
-  sql: 'SELECT * FROM test_table WHERE id = 70'
+  partitionId: 'test-partition-1771161458460-0.48085030193374334',
+  sql: 'SELECT * FROM test_table WHERE id = 97'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040690-0.12699007357845837',
+  partitionId: 'test-partition-1771161458460-0.48085030193374334',
   replicaId: 'replica-1'
 }
 Initializing partition service {
-  partitionId: 'test-partition-1771145040691-0.502004228010491',
+  partitionId: 'test-partition-1771161458461-0.9421115978278694',
   tableId: 'test_table',
   replicaId: 'replica-1',
   nodeId: 'unknown',
@@ -2044,51 +1774,301 @@ Initializing partition service {
 }
 Created table {
   tableName: 'test_table',
-  partitionId: 'test-partition-1771145040691-0.502004228010491'
+  partitionId: 'test-partition-1771161458461-0.9421115978278694'
 }
 Single replica - becoming leader immediately {
   replicaId: 'replica-1',
-  partitionId: 'test-partition-1771145040691-0.502004228010491'
+  partitionId: 'test-partition-1771161458461-0.9421115978278694'
 }
 Partition size updated {
-  partitionId: 'test-partition-1771145040691-0.502004228010491',
+  partitionId: 'test-partition-1771161458461-0.9421115978278694',
   sizeBytes: 20480,
   sizeMB: '0.02'
 }
 Partition service initialized {
-  partitionId: 'test-partition-1771145040691-0.502004228010491',
+  partitionId: 'test-partition-1771161458461-0.9421115978278694',
   replicaId: 'replica-1',
   sizeBytes: 20480
 }
-Beginning transaction { partitionId: 'test-partition-1771145040691-0.502004228010491' }
+Beginning transaction { partitionId: 'test-partition-1771161458461-0.9421115978278694' }
 Executing query {
-  partitionId: 'test-partition-1771145040691-0.502004228010491',
-  sql: "INSERT INTO test_table (id, value) VALUES (46, 'aegdhajgi')"
+  partitionId: 'test-partition-1771161458461-0.9421115978278694',
+  sql: "INSERT INTO test_table (id, value) VALUES (1, 'b')"
 }
 Committing transaction {
-  partitionId: 'test-partition-1771145040691-0.502004228010491',
+  partitionId: 'test-partition-1771161458461-0.9421115978278694',
   operationCount: 1
 }
 generateCDCEvent called {
-  partitionId: 'test-partition-1771145040691-0.502004228010491',
+  partitionId: 'test-partition-1771161458461-0.9421115978278694',
   entryType: 'QUERY',
-  sql: "INSERT INTO test_table (id, value) VALUES (46, 'aegdhajgi')",
+  sql: "INSERT INTO test_table (id, value) VALUES (1, 'b')",
   subscriberCount: 0
 }
-No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771145040691-0.502004228010491' }
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458461-0.9421115978278694' }
 Executing query {
-  partitionId: 'test-partition-1771145040691-0.502004228010491',
-  sql: 'SELECT * FROM test_table WHERE id = 46'
+  partitionId: 'test-partition-1771161458461-0.9421115978278694',
+  sql: 'SELECT * FROM test_table WHERE id = 1'
 }
 Shutting down partition service {
-  partitionId: 'test-partition-1771145040691-0.502004228010491',
+  partitionId: 'test-partition-1771161458461-0.9421115978278694',
+  replicaId: 'replica-1'
+}
+Initializing partition service {
+  partitionId: 'test-partition-1771161458462-0.8644122384641393',
+  tableId: 'test_table',
+  replicaId: 'replica-1',
+  nodeId: 'unknown',
+  replicaCount: 1,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'test_table',
+  partitionId: 'test-partition-1771161458462-0.8644122384641393'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'replica-1',
+  partitionId: 'test-partition-1771161458462-0.8644122384641393'
+}
+Partition size updated {
+  partitionId: 'test-partition-1771161458462-0.8644122384641393',
+  sizeBytes: 20480,
+  sizeMB: '0.02'
+}
+Partition service initialized {
+  partitionId: 'test-partition-1771161458462-0.8644122384641393',
+  replicaId: 'replica-1',
+  sizeBytes: 20480
+}
+Beginning transaction { partitionId: 'test-partition-1771161458462-0.8644122384641393' }
+Executing query {
+  partitionId: 'test-partition-1771161458462-0.8644122384641393',
+  sql: "INSERT INTO test_table (id, value) VALUES (14, 'jbbhg')"
+}
+Committing transaction {
+  partitionId: 'test-partition-1771161458462-0.8644122384641393',
+  operationCount: 1
+}
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458462-0.8644122384641393',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (14, 'jbbhg')",
+  subscriberCount: 0
+}
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458462-0.8644122384641393' }
+Executing query {
+  partitionId: 'test-partition-1771161458462-0.8644122384641393',
+  sql: 'SELECT * FROM test_table WHERE id = 14'
+}
+Shutting down partition service {
+  partitionId: 'test-partition-1771161458462-0.8644122384641393',
+  replicaId: 'replica-1'
+}
+Initializing partition service {
+  partitionId: 'test-partition-1771161458465-0.31859827970058907',
+  tableId: 'test_table',
+  replicaId: 'replica-1',
+  nodeId: 'unknown',
+  replicaCount: 1,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'test_table',
+  partitionId: 'test-partition-1771161458465-0.31859827970058907'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'replica-1',
+  partitionId: 'test-partition-1771161458465-0.31859827970058907'
+}
+Partition size updated {
+  partitionId: 'test-partition-1771161458465-0.31859827970058907',
+  sizeBytes: 20480,
+  sizeMB: '0.02'
+}
+Partition service initialized {
+  partitionId: 'test-partition-1771161458465-0.31859827970058907',
+  replicaId: 'replica-1',
+  sizeBytes: 20480
+}
+Beginning transaction { partitionId: 'test-partition-1771161458465-0.31859827970058907' }
+Executing query {
+  partitionId: 'test-partition-1771161458465-0.31859827970058907',
+  sql: "INSERT INTO test_table (id, value) VALUES (27, 'gei')"
+}
+Committing transaction {
+  partitionId: 'test-partition-1771161458465-0.31859827970058907',
+  operationCount: 1
+}
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458465-0.31859827970058907',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (27, 'gei')",
+  subscriberCount: 0
+}
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458465-0.31859827970058907' }
+Executing query {
+  partitionId: 'test-partition-1771161458465-0.31859827970058907',
+  sql: 'SELECT * FROM test_table WHERE id = 27'
+}
+Shutting down partition service {
+  partitionId: 'test-partition-1771161458465-0.31859827970058907',
+  replicaId: 'replica-1'
+}
+Initializing partition service {
+  partitionId: 'test-partition-1771161458468-0.46698218260122926',
+  tableId: 'test_table',
+  replicaId: 'replica-1',
+  nodeId: 'unknown',
+  replicaCount: 1,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'test_table',
+  partitionId: 'test-partition-1771161458468-0.46698218260122926'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'replica-1',
+  partitionId: 'test-partition-1771161458468-0.46698218260122926'
+}
+Partition size updated {
+  partitionId: 'test-partition-1771161458468-0.46698218260122926',
+  sizeBytes: 20480,
+  sizeMB: '0.02'
+}
+Partition service initialized {
+  partitionId: 'test-partition-1771161458468-0.46698218260122926',
+  replicaId: 'replica-1',
+  sizeBytes: 20480
+}
+Beginning transaction { partitionId: 'test-partition-1771161458468-0.46698218260122926' }
+Executing query {
+  partitionId: 'test-partition-1771161458468-0.46698218260122926',
+  sql: "INSERT INTO test_table (id, value) VALUES (100, 'ichfjbjfa')"
+}
+Committing transaction {
+  partitionId: 'test-partition-1771161458468-0.46698218260122926',
+  operationCount: 1
+}
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458468-0.46698218260122926',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (100, 'ichfjbjfa')",
+  subscriberCount: 0
+}
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458468-0.46698218260122926' }
+Executing query {
+  partitionId: 'test-partition-1771161458468-0.46698218260122926',
+  sql: 'SELECT * FROM test_table WHERE id = 100'
+}
+Shutting down partition service {
+  partitionId: 'test-partition-1771161458468-0.46698218260122926',
+  replicaId: 'replica-1'
+}
+Initializing partition service {
+  partitionId: 'test-partition-1771161458470-0.9205828814672412',
+  tableId: 'test_table',
+  replicaId: 'replica-1',
+  nodeId: 'unknown',
+  replicaCount: 1,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'test_table',
+  partitionId: 'test-partition-1771161458470-0.9205828814672412'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'replica-1',
+  partitionId: 'test-partition-1771161458470-0.9205828814672412'
+}
+Partition size updated {
+  partitionId: 'test-partition-1771161458470-0.9205828814672412',
+  sizeBytes: 20480,
+  sizeMB: '0.02'
+}
+Partition service initialized {
+  partitionId: 'test-partition-1771161458470-0.9205828814672412',
+  replicaId: 'replica-1',
+  sizeBytes: 20480
+}
+Beginning transaction { partitionId: 'test-partition-1771161458470-0.9205828814672412' }
+Executing query {
+  partitionId: 'test-partition-1771161458470-0.9205828814672412',
+  sql: "INSERT INTO test_table (id, value) VALUES (56, 'gj')"
+}
+Committing transaction {
+  partitionId: 'test-partition-1771161458470-0.9205828814672412',
+  operationCount: 1
+}
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458470-0.9205828814672412',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (56, 'gj')",
+  subscriberCount: 0
+}
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458470-0.9205828814672412' }
+Executing query {
+  partitionId: 'test-partition-1771161458470-0.9205828814672412',
+  sql: 'SELECT * FROM test_table WHERE id = 56'
+}
+Shutting down partition service {
+  partitionId: 'test-partition-1771161458470-0.9205828814672412',
+  replicaId: 'replica-1'
+}
+Initializing partition service {
+  partitionId: 'test-partition-1771161458472-0.8294703913654777',
+  tableId: 'test_table',
+  replicaId: 'replica-1',
+  nodeId: 'unknown',
+  replicaCount: 1,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'test_table',
+  partitionId: 'test-partition-1771161458472-0.8294703913654777'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'replica-1',
+  partitionId: 'test-partition-1771161458472-0.8294703913654777'
+}
+Partition size updated {
+  partitionId: 'test-partition-1771161458472-0.8294703913654777',
+  sizeBytes: 20480,
+  sizeMB: '0.02'
+}
+Partition service initialized {
+  partitionId: 'test-partition-1771161458472-0.8294703913654777',
+  replicaId: 'replica-1',
+  sizeBytes: 20480
+}
+Beginning transaction { partitionId: 'test-partition-1771161458472-0.8294703913654777' }
+Executing query {
+  partitionId: 'test-partition-1771161458472-0.8294703913654777',
+  sql: "INSERT INTO test_table (id, value) VALUES (14, 'jbhjjf')"
+}
+Committing transaction {
+  partitionId: 'test-partition-1771161458472-0.8294703913654777',
+  operationCount: 1
+}
+generateCDCEvent called {
+  partitionId: 'test-partition-1771161458472-0.8294703913654777',
+  entryType: 'QUERY',
+  sql: "INSERT INTO test_table (id, value) VALUES (14, 'jbhjjf')",
+  subscriberCount: 0
+}
+No CDC subscribers, skipping event generation { partitionId: 'test-partition-1771161458472-0.8294703913654777' }
+Executing query {
+  partitionId: 'test-partition-1771161458472-0.8294703913654777',
+  sql: 'SELECT * FROM test_table WHERE id = 14'
+}
+Shutting down partition service {
+  partitionId: 'test-partition-1771161458472-0.8294703913654777',
   replicaId: 'replica-1'
 }
 # Subtest: Property 46: Single-Partition ACID - Durability via Raft
     ok 1 - Durability property holds
     1..1
-ok 4 - Property 46: Single-Partition ACID - Durability via Raft # time=16.108ms
+ok 4 - Property 46: Single-Partition ACID - Durability via Raft # time=18.455ms
 
 1..4
 # { total: 4, pass: 4 }
-# time=124.686ms
+# time=144.5ms

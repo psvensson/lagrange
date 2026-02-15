@@ -16,9 +16,9 @@ A scalable distributed database where:
 
 1. **Tables as the Universal Storage Model** - System metadata and user data are stored in tables
 2. **Partitions as Raft Groups** - Each partition is a Raft consensus group using liferaft
-3. **System Cache as Single Source of Truth** - In-memory cache of default
-   system tables, updated by CDC events (`logs` is excluded from default cache
-   sync/hydration and remains queryable from its partition)
+3. **System Cache as Single Source of Truth** - In-memory cache of
+   CDC-propagated system tables, updated by CDC events. Non-propagated
+   tables remain queryable from their owning partition via SQL.
 4. **Message Router for All Communication** - All messages (local and remote) route through WebSocket-based MessageRouter
 5. **No Fallback Code Paths** - Single code path for any given logic; no legacy or alternative mechanisms
 6. **System Cache Read Policy** - The system cache is strictly read-only from
@@ -240,36 +240,72 @@ between phases; the runtime descriptor model is additive.
 
 ## System Tables
 
-The following system tables store cluster metadata:
+### CDC Propagation Classification
 
-| Table | Purpose | Primary Key |
-|-------|---------|-------------|
-| `nodes` | All registered nodes with addresses and status | `node_id` |
-| `partitions` | All partitions with key ranges and replica counts | `partition_id` |
-| `services` | All partition, message group, and replicated service replicas with addresses and Raft roles | `service_id` |
-| `tables` | All user tables with schemas and policies | `table_id` |
-| `message_groups` | All message groups with replica counts | `group_id` |
-| `replica_operations` | Pending replica operations (splits, merges, rebalancing) | `operation_id` |
-| `indices` | Secondary indices for tables | `index_id` |
-| `logs` | System logs | `log_id` |
-| `config` | Dynamic configuration | `config_key` |
-| `live_queries` | Active live query subscriptions | `query_id` |
-| `contexts` | Function execution contexts | `context_id` |
-| `code` | Stored functions/procedures | `code_id` |
-| `service_definitions` | Runtime-agnostic service definitions (`runtime_kind`, `runtime_ref`, `runtime_config`, profiles, policy) | `service_id` |
-| `service_endpoints` | Replicated service endpoint addresses for gateway integration | `endpoint_id` |
-| `service_timers` | Persistent timers for runtime profiles that support timers (currently WASM) | `timer_id` |
-| `storage_reservations` | In-flight storage reservations for capacity-aware placement | `reservation_id` |
+A system table is CDC-propagated when every node must hold an up-to-date
+copy in its local `SystemTableCache` for routing, placement, rebalancing,
+or topology decisions. A table MUST be propagated when any rule applies:
 
-WASM meta-service management tables:
+1. **MEMBERSHIP** — describes which nodes, partitions, message groups, or
+   replicated services exist and where they live.
+2. **ROUTING** — consulted during query routing, leader discovery, or
+   endpoint resolution.
+3. **PLACEMENT** — read by the rebalancer, move planner, or admission
+   service to decide replica placement.
+4. **CLUSTER CONFIG** — carries cluster-wide configuration (epoch, budgets,
+   feature flags) that every node must observe.
+5. **TOPOLOGY** — defines network topology, latency groups, or inter-group
+   measurements used for CDC fanout or routing.
 
-| Table | Purpose | Primary Key |
-|-------|---------|-------------|
-| `module_manifests` | WASM module/package metadata (`namespace`, `name`, `version`, digest, run_export, dependencies, capabilities) | composite (`namespace`, `name`, `version`) |
-| `package_registry_mappings` | Namespace to registry mapping rules for component distribution | `namespace` |
-| `package_registry_overrides` | Per-package source override rules | composite (`namespace`, `name`) |
-| `module_dependency_locks` | Immutable resolved dependency locks for deterministic activation | `lock_id` |
-| `wasm_operations` | Async operation journal for publish/create/rollout/scale/delete workflows | `operation_id` |
+A table MUST NOT be propagated when ALL of the following hold:
+
+- It is high-cardinality or high-write-rate.
+- It is scoped to a specific service, session, or execution context
+  rather than cluster-wide topology.
+- It can be queried on demand from its owning partition without affecting
+  routing, placement, or cluster-health decisions.
+
+Any new system table MUST be classified in `CDC_PROPAGATED_TABLES` or
+`CDC_NON_PROPAGATED_TABLES` in `src/cache/cache-constants.js`. Tables
+not in `CDC_PROPAGATED_TABLES` are excluded from cache hydration
+snapshots and CDC subscriptions by default.
+
+### CDC-Propagated Tables (cached on every node)
+
+| Table | Purpose | Primary Key | Propagation Rule |
+|-------|---------|-------------|------------------|
+| `nodes` | Node registry and state | `node_id` | MEMBERSHIP |
+| `partitions` | Partition key ranges and replica counts | `partition_id` | MEMBERSHIP |
+| `services` | Replica locations and Raft roles | `service_id` | MEMBERSHIP, ROUTING |
+| `tables` | Table schemas and policies | `table_id` | MEMBERSHIP |
+| `message_groups` | Message group membership | `group_id` | MEMBERSHIP |
+| `indices` | Secondary index definitions | `index_id` | MEMBERSHIP |
+| `config` | Cluster-wide configuration (epoch, budgets) | `config_key` | CLUSTER CONFIG |
+| `replica_operations` | In-flight rebalancing operations | `operation_id` | PLACEMENT |
+| `node_endpoints` | Node transport endpoints | `endpoint_id` | ROUTING |
+| `service_definitions` | Service runtime definitions | `service_id` | ROUTING |
+| `service_endpoints` | Replicated service endpoints | `endpoint_id` | ROUTING |
+| `debug_sessions` | Distributed debug trace session state | `session_id` | CLUSTER CONFIG |
+| `storage_reservations` | In-flight storage reservations | `reservation_id` | PLACEMENT |
+| `latency_groups` | Latency group assignments | `group_id` | TOPOLOGY |
+| `inter_group_latencies` | Inter-group RTT measurements | `source_group_id` | TOPOLOGY |
+
+### Non-Propagated Tables (queryable from owning partition only)
+
+| Table | Purpose | Primary Key | Exclusion Reason |
+|-------|---------|-------------|------------------|
+| `logs` | System logs | `log_id` | High cardinality, append-only |
+| `contexts` | Function execution contexts | `context_id` | Per-execution, transient |
+| `code` | Stored functions/procedures | `code_id` | Query on demand |
+| `live_queries` | Active live query subscriptions | `query_id` | Per-session |
+| `service_timers` | WASM persistent timers | `timer_id` | Service-scoped |
+| `module_manifests` | WASM module metadata | composite (`namespace`, `name`, `version`) | Query on demand |
+| `package_registry_mappings` | Namespace registry mappings | `namespace` | Query on demand |
+| `package_registry_overrides` | Per-package source overrides | composite (`namespace`, `name`) | Query on demand |
+| `module_dependency_locks` | Immutable dependency locks | `lock_id` | Query on demand |
+| `wasm_operations` | Async operation journal | `operation_id` | Transient workflow state |
+| `debug_breakpoints` | Debug breakpoint state | `breakpoint_id` | Transient |
+| `debug_snapshots` | Debug snapshot state | `snapshot_id` | Transient |
 
 ## Node State Vocabulary
 
@@ -355,6 +391,45 @@ Under the unified runtime target, these services are runtime-selected via
   `AdminTestRunService` (`src/admin/admin-test-run-service.js`)
 - Standalone userland launcher (`scripts/start-test-run-dashboard.js`) starts
   the same HTTP test admin surface without bootstrap/node lifecycle coupling
+
+### Debug Runtime Foundation Ownership
+- Debug ingress is exposed on existing admin adapter routes:
+  - `/api/admin/debug/sessions*`
+  - `/api/admin/debug/snapshots/:snapshotId`
+  - `/api/admin/debug/dap/request`
+- Required debug ingress headers are:
+  - `x-tenant-id`
+  - `x-principal`
+  - `x-roles`
+- `DebugMetadataStore` is the single owner for debug metadata operations:
+  - `debug_sessions`
+  - `debug_breakpoints`
+  - `debug_snapshots`
+- Metadata persistence/reads are SQL/CDC-only through
+  `SqlCore.executeRequest(SqlRequest)`; direct cache mutation is forbidden.
+- `AdminWebSocketAPI` may route DAP envelopes, but DAP request handling is owned
+  by the injected debug DAP router backend.
+- Distributed stage handoff ownership is handled by `DebugCoordinator` using
+  metadata + CDC updates for endpoint transitions.
+
+Debug ownership flow:
+
+```
+Client (debug headers)
+      │
+      ▼
+AdminWebSocketAPI debug route adapter
+      │
+      ├── metadata ops ─► DebugMetadataStore
+      │                    │
+      │                    ▼
+      │              SqlCore.executeRequest(SqlRequest)
+      │                    │
+      │                    ▼
+      │                SQL write/read + CDC propagation
+      │
+      └── DAP request ─► Debug DAP Router (backend owner)
+```
 
 ### NodeService (Singleton)
 - Administrative component present on every node

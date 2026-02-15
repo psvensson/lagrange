@@ -145,6 +145,21 @@ describe('WasmServiceLifecycle', () => {
       const lifecycle = makeLifecycle({nodeId: 'node-42'});
       assert.equal(lifecycle.nodeId, 'node-42');
     });
+
+    it('binds module mirror to cdc integration service',
+      () => {
+        let bound = false;
+        const moduleMirror = {
+          bindCdcIntegrationService: () => {
+            bound = true;
+          },
+        };
+        makeLifecycle({
+          moduleMirror,
+          cdcIntegrationService: {on() {}, off() {}},
+        });
+        assert.equal(bound, true);
+      });
   });
 
   describe('createReplica', () => {
@@ -234,6 +249,7 @@ describe('WasmServiceLifecycle', () => {
       const def = makeServiceDef();
       lifecycle.createReplica(def, makeReplicaConfig());
       const result = lifecycle.startReplica('svc-1');
+      assert.equal(result.started, true);
       assert.equal(typeof result.port, 'number');
       assert.ok(result.port >= 30000);
       lifecycle.activeReplicas.get('svc-1').kvStore.close();
@@ -276,6 +292,62 @@ describe('WasmServiceLifecycle', () => {
         assert.equal(checkedVersion, 'v2');
         lifecycle.getReplica('svc-1').kvStore.close();
       });
+
+    it('fails closed when module is unavailable', () => {
+      const mm = new ModuleMirror();
+      mm.hasModule = () => false;
+
+      const lifecycle = makeLifecycle({moduleMirror: mm});
+      const def = makeServiceDef();
+      lifecycle.createReplica(def, makeReplicaConfig());
+
+      const result = lifecycle.startReplica('svc-1', {
+        handlerFunctionId: 'fn-missing',
+        moduleVersion: 'v1',
+      });
+
+      assert.equal(result.started, false);
+      assert.equal(result.error, 'WASM module not available on any node');
+      assert.equal(result.diagnostic.serviceId, 'svc-1');
+      assert.equal(result.diagnostic.handlerFunctionId, 'fn-missing');
+      assert.equal(result.diagnostic.code, 'module_unavailable');
+      lifecycle.getReplica('svc-1').kvStore.close();
+    });
+
+    it('fails closed when module mirror is missing', () => {
+      const lifecycle = makeLifecycle({moduleMirror: null});
+      lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+
+      const result = lifecycle.startReplica('svc-1', {
+        handlerFunctionId: 'fn-1',
+        moduleVersion: 'v1',
+      });
+
+      assert.equal(result.started, false);
+      assert.equal(result.diagnostic.code, 'module_mirror_missing');
+      lifecycle.getReplica('svc-1').kvStore.close();
+    });
+
+    it('records and clears startup diagnostics', () => {
+      const mm = new ModuleMirror();
+      mm.hasModule = () => false;
+      const lifecycle = makeLifecycle({moduleMirror: mm});
+      lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+
+      lifecycle.startReplica('svc-1', {
+        handlerFunctionId: 'fn-1',
+        moduleVersion: 'v1',
+      });
+      assert.notEqual(lifecycle.getStartDiagnostic('svc-1'), null);
+
+      mm.hasModule = () => true;
+      lifecycle.startReplica('svc-1', {
+        handlerFunctionId: 'fn-1',
+        moduleVersion: 'v1',
+      });
+      assert.equal(lifecycle.getStartDiagnostic('svc-1'), null);
+      lifecycle.getReplica('svc-1').kvStore.close();
+    });
 
     it('should build endpoint when serviceDefinition ' +
       'provided', () => {
@@ -464,6 +536,21 @@ describe('WasmServiceLifecycle', () => {
         const lifecycle = makeLifecycle();
         await lifecycle.shutdownAll();
         assert.equal(lifecycle.activeReplicas.size, 0);
+      });
+
+    it('unbinds module mirror CDC listeners on shutdown',
+      async () => {
+        let unbound = false;
+        const lifecycle = makeLifecycle({
+          moduleMirror: {
+            unbindCdcIntegrationService: () => {
+              unbound = true;
+            },
+          },
+        });
+
+        await lifecycle.shutdownAll();
+        assert.equal(unbound, true);
       });
   });
 });

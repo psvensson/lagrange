@@ -33,6 +33,8 @@ import {
   BYTE_ESTIMATE_MULTIPLIER,
 } from './callback-stage-constants.js';
 import {buildCallbackContext} from './callback-context.js';
+import {DebugEmitter} from '../debug/debug-emitter.js';
+import {DEBUG_TRACE_SOURCE} from '../debug/debug-constants.js';
 
 const SUBSYSTEM = 'callback-execution-host';
 
@@ -127,6 +129,11 @@ class CallbackExecutionHost {
     this.executionContext = deps.executionContext || null;
     this.planDiagnostics = deps.planDiagnostics || null;
     this.onTelemetry = deps.onTelemetry || null;
+    this.debugSessionResolver = deps.debugSessionResolver || null;
+    this.traceCollector = deps.traceCollector || null;
+    this.nodeId = deps.nodeId || null;
+    this.serviceDefinitionId = deps.serviceDefinitionId || null;
+    this.replicaId = deps.replicaId || null;
     this.logger = this._initLogger();
   }
 
@@ -320,7 +327,7 @@ class CallbackExecutionHost {
     try {
       // Invoke callback through runtime driver interface.
       const rows = await this._invokeCallback(
-        batch, descriptor, options,
+        batch, descriptor, options, batchIndex,
       );
 
       // Post-invocation cancellation check
@@ -430,10 +437,11 @@ class CallbackExecutionHost {
    * @param {object} batch - {partitionId, rows}.
    * @param {object} descriptor - Callback descriptor.
    * @param {object} options - Execution options.
+   * @param {number} batchIndex - Batch index.
    * @return {Promise<Array>} Result rows from callback.
    * @private
    */
-  async _invokeCallback(batch, descriptor, options) {
+  async _invokeCallback(batch, descriptor, options, batchIndex) {
     if (this.runtimeDriverRegistry) {
       const driver = this.runtimeDriverRegistry.getDriver(
         descriptor.runtimeKind,
@@ -445,16 +453,33 @@ class CallbackExecutionHost {
       // broadcast, out) and nested-call guardrails as stage
       // runtime handlers (Requirement 14.4).
       let callbackCtx = null;
+      const debugScope = {
+        lineageId: this._batchLineageId(batchIndex),
+        stageId: this.stageIndex,
+        partitionId: batch.partitionId,
+        callbackExport: descriptor.callbackExport,
+        serviceDefinitionId:
+          options?.serviceDefinitionId || this.serviceDefinitionId || null,
+        nodeId: options?.nodeId || this.nodeId || null,
+        replicaId: options?.replicaId || this.replicaId || null,
+        runtimeKind: descriptor.runtimeKind,
+        source: DEBUG_TRACE_SOURCE.PARTITION_CALLBACK,
+      };
+      const traceApi = this._buildTraceApi(debugScope, descriptor);
       if (this.executionContext) {
         callbackCtx = buildCallbackContext(
           this.executionContext,
           this.planDiagnostics,
+          traceApi,
         );
       }
+      const debugApi = traceApi ? {
+        trace: traceApi.trace,
+      } : null;
 
       return driver.invokeCallback(
         batch, descriptor,
-        {...options, callbackContext: callbackCtx},
+        {...options, callbackContext: callbackCtx, debugScope, debug: debugApi},
       );
     }
 
@@ -465,6 +490,35 @@ class CallbackExecutionHost {
       ADAPTER_ERROR_MSG.CALLBACK_HOST_UNSUPPORTED_RUNTIME +
       descriptor.runtimeKind,
     );
+  }
+
+  /**
+   * Build callback trace API when tracing is active.
+   * @param {Object} debugScope
+   * @param {Object} descriptor
+   * @return {Object|null}
+   * @private
+   */
+  _buildTraceApi(debugScope, descriptor) {
+    if (!this.debugSessionResolver || !this.traceCollector) {
+      return null;
+    }
+    const emitter = new DebugEmitter({
+      sessionResolver: this.debugSessionResolver,
+      traceCollector: this.traceCollector,
+      nodeId: debugScope.nodeId || null,
+      serviceDefinitionId: debugScope.serviceDefinitionId || null,
+      replicaId: debugScope.replicaId || null,
+      runtimeKind: descriptor.runtimeKind,
+      source: DEBUG_TRACE_SOURCE.PARTITION_CALLBACK,
+    });
+    if (!emitter.isTraceActive(debugScope)) {
+      return null;
+    }
+    return emitter.createTraceApi(debugScope, {
+      runtimeKind: descriptor.runtimeKind,
+      source: DEBUG_TRACE_SOURCE.PARTITION_CALLBACK,
+    });
   }
 
   /**

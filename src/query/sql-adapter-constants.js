@@ -112,6 +112,14 @@ const ADAPTER_ERROR_MSG = Object.freeze({
     'Batches array is required for callback execution',
   CALLBACK_HOST_BUDGET_TERMINATED:
     'Callback execution terminated: budget exceeded',
+  NATIVE_CALLBACK_MODULE_NOT_FOUND:
+    'native_js callback module not found in code table',
+  NATIVE_CALLBACK_SOURCE_INVALID:
+    'native_js callback module code_blob must be a non-empty string',
+  NATIVE_CALLBACK_EXPORT_NOT_FOUND:
+    'native_js callback export not found in module exports',
+  NATIVE_CALLBACK_COMPILE_FAILED:
+    'native_js callback compilation failed',
   REGISTRY_UNKNOWN_RUNTIME_KIND:
     'Unknown runtime kind; no fallback driver allowed: ',
   REGISTRY_OCI_CONTAINER_GATED:

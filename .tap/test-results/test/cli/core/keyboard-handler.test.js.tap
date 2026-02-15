@@ -4,13 +4,13 @@ TAP version 14
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 1 - constructor initializes in normal mode # time=2.951ms
+    ok 1 - constructor initializes in normal mode # time=2.87ms
     
     # Subtest: arrow keys emit navigation actions
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 2 - arrow keys emit navigation actions # time=0.674ms
+    ok 2 - arrow keys emit navigation actions # time=0.659ms
     
     # Subtest: Page Up/Down emit navigation with count
         ok 1 - should be equal
@@ -18,24 +18,24 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 3 - Page Up/Down emit navigation with count # time=0.64ms
+    ok 3 - Page Up/Down emit navigation with count # time=0.689ms
     
     # Subtest: Home/End emit first/last navigation
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 4 - Home/End emit first/last navigation # time=0.419ms
+    ok 4 - Home/End emit first/last navigation # time=0.436ms
     
     # Subtest: Enter emits select action
         ok 1 - should be equal
         1..1
-    ok 5 - Enter emits select action # time=0.323ms
+    ok 5 - Enter emits select action # time=0.358ms
     
     # Subtest: Escape/Backspace emit back action
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 6 - Escape/Backspace emit back action # time=0.427ms
+    ok 6 - Escape/Backspace emit back action # time=0.437ms
     
     # Subtest: number keys switch views
         ok 1 - should be equal
@@ -59,108 +59,108 @@ TAP version 14
         ok 19 - should be equal
         ok 20 - should be equal
         1..20
-    ok 7 - number keys switch views # time=2.191ms
+    ok 7 - number keys switch views # time=2.06ms
     
     # Subtest: / enters filter mode
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 8 - / enters filter mode # time=0.469ms
+    ok 8 - / enters filter mode # time=0.504ms
     
     # Subtest: : enters command mode
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 9 - : enters command mode # time=0.422ms
+    ok 9 - : enters command mode # time=0.465ms
     
     # Subtest: ? shows help
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 10 - ? shows help # time=0.664ms
+    ok 10 - ? shows help # time=0.696ms
     
     # Subtest: q emits quit action
         ok 1 - should be equal
         1..1
-    ok 11 - q emits quit action # time=0.33ms
+    ok 11 - q emits quit action # time=0.342ms
     
     # Subtest: d toggles detail panel
         ok 1 - should be equal
         1..1
-    ok 12 - d toggles detail panel # time=0.325ms
+    ok 12 - d toggles detail panel # time=0.334ms
     
     # Subtest: r refreshes cache
         ok 1 - should be equal
         1..1
-    ok 13 - r refreshes cache # time=0.354ms
+    ok 13 - r refreshes cache # time=0.349ms
     
     # Subtest: s triggers sort
         ok 1 - should be equal
         1..1
-    ok 14 - s triggers sort # time=0.327ms
+    ok 14 - s triggers sort # time=0.361ms
     
     # Subtest: p toggles CDC pause/resume
         ok 1 - should be equal
         1..1
-    ok 15 - p toggles CDC pause/resume # time=0.328ms
+    ok 15 - p toggles CDC pause/resume # time=0.339ms
     
     # Subtest: Ctrl+C emits force quit
         ok 1 - should be equal
         1..1
-    ok 16 - Ctrl+C emits force quit # time=0.322ms
+    ok 16 - Ctrl+C emits force quit # time=0.347ms
     
     # Subtest: filter mode: typing adds to buffer
         ok 1 - should be equal
         1..1
-    ok 17 - filter mode: typing adds to buffer # time=0.43ms
+    ok 17 - filter mode: typing adds to buffer # time=0.511ms
     
     # Subtest: filter mode: backspace removes from buffer
         ok 1 - should be equal
         1..1
-    ok 18 - filter mode: backspace removes from buffer # time=0.346ms
+    ok 18 - filter mode: backspace removes from buffer # time=0.374ms
     
     # Subtest: filter mode: escape cancels
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 19 - filter mode: escape cancels # time=0.575ms
+    ok 19 - filter mode: escape cancels # time=0.57ms
     
     # Subtest: filter mode: enter applies filter
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 20 - filter mode: enter applies filter # time=0.522ms
+    ok 20 - filter mode: enter applies filter # time=0.553ms
     
     # Subtest: command mode: typing adds to buffer
         ok 1 - should be equal
         1..1
-    ok 21 - command mode: typing adds to buffer # time=0.446ms
+    ok 21 - command mode: typing adds to buffer # time=0.485ms
     
     # Subtest: command mode: enter executes with parser
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 22 - command mode: enter executes with parser # time=0.822ms
+    ok 22 - command mode: enter executes with parser # time=0.844ms
     
     # Subtest: command mode: invalid command returns error
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 23 - command mode: invalid command returns error # time=0.602ms
+    ok 23 - command mode: invalid command returns error # time=0.573ms
     
     # Subtest: command mode: tab autocompletes
         ok 1 - should be equal
         1..1
-    ok 24 - command mode: tab autocompletes # time=0.564ms
+    ok 24 - command mode: tab autocompletes # time=0.501ms
     
     # Subtest: help overlay dismisses on any key
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 25 - help overlay dismisses on any key # time=0.585ms
+    ok 25 - help overlay dismisses on any key # time=0.576ms
     
     # Subtest: isInInputMode() returns correct state
         ok 1 - should be equal
@@ -168,7 +168,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 26 - isInInputMode() returns correct state # time=0.594ms
+    ok 26 - isInInputMode() returns correct state # time=0.61ms
     
     # Subtest: getStatusBarText() returns mode-specific text
         ok 1 - should be equal
@@ -176,7 +176,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 27 - getStatusBarText() returns mode-specific text # time=0.636ms
+    ok 27 - getStatusBarText() returns mode-specific text # time=0.669ms
     
     # Subtest: getAvailableShortcuts() returns mode-specific shortcuts
         ok 1 - should be equal
@@ -185,27 +185,27 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 28 - getAvailableShortcuts() returns mode-specific shortcuts # time=0.994ms
+    ok 28 - getAvailableShortcuts() returns mode-specific shortcuts # time=0.998ms
     
     # Subtest: emits events via eventBus
         ok 1 - event was emitted
         1..1
-    ok 29 - emits events via eventBus # time=0.883ms
+    ok 29 - emits events via eventBus # time=1.151ms
     
     # Subtest: calls onAction callback
         ok 1 - should be equal
         1..1
-    ok 30 - calls onAction callback # time=0.428ms
+    ok 30 - calls onAction callback # time=0.432ms
     
     # Subtest: calls onModeChange callback
         ok 1 - should be equal
         1..1
-    ok 31 - calls onModeChange callback # time=0.395ms
+    ok 31 - calls onModeChange callback # time=0.421ms
     
     # Subtest: calls onInputChange callback
         ok 1 - should be equal
         1..1
-    ok 32 - calls onInputChange callback # time=0.494ms
+    ok 32 - calls onInputChange callback # time=0.445ms
     
     # Subtest: isNavigationKey() identifies nav keys
         ok 1 - should be equal
@@ -214,7 +214,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 33 - isNavigationKey() identifies nav keys # time=0.697ms
+    ok 33 - isNavigationKey() identifies nav keys # time=0.719ms
     
     # Subtest: isViewSwitchKey() identifies view keys
         ok 1 - should be equal
@@ -222,23 +222,23 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 34 - isViewSwitchKey() identifies view keys # time=0.635ms
+    ok 34 - isViewSwitchKey() identifies view keys # time=0.65ms
     
     # Subtest: getViewForKey() returns correct view
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 35 - getViewForKey() returns correct view # time=0.561ms
+    ok 35 - getViewForKey() returns correct view # time=0.571ms
     
     # Subtest: setInputBuffer() updates buffer
         ok 1 - should be equal
         1..1
-    ok 36 - setInputBuffer() updates buffer # time=0.369ms
+    ok 36 - setInputBuffer() updates buffer # time=0.34ms
     
     1..36
-ok 1 - KeyboardHandler # time=43.593ms
+ok 1 - KeyboardHandler # time=44.327ms
 
 1..1
 # { total: 92, pass: 92 }
-# time=62.795ms
+# time=62.349ms

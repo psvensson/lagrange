@@ -35,6 +35,23 @@ import {
 } from './result-stream.js';
 import {BudgetLimitError} from './budget-limit-error.js';
 import {ExchangeManager} from './exchange-manager.js';
+import {executeLookup} from './lookup-primitive.js';
+import {BroadcastStore} from './broadcast-primitive.js';
+import {
+  LOOKUP_ACCESS_PATH,
+  LOOKUP_KEY_FIELD,
+  PRIMITIVE_ERROR_MSG,
+} from './distributed-context-constants.js';
+
+const LOOKUP_PARTITION_SINGLE = 'single-partition';
+const SAFE_SQL_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+const SQL_SELECT_PREFIX = 'SELECT * FROM ';
+const SQL_WHERE_PREFIX = ' WHERE ';
+const SQL_IN_PREFIX = ' IN (';
+const SQL_IN_SUFFIX = ')';
+const SQL_PARAM_PLACEHOLDER = '?';
+const SQL_PARAM_SEPARATOR = ', ';
+const LOOKUP_STAGE_INDEX_DEFAULT = NUM.ZERO;
 
 /**
  * Runtime execution context injected into user functions by
@@ -118,6 +135,23 @@ class ExecutionContext {
 
     /** @private */
     this._exchangeMode = DEFAULT_EXCHANGE_MODE;
+
+    /** @private */
+    this._lookupPartitionResolver = deps.lookupPartitionResolver ||
+      ((_table, _key) => LOOKUP_PARTITION_SINGLE);
+
+    /** @private */
+    this._lookupFetch = deps.lookupFetch || null;
+
+    /** @private */
+    this._lookupSequence = NUM.ZERO;
+
+    /** @private */
+    this._broadcastStore = deps.broadcastStore ||
+      new BroadcastStore({
+        lineageTracker: this._lineageTracker,
+        stageIndex: LOOKUP_STAGE_INDEX_DEFAULT,
+      });
   }
 
   /**
@@ -404,38 +438,110 @@ class ExecutionContext {
 
   /**
    * Batched key lookup restricted to pk/unique/bounded index.
-   * Wired to real implementation by later tasks.
+   * Routes through the lookup primitive with partition grouping,
+   * dedupe, and budget-aware fetch semantics.
    *
    * @param {string} _table - Table name.
    * @param {Object[]} _keys - Lookup keys.
-   * @throws {Error} Not yet wired.
    */
   async lookup(_table, _keys) {
-    throw new Error('ctx.lookup is not yet wired');
+    this._cancellationToken.throwIfCancelled();
+    const sequenceNum = this._lookupSequence;
+    this._lookupSequence += NUM.ONE;
+    return executeLookup({
+      table: _table,
+      keys: _keys,
+      accessPath: LOOKUP_ACCESS_PATH.PRIMARY_KEY,
+      partitionResolver: (key) =>
+        this._lookupPartitionResolver(_table, key),
+      fetchFn: (partitionId, table, keys) =>
+        this._fetchLookupRows(partitionId, table, keys),
+      lineageTracker: this._lineageTracker,
+      stageIndex: LOOKUP_STAGE_INDEX_DEFAULT,
+      sequenceNum,
+    });
   }
 
   /**
    * Publish a versioned broadcast dataset.
-   * Wired to real implementation by later tasks.
+   * Stores a validated dataset in the broadcast store.
    *
    * @param {string} _ref - Broadcast reference.
    * @param {Object} _dataset - Dataset to broadcast.
-   * @throws {Error} Not yet wired.
    */
   async broadcast(_ref, _dataset) {
-    throw new Error('ctx.broadcast is not yet wired');
+    this._cancellationToken.throwIfCancelled();
+    return this._broadcastStore.broadcast(_ref, _dataset);
   }
 
   /**
    * Retrieve a previously broadcast dataset by reference.
-   * Wired to real implementation by later tasks.
+   * Resolves a validated broadcast payload from local store.
    *
    * @param {string} _ref - Broadcast reference.
    * @return {Promise<Object>} The broadcast dataset.
-   * @throws {Error} Not yet wired.
    */
   async useBroadcast(_ref) {
-    throw new Error('ctx.useBroadcast is not yet wired');
+    this._cancellationToken.throwIfCancelled();
+    return this._broadcastStore.useBroadcast(_ref);
+  }
+
+  /**
+   * Fetch lookup rows for one partition group.
+   * @param {string} partitionId
+   * @param {string} table
+   * @param {Array<Object>} keys
+   * @returns {Promise<Array<Object>>}
+   * @private
+   */
+  async _fetchLookupRows(partitionId, table, keys) {
+    if (this._lookupFetch) {
+      return this._lookupFetch(partitionId, table, keys);
+    }
+    return this._defaultLookupFetch(table, keys);
+  }
+
+  /**
+   * Default lookup fetch implementation routed through queryExecutor.
+   * @param {string} table
+   * @param {Array<Object>} keys
+   * @returns {Promise<Array<Object>>}
+   * @private
+   */
+  async _defaultLookupFetch(table, keys) {
+    if (!this._queryExecutor || typeof this._queryExecutor !== TYPEOF.FUNCTION) {
+      return [];
+    }
+    if (!SAFE_SQL_IDENTIFIER.test(table)) {
+      throw new Error(PRIMITIVE_ERROR_MSG.LOOKUP_ACCESS_PATH_DENIED);
+    }
+
+    const groupedByColumn = new Map();
+    for (const key of keys) {
+      const column = key[LOOKUP_KEY_FIELD.COLUMN];
+      if (!SAFE_SQL_IDENTIFIER.test(column)) {
+        throw new Error(PRIMITIVE_ERROR_MSG.LOOKUP_ACCESS_PATH_DENIED);
+      }
+      if (!groupedByColumn.has(column)) {
+        groupedByColumn.set(column, []);
+      }
+      groupedByColumn.get(column).push(key[LOOKUP_KEY_FIELD.VALUE]);
+    }
+
+    const rows = [];
+    for (const [column, values] of groupedByColumn) {
+      const placeholders = values
+        .map(() => SQL_PARAM_PLACEHOLDER)
+        .join(SQL_PARAM_SEPARATOR);
+      const query = SQL_SELECT_PREFIX + table +
+        SQL_WHERE_PREFIX + column +
+        SQL_IN_PREFIX + placeholders + SQL_IN_SUFFIX;
+      const result = await this._queryExecutor(query, values);
+      if (result && Array.isArray(result.rows)) {
+        rows.push(...result.rows);
+      }
+    }
+    return rows;
   }
 
   /**

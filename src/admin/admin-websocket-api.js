@@ -41,17 +41,28 @@ import {guardedAdaptAdminAction} from './admin-api-adapter.js';
 import {ADMIN_META_ACTION} from './admin-meta-command-handlers.js';
 import {MUTATION_GUARD_MODE} from './admin-mutation-guard.js';
 import {AdminTestRunService} from './admin-test-run-service.js';
+import {DebugMetadataStore} from '../debug-runtime/debug-metadata-service.js';
+import {TraceCollector} from '../debug/trace-collector.js';
+import {
+  DEBUG_METADATA_ERROR_CODE as DEBUG_METADATA_CODE,
+  DEBUG_METADATA_ERROR_MSG as DEBUG_METADATA_ERR,
+} from '../debug-runtime/debug-metadata-service-constants.js';
+import {
+  DEBUG_SESSION_STATUS as DEBUG_METADATA_SESSION_STATUS,
+} from '../debug-runtime/debug-metadata-constants.js';
 import {
   ADMIN_CACHE_DUMP,
   ADMIN_CLIENT,
   ADMIN_CONTENT_TYPE,
   ADMIN_CONFIG_KEY,
+  ADMIN_DEBUG_ERROR_MSG,
   ADMIN_DEFAULT,
   ADMIN_ENFORCEMENT_MODE,
   ADMIN_ERROR_CODE,
   ADMIN_ERROR_HINT,
   ADMIN_ERROR_MATCH,
   ADMIN_ERROR_MESSAGE,
+  ADMIN_HEADER,
   ADMIN_LIMIT,
   ADMIN_LOG_MSG,
   ADMIN_MESSAGE_TYPE,
@@ -69,7 +80,10 @@ const ErrorCode = ADMIN_ERROR_CODE;
 const HTTP_STATUS = Object.freeze({
   OK: 200,
   BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
   NOT_FOUND: 404,
+  SERVICE_UNAVAILABLE: 503,
   INTERNAL_ERROR: 500,
 });
 const HTTP_HEADER = Object.freeze({
@@ -110,6 +124,12 @@ class AdminWebSocketAPI {
     this.enforcementMode = options.enforcementMode ||
       ADMIN_DEFAULT.ENFORCEMENT_MODE;
     this.testRunService = options.testRunService || new AdminTestRunService();
+    this.debugMetadataStore = options.debugMetadataStore ||
+      (this.sqlQueryEngine ?
+        new DebugMetadataStore({sqlQueryEngine: this.sqlQueryEngine}) :
+        null);
+    this.debugDapRouter = options.debugDapRouter || null;
+    this.traceCollector = options.traceCollector || new TraceCollector();
     this.enableAdminStream = options.enableAdminStream !== false;
 
     // Configuration
@@ -267,6 +287,48 @@ class AdminWebSocketAPI {
     this.fastify.get(ADMIN_ROUTE.TEST_RUN_STREAM, async (request, reply) => {
       return this.handleRunStream(request, reply);
     });
+    this.fastify.post(ADMIN_ROUTE.DEBUG_SESSIONS, async (request, reply) => {
+      return this.handleCreateDebugSession(request, reply);
+    });
+    this.fastify.get(ADMIN_ROUTE.DEBUG_SESSION_BY_ID, async (request, reply) => {
+      return this.handleGetDebugSession(request, reply);
+    });
+    this.fastify.patch(ADMIN_ROUTE.DEBUG_SESSION_BY_ID, async (request, reply) => {
+      return this.handleUpdateDebugSession(request, reply);
+    });
+    this.fastify.post(ADMIN_ROUTE.DEBUG_SESSION_ATTACH, async (request, reply) => {
+      return this.handleAttachDebugSession(request, reply);
+    });
+    this.fastify.post(
+      ADMIN_ROUTE.DEBUG_SESSION_BREAKPOINTS,
+      async (request, reply) => {
+        return this.handleWriteDebugBreakpoints(request, reply);
+      },
+    );
+    this.fastify.get(
+      ADMIN_ROUTE.DEBUG_SESSION_BREAKPOINTS,
+      async (request, reply) => {
+        return this.handleListDebugBreakpoints(request, reply);
+      },
+    );
+    this.fastify.post(
+      ADMIN_ROUTE.DEBUG_SESSION_SNAPSHOTS,
+      async (request, reply) => {
+        return this.handleWriteDebugSnapshot(request, reply);
+      },
+    );
+    this.fastify.get(
+      ADMIN_ROUTE.DEBUG_SESSION_SNAPSHOTS,
+      async (request, reply) => {
+        return this.handleListDebugSnapshots(request, reply);
+      },
+    );
+    this.fastify.get(ADMIN_ROUTE.DEBUG_SNAPSHOT_BY_ID, async (request, reply) => {
+      return this.handleGetDebugSnapshot(request, reply);
+    });
+    this.fastify.post(ADMIN_ROUTE.DEBUG_DAP_REQUEST, async (request, reply) => {
+      return this.handleDebugDapRequest(request, reply);
+    });
 
     this.fastify.get(ADMIN_ROUTE.PLAYBACK_VIEWER, async (_request, reply) => {
       return this.handlePlaybackViewerPage(reply);
@@ -282,6 +344,13 @@ class AdminWebSocketAPI {
         fastify.get(ADMIN_ROUTE.STREAM, {websocket: true}, (socket, _req) => {
           this.handleConnection(socket);
         });
+        fastify.get(
+          ADMIN_ROUTE.DEBUG_TRACE_STREAM,
+          {websocket: true},
+          (socket, request) => {
+            this.handleDebugTraceConnection(socket, request);
+          },
+        );
       });
     }
   }
@@ -531,6 +600,330 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Create debug session metadata.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleCreateDebugSession(request, reply) {
+    const securityContext = this.resolveDebugSecurityContext(request, reply);
+    const store = this.requireDebugMetadataStore(reply);
+    if (!securityContext || !store) {
+      return;
+    }
+
+    try {
+      const session = await store.createSession({
+        securityContext,
+        ...(request.body || {}),
+      });
+      reply.code(HTTP_STATUS.OK).send({session});
+    } catch (error) {
+      reply.code(this.resolveDebugApiErrorStatus(error)).send({
+        error: error.message,
+        code: error.code || null,
+      });
+    }
+  }
+
+  /**
+   * Get one debug session by ID.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleGetDebugSession(request, reply) {
+    const securityContext = this.resolveDebugSecurityContext(request, reply);
+    const store = this.requireDebugMetadataStore(reply);
+    if (!securityContext || !store) {
+      return;
+    }
+
+    try {
+      const session = await store.getSession({
+        securityContext,
+        sessionId: request.params.sessionId,
+      });
+      if (!session) {
+        reply.code(HTTP_STATUS.NOT_FOUND).send({
+          error: DEBUG_METADATA_ERR.SESSION_NOT_FOUND,
+        });
+        return;
+      }
+      reply.code(HTTP_STATUS.OK).send({session});
+    } catch (error) {
+      reply.code(this.resolveDebugApiErrorStatus(error)).send({
+        error: error.message,
+        code: error.code || null,
+      });
+    }
+  }
+
+  /**
+   * Update or detach an existing debug session.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleUpdateDebugSession(request, reply) {
+    const securityContext = this.resolveDebugSecurityContext(request, reply);
+    const store = this.requireDebugMetadataStore(reply);
+    if (!securityContext || !store) {
+      return;
+    }
+
+    const body = request.body || {};
+    const isDetachRequest = body.detach === true ||
+      body.status === DEBUG_METADATA_SESSION_STATUS.DETACHED;
+
+    try {
+      const session = isDetachRequest ?
+        await store.detachSession({
+          securityContext,
+          sessionId: request.params.sessionId,
+          ...body,
+        }) :
+        await store.updateSession({
+          securityContext,
+          sessionId: request.params.sessionId,
+          ...body,
+        });
+      reply.code(HTTP_STATUS.OK).send({session});
+    } catch (error) {
+      reply.code(this.resolveDebugApiErrorStatus(error)).send({
+        error: error.message,
+        code: error.code || null,
+      });
+    }
+  }
+
+  /**
+   * Attach a debugger to an existing session.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleAttachDebugSession(request, reply) {
+    const securityContext = this.resolveDebugSecurityContext(request, reply);
+    const store = this.requireDebugMetadataStore(reply);
+    if (!securityContext || !store) {
+      return;
+    }
+
+    try {
+      const session = await store.attachSession({
+        securityContext,
+        sessionId: request.params.sessionId,
+      });
+      reply.code(HTTP_STATUS.OK).send({session});
+    } catch (error) {
+      reply.code(this.resolveDebugApiErrorStatus(error)).send({
+        error: error.message,
+        code: error.code || null,
+      });
+    }
+  }
+
+  /**
+   * Persist breakpoints for a debug session.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleWriteDebugBreakpoints(request, reply) {
+    const securityContext = this.resolveDebugSecurityContext(request, reply);
+    const store = this.requireDebugMetadataStore(reply);
+    if (!securityContext || !store) {
+      return;
+    }
+
+    try {
+      const breakpoints = await store.writeBreakpoints({
+        securityContext,
+        sessionId: request.params.sessionId,
+        ...(request.body || {}),
+      });
+      reply.code(HTTP_STATUS.OK).send({breakpoints});
+    } catch (error) {
+      reply.code(this.resolveDebugApiErrorStatus(error)).send({
+        error: error.message,
+        code: error.code || null,
+      });
+    }
+  }
+
+  /**
+   * List breakpoints for a debug session.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleListDebugBreakpoints(request, reply) {
+    const securityContext = this.resolveDebugSecurityContext(request, reply);
+    const store = this.requireDebugMetadataStore(reply);
+    if (!securityContext || !store) {
+      return;
+    }
+
+    try {
+      const breakpoints = await store.listBreakpoints({
+        securityContext,
+        sessionId: request.params.sessionId,
+        limit: parseRequestLimit(request.query?.limit),
+      });
+      reply.code(HTTP_STATUS.OK).send({breakpoints});
+    } catch (error) {
+      reply.code(this.resolveDebugApiErrorStatus(error)).send({
+        error: error.message,
+        code: error.code || null,
+      });
+    }
+  }
+
+  /**
+   * Persist one snapshot artifact for a debug session.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleWriteDebugSnapshot(request, reply) {
+    const securityContext = this.resolveDebugSecurityContext(request, reply);
+    const store = this.requireDebugMetadataStore(reply);
+    if (!securityContext || !store) {
+      return;
+    }
+
+    try {
+      const snapshot = await store.writeSnapshot({
+        securityContext,
+        sessionId: request.params.sessionId,
+        ...(request.body || {}),
+      });
+      reply.code(HTTP_STATUS.OK).send({
+        snapshot: normalizeSnapshotApiPayload(snapshot),
+      });
+    } catch (error) {
+      reply.code(this.resolveDebugApiErrorStatus(error)).send({
+        error: error.message,
+        code: error.code || null,
+      });
+    }
+  }
+
+  /**
+   * List snapshots for a debug session.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleListDebugSnapshots(request, reply) {
+    const securityContext = this.resolveDebugSecurityContext(request, reply);
+    const store = this.requireDebugMetadataStore(reply);
+    if (!securityContext || !store) {
+      return;
+    }
+
+    try {
+      const snapshots = await store.listSnapshots({
+        securityContext,
+        sessionId: request.params.sessionId,
+        limit: parseRequestLimit(request.query?.limit),
+      });
+      reply.code(HTTP_STATUS.OK).send({
+        snapshots: snapshots.map((snapshot) =>
+          normalizeSnapshotApiPayload(snapshot),
+        ),
+      });
+    } catch (error) {
+      reply.code(this.resolveDebugApiErrorStatus(error)).send({
+        error: error.message,
+        code: error.code || null,
+      });
+    }
+  }
+
+  /**
+   * Fetch one snapshot by snapshotId.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleGetDebugSnapshot(request, reply) {
+    const securityContext = this.resolveDebugSecurityContext(request, reply);
+    const store = this.requireDebugMetadataStore(reply);
+    if (!securityContext || !store) {
+      return;
+    }
+
+    try {
+      const snapshot = await store.getSnapshot({
+        securityContext,
+        snapshotId: request.params.snapshotId,
+        sessionId: request.query?.sessionId || null,
+        includeEnvelope: request.query?.includeEnvelope !== 'false',
+      });
+      if (!snapshot) {
+        reply.code(HTTP_STATUS.NOT_FOUND).send({
+          error: DEBUG_METADATA_ERR.SNAPSHOT_NOT_FOUND,
+        });
+        return;
+      }
+      reply.code(HTTP_STATUS.OK).send({
+        snapshot: normalizeSnapshotApiPayload(snapshot),
+      });
+    } catch (error) {
+      reply.code(this.resolveDebugApiErrorStatus(error)).send({
+        error: error.message,
+        code: error.code || null,
+      });
+    }
+  }
+
+  /**
+   * Route one DAP request through admin ingress ownership.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleDebugDapRequest(request, reply) {
+    const securityContext = this.resolveDebugSecurityContext(request, reply);
+    if (!securityContext) {
+      return;
+    }
+
+    if (!this.debugDapRouter ||
+      typeof this.debugDapRouter.handleRequest !== TYPEOF.FUNCTION) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: ADMIN_DEBUG_ERROR_MSG.DAP_UNAVAILABLE,
+      });
+      return;
+    }
+
+    try {
+      const response = await this.debugDapRouter.handleRequest({
+        securityContext,
+        ...(request.body || {}),
+      });
+      reply.code(HTTP_STATUS.OK).send({response});
+    } catch (error) {
+      reply.code(this.resolveDebugApiErrorStatus(error)).send({
+        error: error.message,
+        code: error.code || null,
+      });
+    }
+  }
+
+  /**
    * Serve shared playback viewer page.
    * @param {Object} reply
    * @return {Promise<void>}
@@ -597,6 +990,101 @@ class AdminWebSocketAPI {
       return HTTP_STATUS.NOT_FOUND;
     }
     return HTTP_STATUS.INTERNAL_ERROR;
+  }
+
+  /**
+   * Resolve security context from debug route headers.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Object|null}
+   * @private
+   */
+  resolveDebugSecurityContext(request, reply) {
+    const tenantId = request.headers[ADMIN_HEADER.TENANT_ID];
+    const principal = request.headers[ADMIN_HEADER.PRINCIPAL];
+    if (!tenantId || !principal) {
+      reply.code(HTTP_STATUS.UNAUTHORIZED).send({
+        error: ADMIN_DEBUG_ERROR_MSG.SECURITY_CONTEXT_REQUIRED,
+      });
+      return null;
+    }
+
+    const rolesHeader = request.headers[ADMIN_HEADER.ROLES];
+    return {
+      tenantId,
+      principal,
+      roles: parseHeaderRoles(rolesHeader),
+    };
+  }
+
+  /**
+   * @param {Object} reply
+   * @return {DebugMetadataStore|null}
+   * @private
+   */
+  requireDebugMetadataStore(reply) {
+    if (!this.debugMetadataStore) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: ADMIN_DEBUG_ERROR_MSG.SERVICE_UNAVAILABLE,
+      });
+      return null;
+    }
+    return this.debugMetadataStore;
+  }
+
+  /**
+   * Resolve debug API HTTP status from error code.
+   * @param {Error} error
+   * @return {number}
+   * @private
+   */
+  resolveDebugApiErrorStatus(error) {
+    switch (error?.code) {
+    case DEBUG_METADATA_CODE.INVALID_CONTEXT:
+      return HTTP_STATUS.UNAUTHORIZED;
+    case DEBUG_METADATA_CODE.UNAUTHORIZED:
+      return HTTP_STATUS.FORBIDDEN;
+    case DEBUG_METADATA_CODE.ENGINE_REQUIRED:
+      return HTTP_STATUS.SERVICE_UNAVAILABLE;
+    case DEBUG_METADATA_CODE.INVALID_REQUEST:
+    case DEBUG_METADATA_CODE.BREAKPOINTS_REQUIRED:
+      return HTTP_STATUS.BAD_REQUEST;
+    case DEBUG_METADATA_CODE.SESSION_NOT_FOUND:
+    case DEBUG_METADATA_CODE.SNAPSHOT_NOT_FOUND:
+      return HTTP_STATUS.NOT_FOUND;
+    default:
+      return HTTP_STATUS.INTERNAL_ERROR;
+    }
+  }
+
+  /**
+   * Handle one trace-stream websocket connection.
+   * @param {Object} socket - WebSocket connection.
+   * @param {Object} request - Fastify request.
+   */
+  handleDebugTraceConnection(socket, request) {
+    const filter = buildTraceStreamFilter(request?.query || {});
+    const subscription = this.traceCollector.subscribe(socket, filter);
+    let closed = false;
+
+    this.logger.info(ADMIN_LOG_MSG.TRACE_STREAM_SUBSCRIBED, {
+      subscriberId: subscription.subscriberId,
+      filter,
+    });
+
+    const cleanup = () => {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      subscription.unsubscribe();
+      this.logger.info(ADMIN_LOG_MSG.TRACE_STREAM_UNSUBSCRIBED, {
+        subscriberId: subscription.subscriberId,
+      });
+    };
+
+    socket.on(TRANSPORT_EVENT.CLOSE, cleanup);
+    socket.on(TRANSPORT_EVENT.ERROR, cleanup);
   }
 
   /**
@@ -707,6 +1195,9 @@ class AdminWebSocketAPI {
       TABLES.CONFIG,
       TABLES.CONTEXTS,
       TABLES.LIVE_QUERIES,
+      TABLES.DEBUG_SESSIONS,
+      TABLES.DEBUG_BREAKPOINTS,
+      TABLES.DEBUG_SNAPSHOTS,
       TABLES.LATENCY_GROUPS,
       TABLES.INTER_GROUP_LATENCIES,
     ];
@@ -760,6 +1251,10 @@ class AdminWebSocketAPI {
     switch (message.type) {
     case MessageType.QUERY:
       this.handleQueryMessage(clientInfo, message);
+      break;
+
+    case MessageType.PARTITION_CALLBACK:
+      this.handlePartitionCallbackMessage(clientInfo, message);
       break;
 
     case MessageType.REFRESH:
@@ -837,6 +1332,81 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Handle partition callback execution message.
+   * @param {Object} clientInfo - Client information.
+   * @param {Object} message - Callback message.
+   * @private
+   */
+  async handlePartitionCallbackMessage(clientInfo, message) {
+    const queryId = message.queryId;
+    const statement = message.statement || message.sql;
+    const parameters = message.parameters || message.params || [];
+    const callbackModuleRef = message.callbackModuleRef;
+    const callbackExport = message.callbackExport;
+    const runtimeKind = message.runtimeKind;
+
+    if (!queryId) {
+      this.sendError(clientInfo, null, ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_QUERY_ID, ADMIN_ERROR_HINT.MISSING_QUERY_ID);
+      return;
+    }
+
+    if (!statement || typeof statement !== TYPEOF.STRING) {
+      this.sendError(clientInfo, queryId, ErrorCode.SYNTAX_ERROR,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_STATEMENT,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_STATEMENT);
+      return;
+    }
+
+    if (!callbackModuleRef || typeof callbackModuleRef !== TYPEOF.STRING) {
+      this.sendError(clientInfo, queryId, ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_MODULE_REF,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_MODULE_REF);
+      return;
+    }
+
+    if (!callbackExport || typeof callbackExport !== TYPEOF.STRING) {
+      this.sendError(clientInfo, queryId, ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_EXPORT,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_EXPORT);
+      return;
+    }
+
+    if (!runtimeKind || typeof runtimeKind !== TYPEOF.STRING) {
+      this.sendError(clientInfo, queryId, ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_RUNTIME_KIND,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_RUNTIME_KIND);
+      return;
+    }
+
+    this.logger.debug(ADMIN_LOG_MSG.EXECUTING_QUERY, {
+      clientId: clientInfo.id,
+      queryId,
+      sql: statement.substring(NUM.ZERO, ADMIN_LIMIT.SQL_PREVIEW_LENGTH),
+      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
+      callbackModuleRef,
+      callbackExport,
+      runtimeKind,
+    });
+
+    try {
+      const result = await this.executeSqlRequestWithTimeout(createSqlRequest({
+        statement,
+        parameters,
+        sessionId: queryId,
+        executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
+        callbackModuleRef,
+        callbackExport,
+        runtimeKind,
+      }));
+      this.sendQueryResult(clientInfo, queryId, result);
+    } catch (error) {
+      const errorCode = this.getErrorCode(error);
+      this.sendError(clientInfo, queryId, errorCode, error.message);
+    }
+  }
+
+  /**
    * Execute query with timeout.
    * @param {string} sql - SQL query.
    * @param {Array} params - Query parameters.
@@ -845,6 +1415,21 @@ class AdminWebSocketAPI {
    * @private
    */
   async executeQueryWithTimeout(sql, params, queryId) {
+    return this.executeSqlRequestWithTimeout(createSqlRequest({
+      statement: sql,
+      parameters: params,
+      sessionId: queryId,
+      executionMode: EXECUTION_MODE.SQL_STATEMENT,
+    }));
+  }
+
+  /**
+   * Execute canonical SQL request with timeout.
+   * @param {Object} sqlRequest - Canonical SqlRequest.
+   * @return {Promise<Object>} Query result.
+   * @private
+   */
+  async executeSqlRequestWithTimeout(sqlRequest) {
     if (!this.sqlQueryEngine ||
         typeof this.sqlQueryEngine.executeRequest !== TYPEOF.FUNCTION) {
       throw new Error(ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE);
@@ -858,14 +1443,7 @@ class AdminWebSocketAPI {
         }, this.queryTimeoutMs);
       });
 
-      const queryPromise = this.sqlQueryEngine.executeRequest(
-        createSqlRequest({
-          statement: sql,
-          parameters: params,
-          sessionId: queryId,
-          executionMode: EXECUTION_MODE.SQL_STATEMENT,
-        }),
-      );
+      const queryPromise = this.sqlQueryEngine.executeRequest(sqlRequest);
 
       return await Promise.race([queryPromise, timeoutPromise]);
     } finally {
@@ -907,6 +1485,14 @@ class AdminWebSocketAPI {
       if (result.hint) {
         message.hint = result.hint;
       }
+    } else if (result.hostResult ||
+      result.executionMode === EXECUTION_MODE.PARTITION_CALLBACK) {
+      message.operation = EXECUTION_MODE.PARTITION_CALLBACK;
+      message.results = Array.isArray(result.results) ?
+        result.results : ADMIN_CACHE_DUMP.EMPTY;
+      message.hostResult = result.hostResult || null;
+      message.callbackModuleRef = result.callbackModuleRef || null;
+      message.callbackExport = result.callbackExport || null;
     } else if (result.rows !== undefined || result.results !== undefined) {
       // SELECT query result - handle both 'rows' and 'results' field names
       message.results = result.rows || result.results || ADMIN_CACHE_DUMP.EMPTY;
@@ -1072,6 +1658,16 @@ class AdminWebSocketAPI {
    */
   setSQLQueryEngine(engine) {
     this.sqlQueryEngine = engine;
+    if (this.debugMetadataStore &&
+      typeof this.debugMetadataStore.setSqlQueryEngine === TYPEOF.FUNCTION) {
+      this.debugMetadataStore.setSqlQueryEngine(engine);
+      return;
+    }
+    if (!this.debugMetadataStore && engine) {
+      this.debugMetadataStore = new DebugMetadataStore({
+        sqlQueryEngine: engine,
+      });
+    }
   }
 
   /**
@@ -1154,6 +1750,115 @@ class AdminWebSocketAPI {
       nodeId: this.nodeId,
     });
   }
+}
+
+/**
+ * Parse comma-separated role header to string array.
+ * @param {*} rolesHeader
+ * @return {Array<string>}
+ */
+function parseHeaderRoles(rolesHeader) {
+  if (typeof rolesHeader !== TYPEOF.STRING) {
+    return [];
+  }
+  return rolesHeader.split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > NUM.ZERO);
+}
+
+/**
+ * Parse limit query parameter.
+ * @param {*} limitParam
+ * @return {number|undefined}
+ */
+function parseRequestLimit(limitParam) {
+  if (typeof limitParam === TYPEOF.STRING) {
+    const parsed = Number.parseInt(limitParam, 10);
+    return Number.isInteger(parsed) ? parsed : undefined;
+  }
+  if (Number.isInteger(limitParam)) {
+    return limitParam;
+  }
+  return undefined;
+}
+
+/**
+ * Build trace stream subscription filter from query params.
+ * @param {Object} query
+ * @return {Object}
+ */
+function buildTraceStreamFilter(query) {
+  const filter = {};
+  const lineagePrefix = normalizeQueryFilterValue(query.lineagePrefix);
+  const level = normalizeQueryFilterValue(query.level);
+  const nodeId = normalizeQueryFilterValue(query.nodeId);
+  const source = normalizeQueryFilterValue(query.source);
+  const levels = parseTraceLevels(query.levels);
+
+  if (lineagePrefix) {
+    filter.lineagePrefix = lineagePrefix;
+  }
+  if (level) {
+    filter.level = level;
+  }
+  if (nodeId) {
+    filter.nodeId = nodeId;
+  }
+  if (source) {
+    filter.source = source;
+  }
+  if (levels.length > NUM.ZERO) {
+    filter.levels = levels;
+  }
+
+  return filter;
+}
+
+/**
+ * Parse comma-separated trace levels query parameter.
+ * @param {*} levelsParam
+ * @return {Array<string>}
+ */
+function parseTraceLevels(levelsParam) {
+  if (typeof levelsParam !== TYPEOF.STRING) {
+    return [];
+  }
+  return levelsParam.split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > NUM.ZERO);
+}
+
+/**
+ * Parse one query filter value to trimmed string.
+ * @param {*} value
+ * @return {string|null}
+ */
+function normalizeQueryFilterValue(value) {
+  if (typeof value !== TYPEOF.STRING) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > NUM.ZERO ? trimmed : null;
+}
+
+/**
+ * Convert snapshot payload to JSON-safe response.
+ * @param {Object} snapshot
+ * @return {Object}
+ */
+function normalizeSnapshotApiPayload(snapshot) {
+  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+    return snapshot;
+  }
+  if (!snapshot.envelope || !Buffer.isBuffer(snapshot.envelope)) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    envelopeBase64: snapshot.envelope.toString('base64'),
+    envelope: undefined,
+  };
 }
 
 export {AdminWebSocketAPI, MessageType, ErrorCode};

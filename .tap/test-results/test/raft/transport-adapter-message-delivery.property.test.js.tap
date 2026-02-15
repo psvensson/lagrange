@@ -2,33 +2,33 @@ TAP version 14
 # Subtest: Property: Simplified transport delivers packets unchanged
     ok 1 - Simplified transport delivers packets unchanged
     1..1
-ok 1 - Property: Simplified transport delivers packets unchanged # time=13.473ms
+ok 1 - Property: Simplified transport delivers packets unchanged # time=16.086ms
 
 # Subtest: Property: Delivery errors are propagated correctly
     ok 1 - Delivery errors are propagated correctly
     1..1
-ok 2 - Property: Delivery errors are propagated correctly # time=2.386ms
+ok 2 - Property: Delivery errors are propagated correctly # time=4.077ms
 
 # Subtest: Property: Delivery result is returned correctly
     ok 1 - Delivery result is returned correctly
     1..1
-ok 3 - Property: Delivery result is returned correctly # time=0.942ms
+ok 3 - Property: Delivery result is returned correctly # time=1.696ms
 
 # Subtest: Property: Peer address is built in unified format
     ok 1 - Peer address is built in unified format
     1..1
-ok 4 - Property: Peer address is built in unified format # time=2.994ms
+ok 4 - Property: Peer address is built in unified format # time=8.151ms
 
 # Subtest: Property: isRaftPacket correctly identifies Raft packets
     ok 1 - isRaftPacket correctly identifies Raft packets
     1..1
-ok 5 - Property: isRaftPacket correctly identifies Raft packets # time=1.768ms
+ok 5 - Property: isRaftPacket correctly identifies Raft packets # time=2.59ms
 
 # Subtest: Property: Non-Raft payloads are not detected as Raft packets
     ok 1 - Non-Raft payloads are not detected as Raft packets
     1..1
-ok 6 - Property: Non-Raft payloads are not detected as Raft packets # time=3.012ms
+ok 6 - Property: Non-Raft payloads are not detected as Raft packets # time=4.691ms
 
 1..6
 # { total: 6, pass: 6 }
-# time=42.31ms
+# time=45.836ms

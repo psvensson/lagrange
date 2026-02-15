@@ -847,3 +847,42 @@ test('execute - works without onTelemetry callback',
     t.equal(result.state, STAGE_STATE.COMPLETED);
     t.equal(result.totalRows, 1);
   });
+
+test('execute - emits lineage-correlated traces through collector',
+  async (t) => {
+    const traceEvents = [];
+    const host = new CallbackExecutionHost({
+      runtimeDriverRegistry: makeRegistry(),
+      lineageTracker: new LineageTracker('q-trace'),
+      stageIndex: 3,
+      executionContext: makeExecContext(),
+      debugSessionResolver: {
+        isTraceActive: (scope) => Boolean(scope.lineageId),
+      },
+      traceCollector: {
+        emit: (event) => traceEvents.push(event),
+      },
+      nodeId: 'node-a',
+      serviceDefinitionId: 'svc-a',
+      replicaId: 'replica-a',
+    });
+
+    const result = await host.execute(
+      makeBatches(1),
+      makeDescriptor(),
+      {
+        handler: (_batch, _descriptor, callbackContext) => {
+          callbackContext.debug.trace('info', 'callback trace', {step: 1});
+          return [];
+        },
+      },
+    );
+
+    t.equal(result.state, STAGE_STATE.COMPLETED);
+    t.equal(traceEvents.length, 1, 'should emit one callback trace event');
+    t.equal(traceEvents[0].source, 'partition_callback');
+    t.equal(traceEvents[0].serviceDefinitionId, 'svc-a');
+    t.equal(traceEvents[0].nodeId, 'node-a');
+    t.equal(traceEvents[0].replicaId, 'replica-a');
+    t.ok(String(traceEvents[0].lineageId).startsWith('q-trace'));
+  });

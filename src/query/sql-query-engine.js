@@ -59,7 +59,16 @@ import {
   EXECUTION_MODE,
   ADAPTER_ERROR_MSG,
   ADAPTER_LOG_MSG,
+  CALLBACK_RUNTIME_KIND,
 } from './sql-adapter-constants.js';
+
+const CODE_LOOKUP_BY_FUNCTION_ID_SQL =
+  `SELECT * FROM ${TABLES.CODE} WHERE function_id = ?`;
+const CODE_LOOKUP_BY_FUNCTION_NAME_SQL =
+  `SELECT * FROM ${TABLES.CODE} WHERE function_name = ?`;
+const NATIVE_CALLBACK_EXPORTS_ARG = 'exports';
+const NATIVE_CALLBACK_MODULE_ARG = 'module';
+const NATIVE_CALLBACK_RETURN_LINE = 'return module.exports;';
 
 /**
  * SQLQueryEngine is the main entry point for SQL query processing.
@@ -119,6 +128,8 @@ class SQLQueryEngine {
     // Unified runtime ownership components (startup-wired).
     this.runtimeDriverRegistry = options.runtimeDriverRegistry || null;
     this.serviceRuntimeLifecycle = options.serviceRuntimeLifecycle || null;
+    this.debugSessionResolver = options.debugSessionResolver || null;
+    this.traceCollector = options.traceCollector || null;
 
     // Transaction state per client/session
     this.activeTransactions = new Map(); // sessionId -> {partitionId, partition}
@@ -184,6 +195,22 @@ class SQLQueryEngine {
    */
   setServiceRuntimeLifecycle(lifecycle) {
     this.serviceRuntimeLifecycle = lifecycle;
+  }
+
+  /**
+   * Set debug session resolver for callback trace gating.
+   * @param {Object} resolver
+   */
+  setDebugSessionResolver(resolver) {
+    this.debugSessionResolver = resolver;
+  }
+
+  /**
+   * Set trace collector for callback trace streaming.
+   * @param {Object} collector
+   */
+  setTraceCollector(collector) {
+    this.traceCollector = collector;
   }
 
   /**
@@ -306,6 +333,11 @@ class SQLQueryEngine {
       callbackExport: dispatchResult.callbackExport,
       runtimeKind,
     };
+    const executionContext = this.createRequestExecutionContext(sqlRequest);
+    const handler = await this.resolvePartitionCallbackHandler(
+      sqlRequest,
+      executionContext,
+    );
 
     // 3. Create callback runtime selector as a strict
     // adapter over unified runtime selection ownership.
@@ -342,11 +374,21 @@ class SQLQueryEngine {
       cancellationToken: sqlRequest.cancellationToken || null,
       stageIndex: sqlRequest.stageIndex || 0,
       runtimeDriverRegistry: callbackRuntimeRegistry,
+      executionContext,
+      planDiagnostics: executionContext.getPlanDiagnostics(),
+      debugSessionResolver:
+        sqlRequest.debugSessionResolver || this.debugSessionResolver || null,
+      traceCollector:
+        sqlRequest.traceCollector || this.traceCollector || null,
+      nodeId: sqlRequest.nodeId || this.nodeId || null,
+      serviceDefinitionId:
+        sqlRequest.serviceDefinitionId || callbackModuleRef || null,
+      replicaId: sqlRequest.replicaId || null,
     });
 
     const hostResult = await host.execute(
       dispatchResult.batches, descriptor,
-      {handler: sqlRequest.handler || null},
+      {handler},
     );
 
     this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_COMPLETE, {
@@ -366,6 +408,114 @@ class SQLQueryEngine {
       executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
       hostResult,
     };
+  }
+
+  /**
+   * Resolve callback handler for partition_callback execution.
+   *
+   * For native_js runtime, handler can be passed directly on the
+   * request or resolved from the `code` table by callbackModuleRef.
+   *
+   * @param {Readonly<Object>} sqlRequest
+   * @param {ExecutionContext} executionContext
+   * @return {Promise<Function|null>}
+   * @private
+   */
+  async resolvePartitionCallbackHandler(sqlRequest, executionContext) {
+    if (typeof sqlRequest.handler === 'function') {
+      return sqlRequest.handler;
+    }
+    if (sqlRequest.runtimeKind !== CALLBACK_RUNTIME_KIND.NATIVE_JS) {
+      return null;
+    }
+    try {
+      return await this.loadNativeCallbackHandler(
+        sqlRequest.callbackModuleRef,
+        sqlRequest.callbackExport,
+        sqlRequest.sessionId || QUERY_SESSION.DEFAULT,
+        executionContext,
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Load and compile a native_js callback handler from code table.
+   * @param {string} callbackModuleRef
+   * @param {string} callbackExport
+   * @param {string} sessionId
+   * @param {ExecutionContext} executionContext
+   * @return {Promise<Function>}
+   * @private
+   */
+  async loadNativeCallbackHandler(
+    callbackModuleRef,
+    callbackExport,
+    sessionId,
+    executionContext,
+  ) {
+    const byFunctionId = await this.executeQuery(
+      CODE_LOOKUP_BY_FUNCTION_ID_SQL,
+      [callbackModuleRef],
+      {sessionId},
+    );
+    const codeRow = byFunctionId.rows?.[0] ||
+      (await this.executeQuery(
+        CODE_LOOKUP_BY_FUNCTION_NAME_SQL,
+        [callbackModuleRef],
+        {sessionId},
+      )).rows?.[0] ||
+      null;
+
+    if (!codeRow) {
+      throw new Error(
+        `${ADAPTER_ERROR_MSG.NATIVE_CALLBACK_MODULE_NOT_FOUND}: ` +
+        callbackModuleRef,
+      );
+    }
+
+    const source = codeRow.code_blob;
+    if (typeof source !== 'string' || !source.trim()) {
+      throw new Error(ADAPTER_ERROR_MSG.NATIVE_CALLBACK_SOURCE_INVALID);
+    }
+
+    const module = {exports: {}};
+    let evaluated = null;
+    try {
+      const moduleFactory = new Function(
+        NATIVE_CALLBACK_EXPORTS_ARG,
+        NATIVE_CALLBACK_MODULE_ARG,
+        `${source}\n${NATIVE_CALLBACK_RETURN_LINE}`,
+      );
+      evaluated = moduleFactory(module.exports, module);
+    } catch (error) {
+      const compileError = new Error(
+        `${ADAPTER_ERROR_MSG.NATIVE_CALLBACK_COMPILE_FAILED}: ${error.message}`,
+      );
+      compileError.cause = error;
+      throw compileError;
+    }
+
+    const compiledExports = evaluated &&
+      typeof evaluated === 'object' ?
+      evaluated :
+      module.exports;
+    const rawHandler = compiledExports ?
+      compiledExports[callbackExport] :
+      null;
+    if (typeof rawHandler !== 'function') {
+      throw new Error(
+        `${ADAPTER_ERROR_MSG.NATIVE_CALLBACK_EXPORT_NOT_FOUND}: ` +
+        callbackExport,
+      );
+    }
+
+    return (batch, descriptor, callbackCtx) => rawHandler(
+      callbackCtx || executionContext,
+      batch,
+      descriptor,
+    );
   }
 
   /**

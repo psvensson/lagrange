@@ -410,6 +410,37 @@ describe('WasmComponentDriver', () => {
           WASM_COMPONENT_ERROR.START_REPLICA_FAILED,
         ));
       });
+
+    it('propagates fail-closed lifecycle start failures',
+      async () => {
+        const lifecycle = makeMockLifecycle({
+          createReplica: (def) => {
+            lifecycle._replicas.set(def.serviceId, {});
+          },
+          startReplica: () => ({
+            started: false,
+            error: 'WASM module not available on any node',
+            diagnostic: {code: 'module_unavailable'},
+          }),
+        });
+        const freshDriver = new WasmComponentDriver();
+        await freshDriver.prepare(
+          makeDefinition(),
+          {wasmLifecycle: lifecycle, replicaConfig: {}},
+        );
+
+        const result = await freshDriver.start(
+          makeReplicaContext(),
+        );
+
+        assert.equal(result.status, START_STATUS.FAILED);
+        assert.ok(result.error.includes(
+          WASM_COMPONENT_ERROR.START_REPLICA_FAILED,
+        ));
+        assert.deepEqual(result.diagnostic, {
+          code: 'module_unavailable',
+        });
+      });
   });
 
   describe('stop', () => {

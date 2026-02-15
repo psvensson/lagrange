@@ -33,6 +33,7 @@ import {
   CACHE_SYSTEM_TABLES,
   CACHE_PRIMARY_KEY_FIELDS,
   CACHE_HYDRATION_TABLES,
+  CDC_NON_PROPAGATED_TABLES,
 } from '../../src/cache/cache-constants.js';
 
 const NEW_TABLES = [
@@ -122,8 +123,9 @@ describe('Cache registration', () => {
       assert.ok(CACHE_SYSTEM_TABLES.includes(table));
     });
 
-    it(`should include ${table} in CACHE_HYDRATION_TABLES`, () => {
-      assert.ok(CACHE_HYDRATION_TABLES.includes(table));
+    it(`should classify ${table} as non-propagated`, () => {
+      assert.ok(CDC_NON_PROPAGATED_TABLES.includes(table));
+      assert.ok(!CACHE_HYDRATION_TABLES.includes(table));
     });
 
     it(`should have primary key field for ${table}`, () => {

@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: NodesView renders all required columns
         ok 1 - NodesView renders all required columns
         1..1
-    ok 1 - NodesView renders all required columns # time=11.492ms
+    ok 1 - NodesView renders all required columns # time=5.727ms
     
     # Subtest: NodesView renders all entities from data
         ok 1 - NodesView renders all entities from data
         1..1
-    ok 2 - NodesView renders all entities from data # time=4.176ms
+    ok 2 - NodesView renders all entities from data # time=4.051ms
     
     # Subtest: NodesView row values match entity data
         ok 1 - NodesView row values match entity data
         1..1
-    ok 3 - NodesView row values match entity data # time=1.527ms
+    ok 3 - NodesView row values match entity data # time=1.162ms
     
     # Subtest: NodesView formatRow produces correct column count
         ok 1 - NodesView formatRow produces correct column count
         1..1
-    ok 4 - NodesView formatRow produces correct column count # time=1.418ms
+    ok 4 - NodesView formatRow produces correct column count # time=0.968ms
     
     # Subtest: NodesView handles null/undefined values gracefully
         ok 1 - NodesView handles null/undefined values gracefully
         1..1
-    ok 5 - NodesView handles null/undefined values gracefully # time=1.696ms
+    ok 5 - NodesView handles null/undefined values gracefully # time=1.167ms
     
     # Subtest: render result contains correct metadata
         ok 1 - render result contains correct metadata
         1..1
-    ok 6 - render result contains correct metadata # time=3.293ms
+    ok 6 - render result contains correct metadata # time=1.685ms
     
     1..6
-ok 1 - Property 1: View Rendering Completeness # time=30.099ms
+ok 1 - Property 1: View Rendering Completeness # time=18.998ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=38.447ms
+# time=23.827ms

@@ -122,6 +122,12 @@ function getValidUpdateData(tableName) {
     return {registry_url: 'https://updated.example.com'};
   case SystemTableName.MODULE_DEPENDENCY_LOCKS:
     return {target_service_id: 'svc-updated'};
+  case SystemTableName.DEBUG_SESSIONS:
+    return {status: 'active'};
+  case SystemTableName.DEBUG_BREAKPOINTS:
+    return {resolved: 1};
+  case SystemTableName.DEBUG_SNAPSHOTS:
+    return {host_call_count: 2};
   default:
     return {updated_at: Date.now()};
   }
@@ -177,6 +183,39 @@ async function executeWrite(cdc, operation, tableName, primaryKey) {
     data.operation_id = primaryKey;
     data.tenant_id = 'tenant-1';
     data.command = 'publishModule';
+  } else if (tableName === SystemTableName.DEBUG_SESSIONS) {
+    data.session_id = primaryKey;
+    data.tenant_id = 'tenant-1';
+    data.service_name = 'svc-debug';
+    data.status = 'active';
+    data.created_at = Date.now();
+    data.updated_at = Date.now();
+  } else if (tableName === SystemTableName.DEBUG_BREAKPOINTS) {
+    data.breakpoint_id = primaryKey;
+    data.session_id = 'session-1';
+    data.tenant_id = 'tenant-1';
+    data.module_ref = 'svc:debug-module@1.0.0';
+    data.source_file_url = 'file:///src/service.ts';
+    data.line_number = 10;
+    data.column_number = 0;
+    data.resolved = 1;
+    data.created_at = Date.now();
+    data.updated_at = Date.now();
+  } else if (tableName === SystemTableName.DEBUG_SNAPSHOTS) {
+    data.snapshot_id = primaryKey;
+    data.session_id = 'session-1';
+    data.tenant_id = 'tenant-1';
+    data.module_ref = 'svc:debug-module@1.0.0';
+    data.module_digest = 'sha256:' + primaryKey.replace(/-/g, '');
+    data.captured_at = Date.now();
+    data.format_version = 1;
+    data.snapshot_bytes_base64 = 'AQID';
+    data.manifest_json = '{}';
+    data.total_bytes = 3;
+    data.frame_count = 1;
+    data.host_call_count = 1;
+    data.created_at = Date.now();
+    data.updated_at = Date.now();
   }
 
   switch (operation) {

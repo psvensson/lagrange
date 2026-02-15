@@ -1141,6 +1141,9 @@ class AdminTestRunService {
     const progressMessage = status === ADMIN_TEST_RUN_STATUS.PASSED ?
       'Run completed successfully' :
       'Run failed';
+    const examplesPayload = this.extractExamplesPayload(scenarios);
+    const examplesArtifactPath = examplesPayload.artifactPath;
+    const examplesSummary = examplesPayload.summary;
 
     return {
       runId,
@@ -1173,6 +1176,47 @@ class AdminTestRunService {
         updatedAt: endedAt || startedAt || new Date(this.now()).toISOString(),
       },
       summary: report.summary || null,
+      examplesSummary,
+      examplesArtifactPath,
+      examplesArtifactUrl: this.toOutputWebPath(examplesArtifactPath),
+    };
+  }
+
+  /**
+   * Extract examples summary payload from report scenarios.
+   * @param {Array<Object>} scenarios
+   * @return {{summary: Object|null, artifactPath: string|null}}
+   * @private
+   */
+  extractExamplesPayload(scenarios) {
+    const fallback = {
+      summary: null,
+      artifactPath: null,
+    };
+    if (!Array.isArray(scenarios) || scenarios.length === 0) {
+      return fallback;
+    }
+
+    let summary = null;
+    let artifactPath = null;
+    for (const scenario of scenarios) {
+      if (!summary && scenario?.exampleResults &&
+        typeof scenario.exampleResults === 'object') {
+        summary = scenario.exampleResults;
+      }
+      const details = scenario?.details;
+      if (!summary && details?.exampleResults &&
+        typeof details.exampleResults === 'object') {
+        summary = details.exampleResults;
+      }
+      if (!artifactPath && typeof details?.artifactPath === 'string') {
+        artifactPath = details.artifactPath;
+      }
+    }
+
+    return {
+      summary: summary || null,
+      artifactPath: this.normalizeWorkspaceRelativePath(artifactPath),
     };
   }
 
@@ -1277,6 +1321,12 @@ class AdminTestRunService {
         message: `Run status: ${merged.status}`,
         percent: isDone ? 100 : 50,
       });
+    }
+
+    if (!merged.examplesArtifactUrl && merged.examplesArtifactPath) {
+      merged.examplesArtifactUrl = this.toOutputWebPath(
+        merged.examplesArtifactPath,
+      );
     }
     return merged;
   }
@@ -1802,6 +1852,16 @@ class AdminTestRunService {
     run.playbackSnapshotsUrl = reportSummary.playbackSnapshotsUrl ||
       run.playbackSnapshotsUrl ||
       null;
+    run.summary = reportSummary.summary || run.summary || null;
+    run.examplesSummary = reportSummary.examplesSummary ||
+      run.examplesSummary ||
+      null;
+    run.examplesArtifactPath = reportSummary.examplesArtifactPath ||
+      run.examplesArtifactPath ||
+      null;
+    run.examplesArtifactUrl = reportSummary.examplesArtifactUrl ||
+      run.examplesArtifactUrl ||
+      null;
 
     await this.persistRunMetadata(run);
     this.publishStatus(run);
@@ -1861,6 +1921,9 @@ class AdminTestRunService {
       playbackSamplesPath: run.playbackSamplesPath || null,
       playbackSnapshotsPath: run.playbackSnapshotsPath || null,
       progress: run.progress || null,
+      summary: run.summary || null,
+      examplesSummary: run.examplesSummary || null,
+      examplesArtifactPath: run.examplesArtifactPath || null,
     };
 
     const metadataPath = this.resolveMetadataFilePath(run.runId);
@@ -1914,6 +1977,9 @@ class AdminTestRunService {
       playbackSamplesUrl: run.playbackSamplesUrl || null,
       playbackSnapshotsUrl: run.playbackSnapshotsUrl || null,
       livePlaybackViewerUrl: run.livePlaybackViewerUrl || null,
+      examplesSummary: run.examplesSummary || null,
+      examplesArtifactPath: run.examplesArtifactPath || null,
+      examplesArtifactUrl: run.examplesArtifactUrl || null,
       exitCode: run.exitCode ?? null,
       signal: run.signal || null,
       pid: run.pid || null,
