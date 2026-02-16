@@ -7,12 +7,18 @@
  * The driver resolves handler references, validates them, and
  * manages their availability lifecycle.
  *
+ * Supports two handler shapes in the handlerMap:
+ *   1. Plain function — simple handler (existing behavior).
+ *   2. Lifecycle-capable module — object exposing prepare,
+ *      start, stop, health methods. Lifecycle calls are
+ *      delegated to the module directly.
+ *
  * Contract rules:
  *   1. No driver writes system metadata directly.
  *   2. All driver failures return typed errors.
  *   3. Driver lifecycle calls are idempotent where possible.
  *
- * Requirements: 2.1, 2.2
+ * Requirements: 2.1, 2.2, 2.4, 9.4
  *
  * @module runtime/native-js-driver
  */
@@ -39,12 +45,38 @@ const NATIVE_JS_ERROR = Object.freeze({
   DEFINITION_REQUIRED: 'service definition is required',
   HANDLER_NOT_FOUND: 'handler not found for runtime_ref',
   HANDLER_NOT_FUNCTION: 'resolved handler is not a function',
+  HANDLER_INVALID_TYPE:
+    'resolved handler must be a function or lifecycle module',
   HANDLER_MAP_NOT_OBJECT: 'handler map must be a non-null object',
   REPLICA_CONTEXT_REQUIRED: 'replicaContext is required',
   SERVICE_ID_REQUIRED: 'replicaContext.serviceId is required',
   NOT_PREPARED: 'driver has not been prepared for this service',
   NOT_STARTED: 'service is not running',
 });
+
+// --- Lifecycle module detection ---
+
+const LIFECYCLE_METHODS = Object.freeze([
+  'prepare', 'start', 'stop', 'health',
+]);
+
+/**
+ * Check whether a resolved handler is a lifecycle-capable module.
+ *
+ * A lifecycle module is a non-null object exposing prepare, start,
+ * stop, and health as functions.
+ *
+ * @param {*} handler - The resolved handler from handlerMap.
+ * @return {boolean}
+ */
+function isLifecycleModule(handler) {
+  if (!handler || typeof handler !== TYPEOF.OBJECT) {
+    return false;
+  }
+  return LIFECYCLE_METHODS.every(
+    (m) => typeof handler[m] === TYPEOF.FUNCTION,
+  );
+}
 
 /**
  * Native_JS_Driver — executes existing in-process JS handlers
@@ -70,6 +102,13 @@ class NativeJsDriver extends RuntimeDriver {
      * @private
      */
     this._prepared = new Map();
+
+    /**
+     * Lifecycle-capable modules keyed by serviceId.
+     * @type {Map<string, Object>}
+     * @private
+     */
+    this._lifecycleModules = new Map();
 
     /**
      * Running service IDs.
@@ -119,8 +158,14 @@ class NativeJsDriver extends RuntimeDriver {
    * Prepare runtime artifacts for a native_js service definition.
    *
    * Resolves the handler reference from the provided context's
-   * handlerMap. The handlerMap maps runtime_ref strings to
-   * handler functions.
+   * handlerMap. The handlerMap maps runtime_ref strings to either:
+   *   - handler functions (existing behavior), or
+   *   - lifecycle-capable modules (objects with prepare, start,
+   *     stop, health methods).
+   *
+   * When a lifecycle module is resolved, its prepare() method is
+   * called and the module is stored for subsequent lifecycle
+   * delegation.
    *
    * Idempotent: re-preparing an already-prepared service
    * updates the handler reference.
@@ -155,13 +200,26 @@ class NativeJsDriver extends RuntimeDriver {
       };
     }
 
+    // Lifecycle-capable module: delegate prepare and store module
+    if (isLifecycleModule(handler)) {
+      const result = await handler.prepare(definition, context);
+      if (result.status === PREPARE_STATUS.FAILED) {
+        return result;
+      }
+      this._lifecycleModules.set(serviceId, handler);
+      this._prepared.set(serviceId, handler);
+      return {status: PREPARE_STATUS.READY};
+    }
+
     if (typeof handler !== TYPEOF.FUNCTION) {
       return {
         status: PREPARE_STATUS.FAILED,
-        error: `${NATIVE_JS_ERROR.HANDLER_NOT_FUNCTION}: '${ref}'`,
+        error:
+          `${NATIVE_JS_ERROR.HANDLER_INVALID_TYPE}: '${ref}'`,
       };
     }
 
+    this._lifecycleModules.delete(serviceId);
     this._prepared.set(serviceId, handler);
     return {status: PREPARE_STATUS.READY};
   }
@@ -169,9 +227,9 @@ class NativeJsDriver extends RuntimeDriver {
   /**
    * Start a native_js service replica.
    *
-   * Makes the prepared handler available for invocation.
-   * Returns an endpoint intent if the replica context includes
-   * endpoint configuration.
+   * For lifecycle-capable modules, delegates to module.start().
+   * For plain handlers, makes the handler available for
+   * invocation and returns endpoint intent from replica context.
    *
    * Idempotent: starting an already-running replica is a no-op.
    *
@@ -204,7 +262,17 @@ class NativeJsDriver extends RuntimeDriver {
       };
     }
 
-    // Idempotent: already running is success
+    // Lifecycle module delegation
+    const mod = this._lifecycleModules.get(serviceId);
+    if (mod) {
+      const result = await mod.start(replicaContext);
+      if (result.status === START_STATUS.RUNNING) {
+        this._running.add(serviceId);
+      }
+      return result;
+    }
+
+    // Plain handler path (existing behavior)
     this._running.add(serviceId);
 
     const result = {status: START_STATUS.RUNNING};
@@ -224,7 +292,8 @@ class NativeJsDriver extends RuntimeDriver {
   /**
    * Stop a native_js service replica.
    *
-   * Cleans up handler resources for the given replica.
+   * For lifecycle-capable modules, delegates to module.stop().
+   * For plain handlers, cleans up handler resources.
    * Idempotent: stopping an already-stopped replica is a no-op.
    *
    * @param {Object} replicaContext - Must include {serviceId}.
@@ -248,15 +317,24 @@ class NativeJsDriver extends RuntimeDriver {
       );
     }
 
-    // Idempotent: remove from running and prepared
+    // Lifecycle module delegation
+    const mod = this._lifecycleModules.get(serviceId);
+    if (mod) {
+      await mod.stop(replicaContext);
+    }
+
+    // Clean up state for both paths
     this._running.delete(serviceId);
     this._prepared.delete(serviceId);
+    this._lifecycleModules.delete(serviceId);
   }
 
   /**
    * Check health of a native_js service replica.
    *
-   * Verifies the handler is prepared and the service is running.
+   * For lifecycle-capable modules, delegates to module.health().
+   * For plain handlers, verifies the handler is prepared and
+   * the service is running.
    *
    * @param {Object} replicaContext - Must include {serviceId}.
    * @return {Promise<{status: string, detail?: string}>}
@@ -293,6 +371,12 @@ class NativeJsDriver extends RuntimeDriver {
       };
     }
 
+    // Lifecycle module delegation
+    const mod = this._lifecycleModules.get(serviceId);
+    if (mod) {
+      return mod.health(replicaContext);
+    }
+
     return {status: HEALTH_STATUS.HEALTHY};
   }
 
@@ -312,4 +396,4 @@ class NativeJsDriver extends RuntimeDriver {
   }
 }
 
-export {NativeJsDriver, NATIVE_JS_ERROR};
+export {NativeJsDriver, NATIVE_JS_ERROR, isLifecycleModule};

@@ -113,6 +113,11 @@ const CDC_PROPAGATED_TABLES = Object.freeze([
   // Cluster-wide configuration
   TABLES.CONFIG, // epoch, budgets, feature flags
 
+  // Distributed SQL transaction coordination/recovery
+  TABLES.SQL_TRANSACTIONS, // transaction state machine rows
+  TABLES.SQL_TRANSACTION_PARTICIPANTS, // participant partition status
+  TABLES.SQL_WRITE_OPERATIONS, // idempotent write operation envelope
+
   // Debug session control plane state
   TABLES.DEBUG_SESSIONS, // trace session activation + lineage scope
 

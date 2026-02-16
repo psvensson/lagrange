@@ -59,6 +59,7 @@ const WASM_META_ACTION = Object.freeze({
 const META_SERVICE_ID = Object.freeze({
   WASM_META: 'sys-wasm-meta',
   ADMIN_META: 'sys-admin-meta',
+  POSTGRES_WIRE: 'sys-postgres-wire',
 });
 
 // --- Runtime references for built-in meta services ---
@@ -66,6 +67,7 @@ const META_SERVICE_ID = Object.freeze({
 const META_SERVICE_RUNTIME_REF = Object.freeze({
   ADMIN_META: 'admin-meta-command-handlers',
   WASM_META: 'wasm-meta-command-handlers',
+  POSTGRES_WIRE: 'postgres-wire-runtime',
 });
 
 export {

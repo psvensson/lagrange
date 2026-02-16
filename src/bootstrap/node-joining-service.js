@@ -105,6 +105,12 @@ import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {CDC_EVENT} from '../cdc/cdc-constants.js';
 import {createJoiningPhaseOwners} from './owners/join-phase-owners.js';
 import {
+  PgWireStartupSafetyGate,
+} from './pgwire-startup-safety-gate.js';
+import {
+  RuntimeServiceHandlerSetup,
+} from './shared/runtime-service-handler-setup.js';
+import {
   MessageGroupServiceAdapter,
   RuntimeServiceAdapter,
   ServiceLifecycleManager,
@@ -355,6 +361,10 @@ class NodeJoiningService extends EventEmitter {
       this.ensureLatencyTopologyOwners();
       this.initializeReplicaHandler();
       await this.initializeControlPlaneService();
+
+      // Initialize runtime service handler AFTER control-plane readiness.
+      // PG wire startup failure is isolated and does not abort join.
+      this.initializeRuntimeServiceHandler();
 
       // Transition to JOINING state
       // Requirements: 2.8 - JOINING state for registering in cluster and proposing epoch
@@ -3355,6 +3365,41 @@ class NodeJoiningService extends EventEmitter {
       owner: 'ControlPlaneSetup',
       messageGroupCount: this.messageGroupServices.size,
     });
+  }
+
+  /**
+   * Initialize the RuntimeServiceHandler behind the PG wire safety
+   * gate. The gate ensures control-plane readiness before allowing
+   * runtime-service replica operations. Startup failure is isolated
+   * so join completes even if PG wire fails.
+   *
+   * Requirements: 11.2, 11.3, 11.4
+   * @private
+   */
+  initializeRuntimeServiceHandler() {
+    const systemTableCache =
+      NodeService.getInstance().getSystemTableCache();
+    const gate = new PgWireStartupSafetyGate({
+      nodeId: this.nodeId,
+      serviceLifecycleManager: this.serviceLifecycleManager,
+      systemTableCache,
+      heartbeatService: this.heartbeatService,
+    });
+
+    const result = gate.guardedSetup(() => {
+      return RuntimeServiceHandlerSetup.create({
+        nodeId: this.nodeId,
+        messageRouter: this.messageRouter,
+        cdcIntegrationService: this.cdcIntegrationService,
+        systemTableCache,
+        serviceLifecycleManager: this.serviceLifecycleManager,
+        rpcClient: this.rpcClient,
+      });
+    });
+
+    if (result) {
+      this.runtimeServiceHandler = result.runtimeServiceHandler;
+    }
   }
 
   /**

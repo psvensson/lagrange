@@ -15,6 +15,7 @@ import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
 
 const SERVICE_RECONCILER_DEFAULT = Object.freeze({
   CHECK_INTERVAL_MS: 5000,
+  MAX_CONCURRENT_SERVICE_ACTIONS: 1,
 });
 
 const RECONCILER_EVENT = Object.freeze({
@@ -61,6 +62,8 @@ const RECONCILER_ERROR = Object.freeze({
     'placementPolicyCheck must be a function',
   INTERVAL_REQUIRED:
     'checkIntervalMs must be a positive finite number',
+  MAX_CONCURRENT_ACTIONS_REQUIRED:
+    'maxConcurrentServiceActions must be a positive finite number',
 });
 
 const RECONCILER_POLICY_TYPE = Object.freeze({
@@ -205,6 +208,7 @@ class ServiceReconciler extends EventEmitter {
    * @param {Function} options.desiredStateReader
    * @param {Function} options.actualStateReader
    * @param {number} [options.checkIntervalMs]
+   * @param {number} [options.maxConcurrentServiceActions]
    * @param {EventEmitter} [options.eventSource]
    * @param {string[]} [options.eventNames]
    * @param {Function|null} [options.telemetrySink]
@@ -227,6 +231,13 @@ class ServiceReconciler extends EventEmitter {
       SERVICE_RECONCILER_DEFAULT.CHECK_INTERVAL_MS;
     if (!Number.isFinite(checkIntervalMs) || checkIntervalMs <= 0) {
       throw new TypeError(RECONCILER_ERROR.INTERVAL_REQUIRED);
+    }
+    const maxConcurrentServiceActions =
+      options.maxConcurrentServiceActions ??
+      SERVICE_RECONCILER_DEFAULT.MAX_CONCURRENT_SERVICE_ACTIONS;
+    if (!Number.isFinite(maxConcurrentServiceActions) ||
+      maxConcurrentServiceActions <= 0) {
+      throw new TypeError(RECONCILER_ERROR.MAX_CONCURRENT_ACTIONS_REQUIRED);
     }
 
     if (options.telemetrySink !== undefined &&
@@ -257,6 +268,9 @@ class ServiceReconciler extends EventEmitter {
 
     /** @type {number} */
     this._checkIntervalMs = checkIntervalMs;
+
+    /** @type {number} */
+    this._maxConcurrentServiceActions = Math.floor(maxConcurrentServiceActions);
 
     /** @type {EventEmitter|null} */
     this._eventSource = options.eventSource || null;
@@ -704,94 +718,140 @@ class ServiceReconciler extends EventEmitter {
    * @return {Promise<Object[]>}
    */
   async executePlan(actions, context) {
-    const execution = [];
+    const execution = new Array(actions.length);
+    const actionsByServiceId = new Map();
 
-    for (const action of actions) {
-      const actionStartedAt = Date.now();
-      const serviceContext = action.definition || action.replica || {};
-      this._stats.actionCount += 1;
-      const decision = {
-        timestamp: Date.now(),
-        reason: context.reason,
-        metadata: context.metadata,
-        action,
-        success: false,
-        result: null,
-        error: null,
-      };
-
-      try {
-        await this._enforcePlacementPolicy(action, context);
-
-        if (action.type === RECONCILER_ACTION_TYPE.STOP_REPLICA) {
-          decision.result = await this._lifecycleManager.stopReplica(
-            action.replica,
-            {reason: context.reason, driftReason: action.driftReason},
-          );
-        } else if (action.type === RECONCILER_ACTION_TYPE.START_REPLICA) {
-          decision.result = await this._lifecycleManager.startReplica(
-            action.replica,
-            {reason: context.reason, driftReason: action.driftReason},
-          );
-        } else if (action.type === RECONCILER_ACTION_TYPE.CREATE_START_REPLICA) {
-          await this._lifecycleManager.createReplica(
-            {
-              ...action.definition,
-              [SERVICE_DESCRIPTOR_FIELD.REPLICA_ID]:
-                resolveReplicaId(action.replica),
-            },
-            {reason: context.reason, driftReason: action.driftReason},
-          );
-          decision.result = await this._lifecycleManager.startReplica(
-            action.replica,
-            {reason: context.reason, driftReason: action.driftReason},
-          );
-        }
-
-        decision.success = true;
-      } catch (error) {
-        decision.error = error;
+    for (let index = 0; index < actions.length; index++) {
+      const action = actions[index];
+      const actionServiceId =
+        resolveServiceId(action.definition || action.replica) ||
+        `action-${index}`;
+      if (!actionsByServiceId.has(actionServiceId)) {
+        actionsByServiceId.set(actionServiceId, []);
       }
-
-      const durationMs = Date.now() - actionStartedAt;
-      decision.durationMs = durationMs;
-      this._stats.lastActionDurationMs = durationMs;
-      this._stats.actionLatencyMsTotal += durationMs;
-      this._stats.actionLatencyMsMax = Math.max(
-        this._stats.actionLatencyMsMax,
-        durationMs,
-      );
-      if (decision.success) {
-        this._stats.actionSuccessCount += 1;
-      } else {
-        this._stats.actionFailureCount += 1;
-      }
-      this._recordDecisionHistory(decision);
-      const decisionLog = {
-        reason: context.reason,
-        driftReason: action.driftReason || null,
-        actionType: action.type,
-        success: decision.success,
-        durationMs,
-        serviceId: resolveServiceId(serviceContext),
-        serviceType: resolveServiceType(serviceContext),
-        runtimeKind: resolveRuntimeKind(serviceContext),
-        operationId: decision.result?.operationId || null,
-        nodeId: context.metadata?.nodeId || null,
-      };
-      if (decision.error) {
-        decisionLog.error = decision.error.message;
-      }
-      this._logger.info(RECONCILER_LOG.DECISION, decisionLog);
-
-      execution.push(decision);
-      this.emit(RECONCILER_EVENT.DECISION, decision);
-      if (this._telemetrySink) {
-        this._telemetrySink(decision);
-      }
+      actionsByServiceId.get(actionServiceId).push({action, index});
     }
 
+    const serviceActionQueues = [...actionsByServiceId.values()];
+    let nextQueueIndex = 0;
+    const workerCount = Math.min(
+      this._maxConcurrentServiceActions,
+      serviceActionQueues.length,
+    );
+
+    const workers = [];
+    for (let workerIndex = 0; workerIndex < workerCount; workerIndex++) {
+      workers.push((async () => {
+        while (nextQueueIndex < serviceActionQueues.length) {
+          const queueIndex = nextQueueIndex;
+          nextQueueIndex += 1;
+          const actionQueue = serviceActionQueues[queueIndex];
+          for (const actionEntry of actionQueue) {
+            execution[actionEntry.index] = await this._executeAction(
+              actionEntry.action,
+              context,
+            );
+          }
+        }
+      })());
+    }
+
+    await Promise.all(workers);
+
     return execution;
+  }
+
+  /**
+   * Execute one reconciliation action and emit decision telemetry.
+   *
+   * @param {Object} action
+   * @param {Object} context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async _executeAction(action, context) {
+    const actionStartedAt = Date.now();
+    const serviceContext = action.definition || action.replica || {};
+    this._stats.actionCount += 1;
+    const decision = {
+      timestamp: Date.now(),
+      reason: context.reason,
+      metadata: context.metadata,
+      action,
+      success: false,
+      result: null,
+      error: null,
+    };
+
+    try {
+      await this._enforcePlacementPolicy(action, context);
+
+      if (action.type === RECONCILER_ACTION_TYPE.STOP_REPLICA) {
+        decision.result = await this._lifecycleManager.stopReplica(
+          action.replica,
+          {reason: context.reason, driftReason: action.driftReason},
+        );
+      } else if (action.type === RECONCILER_ACTION_TYPE.START_REPLICA) {
+        decision.result = await this._lifecycleManager.startReplica(
+          action.replica,
+          {reason: context.reason, driftReason: action.driftReason},
+        );
+      } else if (action.type === RECONCILER_ACTION_TYPE.CREATE_START_REPLICA) {
+        await this._lifecycleManager.createReplica(
+          {
+            ...action.definition,
+            [SERVICE_DESCRIPTOR_FIELD.REPLICA_ID]:
+              resolveReplicaId(action.replica),
+          },
+          {reason: context.reason, driftReason: action.driftReason},
+        );
+        decision.result = await this._lifecycleManager.startReplica(
+          action.replica,
+          {reason: context.reason, driftReason: action.driftReason},
+        );
+      }
+
+      decision.success = true;
+    } catch (error) {
+      decision.error = error;
+    }
+
+    const durationMs = Date.now() - actionStartedAt;
+    decision.durationMs = durationMs;
+    this._stats.lastActionDurationMs = durationMs;
+    this._stats.actionLatencyMsTotal += durationMs;
+    this._stats.actionLatencyMsMax = Math.max(
+      this._stats.actionLatencyMsMax,
+      durationMs,
+    );
+    if (decision.success) {
+      this._stats.actionSuccessCount += 1;
+    } else {
+      this._stats.actionFailureCount += 1;
+    }
+    this._recordDecisionHistory(decision);
+    const decisionLog = {
+      reason: context.reason,
+      driftReason: action.driftReason || null,
+      actionType: action.type,
+      success: decision.success,
+      durationMs,
+      serviceId: resolveServiceId(serviceContext),
+      serviceType: resolveServiceType(serviceContext),
+      runtimeKind: resolveRuntimeKind(serviceContext),
+      operationId: decision.result?.operationId || null,
+      nodeId: context.metadata?.nodeId || null,
+    };
+    if (decision.error) {
+      decisionLog.error = decision.error.message;
+    }
+    this._logger.info(RECONCILER_LOG.DECISION, decisionLog);
+
+    this.emit(RECONCILER_EVENT.DECISION, decision);
+    if (this._telemetrySink) {
+      this._telemetrySink(decision);
+    }
+    return decision;
   }
 
   /**

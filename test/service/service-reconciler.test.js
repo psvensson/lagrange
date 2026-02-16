@@ -14,24 +14,49 @@ import {
 } from '../../src/constants/index.js';
 
 class SpyLifecycleManager extends ServiceLifecycleManager {
-  constructor() {
+  constructor(options = {}) {
     super();
     this.calls = [];
+    this.delayMs = Number.isFinite(options.delayMs) ?
+      Math.max(0, Math.floor(options.delayMs)) :
+      0;
+    this.inFlight = 0;
+    this.maxInFlight = 0;
+  }
+
+  async _recordCall(call, result) {
+    this.calls.push(call);
+    this.inFlight += 1;
+    this.maxInFlight = Math.max(this.maxInFlight, this.inFlight);
+    try {
+      if (this.delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+      }
+      return result;
+    } finally {
+      this.inFlight -= 1;
+    }
   }
 
   async createReplica(definition, context) {
-    this.calls.push({method: 'createReplica', definition, context});
-    return {created: true};
+    return this._recordCall(
+      {method: 'createReplica', definition, context},
+      {created: true},
+    );
   }
 
   async startReplica(replicaHandle, context) {
-    this.calls.push({method: 'startReplica', replicaHandle, context});
-    return {started: true};
+    return this._recordCall(
+      {method: 'startReplica', replicaHandle, context},
+      {started: true},
+    );
   }
 
   async stopReplica(replicaHandle, context) {
-    this.calls.push({method: 'stopReplica', replicaHandle, context});
-    return {stopped: true};
+    return this._recordCall(
+      {method: 'stopReplica', replicaHandle, context},
+      {stopped: true},
+    );
   }
 }
 
@@ -206,6 +231,142 @@ describe('ServiceReconciler action emission', () => {
     );
     assert.equal(lifecycleManager.calls[0].context.reason, 'unit-test');
     assert.equal(lifecycleManager.calls[2].definition.replicaId, 'svc-3-replica-1');
+  });
+
+  it('executes independent services in parallel when configured', async () => {
+    const lifecycleManager = new SpyLifecycleManager({delayMs: 10});
+    const reconciler = new ServiceReconciler({
+      lifecycleManager,
+      desiredStateReader: async () => [],
+      actualStateReader: async () => [],
+      maxConcurrentServiceActions: 3,
+    });
+
+    await reconciler.executePlan([
+      {
+        type: RECONCILER_ACTION_TYPE.START_REPLICA,
+        driftReason: 'drift',
+        definition: {
+          serviceId: 'svc-1',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          tenantId: 'tenant-1',
+          replicaCount: 1,
+        },
+        replica: {
+          serviceId: 'svc-1',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          replicaId: 'svc-1-replica-1',
+          tenantId: 'tenant-1',
+        },
+      },
+      {
+        type: RECONCILER_ACTION_TYPE.START_REPLICA,
+        driftReason: 'drift',
+        definition: {
+          serviceId: 'svc-2',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          tenantId: 'tenant-1',
+          replicaCount: 1,
+        },
+        replica: {
+          serviceId: 'svc-2',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          replicaId: 'svc-2-replica-1',
+          tenantId: 'tenant-1',
+        },
+      },
+      {
+        type: RECONCILER_ACTION_TYPE.START_REPLICA,
+        driftReason: 'drift',
+        definition: {
+          serviceId: 'svc-3',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          tenantId: 'tenant-1',
+          replicaCount: 1,
+        },
+        replica: {
+          serviceId: 'svc-3',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          replicaId: 'svc-3-replica-1',
+          tenantId: 'tenant-1',
+        },
+      },
+    ], {
+      reason: 'unit-test',
+      metadata: {source: 'test'},
+    });
+
+    assert.equal(lifecycleManager.calls.length, 3);
+    assert.ok(lifecycleManager.maxInFlight > 1);
+  });
+
+  it('preserves same-service action order under parallel execution', async () => {
+    const lifecycleManager = new SpyLifecycleManager({delayMs: 10});
+    const reconciler = new ServiceReconciler({
+      lifecycleManager,
+      desiredStateReader: async () => [],
+      actualStateReader: async () => [],
+      maxConcurrentServiceActions: 3,
+    });
+
+    await reconciler.executePlan([
+      {
+        type: RECONCILER_ACTION_TYPE.START_REPLICA,
+        driftReason: 'drift',
+        definition: {
+          serviceId: 'svc-order',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          tenantId: 'tenant-1',
+          replicaCount: 1,
+        },
+        replica: {
+          serviceId: 'svc-order',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          replicaId: 'svc-order-replica-1',
+          tenantId: 'tenant-1',
+        },
+      },
+      {
+        type: RECONCILER_ACTION_TYPE.START_REPLICA,
+        driftReason: 'drift',
+        definition: {
+          serviceId: 'svc-other',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          tenantId: 'tenant-1',
+          replicaCount: 1,
+        },
+        replica: {
+          serviceId: 'svc-other',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          replicaId: 'svc-other-replica-1',
+          tenantId: 'tenant-1',
+        },
+      },
+      {
+        type: RECONCILER_ACTION_TYPE.STOP_REPLICA,
+        driftReason: 'drift',
+        definition: {
+          serviceId: 'svc-order',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          tenantId: 'tenant-1',
+          replicaCount: 1,
+        },
+        replica: {
+          serviceId: 'svc-order',
+          serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+          replicaId: 'svc-order-replica-1',
+          tenantId: 'tenant-1',
+        },
+      },
+    ], {
+      reason: 'unit-test-ordering',
+      metadata: {source: 'test'},
+    });
+
+    const orderCalls = lifecycleManager.calls
+      .filter((call) => call.replicaHandle?.serviceId === 'svc-order')
+      .map((call) => call.method);
+    assert.deepEqual(orderCalls, ['startReplica', 'stopReplica']);
   });
 
   it('fails closed when placement policy check rejects action', async () => {

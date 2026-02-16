@@ -22,11 +22,13 @@ import {
   TRANSPORT_ERROR_MSG,
   TRANSPORT_EVENT,
   TRANSPORT_FORMAT,
+  TRANSPORT_METRIC,
+  TRANSPORT_METRIC_TRIGGER,
   TRANSPORT_NUM,
   TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
 } from '../constants/transport.js';
-import {COLUMN, ERRNO, HOST} from '../constants/index.js';
+import {COLUMN, ERRNO, HOST, METRICS_LOG_TAG} from '../constants/index.js';
 
 // queueMicrotask is a global in Node.js, but ESLint doesn't know about it
 const queueMicrotaskFn = globalThis.queueMicrotask;
@@ -197,6 +199,10 @@ class MessageRouter extends EventEmitter {
 
     // Per-node outbound delivery queues
     this.outboundQueues = new Map();
+
+    // Metric sampling state for high-volume transport delivery logging.
+    this.deliverMetricSampleByTarget = new Map();
+    this.deliverMetricQueueDepthByTarget = new Map();
 
     // Function to resolve service address to node ID
     this.resolveServiceNode = options.resolveServiceNode || null;
@@ -1438,6 +1444,56 @@ class MessageRouter extends EventEmitter {
   }
 
   /**
+   * Decide whether a transport-deliver metric should be emitted.
+   * Emits immediately for faults, slow deliveries, and meaningful
+   * queue-depth transitions; samples steady-state successful traffic.
+   * @param {string} targetNodeId - Target node ID.
+   * @param {number} durationMs - Delivery duration in milliseconds.
+   * @param {number} queueDepth - Pending outbound queue depth.
+   * @param {boolean} acknowledged - Whether delivery was acknowledged.
+   * @return {string|null} Trigger code when metric should be emitted.
+   * @private
+   */
+  getDeliverMetricTrigger(targetNodeId, durationMs, queueDepth, acknowledged) {
+    if (!acknowledged) {
+      return TRANSPORT_METRIC_TRIGGER.FAULT;
+    }
+
+    if (durationMs >= TRANSPORT_METRIC.DELIVER_SLOW_THRESHOLD_MS) {
+      return TRANSPORT_METRIC_TRIGGER.SLOW;
+    }
+
+    const previousQueueDepth =
+      this.deliverMetricQueueDepthByTarget.get(targetNodeId) ||
+      TRANSPORT_NUM.ZERO;
+
+    if (queueDepth >= TRANSPORT_METRIC.DELIVER_QUEUE_BACKPRESSURE_THRESHOLD) {
+      const queueDepthDelta = Math.abs(queueDepth - previousQueueDepth);
+      if (previousQueueDepth <
+        TRANSPORT_METRIC.DELIVER_QUEUE_BACKPRESSURE_THRESHOLD ||
+        queueDepthDelta >= TRANSPORT_METRIC.DELIVER_QUEUE_CHANGE_THRESHOLD) {
+        return TRANSPORT_METRIC_TRIGGER.BACKPRESSURE;
+      }
+    } else if (
+      previousQueueDepth >=
+      TRANSPORT_METRIC.DELIVER_QUEUE_BACKPRESSURE_THRESHOLD
+    ) {
+      return TRANSPORT_METRIC_TRIGGER.QUEUE_DRAINED;
+    }
+
+    const sampleCount = (this.deliverMetricSampleByTarget.get(targetNodeId) ||
+      TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
+    this.deliverMetricSampleByTarget.set(targetNodeId, sampleCount);
+
+    if (sampleCount >= TRANSPORT_METRIC.DELIVER_SUCCESS_SAMPLE_EVERY) {
+      this.deliverMetricSampleByTarget.set(targetNodeId, TRANSPORT_NUM.ZERO);
+      return TRANSPORT_METRIC_TRIGGER.SAMPLE;
+    }
+
+    return null;
+  }
+
+  /**
    * Deliver a message to a target service.
    * When TransportRegistry is configured, uses transport abstraction with fallback.
    * Otherwise, uses direct WebSocket connections.
@@ -1448,6 +1504,7 @@ class MessageRouter extends EventEmitter {
    * @return {Promise<Object>} Delivery result with transportUsed field when using registry.
    */
   async deliver(targetAddress, message, options = {}) {
+    const deliverStartMs = Date.now();
     if (!this.initialized) {
       await this.initialize();
     }
@@ -1476,34 +1533,77 @@ class MessageRouter extends EventEmitter {
       throw new Error(ROUTER_ERROR_MSG.invalidAddressFormat(targetAddress));
     }
 
+    let result;
+
     // If TransportRegistry is configured, use transport abstraction with fallback
     if (this.hasTransportRegistry()) {
-      return this.deliverViaTransportRegistry(
+      result = await this.deliverViaTransportRegistry(
         targetAddress,
         messageId,
         message,
         targetNodeId,
         correlationId,
       );
-    }
-
-    // If the target resolves to this node but we do not have a self-connection
-    // (eg startServer=false), reject rather than silently bypassing transport.
-    if (targetNodeId === this.nodeId) {
+    } else if (targetNodeId === this.nodeId) {
+      // If the target resolves to this node but we do not have a
+      // self-connection (eg startServer=false), reject rather than
+      // silently bypassing transport.
       const selfConn = this.nodeConnections.get(this.nodeId);
-      const hasSelfConn = selfConn && selfConn.state === ConnectionState.CONNECTED;
+      const hasSelfConn =
+        selfConn && selfConn.state === ConnectionState.CONNECTED;
       if (!hasSelfConn) {
-        return {
+        result = {
           messageId,
           correlationId,
           acknowledged: false,
           error: ROUTER_ERROR_MSG.noConnectionToNode(this.nodeId),
         };
+      } else {
+        // Deliver via WebSocket connection (legacy path)
+        result = await this.deliverRemote(
+          targetAddress, messageId, message,
+          targetNodeId, correlationId,
+        );
       }
+    } else {
+      // Deliver via WebSocket connection (legacy path)
+      result = await this.deliverRemote(
+        targetAddress, messageId, message,
+        targetNodeId, correlationId,
+      );
     }
 
-    // Deliver via WebSocket connection (legacy path)
-    return this.deliverRemote(targetAddress, messageId, message, targetNodeId, correlationId);
+    try {
+      const queue = this.outboundQueues.get(targetNodeId);
+      const queueDepth = queue ? queue.pending.length : TRANSPORT_NUM.ZERO;
+      const durationMs = Date.now() - deliverStartMs;
+      const acknowledged = result?.acknowledged === true;
+      const trigger = this.getDeliverMetricTrigger(
+        targetNodeId,
+        durationMs,
+        queueDepth,
+        acknowledged,
+      );
+      if (trigger) {
+        this.deliverMetricQueueDepthByTarget.set(targetNodeId, queueDepth);
+        if (trigger !== TRANSPORT_METRIC_TRIGGER.SAMPLE) {
+          this.deliverMetricSampleByTarget.set(targetNodeId, TRANSPORT_NUM.ZERO);
+        }
+        this.logger.info(METRICS_LOG_TAG.TRANSPORT_DELIVER, {
+          targetNodeId,
+          durationMs,
+          messageCount: this.messageCount,
+          queueDepth,
+          acknowledged,
+          trigger,
+          error: acknowledged ? null : (result?.error || null),
+        });
+      }
+    } catch (_metricsErr) {
+      // Metrics logging must not propagate to callers
+    }
+
+    return result;
   }
 
   /**
@@ -1673,12 +1773,16 @@ class MessageRouter extends EventEmitter {
    * @return {Promise<Object>} Delivery result.
    * @private
    */
-  async deliverViaEndpoint(targetAddress, messageId, payload, targetNodeId, endpoint, provider,
-    correlationId) {
+  async deliverViaEndpoint(targetAddress, messageId, payload,
+    targetNodeId, endpoint, provider, correlationId) {
+    const endpointStartMs = Date.now();
+    let acknowledged = false;
     let connection;
     try {
       // Get or create connection via ConnectionPool
-      connection = await this.connectionPool.getConnection(targetNodeId, endpoint, provider);
+      connection = await this.connectionPool.getConnection(
+        targetNodeId, endpoint, provider,
+      );
 
       // Build the message
       const message = {
@@ -1692,11 +1796,14 @@ class MessageRouter extends EventEmitter {
       };
 
       // Send via provider
-      const result = await provider.send(connection.providerConnection, message);
+      const result = await provider.send(
+        connection.providerConnection, message,
+      );
 
       // Release connection (reset TTL)
       this.connectionPool.releaseConnection(targetNodeId);
 
+      acknowledged = true;
       return {
         messageId,
         correlationId,
@@ -1717,6 +1824,18 @@ class MessageRouter extends EventEmitter {
         acknowledged: false,
         error: error.message,
       };
+    } finally {
+      try {
+        this.logger.info(METRICS_LOG_TAG.TRANSPORT_ENDPOINT, {
+          targetNodeId,
+          transportType: endpoint[COLUMN.TRANSPORT_TYPE],
+          endpointId: endpoint[COLUMN.ENDPOINT_ID],
+          durationMs: Date.now() - endpointStartMs,
+          acknowledged,
+        });
+      } catch (_metricsErr) {
+        // Metrics logging must not propagate to callers
+      }
     }
   }
 

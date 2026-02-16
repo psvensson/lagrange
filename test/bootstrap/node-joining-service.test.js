@@ -261,6 +261,9 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
     service.initializeControlPlaneService = async function() {
       // Skip control plane service initialization
     };
+    service.initializeRuntimeServiceHandler = function() {
+      // Skip runtime service handler initialization
+    };
     service.signalReadyForReplicas = async function() {
       // Skip ready signal
     };
@@ -349,6 +352,7 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   service.phaseWaitForLeadership = async () => {};
   service.initializeReplicaHandler = () => {};
   service.initializeControlPlaneService = async () => {};
+  service.initializeRuntimeServiceHandler = () => {};
   service.phaseQuerySystemState = async () => {
     order.push('query');
   };
@@ -626,6 +630,7 @@ test('NodeJoiningService - emits events', async (t) => {
     service.phaseQuerySystemState = async function() {};
     service.initializeReplicaHandler = function() {};
     service.initializeControlPlaneService = async function() {};
+    service.initializeRuntimeServiceHandler = function() {};
     service.signalReadyForReplicas = async function() {};
 
     const events = [];

@@ -21,6 +21,7 @@ test('CommandParser', async (t) => {
     t.ok(commands.includes('help'), 'has help command');
     t.ok(commands.includes('quit'), 'has quit command');
     t.ok(commands.includes('history'), 'has history command');
+    t.ok(commands.includes('since'), 'has since command');
   });
 
   await t.test('parse() handles valid commands', async (t) => {
@@ -247,5 +248,20 @@ test('CommandParser', async (t) => {
 
     const result = parser.parse('hist replica-456');
     t.same(result, {command: 'history', args: ['replica-456']});
+  });
+
+  await t.test('since command parses with a required argument', async (t) => {
+    const parser = new CommandParser();
+
+    const result = parser.parse('since -5m');
+    t.same(result, {command: 'since', args: ['-5m']});
+  });
+
+  await t.test('since command requires value argument', async (t) => {
+    const parser = new CommandParser();
+
+    const result = parser.parse('since');
+    t.ok(result.error, 'has error');
+    t.match(result.error, /Missing required parameter/);
   });
 });

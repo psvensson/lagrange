@@ -1,8 +1,8 @@
 /**
  * Shared owner for built-in meta service-definition registration.
  *
- * Persists sys-wasm-meta and sys-admin-meta definitions through a caller-provided
- * system-table upsert function.
+ * Persists sys-wasm-meta, sys-admin-meta, and sys-postgres-wire definitions
+ * through a caller-provided system-table upsert function.
  */
 
 import {URL} from 'node:url';
@@ -11,6 +11,7 @@ import {SystemTableName} from '../system-table-schemas-constants.js';
 import {
   createAdminMetaDefinition,
   createWasmMetaDefinition,
+  createPostgresWireDefinition,
 } from '../../wasm-service/meta-service-factory.js';
 import {serializeServiceDefinition} from '../../wasm-service/wasm-service-models.js';
 import {buildMetaServiceEndpoints} from '../../admin/admin-meta-endpoint-builder.js';
@@ -36,6 +37,7 @@ async function registerBuiltInMetaServiceDefinitions(options = {}) {
   const definitions = [
     createWasmMetaDefinition(),
     createAdminMetaDefinition(),
+    createPostgresWireDefinition(),
   ];
 
   for (const definition of definitions) {

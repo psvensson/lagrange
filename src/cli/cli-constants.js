@@ -83,6 +83,7 @@ const CLI_COMMAND = Object.freeze({
   SORT: 'sort',
   GOTO: 'goto',
   SQL: 'sql',
+  SINCE: 'since',
   HELP: 'help',
   QUIT: 'quit',
   HISTORY: 'history',
@@ -123,6 +124,12 @@ const CLI_COMMAND_DEFINITIONS = Object.freeze([
     name: CLI_COMMAND.SQL,
     params: [],
     description: 'Open SQL query view',
+    aliases: [],
+  },
+  {
+    name: CLI_COMMAND.SINCE,
+    params: ['value'],
+    description: 'Set live logs start time (now, ISO/epoch, or relative like -5m)',
     aliases: [],
   },
   {

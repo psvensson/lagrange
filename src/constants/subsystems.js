@@ -125,6 +125,12 @@ const SUBSYSTEM = Object.freeze({
   /** Replica lifecycle manager */
   REPLICA_LIFECYCLE: 'replica-lifecycle',
 
+  /** Runtime service handler for runtime-service replica operations */
+  RUNTIME_SERVICE_HANDLER: 'runtime-service-handler',
+
+  /** Runtime service handler setup during bootstrap */
+  RUNTIME_SERVICE_HANDLER_SETUP: 'runtime-service-handler-setup',
+
   /** Replica recovery service */
   REPLICA_RECOVERY: 'replica-recovery',
 

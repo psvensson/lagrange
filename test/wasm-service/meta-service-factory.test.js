@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   createWasmMetaDefinition,
   createAdminMetaDefinition,
+  createPostgresWireDefinition,
   META_FACTORY_SUBSYSTEM,
   META_FACTORY_LOG_MSG,
 } from '../../src/wasm-service/meta-service-factory.js';
@@ -10,12 +11,14 @@ import {
   META_SERVICE_ID,
   META_SERVICE_RUNTIME_REF,
   SERVICE_PROFILE,
+  UNIFIED_SERVICE_TYPE,
 } from '../../src/constants/index.js';
 import {RUNTIME_KIND, RUNTIME_FIELD} from '../../src/constants/runtime.js';
 import {
   READ_CONSISTENCY_MODE,
   WRITE_CONSISTENCY_MODE,
   WASM_SERVICE_DEFAULT,
+  WASM_SERVICE_PROTOCOL,
 } from '../../src/wasm-service/wasm-service-constants.js';
 import {
   serializeServiceDefinition,
@@ -135,6 +138,91 @@ describe('meta-service-factory', () => {
     });
   });
 
+  describe('createPostgresWireDefinition', () => {
+    it('should return correct service ID', () => {
+      const def = createPostgresWireDefinition();
+      assert.equal(def.serviceId, META_SERVICE_ID.POSTGRES_WIRE);
+    });
+
+    it('should return correct service name', () => {
+      const def = createPostgresWireDefinition();
+      assert.equal(def.serviceName, META_SERVICE_ID.POSTGRES_WIRE);
+    });
+
+    it('should use default service profile', () => {
+      const def = createPostgresWireDefinition();
+      assert.equal(def.serviceProfile, SERVICE_PROFILE.DEFAULT);
+    });
+
+    it('should use runtime_service service type', () => {
+      const def = createPostgresWireDefinition();
+      assert.equal(
+        def.serviceType, UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE
+      );
+    });
+
+    it('should have null handlerFunctionId for built-in service', () => {
+      const def = createPostgresWireDefinition();
+      assert.equal(def.handlerFunctionId, null);
+    });
+
+    it('should use native_js runtime kind', () => {
+      const def = createPostgresWireDefinition();
+      assert.equal(def.runtimeKind, RUNTIME_KIND.NATIVE_JS);
+    });
+
+    it('should use postgres wire runtime ref', () => {
+      const def = createPostgresWireDefinition();
+      assert.equal(
+        def.runtimeRef, META_SERVICE_RUNTIME_REF.POSTGRES_WIRE
+      );
+    });
+
+    it('should have null runtime config', () => {
+      const def = createPostgresWireDefinition();
+      assert.equal(def.runtimeConfig, null);
+    });
+
+    it('should use postgresql protocol', () => {
+      const def = createPostgresWireDefinition();
+      assert.equal(
+        def.protocol, WASM_SERVICE_PROTOCOL.POSTGRESQL
+      );
+    });
+
+    it('should use default replica count', () => {
+      const def = createPostgresWireDefinition();
+      assert.equal(
+        def.replicaCount, WASM_SERVICE_DEFAULT.REPLICA_COUNT
+      );
+    });
+
+    it('should serialize without errors', () => {
+      const def = createPostgresWireDefinition();
+      assert.doesNotThrow(() => serializeServiceDefinition(def));
+    });
+
+    it('should persist runtime fields in serialized row', () => {
+      const def = createPostgresWireDefinition();
+      const row = serializeServiceDefinition(def);
+      assert.equal(
+        row[RUNTIME_FIELD.RUNTIME_KIND],
+        RUNTIME_KIND.NATIVE_JS
+      );
+      assert.equal(
+        row[RUNTIME_FIELD.RUNTIME_REF],
+        META_SERVICE_RUNTIME_REF.POSTGRES_WIRE
+      );
+      assert.equal(row[RUNTIME_FIELD.RUNTIME_CONFIG], null);
+    });
+
+    it('should persist postgresql protocol in serialized row', () => {
+      const def = createPostgresWireDefinition();
+      const row = serializeServiceDefinition(def);
+      assert.equal(row.protocol, WASM_SERVICE_PROTOCOL.POSTGRESQL);
+    });
+  });
+
   describe('constants', () => {
     it('should export subsystem name', () => {
       assert.equal(
@@ -145,6 +233,7 @@ describe('meta-service-factory', () => {
     it('should export log messages', () => {
       assert.ok(META_FACTORY_LOG_MSG.WASM_META_CREATED);
       assert.ok(META_FACTORY_LOG_MSG.ADMIN_META_CREATED);
+      assert.ok(META_FACTORY_LOG_MSG.POSTGRES_WIRE_CREATED);
     });
   });
 });

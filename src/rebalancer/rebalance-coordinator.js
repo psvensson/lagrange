@@ -16,7 +16,10 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {isNodeRecordReady} from '../node/node-readiness-policy.js';
-import {WORKFLOW_STEP, NUM, ERRORS, TIME_MS} from '../constants/index.js';
+import {
+  WORKFLOW_STEP, NUM, ERRORS, TIME_MS, METRICS_LOG_TAG,
+  UNIFIED_SERVICE_TYPE,
+} from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -49,7 +52,6 @@ import {
   RESERVATION_STATUS,
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
-  STORAGE_CAPACITY_LOG_MSG,
 } from './storage-capacity-constants.js';
 
 /**
@@ -97,7 +99,7 @@ const SQL = Object.freeze({
     SET status = ?, updated_at = ?, released_at = ?
     WHERE operation_id = ? AND status = ?`,
   SELECT_ACTIVE_RESERVATIONS:
-    `SELECT * FROM storage_reservations WHERE status = 'active'`,
+    'SELECT * FROM storage_reservations WHERE status = \'active\'',
   EXPIRE_STALE_RESERVATIONS: `UPDATE storage_reservations
     SET status = ?, updated_at = ?, released_at = ?
     WHERE status = ? AND expires_at <= ?`,
@@ -110,6 +112,7 @@ const OPERATION_PERSIST_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
 const OPERATION_HANDLER = Object.freeze({
   [SERVICE_TYPE.PARTITION]: 'replica-handler',
   [SERVICE_TYPE.MESSAGE_GROUP]: 'message-group-handler',
+  [UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE]: 'runtime-service-handler',
 });
 
 const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
@@ -491,6 +494,10 @@ class RebalanceCoordinator extends EventEmitter {
 
       if (entityType === SERVICE_TYPE.MESSAGE_GROUP) {
         return row.group_id === entityId;
+      }
+
+      if (entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
+        return row.service_id === entityId;
       }
 
       return row.partition_id === partitionId;
@@ -1513,6 +1520,17 @@ class RebalanceCoordinator extends EventEmitter {
     });
 
     this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {operation});
+
+    try {
+      this.logger.info(METRICS_LOG_TAG.REBALANCE_OPERATION, {
+        operationId: operation.operationId,
+        entityType: operation.entityType,
+        finalState: operation.status,
+        totalDurationMs: now - operation.createdAt,
+      });
+    } catch (_metricsErr) {
+      // Metrics logging failures must not propagate to callers
+    }
   }
 
   /**
@@ -1796,6 +1814,17 @@ class RebalanceCoordinator extends EventEmitter {
       operation,
       errorMessage: normalizedError,
     });
+
+    try {
+      this.logger.info(METRICS_LOG_TAG.REBALANCE_OPERATION, {
+        operationId: operation.operationId,
+        entityType: operation.entityType,
+        finalState: operation.status,
+        totalDurationMs: now - operation.createdAt,
+      });
+    } catch (_metricsErr) {
+      // Metrics logging failures must not propagate to callers
+    }
   }
 
   /**

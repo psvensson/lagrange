@@ -1,4 +1,5 @@
 const DEFAULT_REPLICA_STAGGER_DELAY_MS = 50;
+const DEFAULT_MAX_CONCURRENT_SERVICE_ACTIONS = 16;
 
 const BOOTSTRAP_ASSIGNMENT_STRATEGY = Object.freeze({
   MOVE_REPLICA: 'MOVE_REPLICA',
@@ -142,6 +143,8 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
   PARTITION_LEADERS_PENDING: 'Some partitions still electing leaders, failing bootstrap',
   CREATING_SYSTEM_PARTITION: 'Creating system table partition',
   PARTITION_REPLICA_CREATED: 'Partition replica created',
+  PARTITION_CREATION_BATCH_STARTING:
+    'Starting first system table partition creation batch',
   STARTING_MG_ELECTIONS: 'Starting elections for message group replicas',
   MESSAGE_GROUP_LEADERSHIP_READY: 'Message group leadership established',
   STARTING_PARTITION_ELECTIONS: 'Starting elections for all partition replicas',
@@ -280,6 +283,7 @@ const BOOTSTRAP_DEFAULT = Object.freeze({
   leadershipWaitBackoffMultiplier: 2,
   partitionDbPath: ':memory:',
   replicaStaggerDelayMs: DEFAULT_REPLICA_STAGGER_DELAY_MS,
+  maxConcurrentServiceActions: DEFAULT_MAX_CONCURRENT_SERVICE_ACTIONS,
   nodeReadyRebalanceDelayMs: BOOTSTRAP_REBALANCE_DELAY_MS,
   wsPort: null,
 });
@@ -304,6 +308,7 @@ export {
   BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT,
   BOOTSTRAP_SQL,
   BOOTSTRAP_SUBSYSTEM,
+  DEFAULT_MAX_CONCURRENT_SERVICE_ACTIONS,
   DEFAULT_REPLICA_STAGGER_DELAY_MS,
   JOINING_PHASE,
 };

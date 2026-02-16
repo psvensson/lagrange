@@ -99,6 +99,7 @@ class SQLParser {
     this.parser = new Parser();
     this.logger = this.initLogger();
     this.positionalParams = [];
+    this.parameterCounter = 0;
   }
 
   initLogger() {
@@ -114,6 +115,8 @@ class SQLParser {
   }
 
   parse() {
+    this.positionalParams = [];
+    this.parameterCounter = 0;
     const trimmedSql = this.sql.trim().toUpperCase();
     if (trimmedSql === 'BEGIN' || trimmedSql.startsWith('BEGIN ')) {
       return {type: AST_TYPE.BEGIN_TRANSACTION};
@@ -141,6 +144,18 @@ class SQLParser {
       this.logger.error(errorMsg, {sql: this.sql});
       throw new Error(errorMsg);
     }
+  }
+
+  /**
+   * Create a parameter placeholder node with a deterministic zero-based index.
+   * This index preserves placeholder position across the converted AST.
+   * @return {Object} Parameter expression node.
+   * @private
+   */
+  createParameterNode() {
+    const index = this.parameterCounter;
+    this.parameterCounter += 1;
+    return {type: EXPR_TYPE.PARAMETER, index};
   }
 
   convertAst(ast) {
@@ -592,7 +607,7 @@ class SQLParser {
       return {type: EXPR_TYPE.LITERAL, value: null};
     case 'origin':
       if (expr.value === '?') {
-        return {type: EXPR_TYPE.PARAMETER};
+        return this.createParameterNode();
       }
       return {type: EXPR_TYPE.LITERAL, value: expr.value};
     case 'aggr_func':
@@ -622,9 +637,10 @@ class SQLParser {
     switch (expr.type) {
     case PG_NODE_TYPE.VAR:
       if (expr.prefix === PG_PARAM_PREFIX) {
-        return translatePositionalParam(
+        translatePositionalParam(
           {value: expr.name}, this.positionalParams,
         );
+        return this.createParameterNode();
       }
       return null;
 
@@ -842,9 +858,10 @@ class SQLParser {
     // PG-specific value types
     if (this.dialect === PARSER_DIALECT.POSTGRESQL) {
       if (val.type === PG_NODE_TYPE.VAR && val.prefix === PG_PARAM_PREFIX) {
-        return translatePositionalParam(
+        translatePositionalParam(
           {value: val.name}, this.positionalParams,
         );
+        return this.createParameterNode();
       }
       if (val.type === 'bool') {
         return translateBooleanLiteral(val);
@@ -864,7 +881,7 @@ class SQLParser {
       return {type: EXPR_TYPE.LITERAL, value: null};
     case 'origin':
       if (val.value === '?') {
-        return {type: EXPR_TYPE.PARAMETER};
+        return this.createParameterNode();
       }
       return {type: EXPR_TYPE.LITERAL, value: val.value};
     default:

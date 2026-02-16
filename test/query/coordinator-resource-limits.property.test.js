@@ -77,7 +77,7 @@ function createFastCoordinator(partitions) {
  * **Validates: Requirements 26.2, 26.3, 26.8**
  */
 test('Property 71: Coordinator Resource Limits', async (t) => {
-  await t.test('enforces max parallel partitions limit', async (t) => {
+  await t.test('executes all partitions without truncation', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.integer({min: 5, max: 20}), // Requested partitions
@@ -99,14 +99,15 @@ test('Property 71: Coordinator Resource Limits', async (t) => {
             [],
           );
 
-          // Property: Should limit partitions to maxAllowed
+          // Property: All partitions are executed even when chunk size is smaller.
           const actualPartitions = result.partitions.length;
-          return actualPartitions <= maxAllowed;
+          return result.success === true &&
+            actualPartitions === requestedCount;
         },
       ),
       {numRuns: 10},
     );
-    t.pass('Enforces max parallel partitions limit');
+    t.pass('Executes all partitions without truncation');
   });
 
   await t.test('tracks resource usage correctly', async (t) => {
@@ -209,7 +210,7 @@ test('Property 71: Coordinator Resource Limits', async (t) => {
     t.pass('Respects max concurrent connections');
   });
 
-  await t.test('partition limit truncates correctly', async (t) => {
+  await t.test('partition chunking preserves full partition coverage', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.integer({min: 10, max: 20}),
@@ -231,15 +232,16 @@ test('Property 71: Coordinator Resource Limits', async (t) => {
             [],
           );
 
-          // Property: Should truncate to exactly maxAllowed
+          // Property: chunking must preserve complete partition coverage.
           return (
             result.success === true &&
-            result.partitions.length === maxAllowed
+            result.partitions.length === requestedCount &&
+            result.metrics.partitionCount === requestedCount
           );
         },
       ),
       {numRuns: 10},
     );
-    t.pass('Partition limit truncates correctly');
+    t.pass('Partition chunking preserves full partition coverage');
   });
 });

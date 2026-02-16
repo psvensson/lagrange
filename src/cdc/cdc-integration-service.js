@@ -22,8 +22,8 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {
-  CDC_OPERATION, COLUMN, ERRORS, NUM, SQL, STATE, STRING, TYPEOF,
-  ADDRESS, PROTOCOL,
+  CDC_OPERATION, COLUMN, ERRORS, METRICS_LOG_TAG, NUM, SQL, STATE,
+  STRING, TYPEOF, ADDRESS, PROTOCOL,
 } from '../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
@@ -36,6 +36,7 @@ import {
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
+import {CDC_PROPAGATED_TABLES} from '../cache/cache-constants.js';
 import {CDCEventHandler} from './cdc-event-handler.js';
 import {
   CDC_CONFIG_KEY,
@@ -491,9 +492,11 @@ class CDCIntegrationService extends EventEmitter {
       CDC_RETRY.MIN_DELAY_MS,
       Number(this.retryDelayMs) || CDC_DEFAULTS.RETRY_DELAY_MS,
     );
+    const tableName = this.extractTableNameFromSQL(sql);
 
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt += NUM.ONE) {
       try {
+        const attemptStartMs = Date.now();
         const result = await this.sqlQueryEngine.executeQuery(sql, params);
 
         if (result && result.success === false) {
@@ -509,6 +512,19 @@ class CDCIntegrationService extends EventEmitter {
             continue;
           }
           throw new Error(message);
+        }
+
+        try {
+          const durationMs = Date.now() - attemptStartMs;
+          this.logger.info(METRICS_LOG_TAG.CDC_SQL_ROUTE, {
+            durationMs,
+            attempt,
+            maxAttempts,
+            bootstrapMode: this.bootstrapMode,
+            tableName,
+          });
+        } catch (_metricsErr) {
+          // Metrics logging must not propagate to callers
         }
 
         return result;
@@ -572,6 +588,17 @@ class CDCIntegrationService extends EventEmitter {
   }
 
   /**
+   * Determine whether a table write should wait for cache visibility.
+   * Only CDC-propagated tables are guaranteed to appear in SystemTableCache.
+   * @param {string} tableName - System table name.
+   * @return {boolean} True when cache wait semantics apply.
+   * @private
+   */
+  shouldWaitForCacheUpdate(tableName) {
+    return CDC_PROPAGATED_TABLES.includes(tableName);
+  }
+
+  /**
    * Wait for a system table cache update matching a primary key.
    * Used to make post-write cache visibility deterministic for callers.
    * @param {string} tableName - System table name.
@@ -581,6 +608,10 @@ class CDCIntegrationService extends EventEmitter {
    * @private
    */
   async waitForCacheUpdate(tableName, key, expectPresent) {
+    if (!this.shouldWaitForCacheUpdate(tableName)) {
+      return;
+    }
+
     const cache = this.systemTableCache;
     if (!cache || typeof cache.onCacheChange !== TYPEOF.FUNCTION) {
       return;
@@ -898,7 +929,9 @@ class CDCIntegrationService extends EventEmitter {
       const sql = `${SQL.INSERT_INTO} ${tableName} (${columns}) ` +
         `${SQL.VALUES} (${placeholders})`;
 
+      const sqlStartMs = Date.now();
       const result = await this.executeSQL(sql, values);
+      const sqlDurationMs = Date.now() - sqlStartMs;
 
       if (!result.success) {
         throw new Error(result.error || CDC_ERROR_MSG.INSERT_FAILED);
@@ -906,8 +939,22 @@ class CDCIntegrationService extends EventEmitter {
 
       const pkField = this.getPrimaryKeyField(tableName);
       const pkValue = rowData[pkField];
+      const cacheWaitStartMs = Date.now();
       if (pkValue) {
         await this.waitForCacheUpdate(tableName, pkValue, true);
+      }
+      const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
+
+      try {
+        this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
+          tableName,
+          operation: CDC_OPERATION.INSERT,
+          sqlDurationMs,
+          cacheWaitDurationMs,
+          totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
+        });
+      } catch (_metricsErr) {
+        // Metrics logging must not propagate to callers
       }
 
       this.stats.inserts++;
@@ -993,15 +1040,31 @@ class CDCIntegrationService extends EventEmitter {
       const sql = `${SQL.UPDATE} ${tableName} ${SQL.SET} ${setClause} ` +
         `${SQL.WHERE} ${whereStr}`;
 
+      const sqlStartMs = Date.now();
       const result = await this.executeSQL(sql, [...setValues, ...whereValues]);
+      const sqlDurationMs = Date.now() - sqlStartMs;
 
       if (!result.success) {
         throw new Error(result.error || CDC_ERROR_MSG.UPDATE_FAILED);
       }
 
+      const cacheWaitStartMs = Date.now();
       if (typeof result.affectedRows !== TYPEOF.NUMBER ||
         result.affectedRows > NUM.ZERO) {
         await this.waitForCacheUpdate(tableName, id, true);
+      }
+      const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
+
+      try {
+        this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
+          tableName,
+          operation: CDC_OPERATION.UPDATE,
+          sqlDurationMs,
+          cacheWaitDurationMs,
+          totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
+        });
+      } catch (_metricsErr) {
+        // Metrics logging must not propagate to callers
       }
 
       this.stats.updates++;

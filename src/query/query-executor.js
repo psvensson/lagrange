@@ -12,6 +12,7 @@ import {
   COLUMN,
   ERRORS,
   LOG_MSG,
+  METRICS_LOG_TAG,
   NUM,
   SQL,
   TABLES,
@@ -22,8 +23,10 @@ import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
+  QUERY_AST_TYPE,
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
+  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_JOIN_TYPE,
   QUERY_LOG_MSG,
@@ -35,6 +38,9 @@ import {
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
 import {PG_EXPR_TYPE} from './pg-compat-constants.js';
+import {DistributedMergeEngine} from './distributed-merge-engine.js';
+import {ParallelQueryCoordinator} from './parallel-query-coordinator.js';
+import {DISTRIBUTED_JOIN_STRATEGY} from './distributed-query-plan-constants.js';
 
 /**
  * QueryExecutor handles parallel query execution across partitions
@@ -56,14 +62,29 @@ class QueryExecutor {
     this.systemCache = options.systemCache || null;
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.QUERY_EXECUTOR;
     this.hlcClock = new HLCClockService(this.nodeId);
+    this.mergeEngine = options.mergeEngine || new DistributedMergeEngine();
+    this.parallelQueryCoordinator = options.parallelQueryCoordinator ||
+      new ParallelQueryCoordinator({
+        systemCache: this.systemCache,
+        nodeId: this.nodeId,
+        partitionQueryExecutor:
+          (sql, partitionId, params, coordinatorOptions = {}) =>
+            this.executeOnPartition(
+              partitionId,
+              sql,
+              params,
+              coordinatorOptions.forRead === true,
+              coordinatorOptions.preferLeader === true,
+              coordinatorOptions.preferSameLatencyGroup === true,
+            ),
+      });
+    this.lastCoordinatorMetrics = null;
     this.logger = this.initLogger();
 
     // Configuration
     const config = ConfigurationManager.getInstance();
     this.queryTimeoutMs = config.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
       QUERY_DEFAULTS.QUERY_TIMEOUT_MS;
-    this.maxParallelPartitions = config.get(QUERY_CONFIG_KEY.MAX_PARALLEL_PARTITIONS) ||
-      QUERY_DEFAULTS.MAX_PARALLEL_PARTITIONS;
     this.leaderRetryAttempts = config.get(QUERY_CONFIG_KEY.LEADER_RETRY_ATTEMPTS) ||
       QUERY_DEFAULTS.LEADER_RETRY_ATTEMPTS;
     this.leaderRetryDelayMs = config.get(QUERY_CONFIG_KEY.LEADER_RETRY_DELAY_MS) ||
@@ -101,6 +122,9 @@ class QueryExecutor {
    */
   setSystemCache(cache) {
     this.systemCache = cache;
+    if (this.parallelQueryCoordinator) {
+      this.parallelQueryCoordinator.setSystemCache(cache);
+    }
   }
 
   /**
@@ -111,7 +135,6 @@ class QueryExecutor {
    * @param {Array} partitionIds - Partition IDs to query.
    * @param {Array} params - Query parameters.
    * @param {Object} options - Execution options.
-   * @param {Map} options.joinPartitions - Map of table name to partition IDs for JOINs.
    * @return {Promise<Object>} Query result.
    */
   async executeSelect(ast, partitionIds, params = [], options = {}) {
@@ -135,8 +158,31 @@ class QueryExecutor {
     });
 
     // Check if this is a cross-partition JOIN query
-    if (ast.joins && ast.joins.length > NUM.ZERO && options.joinPartitions) {
-      return this.executeCrossPartitionJoin(ast, partitionIds, params, options, queryTimestamp);
+    if (ast.joins && ast.joins.length > NUM.ZERO) {
+      const joinPartitions = this.resolveJoinPartitions(ast, options);
+      if (joinPartitions.size > NUM.ZERO) {
+        return this.executeCrossPartitionJoin(
+          ast,
+          partitionIds,
+          params,
+          {
+            ...options,
+            joinPartitions,
+          },
+          queryTimestamp,
+        );
+      }
+      return {
+        success: false,
+        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+        failedPartitions: [],
+        partitionErrors: [{
+          partitionId: null,
+          error: 'Missing canonical join partition plan',
+        }],
+        partitions: partitionIds,
+      };
     }
 
     // Build SQL from AST
@@ -152,9 +198,55 @@ class QueryExecutor {
       options.preferLeader || false,
       options.preferSameLatencyGroup === true,
     );
+    const fanoutMetrics = this.getLastCoordinatorMetrics();
+
+    const failedPartitions = results
+      .filter((result) => !result.success)
+      .map((result) => result.partitionId);
+    if (failedPartitions.length > NUM.ZERO) {
+      return {
+        success: false,
+        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+        failedPartitions,
+        partitionErrors: results
+          .filter((result) => !result.success)
+          .map((result) => ({
+            partitionId: result.partitionId,
+            error: result.error || ERRORS.QUERY_FAILED,
+          })),
+        partitions: partitionIds,
+        distributedMetrics: {
+          fanout: fanoutMetrics,
+          mergeDurationMs: 0,
+          failedPartitionCount: failedPartitions.length,
+        },
+      };
+    }
 
     // Aggregate results
-    const aggregated = this.aggregateSelectResults(results, ast);
+    const mergeStartTimeMs = Date.now();
+    const aggregated = this.mergeEngine.mergePartitionResults(
+      results,
+      ast,
+      this,
+    );
+    const mergeDurationMs = Date.now() - mergeStartTimeMs;
+
+    try {
+      this.logger.info(METRICS_LOG_TAG.SELECT_DISTRIBUTED, {
+        partitionCount: partitionIds.length,
+        fanoutTotalLatencyMs: fanoutMetrics?.totalLatencyMs,
+        fanoutMedianLatencyMs: fanoutMetrics?.medianLatencyMs,
+        mergeDurationMs,
+        totalRows: aggregated.rows.length,
+        stragglerCount: fanoutMetrics?.stragglers?.length ?? 0,
+        speculativeExecutions:
+          fanoutMetrics?.speculativeExecutions ?? 0,
+      });
+    } catch (_metricsErr) {
+      // Metrics logging must not propagate to callers
+    }
 
     return {
       success: true,
@@ -162,7 +254,52 @@ class QueryExecutor {
       count: aggregated.rows.length,
       partitions: partitionIds,
       timestamp: queryTimestamp.toString(),
+      distributedMetrics: {
+        fanout: fanoutMetrics,
+        mergeDurationMs,
+        failedPartitionCount: 0,
+      },
     };
+  }
+
+  /**
+   * Resolve JOIN table partition targets from canonical distributed plan.
+   * @param {Object} ast - SELECT AST.
+   * @param {Object} options - Execution options.
+   * @return {Map<string, string[]>} Join table -> partition IDs map.
+   * @private
+   */
+  resolveJoinPartitions(ast, options) {
+    const joinPartitions = new Map();
+    const distributedPlan = options.distributedPlan || null;
+    const tablePlans = distributedPlan?.tablePlans || null;
+    if (!tablePlans) {
+      return joinPartitions;
+    }
+
+    for (const join of ast.joins || []) {
+      const joinTableName = join.table?.name;
+      const joinAlias = join.table?.alias || joinTableName;
+      if (!joinTableName) {
+        continue;
+      }
+
+      let partitionIds = [];
+      if (tablePlans) {
+        const planned = tablePlans.get ?
+          (tablePlans.get(joinAlias) || tablePlans.get(joinTableName)) :
+          tablePlans[joinAlias] || tablePlans[joinTableName];
+        if (planned?.partitions) {
+          partitionIds = planned.partitions;
+        }
+      }
+
+      if (partitionIds.length > NUM.ZERO) {
+        joinPartitions.set(joinTableName, partitionIds);
+      }
+    }
+
+    return joinPartitions;
   }
 
   /**
@@ -171,13 +308,14 @@ class QueryExecutor {
    * @param {Object} ast - Parsed SELECT AST with JOINs.
    * @param {Array} mainPartitionIds - Partition IDs for main table.
    * @param {Array} params - Query parameters.
-   * @param {Object} options - Execution options with joinPartitions map.
+   * @param {Object} options - Execution options with distributed plan.
    * @param {Object} queryTimestamp - HLC timestamp for consistent snapshot.
    * @return {Promise<Object>} Query result.
    * @private
    */
   async executeCrossPartitionJoin(ast, mainPartitionIds, params, options, queryTimestamp) {
     const {joinPartitions} = options;
+    const fanoutMetrics = [];
 
     this.logger.debug(QUERY_LOG_MSG.EXECUTING_CROSS_PARTITION_JOIN, {
       mainTable: ast.from.name,
@@ -199,6 +337,25 @@ class QueryExecutor {
       options.preferLeader || false,
       options.preferSameLatencyGroup === true,
     );
+    fanoutMetrics.push(this.getLastCoordinatorMetrics());
+    const mainFailures = mainResults.filter((result) => !result.success);
+    if (mainFailures.length > NUM.ZERO) {
+      return {
+        success: false,
+        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+        failedPartitions: mainFailures.map((result) => result.partitionId),
+        partitionErrors: mainFailures.map((result) => ({
+          partitionId: result.partitionId,
+          error: result.error || ERRORS.QUERY_FAILED,
+        })),
+        distributedMetrics: {
+          fanout: fanoutMetrics,
+          mergeDurationMs: 0,
+          failedPartitionCount: mainFailures.length,
+        },
+      };
+    }
 
     let mainRows = [];
     for (const result of mainResults) {
@@ -225,6 +382,25 @@ class QueryExecutor {
           options.preferLeader || false,
           options.preferSameLatencyGroup === true,
         );
+        fanoutMetrics.push(this.getLastCoordinatorMetrics());
+        const joinFailures = joinResults.filter((result) => !result.success);
+        if (joinFailures.length > NUM.ZERO) {
+          return {
+            success: false,
+            errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+            error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+            failedPartitions: joinFailures.map((result) => result.partitionId),
+            partitionErrors: joinFailures.map((result) => ({
+              partitionId: result.partitionId,
+              error: result.error || ERRORS.QUERY_FAILED,
+            })),
+            distributedMetrics: {
+              fanout: fanoutMetrics,
+              mergeDurationMs: 0,
+              failedPartitionCount: joinFailures.length,
+            },
+          };
+        }
 
         let joinRows = [];
         for (const result of joinResults) {
@@ -238,17 +414,31 @@ class QueryExecutor {
 
     // 3. Perform in-memory JOIN
     let resultRows = mainRows;
+    let leftTableRef = ast.from.alias || ast.from.name;
     for (const join of ast.joins) {
       const joinTableName = join.table.name;
+      const rightTableRef = join.table.alias || join.table.name;
       const joinRows = joinedData.get(joinTableName) || [];
-      resultRows = this.performJoin(resultRows, joinRows, join, ast.from.name, joinTableName);
+      const strategy = this.resolveJoinStrategy(join, leftTableRef, options.distributedPlan);
+      resultRows = this.executeJoinByStrategy(
+        resultRows,
+        joinRows,
+        join,
+        leftTableRef,
+        rightTableRef,
+        strategy,
+      );
+      leftTableRef = rightTableRef;
     }
 
     // 4. Apply remaining clauses (WHERE on joined data, GROUP BY, etc.)
-    const aggregated = this.aggregateSelectResults(
+    const mergeStartTimeMs = Date.now();
+    const aggregated = this.mergeEngine.mergePartitionResults(
       [{success: true, rows: resultRows}],
       ast,
+      this,
     );
+    const mergeDurationMs = Date.now() - mergeStartTimeMs;
 
     const allPartitions = [...mainPartitionIds];
     for (const partitions of joinPartitions.values()) {
@@ -261,6 +451,11 @@ class QueryExecutor {
       count: aggregated.rows.length,
       partitions: [...new Set(allPartitions)],
       timestamp: queryTimestamp.toString(),
+      distributedMetrics: {
+        fanout: fanoutMetrics,
+        mergeDurationMs,
+        failedPartitionCount: 0,
+      },
     };
   }
 
@@ -287,7 +482,14 @@ class QueryExecutor {
 
     if (!leftColumn || !rightColumn) {
       // Can't optimize, do nested loop join
-      return this.nestedLoopJoin(leftRows, rightRows, condition, joinType);
+      return this.nestedLoopJoin(
+        leftRows,
+        rightRows,
+        condition,
+        joinType,
+        leftTableName,
+        rightTableName,
+      );
     }
 
     // Build hash index on right table for efficient join
@@ -309,7 +511,9 @@ class QueryExecutor {
 
       if (matches.length > 0) {
         for (const rightRow of matches) {
-          result.push({...leftRow, ...rightRow});
+          result.push(
+            this.combineJoinRows(leftRow, rightRow, leftTableName, rightTableName),
+          );
           matchedRight.add(rightRow);
         }
       } else if (joinType === QUERY_JOIN_TYPE.LEFT ||
@@ -321,7 +525,9 @@ class QueryExecutor {
             nullRight[col] = null;
           }
         }
-        result.push({...leftRow, ...nullRight});
+        result.push(
+          this.combineJoinRows(leftRow, nullRight, leftTableName, rightTableName),
+        );
       }
     }
 
@@ -336,7 +542,9 @@ class QueryExecutor {
               nullLeft[col] = null;
             }
           }
-          result.push({...nullLeft, ...rightRow});
+          result.push(
+            this.combineJoinRows(nullLeft, rightRow, leftTableName, rightTableName),
+          );
         }
       }
     }
@@ -402,7 +610,14 @@ class QueryExecutor {
    * @return {Array} Joined rows.
    * @private
    */
-  nestedLoopJoin(leftRows, rightRows, condition, joinType) {
+  nestedLoopJoin(
+    leftRows,
+    rightRows,
+    condition,
+    joinType,
+    leftTableRef = 'left',
+    rightTableRef = 'right',
+  ) {
     const result = [];
     const matchedRight = new Set();
 
@@ -412,7 +627,9 @@ class QueryExecutor {
       for (const rightRow of rightRows) {
         const combined = {...leftRow, ...rightRow};
         if (this.evaluateExpression(combined, condition)) {
-          result.push(combined);
+          result.push(
+            this.combineJoinRows(leftRow, rightRow, leftTableRef, rightTableRef),
+          );
           matchedRight.add(rightRow);
           hasMatch = true;
         }
@@ -426,7 +643,9 @@ class QueryExecutor {
             nullRight[col] = null;
           }
         }
-        result.push({...leftRow, ...nullRight});
+        result.push(
+          this.combineJoinRows(leftRow, nullRight, leftTableRef, rightTableRef),
+        );
       }
     }
 
@@ -440,12 +659,101 @@ class QueryExecutor {
               nullLeft[col] = null;
             }
           }
-          result.push({...nullLeft, ...rightRow});
+          result.push(
+            this.combineJoinRows(nullLeft, rightRow, leftTableRef, rightTableRef),
+          );
         }
       }
     }
 
     return result;
+  }
+
+  /**
+   * Execute one JOIN edge with the selected distributed strategy.
+   * @param {Object[]} leftRows - Left-side rows.
+   * @param {Object[]} rightRows - Right-side rows.
+   * @param {Object} join - JOIN AST node.
+   * @param {string} leftTableRef - Left table/alias reference.
+   * @param {string} rightTableRef - Right table/alias reference.
+   * @param {string} strategy - Planner-selected join strategy.
+   * @return {Object[]} Joined rows.
+   * @private
+   */
+  executeJoinByStrategy(
+    leftRows,
+    rightRows,
+    join,
+    leftTableRef,
+    rightTableRef,
+    strategy,
+  ) {
+    switch (strategy) {
+    case DISTRIBUTED_JOIN_STRATEGY.BROADCAST:
+      return this.performJoin(leftRows, rightRows, join, leftTableRef, rightTableRef);
+    case DISTRIBUTED_JOIN_STRATEGY.REPARTITION:
+      return this.performJoin(leftRows, rightRows, join, leftTableRef, rightTableRef);
+    case DISTRIBUTED_JOIN_STRATEGY.NESTED_LOOP:
+      return this.nestedLoopJoin(
+        leftRows,
+        rightRows,
+        join.condition,
+        (join.joinType || QUERY_JOIN_TYPE.INNER).toUpperCase(),
+        leftTableRef,
+        rightTableRef,
+      );
+    default:
+      return this.performJoin(leftRows, rightRows, join, leftTableRef, rightTableRef);
+    }
+  }
+
+  /**
+   * Resolve strategy for one JOIN edge from distributed plan metadata.
+   * @param {Object} join - JOIN AST node.
+   * @param {string} leftTableRef - Left table/alias reference.
+   * @param {Object|null} distributedPlan - Distributed plan object.
+   * @return {string} Join strategy.
+   * @private
+   */
+  resolveJoinStrategy(join, leftTableRef, distributedPlan) {
+    const joinPlan = distributedPlan?.joinPlan || null;
+    const rightTableRef = join.table?.alias || join.table?.name || null;
+    if (!joinPlan || !rightTableRef) {
+      return DISTRIBUTED_JOIN_STRATEGY.BROADCAST;
+    }
+    const edge = joinPlan.find((entry) =>
+      entry.leftAlias === leftTableRef &&
+        entry.rightAlias === rightTableRef,
+    ) || joinPlan.find((entry) =>
+      entry.rightAlias === rightTableRef,
+    );
+    return edge?.strategy || DISTRIBUTED_JOIN_STRATEGY.BROADCAST;
+  }
+
+  /**
+   * Combine rows while preserving unqualified keys and qualified collisions.
+   * @param {Object} leftRow - Left row.
+   * @param {Object} rightRow - Right row.
+   * @param {string} leftTableRef - Left table/alias reference.
+   * @param {string} rightTableRef - Right table/alias reference.
+   * @return {Object} Combined row.
+   * @private
+   */
+  combineJoinRows(leftRow, rightRow, leftTableRef, rightTableRef) {
+    const combined = {...leftRow};
+    for (const [column, value] of Object.entries(rightRow)) {
+      if (Object.prototype.hasOwnProperty.call(combined, column)) {
+        const leftQualified = `${leftTableRef}.${column}`;
+        const rightQualified = `${rightTableRef}.${column}`;
+        if (!Object.prototype.hasOwnProperty.call(combined, leftQualified)) {
+          combined[leftQualified] = leftRow[column];
+        }
+        combined[rightQualified] = value;
+        continue;
+      }
+      combined[column] = value;
+    }
+    return combined;
   }
 
   /**
@@ -521,54 +829,27 @@ class QueryExecutor {
     preferLeader = false,
     preferSameLatencyGroup = false,
   ) {
-    // Limit parallel partitions
-    const limitedIds = partitionIds.slice(0, this.maxParallelPartitions);
-
-    if (limitedIds.length < partitionIds.length) {
-      this.logger.warn('Partition count exceeds limit', {
-        requested: partitionIds.length,
-        limit: this.maxParallelPartitions,
-      });
-    }
-
-    // Create promises for parallel execution
-    const promises = limitedIds.map((partitionId) =>
-      this.executeOnPartition(
-        partitionId,
-        sql,
-        params,
+    const coordinatorResult = await this.parallelQueryCoordinator.executeParallel(
+      sql,
+      partitionIds,
+      params,
+      {
         forRead,
         preferLeader,
         preferSameLatencyGroup,
-      ),
+        timestamp: _timestamp,
+      },
     );
+    this.lastCoordinatorMetrics = coordinatorResult.metrics || null;
+    return coordinatorResult.results;
+  }
 
-    // Execute with timeout - ensure timer is always cleared
-    let timeoutId;
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error(QUERY_ERROR_MSG.QUERY_TIMEOUT)),
-        this.queryTimeoutMs,
-      );
-    });
-
-    try {
-      const results = await Promise.race([
-        Promise.all(promises),
-        timeoutPromise,
-      ]);
-      return results;
-    } catch (error) {
-      if (error.message === QUERY_ERROR_MSG.QUERY_TIMEOUT) {
-        this.logger.error(QUERY_LOG_MSG.QUERY_TIMED_OUT, {
-          partitionCount: limitedIds.length,
-          timeoutMs: this.queryTimeoutMs,
-        });
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
+  /**
+   * Return coordinator metrics for the most recent fanout execution.
+   * @return {Object|null} Last coordinator metrics payload.
+   */
+  getLastCoordinatorMetrics() {
+    return this.lastCoordinatorMetrics;
   }
 
   /**
@@ -676,7 +957,6 @@ class QueryExecutor {
             rows: [],
           };
         }
-
       }
 
       for (const serviceInfo of serviceCandidates) {
@@ -1504,8 +1784,13 @@ class QueryExecutor {
    * @private
    */
   applyLimit(rows, limit) {
-    const offset = limit.offset || 0;
-    const count = limit.count;
+    const offset = Number.isInteger(limit.offset) ?
+      Math.max(limit.offset, NUM.ZERO) :
+      NUM.ZERO;
+    if (!Number.isInteger(limit.count)) {
+      return rows.slice(offset);
+    }
+    const count = Math.max(limit.count, NUM.ZERO);
     return rows.slice(offset, offset + count);
   }
 
@@ -1744,6 +2029,7 @@ class QueryExecutor {
       success: true,
       operation: 'INSERT',
       affectedRows: result.changes || ast.values.length,
+      rows: Array.isArray(result.rows) ? result.rows : [],
       partitions: [partitionId],
     };
   }
@@ -1759,9 +2045,9 @@ class QueryExecutor {
     if (!returning) {
       return sql;
     }
-    const cols = returning === '*'
-      ? '*'
-      : returning.join(', ');
+    const cols = returning === '*' ?
+      '*' :
+      returning.join(', ');
     return `${sql} ${SQL.RETURNING} ${cols}`;
   }
 
@@ -1819,17 +2105,51 @@ class QueryExecutor {
       params,
       this.hlcClock.now(),
     );
+    const fanoutMetrics = this.getLastCoordinatorMetrics();
 
+    const failedResults = results.filter((result) => !result.success);
     const totalChanges = results.reduce(
-      (sum, r) => sum + (r.changes || 0),
+      (sum, result) => sum + (result.success ? (result.changes || 0) : 0),
       0,
     );
+    const returningRows = [];
+    for (const result of results) {
+      if (result.success && Array.isArray(result.rows) && result.rows.length > NUM.ZERO) {
+        returningRows.push(...result.rows);
+      }
+    }
+
+    if (failedResults.length > NUM.ZERO) {
+      return {
+        success: false,
+        operation: QUERY_AST_TYPE.UPDATE,
+        affectedRows: totalChanges,
+        partitions: partitionIds,
+        failedPartitions: failedResults.map((result) => result.partitionId),
+        partitionErrors: failedResults.map((result) => ({
+          partitionId: result.partitionId,
+          error: result.error || ERRORS.QUERY_FAILED,
+        })),
+        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+        rows: returningRows,
+        distributedMetrics: {
+          fanout: fanoutMetrics,
+          failedPartitionCount: failedResults.length,
+        },
+      };
+    }
 
     return {
       success: true,
-      operation: 'UPDATE',
+      operation: QUERY_AST_TYPE.UPDATE,
       affectedRows: totalChanges,
       partitions: partitionIds,
+      rows: returningRows,
+      distributedMetrics: {
+        fanout: fanoutMetrics,
+        failedPartitionCount: 0,
+      },
     };
   }
 
@@ -1875,17 +2195,51 @@ class QueryExecutor {
       params,
       this.hlcClock.now(),
     );
+    const fanoutMetrics = this.getLastCoordinatorMetrics();
 
+    const failedResults = results.filter((result) => !result.success);
     const totalChanges = results.reduce(
-      (sum, r) => sum + (r.changes || 0),
+      (sum, result) => sum + (result.success ? (result.changes || 0) : 0),
       0,
     );
+    const returningRows = [];
+    for (const result of results) {
+      if (result.success && Array.isArray(result.rows) && result.rows.length > NUM.ZERO) {
+        returningRows.push(...result.rows);
+      }
+    }
+
+    if (failedResults.length > NUM.ZERO) {
+      return {
+        success: false,
+        operation: QUERY_AST_TYPE.DELETE,
+        affectedRows: totalChanges,
+        partitions: partitionIds,
+        failedPartitions: failedResults.map((result) => result.partitionId),
+        partitionErrors: failedResults.map((result) => ({
+          partitionId: result.partitionId,
+          error: result.error || ERRORS.QUERY_FAILED,
+        })),
+        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+        rows: returningRows,
+        distributedMetrics: {
+          fanout: fanoutMetrics,
+          failedPartitionCount: failedResults.length,
+        },
+      };
+    }
 
     return {
       success: true,
-      operation: 'DELETE',
+      operation: QUERY_AST_TYPE.DELETE,
       affectedRows: totalChanges,
       partitions: partitionIds,
+      rows: returningRows,
+      distributedMetrics: {
+        fanout: fanoutMetrics,
+        failedPartitionCount: 0,
+      },
     };
   }
 

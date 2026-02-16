@@ -14,6 +14,7 @@ const LOGGING_DEFAULT = Object.freeze({
   LEVEL: 'info',
   MAX_BUFFER_SIZE: NUM.THOUSAND,
   PRETTY_PRINT: false,
+  SHOW_METRICS_IN_CONSOLE: false,
 });
 
 const LOGGING_PRETTY = Object.freeze({

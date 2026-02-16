@@ -17,3 +17,8 @@ export {
   LiveQueryManager,
   QueryGroup,
 } from './live-query-manager.js';
+
+export {
+  createLiveQueryCacheSubscriptionAdapter,
+  createLiveQueryStartupWiring,
+} from './live-query-startup-wiring.js';

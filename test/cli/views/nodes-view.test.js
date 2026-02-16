@@ -43,6 +43,7 @@ test('NodesView', async (t) => {
     t.equal(columns[4].key, 'memory_usage_percent');
     t.equal(columns[5].key, 'disk_usage_percent');
     t.equal(columns[6].key, 'services_count');
+    t.equal(columns[6].label, 'Replicas');
   });
 
   t.test('formatRow formats node data correctly', async (t) => {
@@ -212,7 +213,7 @@ test('NodesView', async (t) => {
     t.equal(details.sections.length, 3);
     t.equal(details.sections[0].title, 'Basic Information');
     t.equal(details.sections[1].title, 'Resource Statistics');
-    t.equal(details.sections[2].title, 'Services');
+    t.equal(details.sections[2].title, 'Replicas');
   });
 
   t.test('getSelectedDetails returns null when no selection', async (t) => {

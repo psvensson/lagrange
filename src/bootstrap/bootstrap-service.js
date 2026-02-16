@@ -98,6 +98,12 @@ import {
   registerBuiltInMetaServiceEndpoints,
 } from './shared/meta-service-definition-registration.js';
 import {
+  PgWireStartupSafetyGate,
+} from './pgwire-startup-safety-gate.js';
+import {
+  RuntimeServiceHandlerSetup,
+} from './shared/runtime-service-handler-setup.js';
+import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
 import {createSeedPhaseOwners} from './owners/seed-phase-owners.js';
@@ -216,6 +222,11 @@ class BootstrapService extends EventEmitter {
     this.config.replicaStaggerDelayMs = Number.isFinite(this.config.replicaStaggerDelayMs) ?
       Math.max(NUM.ZERO, this.config.replicaStaggerDelayMs) :
       BOOTSTRAP_DEFAULT.replicaStaggerDelayMs;
+    this.config.maxConcurrentServiceActions = Number.isFinite(
+      this.config.maxConcurrentServiceActions,
+    ) ?
+      Math.max(NUM.ONE, Math.floor(this.config.maxConcurrentServiceActions)) :
+      BOOTSTRAP_DEFAULT.maxConcurrentServiceActions;
     this.nodeReadyRebalanceDelayMs = Number.isFinite(
       this.config.nodeReadyRebalanceDelayMs,
     ) ?
@@ -371,6 +382,10 @@ class BootstrapService extends EventEmitter {
       await this.initializeControlPlaneService();
       await this.registerSeedNodeWithControlPlane();
       this.startLatencyTopologyLifecycle();
+
+      // Initialize runtime service handler AFTER control-plane readiness.
+      // PG wire startup failure is isolated and does not abort bootstrap.
+      this.initializeRuntimeServiceHandler();
 
       // Bootstrap complete
       const currentState = this.lifecycleStateMachine.getState();
@@ -636,6 +651,7 @@ class BootstrapService extends EventEmitter {
         [...this.bootstrapDesiredServiceDefinitions.values()],
       actualStateReader: async () => this.buildBootstrapActualStateRows(),
       checkIntervalMs: BOOTSTRAP_UNIFIED_RECONCILE.CHECK_INTERVAL_MS,
+      maxConcurrentServiceActions: this.config.maxConcurrentServiceActions,
     });
 
     await this.serviceReconciler.start();
@@ -1628,6 +1644,7 @@ class BootstrapService extends EventEmitter {
    */
   async phasePartitions() {
     const replicaStaggerDelayMs = this.config.replicaStaggerDelayMs;
+    let queuedPartitionReplicaCount = NUM.ZERO;
     this.partitionReplicas = [];
 
     for (const schema of SYSTEM_TABLE_SCHEMAS) {
@@ -1676,9 +1693,21 @@ class BootstrapService extends EventEmitter {
               NUM.ZERO,
           },
         );
+        queuedPartitionReplicaCount++;
       }
     }
 
+    const firstBatchReplicaCount = Math.min(
+      queuedPartitionReplicaCount,
+      this.config.maxConcurrentServiceActions,
+    );
+    this.logger.info(BootstrapLog.PARTITION_CREATION_BATCH_STARTING, {
+      nodeId: this.nodeId,
+      tableCount: SYSTEM_TABLE_SCHEMAS.length,
+      queuedReplicaCount: queuedPartitionReplicaCount,
+      firstBatchReplicaCount,
+      maxConcurrentServiceActions: this.config.maxConcurrentServiceActions,
+    });
     await this.triggerBootstrapReconciler(
       BOOTSTRAP_UNIFIED_RECONCILE.PARTITIONS_REASON,
     );
@@ -3094,6 +3123,40 @@ class BootstrapService extends EventEmitter {
       messageGroupCount: this.messageGroupServices.size,
       owner: 'ControlPlaneSetup',
     });
+  }
+
+  /**
+   * Initialize the RuntimeServiceHandler behind the PG wire safety
+   * gate. The gate ensures control-plane readiness before allowing
+   * runtime-service replica operations. Startup failure is isolated
+   * so bootstrap completes even if PG wire fails.
+   *
+   * Requirements: 11.1, 11.2, 11.4
+   * @private
+   */
+  initializeRuntimeServiceHandler() {
+    const systemTableCache = this.getSystemTableCache();
+    const gate = new PgWireStartupSafetyGate({
+      nodeId: this.nodeId,
+      serviceLifecycleManager: this.serviceLifecycleManager,
+      systemTableCache,
+      heartbeatService: this.heartbeatService,
+    });
+
+    const result = gate.guardedSetup(() => {
+      return RuntimeServiceHandlerSetup.create({
+        nodeId: this.nodeId,
+        messageRouter: this.messageRouter,
+        cdcIntegrationService: this.cdcIntegrationService,
+        systemTableCache,
+        serviceLifecycleManager: this.serviceLifecycleManager,
+        rpcClient: this.rpcClient,
+      });
+    });
+
+    if (result) {
+      this.runtimeServiceHandler = result.runtimeServiceHandler;
+    }
   }
 
   /**

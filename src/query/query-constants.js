@@ -42,6 +42,7 @@ const QUERY_OPERATION = Object.freeze({
   ROLLBACK: 'ROLLBACK',
   TRANSACTION: 'TRANSACTION',
   BEGIN: 'BEGIN',
+  EXPLAIN_DISTRIBUTED: 'EXPLAIN_DISTRIBUTED',
 });
 
 const QUERY_ERROR_CODE = Object.freeze({
@@ -54,6 +55,7 @@ const QUERY_ERROR_CODE = Object.freeze({
   ROLLBACK_FAILED: 'ROLLBACK_FAILED',
   PRIMARY_KEY_REQUIRED: 'PRIMARY_KEY_REQUIRED',
   TABLE_EXISTS: 'TABLE_EXISTS',
+  DISTRIBUTED_PARTICIPANT_FAILURE: 'DISTRIBUTED_PARTICIPANT_FAILURE',
   SYNTAX_ERROR: 'SYNTAX_ERROR',
   TIMEOUT: 'TIMEOUT',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
@@ -107,6 +109,10 @@ const QUERY_ERROR_MSG = Object.freeze({
     'User tables require a PRIMARY KEY for partition key derivation.',
   TABLE_EXISTS_PREFIX: 'Table \'',
   TABLE_EXISTS_SUFFIX: '\' already exists',
+  DISTRIBUTED_PARTICIPANT_FAILURE:
+    'Distributed operation failed due to participant failures',
+  EXPLAIN_DISTRIBUTED_REQUIRES_STATEMENT:
+    'EXPLAIN DISTRIBUTED requires a SQL statement',
 });
 
 const QUERY_ROUTER_ERROR_MSG = Object.freeze({
@@ -158,6 +164,8 @@ const QUERY_LOG_MSG = Object.freeze({
   TABLE_CREATE_START: 'Creating table',
   TABLE_EXISTS_SKIP: 'Table already exists, skipping creation',
   TABLE_CREATED_SUCCESS: 'Table created successfully',
+  TABLE_SPLIT_MERGE_EVAL_FAILED:
+    'Split/merge evaluation after table create failed',
   FOLLOWING_LEADER_REDIRECT: 'Following leader redirect',
 });
 

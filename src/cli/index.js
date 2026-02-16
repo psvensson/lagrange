@@ -35,6 +35,8 @@ import {LogsView} from './views/logs-view.js';
 import {ConfigView} from './views/config-view.js';
 import {ContextsView} from './views/contexts-view.js';
 
+import {LiveQueryManager} from './core/live-query-manager.js';
+
 import {SQLQueryView} from './sql/sql-query-view.js';
 import {
   CLI_APP,
@@ -94,6 +96,7 @@ export class AdminCLI {
     this.configManager = null;
     this.connectionManager = null;
     this.cache = null;
+    this.liveQueryManager = null;
     this.metadataComputer = null;
     this.navigation = null;
     this.viewManager = null;
@@ -185,6 +188,9 @@ export class AdminCLI {
     this.helpOverlay = new HelpOverlay({eventBus: this.eventBus});
     this.errorHandler = new ErrorHandler({eventBus: this.eventBus});
     this.connectionManager = new ConnectionManager();
+    this.liveQueryManager = new LiveQueryManager(
+      this.connectionManager, this.eventBus,
+    );
   }
 
   /**
@@ -493,7 +499,12 @@ export class AdminCLI {
     }));
     this.viewManager.registerView('partitions', new PartitionsView(viewOptions));
     this.viewManager.registerView('message_groups', new MessageGroupsView(viewOptions));
-    this.viewManager.registerView('logs', new LogsView(viewOptions));
+    this.viewManager.registerView('logs', new LogsView({
+      ...viewOptions,
+      connectionManager: this.connectionManager,
+      liveQueryManager: this.liveQueryManager,
+      liveQueryEnabled: true,
+    }));
     this.viewManager.registerView('config', new ConfigView(viewOptions));
     this.viewManager.registerView('contexts', new ContextsView(viewOptions));
     this.viewManager.registerView('sql', new SQLQueryView({
@@ -528,10 +539,23 @@ export class AdminCLI {
    */
   setupEventHandlers() {
     this.eventBus.on('cache:update', () => {
-      if (!this.cdcPaused) this.refreshCurrentView();
+      if (this.cdcPaused || this.currentView === CLI_VIEW.LOGS) {
+        return;
+      }
+      this.refreshCurrentView();
     });
 
     this.eventBus.on('navigation:changed', () => this.refreshCurrentView());
+    this.eventBus.on('view:refresh', (payload = {}) => {
+      const currentView = this.viewManager.getCurrentView();
+      if (!currentView) {
+        return;
+      }
+      if (payload.view && payload.view !== currentView) {
+        return;
+      }
+      this.renderCurrentView(currentView);
+    });
 
     this.eventBus.on('help:show', () => this.showHelpOverlay());
     this.eventBus.on('help:hide', () => this.hideHelpOverlay());
@@ -570,14 +594,17 @@ export class AdminCLI {
       // Get stats to verify data was loaded
       const stats = this.cache.getStats();
       const nodeCount = stats.tableCounts.nodes || 0;
-      const serviceCount = stats.tableCounts.services || 0;
+      const replicaCount = stats.tableCounts.services || 0;
       const tableCount = stats.tableCounts.tables || 0;
 
-      debugLog(`Cache loaded: ${nodeCount} nodes, ${serviceCount} services, ${tableCount} tables`);
+      debugLog(
+        `Cache loaded: ${nodeCount} nodes, ${replicaCount} replicas, ` +
+        `${tableCount} tables`,
+      );
 
       // Update status with counts
       this.updateStatus(
-        `Connected (${nodeCount} nodes, ${serviceCount} services, ${tableCount} tables)`,
+        `Connected (${nodeCount} nodes, ${replicaCount} replicas, ${tableCount} tables)`,
         'green',
       );
 
@@ -604,6 +631,13 @@ export class AdminCLI {
     this.connectionManager.onQueryResult = (result) => {
       debugLog(`onQueryResult: queryId=${result.queryId}`);
       this.eventBus.emit('query:result', result);
+    };
+
+    this.connectionManager.onLiveQueryEvent = (message) => {
+      debugLog(`onLiveQueryEvent: subscriptionId=${message.subscriptionId}`);
+      if (this.liveQueryManager) {
+        this.liveQueryManager.handleLiveQueryEvent(message);
+      }
     };
 
     this.connectionManager.onError = (err) => {
@@ -710,8 +744,9 @@ export class AdminCLI {
       data = this.cache.getMessageGroups();
       break;
     case 'logs':
-      data = this.cache.getLogs(this.navigation.currentContext || {});
-      break;
+      // Logs are maintained by live query subscriptions owned by LogsView.
+      this.renderCurrentView(view);
+      return;
     case 'config':
       data = this.cache.getConfig();
       break;
@@ -724,11 +759,23 @@ export class AdminCLI {
     }
 
     view.setData(data);
+    this.renderCurrentView(view);
+  }
+
+  /**
+   * Render the active view without triggering data fetches.
+   * @param {Object} view - View instance to render
+   */
+  renderCurrentView(view) {
+    if (!view) return;
+
     const renderData = view.render(this.navigation.getCurrentState());
     this.updateMainTable(renderData);
     this.updateHeader();
 
-    if (this.showingDetail) this.updateDetailPanel();
+    if (this.showingDetail) {
+      this.updateDetailPanel();
+    }
 
     this.screen.render();
   }
@@ -1370,7 +1417,11 @@ export class AdminCLI {
     const view = this.viewManager.getCurrentView();
     if (view) {
       view.selectUp(count);
-      this.refreshCurrentView();
+      if (this.currentView === CLI_VIEW.LOGS) {
+        this.renderCurrentView(view);
+      } else {
+        this.refreshCurrentView();
+      }
     }
   }
 
@@ -1388,7 +1439,11 @@ export class AdminCLI {
     const view = this.viewManager.getCurrentView();
     if (view) {
       view.selectDown(count);
-      this.refreshCurrentView();
+      if (this.currentView === CLI_VIEW.LOGS) {
+        this.renderCurrentView(view);
+      } else {
+        this.refreshCurrentView();
+      }
     }
   }
 
@@ -1410,7 +1465,11 @@ export class AdminCLI {
     const view = this.viewManager.getCurrentView();
     if (view) {
       view.selectFirst();
-      this.refreshCurrentView();
+      if (this.currentView === CLI_VIEW.LOGS) {
+        this.renderCurrentView(view);
+      } else {
+        this.refreshCurrentView();
+      }
     }
   }
 
@@ -1432,7 +1491,11 @@ export class AdminCLI {
     const view = this.viewManager.getCurrentView();
     if (view) {
       view.selectLast();
-      this.refreshCurrentView();
+      if (this.currentView === CLI_VIEW.LOGS) {
+        this.renderCurrentView(view);
+      } else {
+        this.refreshCurrentView();
+      }
     }
   }
 
@@ -1503,6 +1566,33 @@ export class AdminCLI {
     case 'history':
       if (args[0]) this.showReplicaHistory(args[0]);
       break;
+    case 'since':
+      if (args[0]) this.applyLogsSince(args[0]);
+      break;
+    }
+  }
+
+  /**
+   * Apply a live logs start-time window from command input.
+   * @param {string} value - Since value (`now`, ISO/epoch, or relative like `-5m`).
+   */
+  applyLogsSince(value) {
+    if (this.currentView !== CLI_VIEW.LOGS) {
+      this.showError('since command is only available in logs view');
+      return;
+    }
+
+    const logsView = this.viewManager?.getView(CLI_VIEW.LOGS);
+    if (!logsView || typeof logsView.setLiveWindowStartTime !== 'function') {
+      this.showError('logs view does not support since command');
+      return;
+    }
+
+    try {
+      logsView.setLiveWindowStartTime(value);
+      this.refreshCurrentView();
+    } catch (error) {
+      this.showError(error.message);
     }
   }
 

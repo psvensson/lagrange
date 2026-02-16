@@ -11,6 +11,7 @@ import {
   ADDRESS,
   COLUMN,
   ENTITY_TYPE,
+  METRICS_LOG_TAG,
   NUM,
   STRING,
   TABLES,
@@ -1208,8 +1209,11 @@ class MessageGroupService extends EventEmitter {
    * @return {Promise<void>}
    */
   async applyCDCEvent(tableName, operation, data, options = {}) {
-    const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
-    const eventTimestamp = options.timestamp || this.hlcClock.now().toString();
+    const applyStartMs = Date.now();
+    const skipSubscriptionCheck =
+      options.skipSubscriptionCheck === true;
+    const eventTimestamp =
+      options.timestamp || this.hlcClock.now().toString();
     const applied = this.cdcHandler.applyImmediate(
       {
         tableName,
@@ -1235,7 +1239,8 @@ class MessageGroupService extends EventEmitter {
 
       // Replicate if leader using liferaft
       // Only use liferaft's command if it considers itself the leader
-      const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
+      const isLiferaftLeader =
+        this.raft && this.raft.state === LifeRaft.LEADER;
       if (isLiferaftLeader) {
         // Fire and forget - don't wait for commit
         this.raft.command({
@@ -1253,11 +1258,51 @@ class MessageGroupService extends EventEmitter {
         });
       }
 
-      this.emit('cdcApplied', {tableName, operation, data, logIndex: entry.index});
+      try {
+        const handlerDurationMs = Date.now() - applyStartMs;
+        const metricsData = {
+          tableName,
+          operation,
+          handlerDurationMs,
+        };
+        if (options.timestamp != null) {
+          metricsData.eventAgeMs =
+            Date.now() - options.timestamp;
+        }
+        this.logger.info(
+          METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
+        );
+      } catch (_metricsErr) {
+        // Metrics logging must not propagate to callers
+      }
+
+      this.emit('cdcApplied', {
+        tableName, operation, data, logIndex: entry.index,
+      });
       return;
     }
 
-    this.emit('cdcApplied', {tableName, operation, data, logIndex: null});
+    try {
+      const handlerDurationMs = Date.now() - applyStartMs;
+      const metricsData = {
+        tableName,
+        operation,
+        handlerDurationMs,
+      };
+      if (options.timestamp != null) {
+        metricsData.eventAgeMs =
+          Date.now() - options.timestamp;
+      }
+      this.logger.info(
+        METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
+      );
+    } catch (_metricsErr) {
+      // Metrics logging must not propagate to callers
+    }
+
+    this.emit('cdcApplied', {
+      tableName, operation, data, logIndex: null,
+    });
   }
 
 

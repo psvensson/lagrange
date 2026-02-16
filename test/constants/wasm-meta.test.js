@@ -164,7 +164,13 @@ describe('META_SERVICE_ID', () => {
     assert.equal(META_SERVICE_ID.ADMIN_META, 'sys-admin-meta');
   });
 
-  it('should have exactly two identifiers', () => {
-    assert.equal(Object.keys(META_SERVICE_ID).length, 2);
+  it('should have POSTGRES_WIRE identifier', () => {
+    assert.equal(
+      META_SERVICE_ID.POSTGRES_WIRE, 'sys-postgres-wire',
+    );
+  });
+
+  it('should have exactly three identifiers', () => {
+    assert.equal(Object.keys(META_SERVICE_ID).length, 3);
   });
 });

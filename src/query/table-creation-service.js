@@ -31,6 +31,7 @@ class TableCreationService {
   constructor(options = {}) {
     this.systemCache = options.systemCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.partitionSplitMergeManager = options.partitionSplitMergeManager || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -71,6 +72,14 @@ class TableCreationService {
    */
   setCDCIntegrationService(service) {
     this.cdcIntegrationService = service;
+  }
+
+  /**
+   * Set partition split/merge manager integration hook.
+   * @param {Object} manager - PartitionSplitMergeManager instance.
+   */
+  setPartitionSplitMergeManager(manager) {
+    this.partitionSplitMergeManager = manager || null;
   }
 
   /**
@@ -167,6 +176,8 @@ class TableCreationService {
       );
     }
 
+    await this.evaluateSplitMergeLifecycle();
+
     this.logger.info(QUERY_LOG_MSG.TABLE_CREATED_SUCCESS, {
       tableId,
       tableName,
@@ -183,6 +194,26 @@ class TableCreationService {
       partitionId,
       columns: columns.length,
     };
+  }
+
+  /**
+   * Trigger policy-driven split/merge evaluation after table lifecycle changes.
+   * @return {Promise<void>}
+   * @private
+   */
+  async evaluateSplitMergeLifecycle() {
+    const manager = this.partitionSplitMergeManager;
+    if (!manager || typeof manager.evaluateAllPartitions !== 'function') {
+      return;
+    }
+
+    try {
+      await manager.evaluateAllPartitions();
+    } catch (error) {
+      this.logger.warn(QUERY_LOG_MSG.TABLE_SPLIT_MERGE_EVAL_FAILED, {
+        splitMergeEvaluationError: error.message,
+      });
+    }
   }
 
   /**

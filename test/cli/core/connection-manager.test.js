@@ -253,6 +253,25 @@ test('ConnectionManager - handleMessage parses error', async (t) => {
   t.equal(receivedError.message, 'Test error');
 });
 
+test('ConnectionManager - handleMessage parses error from error field',
+  async (t) => {
+    const manager = new ConnectionManager();
+    let receivedError = null;
+
+    manager.onError = (err) => {
+      receivedError = err;
+    };
+
+    manager.handleMessage(JSON.stringify({
+      type: 'error',
+      error: 'Live query manager not available',
+      errorCode: 'INTERNAL_ERROR',
+    }));
+
+    t.ok(receivedError instanceof Error);
+    t.equal(receivedError.message, 'Live query manager not available');
+  });
+
 test('ConnectionManager - handleMessage handles invalid JSON', async (t) => {
   const manager = new ConnectionManager();
   let receivedError = null;

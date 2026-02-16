@@ -108,6 +108,7 @@ const SQL_ENGINE_PROFILE = Object.freeze({
 
 const WASM_SERVICE_PROTOCOL = Object.freeze({
   WEBSOCKET: 'websocket',
+  POSTGRESQL: 'postgresql',
 });
 
 const WASM_SERVICE_HEALTH_STATUS = Object.freeze({

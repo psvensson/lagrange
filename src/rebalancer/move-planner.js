@@ -2,7 +2,8 @@
  * Move Planner - Calculates replica placement and moves for rebalancing.
  *
  * This module provides move planning logic extracted from UnifiedRebalancer.
- * It calculates target replica state and the moves needed to reach that state.
+ * It calculates target replica state and the moves needed to reach that
+ * state for partitions, message groups, and runtime services.
  *
  * Requirements: 1.3, 1.8, 5.1, 5.2, 5.3, 5.4, 5.5, 11.3
  *
@@ -44,8 +45,8 @@ const MOVE_PLANNER_TOPOLOGY_SCORE = Object.freeze({
 });
 
 /**
- * MovePlanner calculates replica placement and moves for partitions
- * and message groups.
+ * MovePlanner calculates replica placement and moves for partitions,
+ * message groups, and runtime services.
  *
  * This class is responsible for:
  * - Calculating target replica state based on policy
@@ -58,8 +59,10 @@ const MOVE_PLANNER_TOPOLOGY_SCORE = Object.freeze({
  *
  * @constructor
  * @param {Object} options - Configuration options
- * @param {string} options.entityId - Partition ID or message group ID
- * @param {string} options.entityType - 'partition' or 'message_group'
+ * @param {string} options.entityId - Entity ID (partition, message
+ *   group, or service definition ID)
+ * @param {string} options.entityType - 'partition', 'message_group',
+ *   or 'runtime_service'
  * @param {Object} options.moveStateProvider - Provider for state access
  * @param {Object} [options.storageAdmissionService] - Admission gate
  * @param {Object} [options.accountingService] - Capacity accounting
@@ -69,8 +72,10 @@ class MovePlanner {
   /**
    * Create a new MovePlanner instance.
    * @param {Object} options - Configuration options.
-   * @param {string} options.entityId - Partition ID or message group ID.
-   * @param {string} options.entityType - 'partition' or 'message_group'.
+   * @param {string} options.entityId - Entity ID (partition, message
+   *   group, or service definition ID).
+   * @param {string} options.entityType - 'partition', 'message_group',
+   *   or 'runtime_service'.
    * @param {Object} options.moveStateProvider - Provider for state access.
    * @param {Object} [options.storageAdmissionService] - Admission gate.
    * @param {Object} [options.accountingService] - Capacity accounting.
@@ -106,6 +111,11 @@ class MovePlanner {
    * Applies capacity feasibility filter before scoring when admission
    * service is available.
    *
+   * Routes entity types to the appropriate placement strategy:
+   * - MESSAGE_GROUP with ensureLocalAccess: message-group placement
+   * - PARTITION: partition placement (spread by suitability)
+   * - RUNTIME_SERVICE: partition placement (cluster-global target)
+   *
    * @param {Array<Object>} currentReplicas - Current replica state.
    * @param {Object} policy - Applicable policy.
    * @return {Promise<Object>} Target state with replica count and
@@ -128,7 +138,8 @@ class MovePlanner {
       );
     }
 
-    // For partitions: spread across nodes by policy
+    // For partitions and runtime services: spread across nodes by
+    // policy with cluster-global replica count target.
     return this.calculatePartitionPlacement(
       feasibleNodes, targetReplicaCount, policy, diagnostics,
     );

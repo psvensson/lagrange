@@ -20,6 +20,9 @@ import {
   handleListInterGroupLatencies,
 } from '../../src/admin/admin-meta-command-handlers.js';
 import {WASM_META_ACTION, TABLES} from '../../src/constants/index.js';
+import {
+  CDC_NON_PROPAGATED_TABLES,
+} from '../../src/cache/cache-constants.js';
 
 describe('admin-meta-command-handlers', () => {
   describe('handleExecuteQuery', () => {
@@ -77,6 +80,16 @@ describe('admin-meta-command-handlers', () => {
       assert.ok(result.tables.includes(TABLES.SERVICES));
       assert.ok(result.tables.includes(TABLES.PARTITIONS));
       assert.strictEqual(result.tables, CACHE_DUMP_TABLES);
+    });
+
+    it('excludes non-propagated tables that are never in the cache', () => {
+      for (const table of CDC_NON_PROPAGATED_TABLES) {
+        assert.ok(
+          !CACHE_DUMP_TABLES.includes(table),
+          `CACHE_DUMP_TABLES must not include non-propagated table` +
+          ` "${table}" — it is never hydrated into SystemTableCache`,
+        );
+      }
     });
   });
 

@@ -194,6 +194,14 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
   SERVICE_DISPATCH_OPERATION_UNSUPPORTED:
     'Unsupported admin service-dispatch operation',
   SYSTEM_CACHE_EMPTY: 'System table cache is empty',
+  LIVE_QUERY_MANAGER_UNAVAILABLE:
+    'Live query manager not available',
+  LIVE_QUERY_MISSING_SUBSCRIPTION_ID:
+    'Live query subscribe must include subscriptionId',
+  LIVE_QUERY_MISSING_SQL:
+    'Live query subscribe must include sql string',
+  LIVE_QUERY_PARSE_FAILED:
+    'Failed to parse live query SQL',
   queryTimeout: (timeoutMs) => `Query timeout after ${timeoutMs}ms`,
 });
 
@@ -206,6 +214,8 @@ const ADMIN_ERROR_HINT = Object.freeze({
   MISSING_CALLBACK_MODULE_REF: 'Include callbackModuleRef field',
   MISSING_CALLBACK_EXPORT: 'Include callbackExport field',
   MISSING_CALLBACK_RUNTIME_KIND: 'Include runtimeKind field',
+  LIVE_QUERY_MISSING_SUBSCRIPTION_ID: 'Include subscriptionId field',
+  LIVE_QUERY_MISSING_SQL: 'Include sql field with LIVE SELECT statement',
 });
 
 const ADMIN_ERROR_MATCH = Object.freeze({
@@ -239,6 +249,9 @@ const ADMIN_LOG_MSG = Object.freeze({
   TEST_RUN_LOG_STREAM_UNSUBSCRIBED: 'Admin test run log stream unsubscribed',
   TRACE_STREAM_SUBSCRIBED: 'Admin debug trace stream subscribed',
   TRACE_STREAM_UNSUBSCRIBED: 'Admin debug trace stream unsubscribed',
+  LIVE_QUERY_SUBSCRIBED: 'Live query subscription registered',
+  LIVE_QUERY_UNSUBSCRIBED: 'Live query subscription removed',
+  LIVE_QUERY_SUBSCRIBE_FAILED: 'Live query subscribe failed',
   SHUTDOWN: 'Admin WebSocket API shutdown',
   SERVER_CLOSE_ERROR: 'Error closing HTTP server',
 });

@@ -159,7 +159,7 @@ describe('NativeJsDriver', () => {
       );
       assert.equal(result.status, PREPARE_STATUS.FAILED);
       assert.ok(result.error.includes(
-        NATIVE_JS_ERROR.HANDLER_NOT_FUNCTION,
+        NATIVE_JS_ERROR.HANDLER_INVALID_TYPE,
       ));
     });
 

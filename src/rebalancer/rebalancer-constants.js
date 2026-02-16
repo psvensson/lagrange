@@ -1,4 +1,4 @@
-import {NUM, STATE} from '../constants/index.js';
+import {NUM, STATE, UNIFIED_SERVICE_TYPE} from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {
   STORAGE_PLACEMENT_CONSTRAINT,
@@ -17,6 +17,7 @@ const REBALANCER_ENTITY_TYPE = Object.freeze({
   PARTITION: SERVICE_TYPE.PARTITION,
   MESSAGE_GROUP: SERVICE_TYPE.MESSAGE_GROUP,
   WASM_SERVICE: SERVICE_TYPE.WASM_SERVICE,
+  RUNTIME_SERVICE: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
 });
 
 const REBALANCER_TRIGGER = Object.freeze({
@@ -117,6 +118,16 @@ const REBALANCER_DEFAULT_POLICY = Object.freeze({
   WASM_SERVICE: Object.freeze({
     targetReplicaCount: NUM.THREE,
     minReplicaCount: NUM.THREE,
+    maxReplicaCount: NUM.SEVEN,
+    placementConstraints: {
+      spreadAcrossNodes: true,
+      considerCpuLoad: true,
+      considerMemoryLoad: true,
+    },
+  }),
+  RUNTIME_SERVICE: Object.freeze({
+    targetReplicaCount: NUM.THREE,
+    minReplicaCount: NUM.ONE,
     maxReplicaCount: NUM.SEVEN,
     placementConstraints: {
       spreadAcrossNodes: true,

@@ -14,6 +14,8 @@ import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
 import {ADMIN_DEFAULT} from './admin/admin-constants.js';
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
 import {NodeService} from './node/node-service.js';
+import {createLiveQueryStartupWiring} from
+  './live-query/live-query-startup-wiring.js';
 import {assertCritical} from './utils/assert.js';
 import {ModuleMirror} from './wasm-service/module-mirror.js';
 import {WasmExecutor} from './wasm-service/wasm-executor.js';
@@ -136,6 +138,40 @@ function createServiceDiagnosticsProvider(owner) {
       lifecycle: lifecycleDiagnostics,
       reconciler: reconcilerDiagnostics,
     };
+  };
+}
+
+/**
+ * Create admin API and startup-owned live query wiring.
+ * @param {Object} options
+ * @param {string} options.nodeId
+ * @param {Object} options.systemTableCache
+ * @param {Object|null} options.sqlQueryEngine
+ * @param {Function|null} options.serviceDiagnosticsProvider
+ * @return {{adminAPI: AdminWebSocketAPI, liveQueryWiring: Object}}
+ */
+function createAdminAPIWithLiveQuery(options) {
+  const liveQueryWiring = createLiveQueryStartupWiring({
+    nodeId: options.nodeId,
+    systemTableCache: options.systemTableCache,
+    sqlQueryEngine: options.sqlQueryEngine || null,
+  });
+  const liveQueryManager = assertCritical(
+    liveQueryWiring.liveQueryManager,
+    ENTRYPOINT_ERROR_MSG.LIVE_QUERY_MANAGER_REQUIRED,
+  );
+
+  const adminAPI = new AdminWebSocketAPI({
+    nodeId: options.nodeId,
+    systemTableCache: options.systemTableCache,
+    sqlQueryEngine: options.sqlQueryEngine || null,
+    serviceDiagnosticsProvider: options.serviceDiagnosticsProvider || null,
+    liveQueryManager,
+  });
+
+  return {
+    adminAPI,
+    liveQueryWiring,
   };
 }
 
@@ -356,13 +392,15 @@ async function main() {
     }
 
     // Start Admin WebSocket API for this node
-    const adminAPI = new AdminWebSocketAPI({
+    const joinAdminStartup = createAdminAPIWithLiveQuery({
       nodeId: config.get(CONFIG_KEY.NODE_ID),
       systemTableCache,
       sqlQueryEngine,
       serviceDiagnosticsProvider:
         createServiceDiagnosticsProvider(nodeJoiningService),
     });
+    const adminAPI = joinAdminStartup.adminAPI;
+    const liveQueryWiring = joinAdminStartup.liveQueryWiring;
 
     const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
     await adminAPI.initialize(adminPort);
@@ -393,6 +431,7 @@ async function main() {
         await shutdownLogsTablePersistence(joinLogsTableService, mainLogger);
         await nodeJoiningService.cleanup();
         await adminAPI.shutdown();
+        liveQueryWiring.shutdown();
         process.exit(0);
       } catch (error) {
         mainLogger.error('Failed to shutdown joining node cleanly', {
@@ -495,13 +534,15 @@ async function main() {
     bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
 
     // Start Admin WebSocket API
-    const adminAPI = new AdminWebSocketAPI({
+    const seedAdminStartup = createAdminAPIWithLiveQuery({
       nodeId: config.get(CONFIG_KEY.NODE_ID),
       systemTableCache,
       sqlQueryEngine,
       serviceDiagnosticsProvider:
         createServiceDiagnosticsProvider(bootstrapService),
     });
+    const adminAPI = seedAdminStartup.adminAPI;
+    const liveQueryWiring = seedAdminStartup.liveQueryWiring;
 
     const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
     await adminAPI.initialize(adminPort);
@@ -534,6 +575,7 @@ async function main() {
         await bootstrapService.shutdown();
         await bootstrapAPI.shutdown();
         await adminAPI.shutdown();
+        liveQueryWiring.shutdown();
         process.exit(0);
       } catch (error) {
         mainLogger.error('Failed to shutdown seed node cleanly', {

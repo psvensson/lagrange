@@ -49,6 +49,9 @@ const SystemTableName = {
   PACKAGE_REGISTRY_OVERRIDES: TABLES.PACKAGE_REGISTRY_OVERRIDES,
   MODULE_DEPENDENCY_LOCKS: TABLES.MODULE_DEPENDENCY_LOCKS,
   WASM_OPERATIONS: TABLES.WASM_OPERATIONS,
+  SQL_TRANSACTIONS: TABLES.SQL_TRANSACTIONS,
+  SQL_TRANSACTION_PARTICIPANTS: TABLES.SQL_TRANSACTION_PARTICIPANTS,
+  SQL_WRITE_OPERATIONS: TABLES.SQL_WRITE_OPERATIONS,
   DEBUG_SESSIONS: TABLES.DEBUG_SESSIONS,
   DEBUG_BREAKPOINTS: TABLES.DEBUG_BREAKPOINTS,
   DEBUG_SNAPSHOTS: TABLES.DEBUG_SNAPSHOTS,
@@ -803,6 +806,90 @@ const WASM_OPERATIONS_SCHEMA = {
 };
 
 /**
+ * SQL transactions system table schema.
+ * Stores distributed transaction coordinator state for restart recovery.
+ */
+const SQL_TRANSACTIONS_SCHEMA = {
+  tableName: SystemTableName.SQL_TRANSACTIONS,
+  columns: [
+    {name: 'transaction_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'session_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'status', type: ColumnType.TEXT, notNull: true},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {name: 'idx_sql_transactions_session', columns: ['session_id']},
+    {name: 'idx_sql_transactions_status', columns: ['status']},
+  ],
+};
+
+/**
+ * SQL transaction participants system table schema.
+ * Stores participant partition state for distributed transactions.
+ */
+const SQL_TRANSACTION_PARTICIPANTS_SCHEMA = {
+  tableName: SystemTableName.SQL_TRANSACTION_PARTICIPANTS,
+  columns: [
+    {name: 'participant_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'transaction_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'partition_id', type: ColumnType.TEXT, notNull: true},
+    {name: 'status', type: ColumnType.TEXT, notNull: true},
+    {name: 'last_error', type: ColumnType.TEXT},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {
+      name: 'idx_sql_tx_participants_tx_partition',
+      columns: ['transaction_id', 'partition_id'],
+    },
+    {
+      name: 'idx_sql_tx_participants_partition',
+      columns: ['partition_id'],
+    },
+    {
+      name: 'idx_sql_tx_participants_status',
+      columns: ['status'],
+    },
+  ],
+};
+
+/**
+ * SQL write operations system table schema.
+ * Stores idempotent distributed write operation state.
+ */
+const SQL_WRITE_OPERATIONS_SCHEMA = {
+  tableName: SystemTableName.SQL_WRITE_OPERATIONS,
+  columns: [
+    {name: 'operation_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'transaction_id', type: ColumnType.TEXT},
+    {name: 'statement_type', type: ColumnType.TEXT, notNull: true},
+    {name: 'status', type: ColumnType.TEXT, notNull: true},
+    {name: 'idempotency_key', type: ColumnType.TEXT, notNull: true},
+    {name: 'payload_hash', type: ColumnType.TEXT, notNull: true},
+    {
+      name: 'partition_ids',
+      type: ColumnType.TEXT,
+      notNull: true,
+      defaultValue: '\'[]\'',
+    },
+    {name: 'retry_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 0},
+    {name: 'last_error', type: ColumnType.TEXT},
+    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+  ],
+  indices: [
+    {name: 'idx_sql_write_ops_tx', columns: ['transaction_id']},
+    {name: 'idx_sql_write_ops_status', columns: ['status']},
+    {
+      name: 'idx_sql_write_ops_idempotency',
+      columns: ['idempotency_key'],
+    },
+  ],
+};
+
+/**
  * Debug sessions system table schema.
  * Stores tenant-scoped distributed debug session metadata.
  */
@@ -1006,6 +1093,9 @@ const SYSTEM_TABLE_SCHEMAS = [
   PACKAGE_REGISTRY_OVERRIDES_SCHEMA,
   MODULE_DEPENDENCY_LOCKS_SCHEMA,
   WASM_OPERATIONS_SCHEMA,
+  SQL_TRANSACTIONS_SCHEMA,
+  SQL_TRANSACTION_PARTICIPANTS_SCHEMA,
+  SQL_WRITE_OPERATIONS_SCHEMA,
   DEBUG_SESSIONS_SCHEMA,
   DEBUG_BREAKPOINTS_SCHEMA,
   DEBUG_SNAPSHOTS_SCHEMA,
@@ -1041,6 +1131,10 @@ const INITIAL_PARTITION_IDS = {
   [SystemTableName.MODULE_DEPENDENCY_LOCKS]:
     'module_dependency_locks-p1',
   [SystemTableName.WASM_OPERATIONS]: 'wasm_operations-p1',
+  [SystemTableName.SQL_TRANSACTIONS]: 'sql_transactions-p1',
+  [SystemTableName.SQL_TRANSACTION_PARTICIPANTS]:
+    'sql_transaction_participants-p1',
+  [SystemTableName.SQL_WRITE_OPERATIONS]: 'sql_write_operations-p1',
   [SystemTableName.DEBUG_SESSIONS]: 'debug_sessions-p1',
   [SystemTableName.DEBUG_BREAKPOINTS]: 'debug_breakpoints-p1',
   [SystemTableName.DEBUG_SNAPSHOTS]: 'debug_snapshots-p1',
@@ -1108,6 +1202,21 @@ const INITIAL_REPLICA_IDS = {
     'wasm_operations-p1-r1',
     'wasm_operations-p1-r2',
     'wasm_operations-p1-r3',
+  ],
+  [SystemTableName.SQL_TRANSACTIONS]: [
+    'sql_transactions-p1-r1',
+    'sql_transactions-p1-r2',
+    'sql_transactions-p1-r3',
+  ],
+  [SystemTableName.SQL_TRANSACTION_PARTICIPANTS]: [
+    'sql_transaction_participants-p1-r1',
+    'sql_transaction_participants-p1-r2',
+    'sql_transaction_participants-p1-r3',
+  ],
+  [SystemTableName.SQL_WRITE_OPERATIONS]: [
+    'sql_write_operations-p1-r1',
+    'sql_write_operations-p1-r2',
+    'sql_write_operations-p1-r3',
   ],
   [SystemTableName.DEBUG_SESSIONS]: [
     'debug_sessions-p1-r1',
@@ -1254,6 +1363,9 @@ export {
   PACKAGE_REGISTRY_OVERRIDES_SCHEMA,
   MODULE_DEPENDENCY_LOCKS_SCHEMA,
   WASM_OPERATIONS_SCHEMA,
+  SQL_TRANSACTIONS_SCHEMA,
+  SQL_TRANSACTION_PARTICIPANTS_SCHEMA,
+  SQL_WRITE_OPERATIONS_SCHEMA,
   DEBUG_SESSIONS_SCHEMA,
   DEBUG_BREAKPOINTS_SCHEMA,
   DEBUG_SNAPSHOTS_SCHEMA,

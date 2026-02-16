@@ -69,6 +69,8 @@ const LIFECYCLE_EVENT = Object.freeze({
   ENDPOINT_INTENT_RECEIVED: 'lifecycle:endpoint:intent_received',
   ENDPOINT_REGISTERED: 'lifecycle:endpoint:registered',
   ENDPOINT_REGISTRATION_FAILED: 'lifecycle:endpoint:registration_failed',
+  ENDPOINT_REMOVED: 'lifecycle:endpoint:removed',
+  ENDPOINT_REMOVAL_FAILED: 'lifecycle:endpoint:removal_failed',
 });
 
 // --- Operation journal event names ---
@@ -94,11 +96,29 @@ const MIN_PORT = 1;
 // --- Maximum valid port number ---
 const MAX_PORT = 65535;
 
+// --- State projection event names (services table) ---
+
+const STATE_PROJECTION_EVENT = Object.freeze({
+  STATE_PROJECTED: 'lifecycle:state:projected',
+  STATE_PROJECTION_FAILED: 'lifecycle:state:projection_failed',
+});
+
+// --- Runtime service status values for services table ---
+
+const RUNTIME_REPLICA_STATUS = Object.freeze({
+  CREATED: 'created',
+  ACTIVE: 'active',
+  STOPPED: 'stopped',
+  FAILED: 'failed',
+});
+
 export {
   LIFECYCLE_OPERATION,
   LIFECYCLE_EVENT,
   OPERATION_JOURNAL_EVENT,
   ENDPOINT_INTENT_FIELD,
+  STATE_PROJECTION_EVENT,
+  RUNTIME_REPLICA_STATUS,
   MIN_PORT,
   MAX_PORT,
 };

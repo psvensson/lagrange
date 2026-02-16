@@ -29,7 +29,8 @@ export {SUBSYSTEM} from './subsystems.js';
 export {TABLES} from './tables.js';
 export {TIME_MS} from './time.js';
 export {TRANSPORT_TYPE, ENDPOINT_STATUS} from './transport-types.js';
-export {RUNTIME_KIND, ALLOWED_RUNTIME_KINDS, RUNTIME_FIELD}
+export {RUNTIME_KIND, ALLOWED_RUNTIME_KINDS, RUNTIME_FIELD,
+  STATE_PROJECTION_EVENT, RUNTIME_REPLICA_STATUS}
   from './runtime.js';
 export {TYPEOF} from './types.js';
 export {
@@ -43,3 +44,4 @@ export {
   META_SERVICE_RUNTIME_REF,
 } from './wasm-meta.js';
 export {WORKFLOW_STEP} from './workflow.js';
+export {METRICS_LOG_PREFIX, METRICS_LOG_TAG} from './metrics-constants.js';

@@ -50,6 +50,37 @@ function createMockSqlQueryEngine() {
   };
 }
 
+/**
+ * Create a deterministic cache probe for CDC cache-wait behavior tests.
+ * The first onCacheChange registration synchronously flips record presence
+ * and emits a matching table change so waiters resolve immediately.
+ * @return {{cache: Object, state: Object}}
+ */
+function createCacheWaitProbe() {
+  const state = {
+    present: false,
+    onCacheChangeCalls: 0,
+    offCacheChangeCalls: 0,
+  };
+
+  const cache = {
+    has() {
+      return state.present;
+    },
+    onCacheChange(listener) {
+      state.onCacheChangeCalls++;
+      state.present = true;
+      listener(SystemTableName.NODES);
+      listener(SystemTableName.LOGS);
+    },
+    offCacheChange() {
+      state.offCacheChangeCalls++;
+    },
+  };
+
+  return {cache, state};
+}
+
 test('CDCIntegrationService - constructor', async (t) => {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
@@ -141,6 +172,57 @@ test('CDCIntegrationService - insertSystemTableRow generates id', async (t) => {
 
   t.equal(result.success, true, 'should succeed');
   t.ok(result.data.node_id, 'should generate node_id');
+  t.end();
+});
+
+test('CDCIntegrationService - insertSystemTableRow skips cache wait for logs', async (t) => {
+  const mockSqlEngine = createMockSqlQueryEngine();
+  const {cache, state} = createCacheWaitProbe();
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockSqlEngine,
+    systemTableCache: cache,
+  });
+  service.initialize();
+
+  const data = {
+    log_id: 'log-1',
+    timestamp: Date.now(),
+    level: 'INFO',
+    node_id: 'node-1',
+    message: 'log message',
+    created_at: Date.now(),
+  };
+
+  await service.insertSystemTableRow(SystemTableName.LOGS, data);
+
+  t.equal(
+    state.onCacheChangeCalls,
+    0,
+    'should not subscribe to cache waits for non-propagated logs table',
+  );
+  t.end();
+});
+
+test('CDCIntegrationService - insertSystemTableRow waits for propagated tables', async (t) => {
+  const mockSqlEngine = createMockSqlQueryEngine();
+  const {cache, state} = createCacheWaitProbe();
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockSqlEngine,
+    systemTableCache: cache,
+  });
+  service.initialize();
+
+  const data = {
+    node_id: 'node-1',
+    node_address: 'localhost:8080',
+  };
+
+  await service.insertSystemTableRow(SystemTableName.NODES, data);
+
+  t.equal(state.onCacheChangeCalls, 1, 'should subscribe to cache waits for nodes table');
+  t.ok(state.offCacheChangeCalls >= 1, 'should clean up cache wait subscription');
   t.end();
 });
 

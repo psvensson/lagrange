@@ -2,7 +2,7 @@
  * NodesView - Displays cluster nodes with health metrics
  *
  * Columns: node_id, address, status, CPU%, memory%, disk%, services_count
- * Supports drill-down to services and warning highlighting.
+ * Supports drill-down to replicas and warning highlighting.
  *
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6
  */
@@ -47,7 +47,7 @@ export class NodesView extends BaseView {
       {key: 'cpu_usage_percent', label: 'CPU%', width: 8},
       {key: 'memory_usage_percent', label: 'Mem%', width: 8},
       {key: 'disk_usage_percent', label: 'Disk%', width: 8},
-      {key: 'services_count', label: 'Services', width: 10},
+      {key: 'services_count', label: 'Replicas', width: 10},
     ];
   }
 
@@ -203,11 +203,11 @@ export class NodesView extends BaseView {
         ],
       },
       {
-        title: 'Services',
+        title: 'Replicas',
         fields: [
-          {label: 'Total Services', value: String(node.services_count ?? 0)},
-          {label: 'Partition Services', value: String(node.partition_services_count ?? 'N/A')},
-          {label: 'Message Group Services', value: String(node.mg_services_count ?? 'N/A')},
+          {label: 'Total Replicas', value: String(node.services_count ?? 0)},
+          {label: 'Partition Replicas', value: String(node.partition_services_count ?? 'N/A')},
+          {label: 'Message Group Replicas', value: String(node.mg_services_count ?? 'N/A')},
         ],
       },
     ];

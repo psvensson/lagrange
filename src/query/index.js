@@ -9,6 +9,18 @@ export {SQLQueryEngine} from './sql-query-engine.js';
 export {PartitionResolver} from './partition-resolver.js';
 export {QueryExecutor} from './query-executor.js';
 export {TableCreationService} from './table-creation-service.js';
+export {DistributedQueryPlanner} from './distributed-query-planner.js';
+export {
+  DISTRIBUTED_EXECUTION_POLICY,
+  DISTRIBUTED_JOIN_STRATEGY,
+  DISTRIBUTED_PLAN_FIELD,
+  DISTRIBUTED_PLANNER_DEFAULT,
+  DISTRIBUTED_PREDICATE_SHAPE,
+  DISTRIBUTED_QUERY_ERROR_CODE,
+  DISTRIBUTED_QUERY_ERROR_MSG,
+  DISTRIBUTED_ROLE_HINT,
+  DISTRIBUTED_STATEMENT_TYPE,
+} from './distributed-query-plan-constants.js';
 export {
   ParallelQueryCoordinator,
   PartitionQueryMetrics,
@@ -16,6 +28,12 @@ export {
 } from './parallel-query-coordinator.js';
 export {StragglerDetector, SpeculativeExecutor} from './straggler-detector.js';
 export {StreamingAggregator} from './streaming-aggregator.js';
+export {DistributedMergeEngine} from './distributed-merge-engine.js';
+export {DistributedWriteCoordinator} from './distributed-write-coordinator.js';
+export {
+  DistributedTransactionCoordinator,
+  TRANSACTION_STATUS,
+} from './distributed-transaction-coordinator.js';
 export {createSqlRequest, isSqlRequest} from './sql-request.js';
 export {InternalSqlAdapter} from './internal-sql-adapter.js';
 export {

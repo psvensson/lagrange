@@ -243,7 +243,9 @@ export class ConnectionManager {
         break;
       case ADMIN_MESSAGE_TYPE.ERROR:
         if (this.onError) {
-          this.onError(new Error(message.message || 'Unknown error'));
+          this.onError(
+            new Error(message.error || message.message || 'Unknown error'),
+          );
         }
         break;
       default:

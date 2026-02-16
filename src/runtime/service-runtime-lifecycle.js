@@ -43,6 +43,8 @@ import {
   LIFECYCLE_EVENT,
   OPERATION_JOURNAL_EVENT,
   ENDPOINT_INTENT_FIELD,
+  STATE_PROJECTION_EVENT,
+  RUNTIME_REPLICA_STATUS,
   MIN_PORT,
   MAX_PORT,
 } from '../constants/runtime.js';
@@ -54,6 +56,9 @@ import {
   IdempotencyCheckError,
 } from './runtime-driver-errors.js';
 import {TYPEOF} from '../constants/types.js';
+import {
+  UNIFIED_SERVICE_TYPE,
+} from '../constants/unified-service-lifecycle.js';
 import {
   createOperation,
   transitionOperation,
@@ -165,6 +170,21 @@ class ServiceRuntimeLifecycle extends EventEmitter {
     this._endpointWriter = null;
 
     /**
+     * Optional endpoint remover callback for the SQL/CDC write path.
+     * When set, endpoint rows are removed or marked unhealthy during
+     * stop and failure transitions. This is the single endpoint
+     * cleanup coordinator.
+     *
+     * Signature: (serviceId, nodeId) => Promise
+     *
+     * Requirements: 6.4
+     *
+     * @type {Function|null}
+     * @private
+     */
+    this._endpointRemover = null;
+
+    /**
      * Optional operation journal writer callback for SQL/CDC path.
      * When set, operation create/transition SQL is written through
      * this function. The lifecycle owner coordinates all operation
@@ -194,6 +214,29 @@ class ServiceRuntimeLifecycle extends EventEmitter {
      * @private
      */
     this._idempotencyReader = null;
+
+    /**
+     * Optional state projection writer for the SQL/CDC write path.
+     * When set, lifecycle transitions project replica state into
+     * the `services` table so runtime-service replicas are visible
+     * in admin replica views.
+     *
+     * Signature:
+     *   (serviceId, stateRow) => Promise
+     *
+     * `stateRow` is an object with services-table column values:
+     *   { service_type, node_id, status, address, created_at,
+     *     updated_at, ... }
+     *
+     * On first projection (prepare/create), the writer inserts.
+     * On subsequent transitions, the writer updates.
+     *
+     * Requirements: 5.1, 5.2, 5.4, 13.1
+     *
+     * @type {Function|null}
+     * @private
+     */
+    this._stateProjectionWriter = null;
   }
 
   /**
@@ -216,6 +259,28 @@ class ServiceRuntimeLifecycle extends EventEmitter {
       );
     }
     this._endpointWriter = writer;
+  }
+
+  /**
+   * Set the endpoint remover callback for the SQL/CDC write path.
+   *
+   * This is the single cleanup coordinator for endpoint rows
+   * during stop and failure transitions. No driver or external
+   * component may remove endpoint records directly.
+   *
+   * Requirements: 6.4
+   *
+   * @param {Function} remover - Async callback
+   *   (serviceId, nodeId) => Promise.
+   * @throws {TypeError} If remover is not a function.
+   */
+  setEndpointRemover(remover) {
+    if (typeof remover !== TYPEOF.FUNCTION) {
+      throw new TypeError(
+        'endpoint remover must be a function',
+      );
+    }
+    this._endpointRemover = remover;
   }
 
   /**
@@ -265,6 +330,112 @@ class ServiceRuntimeLifecycle extends EventEmitter {
       );
     }
     this._idempotencyReader = reader;
+  }
+
+  /**
+   * Set the state projection writer for the SQL/CDC write path.
+   *
+   * This is the single coordinator for projecting runtime replica
+   * lifecycle state into the `services` table. No driver or
+   * external component may write services rows directly.
+   *
+   * Requirements: 5.1, 5.2, 5.4, 13.1
+   *
+   * @param {Function} writer - Async callback
+   *   (serviceId, stateRow) => Promise.
+   * @throws {TypeError} If writer is not a function.
+   */
+  setStateProjectionWriter(writer) {
+    if (typeof writer !== TYPEOF.FUNCTION) {
+      throw new TypeError(
+        'state projection writer must be a function',
+      );
+    }
+    this._stateProjectionWriter = writer;
+  }
+
+  /**
+   * Project runtime replica state into the `services` table.
+   *
+   * Builds a row object with the required services-table columns
+   * and delegates the write to the configured state projection
+   * writer. Failures are emitted as events but do not block the
+   * lifecycle operation — the projection is best-effort so that
+   * a transient CDC/SQL failure does not prevent replica startup.
+   *
+   * Requirements: 5.1, 5.2, 5.4, 13.1
+   *
+   * @param {string} serviceId - Replica service identifier.
+   * @param {Object} definition - Service definition or context.
+   * @param {string} status - Target status value for the row.
+   * @param {Object} [extras] - Additional column values.
+   * @return {Promise<void>}
+   * @private
+   */
+  async _projectReplicaState(
+    serviceId, definition, status, extras,
+  ) {
+    if (!this._stateProjectionWriter) {
+      return;
+    }
+    const now = Date.now();
+    const nodeId = definition?.nodeId ??
+      definition?.node_id ?? null;
+    const serviceType = definition?.serviceType ??
+      definition?.service_type ??
+      UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE;
+    const address = definition?.address ?? null;
+    const stateRow = {
+      service_type: serviceType,
+      node_id: nodeId,
+      status,
+      address,
+      updated_at: now,
+      ...extras,
+    };
+    try {
+      await this._stateProjectionWriter(serviceId, stateRow);
+      this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTED, {
+        serviceId, status, nodeId,
+      });
+    } catch (err) {
+      this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTION_FAILED, {
+        serviceId, status, nodeId, error: err,
+      });
+    }
+  }
+
+  /**
+   * Remove or clean up endpoint rows during stop/failure.
+   *
+   * Delegates to the configured endpoint remover callback.
+   * Failures are emitted as events but do not block the
+   * lifecycle operation — cleanup is best-effort so that a
+   * transient SQL/CDC failure does not prevent replica shutdown.
+   *
+   * Requirements: 6.4
+   *
+   * @param {string} serviceId - Replica service identifier.
+   * @param {Object} definition - Service definition or context.
+   * @return {Promise<void>}
+   * @private
+   */
+  async _removeEndpoint(serviceId, definition) {
+    if (!this._endpointRemover) {
+      return;
+    }
+    const nodeId = definition?.nodeId ??
+      definition?.node_id ?? null;
+    try {
+      await this._endpointRemover(serviceId, nodeId);
+      this.emit(LIFECYCLE_EVENT.ENDPOINT_REMOVED, {
+        serviceId, nodeId,
+      });
+    } catch (err) {
+      this.emit(LIFECYCLE_EVENT.ENDPOINT_REMOVAL_FAILED, {
+        serviceId, nodeId, error: err,
+      });
+    }
   }
 
   /**
@@ -547,6 +718,11 @@ class ServiceRuntimeLifecycle extends EventEmitter {
       const result = await driver.prepare(definition, context);
       const durationMs = Date.now() - start;
 
+      await this._projectReplicaState(
+        serviceId, definition, RUNTIME_REPLICA_STATUS.CREATED,
+        {created_at: start},
+      );
+
       await this._journalTransition(
         operation, serviceId, runtimeKind, op,
         WASM_OPERATION_STATE.IN_PROGRESS,
@@ -569,6 +745,10 @@ class ServiceRuntimeLifecycle extends EventEmitter {
           {message: err.message},
         ).catch(() => {});
       }
+      await this._projectReplicaState(
+        serviceId, definition, RUNTIME_REPLICA_STATUS.FAILED,
+        {error_message: err.message},
+      );
       this.emit(LIFECYCLE_EVENT.PREPARE_FAILURE, {
         runtimeKind, serviceId, durationMs, error: err,
       });
@@ -707,6 +887,10 @@ class ServiceRuntimeLifecycle extends EventEmitter {
         result,
       );
 
+      await this._projectReplicaState(
+        serviceId, definition, RUNTIME_REPLICA_STATUS.ACTIVE,
+      );
+
       this.emit(LIFECYCLE_EVENT.START_SUCCESS, {
         runtimeKind, serviceId, durationMs, result,
       });
@@ -722,6 +906,11 @@ class ServiceRuntimeLifecycle extends EventEmitter {
           {message: err.message},
         ).catch(() => {});
       }
+      await this._removeEndpoint(serviceId, definition);
+      await this._projectReplicaState(
+        serviceId, definition, RUNTIME_REPLICA_STATUS.FAILED,
+        {error_message: err.message},
+      );
       this.emit(LIFECYCLE_EVENT.START_FAILURE, {
         runtimeKind, serviceId, durationMs, error: err,
       });
@@ -804,6 +993,12 @@ class ServiceRuntimeLifecycle extends EventEmitter {
         WASM_OPERATION_STATE.COMPLETED,
       );
 
+      await this._removeEndpoint(serviceId, definition);
+
+      await this._projectReplicaState(
+        serviceId, definition, RUNTIME_REPLICA_STATUS.STOPPED,
+      );
+
       this.emit(LIFECYCLE_EVENT.STOP_SUCCESS, {
         runtimeKind, serviceId, durationMs,
       });
@@ -818,6 +1013,11 @@ class ServiceRuntimeLifecycle extends EventEmitter {
           {message: err.message},
         ).catch(() => {});
       }
+      await this._removeEndpoint(serviceId, definition);
+      await this._projectReplicaState(
+        serviceId, definition, RUNTIME_REPLICA_STATUS.FAILED,
+        {error_message: err.message},
+      );
       this.emit(LIFECYCLE_EVENT.STOP_FAILURE, {
         runtimeKind, serviceId, durationMs, error: err,
       });

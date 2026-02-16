@@ -1363,3 +1363,169 @@ test('AdminWebSocketAPI - debug trace stream route wiring and filtering', async 
 
   await api.shutdown();
 });
+
+// ============================================================================
+// Live Query Wiring Tests
+// ============================================================================
+
+test('live query subscribe routes to liveQueryManager', async (t) => {
+  const registrations = [];
+  const mockLiveQueryManager = {
+    initialized: true,
+    isInitialized: () => true,
+    registerLiveQuery: async (parsedQuery, client) => {
+      registrations.push({parsedQuery, clientId: client.id});
+      return {
+        queryId: 'lq-test-1',
+        expiresAt: Date.now() + 30000,
+        renewBefore: Date.now() + 21000,
+        partitions: ['partition-1'],
+      };
+    },
+    sendSnapshotToClient: async () => {},
+    unregisterLiveQuery: () => {},
+    handleClientDisconnection: () => {},
+  };
+
+  const api = new AdminWebSocketAPI({
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+    nodeId: 'test-node',
+    liveQueryManager: mockLiveQueryManager,
+  });
+  await api.initialize(0, {listen: false});
+
+  const {ws} = await connectAndReceive(api);
+
+  // Send live query subscribe message
+  ws.send(JSON.stringify({
+    type: MessageType.LIVE_QUERY_SUBSCRIBE,
+    subscriptionId: 'sub-1',
+    sql: 'LIVE SELECT * FROM logs',
+  }));
+
+  // Wait for the registration to be processed
+  const response = await waitForMessage(ws);
+  t.equal(response.type, MessageType.LIVE_QUERY_EVENT,
+    'should respond with live_query_event');
+  t.equal(response.subscriptionId, 'sub-1',
+    'should include subscriptionId');
+  t.equal(registrations.length, 1,
+    'should register with live query manager');
+  t.ok(registrations[0].parsedQuery,
+    'should pass parsed query to manager');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('live query subscribe rejects missing subscriptionId', async (t) => {
+  const api = new AdminWebSocketAPI({
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+    nodeId: 'test-node',
+    liveQueryManager: {
+      initialized: true,
+      isInitialized: () => true,
+      handleClientDisconnection: () => {},
+    },
+  });
+  await api.initialize(0, {listen: false});
+
+  const {ws} = await connectAndReceive(api);
+
+  ws.send(JSON.stringify({
+    type: MessageType.LIVE_QUERY_SUBSCRIBE,
+    sql: 'LIVE SELECT * FROM logs',
+  }));
+
+  const response = await waitForMessage(ws);
+  t.equal(response.type, MessageType.ERROR,
+    'should respond with error');
+  t.ok(response.error, 'should include error message');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('live query unsubscribe routes to liveQueryManager', async (t) => {
+  const unregistrations = [];
+  const mockLiveQueryManager = {
+    initialized: true,
+    isInitialized: () => true,
+    registerLiveQuery: async () => ({
+      queryId: 'lq-test-2',
+      expiresAt: Date.now() + 30000,
+      renewBefore: Date.now() + 21000,
+      partitions: [],
+    }),
+    sendSnapshotToClient: async () => {},
+    unregisterLiveQuery: (queryId, clientId) => {
+      unregistrations.push({queryId, clientId});
+    },
+    handleClientDisconnection: () => {},
+  };
+
+  const api = new AdminWebSocketAPI({
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+    nodeId: 'test-node',
+    liveQueryManager: mockLiveQueryManager,
+  });
+  await api.initialize(0, {listen: false});
+
+  const {ws} = await connectAndReceive(api);
+
+  // Subscribe first
+  ws.send(JSON.stringify({
+    type: MessageType.LIVE_QUERY_SUBSCRIBE,
+    subscriptionId: 'sub-2',
+    sql: 'LIVE SELECT * FROM logs',
+  }));
+  await waitForMessage(ws);
+
+  // Now unsubscribe
+  ws.send(JSON.stringify({
+    type: MessageType.LIVE_QUERY_UNSUBSCRIBE,
+    subscriptionId: 'sub-2',
+  }));
+
+  // Give time for async processing
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  t.equal(unregistrations.length, 1,
+    'should unregister from live query manager');
+
+  ws.close();
+  await api.shutdown();
+});
+
+test('live query client disconnect cleans up subscriptions', async (t) => {
+  const disconnections = [];
+  const mockLiveQueryManager = {
+    initialized: true,
+    isInitialized: () => true,
+    handleClientDisconnection: (clientId) => {
+      disconnections.push(clientId);
+    },
+  };
+
+  const api = new AdminWebSocketAPI({
+    systemTableCache: createPopulatedCache(),
+    sqlQueryEngine: createMockQueryEngine(),
+    nodeId: 'test-node',
+    liveQueryManager: mockLiveQueryManager,
+  });
+  await api.initialize(0, {listen: false});
+
+  const {ws} = await connectAndReceive(api);
+  ws.close();
+
+  // Give time for disconnect handler
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  t.equal(disconnections.length, 1,
+    'should notify live query manager of disconnection');
+
+  await api.shutdown();
+});

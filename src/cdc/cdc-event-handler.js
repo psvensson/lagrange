@@ -11,6 +11,7 @@
 
 import {COLUMN, NUM, TYPEOF} from '../constants/index.js';
 import {ADDRESS, PROTOCOL, CDC_OPERATION} from '../constants/index.js';
+import {METRICS_LOG_TAG} from '../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
@@ -97,6 +98,8 @@ class CDCEventHandler {
    *   Result object indicating if epoch was applied.
    */
   handleEpochChangeCDC(cdcEvent) {
+    const handlerStartMs = Date.now();
+
     // Validate cdcEvent
     if (!cdcEvent || typeof cdcEvent !== TYPEOF.OBJECT) {
       return {
@@ -132,7 +135,9 @@ class CDCEventHandler {
       const configValue = cdcEvent.data?.[COLUMN.CONFIG_VALUE];
       if (typeof configValue === TYPEOF.STRING) {
         epochData = JSON.parse(configValue);
-      } else if (typeof configValue === TYPEOF.OBJECT && configValue !== null) {
+      } else if (
+        typeof configValue === TYPEOF.OBJECT && configValue !== null
+      ) {
         epochData = configValue;
       } else {
         throw new Error(CDC_ERROR_MSG.EPOCH_DATA_INVALID);
@@ -183,23 +188,40 @@ class CDCEventHandler {
         proposedBy: epoch.proposedBy,
         source: CDC_SOURCE.CDC,
       });
-
-      return {
-        applied: true,
-        epoch: epoch.epoch,
-      };
     } else {
       this.logger.debug(CDC_LOG_MSG.EPOCH_SKIPPED, {
         nodeId: this.nodeId,
         incomingEpoch: epoch.epoch,
       });
+    }
 
+    try {
+      const handlerDurationMs = Date.now() - handlerStartMs;
+      const metricsData = {
+        tableName: cdcEvent.tableName,
+        operation: cdcEvent.operation,
+        handlerDurationMs,
+      };
+      if (cdcEvent.timestamp != null) {
+        metricsData.eventAgeMs = Date.now() - cdcEvent.timestamp;
+      }
+      this.logger.info(METRICS_LOG_TAG.CDC_PROPAGATION, metricsData);
+    } catch (_metricsErr) {
+      // Metrics logging must not propagate to callers
+    }
+
+    if (applied) {
       return {
-        applied: false,
-        error: CDC_ERROR_MSG.EPOCH_NOT_APPLIED,
+        applied: true,
         epoch: epoch.epoch,
       };
     }
+
+    return {
+      applied: false,
+      error: CDC_ERROR_MSG.EPOCH_NOT_APPLIED,
+      epoch: epoch.epoch,
+    };
   }
 
   /**
@@ -218,6 +240,8 @@ class CDCEventHandler {
    *   Result object indicating if the event was processed.
    */
   handleNodeStateCDC(cdcEvent) {
+    const handlerStartMs = Date.now();
+
     // Validate cdcEvent
     if (!cdcEvent || typeof cdcEvent !== TYPEOF.OBJECT) {
       return {
@@ -256,12 +280,16 @@ class CDCEventHandler {
     // Get the previous state for this node.
     const oldState = this._nodeStates.get(nodeId) || null;
 
-    // Ignore stale/out-of-order node state events when a monotonic timestamp
-    // is present in CDC payload.
+    // Ignore stale/out-of-order node state events when a monotonic
+    // timestamp is present in CDC payload.
     const eventTimestamp = this.getNodeStateEventTimestamp(cdcEvent);
     if (Number.isFinite(eventTimestamp)) {
-      const lastTimestamp = this._nodeStateEventTimestamps.get(nodeId);
-      if (Number.isFinite(lastTimestamp) && eventTimestamp < lastTimestamp) {
+      const lastTimestamp =
+          this._nodeStateEventTimestamps.get(nodeId);
+      if (
+        Number.isFinite(lastTimestamp) &&
+          eventTimestamp < lastTimestamp
+      ) {
         this.logger.debug(CDC_LOG_MSG.NODE_STATE_UNCHANGED, {
           nodeId,
           state: oldState,
@@ -342,6 +370,23 @@ class CDCEventHandler {
       this.logger.debug(CDC_LOG_MSG.REBALANCER_NOT_SET, {
         nodeId,
       });
+    }
+
+    try {
+      const handlerDurationMs = Date.now() - handlerStartMs;
+      const metricsData = {
+        tableName: cdcEvent.tableName,
+        operation: cdcEvent.operation,
+        handlerDurationMs,
+      };
+      if (cdcEvent.timestamp != null) {
+        metricsData.eventAgeMs = Date.now() - cdcEvent.timestamp;
+      }
+      this.logger.info(
+        METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
+      );
+    } catch (_metricsErr) {
+      // Metrics logging must not propagate to callers
     }
 
     return {

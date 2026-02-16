@@ -20,20 +20,25 @@
  *               20.6, 20.7, 20.10, 21.1, 21.2, 21.3
  */
 
+import {createHash} from 'node:crypto';
 import {SQLParser} from './sql-parser.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {PartitionResolver} from './partition-resolver.js';
 import {QueryExecutor} from './query-executor.js';
 import {TableCreationService} from './table-creation-service.js';
+import {DistributedQueryPlanner} from './distributed-query-planner.js';
+import {DistributedWriteCoordinator} from './distributed-write-coordinator.js';
+import {
+  DistributedTransactionCoordinator,
+  WRITE_OPERATION_STATUS,
+} from './distributed-transaction-coordinator.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {TABLES} from '../constants/index.js';
+import {TABLES, METRICS_LOG_TAG} from '../constants/index.js';
 import {
-  QUERY_AST_NODE,
   QUERY_AST_TYPE,
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
-  QUERY_DEFAULT_VALUE,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
@@ -76,6 +81,7 @@ const NATIVE_CALLBACK_MODULE_ARG = 'module';
 const NATIVE_CALLBACK_RETURN_LINE = 'return module.exports;';
 const DEFAULT_CODE_VERSION = '1';
 const ZERO_SHA256_DIGEST = 'sha256:' + '0'.repeat(64);
+const EXPLAIN_DISTRIBUTED_PREFIX_REGEX = /^\s*EXPLAIN\s+DISTRIBUTED\s+/i;
 
 /**
  * SQLQueryEngine is the main entry point for SQL query processing.
@@ -105,16 +111,46 @@ class SQLQueryEngine {
     this.partitionResolver = new PartitionResolver({
       systemCache: this.systemCache,
     });
+    this.distributedQueryPlanner = options.distributedQueryPlanner ||
+      new DistributedQueryPlanner({
+        partitionResolver: this.partitionResolver,
+        getTablePartitions: (tableName) => this.getTablePartitions(tableName),
+        getTableInfo: (tableName) => this.getTableInfo(tableName),
+      });
 
     this.queryExecutor = new QueryExecutor({
       messageRouter: this.messageRouter,
       systemCache: this.systemCache,
       nodeId: this.nodeId,
     });
+    this.distributedWriteCoordinator = options.distributedWriteCoordinator ||
+      new DistributedWriteCoordinator({
+        partitionResolver: this.partitionResolver,
+        queryExecutor: this.queryExecutor,
+        getTablePartitions: (tableName) => this.getTablePartitions(tableName),
+        getTableInfo: (tableName) => this.getTableInfo(tableName),
+      });
+    this.transactionCoordinator = options.transactionCoordinator ||
+      new DistributedTransactionCoordinator({
+        beginParticipant: async (sessionId, partitionId) =>
+          this.deliverTransactionOperation(sessionId, partitionId, QUERY_OPERATION.BEGIN),
+        prepareParticipant: async () => {},
+        commitParticipant: async (sessionId, partitionId) =>
+          this.deliverTransactionOperation(sessionId, partitionId, QUERY_OPERATION.COMMIT),
+        rollbackParticipant: async (sessionId, partitionId) =>
+          this.deliverTransactionOperation(sessionId, partitionId, QUERY_OPERATION.ROLLBACK),
+        persistTransaction: async (record) =>
+          this.persistDistributedTransactionRow(record),
+        persistParticipant: async (record) =>
+          this.persistDistributedTransactionParticipantRow(record),
+        persistWriteOperation: async (record) =>
+          this.persistDistributedWriteOperationRow(record),
+      });
 
     this.tableCreationService = new TableCreationService({
       systemCache: this.systemCache,
       cdcIntegrationService: this.cdcIntegrationService,
+      partitionSplitMergeManager: options.partitionSplitMergeManager || null,
     });
 
     this.partitionCallbackDispatcher = new PartitionCallbackDispatcher({
@@ -139,8 +175,10 @@ class SQLQueryEngine {
     this.traceCollector = options.traceCollector || null;
     this.wasmExecutor = options.wasmExecutor || null;
 
-    // Transaction state per client/session
-    this.activeTransactions = new Map(); // sessionId -> {partitionId, partition}
+    // Backward-compatible alias for callers/tests expecting transaction state map.
+    this.activeTransactions = this.transactionCoordinator.transactionsBySession;
+    this.transactionStateRecovered = false;
+    this.recoverDistributedTransactionStateFromCache();
   }
 
   /**
@@ -169,6 +207,8 @@ class SQLQueryEngine {
     this.partitionResolver.setSystemCache(cache);
     this.tableCreationService.setSystemCache(cache);
     this.queryExecutor.setSystemCache(cache);
+    this.transactionStateRecovered = false;
+    this.recoverDistributedTransactionStateFromCache();
   }
 
   /**
@@ -187,6 +227,14 @@ class SQLQueryEngine {
   setCDCIntegrationService(service) {
     this.cdcIntegrationService = service;
     this.tableCreationService.setCDCIntegrationService(service);
+  }
+
+  /**
+   * Set partition split/merge manager integration owner.
+   * @param {Object} manager - PartitionSplitMergeManager instance.
+   */
+  setPartitionSplitMergeManager(manager) {
+    this.tableCreationService.setPartitionSplitMergeManager(manager);
   }
 
   /**
@@ -253,6 +301,7 @@ class SQLQueryEngine {
       sessionId,
     });
 
+    const dispatchStartMs = Date.now();
     try {
       let result;
 
@@ -287,8 +336,29 @@ class SQLQueryEngine {
         success: result.success,
       });
 
+      try {
+        this.logger.info(METRICS_LOG_TAG.QUERY_DISPATCH, {
+          executionMode,
+          totalDurationMs: Date.now() - dispatchStartMs,
+          success: result?.success ?? false,
+          sessionId,
+        });
+      } catch (_metricsErr) {
+        // Metrics logging must not propagate to callers
+      }
+
       return result;
     } catch (error) {
+      try {
+        this.logger.info(METRICS_LOG_TAG.QUERY_DISPATCH, {
+          executionMode,
+          totalDurationMs: Date.now() - dispatchStartMs,
+          success: false,
+          sessionId,
+        });
+      } catch (_metricsErr) {
+        // Metrics logging must not propagate to callers
+      }
       this.logger.error(ADAPTER_LOG_MSG.EXECUTE_REQUEST_FAILED, {
         executionMode,
         error: error.message,
@@ -880,12 +950,21 @@ class SQLQueryEngine {
    */
   async executeQuery(sql, params = [], options = {}) {
     const sessionId = options.sessionId || QUERY_SESSION.DEFAULT;
+    this.recoverDistributedTransactionStateFromCache();
+    if (EXPLAIN_DISTRIBUTED_PREFIX_REGEX.test(sql)) {
+      return this.executeExplainDistributed(sql, params, {
+        sessionId,
+        dialect: options.dialect,
+      });
+    }
 
     this.logger.debug(QUERY_LOG_MSG.EXECUTING_SQL_QUERY, {
       sql: sql.substring(0, 100),
       paramCount: params.length,
       sessionId,
     });
+
+    const queryStartMs = Date.now();
 
     // Parse the SQL
     let ast;
@@ -907,6 +986,8 @@ class SQLQueryEngine {
         errorCode: QUERY_ERROR_CODE.SYNTAX_ERROR,
       };
     }
+
+    const parseEndMs = Date.now();
 
     try {
       // Route based on statement type
@@ -942,12 +1023,46 @@ class SQLQueryEngine {
         return this.handleRollback(sessionId);
 
       default:
-        throw new Error(`${QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX}${ast.type}`);
+        throw new Error(
+          `${QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX}${ast.type}`,
+        );
+      }
+
+      const queryEndMs = Date.now();
+      try {
+        this.logger.info(METRICS_LOG_TAG.QUERY_LIFECYCLE, {
+          sessionId,
+          statementType: ast.type,
+          parseDurationMs: parseEndMs - queryStartMs,
+          executionDurationMs: queryEndMs - parseEndMs,
+          totalDurationMs: queryEndMs - queryStartMs,
+          partitionCount: result?.partitions?.length ?? 0,
+          rowCount: result?.count ?? result?.changes ?? 0,
+          success: result?.success ?? false,
+        });
+      } catch (_metricsErr) {
+        // Metrics logging must not propagate to callers
       }
 
       // Strip partition details from results (Requirement 20.10)
       return this.tableCreationService.stripPartitionDetails(result);
     } catch (error) {
+      const queryEndMs = Date.now();
+      try {
+        this.logger.info(METRICS_LOG_TAG.QUERY_LIFECYCLE, {
+          sessionId,
+          statementType: ast.type,
+          parseDurationMs: parseEndMs - queryStartMs,
+          executionDurationMs: queryEndMs - parseEndMs,
+          totalDurationMs: queryEndMs - queryStartMs,
+          partitionCount: 0,
+          rowCount: 0,
+          success: false,
+        });
+      } catch (_metricsErr) {
+        // Metrics logging must not propagate to callers
+      }
+
       this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
         sql: sql.substring(0, 100),
         error: error.message,
@@ -958,6 +1073,75 @@ class SQLQueryEngine {
         errorCode: this.getErrorCode(error),
       };
     }
+  }
+
+  /**
+   * Execute EXPLAIN DISTRIBUTED and return canonical planner output.
+   * @param {string} sql - EXPLAIN DISTRIBUTED statement.
+   * @param {Array} params - Bound parameters.
+   * @param {Object} options - Explain options.
+   * @param {string} options.sessionId - Session ID.
+   * @param {string} options.dialect - SQL dialect.
+   * @return {Promise<Object>} Explain result.
+   * @private
+   */
+  async executeExplainDistributed(sql, params = [], options = {}) {
+    const statement = sql.replace(EXPLAIN_DISTRIBUTED_PREFIX_REGEX, '');
+    if (!statement.trim()) {
+      return {
+        success: false,
+        error: QUERY_ERROR_MSG.EXPLAIN_DISTRIBUTED_REQUIRES_STATEMENT,
+        errorCode: QUERY_ERROR_CODE.SYNTAX_ERROR,
+      };
+    }
+
+    let ast;
+    let normalizedParams = params;
+    try {
+      const parser = new SQLParser(statement, {dialect: options.dialect});
+      ast = parser.parse();
+      if (ast._paramMapping && ast._paramMapping.length > 0) {
+        normalizedParams = reorderParams(params, ast._paramMapping);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        errorCode: QUERY_ERROR_CODE.SYNTAX_ERROR,
+      };
+    }
+
+    const distributedPlan = this.distributedQueryPlanner.planStatement(
+      ast,
+      normalizedParams,
+      {
+        sessionId: options.sessionId || QUERY_SESSION.DEFAULT,
+        explain: true,
+      },
+    );
+    if (!distributedPlan) {
+      return {
+        success: false,
+        error: `${QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX}${ast.type}`,
+        errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
+      };
+    }
+
+    return {
+      success: true,
+      operation: QUERY_OPERATION.EXPLAIN_DISTRIBUTED,
+      rows: [{
+        plan_id: distributedPlan.planId,
+        statement_type: distributedPlan.statementType,
+        execution_policy: distributedPlan.executionPolicy,
+        table_plans: Array.from(distributedPlan.tablePlans.values()),
+        join_plan: distributedPlan.joinPlan,
+        merge_plan: distributedPlan.mergePlan,
+        diagnostics: distributedPlan.diagnostics,
+      }],
+      distributedPlan,
+      distributedDiagnostics: distributedPlan.diagnostics,
+    };
   }
 
   /**
@@ -982,11 +1166,19 @@ class SQLQueryEngine {
    */
   async executeSelect(ast, params, sessionId) {
     const tableName = ast.from.name;
+    const planningStartTimeMs = Date.now();
+    const distributedPlan = this.distributedQueryPlanner.planSelect(
+      ast,
+      params,
+      {sessionId},
+    );
+    const planningDurationMs = Date.now() - planningStartTimeMs;
+    const rootAlias = ast.from.alias || tableName;
+    const rootPlan = distributedPlan.tablePlans.get(rootAlias) ||
+      distributedPlan.tablePlans.get(tableName) ||
+      null;
 
-    // Get partitions for the table
-    const partitions = this.getTablePartitions(tableName);
-
-    if (partitions.length === 0) {
+    if (!rootPlan || rootPlan.partitions.length === 0) {
       return {
         success: false,
         error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
@@ -994,33 +1186,58 @@ class SQLQueryEngine {
       };
     }
 
-    // Resolve which partitions to query
-    const partitionIds = this.partitionResolver.resolvePartitions(
-      tableName,
-      ast.where,
-      partitions,
-    );
+    const partitionIds = rootPlan.partitions;
 
     this.logger.debug(QUERY_LOG_MSG.RESOLVED_PARTITIONS_SELECT, {
       tableName,
-      totalPartitions: partitions.length,
+      totalPartitions: partitionIds.length,
       targetPartitions: partitionIds.length,
       sessionId,
     });
 
     const preferLeader = this.isSystemTable(tableName);
+    for (const join of ast.joins || []) {
+      const joinTableName = join.table?.name;
+      if (!joinTableName) {
+        continue;
+      }
+      const joinAlias = join.table.alias || joinTableName;
+      const joinPlan = distributedPlan.tablePlans.get(joinAlias) ||
+        distributedPlan.tablePlans.get(joinTableName) ||
+        null;
+      if (!joinPlan || joinPlan.partitions.length === 0) {
+        return {
+          success: false,
+          error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${joinTableName}`,
+          errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
+        };
+      }
+    }
 
     // Execute on resolved partitions
+    const executionStartTimeMs = Date.now();
     const result = await this.queryExecutor.executeSelect(
       ast,
       partitionIds,
       params,
-      {preferLeader},
+      {
+        preferLeader,
+        distributedPlan,
+      },
     );
+    const executionDurationMs = Date.now() - executionStartTimeMs;
 
     return {
       ...result,
       tableName,
+      distributedPlan,
+      distributedDiagnostics: distributedPlan.diagnostics,
+      distributedMetrics: {
+        planningDurationMs,
+        executionDurationMs,
+        fanout: result.distributedMetrics?.fanout || null,
+        mergeDurationMs: result.distributedMetrics?.mergeDurationMs || 0,
+      },
     };
   }
 
@@ -1034,110 +1251,121 @@ class SQLQueryEngine {
    */
   async executeInsert(ast, params, sessionId) {
     const tableName = ast.table;
-
-    // Get partitions for the table
-    const partitions = this.getTablePartitions(tableName);
-
-    if (partitions.length === 0) {
+    const planningStartTimeMs = Date.now();
+    const distributedPlan = this.distributedQueryPlanner.planInsert(
+      ast,
+      params,
+      {sessionId},
+    );
+    const planningDurationMs = Date.now() - planningStartTimeMs;
+    const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
+    if (!tablePlan || tablePlan.partitions.length === 0) {
       return {
         success: false,
         error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
         errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
       };
     }
+    const writePlan = this.distributedWriteCoordinator.createWritePlan(
+      ast,
+      params,
+      {sessionId},
+    );
+    const payloadHash = this.createWriteOperationPayloadHash(
+      writePlan,
+      QUERY_AST_TYPE.INSERT,
+    );
 
-    // Get table info to find primary key
-    const tableInfo = this.getTableInfo(tableName);
-    const primaryKey = tableInfo?.primaryKey || QUERY_DEFAULT_VALUE.PRIMARY_KEY;
-    const primaryKeyIndex = this.findPrimaryKeyIndex(ast, primaryKey);
-
-    // Route each row to appropriate partition
-    const rowsByPartition = new Map();
-
-    for (const row of ast.values) {
-      const keyValue = this.extractKeyValue(row, primaryKeyIndex);
-      const partitionId = this.partitionResolver.resolvePartitionForKey(
-        tableName,
-        keyValue,
-        partitions,
+    const txState = this.transactionCoordinator.getTransaction(sessionId);
+    const writePartitions = Array.from(writePlan.partitionStatements.keys());
+    if (txState) {
+      const enlistResult = await this.transactionCoordinator.enlistParticipants(
+        sessionId,
+        writePartitions,
       );
-
-      if (!partitionId) {
-        return {
-          success: false,
-          error: `${QUERY_ERROR_MSG.PARTITION_FOR_KEY_PREFIX}${keyValue}`,
-          errorCode: QUERY_ERROR_CODE.PARTITION_NOT_FOUND,
-        };
+      if (!enlistResult.success) {
+        return enlistResult;
       }
-
-      if (!rowsByPartition.has(partitionId)) {
-        rowsByPartition.set(partitionId, []);
-      }
-      rowsByPartition.get(partitionId).push(row);
-    }
-
-    // Check for cross-partition transaction violation
-    const txState = this.activeTransactions.get(sessionId);
-    if (txState && rowsByPartition.size > 1) {
-      return {
-        success: false,
-        error: QUERY_ERROR_MSG.CROSS_PARTITION_INSERT,
-        errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
-      };
-    }
-
-    if (txState && txState.partitionId) {
-      // Check if all rows go to the same partition as the transaction
-      for (const partitionId of rowsByPartition.keys()) {
-        if (partitionId !== txState.partitionId) {
-          return {
-            success: false,
-            error: `${QUERY_ERROR_MSG.TX_BOUND_PREFIX}${txState.partitionId}` +
-              `${QUERY_ERROR_MSG.TX_BOUND_INSERT_SUFFIX}${partitionId}`,
-            errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
-          };
-        }
-      }
+      await this.transactionCoordinator.recordWriteOperation(sessionId, {
+        statementType: QUERY_AST_TYPE.INSERT,
+        operationId: writePlan.operationId,
+        partitionIds: writePartitions,
+        idempotencyKey: writePlan.idempotencyKey,
+        payloadHash,
+      });
+    } else {
+      await this.persistNonTransactionalWriteStart(
+        writePlan,
+        QUERY_AST_TYPE.INSERT,
+      );
     }
 
     this.logger.debug(QUERY_LOG_MSG.ROUTING_INSERT, {
       tableName,
       rowCount: ast.values.length,
-      partitionCount: rowsByPartition.size,
+      partitionCount: writePlan.partitionStatements.size,
       sessionId,
     });
 
-    // Execute inserts on each partition
-    let totalAffected = 0;
-    const affectedPartitions = [];
-
-    for (const [partitionId, rows] of rowsByPartition) {
-      // Bind transaction to partition if in transaction
-      if (txState && !txState.partitionId) {
-        await this.bindTransactionToPartition(sessionId, partitionId);
-      }
-
-      const partitionAst = {
-        ...ast,
-        values: rows,
-      };
-
-      const result = await this.queryExecutor.executeInsert(
-        partitionAst,
-        partitionId,
+    let result;
+    const executionStartTimeMs = Date.now();
+    try {
+      result = await this.distributedWriteCoordinator.executePlan(
+        writePlan,
         params,
       );
+    } catch (error) {
+      if (txState) {
+        await this.transactionCoordinator.markWriteOperationResult(
+          sessionId,
+          writePlan.operationId,
+          {
+            success: false,
+            error: error.message,
+            retryCount: 0,
+          },
+        );
+      } else {
+        await this.persistNonTransactionalWriteResult(
+          writePlan,
+          QUERY_AST_TYPE.INSERT,
+          {
+            success: false,
+            error: error.message,
+            retryCount: 0,
+          },
+        );
+      }
+      throw error;
+    }
+    const executionDurationMs = Date.now() - executionStartTimeMs;
 
-      totalAffected += result.affectedRows || 0;
-      affectedPartitions.push(partitionId);
+    if (txState) {
+      await this.transactionCoordinator.markWriteOperationResult(
+        sessionId,
+        writePlan.operationId,
+        result,
+      );
+    } else {
+      await this.persistNonTransactionalWriteResult(
+        writePlan,
+        QUERY_AST_TYPE.INSERT,
+        result,
+      );
     }
 
     return {
-      success: true,
+      ...result,
       operation: QUERY_OPERATION.INSERT,
-      affectedRows: totalAffected,
-      partitions: affectedPartitions,
       tableName,
+      distributedPlan,
+      distributedWritePlan: writePlan,
+      distributedDiagnostics: distributedPlan.diagnostics,
+      distributedMetrics: {
+        planningDurationMs,
+        executionDurationMs,
+        retryCount: result.retryCount || 0,
+      },
     };
   }
 
@@ -1151,11 +1379,16 @@ class SQLQueryEngine {
    */
   async executeUpdate(ast, params, sessionId) {
     const tableName = ast.table;
+    const planningStartTimeMs = Date.now();
+    const distributedPlan = this.distributedQueryPlanner.planUpdate(
+      ast,
+      params,
+      {sessionId},
+    );
+    const planningDurationMs = Date.now() - planningStartTimeMs;
 
-    // Get partitions for the table
-    const partitions = this.getTablePartitions(tableName);
-
-    if (partitions.length === 0) {
+    const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
+    if (!tablePlan || tablePlan.partitions.length === 0) {
       return {
         success: false,
         error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
@@ -1163,37 +1396,41 @@ class SQLQueryEngine {
       };
     }
 
-    // Resolve which partitions to update
-    const partitionIds = this.partitionResolver.resolvePartitions(
-      tableName,
-      ast.where,
-      partitions,
+    const partitionIds = tablePlan.partitions;
+    const writePlan = this.distributedWriteCoordinator.createWritePlan(
+      ast,
+      params,
+      {
+        sessionId,
+        partitionIds,
+      },
+    );
+    const payloadHash = this.createWriteOperationPayloadHash(
+      writePlan,
+      QUERY_AST_TYPE.UPDATE,
     );
 
-    // Check for cross-partition transaction violation
-    const txState = this.activeTransactions.get(sessionId);
-    if (txState && partitionIds.length > 1) {
-      return {
-        success: false,
-        error: QUERY_ERROR_MSG.CROSS_PARTITION_UPDATE,
-        errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
-      };
-    }
-
-    if (txState && txState.partitionId && partitionIds.length > 0) {
-      if (!partitionIds.includes(txState.partitionId)) {
-        return {
-          success: false,
-          error: `${QUERY_ERROR_MSG.TX_BOUND_PREFIX}${txState.partitionId}` +
-            QUERY_ERROR_MSG.TX_BOUND_UPDATE_SUFFIX,
-          errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
-        };
+    const txState = this.transactionCoordinator.getTransaction(sessionId);
+    if (txState) {
+      const enlistResult = await this.transactionCoordinator.enlistParticipants(
+        sessionId,
+        partitionIds,
+      );
+      if (!enlistResult.success) {
+        return enlistResult;
       }
-    }
-
-    // Bind transaction to partition if in transaction
-    if (txState && !txState.partitionId && partitionIds.length === 1) {
-      await this.bindTransactionToPartition(sessionId, partitionIds[0]);
+      await this.transactionCoordinator.recordWriteOperation(sessionId, {
+        statementType: QUERY_AST_TYPE.UPDATE,
+        operationId: writePlan.operationId,
+        partitionIds,
+        idempotencyKey: writePlan.idempotencyKey,
+        payloadHash,
+      });
+    } else {
+      await this.persistNonTransactionalWriteStart(
+        writePlan,
+        QUERY_AST_TYPE.UPDATE,
+      );
     }
 
     this.logger.debug(QUERY_LOG_MSG.ROUTING_UPDATE, {
@@ -1203,15 +1440,64 @@ class SQLQueryEngine {
     });
 
     // Execute update on resolved partitions
-    const result = await this.queryExecutor.executeUpdate(
-      ast,
-      partitionIds,
-      params,
-    );
+    let result;
+    const executionStartTimeMs = Date.now();
+    try {
+      result = await this.distributedWriteCoordinator.executePlan(
+        writePlan,
+        params,
+      );
+    } catch (error) {
+      if (txState) {
+        await this.transactionCoordinator.markWriteOperationResult(
+          sessionId,
+          writePlan.operationId,
+          {
+            success: false,
+            error: error.message,
+            retryCount: 0,
+          },
+        );
+      } else {
+        await this.persistNonTransactionalWriteResult(
+          writePlan,
+          QUERY_AST_TYPE.UPDATE,
+          {
+            success: false,
+            error: error.message,
+            retryCount: 0,
+          },
+        );
+      }
+      throw error;
+    }
+    const executionDurationMs = Date.now() - executionStartTimeMs;
+
+    if (txState) {
+      await this.transactionCoordinator.markWriteOperationResult(
+        sessionId,
+        writePlan.operationId,
+        result,
+      );
+    } else {
+      await this.persistNonTransactionalWriteResult(
+        writePlan,
+        QUERY_AST_TYPE.UPDATE,
+        result,
+      );
+    }
 
     return {
       ...result,
       tableName,
+      distributedPlan,
+      distributedWritePlan: writePlan,
+      distributedDiagnostics: distributedPlan.diagnostics,
+      distributedMetrics: {
+        planningDurationMs,
+        executionDurationMs,
+        retryCount: result.retryCount || 0,
+      },
     };
   }
 
@@ -1225,11 +1511,16 @@ class SQLQueryEngine {
    */
   async executeDelete(ast, params, sessionId) {
     const tableName = ast.table;
+    const planningStartTimeMs = Date.now();
+    const distributedPlan = this.distributedQueryPlanner.planDelete(
+      ast,
+      params,
+      {sessionId},
+    );
+    const planningDurationMs = Date.now() - planningStartTimeMs;
 
-    // Get partitions for the table
-    const partitions = this.getTablePartitions(tableName);
-
-    if (partitions.length === 0) {
+    const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
+    if (!tablePlan || tablePlan.partitions.length === 0) {
       return {
         success: false,
         error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
@@ -1237,37 +1528,41 @@ class SQLQueryEngine {
       };
     }
 
-    // Resolve which partitions to delete from
-    const partitionIds = this.partitionResolver.resolvePartitions(
-      tableName,
-      ast.where,
-      partitions,
+    const partitionIds = tablePlan.partitions;
+    const writePlan = this.distributedWriteCoordinator.createWritePlan(
+      ast,
+      params,
+      {
+        sessionId,
+        partitionIds,
+      },
+    );
+    const payloadHash = this.createWriteOperationPayloadHash(
+      writePlan,
+      QUERY_AST_TYPE.DELETE,
     );
 
-    // Check for cross-partition transaction violation
-    const txState = this.activeTransactions.get(sessionId);
-    if (txState && partitionIds.length > 1) {
-      return {
-        success: false,
-        error: QUERY_ERROR_MSG.CROSS_PARTITION_DELETE,
-        errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
-      };
-    }
-
-    if (txState && txState.partitionId && partitionIds.length > 0) {
-      if (!partitionIds.includes(txState.partitionId)) {
-        return {
-          success: false,
-          error: `${QUERY_ERROR_MSG.TX_BOUND_PREFIX}${txState.partitionId}` +
-            QUERY_ERROR_MSG.TX_BOUND_DELETE_SUFFIX,
-          errorCode: QUERY_ERROR_CODE.CROSS_PARTITION_TRANSACTION,
-        };
+    const txState = this.transactionCoordinator.getTransaction(sessionId);
+    if (txState) {
+      const enlistResult = await this.transactionCoordinator.enlistParticipants(
+        sessionId,
+        partitionIds,
+      );
+      if (!enlistResult.success) {
+        return enlistResult;
       }
-    }
-
-    // Bind transaction to partition if in transaction
-    if (txState && !txState.partitionId && partitionIds.length === 1) {
-      await this.bindTransactionToPartition(sessionId, partitionIds[0]);
+      await this.transactionCoordinator.recordWriteOperation(sessionId, {
+        statementType: QUERY_AST_TYPE.DELETE,
+        operationId: writePlan.operationId,
+        partitionIds,
+        idempotencyKey: writePlan.idempotencyKey,
+        payloadHash,
+      });
+    } else {
+      await this.persistNonTransactionalWriteStart(
+        writePlan,
+        QUERY_AST_TYPE.DELETE,
+      );
     }
 
     this.logger.debug(QUERY_LOG_MSG.ROUTING_DELETE, {
@@ -1277,16 +1572,287 @@ class SQLQueryEngine {
     });
 
     // Execute delete on resolved partitions
-    const result = await this.queryExecutor.executeDelete(
-      ast,
-      partitionIds,
-      params,
-    );
+    let result;
+    const executionStartTimeMs = Date.now();
+    try {
+      result = await this.distributedWriteCoordinator.executePlan(
+        writePlan,
+        params,
+      );
+    } catch (error) {
+      if (txState) {
+        await this.transactionCoordinator.markWriteOperationResult(
+          sessionId,
+          writePlan.operationId,
+          {
+            success: false,
+            error: error.message,
+            retryCount: 0,
+          },
+        );
+      } else {
+        await this.persistNonTransactionalWriteResult(
+          writePlan,
+          QUERY_AST_TYPE.DELETE,
+          {
+            success: false,
+            error: error.message,
+            retryCount: 0,
+          },
+        );
+      }
+      throw error;
+    }
+    const executionDurationMs = Date.now() - executionStartTimeMs;
+
+    if (txState) {
+      await this.transactionCoordinator.markWriteOperationResult(
+        sessionId,
+        writePlan.operationId,
+        result,
+      );
+    } else {
+      await this.persistNonTransactionalWriteResult(
+        writePlan,
+        QUERY_AST_TYPE.DELETE,
+        result,
+      );
+    }
 
     return {
       ...result,
       tableName,
+      distributedPlan,
+      distributedWritePlan: writePlan,
+      distributedDiagnostics: distributedPlan.diagnostics,
+      distributedMetrics: {
+        planningDurationMs,
+        executionDurationMs,
+        retryCount: result.retryCount || 0,
+      },
     };
+  }
+
+  /**
+   * Recover distributed transaction state from system cache snapshots.
+   * @private
+   */
+  recoverDistributedTransactionStateFromCache() {
+    if (this.transactionStateRecovered || !this.systemCache) {
+      return;
+    }
+    if (typeof this.transactionCoordinator.recoverFromSystemTables !==
+      'function') {
+      this.transactionStateRecovered = true;
+      return;
+    }
+
+    const transactions = this.loadSystemTableRows(TABLES.SQL_TRANSACTIONS);
+    if (transactions.length === 0) {
+      return;
+    }
+
+    const participants = this.loadSystemTableRows(
+      TABLES.SQL_TRANSACTION_PARTICIPANTS,
+    );
+    const writeOperations = this.loadSystemTableRows(TABLES.SQL_WRITE_OPERATIONS);
+
+    this.transactionCoordinator.recoverFromSystemTables({
+      transactions,
+      participants,
+      writeOperations,
+    });
+    this.transactionStateRecovered = true;
+  }
+
+  /**
+   * Load rows for one table from system cache.
+   * @param {string} tableName - System table name.
+   * @return {Object[]} Cached rows.
+   * @private
+   */
+  loadSystemTableRows(tableName) {
+    if (!this.systemCache) {
+      return [];
+    }
+    if (typeof this.systemCache.getAll === 'function') {
+      return this.systemCache.getAll(tableName) || [];
+    }
+    if (typeof this.systemCache.filter === 'function') {
+      return this.systemCache.filter(tableName, () => true) || [];
+    }
+    return [];
+  }
+
+  /**
+   * Persist one distributed transaction row.
+   * @param {Object} record - Transaction persistence payload.
+   * @return {Promise<void>}
+   * @private
+   */
+  async persistDistributedTransactionRow(record) {
+    if (!this.cdcIntegrationService ||
+      typeof this.cdcIntegrationService.upsertSystemTableRow !== 'function') {
+      return;
+    }
+    await this.cdcIntegrationService.upsertSystemTableRow(
+      TABLES.SQL_TRANSACTIONS,
+      {
+        transaction_id: record.transactionId,
+        session_id: record.sessionId,
+        status: record.status,
+        created_at: record.createdAt,
+        updated_at: record.updatedAt,
+      },
+    );
+  }
+
+  /**
+   * Persist one distributed transaction participant row.
+   * @param {Object} record - Participant persistence payload.
+   * @return {Promise<void>}
+   * @private
+   */
+  async persistDistributedTransactionParticipantRow(record) {
+    if (!this.cdcIntegrationService ||
+      typeof this.cdcIntegrationService.upsertSystemTableRow !== 'function') {
+      return;
+    }
+    await this.cdcIntegrationService.upsertSystemTableRow(
+      TABLES.SQL_TRANSACTION_PARTICIPANTS,
+      {
+        participant_id: record.participantId,
+        transaction_id: record.transactionId,
+        partition_id: record.partitionId,
+        status: record.status,
+        last_error: record.lastError,
+        created_at: record.createdAt,
+        updated_at: record.updatedAt,
+      },
+    );
+  }
+
+  /**
+   * Persist one distributed write operation row.
+   * @param {Object} record - Write operation persistence payload.
+   * @return {Promise<void>}
+   * @private
+   */
+  async persistDistributedWriteOperationRow(record) {
+    if (!this.cdcIntegrationService ||
+      typeof this.cdcIntegrationService.upsertSystemTableRow !== 'function') {
+      return;
+    }
+    await this.cdcIntegrationService.upsertSystemTableRow(
+      TABLES.SQL_WRITE_OPERATIONS,
+      {
+        operation_id: record.operationId,
+        transaction_id: record.transactionId || null,
+        statement_type: record.statementType,
+        status: record.status,
+        idempotency_key: record.idempotencyKey,
+        payload_hash: record.payloadHash,
+        retry_count: record.retryCount || 0,
+        last_error: record.lastError || null,
+        partition_ids: JSON.stringify(record.partitionIds || []),
+        created_at: record.createdAt,
+        updated_at: record.updatedAt,
+      },
+    );
+  }
+
+  /**
+   * Persist a distributed write operation not associated with a transaction.
+   * @param {Object} writePlan - DistributedWritePlan.
+   * @param {string} statementType - SQL AST statement type.
+   * @return {Promise<void>}
+   * @private
+   */
+  async persistNonTransactionalWriteStart(writePlan, statementType) {
+    const now = Date.now();
+    await this.persistDistributedWriteOperationRow({
+      operationId: writePlan.operationId,
+      transactionId: null,
+      statementType,
+      status: WRITE_OPERATION_STATUS.PENDING,
+      idempotencyKey: writePlan.idempotencyKey,
+      payloadHash: this.createWriteOperationPayloadHash(
+        writePlan,
+        statementType,
+      ),
+      partitionIds: Array.from(writePlan.partitionStatements.keys()),
+      retryCount: 0,
+      lastError: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  /**
+   * Persist the final state for a non-transactional distributed write.
+   * @param {Object} writePlan - DistributedWritePlan.
+   * @param {string} statementType - SQL AST statement type.
+   * @param {Object} result - Write result.
+   * @return {Promise<void>}
+   * @private
+   */
+  async persistNonTransactionalWriteResult(writePlan, statementType, result) {
+    const now = Date.now();
+    await this.persistDistributedWriteOperationRow({
+      operationId: writePlan.operationId,
+      transactionId: null,
+      statementType,
+      status: result.success === true ?
+        WRITE_OPERATION_STATUS.SUCCEEDED :
+        WRITE_OPERATION_STATUS.FAILED,
+      idempotencyKey: writePlan.idempotencyKey,
+      payloadHash: this.createWriteOperationPayloadHash(
+        writePlan,
+        statementType,
+      ),
+      partitionIds: Array.from(writePlan.partitionStatements.keys()),
+      retryCount: this.resolveWriteResultRetryCount(result),
+      lastError: result.success === true ? null : result.error,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  /**
+   * Build deterministic payload hash for distributed write persistence.
+   * @param {Object} writePlan - DistributedWritePlan.
+   * @param {string} statementType - SQL AST statement type.
+   * @return {string} Payload hash.
+   * @private
+   */
+  createWriteOperationPayloadHash(writePlan, statementType) {
+    const payload = JSON.stringify({
+      operationId: writePlan.operationId,
+      statementType,
+      partitionIds: Array.from(writePlan.partitionStatements.keys()).sort(),
+    });
+    return createHash('sha1')
+      .update(payload)
+      .digest('hex');
+  }
+
+  /**
+   * Resolve total retry count from a write result payload.
+   * @param {Object} result - Distributed write result.
+   * @return {number} Retry count.
+   * @private
+   */
+  resolveWriteResultRetryCount(result) {
+    if (Number.isInteger(result?.retryCount)) {
+      return result.retryCount;
+    }
+    if (!Array.isArray(result?.participantResults)) {
+      return 0;
+    }
+    return result.participantResults.reduce((sum, entry) => {
+      const attempts = Number.isInteger(entry.attempts) ? entry.attempts : 1;
+      return sum + Math.max(attempts - 1, 0);
+    }, 0);
   }
 
   /**
@@ -1296,29 +1862,8 @@ class SQLQueryEngine {
    * @private
    */
   handleBeginTransaction(sessionId = QUERY_SESSION.DEFAULT) {
-    // Check if session already has an active transaction
-    if (this.activeTransactions.has(sessionId)) {
-      return {
-        success: false,
-        error: QUERY_ERROR_MSG.TRANSACTION_ACTIVE,
-        errorCode: QUERY_ERROR_CODE.TRANSACTION_ACTIVE,
-      };
-    }
-
     this.logger.debug(QUERY_LOG_MSG.BEGIN_TRANSACTION, {sessionId});
-
-    // Transaction will be bound to a partition on first write
-    this.activeTransactions.set(sessionId, {
-      partitionId: null,
-      partition: null,
-      started: Date.now(),
-    });
-
-    return {
-      success: true,
-      operation: QUERY_OPERATION.BEGIN_TRANSACTION,
-      sessionId,
-    };
+    return this.transactionCoordinator.begin(sessionId);
   }
 
   /**
@@ -1329,52 +1874,21 @@ class SQLQueryEngine {
    * @private
    */
   async handleCommit(sessionId = QUERY_SESSION.DEFAULT) {
-    const txState = this.activeTransactions.get(sessionId);
+    const txState = this.transactionCoordinator.getTransaction(sessionId);
+    this.logger.debug(QUERY_LOG_MSG.COMMIT, {
+      sessionId,
+      participants: txState?.participants || [],
+    });
 
-    if (!txState) {
+    const result = await this.transactionCoordinator.commit(sessionId);
+    if (!result.success && !result.errorCode) {
       return {
-        success: false,
-        error: QUERY_ERROR_MSG.NO_TRANSACTION_COMMIT,
-        errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
+        ...result,
+        errorCode: QUERY_ERROR_CODE.COMMIT_FAILED,
+        error: QUERY_ERROR_MSG.COMMIT_FAILED,
       };
     }
-
-    this.logger.debug(QUERY_LOG_MSG.COMMIT, {sessionId, partitionId: txState.partitionId});
-
-    try {
-      let result = {success: true, operation: QUERY_OPERATION.COMMIT};
-
-      // If transaction was bound to a partition, commit it via message router
-      if (txState.partitionId) {
-        const serviceInfo = this.queryExecutor.findPartitionService(txState.partitionId);
-        if (serviceInfo) {
-          const response = await this.messageRouter.deliver(serviceInfo.address, {
-            type: QUERY_OPERATION.TRANSACTION,
-            operation: QUERY_OPERATION.COMMIT,
-            sessionId,
-          });
-
-          if (!response.acknowledged || !response.success) {
-            throw new Error(response.error || QUERY_ERROR_MSG.COMMIT_FAILED);
-          }
-          result = {success: true, operation: QUERY_OPERATION.COMMIT};
-        }
-      }
-
-      // Clean up transaction state
-      this.activeTransactions.delete(sessionId);
-
-      return result;
-    } catch (error) {
-      // Clean up on error
-      this.activeTransactions.delete(sessionId);
-      this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
-        operation: QUERY_OPERATION.COMMIT,
-        sessionId,
-        error: error.message,
-      });
-      throw error;
-    }
+    return result;
   }
 
   /**
@@ -1385,52 +1899,21 @@ class SQLQueryEngine {
    * @private
    */
   async handleRollback(sessionId = QUERY_SESSION.DEFAULT) {
-    const txState = this.activeTransactions.get(sessionId);
+    const txState = this.transactionCoordinator.getTransaction(sessionId);
+    this.logger.debug(QUERY_LOG_MSG.ROLLBACK, {
+      sessionId,
+      participants: txState?.participants || [],
+    });
 
-    if (!txState) {
+    const result = await this.transactionCoordinator.rollback(sessionId);
+    if (!result.success && !result.errorCode) {
       return {
-        success: false,
-        error: QUERY_ERROR_MSG.NO_TRANSACTION_ROLLBACK,
-        errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
+        ...result,
+        errorCode: QUERY_ERROR_CODE.ROLLBACK_FAILED,
+        error: QUERY_ERROR_MSG.ROLLBACK_FAILED,
       };
     }
-
-    this.logger.debug(QUERY_LOG_MSG.ROLLBACK, {sessionId, partitionId: txState.partitionId});
-
-    try {
-      let result = {success: true, operation: QUERY_OPERATION.ROLLBACK};
-
-      // If transaction was bound to a partition, rollback it via message router
-      if (txState.partitionId) {
-        const serviceInfo = this.queryExecutor.findPartitionService(txState.partitionId);
-        if (serviceInfo) {
-          const response = await this.messageRouter.deliver(serviceInfo.address, {
-            type: QUERY_OPERATION.TRANSACTION,
-            operation: QUERY_OPERATION.ROLLBACK,
-            sessionId,
-          });
-
-          if (!response.acknowledged || !response.success) {
-            throw new Error(response.error || QUERY_ERROR_MSG.ROLLBACK_FAILED);
-          }
-          result = {success: true, operation: QUERY_OPERATION.ROLLBACK};
-        }
-      }
-
-      // Clean up transaction state
-      this.activeTransactions.delete(sessionId);
-
-      return result;
-    } catch (error) {
-      // Clean up on error
-      this.activeTransactions.delete(sessionId);
-      this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
-        operation: QUERY_OPERATION.ROLLBACK,
-        sessionId,
-        error: error.message,
-      });
-      throw error;
-    }
+    return result;
   }
 
   /**
@@ -1439,7 +1922,7 @@ class SQLQueryEngine {
    * @return {boolean} True if transaction is active.
    */
   hasActiveTransaction(sessionId = QUERY_SESSION.DEFAULT) {
-    return this.activeTransactions.has(sessionId);
+    return this.transactionCoordinator.hasActiveTransaction(sessionId);
   }
 
   /**
@@ -1448,8 +1931,8 @@ class SQLQueryEngine {
    * @return {string|null} Partition ID or null.
    */
   getTransactionPartition(sessionId = QUERY_SESSION.DEFAULT) {
-    const txState = this.activeTransactions.get(sessionId);
-    return txState?.partitionId || null;
+    const txState = this.transactionCoordinator.getTransaction(sessionId);
+    return txState?.participants?.[0] || null;
   }
 
   /**
@@ -1461,39 +1944,41 @@ class SQLQueryEngine {
    * @private
    */
   async bindTransactionToPartition(sessionId, partitionId) {
-    const txState = this.activeTransactions.get(sessionId);
-
-    if (!txState) {
-      throw new Error(QUERY_ERROR_MSG.NO_ACTIVE_TRANSACTION);
+    const result = await this.transactionCoordinator.enlistParticipants(
+      sessionId,
+      [partitionId],
+    );
+    if (!result.success) {
+      throw new Error(result.error || QUERY_ERROR_MSG.BEGIN_FAILED);
     }
+  }
 
-    if (txState.partitionId && txState.partitionId !== partitionId) {
-      throw new Error(
-        `${QUERY_ERROR_MSG.TX_BOUND_PREFIX}${txState.partitionId}` +
-        `${QUERY_ERROR_MSG.TX_BOUND_OPERATION_SUFFIX}${partitionId}`,
-      );
+  /**
+   * Deliver one transaction control operation to a partition service.
+   * @param {string} sessionId - Session ID.
+   * @param {string} partitionId - Partition ID.
+   * @param {string} operation - Transaction operation.
+   * @return {Promise<void>}
+   * @private
+   */
+  async deliverTransactionOperation(sessionId, partitionId, operation) {
+    const serviceInfo = this.queryExecutor.findPartitionService(partitionId);
+    if (!serviceInfo) {
+      throw new Error(`${QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND_PREFIX}${partitionId}`);
     }
-
-    if (!txState.partitionId) {
-      // First write - bind to this partition
-      txState.partitionId = partitionId;
-
-      // Begin transaction via message router
-      // The partition service will handle the BEGIN TRANSACTION message
-      const serviceInfo = this.queryExecutor.findPartitionService(partitionId);
-      if (!serviceInfo) {
-        throw new Error(`${QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND_PREFIX}${partitionId}`);
-      }
-
-      const response = await this.messageRouter.deliver(serviceInfo.address, {
-        type: QUERY_OPERATION.TRANSACTION,
-        operation: QUERY_OPERATION.BEGIN,
-        sessionId,
-      });
-
-      if (!response.acknowledged || !response.success) {
+    const response = await this.messageRouter.deliver(serviceInfo.address, {
+      type: QUERY_OPERATION.TRANSACTION,
+      operation,
+      sessionId,
+    });
+    if (!response.acknowledged || !response.success) {
+      if (operation === QUERY_OPERATION.BEGIN) {
         throw new Error(response.error || QUERY_ERROR_MSG.BEGIN_FAILED);
       }
+      if (operation === QUERY_OPERATION.COMMIT) {
+        throw new Error(response.error || QUERY_ERROR_MSG.COMMIT_FAILED);
+      }
+      throw new Error(response.error || QUERY_ERROR_MSG.ROLLBACK_FAILED);
     }
   }
 
@@ -1578,45 +2063,6 @@ class SQLQueryEngine {
    */
   isSystemTable(tableName) {
     return Object.values(SystemTableName).includes(tableName);
-  }
-
-  /**
-   * Find primary key column index in INSERT columns.
-   * @param {Object} ast - INSERT AST.
-   * @param {string} primaryKey - Primary key column name.
-   * @return {number} Column index or 0.
-   * @private
-   */
-  findPrimaryKeyIndex(ast, primaryKey) {
-    if (!ast.columns) {
-      return 0; // Assume first column is primary key
-    }
-
-    const index = ast.columns.findIndex((col) =>
-      col.toLowerCase() === primaryKey.toLowerCase(),
-    );
-
-    return index >= 0 ? index : 0;
-  }
-
-  /**
-   * Extract key value from INSERT row.
-   * @param {Array} row - Row values.
-   * @param {number} keyIndex - Primary key index.
-   * @return {*} Key value.
-   * @private
-   */
-  extractKeyValue(row, keyIndex) {
-    if (keyIndex >= row.length) {
-      return null;
-    }
-
-    const valueExpr = row[keyIndex];
-    if (valueExpr.type === QUERY_AST_NODE.LITERAL) {
-      return valueExpr.value;
-    }
-
-    return null;
   }
 
   /**

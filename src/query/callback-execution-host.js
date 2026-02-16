@@ -18,7 +18,7 @@
  * Requirements: 1.3, 14.2, 14.3
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM, TYPEOF, METRICS_LOG_TAG} from '../constants/index.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {
   ADAPTER_ERROR_MSG,
@@ -256,6 +256,23 @@ class CallbackExecutionHost {
       totalBytes,
       totalDurationMs,
     };
+
+    // Emit aggregate throughput metrics
+    try {
+      this.logger.info(METRICS_LOG_TAG.CALLBACK_THROUGHPUT, {
+        batchCount: batches.length,
+        totalRows,
+        totalBytes,
+        totalDurationMs,
+        rowsPerSecond: totalDurationMs > 0 ?
+          Math.round(totalRows / (totalDurationMs / 1000)) : 0,
+        avgBatchDurationMs: batches.length > 0 ?
+          Math.round(totalDurationMs / batches.length) : 0,
+        failedPartitions: stageResult.failedPartitions,
+      });
+    } catch (_metricsErr) {
+      // Metrics logging failures must not propagate to callers
+    }
 
     // Attach lineage to aggregate result
     if (this.lineageTracker) {

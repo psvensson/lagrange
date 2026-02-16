@@ -31,6 +31,7 @@ import {
   CDC_OPERATION,
   ENTITY_TYPE,
   ERRORS,
+  METRICS_LOG_TAG,
   NUM,
   SQL,
   SERVICE_TYPE,
@@ -1713,7 +1714,19 @@ class PartitionService extends EventEmitter {
       const isSelect = sql.trim().toUpperCase().startsWith(SQL.SELECT);
 
       if (isSelect) {
+        const sqliteStartMs = Date.now();
         const rows = stmt.all(...params);
+        const durationMs = Date.now() - sqliteStartMs;
+        try {
+          this.logger.info(METRICS_LOG_TAG.PARTITION_SQLITE, {
+            partitionId: this.partitionId,
+            operation: 'select',
+            durationMs,
+            rowCount: rows.length,
+          });
+        } catch (_metricsErr) {
+          // Metrics logging must not propagate to callers
+        }
         return {
           success: true,
           rows,
@@ -1963,6 +1976,7 @@ class PartitionService extends EventEmitter {
    * @private
    */
   async proposeWrite(operation) {
+    const proposeStartMs = Date.now();
     const timestamp = this.hlcClock.now();
 
     const entry = {
@@ -1972,9 +1986,23 @@ class PartitionService extends EventEmitter {
       proposedAt: Date.now(),
     };
 
+    const isLeader = this.role === RaftRole.LEADER;
+
     // If we're the leader, append and replicate
-    if (this.role === RaftRole.LEADER) {
-      return this.applyWrite(entry);
+    if (isLeader) {
+      const result = await this.applyWrite(entry);
+      const durationMs = Date.now() - proposeStartMs;
+      try {
+        this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
+          partitionId: this.partitionId,
+          durationMs,
+          isLeader: true,
+          forwarded: false,
+        });
+      } catch (_metricsErr) {
+        // Metrics logging must not propagate to callers
+      }
+      return result;
     }
 
     // If we're not the leader, forward to leader
@@ -1988,9 +2016,35 @@ class PartitionService extends EventEmitter {
           type: PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE,
           operation: entry,
         });
+        const durationMs = Date.now() - proposeStartMs;
+        try {
+          this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
+            partitionId: this.partitionId,
+            durationMs,
+            isLeader: false,
+            forwarded: true,
+          });
+        } catch (_metricsErr) {
+          // Metrics logging must not propagate to callers
+        }
         return result;
       } catch (error) {
-        throw new Error(PARTITION_SERVICE_ERROR_MSG.forwardWriteFailed(error.message));
+        const durationMs = Date.now() - proposeStartMs;
+        try {
+          this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
+            partitionId: this.partitionId,
+            durationMs,
+            isLeader: false,
+            forwarded: true,
+          });
+        } catch (_metricsErr) {
+          // Metrics logging must not propagate to callers
+        }
+        throw new Error(
+          PARTITION_SERVICE_ERROR_MSG.forwardWriteFailed(
+            error.message,
+          ),
+        );
       }
     }
 

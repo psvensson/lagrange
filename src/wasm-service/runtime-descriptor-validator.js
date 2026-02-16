@@ -10,6 +10,10 @@
 
 import {ALLOWED_RUNTIME_KINDS, RUNTIME_KIND} from '../constants/runtime.js';
 import {TYPEOF} from '../constants/types.js';
+import {
+  isPgwireRuntimeRef,
+  validatePgwireRuntimeConfig,
+} from '../runtime/pgwire-descriptor.js';
 
 // --- Validation error message constants ---
 
@@ -192,6 +196,17 @@ function validateRuntimeDescriptor(descriptor) {
   const configResult = validateRuntimeConfig(descriptor.runtimeConfig);
   if (!configResult.valid) {
     errors.push(...configResult.errors);
+  }
+
+  // Per-ref config shape validation (fail-closed).
+  if (configResult.valid &&
+      isPgwireRuntimeRef(descriptor.runtimeRef)) {
+    const pgResult = validatePgwireRuntimeConfig(
+      descriptor.runtimeConfig,
+    );
+    if (!pgResult.valid) {
+      errors.push(...pgResult.errors);
+    }
   }
 
   if (errors.length > 0) {

@@ -81,12 +81,36 @@ test('LogsView', async (t) => {
     t.equal(row[4], '');
   });
 
+  t.test('formatRow falls back to created_at timestamp', async (t) => {
+    const view = new LogsView();
+    const createdAt = new Date('2025-01-18T10:30:00.000Z').getTime();
+    const log = createLog({
+      timestamp: null,
+      created_at: createdAt,
+    });
+
+    const row = view.formatRow(log);
+
+    t.equal(row[0], '2025-01-18 10:30:00.000');
+  });
+
   t.test('formatTimestamp handles various formats', async (t) => {
     const view = new LogsView();
 
     // Numeric timestamp
     const ts1 = new Date('2025-01-18T10:30:00.000Z').getTime();
     t.equal(view.formatTimestamp(ts1), '2025-01-18 10:30:00.000');
+
+    // Numeric-string timestamp (epoch ms)
+    t.equal(
+      view.formatTimestamp(String(ts1)),
+      '2025-01-18 10:30:00.000',
+    );
+
+    // Epoch seconds (number and string) should be normalized to ms
+    const tsSeconds = Math.floor(ts1 / 1000);
+    t.equal(view.formatTimestamp(tsSeconds), '2025-01-18 10:30:00.000');
+    t.equal(view.formatTimestamp(String(tsSeconds)), '2025-01-18 10:30:00.000');
 
     // ISO string
     t.equal(view.formatTimestamp('2025-01-18T10:30:00.000Z'),
@@ -284,6 +308,58 @@ test('LogsView', async (t) => {
     t.equal(view.filteredData[2].log_id, 'log-2');
   });
 
+  t.test('applySort normalizes mixed timestamp formats', async (t) => {
+    const view = new LogsView();
+    const baseMs = Date.parse('2025-01-18T10:30:00.000Z');
+    const logs = [
+      createLog({log_id: 'log-ms', timestamp: String(baseMs)}),
+      createLog({
+        log_id: 'log-seconds-string',
+        timestamp: String(Math.floor((baseMs + 1000) / 1000)),
+      }),
+      createLog({
+        log_id: 'log-seconds-number',
+        timestamp: Math.floor((baseMs + 2000) / 1000),
+      }),
+    ];
+
+    view.setData(logs);
+
+    t.same(
+      view.filteredData.map((log) => log.log_id),
+      ['log-seconds-number', 'log-seconds-string', 'log-ms'],
+    );
+  });
+
+  t.test('applySort uses deterministic tie-breakers for identical timestamps', async (t) => {
+    const view = new LogsView();
+    const ts = Date.parse('2025-01-18T10:30:00.000Z');
+    const logs = [
+      createLog({
+        log_id: 'log-c',
+        timestamp: ts,
+        created_at: ts,
+      }),
+      createLog({
+        log_id: 'log-a',
+        timestamp: ts,
+        created_at: ts + 1,
+      }),
+      createLog({
+        log_id: 'log-b',
+        timestamp: ts,
+        created_at: ts + 1,
+      }),
+    ];
+
+    view.setData(logs);
+
+    t.same(
+      view.filteredData.map((log) => log.log_id),
+      ['log-b', 'log-a', 'log-c'],
+    );
+  });
+
   t.test('handleDrillDown returns detail action', async (t) => {
     const view = new LogsView();
     view.setData([createLog({log_id: 'log-1'})]);
@@ -394,6 +470,25 @@ test('LogsView', async (t) => {
 
     t.equal(range.start, now - 3000);
     t.equal(range.end, now - 1000);
+  });
+
+  t.test('getTimeRange falls back to created_at timestamps', async (t) => {
+    const view = new LogsView();
+    const baseMs = Date.parse('2025-01-18T10:30:00.000Z');
+    const logs = [
+      createLog({log_id: 'log-1', timestamp: null, created_at: baseMs}),
+      createLog({
+        log_id: 'log-2',
+        timestamp: null,
+        created_at: baseMs + 1000,
+      }),
+    ];
+    view.setData(logs);
+
+    const range = view.getTimeRange();
+
+    t.equal(range.start, baseMs);
+    t.equal(range.end, baseMs + 1000);
   });
 
   t.test('getTimeRange returns null for empty data', async (t) => {
@@ -551,4 +646,277 @@ test('LOG_LEVEL_COLORS constant', async (t) => {
   t.equal(LOG_LEVEL_COLORS.INFO, 'white');
   t.equal(LOG_LEVEL_COLORS.DEBUG, 'gray');
   t.equal(LOG_LEVEL_COLORS.TRACE, 'gray');
+});
+
+test('buildLogsQuery', async (t) => {
+  t.test('returns unfiltered query with no filters', async (t) => {
+    const view = new LogsView();
+    const {sql, params} = view.buildLogsQuery();
+
+    t.ok(sql.startsWith('SELECT * FROM logs'));
+    t.ok(sql.includes('ORDER BY timestamp DESC, created_at DESC, log_id DESC'));
+    t.ok(sql.includes('LIMIT'));
+    t.equal(params.length, 0);
+  });
+
+  t.test('adds level WHERE clause', async (t) => {
+    const view = new LogsView();
+    view.levelFilter = 'ERROR';
+    const {sql, params} = view.buildLogsQuery();
+
+    t.ok(sql.includes('WHERE'));
+    t.ok(sql.includes('level = ?1'));
+    t.equal(params[0], 'ERROR');
+  });
+
+  t.test('adds node_id WHERE clause', async (t) => {
+    const view = new LogsView();
+    view.nodeFilter = 'node-1';
+    const {sql, params} = view.buildLogsQuery();
+
+    t.ok(sql.includes('node_id = ?1'));
+    t.equal(params[0], 'node-1');
+  });
+
+  t.test('adds message LIKE clause', async (t) => {
+    const view = new LogsView();
+    view.messageFilter = 'timeout';
+    const {sql, params} = view.buildLogsQuery();
+
+    t.ok(sql.includes('message LIKE ?1'));
+    t.equal(params[0], '%timeout%');
+  });
+
+  t.test('combines multiple filters with AND', async (t) => {
+    const view = new LogsView();
+    view.levelFilter = 'WARN';
+    view.nodeFilter = 'node-2';
+    const {sql, params} = view.buildLogsQuery();
+
+    t.ok(sql.includes('level = ?1'));
+    t.ok(sql.includes('node_id = ?2'));
+    t.ok(sql.includes(' AND '));
+    t.equal(params.length, 2);
+    t.equal(params[0], 'WARN');
+    t.equal(params[1], 'node-2');
+  });
+});
+
+test('logs live query mode', async (t) => {
+  t.test('show anchors logs window to view-entry time and starts subscription', async (t) => {
+    const subscriptions = [];
+    const mockLiveQueryManager = {
+      subscribe: (sql) => {
+        subscriptions.push(sql);
+        return 'lq_0';
+      },
+      cancel: () => true,
+    };
+    const view = new LogsView({
+      connectionManager: {sendQuery: () => true},
+      liveQueryManager: mockLiveQueryManager,
+      liveQueryEnabled: true,
+    });
+    const originalNow = Date.now;
+    Date.now = () => 1771263051905;
+
+    try {
+      view.show();
+    } finally {
+      Date.now = originalNow;
+    }
+
+    t.equal(view.startTimeFilter, 1771263051905);
+    t.equal(subscriptions.length, 1, 'should subscribe on view entry');
+    t.match(subscriptions[0], /LIVE SELECT \* FROM logs/i);
+    t.match(subscriptions[0], /timestamp >= 1771263051905/);
+  });
+
+  t.test('fetchLogs uses live query only and does not send one-shot SQL', async (t) => {
+    const subscriptions = [];
+    let sendQueryCalls = 0;
+    const mockLiveQueryManager = {
+      subscribe: (sql) => {
+        subscriptions.push(sql);
+        return 'lq_0';
+      },
+      cancel: () => true,
+    };
+    const view = new LogsView({
+      connectionManager: {
+        sendQuery: () => {
+          sendQueryCalls += 1;
+          return true;
+        },
+      },
+      liveQueryManager: mockLiveQueryManager,
+      liveQueryEnabled: true,
+    });
+
+    view.fetchLogs();
+
+    t.equal(subscriptions.length, 1, 'should subscribe to live query');
+    t.equal(sendQueryCalls, 0, 'should not run hybrid snapshot query path');
+  });
+
+  t.test('ignores external setData in live-query mode', async (t) => {
+    const view = new LogsView({
+      connectionManager: {},
+      liveQueryManager: {
+        subscribe: () => 'lq_0',
+        cancel: () => true,
+      },
+      liveQueryEnabled: true,
+    });
+
+    view.setData([
+      {log_id: 'cache-1', timestamp: 10, level: 'INFO', message: 'cache'},
+    ]);
+    t.equal(view.data.length, 0, 'should ignore non-live data injection');
+
+    view.applySnapshotRows([
+      {log_id: 'live-1', timestamp: 20, level: 'INFO', message: 'live'},
+    ]);
+    t.equal(view.data.length, 1, 'should accept live-query snapshot data');
+    t.equal(view.data[0].log_id, 'live-1');
+  });
+
+  t.test('reuses live query subscription when filters are unchanged', async (t) => {
+    const subscriptions = [];
+    const cancelled = [];
+    const mockLiveQueryManager = {
+      subscribe: (sql) => {
+        const id = `lq_${subscriptions.length}`;
+        subscriptions.push({id, sql});
+        return id;
+      },
+      cancel: (id) => {
+        cancelled.push(id);
+        return true;
+      },
+    };
+    const view = new LogsView({
+      connectionManager: {},
+      liveQueryManager: mockLiveQueryManager,
+      liveQueryEnabled: true,
+    });
+
+    view.fetchLogs();
+    const firstSubscriptionId = view.activeSubscriptionId;
+    view.fetchLogs();
+
+    t.equal(subscriptions.length, 1, 'should avoid re-subscribing live query');
+    t.equal(cancelled.length, 0, 'should avoid cancelling active live query');
+    t.equal(view.activeSubscriptionId, firstSubscriptionId,
+      'should keep existing live query subscription');
+  });
+
+  t.test('setLiveWindowStartTime updates live query start boundary', async (t) => {
+    const subscriptions = [];
+    const cancelled = [];
+    let nextSubscriptionNumber = 0;
+    const mockLiveQueryManager = {
+      subscribe: (sql) => {
+        subscriptions.push(sql);
+        return `lq_${nextSubscriptionNumber++}`;
+      },
+      cancel: (id) => {
+        cancelled.push(id);
+        return true;
+      },
+    };
+    const view = new LogsView({
+      connectionManager: {},
+      liveQueryManager: mockLiveQueryManager,
+      liveQueryEnabled: true,
+    });
+
+    view.fetchLogs();
+    view.setLiveWindowStartTime('-5m');
+
+    t.equal(cancelled.length, 1, 'should replace previous subscription');
+    t.equal(subscriptions.length, 2, 'should subscribe with updated time window');
+  });
+
+  t.test('hide cancels active live query subscription', async (t) => {
+    const cancelled = [];
+    const mockLiveQueryManager = {
+      subscribe: () => 'lq_0',
+      cancel: (id) => {
+        cancelled.push(id);
+        return true;
+      },
+    };
+    const view = new LogsView({
+      connectionManager: {},
+      liveQueryManager: mockLiveQueryManager,
+      liveQueryEnabled: true,
+    });
+
+    view.fetchLogs();
+    view.hide();
+
+    t.same(cancelled, ['lq_0']);
+  });
+
+  t.test('applies snapshot rows from live query snapshot events', async (t) => {
+    const {EventBus} = await import('../../../src/cli/core/event-bus.js');
+    const bus = new EventBus();
+    const mockLiveQueryManager = {
+      subscribe: () => 'lq_snapshot',
+      cancel: () => true,
+    };
+    const view = new LogsView({
+      connectionManager: {},
+      liveQueryManager: mockLiveQueryManager,
+      eventBus: bus,
+      liveQueryEnabled: true,
+    });
+
+    view.fetchLogs();
+    bus.emit('livequery:event', {
+      subscriptionId: 'lq_snapshot',
+      eventType: 'SNAPSHOT',
+      data: [
+        {log_id: 'l1', level: 'INFO', message: 'first', timestamp: 100},
+        {log_id: 'l2', level: 'ERROR', message: 'second', timestamp: 90},
+      ],
+    });
+
+    t.equal(view.data.length, 2);
+    t.equal(view.data[0].log_id, 'l1');
+  });
+
+  t.test('handles livequery:event for incremental inserts', async (t) => {
+    const {EventBus} = await import('../../../src/cli/core/event-bus.js');
+    const bus = new EventBus();
+    const mockLiveQueryManager = {
+      subscribe: () => 'lq_event_test',
+      cancel: () => true,
+    };
+    const view = new LogsView({
+      connectionManager: {},
+      liveQueryManager: mockLiveQueryManager,
+      eventBus: bus,
+      liveQueryEnabled: true,
+    });
+
+    view.fetchLogs();
+    bus.emit('livequery:event', {
+      subscriptionId: 'lq_event_test',
+      eventType: 'SNAPSHOT',
+      data: [
+        {log_id: 'l1', level: 'INFO', message: 'first', timestamp: 100},
+      ],
+    });
+
+    bus.emit('livequery:event', {
+      subscriptionId: 'lq_event_test',
+      eventType: 'INSERT',
+      data: {log_id: 'l3', level: 'WARN', message: 'new', timestamp: 300},
+    });
+
+    t.equal(view.data.length, 2, 'should add new log entry');
+    t.equal(view.filteredData[0].log_id, 'l3');
+  });
 });

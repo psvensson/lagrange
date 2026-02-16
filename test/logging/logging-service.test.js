@@ -192,6 +192,62 @@ test('LoggingService all log methods', async (t) => {
   LoggingService.resetInstance();
 });
 
+test('LoggingService suppresses metrics logs from default console sink',
+  async (t) => {
+    LoggingService.resetInstance();
+    const logger = LoggingService.getInstance();
+    logger.initialize({nodeId: 'test-node', level: 'info'});
+
+    const sinkCalls = [];
+    logger.logger = {
+      trace: (...args) => sinkCalls.push({level: 'trace', args}),
+      debug: (...args) => sinkCalls.push({level: 'debug', args}),
+      info: (...args) => sinkCalls.push({level: 'info', args}),
+      warn: (...args) => sinkCalls.push({level: 'warn', args}),
+      error: (...args) => sinkCalls.push({level: 'error', args}),
+      fatal: (...args) => sinkCalls.push({level: 'fatal', args}),
+    };
+
+    logger.info('metrics.transport.deliver', {
+      durationMs: 1,
+      messageCount: 10,
+    });
+
+    t.equal(sinkCalls.length, 0, 'should not write metrics to console sink');
+    t.equal(logger.getBufferSize(), 1, 'should still buffer the metric entry');
+    t.equal(logger.buffer[0].message, 'metrics.transport.deliver');
+
+    LoggingService.resetInstance();
+  });
+
+test('LoggingService allows metrics logs when override is enabled',
+  async (t) => {
+    LoggingService.resetInstance();
+    const logger = LoggingService.getInstance();
+    logger.initialize({
+      nodeId: 'test-node',
+      level: 'info',
+      showMetricsInConsole: true,
+    });
+
+    const sinkCalls = [];
+    logger.logger = {
+      trace: (...args) => sinkCalls.push({level: 'trace', args}),
+      debug: (...args) => sinkCalls.push({level: 'debug', args}),
+      info: (...args) => sinkCalls.push({level: 'info', args}),
+      warn: (...args) => sinkCalls.push({level: 'warn', args}),
+      error: (...args) => sinkCalls.push({level: 'error', args}),
+      fatal: (...args) => sinkCalls.push({level: 'fatal', args}),
+    };
+
+    logger.info('metrics.transport.deliver', {durationMs: 1});
+
+    t.equal(sinkCalls.length, 1, 'should write metrics to console sink');
+    t.equal(sinkCalls[0].level, 'info');
+
+    LoggingService.resetInstance();
+  });
+
 test('cleanup', async (t) => {
   LoggingService.resetInstance();
   ConfigurationManager.resetInstance();

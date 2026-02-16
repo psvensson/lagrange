@@ -8,6 +8,7 @@ import pino from 'pino';
 import {v4 as uuidv4} from 'uuid';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
+import {METRICS_LOG_PREFIX} from '../constants/metrics-constants.js';
 import {
   LOG_LEVELS,
   LOGGING_DEFAULT,
@@ -33,6 +34,7 @@ class LoggingService {
     this.nodeId = null;
     this.logger = null;
     this.initialized = false;
+    this.showMetricsInConsole = LOGGING_DEFAULT.SHOW_METRICS_IN_CONSOLE;
   }
 
   /**
@@ -56,6 +58,8 @@ class LoggingService {
   /**
    * Initialize the logging service.
    * @param {Object} options - Configuration options.
+   * @param {boolean} [options.showMetricsInConsole] - Enable console output
+   *   for `metrics.*` log tags (disabled by default).
    */
   initialize(options = {}) {
     const config = ConfigurationManager.getInstance();
@@ -69,6 +73,9 @@ class LoggingService {
     const prettyPrint =
       options.prettyPrint ?? config.get(CONFIG_KEY.LOGGING_PRETTY_PRINT) ??
       LOGGING_DEFAULT.PRETTY_PRINT;
+    this.showMetricsInConsole =
+      options.showMetricsInConsole ??
+      LOGGING_DEFAULT.SHOW_METRICS_IN_CONSOLE;
 
     // Configure pino logger
     const pinoOptions = {
@@ -121,22 +128,40 @@ class LoggingService {
   }
 
   /**
+   * Check whether a log message belongs to the metrics namespace.
+   * @param {*} message - Log message value.
+   * @return {boolean} True when message starts with metrics namespace prefix.
+   * @private
+   */
+  isMetricsLogMessage(message) {
+    return typeof message === 'string' &&
+      message.startsWith(METRICS_LOG_PREFIX);
+  }
+
+  /**
    * Log a message at the specified level.
    * @param {string} level - Log level.
    * @param {string} message - Log message.
    * @param {Object} context - Additional context.
    */
   log(level, message, context = {}) {
+    const isMetricsMessage = this.isMetricsLogMessage(message);
+    const shouldWriteToConsole = this.showMetricsInConsole || !isMetricsMessage;
+
     if (!this.initialized) {
       // Fallback to console during pre-initialization
-      console.log(JSON.stringify({level, message, ...context}));
+      if (shouldWriteToConsole) {
+        console.log(JSON.stringify({level, message, ...context}));
+      }
       return;
     }
 
     const entry = this.createLogEntry(level, message, context);
 
     // Log to pino
-    this.logger[level]({...context, nodeId: this.nodeId}, message);
+    if (shouldWriteToConsole) {
+      this.logger[level]({...context, nodeId: this.nodeId}, message);
+    }
 
     // Buffer during bootstrap
     if (!this.logsTableReady) {

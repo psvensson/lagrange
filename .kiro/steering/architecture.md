@@ -10,7 +10,7 @@ A scalable distributed database where:
 - ALL partitions are Raft consensus groups with odd-numbered replicas (minimum 3)
 - ALL partitions use SQLite for storage
 - Replicated service groups host service runtimes selected by
-  `service_definitions.runtime_kind` (current focus: WASM and native admin)
+  `service_definitions.runtime_kind` (WASM, native admin, PG wire)
 
 ## Core Principles
 
@@ -71,7 +71,42 @@ To prevent overlap and contradictory runtime behavior:
 15. **Adapter Boundary Ownership:** Node-local admin endpoints are ingress
     adapters only (fixed port `8081`), not mutation owners.
 16. **Runtime Mutation Ownership:** Runtime drivers must not write system
-    metadata directly; service and operation mutations flow through SQL/CDC.
+   metadata directly; service and operation mutations flow through SQL/CDC.
+17. **Live Query Runtime Ownership:** `createLiveQueryStartupWiring` is the
+    single startup-owned path that creates one `LiveQueryManager` per node,
+    wires it into `AdminWebSocketAPI`, and bridges `SystemTableCache` CDC
+    notifications to active live subscriptions.
+
+### Distributed SQL Canonical Ownership (Hard Cutover)
+
+The distributed SQL layer is now single-path and owner-specific:
+
+1. `DistributedQueryPlanner` is the only owner of multi-table partition
+   planning, predicate-shape diagnostics, join strategy selection, and
+   pushdown planning.
+2. `ParallelQueryCoordinator` is the only owner of fanout scheduling and
+   per-partition execution outcomes. Partition limits are enforced through
+   deterministic chunking; no partition truncation is allowed.
+3. `DistributedMergeEngine` (over `StreamingAggregator`) is the only owner of
+   global merge semantics (`DISTINCT`, `GROUP/HAVING`, `ORDER`, `LIMIT`,
+   set-operation merge behavior).
+4. `DistributedWriteCoordinator` is the only owner for distributed
+   INSERT/UPDATE/DELETE routing, participant result aggregation, and
+   idempotency envelope metadata.
+5. `DistributedTransactionCoordinator` is the only owner for distributed
+   transaction participant enlistment, prepare/commit/rollback state machine,
+   and recovery from `sql_transactions`, `sql_transaction_participants`,
+   and `sql_write_operations`.
+6. `SQLQueryEngine` remains the orchestration entrypoint and delegates to the
+   owners above. It does not keep alternate distributed execution branches.
+
+Forbidden patterns for distributed SQL:
+
+1. `failOpen` read/write behavior toggles.
+2. External ad-hoc join-partition injection (`options.joinPartitions`) in
+   execution entrypoints.
+3. Legacy distributed planning/execution fallback branches in
+   `SQLQueryEngine` or `QueryExecutor`.
 
 ## Unified Service Lifecycle Owners (Hard Cutover)
 
@@ -174,17 +209,22 @@ State labels in this section are explicit and mandatory.
 
 ### Active
 
-1. `sys-admin-meta` and `sys-wasm-meta` are replicated control-plane services.
-2. Node-local admin ingress remains fixed on port `8081` as a compatibility
-   adapter.
+1. `sys-admin-meta`, `sys-wasm-meta`, and `sys-postgres-wire` are
+   replicated control-plane / ingress services.
+2. Node-local admin ingress remains fixed on port `8081` as a
+   compatibility adapter.
 3. Runtime lifecycle operations are owned by
    `Service_Runtime_Lifecycle` with runtime selection through
    `Runtime_Driver_Registry`.
 4. SQL profile services map to `runtime_kind = native_js` through
    `SQL_ENGINE_RUNTIME_KIND`.
-5. Callback invocation is owned by `CallbackExecutionHost`; callback runtime
-   selection is through `CallbackRuntimeDriverRegistry` as a strict adapter
-   over the unified runtime registry.
+5. Callback invocation is owned by `CallbackExecutionHost`; callback
+   runtime selection is through `CallbackRuntimeDriverRegistry` as a
+   strict adapter over the unified runtime registry.
+6. `sys-postgres-wire` is a built-in replicated runtime service
+   providing PostgreSQL wire protocol ingress. Lifecycle, placement,
+   and endpoint ownership follow the unified runtime model. No
+   standalone listener path exists (hard cutover).
 
 ### Target
 
@@ -249,10 +289,13 @@ SQL/CDC mutation path + operation journal updates
 2. Runtime fallback driver selection.
 3. Node-local adapter mutation ownership.
 4. Driver direct writes to system metadata bypassing SQL/CDC.
-5. Parallel callback runtime engine outside `CallbackRuntimeDriverRegistry`.
+5. Parallel callback runtime engine outside
+   `CallbackRuntimeDriverRegistry`.
 6. Schema/model command drift for `service_definitions`.
 7. Unlabeled active-vs-target documentation claims.
 8. Marking closure tasks complete without production-path evidence.
+9. Standalone PG wire TCP listener outside the replicated service
+   path (`sys-postgres-wire` is the only PG wire listener owner).
 
 ### Migration Posture
 
@@ -408,10 +451,12 @@ The general `STATE` enum (`src/constants/states.js`) retains only non-node value
 Versioned management APIs are serviceized. Node-local admin and WASM API
 routes are compatibility adapters forwarding to:
 - `sys-wasm-meta` (WASM module/service ownership)
-- `sys-admin-meta` (broader admin surfaces, delegates WASM ownership areas)
-Both services are provisioned during seed bootstrap.
+- `sys-admin-meta` (broader admin surfaces, delegates WASM ownership)
+- `sys-postgres-wire` (PostgreSQL wire protocol ingress)
+All three services are provisioned during seed bootstrap.
 Under the unified runtime target, these services are runtime-selected via
-`service_definitions.runtime_kind` and orchestrated through one lifecycle owner.
+`service_definitions.runtime_kind` and orchestrated through one lifecycle
+owner.
 
 ## Key Components
 
@@ -596,6 +641,124 @@ AdminWebSocketAPI debug route adapter
 - Mutation guard (`src/admin/admin-mutation-guard.js`) rejects
   bypass attempts in `reject` mode
 - Preserves single-path mutation ownership in service handlers
+
+### PostgresWireService (`sys-postgres-wire`)
+- Built-in replicated runtime service for PostgreSQL wire protocol
+  ingress (`META_SERVICE_ID.POSTGRES_WIRE = 'sys-postgres-wire'`)
+- Provisioned during seed bootstrap alongside `sys-admin-meta` and
+  `sys-wasm-meta` via `MetaServiceFactory`
+- `service_type = runtime_service`, `runtime_kind = native_js`,
+  `runtime_ref = postgres-wire-runtime`
+  (`META_SERVICE_RUNTIME_REF.POSTGRES_WIRE`)
+- Cluster-global `replica_count` semantics: the rebalancer treats
+  the service as a single entity with a target replica count spread
+  across nodes (not per-node)
+- Placement managed by `UnifiedRebalancer` with entity type
+  `REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE`
+- Replica operations (`ADD/REMOVE/REPLACE`) execute through
+  `RuntimeServiceHandler` via `ServiceLifecycleManager`
+- Endpoint publication: each replica writes a `service_endpoints`
+  row with `protocol = postgresql`
+  (`WASM_SERVICE_PROTOCOL.POSTGRESQL`) for client discovery
+
+Key components:
+- `PostgresWireRuntimeModule` — native runtime module implementing
+  `prepare/start/stop/health`; `start()` binds TCP listener and
+  returns endpoint intent
+- `PgWireProtocolHandler` — wire protocol message handling
+  (startup, auth handshake, simple/extended query protocol)
+- `PgWireSession` — per-connection session state and lifecycle
+- `PgWireAuthHandler` — authentication and tenant/principal context
+  mapping for authorization before query execution
+- `PgwirePortAllocator` — port allocation with fixed-port and
+  dynamic-range modes; bind conflicts produce typed errors
+- `PgWireStartupSafetyGate` — ensures control-plane readiness
+  before PG wire startup; prevents bootstrap/join deadlocks on
+  PG wire failure
+- `PgWireCutoverGuard` — hard cutover verification; rejects any
+  standalone listener startup path outside the replicated service
+
+Ownership rules:
+- No standalone PG wire TCP listener path exists. The replicated
+  service path is the only listener owner (hard cutover).
+- Session state is replica-local by design. Horizontal scaling
+  works through endpoint discovery and client reconnect.
+- All metadata writes flow through SQL/CDC; the runtime module
+  does not write system tables directly.
+
+### PostgreSQL Wire Data Flow
+
+```
+PG Client (psql, pg driver, ORM)
+      │
+      ▼ TCP connect (port from service_endpoints)
+┌─────────────────────────────────────────────┐
+│ PgWireStartupSafetyGate                     │
+│ (control-plane readiness check)             │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────┐
+│ PostgresWireRuntimeModule (TCP listener)    │
+│ (sys-postgres-wire replica on this node)    │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────┐
+│ PgWireProtocolHandler                       │
+│ (startup/auth handshake, query dispatch)    │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────┐
+│ PgWireAuthHandler                           │
+│ (authn → tenant/principal context)          │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────┐
+│ PostgresWireAdapter                         │
+│ (normalize to SqlRequest, dialect=pg)       │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────┐
+│ SqlCore (SQLQueryEngine)                    │
+│ (parse, plan, route, execute)               │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+             Return Results
+        (PG wire result encoding)
+```
+
+### PostgreSQL Wire Scale Operations
+
+Scaling `sys-postgres-wire` follows the unified rebalancer model:
+
+1. `replica_count` in `service_definitions` is cluster-global.
+   The rebalancer spreads replicas across available nodes.
+2. Scale-up: increase `replica_count` → rebalancer plans `ADD`
+   operations → `RuntimeServiceHandler` materializes new replicas
+   via `ServiceLifecycleManager` → each replica binds a TCP
+   listener and publishes a `service_endpoints` row.
+3. Scale-down: decrease `replica_count` → rebalancer plans `REMOVE`
+   operations → replica stops listener, cleans up endpoint row.
+4. Node failure: rebalancer detects under-replication → plans
+   `REPLACE` operations on healthy nodes with elevated budget.
+5. Convergence: rebalancer stabilization period prevents thrashing;
+   budget coordination limits concurrent operations.
+
+### PostgreSQL Wire Endpoint Discovery
+
+Clients discover PG wire endpoints through `service_endpoints`:
+
+- Rows with `protocol = 'postgresql'` identify PG wire replicas
+- Each row includes `node_id`, `host`, `port` for connection
+- Admin diagnostic views group endpoints by logical service
+  (`sys-postgres-wire`) and show per-replica state and health
+- UI distinguishes logical services (e.g., `sys-postgres-wire`)
+  from individual replica rows for clarity
 
 ### Admin Security and Observability
 - Auth middleware (`src/admin/admin-auth-middleware.js`) enforces
@@ -1022,14 +1185,20 @@ The former monolithic ControlPlaneService is decomposed into four focused servic
 A thin `ControlPlaneService` facade remains for backward compatibility, delegating to these focused services.
 
 ### UnifiedRebalancer
-- Manages replica placement for partitions, message groups, and replicated
-  service groups (current service entity type: `wasm_service`)
+- Manages replica placement for partitions, message groups, and
+  replicated service groups (entity types: `wasm_service`,
+  `runtime_service`)
 - Operates autonomously (no manual placement)
 - Uses policies to determine target replica count and placement
+- Runtime services (`sys-postgres-wire`) use cluster-global
+  `replica_count` semantics (not per-node)
 - Stabilization period prevents thrashing
-- Cluster-wide rebalance budget limits concurrent moves (stored in config table)
-- Critical moves (under-replicated from node failure) get elevated budget via multiplier
-- Reads in-flight operation count via SQL engine before planning moves
+- Cluster-wide rebalance budget limits concurrent moves (stored in
+  config table)
+- Critical moves (under-replicated from node failure) get elevated
+  budget via multiplier
+- Reads in-flight operation count via SQL engine before planning
+  moves
 
 ## Bootstrap Process
 
@@ -1058,6 +1227,8 @@ Phase 4: Registration (Bootstrap Mode)
 ├── Write initial system table data directly to partitions
 ├── Seed `config.current_epoch` when absent
 ├── Register nodes, services, partitions, tables
+├── Register built-in runtime service definitions
+│   (sys-admin-meta, sys-wasm-meta, sys-postgres-wire)
 ├── Resolve and persist node storage budget via NodeStorageBudgetService
 └── Disable bootstrap mode
 
@@ -1222,6 +1393,7 @@ Entity types:
 - `partition` - Partition service replicas
 - `message-group` - Message group replicas
 - `wasm-service` - WASM service group replicas
+- `runtime-service` - Runtime service replicas (e.g., PG wire)
 - `lifecycle` - Node lifecycle handler
 
 ## Raft Consensus
@@ -1241,18 +1413,18 @@ Entity types:
 ### Log Storage
 - Message groups: In-memory log adapter
 - Partitions: SQLite log adapter (persistent)
-- Replicated service groups (current `wasm_service`): SQLite log adapter
-  (persistent)
+- Replicated service groups (`wasm_service`, `runtime_service`):
+  SQLite log adapter (persistent)
 
 ## Rebalancing
 
 ### UnifiedRebalancer
 
-The `UnifiedRebalancer` is the single rebalancer implementation for partitions,
-message groups, and replicated service groups (current entity type:
-`wasm_service`). Each partition/message group/service leader runs its own
-rebalancer instance, making independent decisions that converge to optimal
-state.
+The `UnifiedRebalancer` is the single rebalancer implementation for
+partitions, message groups, and replicated service groups (entity types:
+`wasm_service`, `runtime_service`). Each partition/message group/service
+leader runs its own rebalancer instance, making independent decisions
+that converge to optimal state.
 
 Key characteristics:
 - **Per-entity rebalancer**: Each partition/message group/service has its own
@@ -1545,6 +1717,53 @@ Configuration is centralized in ConfigurationManager with sections:
 - `query` - Query execution settings
 - `bootstrap` - Bootstrap process settings
 
+## Performance Metrics Instrumentation
+
+Structured metrics logging is emitted on hot paths using the `metrics.*`
+log tag namespace. All metrics use `logger.info()` level, structured
+objects (no string interpolation), and `Ms` suffix for duration fields.
+Most paths emit one metric per operation; ultra-hot transport delivery
+metrics use trigger-based sampling to avoid log flood.
+
+Constants: `METRICS_LOG_TAG` in `src/constants/metrics-constants.js`.
+
+### Instrumented Paths
+
+| Log Tag | Owner Component | Method |
+|---------|----------------|--------|
+| `metrics.query.lifecycle` | `SQLQueryEngine` | `executeQuery()` |
+| `metrics.query.dispatch` | `SQLQueryEngine` | `executeRequest()` |
+| `metrics.select.distributed` | `QueryExecutor` | `executeSelect()` |
+| `metrics.fanout.complete` | `ParallelQueryCoordinator` | `executeParallel()` |
+| `metrics.partition.sqlite` | `PartitionService` | `executeQuery()` |
+| `metrics.partition.raft_propose` | `PartitionService` | `proposeWrite()` |
+| `metrics.transport.deliver` | `MessageRouter` | `deliver()` |
+| `metrics.transport.endpoint` | `MessageRouter` | `deliverViaEndpoint()` |
+| `metrics.cdc.write` | `CDCIntegrationService` | `insertSystemTableRow()` / `updateSystemTableRow()` |
+| `metrics.cdc.sql_route` | `CDCIntegrationService` | `executeSQL()` |
+| `metrics.cdc.propagation` | `CDCEventHandler` / `MessageGroupService` | `applyCDCEvent()` |
+| `metrics.hydration.table` | `CacheHydrationService` | `hydrateTable()` |
+| `metrics.hydration.complete` | `CacheHydrationService` | `hydrateCache()` |
+| `metrics.callback.throughput` | `CallbackExecutionHost` | `execute()` |
+| `metrics.rebalance.operation` | `RebalanceCoordinator` | terminal state transitions |
+| `metrics.pgwire.handshake` | `PgWireProtocolHandler` | startup/auth handshake |
+| `metrics.pgwire.query` | `PgWireProtocolHandler` | query execution |
+| `metrics.pgwire.session` | `PgWireSession` | session lifecycle |
+| `metrics.pgwire.protocol_error` | `PgWireProtocolHandler` | protocol errors |
+
+### Conventions
+
+- All log tags use the `metrics.` prefix namespace.
+- Duration fields use `Ms` suffix with integer milliseconds.
+- Throughput fields use explicit units (e.g., `rowsPerSecond`).
+- `metrics.transport.deliver` is sampled for steady-state success traffic;
+  immediate emission still happens for faults, slow deliveries, and
+  queue backpressure transitions.
+- Metric-tagged logs are hidden from default process console output and
+  remain available in structured logging persistence for deeper analysis.
+- No new dependencies, caches, or state introduced by instrumentation.
+- Metrics logging failures do not propagate to callers.
+
 ## Error Handling
 
 - Try/catch errors MUST NOT be swallowed
@@ -1558,3 +1777,66 @@ Configuration is centralized in ConfigurationManager with sections:
 - Property-based testing with fast-check (max 10 iterations)
 - Tests must complete in under 2 seconds
 - No skipped tests allowed
+
+## Kubernetes Endpoint Sync Controller
+
+Kubernetes integration for runtime-managed replicated services uses a
+projection controller model. Ownership remains split by concern:
+
+1. Internal runtime ownership (`ServiceLifecycleManager`, `ServiceRuntimeLifecycle`,
+   rebalancer, operation journal) remains authoritative for placement, lifecycle,
+   and endpoint publication in `service_endpoints`.
+2. Kubernetes endpoint sync is projection-only: it reads canonical endpoint rows
+   via admin stream query execution and reconciles selector-less `Service` plus
+   managed `EndpointSlice` resources.
+3. The sync controller does not perform internal placement, does not mutate
+   system tables, and does not introduce a parallel metadata store.
+
+### Endpoint Sync Runtime Modules
+
+Primary modules:
+
+1. `src/runtime/endpoint-sync-config.js` — env contract parsing and validation.
+2. `src/runtime/endpoint-sync-source-client.js` — admin stream source query with
+   retries and typed failures.
+3. `src/runtime/endpoint-sync-source-query.js` — source SQL builder and endpoint
+   row normalization/filtering.
+4. `src/runtime/endpoint-sync-naming.js` — deterministic DNS-1123 naming with
+   hash truncation.
+5. `src/runtime/endpoint-sync-planner.js` — logical service grouping, strict
+   port validation, EndpointSlice chunk planning.
+6. `src/runtime/endpoint-sync-k8s-reconciler.js` — upsert/GC reconciliation for
+   managed `Service` and `EndpointSlice`, with per-group failure continuation.
+7. `src/runtime/endpoint-sync-controller.js` — run-once orchestration of
+   source -> filter -> plan -> reconcile with leader/follower write gating.
+8. `src/runtime/endpoint-sync-leader-election.js` — Kubernetes Lease-based
+   leadership election (`coordination.k8s.io/v1` Lease).
+9. `src/runtime/endpoint-sync-metrics.js` — in-memory metric storage for
+   reconcile duration/failures and exported object counts.
+10. `src/runtime/endpoint-sync-k8s-client.js` — in-cluster Kubernetes API
+    adapter implementing Service/EndpointSlice/Lease/Event operations.
+
+### Endpoint Sync Safety and Observability
+
+1. Leader election is lease-backed. Only the lease holder performs reconcile
+   writes; followers no-op for write safety in multi-replica deployments.
+2. Structured logs include one reconcile summary per cycle and per-group
+   projection failures with `serviceKey`, `serviceName`, `protocol`, and stage.
+3. Group-level projection failures emit Kubernetes warning Events when the
+   Kubernetes client provides `recordEvent(...)`.
+4. Metrics snapshot includes:
+   `endpoint_sync_reconcile_duration_ms`,
+   `endpoint_sync_reconcile_failures_total`,
+   `endpoint_sync_exported_services`,
+   `endpoint_sync_exported_endpoints`,
+   `endpoint_sync_port_conflict_total`.
+
+### Managed Resource Identity
+
+Managed Kubernetes objects are identified by labels:
+
+1. `endpointsync.system/managed=true`
+2. `endpointsync.system/source=service_endpoints`
+3. `endpointsync.system/service-key=<logical-service|protocol>`
+
+Garbage collection is scoped strictly to resources carrying managed labels.

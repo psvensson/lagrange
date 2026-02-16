@@ -123,7 +123,7 @@ test('QueryExecutor - returns empty for no partitions', async (t) => {
   t.equal(result.rows.length, 0);
 });
 
-test('QueryExecutor - handles missing partition gracefully', async (t) => {
+test('QueryExecutor - fails closed when a partition is missing', async (t) => {
   mockPartitionData.set('p1', [{id: 1, name: 'Alice'}]);
 
   const executor = new QueryExecutor({
@@ -134,8 +134,9 @@ test('QueryExecutor - handles missing partition gracefully', async (t) => {
   const ast = parseSQL('SELECT * FROM users');
   const result = await executor.executeSelect(ast, ['p1', 'missing']);
 
-  t.equal(result.success, true);
-  t.equal(result.rows.length, 1); // Only p1 returns data
+  t.equal(result.success, false);
+  t.equal(result.errorCode, 'DISTRIBUTED_PARTICIPANT_FAILURE');
+  t.same(result.failedPartitions, ['missing']);
 
   mockPartitionData.clear();
 });
@@ -515,7 +516,7 @@ test('QueryExecutor - preserves IS NOT NULL when rebuilding SQL', async (t) => {
   t.notMatch(sql, /IS NOT NULL\s+NULL/i);
 });
 
-test('QueryExecutor - handles partition query errors', async (t) => {
+test('QueryExecutor - fails closed on partition query errors', async (t) => {
   // Create a message router that returns errors
   const errorRouter = {
     deliver: async function(_address, _message) {
@@ -536,9 +537,9 @@ test('QueryExecutor - handles partition query errors', async (t) => {
   const ast = parseSQL('SELECT * FROM users');
   const result = await executor.executeSelect(ast, ['p1']);
 
-  // Should not throw, but return empty rows for failed partition
-  t.equal(result.success, true);
-  t.equal(result.rows.length, 0);
+  t.equal(result.success, false);
+  t.equal(result.errorCode, 'DISTRIBUTED_PARTICIPANT_FAILURE');
+  t.same(result.failedPartitions, ['p1']);
 });
 
 test('QueryExecutor - findPartitionLeaderAddress returns leader address', (t) => {
@@ -841,9 +842,9 @@ test('QueryExecutor - handles redirect when leader also fails', async (t) => {
   const ast = parseSQL('SELECT * FROM users');
   const result = await executor.executeSelect(ast, ['p1']);
 
-  // Should fail gracefully - no rows but still returns result
-  t.equal(result.success, true, 'overall query succeeds');
-  t.equal(result.rows.length, 0, 'no rows when all replicas fail');
+  t.equal(result.success, false, 'query fails closed when all replicas fail');
+  t.equal(result.errorCode, 'DISTRIBUTED_PARTICIPANT_FAILURE');
+  t.same(result.failedPartitions, ['p1']);
 });
 
 // --- RETURNING clause reconstruction tests (Requirements: 3.2, 3.3) ---

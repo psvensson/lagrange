@@ -336,6 +336,9 @@ class UnifiedRebalancer extends EventEmitter {
     if (this.entityType === EntityType.MESSAGE_GROUP) {
       return this.getMessageGroupPolicy();
     }
+    if (this.entityType === EntityType.RUNTIME_SERVICE) {
+      return this.getRuntimeServicePolicy();
+    }
     return this.getTablePolicy();
   }
 
@@ -355,6 +358,15 @@ class UnifiedRebalancer extends EventEmitter {
   getMessageGroupPolicy() {
     // Delegate to TablePolicyService for canonical validation/merge
     return this.tablePolicyService.getMessageGroupPolicy(this.entityId);
+  }
+
+  /**
+   * Get runtime service policy.
+   * Returns the default runtime service placement policy.
+   * @return {Object} Runtime service policy.
+   */
+  getRuntimeServicePolicy() {
+    return {...REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE};
   }
 
   /**
@@ -626,6 +638,17 @@ class UnifiedRebalancer extends EventEmitter {
         SystemTableName.SERVICES, (service) => {
           return service.group_id === this.entityId &&
             service.service_type === EntityType.MESSAGE_GROUP;
+        });
+    }
+
+    // For runtime services, match by service_type and service_id
+    // that equals or is prefixed by the entity (definition) ID.
+    if (this.entityType === EntityType.RUNTIME_SERVICE) {
+      return this.systemTableCache.filter(
+        SystemTableName.SERVICES, (service) => {
+          return service.service_type ===
+            EntityType.RUNTIME_SERVICE &&
+            service.service_id === this.entityId;
         });
     }
 
@@ -1827,7 +1850,9 @@ class UnifiedRebalancer extends EventEmitter {
         event.operation === 'UPDATE' &&
         event.data?.status === ReplicaStatus.FAILED) {
       return event.data?.partition_id === this.entityId ||
-        event.data?.group_id === this.entityId;
+        event.data?.group_id === this.entityId ||
+        (this.entityType === EntityType.RUNTIME_SERVICE &&
+          event.data?.service_id === this.entityId);
     }
 
     return false;

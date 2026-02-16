@@ -14,7 +14,7 @@ TAP version 14
     ok 12 - lastUpdate is null
     ok 13 - cdcLag is 0
     1..13
-ok 1 - RemoteCache - constructor initializes empty tables # time=4.675ms
+ok 1 - RemoteCache - constructor initializes empty tables # time=4.285ms
 
 # Subtest: RemoteCache - loadFromDump initializes cache from dump
     ok 1 - loaded 2 nodes
@@ -22,37 +22,37 @@ ok 1 - RemoteCache - constructor initializes empty tables # time=4.675ms
     ok 3 - loaded 1 table
     ok 4 - lastUpdate is set
     1..4
-ok 2 - RemoteCache - loadFromDump initializes cache from dump # time=0.641ms
+ok 2 - RemoteCache - loadFromDump initializes cache from dump # time=0.623ms
 
 # Subtest: RemoteCache - applyCDCEvent INSERT adds record
     ok 1 - event was applied
     ok 2 - node was added
     ok 3 - node has correct status
     1..3
-ok 3 - RemoteCache - applyCDCEvent INSERT adds record # time=0.326ms
+ok 3 - RemoteCache - applyCDCEvent INSERT adds record # time=0.387ms
 
 # Subtest: RemoteCache - applyCDCEvent UPDATE modifies record
     ok 1 - node status was updated
     1..1
-ok 4 - RemoteCache - applyCDCEvent UPDATE modifies record # time=0.166ms
+ok 4 - RemoteCache - applyCDCEvent UPDATE modifies record # time=0.176ms
 
 # Subtest: RemoteCache - applyCDCEvent DELETE removes record
     ok 1 - node was removed
     ok 2 - node is undefined
     1..2
-ok 5 - RemoteCache - applyCDCEvent DELETE removes record # time=0.208ms
+ok 5 - RemoteCache - applyCDCEvent DELETE removes record # time=0.224ms
 
 # Subtest: RemoteCache - getServices filters by nodeId
     ok 1 - filtered to 2 services
     ok 2 - all have node-1
     1..2
-ok 6 - RemoteCache - getServices filters by nodeId # time=0.231ms
+ok 6 - RemoteCache - getServices filters by nodeId # time=0.307ms
 
 # Subtest: RemoteCache - getServices filters by type
     ok 1 - filtered to 2 services
     ok 2 - all partitions
     1..2
-ok 7 - RemoteCache - getServices filters by type # time=0.243ms
+ok 7 - RemoteCache - getServices filters by type # time=0.295ms
 
 # Subtest: RemoteCache - getServices includes runtime services from definitions/endpoints
     ok 1 - includes one runtime service row
@@ -61,7 +61,7 @@ ok 7 - RemoteCache - getServices filters by type # time=0.243ms
     ok 4 - runtime service row uses endpoint health status
     ok 5 - runtime service row is enriched with node address
     1..5
-ok 8 - RemoteCache - getServices includes runtime services from definitions/endpoints # time=0.457ms
+ok 8 - RemoteCache - getServices includes runtime services from definitions/endpoints # time=0.511ms
 
 # Subtest: RemoteCache - runtime services support legacy id/camelCase payload fields
     ok 1 - includes one runtime replica row
@@ -71,12 +71,12 @@ ok 8 - RemoteCache - getServices includes runtime services from definitions/endp
     ok 5 - runtime row prefers endpoint health status
     ok 6 - runtime row resolves node address from legacy node field
     1..6
-ok 9 - RemoteCache - runtime services support legacy id/camelCase payload fields # time=0.418ms
+ok 9 - RemoteCache - runtime services support legacy id/camelCase payload fields # time=0.463ms
 
 # Subtest: RemoteCache - node filter excludes runtime definitions without endpoints
     ok 1 - runtime definitions without endpoints are not materialized as replicas
     1..1
-ok 10 - RemoteCache - node filter excludes runtime definitions without endpoints # time=0.204ms
+ok 10 - RemoteCache - node filter excludes runtime definitions without endpoints # time=0.226ms
 
 # Subtest: RemoteCache - getLogicalServices aggregates definitions and endpoints
     ok 1 - returns one logical service
@@ -86,32 +86,32 @@ ok 10 - RemoteCache - node filter excludes runtime definitions without endpoints
     ok 5 - includes healthy replica count from endpoints
     ok 6 - marks service healthy when desired replicas are healthy
     1..6
-ok 11 - RemoteCache - getLogicalServices aggregates definitions and endpoints # time=0.59ms
+ok 11 - RemoteCache - getLogicalServices aggregates definitions and endpoints # time=0.591ms
 
 # Subtest: RemoteCache - getLogicalServices supports nodeId filter
     ok 1 - filters logical services to those hosted on selected node
     ok 2 - returns logical service hosted on node-1
     1..2
-ok 12 - RemoteCache - getLogicalServices supports nodeId filter # time=0.228ms
+ok 12 - RemoteCache - getLogicalServices supports nodeId filter # time=0.428ms
 
 # Subtest: RemoteCache - getPartitions filters by tableId
     ok 1 - filtered to 2 partitions
     ok 2 - all for tbl-1
     1..2
-ok 13 - RemoteCache - getPartitions filters by tableId # time=0.265ms
+ok 13 - RemoteCache - getPartitions filters by tableId # time=0.669ms
 
 # Subtest: RemoteCache - getLogs filters by multiple criteria
     ok 1 - filtered by level
     ok 2 - filtered by nodeId
     ok 3 - filtered by startTime
     1..3
-ok 14 - RemoteCache - getLogs filters by multiple criteria # time=0.371ms
+ok 14 - RemoteCache - getLogs filters by multiple criteria # time=0.662ms
 
 # Subtest: RemoteCache - getContexts filters by type and namePattern
     ok 1 - filtered by type
     ok 2 - filtered by namePattern
     1..2
-ok 15 - RemoteCache - getContexts filters by type and namePattern # time=0.293ms
+ok 15 - RemoteCache - getContexts filters by type and namePattern # time=0.387ms
 
 # Subtest: RemoteCache - serialize and deserialize round-trip
     ok 1 - nodes restored
@@ -119,44 +119,44 @@ ok 15 - RemoteCache - getContexts filters by type and namePattern # time=0.293ms
     ok 3 - tables restored
     ok 4 - node data correct
     1..4
-ok 16 - RemoteCache - serialize and deserialize round-trip # time=0.402ms
+ok 16 - RemoteCache - serialize and deserialize round-trip # time=0.409ms
 
 # Subtest: RemoteCache - clear removes all data
     ok 1 - nodes cleared
     ok 2 - services cleared
     ok 3 - lastUpdate cleared
     1..3
-ok 17 - RemoteCache - clear removes all data # time=0.261ms
+ok 17 - RemoteCache - clear removes all data # time=0.272ms
 
 # Subtest: RemoteCache - getStats returns cache statistics
     ok 1 - lastUpdate is set
     ok 2 - nodes count is 2
     ok 3 - services count is 1
     1..3
-ok 18 - RemoteCache - getStats returns cache statistics # time=0.328ms
+ok 18 - RemoteCache - getStats returns cache statistics # time=0.457ms
 
 # Subtest: RemoteCache - isInitialized returns correct state
     ok 1 - not initialized initially
     ok 2 - initialized after loadFromDump
     1..2
-ok 19 - RemoteCache - isInitialized returns correct state # time=0.199ms
+ok 19 - RemoteCache - isInitialized returns correct state # time=0.322ms
 
 # Subtest: RemoteCache - isStale checks CDC lag
     ok 1 - not stale with low lag
     ok 2 - stale with high lag
     1..2
-ok 20 - RemoteCache - isStale checks CDC lag # time=0.183ms
+ok 20 - RemoteCache - isStale checks CDC lag # time=0.34ms
 
 # Subtest: RemoteCache - applyCDCEvent handles unknown table
     ok 1 - event was not applied
     1..1
-ok 21 - RemoteCache - applyCDCEvent handles unknown table # time=0.143ms
+ok 21 - RemoteCache - applyCDCEvent handles unknown table # time=0.405ms
 
 # Subtest: RemoteCache - applyCDCEvent handles unknown operation
     ok 1 - event was not applied
     1..1
-ok 22 - RemoteCache - applyCDCEvent handles unknown operation # time=0.138ms
+ok 22 - RemoteCache - applyCDCEvent handles unknown operation # time=0.182ms
 
 1..22
 # { total: 70, pass: 70 }
-# time=18.55ms
+# time=20.853ms

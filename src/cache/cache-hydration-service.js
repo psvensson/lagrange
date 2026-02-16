@@ -5,7 +5,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {CDC_OPERATION} from '../constants/index.js';
+import {CDC_OPERATION, METRICS_LOG_TAG} from '../constants/index.js';
 import {
   CACHE_HYDRATION_ERROR_MSG,
   CACHE_HYDRATION_LOG_MSG,
@@ -79,6 +79,8 @@ class CacheHydrationService {
    */
   async hydrateCache() {
     this.logger.info(CACHE_HYDRATION_LOG_MSG.STARTING);
+    const totalStartMs = Date.now();
+    let totalRows = 0;
 
     const results = {
       success: true,
@@ -89,6 +91,7 @@ class CacheHydrationService {
     for (const tableName of SYSTEM_TABLES_TO_HYDRATE) {
       try {
         const rowCount = await this.hydrateTable(tableName);
+        totalRows += rowCount;
         results.tables[tableName] = {
           success: true,
           rowCount,
@@ -124,6 +127,16 @@ class CacheHydrationService {
       errors: results.errors.length,
     });
 
+    try {
+      this.logger.info(METRICS_LOG_TAG.HYDRATION_COMPLETE, {
+        tableCount: SYSTEM_TABLES_TO_HYDRATE.length,
+        totalDurationMs: Date.now() - totalStartMs,
+        totalRows,
+      });
+    } catch (_metricsErr) {
+      // Metrics logging must not propagate to callers
+    }
+
     return results;
   }
 
@@ -134,11 +147,14 @@ class CacheHydrationService {
    * @private
    */
   async hydrateTable(tableName) {
+    const startMs = Date.now();
     const sql = `SELECT * FROM ${tableName}`;
     const result = await this.queryEngine.executeQuery(sql);
 
     if (!result.success) {
-      throw new Error(result.error || CACHE_HYDRATION_ERROR_MSG.queryFailed(tableName));
+      throw new Error(
+        result.error || CACHE_HYDRATION_ERROR_MSG.queryFailed(tableName),
+      );
     }
 
     const rows = result.rows || [];
@@ -147,7 +163,21 @@ class CacheHydrationService {
       await this.cdcEventApplier(tableName, CDC_OPERATION.INSERT, row);
     }
 
-    return rows.length;
+    const rowCount = rows.length;
+    const durationMs = Date.now() - startMs;
+    try {
+      this.logger.info(METRICS_LOG_TAG.HYDRATION_TABLE, {
+        tableName,
+        rowCount,
+        durationMs,
+        rowsPerSecond: durationMs > 0 ?
+          Math.round(rowCount / (durationMs / 1000)) : 0,
+      });
+    } catch (_metricsErr) {
+      // Metrics logging must not propagate to callers
+    }
+
+    return rowCount;
   }
 }
 

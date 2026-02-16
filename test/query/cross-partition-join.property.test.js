@@ -131,14 +131,20 @@ test('Property 50: Cross-Partition JOIN Support', async (t) => {
             distinct: false,
           };
 
-          const joinPartitions = new Map();
-          joinPartitions.set('orders', ['orders_p1']);
+          const tablePlans = new Map();
+          tablePlans.set('orders', {
+            partitions: ['orders_p1'],
+          });
 
           const result = await executor.executeSelect(
             ast,
             ['users_p1'],
             [],
-            {joinPartitions},
+            {
+              distributedPlan: {
+                tablePlans,
+              },
+            },
           );
 
           mockPartitionData.clear();

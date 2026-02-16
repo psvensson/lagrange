@@ -56,6 +56,7 @@ const ENTRYPOINT_LOG_MSG = Object.freeze({
 
 const ENTRYPOINT_ERROR_MSG = Object.freeze({
   SYSTEM_TABLE_CACHE_REQUIRED: 'System table cache required after join',
+  LIVE_QUERY_MANAGER_REQUIRED: 'Live query manager required during startup',
 });
 
 const ENTRYPOINT_TEXT = Object.freeze({

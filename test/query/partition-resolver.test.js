@@ -255,3 +255,97 @@ test('PartitionResolver - handles keyRange format', async (t) => {
   t.equal(resolver.resolvePartitionForKey('users', 'alice', partitions), 'p1');
   t.equal(resolver.resolvePartitionForKey('users', 'peter', partitions), 'p2');
 });
+
+test('PartitionResolver - routes with parameterized key predicates', async (t) => {
+  const resolver = new PartitionResolver();
+  const partitions = createPartitions();
+  const where = parseWhere('SELECT * FROM users WHERE id = ?');
+
+  const result = resolver.resolvePartitions(
+    'users',
+    where,
+    partitions,
+    {params: ['alice']},
+  );
+
+  t.same(result, ['p1']);
+  t.equal(resolver.getLastResolutionInfo().predicateShape, 'eq');
+});
+
+test('PartitionResolver - supports key predicate with parameter on left side', async (t) => {
+  const resolver = new PartitionResolver();
+  const partitions = createPartitions();
+  const where = parseWhere('SELECT * FROM users WHERE ? < id');
+
+  const result = resolver.resolvePartitions(
+    'users',
+    where,
+    partitions,
+    {params: ['n']},
+  );
+
+  t.ok(result.includes('p2'));
+  t.ok(result.includes('p3'));
+  t.equal(resolver.getLastResolutionInfo().predicateShape, 'range');
+});
+
+test('PartitionResolver - supports composite key pruning with equality', async (t) => {
+  const resolver = new PartitionResolver();
+  const partitions = [
+    {
+      partition_id: 'p1',
+      partition_key_start: null,
+      partition_key_end: '[\"n\"',
+    },
+    {
+      partition_id: 'p2',
+      partition_key_start: '[\"n\"',
+      partition_key_end: null,
+    },
+  ];
+  const where = parseWhere(
+    'SELECT * FROM users WHERE tenant_id = \'alice\' AND id = 7',
+  );
+
+  const result = resolver.resolvePartitions(
+    'users',
+    where,
+    partitions,
+    {keyColumns: ['tenant_id', 'id']},
+  );
+
+  t.same(result, ['p1']);
+  t.equal(resolver.getLastResolutionInfo().predicateShape, 'eq');
+});
+
+test('PartitionResolver - scatters when composite key predicate is incomplete', async (t) => {
+  const resolver = new PartitionResolver();
+  const partitions = [
+    {
+      partition_id: 'p1',
+      partition_key_start: null,
+      partition_key_end: '[\"n\"',
+    },
+    {
+      partition_id: 'p2',
+      partition_key_start: '[\"n\"',
+      partition_key_end: null,
+    },
+  ];
+  const where = parseWhere(
+    'SELECT * FROM users WHERE tenant_id = ?',
+  );
+
+  const result = resolver.resolvePartitions(
+    'users',
+    where,
+    partitions,
+    {
+      params: ['alice'],
+      keyColumns: ['tenant_id', 'id'],
+    },
+  );
+
+  t.same(result.sort(), ['p1', 'p2']);
+  t.equal(resolver.getLastResolutionInfo().predicateShape, 'scatter');
+});

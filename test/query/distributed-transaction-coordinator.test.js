@@ -1,0 +1,224 @@
+import {test} from '../../src/test-helpers/tap.js';
+import {
+  DistributedTransactionCoordinator,
+  TRANSACTION_STATUS,
+} from '../../src/query/distributed-transaction-coordinator.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+
+const config = ConfigurationManager.getInstance();
+if (!config.isInitialized()) {
+  config.initialize();
+}
+
+test('DistributedTransactionCoordinator - enlists participants and commits', async (t) => {
+  const calls = [];
+  const coordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async (sessionId, partitionId) => {
+      calls.push(`begin:${sessionId}:${partitionId}`);
+    },
+    commitParticipant: async (sessionId, partitionId) => {
+      calls.push(`commit:${sessionId}:${partitionId}`);
+    },
+    rollbackParticipant: async (sessionId, partitionId) => {
+      calls.push(`rollback:${sessionId}:${partitionId}`);
+    },
+    now: () => 1000,
+  });
+
+  const beginResult = await coordinator.begin('s1');
+  t.equal(beginResult.success, true);
+  t.ok(beginResult.transactionId.startsWith('tx-s1-'));
+
+  const enlistResult = await coordinator.enlistParticipants('s1', ['p1', 'p2']);
+  t.equal(enlistResult.success, true);
+  t.same(enlistResult.participants.sort(), ['p1', 'p2']);
+
+  const commitResult = await coordinator.commit('s1');
+  t.equal(commitResult.success, true);
+  t.same(commitResult.participants.sort(), ['p1', 'p2']);
+  t.equal(coordinator.hasActiveTransaction('s1'), false);
+  t.same(calls, [
+    'begin:s1:p1',
+    'begin:s1:p2',
+    'commit:s1:p1',
+    'commit:s1:p2',
+  ]);
+});
+
+test(
+  'DistributedTransactionCoordinator - commit failure surfaces failed participants',
+  async (t) => {
+    const coordinator = new DistributedTransactionCoordinator({
+      beginParticipant: async () => {},
+      commitParticipant: async (_sessionId, partitionId) => {
+        if (partitionId === 'p2') {
+          throw new Error('commit failed');
+        }
+      },
+      rollbackParticipant: async () => {},
+    });
+
+    await coordinator.begin('s2');
+    await coordinator.enlistParticipants('s2', ['p1', 'p2']);
+    const commitResult = await coordinator.commit('s2');
+
+    t.equal(commitResult.success, false);
+    t.equal(commitResult.failedParticipants.length, 1);
+    t.equal(commitResult.failedParticipants[0].partitionId, 'p2');
+  },
+);
+
+test('DistributedTransactionCoordinator - rollback clears active transaction', async (t) => {
+  const calls = [];
+  const coordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async () => {},
+    commitParticipant: async () => {},
+    rollbackParticipant: async (_sessionId, partitionId) => {
+      calls.push(partitionId);
+    },
+  });
+
+  await coordinator.begin('s3');
+  await coordinator.enlistParticipants('s3', ['p1', 'p2']);
+  const rollbackResult = await coordinator.rollback('s3');
+
+  t.equal(rollbackResult.success, true);
+  t.same(calls.sort(), ['p1', 'p2']);
+  t.equal(coordinator.hasActiveTransaction('s3'), false);
+});
+
+test('DistributedTransactionCoordinator - supports recovery payloads', async (t) => {
+  const coordinator = new DistributedTransactionCoordinator();
+  coordinator.recover([
+    {
+      sessionId: 's4',
+      transactionId: 'tx-s4-1',
+      status: TRANSACTION_STATUS.PREPARED,
+      participants: ['p1'],
+      writeOperations: [{operationId: 'op-1'}],
+      createdAt: 1,
+    },
+  ]);
+
+  const tx = coordinator.getTransaction('s4');
+  t.equal(tx.transactionId, 'tx-s4-1');
+  t.equal(tx.status, TRANSACTION_STATUS.PREPARED);
+  t.same(tx.participants, ['p1']);
+  t.equal(tx.writeOperations.length, 1);
+  t.equal(tx.writeOperations[0].operationId, 'op-1');
+});
+
+test('DistributedTransactionCoordinator - prepare failure reports stage and participant',
+  async (t) => {
+    const coordinator = new DistributedTransactionCoordinator({
+      beginParticipant: async () => {},
+      prepareParticipant: async (_sessionId, partitionId) => {
+        if (partitionId === 'p2') {
+          throw new Error('prepare failed');
+        }
+      },
+      commitParticipant: async () => {},
+      rollbackParticipant: async () => {},
+    });
+
+    await coordinator.begin('s5');
+    await coordinator.enlistParticipants('s5', ['p1', 'p2']);
+    const result = await coordinator.commit('s5');
+
+    t.equal(result.success, false);
+    t.equal(result.stage, TRANSACTION_STATUS.PREPARING);
+    t.equal(result.failedParticipants.length, 1);
+    t.equal(result.failedParticipants[0].partitionId, 'p2');
+    t.equal(coordinator.hasActiveTransaction('s5'), true);
+  });
+
+test('DistributedTransactionCoordinator - emits persistence callbacks', async (t) => {
+  const persistedTransactions = [];
+  const persistedParticipants = [];
+  const persistedWriteOperations = [];
+
+  const coordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async () => {},
+    prepareParticipant: async () => {},
+    commitParticipant: async () => {},
+    rollbackParticipant: async () => {},
+    persistTransaction: async (record) => {
+      persistedTransactions.push(record.status);
+    },
+    persistParticipant: async (record) => {
+      persistedParticipants.push({
+        partitionId: record.partitionId,
+        status: record.status,
+      });
+    },
+    persistWriteOperation: async (record) => {
+      persistedWriteOperations.push({
+        operationId: record.operationId,
+        status: record.status,
+      });
+    },
+  });
+
+  await coordinator.begin('s6');
+  await coordinator.enlistParticipants('s6', ['p1']);
+  await coordinator.recordWriteOperation('s6', {
+    operationId: 'op-1',
+    statementType: 'UPDATE',
+    partitionIds: ['p1'],
+    idempotencyKey: 'idem-op-1',
+    payloadHash: 'hash-op-1',
+  });
+  await coordinator.markWriteOperationResult('s6', 'op-1', {
+    success: true,
+    retryCount: 1,
+  });
+  await coordinator.commit('s6');
+
+  t.ok(persistedTransactions.includes(TRANSACTION_STATUS.ACTIVE));
+  t.ok(persistedTransactions.includes(TRANSACTION_STATUS.PREPARED));
+  t.ok(persistedTransactions.includes(TRANSACTION_STATUS.COMMITTED));
+  t.ok(persistedParticipants.some((entry) =>
+    entry.partitionId === 'p1' && entry.status === 'COMMITTED'));
+  t.ok(persistedWriteOperations.some((entry) =>
+    entry.operationId === 'op-1' && entry.status === 'SUCCEEDED'));
+});
+
+test('DistributedTransactionCoordinator - recovers from canonical system table rows',
+  async (t) => {
+    const coordinator = new DistributedTransactionCoordinator();
+    coordinator.recoverFromSystemTables({
+      transactions: [{
+        transaction_id: 'tx-s7-1',
+        session_id: 's7',
+        status: TRANSACTION_STATUS.PREPARED,
+        created_at: 1,
+        updated_at: 2,
+      }],
+      participants: [{
+        participant_id: 'tx-s7-1:p1',
+        transaction_id: 'tx-s7-1',
+        partition_id: 'p1',
+        status: 'PREPARED',
+        created_at: 1,
+        updated_at: 2,
+      }],
+      writeOperations: [{
+        operation_id: 'op-2',
+        transaction_id: 'tx-s7-1',
+        statement_type: 'DELETE',
+        status: 'PENDING',
+        idempotency_key: 'idem-op-2',
+        payload_hash: 'hash-op-2',
+        partition_ids: '["p1"]',
+        retry_count: 0,
+        created_at: 1,
+        updated_at: 2,
+      }],
+    });
+
+    const tx = coordinator.getTransaction('s7');
+    t.equal(tx.transactionId, 'tx-s7-1');
+    t.same(tx.participants, ['p1']);
+    t.equal(tx.writeOperations.length, 1);
+    t.same(tx.writeOperations[0].partitionIds, ['p1']);
+  });

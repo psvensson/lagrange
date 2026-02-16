@@ -6,6 +6,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {TABLES} from '../../src/constants/index.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -188,6 +189,94 @@ test('SQLQueryEngine - routes INSERT to multiple partitions', async (t) => {
 
   // Clean up
   mockPartitionData.clear();
+});
+
+test('SQLQueryEngine - merges RETURNING rows for distributed INSERT', async (t) => {
+  const cache = createMockSystemCache(
+    [{table_name: 'users', primaryKey: 'id'}],
+    [
+      {partition_id: 'p1', table_name: 'users', partition_key_start: null, partition_key_end: 'm'},
+      {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
+    ],
+  );
+  const returningRouter = {
+    deliver: async (address, message) => {
+      const partitionId = address.split('/')[2];
+      if (message.type !== 'QUERY') {
+        return {acknowledged: true, success: true};
+      }
+      if (!message.sql.startsWith('INSERT')) {
+        return {acknowledged: true, success: true, rows: [], changes: 0};
+      }
+      const rows = partitionId === 'p1' ?
+        [{id: 'alice'}] :
+        [{id: 'zack'}];
+      return {
+        acknowledged: true,
+        success: true,
+        rows,
+        changes: 1,
+      };
+    },
+  };
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: returningRouter,
+  });
+
+  const result = await engine.executeQuery(
+    'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\'), ' +
+    '(\'zack\', \'Zack\') RETURNING id',
+  );
+
+  t.equal(result.success, true);
+  t.equal(result.affectedRows, 2);
+  t.same(result.rows.map((row) => row.id).sort(), ['alice', 'zack']);
+});
+
+test('SQLQueryEngine - surfaces partial failure for distributed UPDATE', async (t) => {
+  const cache = createMockSystemCache(
+    [{table_name: 'users', primaryKey: 'id'}],
+    [
+      {partition_id: 'p1', table_name: 'users', partition_key_start: null, partition_key_end: 'm'},
+      {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
+    ],
+  );
+  const failingRouter = {
+    deliver: async (address, message) => {
+      const partitionId = address.split('/')[2];
+      if (message.type !== 'QUERY') {
+        return {acknowledged: true, success: true};
+      }
+      if (partitionId === 'p2') {
+        return {
+          acknowledged: true,
+          success: false,
+          error: 'partition unavailable',
+        };
+      }
+      return {
+        acknowledged: true,
+        success: true,
+        rows: [{id: 'alice'}],
+        changes: 1,
+      };
+    },
+  };
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: failingRouter,
+  });
+
+  const result = await engine.executeQuery(
+    'UPDATE users SET status = \'active\' WHERE age > 18 RETURNING id',
+  );
+
+  t.equal(result.success, false);
+  t.equal(result.errorCode, 'DISTRIBUTED_PARTICIPANT_FAILURE');
+  t.same(result.failedPartitions, ['p2']);
+  t.equal(result.affectedRows, 1);
+  t.same(result.rows, [{id: 'alice'}]);
 });
 
 test('SQLQueryEngine - executes UPDATE with key filter', async (t) => {
@@ -388,3 +477,236 @@ test('SQLQueryEngine - returns empty array when no partitions found in cache', a
   t.equal(result.success, false);
   t.ok(result.error.includes('not found'));
 });
+
+test('SQLQueryEngine - persists non-transactional distributed write operations',
+  async (t) => {
+    const upserts = [];
+    const cache = createMockSystemCache(
+      [{table_name: 'users', primaryKey: 'id'}],
+      [
+        {
+          partition_id: 'p1',
+          table_name: 'users',
+          partition_key_start: null,
+          partition_key_end: 'm',
+        },
+        {
+          partition_id: 'p2',
+          table_name: 'users',
+          partition_key_start: 'm',
+          partition_key_end: null,
+        },
+      ],
+    );
+    const cdcIntegrationService = {
+      async upsertSystemTableRow(tableName, row) {
+        upserts.push({tableName, row});
+        return {success: true};
+      },
+    };
+    const engine = new SQLQueryEngine({
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+      cdcIntegrationService,
+    });
+
+    const result = await engine.executeQuery(
+      'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\')',
+    );
+
+    t.equal(result.success, true);
+    const writeOpRows = upserts.filter((entry) =>
+      entry.tableName === TABLES.SQL_WRITE_OPERATIONS);
+    t.equal(writeOpRows.length, 2);
+    t.equal(writeOpRows[0].row.status, 'PENDING');
+    t.equal(writeOpRows[1].row.status, 'SUCCEEDED');
+  });
+
+test('SQLQueryEngine - recovers distributed transactions from system cache snapshots',
+  async (t) => {
+    const cache = createMockSystemCache([], []);
+    const transactionRows = [{
+      transaction_id: 'tx-recovery-1',
+      session_id: 'recovery-session',
+      status: 'PREPARED',
+      created_at: 1,
+      updated_at: 2,
+    }];
+    const participantRows = [{
+      participant_id: 'tx-recovery-1:p1',
+      transaction_id: 'tx-recovery-1',
+      partition_id: 'p1',
+      status: 'PREPARED',
+      created_at: 1,
+      updated_at: 2,
+    }];
+    const writeOperationRows = [{
+      operation_id: 'op-recovery-1',
+      transaction_id: 'tx-recovery-1',
+      statement_type: 'UPDATE',
+      status: 'PENDING',
+      idempotency_key: 'idem-op-recovery-1',
+      payload_hash: 'hash-op-recovery-1',
+      partition_ids: '["p1"]',
+      retry_count: 0,
+      created_at: 1,
+      updated_at: 2,
+    }];
+    const originalGetAll = cache.getAll.bind(cache);
+    cache.getAll = function(type) {
+      if (type === TABLES.SQL_TRANSACTIONS) {
+        return transactionRows;
+      }
+      if (type === TABLES.SQL_TRANSACTION_PARTICIPANTS) {
+        return participantRows;
+      }
+      if (type === TABLES.SQL_WRITE_OPERATIONS) {
+        return writeOperationRows;
+      }
+      return originalGetAll(type);
+    };
+
+    const engine = new SQLQueryEngine({
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+    });
+
+    t.equal(engine.hasActiveTransaction('recovery-session'), true);
+    t.equal(engine.getTransactionPartition('recovery-session'), 'p1');
+  });
+
+test('SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output',
+  async (t) => {
+    const cache = createMockSystemCache(
+      [{table_name: 'users', primaryKey: 'id'}],
+      [
+        {
+          partition_id: 'p1',
+          table_name: 'users',
+          partition_key_start: null,
+          partition_key_end: null,
+        },
+      ],
+    );
+    const engine = new SQLQueryEngine({
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+    });
+
+    const result = await engine.executeQuery(
+      'EXPLAIN DISTRIBUTED SELECT id FROM users WHERE id = ?',
+      ['alice'],
+    );
+
+    t.equal(result.success, true);
+    t.equal(result.operation, 'EXPLAIN_DISTRIBUTED');
+    t.equal(result.rows.length, 1);
+    t.ok(result.rows[0].plan_id.startsWith('dqp-'));
+    t.same(Object.keys(result.rows[0].diagnostics).sort(), [
+      'explain',
+      'generatedAt',
+      'joinPlan',
+      'pushdownDecisions',
+      'tableGraph',
+      'tablePlans',
+    ]);
+  });
+
+test('SQLQueryEngine - distributed diagnostics schema is stable for SELECT',
+  async (t) => {
+    mockPartitionData.set('p1', [{id: 'alice', name: 'Alice'}]);
+
+    const cache = createMockSystemCache(
+      [{table_name: 'users', primaryKey: 'id'}],
+      [{
+        partition_id: 'p1',
+        table_name: 'users',
+        partition_key_start: null,
+        partition_key_end: null,
+      }],
+    );
+    const engine = new SQLQueryEngine({
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+    });
+
+    const result = await engine.executeQuery(
+      'SELECT id FROM users WHERE id = ?',
+      ['alice'],
+    );
+
+    t.equal(result.success, true);
+    t.same(Object.keys(result.distributedMetrics).sort(), [
+      'executionDurationMs',
+      'fanout',
+      'mergeDurationMs',
+      'planningDurationMs',
+    ]);
+    t.same(Object.keys(result.distributedDiagnostics).sort(), [
+      'explain',
+      'generatedAt',
+      'joinPlan',
+      'pushdownDecisions',
+      'tableGraph',
+      'tablePlans',
+    ]);
+
+    mockPartitionData.clear();
+  });
+
+test('SQLQueryEngine - remains correct before and after partition split updates',
+  async (t) => {
+    const cache = createMockSystemCache(
+      [{table_name: 'users', primaryKey: 'id'}],
+      [{
+        partition_id: 'users-p1',
+        table_name: 'users',
+        partition_key_start: null,
+        partition_key_end: null,
+      }],
+    );
+    const engine = new SQLQueryEngine({
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+    });
+
+    mockPartitionData.set('users-p1', [{id: 'alice'}]);
+    const beforeSplit = await engine.executeQuery('SELECT * FROM users');
+    t.equal(beforeSplit.success, true);
+    t.equal(beforeSplit.rows.length, 1);
+
+    cache.partitions = [
+      {
+        partition_id: 'users-p1a',
+        table_name: 'users',
+        partition_key_start: null,
+        partition_key_end: 'm',
+      },
+      {
+        partition_id: 'users-p1b',
+        table_name: 'users',
+        partition_key_start: 'm',
+        partition_key_end: null,
+      },
+    ];
+    cache.services = cache.partitions.map((partition) => ({
+      service_id: partition.partition_id,
+      service_type: 'partition',
+      partition_id: partition.partition_id,
+      node_id: 'test-node',
+      raft_role: 'leader',
+      address: `test-node/partition/${partition.partition_id}`,
+      status: 'active',
+    }));
+
+    mockPartitionData.clear();
+    mockPartitionData.set('users-p1a', [{id: 'alice'}]);
+    mockPartitionData.set('users-p1b', [{id: 'zack'}]);
+
+    const afterSplit = await engine.executeQuery('SELECT * FROM users');
+    t.equal(afterSplit.success, true);
+    t.equal(afterSplit.rows.length, 2);
+    t.same(afterSplit.partitions.sort(), ['users-p1a', 'users-p1b']);
+
+    mockPartitionData.clear();
+  });

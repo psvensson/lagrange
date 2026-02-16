@@ -17,6 +17,7 @@ import {
   READ_CONSISTENCY_MODE,
   WRITE_CONSISTENCY_MODE,
   WASM_SERVICE_DEFAULT,
+  WASM_SERVICE_PROTOCOL,
 } from './wasm-service-constants.js';
 
 const META_FACTORY_SUBSYSTEM = 'meta-service-factory';
@@ -24,6 +25,7 @@ const META_FACTORY_SUBSYSTEM = 'meta-service-factory';
 const META_FACTORY_LOG_MSG = Object.freeze({
   WASM_META_CREATED: 'Created sys-wasm-meta service definition',
   ADMIN_META_CREATED: 'Created sys-admin-meta service definition',
+  POSTGRES_WIRE_CREATED: 'Created sys-postgres-wire service definition',
 });
 
 /**
@@ -74,9 +76,36 @@ function createAdminMetaDefinition() {
   };
 }
 
+/**
+ * Create the built-in sys-postgres-wire service definition.
+ * Binds to native_js runtime kind with the PostgreSQL wire
+ * runtime reference and postgresql protocol.
+ * @return {Object} Service definition object for sys-postgres-wire.
+ */
+function createPostgresWireDefinition() {
+  return {
+    serviceId: META_SERVICE_ID.POSTGRES_WIRE,
+    serviceName: META_SERVICE_ID.POSTGRES_WIRE,
+    serviceProfile: SERVICE_PROFILE.DEFAULT,
+    serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+    handlerFunctionId: null,
+    readConsistency: READ_CONSISTENCY_MODE.STRONG,
+    writeConsistency: WRITE_CONSISTENCY_MODE.STRONG,
+    replicaCount: WASM_SERVICE_DEFAULT.REPLICA_COUNT,
+    resourceBudget: {},
+    safetyIntervalMs: WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS,
+    runtimeKind: RUNTIME_KIND.NATIVE_JS,
+    runtimeRef: META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
+    runtimeConfig: null,
+    protocol: WASM_SERVICE_PROTOCOL.POSTGRESQL,
+  };
+}
+
+
 export {
   META_FACTORY_SUBSYSTEM,
   META_FACTORY_LOG_MSG,
   createWasmMetaDefinition,
   createAdminMetaDefinition,
+  createPostgresWireDefinition,
 };
