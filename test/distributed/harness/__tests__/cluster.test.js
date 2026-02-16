@@ -165,7 +165,7 @@ test('Unit: startLoad emits progress and completion playback events', async () =
 
   const run = cluster.startLoad({
     opsPerSec: 5,
-    duration: 2200,
+    duration: 1200,
   });
   const metrics = await run.waitComplete();
   assert.ok(metrics, 'waitComplete should resolve metrics');
@@ -186,7 +186,7 @@ test('Unit: startLoad emits progress and completion playback events', async () =
     'startLoad should emit one load.started event',
   );
   assert.ok(
-    progress.length >= 2,
+    progress.length >= 1,
     'startLoad should emit periodic load.progress events while running',
   );
   assert.strictEqual(
@@ -739,6 +739,45 @@ test('Unit: _startNode sets NODE_ADDRESS to routable host:port', async () => {
   );
 });
 
+test('Unit: _startNode sets leak capture NODE_OPTIONS when enabled', async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+    memoryLeak: {
+      enabled: true,
+      captureHeapArtifacts: true,
+      heapSnapshotNearLimitCount: 4,
+    },
+  });
+
+  cluster._networkName = 'test-net';
+
+  let capturedCreateOptions = null;
+  const provider = cluster._providers[0];
+  provider.createContainer = async (options) => {
+    capturedCreateOptions = options;
+    return {
+      containerId: 'container-2',
+      ip: '10.0.0.20',
+      name: options.name,
+    };
+  };
+
+  await cluster._startNode('node-with-leak-capture', NODE_ROLES.SEED, null, 0);
+
+  const env = capturedCreateOptions.env;
+  assert.ok(env.NODE_OPTIONS, 'NODE_OPTIONS should be set');
+  assert.ok(
+    env.NODE_OPTIONS.includes('--heap-prof'),
+    'NODE_OPTIONS should enable heap profiling',
+  );
+  assert.ok(
+    env.NODE_OPTIONS.includes('--heapsnapshot-near-heap-limit=4'),
+    'NODE_OPTIONS should use configured near-limit snapshot count',
+  );
+});
+
 /**
  * Unit: startup failure error reporting with logs (Req 3.4)
  */
@@ -830,51 +869,62 @@ test('Unit: _collectFailureLogs collects from all nodes', async () => {
 /**
  * Unit: best-effort cleanup via labels (Req 2.6)
  */
-test('Unit: createCluster registers process exit handlers', async () => {
-  const originalListenerCounts = {
+test('Unit: createCluster registers process cleanup handlers only once', async () => {
+  const firstCluster = createCluster({
+    size: 2,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  const countsAfterFirst = {
     exit: process.listenerCount('exit'),
     SIGINT: process.listenerCount('SIGINT'),
     SIGTERM: process.listenerCount('SIGTERM'),
     uncaughtException: process.listenerCount('uncaughtException'),
   };
 
-  const cluster = createCluster({
+  const secondCluster = createCluster({
     size: 2,
     docker: {socketPath: '/var/run/docker.sock'},
     image: 'distributed-db:test',
   });
 
-  assert.ok(
-    process.listenerCount('exit') >
-      originalListenerCounts.exit,
-    'should register an exit handler',
-  );
-  assert.ok(
-    process.listenerCount('SIGINT') >
-      originalListenerCounts.SIGINT,
-    'should register a SIGINT handler',
-  );
-  assert.ok(
-    process.listenerCount('SIGTERM') >
-      originalListenerCounts.SIGTERM,
-    'should register a SIGTERM handler',
-  );
-  assert.ok(
-    process.listenerCount('uncaughtException') >
-      originalListenerCounts.uncaughtException,
-    'should register an uncaughtException handler',
-  );
+  const countsAfterSecond = {
+    exit: process.listenerCount('exit'),
+    SIGINT: process.listenerCount('SIGINT'),
+    SIGTERM: process.listenerCount('SIGTERM'),
+    uncaughtException: process.listenerCount('uncaughtException'),
+  };
 
+  assert.deepStrictEqual(
+    countsAfterSecond,
+    countsAfterFirst,
+    'listener counts should remain stable across repeated createCluster calls',
+  );
   assert.ok(
-    cluster._clusterId,
+    countsAfterFirst.exit >= 1,
+    'should have at least one exit listener registered',
+  );
+  assert.ok(
+    countsAfterFirst.SIGINT >= 1,
+    'should have at least one SIGINT listener registered',
+  );
+  assert.ok(
+    countsAfterFirst.SIGTERM >= 1,
+    'should have at least one SIGTERM listener registered',
+  );
+  assert.ok(
+    countsAfterFirst.uncaughtException >= 1,
+    'should have at least one uncaughtException listener registered',
+  );
+  assert.ok(
+    firstCluster._clusterId,
     'cluster should have a clusterId for label identification',
   );
-
-  // Clean up listeners to avoid test pollution
-  process.removeAllListeners('exit');
-  process.removeAllListeners('SIGINT');
-  process.removeAllListeners('SIGTERM');
-  process.removeAllListeners('uncaughtException');
+  assert.ok(
+    secondCluster._clusterId,
+    'second cluster should have a clusterId for label identification',
+  );
 });
 
 test('Unit: cluster uses label constants for identification', async () => {

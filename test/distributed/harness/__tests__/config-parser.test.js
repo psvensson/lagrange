@@ -18,6 +18,7 @@ import {
   RESOURCE_DEFAULTS,
   LOAD_DEFAULTS,
   DEBUG_TRACE_DEFAULTS,
+  LEAK_DEFAULTS,
 } from '../constants.js';
 
 // --- Unit Tests ---
@@ -88,6 +89,30 @@ test('Unit: mergeWithDefaults fills all fields from empty object', async (t) => 
         config.debugTrace.serviceName,
         DEBUG_TRACE_DEFAULTS.serviceName,
       );
+      assert.strictEqual(
+        config.memoryLeak.enabled,
+        LEAK_DEFAULTS.enabled,
+      );
+      assert.strictEqual(
+        config.memoryLeak.failOnDetection,
+        LEAK_DEFAULTS.failOnDetection,
+      );
+      assert.strictEqual(
+        config.memoryLeak.requireSamples,
+        LEAK_DEFAULTS.requireSamples,
+      );
+      assert.strictEqual(
+        config.memoryLeak.minSamplesPerNode,
+        LEAK_DEFAULTS.minSamplesPerNode,
+      );
+      assert.strictEqual(
+        config.memoryLeak.maxPositiveSlopeBytesPerMin,
+        LEAK_DEFAULTS.maxPositiveSlopeBytesPerMin,
+      );
+      assert.strictEqual(
+        config.memoryLeak.captureHeapArtifacts,
+        LEAK_DEFAULTS.captureHeapArtifacts,
+      );
     },
   );
 });
@@ -106,6 +131,15 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
         required: true,
         serviceName: 'svc-orders',
         requiredLineagePrefix: 'lineage-orders',
+      },
+      memoryLeak: {
+        enabled: true,
+        failOnDetection: true,
+        requireSamples: true,
+        minSamplesPerNode: 25,
+        maxPositiveSlopeBytesPerMin: 500000,
+        captureHeapArtifacts: true,
+        heapSnapshotNearLimitCount: 3,
       },
     };
 
@@ -133,6 +167,20 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
     assert.strictEqual(
       config.debugTrace.requiredLineagePrefix,
       'lineage-orders',
+    );
+    assert.strictEqual(config.memoryLeak.enabled, true);
+    assert.strictEqual(config.memoryLeak.failOnDetection, true);
+    assert.strictEqual(config.memoryLeak.requireSamples, true);
+    assert.strictEqual(config.memoryLeak.minSamplesPerNode, 25);
+    assert.strictEqual(
+      config.memoryLeak.maxPositiveSlopeBytesPerMin,
+      500000,
+    );
+    assert.strictEqual(config.memoryLeak.captureHeapArtifacts, true);
+    assert.strictEqual(config.memoryLeak.heapSnapshotNearLimitCount, 3);
+    assert.strictEqual(
+      config.memoryLeak.minGrowthBytes,
+      LEAK_DEFAULTS.minGrowthBytes,
     );
   });
 });

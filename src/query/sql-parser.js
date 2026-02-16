@@ -8,6 +8,7 @@
 import nodeSqlParser from 'node-sql-parser';
 const {Parser} = nodeSqlParser;
 import {LoggingService} from '../logging/logging-service.js';
+import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
 import {PARSER_DIALECT, PG_EXPR_TYPE} from './pg-compat-constants.js';
 import {
   translateBooleanLiteral,
@@ -53,20 +54,6 @@ const PG_CASE_ARG_TYPE = Object.freeze({
  */
 const PG_EXISTS_NAME = 'EXISTS';
 
-const AST_TYPE = Object.freeze({
-  SELECT: 'SELECT',
-  INSERT: 'INSERT',
-  UPDATE: 'UPDATE',
-  DELETE: 'DELETE',
-  CREATE_TABLE: 'CREATE_TABLE',
-  CREATE_INDEX: 'CREATE_INDEX',
-  DROP_TABLE: 'DROP_TABLE',
-  DROP_INDEX: 'DROP_INDEX',
-  BEGIN_TRANSACTION: 'BEGIN_TRANSACTION',
-  COMMIT: 'COMMIT',
-  ROLLBACK: 'ROLLBACK',
-});
-
 const EXTERNAL_TYPE = Object.freeze({
   SELECT: 'select',
   INSERT: 'insert',
@@ -74,22 +61,6 @@ const EXTERNAL_TYPE = Object.freeze({
   DELETE: 'delete',
   CREATE: 'create',
   DROP: 'drop',
-});
-
-const EXPR_TYPE = Object.freeze({
-  BINARY: 'binary',
-  UNARY: 'unary',
-  LITERAL: 'literal',
-  COLUMN_REF: 'column_ref',
-  PARAMETER: 'parameter',
-  AGGREGATE: 'aggregate',
-  STAR: 'star',
-  IN: 'in',
-  BETWEEN: 'between',
-  LIKE: 'like',
-  COLUMN: 'column',
-  TABLE: 'table',
-  JOIN: 'join',
 });
 
 class SQLParser {

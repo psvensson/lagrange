@@ -25,10 +25,12 @@
     "test:sharded:all": "npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2",
     "test:coverage": "tap --coverage",
     "test:cli": "tap test/cli/**/*.test.js",
-    "test:unused": "knip",
+    "test:unused": "knip --exclude exports",
     "test:unused:prod": "knip --production",
+    "test:unused:exports": "knip --include exports",
     "test:deps": "depcruise --config dependency-cruiser.config.cjs src test",
-    "test:complexity": "eslint src/ test/ --ignore-pattern 'test/.gitkeep' --rule 'complexity: [\"error\", 12]'",
+    "test:complexity": "node scripts/check-complexity.js",
+    "test:complexity:strict": "node scripts/check-complexity.js --strict",
     "test:mutation": "stryker run",
     "test:analysis": "npm run test:unused && npm run test:deps && npm run test:complexity",
     "test:static": "npm run test:unused && npm run test:unused:prod && npm run test:deps && npm run test:complexity",
@@ -61,15 +63,10 @@
     "better-sqlite3": "^11.7.0",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
-    "chalk": "^5.6.2",
-    "dayjs": "^1.11.19",
-    "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
-    "lodash": "^4.17.21",
     "node-fetch": "^3.3.2",
     "node-sql-parser": "^5.4.0",
     "pino": "^9.6.0",
-    "pino-pretty": "^13.0.0",
     "piscina": "^4.8.0",
     "uuid": "^11.0.5",
     "ws": "^8.18.0"
@@ -86,7 +83,6 @@
     "fast-check": "^3.23.2",
     "knip": "^5.83.1",
     "postject": "^1.0.0-alpha.6",
-    "tap": "^21.5.0",
-    "why-is-node-running": "^3.2.2"
+    "tap": "^21.5.0"
   }
 }

@@ -21,6 +21,7 @@ import {createCluster} from './harness/cluster.js';
 import {DockerProvider} from './harness/docker-provider.js';
 import {ReportWriter} from './harness/report-writer.js';
 import {formatLogEntry} from './harness/log-collector.js';
+import {analyzeMemoryLeakFromPlayback} from './harness/memory-leak-analyzer.js';
 import {CLI, EXIT_CODES} from './harness/constants.js';
 
 const LIVE_LOG_PREFIX = '[live-log] ';
@@ -87,6 +88,10 @@ const TRACE_ASSERTION_MISSING_ARTIFACT = 'trace artifact missing';
 const TRACE_ASSERTION_NO_EVENTS = 'no trace events captured';
 const TRACE_ASSERTION_LINEAGE_PREFIX_MISSING =
   'required lineage prefix not found: ';
+const MEMORY_ASSERTION_ERROR_PREFIX = 'Memory leak assertion failed: ';
+const MEMORY_ASSERTION_SAMPLES_MISSING = 'memory samples unavailable';
+const MEMORY_ASSERTION_LEAK_DETECTED_PREFIX =
+  'memory leak detected on nodes: ';
 
 /**
  * Parse CLI arguments from argv.
@@ -570,6 +575,11 @@ async function runScenarios(config, scenarios, options) {
       }
       scenarioResult.trace = trace;
 
+      scenarioResult.memoryLeak = await analyzeMemoryLeakFromPlayback(
+        scenarioResult.playback,
+        config.memoryLeak || {},
+      );
+
       const traceAssertion = evaluateTraceAssertions(
         trace,
         config.debugTrace,
@@ -579,6 +589,20 @@ async function runScenarios(config, scenarios, options) {
         if (scenarioResult.passed && !traceAssertion.passed) {
           scenarioResult.passed = false;
           scenarioResult.error = `${TRACE_ASSERTION_ERROR_PREFIX}${traceAssertion.error}`;
+          hasFailures = true;
+        }
+      }
+
+      const memoryLeakAssertion = evaluateMemoryLeakAssertions(
+        scenarioResult.memoryLeak,
+        config.memoryLeak || {},
+      );
+      if (memoryLeakAssertion) {
+        scenarioResult.memoryLeakAssertion = memoryLeakAssertion;
+        if (scenarioResult.passed && !memoryLeakAssertion.passed) {
+          scenarioResult.passed = false;
+          scenarioResult.error = MEMORY_ASSERTION_ERROR_PREFIX +
+            memoryLeakAssertion.error;
           hasFailures = true;
         }
       }
@@ -680,6 +704,49 @@ function evaluateTraceAssertions(traceArtifact, debugTraceConfig) {
       assertion.error =
         TRACE_ASSERTION_LINEAGE_PREFIX_MISSING + requiredPrefix;
     }
+  }
+
+  return assertion;
+}
+
+/**
+ * Evaluate required memory leak assertions for a scenario run.
+ * @param {Object|null} memoryLeakAnalysis
+ * @param {Object} memoryLeakConfig
+ * @return {Object|null}
+ */
+function evaluateMemoryLeakAssertions(memoryLeakAnalysis, memoryLeakConfig) {
+  if (!memoryLeakConfig || memoryLeakConfig.enabled !== true) {
+    return null;
+  }
+
+  const leakingNodes = Array.isArray(memoryLeakAnalysis?.leakingNodes) ?
+    memoryLeakAnalysis.leakingNodes :
+    [];
+  const assertion = {
+    enabled: true,
+    required: memoryLeakConfig.failOnDetection === true ||
+      memoryLeakConfig.requireSamples === true,
+    analyzed: memoryLeakAnalysis?.analyzed === true,
+    leakDetected: memoryLeakAnalysis?.leakDetected === true,
+    leakingNodeCount: Number(memoryLeakAnalysis?.leakingNodeCount || 0),
+    leakingNodes,
+    passed: true,
+    error: null,
+  };
+
+  if (memoryLeakConfig.requireSamples === true &&
+      assertion.analyzed !== true) {
+    assertion.passed = false;
+    assertion.error = MEMORY_ASSERTION_SAMPLES_MISSING;
+    return assertion;
+  }
+
+  if (memoryLeakConfig.failOnDetection === true &&
+      assertion.leakDetected === true) {
+    assertion.passed = false;
+    assertion.error = MEMORY_ASSERTION_LEAK_DETECTED_PREFIX +
+      leakingNodes.join(',');
   }
 
   return assertion;
@@ -905,6 +972,7 @@ export {
   runScenarios,
   normalizeScenarioPayload,
   evaluateTraceAssertions,
+  evaluateMemoryLeakAssertions,
   buildImage,
   loadScenarioModule,
   shouldPrintLiveLogEntry,

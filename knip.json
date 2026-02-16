@@ -1,8 +1,14 @@
 {
   "entry": [
     "src/index.js",
+    "src/sea-entry.js",
     "src/cli/bin/ddb-admin.js",
-    "test/**/*.test.js"
+    "src/test-helpers/worker/entry-runner.js",
+    "src/test-helpers/worker/admin-cli-direct-runner.js",
+    "test/**/*.test.js",
+    "test/distributed/scenarios/*.js",
+    "test/runtime/pgwire-test-matrix.js",
+    "scripts/**/*.js"
   ],
   "project": [
     "src/**/*.js",
@@ -14,5 +20,10 @@
     "data/**",
     "data2/**",
     "data3/**"
+  ],
+  "ignoreDependencies": [
+    "postject",
+    "@pulumi/pulumi",
+    "@pulumi/gcp"
   ]
 }

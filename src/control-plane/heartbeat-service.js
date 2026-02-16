@@ -24,9 +24,49 @@ import {
   HEARTBEAT_EVENT,
   HEARTBEAT_FAILURE_WARN_THRESHOLD,
   HEARTBEAT_LOG_MSG,
+  HEARTBEAT_MEMORY_TREND,
   HEARTBEAT_STATE,
   HEARTBEAT_SUBSYSTEM,
 } from './heartbeat-service-constants.js';
+
+const ZERO = 0;
+const ONE = 1;
+const MS_PER_MINUTE = 60000;
+
+/**
+ * Estimate usage-percent slope (percent per minute) with linear regression.
+ * @param {Array<{timestamp: number, usagePercent: number}>} samples
+ * @return {number}
+ */
+function calculateUsageSlopePerMinute(samples) {
+  if (!Array.isArray(samples) || samples.length < 2) {
+    return ZERO;
+  }
+
+  const origin = samples[ZERO].timestamp;
+  let sumX = ZERO;
+  let sumY = ZERO;
+  let sumXY = ZERO;
+  let sumX2 = ZERO;
+
+  for (const sample of samples) {
+    const x = sample.timestamp - origin;
+    const y = sample.usagePercent;
+    sumX += x;
+    sumY += y;
+    sumXY += x * y;
+    sumX2 += x * x;
+  }
+
+  const count = samples.length;
+  const denominator = (count * sumX2) - (sumX * sumX);
+  if (denominator <= ZERO) {
+    return ZERO;
+  }
+
+  const slopePerMs = ((count * sumXY) - (sumX * sumY)) / denominator;
+  return slopePerMs * MS_PER_MINUTE;
+}
 
 class HeartbeatService extends EventEmitter {
   /**
@@ -60,6 +100,31 @@ class HeartbeatService extends EventEmitter {
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(HEARTBEAT_SUBSYSTEM) : console;
+
+    const memoryTrend = options.memoryTrend || {};
+    this.memoryTrendWindowMs = Number.isFinite(memoryTrend.windowMs) &&
+      memoryTrend.windowMs > ZERO ?
+      memoryTrend.windowMs :
+      HEARTBEAT_MEMORY_TREND.WINDOW_MS;
+    this.memoryTrendMinSamples = Number.isFinite(memoryTrend.minSamples) &&
+      memoryTrend.minSamples >= 2 ?
+      Math.floor(memoryTrend.minSamples) :
+      HEARTBEAT_MEMORY_TREND.MIN_SAMPLES;
+    this.memoryTrendSlopePercentPerMinThreshold =
+      Number.isFinite(memoryTrend.slopePercentPerMinThreshold) ?
+        memoryTrend.slopePercentPerMinThreshold :
+        HEARTBEAT_MEMORY_TREND.SLOPE_PERCENT_PER_MIN;
+    this.memoryTrendWarningPercent =
+      Number.isFinite(memoryTrend.warningPercent) ?
+        memoryTrend.warningPercent :
+        HEARTBEAT_MEMORY_TREND.WARNING_PERCENT;
+    this.memoryTrendWarningCooldownMs =
+      Number.isFinite(memoryTrend.warningCooldownMs) &&
+      memoryTrend.warningCooldownMs >= ZERO ?
+        memoryTrend.warningCooldownMs :
+        HEARTBEAT_MEMORY_TREND.WARNING_COOLDOWN_MS;
+    this.memoryTrendSamples = [];
+    this.lastMemoryTrendWarningAt = ZERO;
   }
 
   /**
@@ -207,6 +272,11 @@ class HeartbeatService extends EventEmitter {
       ready_lease_expires_at: now + this.readyLeaseMs,
     };
 
+    this.recordMemoryTrendSample(
+      updateRow.memory_usage_percent,
+      now,
+    );
+
     await this.cdcIntegrationService.updateSystemTableRow(
       SystemTableName.NODES,
       {node_id: this.nodeId},
@@ -235,6 +305,63 @@ class HeartbeatService extends EventEmitter {
     await this.cdcIntegrationService.upsertSystemTableRow(
       SystemTableName.NODE_ENDPOINTS, endpointRow,
     );
+  }
+
+  /**
+   * Track memory usage trend and emit warning events on sustained growth.
+   * @param {number} memoryUsagePercent
+   * @param {number} timestamp
+   */
+  recordMemoryTrendSample(memoryUsagePercent, timestamp) {
+    if (!Number.isFinite(memoryUsagePercent) || !Number.isFinite(timestamp)) {
+      return;
+    }
+
+    this.memoryTrendSamples.push({
+      timestamp,
+      usagePercent: Number(memoryUsagePercent),
+    });
+    const cutoff = timestamp - this.memoryTrendWindowMs;
+    this.memoryTrendSamples = this.memoryTrendSamples.filter(
+      (sample) => sample.timestamp >= cutoff,
+    );
+
+    if (this.memoryTrendSamples.length < this.memoryTrendMinSamples) {
+      return;
+    }
+
+    const slopePercentPerMin = calculateUsageSlopePerMinute(
+      this.memoryTrendSamples,
+    );
+    const currentUsagePercent =
+      this.memoryTrendSamples[this.memoryTrendSamples.length - ONE].usagePercent;
+    if (currentUsagePercent < this.memoryTrendWarningPercent) {
+      return;
+    }
+    if (slopePercentPerMin < this.memoryTrendSlopePercentPerMinThreshold) {
+      return;
+    }
+
+    if (this.lastMemoryTrendWarningAt > ZERO &&
+      timestamp - this.lastMemoryTrendWarningAt <
+        this.memoryTrendWarningCooldownMs) {
+      return;
+    }
+    this.lastMemoryTrendWarningAt = timestamp;
+
+    const warning = {
+      nodeId: this.nodeId,
+      memoryUsagePercent: currentUsagePercent,
+      slopePercentPerMin,
+      sampleCount: this.memoryTrendSamples.length,
+      windowMs: this.memoryTrendWindowMs,
+      thresholdSlopePercentPerMin:
+        this.memoryTrendSlopePercentPerMinThreshold,
+      thresholdUsagePercent: this.memoryTrendWarningPercent,
+    };
+
+    this.logger.warn(HEARTBEAT_LOG_MSG.MEMORY_TREND_WARNING, warning);
+    this.emit(HEARTBEAT_EVENT.MEMORY_TREND_WARNING, warning);
   }
 
   /**
@@ -287,4 +414,4 @@ class HeartbeatService extends EventEmitter {
   }
 }
 
-export {HeartbeatService};
+export {HeartbeatService, calculateUsageSlopePerMinute};

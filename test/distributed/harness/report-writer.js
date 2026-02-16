@@ -32,6 +32,8 @@ function buildScenarioEntry(scenarioName, result) {
     playback: result.playback || null,
     trace: result.trace || null,
     traceAssertion: result.traceAssertion || null,
+    memoryLeak: result.memoryLeak || null,
+    memoryLeakAssertion: result.memoryLeakAssertion || null,
     details: result.details || null,
   };
 

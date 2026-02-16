@@ -17,6 +17,14 @@ const HEARTBEAT_DEFAULT = Object.freeze({
   READY_LEASE_MS: TIME_MS.CONTROL_PLANE_READY_LEASE,
 });
 
+const HEARTBEAT_MEMORY_TREND = Object.freeze({
+  WINDOW_MS: 300000,
+  MIN_SAMPLES: 5,
+  SLOPE_PERCENT_PER_MIN: 0.5,
+  WARNING_PERCENT: 85,
+  WARNING_COOLDOWN_MS: 300000,
+});
+
 const HEARTBEAT_FAILURE_WARN_THRESHOLD = 3;
 
 const HEARTBEAT_STATE = Object.freeze({
@@ -33,6 +41,7 @@ const HEARTBEAT_LOG_MSG = Object.freeze({
   HEARTBEAT_FAILED: 'Heartbeat failed',
   HEARTBEAT_CONSECUTIVE_FAILURES: 'Heartbeat failing repeatedly',
   HEARTBEAT_RECOVERED: 'Heartbeat recovered after failures',
+  MEMORY_TREND_WARNING: 'Heartbeat memory trend warning',
 });
 
 const HEARTBEAT_ERROR_MSG = Object.freeze({
@@ -47,12 +56,14 @@ const HEARTBEAT_ERROR_MSG = Object.freeze({
 const HEARTBEAT_EVENT = Object.freeze({
   HEARTBEAT_SENT: 'heartbeatSent',
   HEARTBEAT_FAILED: 'heartbeatFailed',
+  MEMORY_TREND_WARNING: 'heartbeatMemoryTrendWarning',
 });
 
 export {
   HEARTBEAT_SUBSYSTEM,
   HEARTBEAT_CONFIG_KEY,
   HEARTBEAT_DEFAULT,
+  HEARTBEAT_MEMORY_TREND,
   HEARTBEAT_FAILURE_WARN_THRESHOLD,
   HEARTBEAT_STATE,
   HEARTBEAT_LOG_MSG,

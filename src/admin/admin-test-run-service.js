@@ -17,17 +17,12 @@ import {
 } from 'node:fs/promises';
 import {
   basename,
-  dirname,
   extname,
   join,
-  relative,
   resolve,
-  sep,
 } from 'node:path';
-import {URL, URLSearchParams} from 'node:url';
+import {URL} from 'node:url';
 import {
-  ADMIN_CONTENT_TYPE,
-  ADMIN_ROUTE,
   ADMIN_TEST_DEFAULT,
   ADMIN_TEST_ERROR_MSG,
   ADMIN_TEST_LOG_STREAM,
@@ -35,15 +30,37 @@ import {
   ADMIN_TEST_RUN_STATUS,
   ADMIN_TEST_STREAM_EVENT,
 } from './admin-constants.js';
+import {
+  buildArchivedTimelineCandidates,
+  buildLivePlaybackViewerUrl,
+  buildPlaybackViewerUrl,
+  buildRunPlaybackOutputDir,
+  buildScenarioOutputDir,
+  buildScenarioPlaybackPaths,
+  getContentType,
+  isPathInside,
+  normalizeWorkspaceRelativePath,
+  resolveOutputAssetPath,
+  toOutputWebPath,
+} from './admin-test-run-paths.js';
+import {
+  inferProgressFromLog,
+  RUN_PROGRESS_PERCENT,
+  RUN_PROGRESS_PHASE,
+} from './admin-test-run-progress.js';
+import {
+  extractReportSummary,
+  isRunStatusActive,
+  mergeRunRecord,
+  serializeRun,
+} from './admin-test-run-report.js';
 
 const FILE_ENCODING = 'utf8';
 const REPORT_TIMESTAMP_FALLBACK_MS = 0;
 const PROCESS_EXIT_SUCCESS = 0;
 const METADATA_FILE_EXTENSION = '.json';
-const PATH_SEPARATOR_WEB = '/';
 const CLEAN_LINE_BREAK_REGEX = /\r?\n/;
 const TRIM_CRLF_REGEX = /\r$/;
-const LEADING_SLASH_REGEX = /^\/+/;
 const FIRST_SPACE_REGEX = /\s+/;
 const ISO_TIMESTAMP_PREFIX_REGEX = /^\d{4}-\d{2}-\d{2}T/;
 const RUN_ID_SANITIZE_REGEX = /[^a-zA-Z0-9._-]/g;
@@ -55,47 +72,13 @@ const GIT_HASH_COMMAND = 'git';
 const GIT_HASH_ARGS = Object.freeze(['rev-parse', '--short', 'HEAD']);
 const GIT_HASH_FALLBACK = ADMIN_TEST_DEFAULT.GIT_HASH_UNKNOWN;
 const EMPTY_STRING = '';
-const OUTPUT_ROUTE_PREFIX =
-  ADMIN_ROUTE.OUTPUT_FILES.substring(
-    REPORT_TIMESTAMP_FALLBACK_MS,
-    ADMIN_ROUTE.OUTPUT_FILES.length - 1,
-  );
-const PLAYBACK_MANIFEST_QUERY_KEY = 'manifest';
-const PLAYBACK_RUN_START_QUERY_KEY = 'runStartMs';
 const DEFAULT_STDIO = 'pipe';
 const SIGNAL_STOP = ADMIN_TEST_DEFAULT.SIGNAL_TERM;
 const FILE_READ_BYTES_PER_CHUNK = 65536;
 const BUFFER_ENCODING = 'utf8';
-const RUN_PROGRESS_PHASE = Object.freeze({
-  STARTING: 'starting',
-  BUILDING_IMAGE: 'building-image',
-  SCENARIO_RUNNING: 'scenario-running',
-  STOPPING: 'stopping',
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-  STOPPED: 'stopped',
-});
-const RUN_PROGRESS_PATTERN = Object.freeze({
-  CONFIG_LOADING: /^Loading config:/i,
-  CONFIG_LOADED: /^Config loaded:/i,
-  SCENARIO_DISCOVERY: /^Discovering scenarios/i,
-  SCENARIO_FOUND: /^Found \d+ scenario\(s\)/i,
-  BUILD_START: /^Building Docker image/i,
-  BUILD_DONE: /^Image built:/i,
-  SCENARIO_START: /^Running scenario:\s*(.+)$/i,
-  SCENARIO_PASSED: /^Scenario passed:/i,
-  SCENARIO_FAILED: /^Scenario failed:/i,
-});
 const RUN_CONFIG_MODE = Object.freeze({
   LOCAL: 'local',
   REMOTE: 'remote',
-});
-const RUN_PROGRESS_PERCENT = Object.freeze({
-  CONFIG_LOADING: 2,
-  CONFIG_LOADED: 4,
-  PRECHECK_COMPLETE: 6,
-  SCENARIO_DISCOVERY: 25,
-  SCENARIO_FOUND: 30,
 });
 const CONFIG_PRECHECK_ERROR_PREFIX =
   `${ADMIN_TEST_ERROR_MSG.CONFIG_PREFLIGHT_FAILED}: `;
@@ -104,39 +87,7 @@ const DOCKER_HOST_PATH_SEPARATOR = '/';
 const DOCKER_HOST_PORT_SEPARATOR = ':';
 const DOCKER_HOST_IPV6_PREFIX = '[';
 const DOCKER_HOST_IPV6_SUFFIX = ']';
-const RUN_PLAYBACK_OUTPUT_DIRNAME = '.playback';
 
-const FILE_EXTENSION_CONTENT_TYPE = Object.freeze({
-  '.html': ADMIN_CONTENT_TYPE.HTML,
-  '.json': ADMIN_CONTENT_TYPE.JSON,
-  '.ndjson': ADMIN_CONTENT_TYPE.NDJSON,
-  '.js': ADMIN_CONTENT_TYPE.JAVASCRIPT,
-  '.css': ADMIN_CONTENT_TYPE.CSS,
-  '.log': ADMIN_CONTENT_TYPE.TEXT,
-  '.txt': ADMIN_CONTENT_TYPE.TEXT,
-});
-
-/**
- * Normalize a path to web slash separators.
- * @param {string} value
- * @return {string}
- */
-function normalizeWebPath(value) {
-  return String(value).split(sep).join(PATH_SEPARATOR_WEB);
-}
-
-/**
- * Returns true if targetPath is inside basePath.
- * @param {string} basePath
- * @param {string} targetPath
- * @return {boolean}
- */
-function isPathInside(basePath, targetPath) {
-  if (targetPath === basePath) {
-    return true;
-  }
-  return targetPath.startsWith(`${basePath}${sep}`);
-}
 
 /**
  * Build a stable run identifier.
@@ -154,17 +105,6 @@ function buildRunId(scenario, epochMs, gitHash) {
     RUN_ID_SANITIZE_REGEX, '_',
   );
   return `${safeScenario}-${timestamp}-${safeGitHash}`;
-}
-
-/**
- * Returns true for active/in-flight run states.
- * @param {string} status
- * @return {boolean}
- */
-function isRunStatusActive(status) {
-  return status === ADMIN_TEST_RUN_STATUS.RUNNING ||
-    status === ADMIN_TEST_RUN_STATUS.STOPPING ||
-    status === ADMIN_TEST_RUN_STATUS.PENDING;
 }
 
 /**
@@ -769,15 +709,7 @@ class AdminTestRunService {
    * @return {string|null}
    */
   resolveOutputAssetPath(wildcardPath) {
-    const safeRelative = decodeURIComponent(
-      String(wildcardPath || EMPTY_STRING)
-        .replace(LEADING_SLASH_REGEX, EMPTY_STRING),
-    );
-    const absolutePath = resolve(this.outputDir, safeRelative);
-    if (!isPathInside(this.outputDir, absolutePath)) {
-      return null;
-    }
-    return absolutePath;
+    return resolveOutputAssetPath(wildcardPath, this.outputDir);
   }
 
   /**
@@ -786,8 +718,7 @@ class AdminTestRunService {
    * @return {string}
    */
   getContentType(filePath) {
-    const extension = extname(filePath).toLowerCase();
-    return FILE_EXTENSION_CONTENT_TYPE[extension] || ADMIN_CONTENT_TYPE.TEXT;
+    return getContentType(filePath);
   }
 
   /**
@@ -927,49 +858,9 @@ class AdminTestRunService {
    * @private
    */
   buildArchivedTimelineCandidates(runRecord) {
-    const paths = [];
-    const seen = new Set();
-    const addPath = (pathValue) => {
-      if (!pathValue || seen.has(pathValue)) {
-        return;
-      }
-      seen.add(pathValue);
-      paths.push(pathValue);
-    };
-
-    const normalizedManifestPath = this.normalizeWorkspaceRelativePath(
-      runRecord?.playbackManifestPath || null,
+    return buildArchivedTimelineCandidates(
+      runRecord, this.outputDir, this.workspaceRoot,
     );
-    if (normalizedManifestPath) {
-      const manifestDir = dirname(normalizedManifestPath);
-      addPath(resolve(
-        this.workspaceRoot,
-        manifestDir,
-        ADMIN_TEST_DEFAULT.TIMELINE_FILENAME,
-      ));
-    }
-
-    const runScopedScenarioDir = this.buildScenarioOutputDir(
-      runRecord?.scenario || null,
-      runRecord?.runId || null,
-    );
-    if (runScopedScenarioDir) {
-      addPath(resolve(
-        this.workspaceRoot,
-        runScopedScenarioDir,
-        ADMIN_TEST_DEFAULT.TIMELINE_FILENAME,
-      ));
-    }
-
-    if (runRecord?.scenario) {
-      addPath(resolve(
-        this.outputDir,
-        runRecord.scenario,
-        ADMIN_TEST_DEFAULT.TIMELINE_FILENAME,
-      ));
-    }
-
-    return paths;
   }
 
   /**
@@ -1094,156 +985,10 @@ class AdminTestRunService {
    * @private
    */
   extractReportSummary(report, runId, reportStats) {
-    const scenarios = Array.isArray(report.scenarios) ?
-      report.scenarios : [];
-    const firstScenario = scenarios.length > 0 ? scenarios[0] : null;
-    const scenarioName = firstScenario?.scenario || null;
-    const startedAt = firstScenario?.startedAt ||
-      report.timestamp ||
-      (reportStats ? reportStats.mtime.toISOString() : null);
-    const endedAt = report.timestamp ||
-      (reportStats ? reportStats.mtime.toISOString() : null);
-    const failed = Number(report.summary?.failed || REPORT_TIMESTAMP_FALLBACK_MS);
-    const status = failed > REPORT_TIMESTAMP_FALLBACK_MS ?
-      ADMIN_TEST_RUN_STATUS.FAILED :
-      ADMIN_TEST_RUN_STATUS.PASSED;
-
-    const outputReportPath = join(
-      ADMIN_TEST_RUN_PATH.OUTPUT_DIR,
-      `${runId}${ADMIN_TEST_DEFAULT.REPORT_EXTENSION}`,
+    return extractReportSummary(
+      report, runId, reportStats,
+      this.outputDir, this.workspaceRoot, this.now,
     );
-
-    const manifestPathFromReport = this.resolvePlaybackManifestPath(firstScenario);
-    const reportPlaybackPaths = this.buildScenarioPlaybackPaths(scenarioName, runId);
-    const normalizedManifestPath =
-      this.normalizeWorkspaceRelativePath(manifestPathFromReport) ||
-      reportPlaybackPaths?.manifestPath ||
-      null;
-    const playbackEventsPath = reportPlaybackPaths?.eventsPath || null;
-    const playbackSamplesPath = reportPlaybackPaths?.samplesPath || null;
-    const playbackSnapshotsPath = reportPlaybackPaths?.snapshotsPath || null;
-    const playbackEventsUrl = this.toOutputWebPath(playbackEventsPath);
-    const playbackSamplesUrl = this.toOutputWebPath(playbackSamplesPath);
-    const playbackSnapshotsUrl = this.toOutputWebPath(playbackSnapshotsPath);
-    const livePlaybackViewerUrl = this.buildLivePlaybackViewerUrl(
-      {
-        eventsUrl: playbackEventsUrl,
-        samplesUrl: playbackSamplesUrl,
-        snapshotsUrl: playbackSnapshotsUrl,
-      },
-      {
-        follow: false,
-        autoplay: false,
-        runId,
-        runStartMs: Date.parse(startedAt || EMPTY_STRING) || null,
-      },
-    );
-    const progressMessage = status === ADMIN_TEST_RUN_STATUS.PASSED ?
-      'Run completed successfully' :
-      'Run failed';
-    const examplesPayload = this.extractExamplesPayload(scenarios);
-    const examplesArtifactPath = examplesPayload.artifactPath;
-    const examplesSummary = examplesPayload.summary;
-
-    return {
-      runId,
-      scenario: scenarioName,
-      config: null,
-      startedAt,
-      endedAt,
-      status,
-      gitHash: null,
-      outputReportPath,
-      outputReportUrl: this.toOutputWebPath(outputReportPath),
-      playbackManifestPath: normalizedManifestPath,
-      playbackManifestUrl: normalizedManifestPath ?
-        this.toOutputWebPath(normalizedManifestPath) : null,
-      playbackEventsPath,
-      playbackSamplesPath,
-      playbackSnapshotsPath,
-      playbackEventsUrl,
-      playbackSamplesUrl,
-      playbackSnapshotsUrl,
-      playbackViewerUrl: normalizedManifestPath ?
-        this.buildPlaybackViewerUrl(normalizedManifestPath) : null,
-      livePlaybackViewerUrl,
-      progress: {
-        phase: status === ADMIN_TEST_RUN_STATUS.PASSED ?
-          RUN_PROGRESS_PHASE.COMPLETED :
-          RUN_PROGRESS_PHASE.FAILED,
-        message: progressMessage,
-        percent: 100,
-        updatedAt: endedAt || startedAt || new Date(this.now()).toISOString(),
-      },
-      summary: report.summary || null,
-      examplesSummary,
-      examplesArtifactPath,
-      examplesArtifactUrl: this.toOutputWebPath(examplesArtifactPath),
-    };
-  }
-
-  /**
-   * Extract examples summary payload from report scenarios.
-   * @param {Array<Object>} scenarios
-   * @return {{summary: Object|null, artifactPath: string|null}}
-   * @private
-   */
-  extractExamplesPayload(scenarios) {
-    const fallback = {
-      summary: null,
-      artifactPath: null,
-    };
-    if (!Array.isArray(scenarios) || scenarios.length === 0) {
-      return fallback;
-    }
-
-    let summary = null;
-    let artifactPath = null;
-    for (const scenario of scenarios) {
-      if (!summary && scenario?.exampleResults &&
-        typeof scenario.exampleResults === 'object') {
-        summary = scenario.exampleResults;
-      }
-      const details = scenario?.details;
-      if (!summary && details?.exampleResults &&
-        typeof details.exampleResults === 'object') {
-        summary = details.exampleResults;
-      }
-      if (!artifactPath && typeof details?.artifactPath === 'string') {
-        artifactPath = details.artifactPath;
-      }
-    }
-
-    return {
-      summary: summary || null,
-      artifactPath: this.normalizeWorkspaceRelativePath(artifactPath),
-    };
-  }
-
-  /**
-   * Resolve playback manifest path from report scenario payload.
-   * Supports both legacy and current playback shapes.
-   * @param {Object|null} scenario
-   * @return {string|null}
-   * @private
-   */
-  resolvePlaybackManifestPath(scenario) {
-    const playback = scenario?.playback;
-    if (!playback || typeof playback !== 'object') {
-      return null;
-    }
-
-    const candidates = [
-      playback.manifestPath,
-      playback.files?.manifest,
-      playback.files?.manifestPath,
-    ];
-    for (const candidate of candidates) {
-      if (typeof candidate === 'string' && candidate.trim()) {
-        return candidate;
-      }
-    }
-    return null;
   }
 
   /**
@@ -1254,81 +999,11 @@ class AdminTestRunService {
    * @private
    */
   mergeRunRecord(left, right) {
-    const merged = {...left};
-    for (const [key, value] of Object.entries(right || {})) {
-      if (value !== undefined && value !== null && value !== EMPTY_STRING) {
-        merged[key] = value;
-      } else if (!(key in merged)) {
-        merged[key] = value;
-      }
-    }
-
-    const scenarioPlaybackPaths = this.buildScenarioPlaybackPaths(
-      merged.scenario,
-      merged.runId || null,
+    return mergeRunRecord(
+      left, right,
+      this.outputDir, this.workspaceRoot,
+      (input) => this.buildProgressPayload(input),
     );
-    if (!merged.playbackManifestPath && scenarioPlaybackPaths?.manifestPath) {
-      merged.playbackManifestPath = scenarioPlaybackPaths.manifestPath;
-    }
-    if (!merged.playbackEventsPath && scenarioPlaybackPaths?.eventsPath) {
-      merged.playbackEventsPath = scenarioPlaybackPaths.eventsPath;
-    }
-    if (!merged.playbackSamplesPath && scenarioPlaybackPaths?.samplesPath) {
-      merged.playbackSamplesPath = scenarioPlaybackPaths.samplesPath;
-    }
-    if (!merged.playbackSnapshotsPath && scenarioPlaybackPaths?.snapshotsPath) {
-      merged.playbackSnapshotsPath = scenarioPlaybackPaths.snapshotsPath;
-    }
-
-    if (!merged.playbackManifestUrl) {
-      merged.playbackManifestUrl = this.toOutputWebPath(merged.playbackManifestPath);
-    }
-    if (!merged.playbackEventsUrl) {
-      merged.playbackEventsUrl = this.toOutputWebPath(merged.playbackEventsPath);
-    }
-    if (!merged.playbackSamplesUrl) {
-      merged.playbackSamplesUrl = this.toOutputWebPath(merged.playbackSamplesPath);
-    }
-    if (!merged.playbackSnapshotsUrl) {
-      merged.playbackSnapshotsUrl = this.toOutputWebPath(merged.playbackSnapshotsPath);
-    }
-
-    if (!merged.playbackViewerUrl && merged.playbackManifestPath) {
-      merged.playbackViewerUrl = this.buildPlaybackViewerUrl(
-        merged.playbackManifestPath,
-      );
-    }
-    if (!merged.livePlaybackViewerUrl) {
-      merged.livePlaybackViewerUrl = this.buildLivePlaybackViewerUrl(
-        {
-          eventsUrl: merged.playbackEventsUrl,
-          samplesUrl: merged.playbackSamplesUrl,
-          snapshotsUrl: merged.playbackSnapshotsUrl,
-        },
-        {
-          follow: false,
-          autoplay: false,
-          runId: merged.runId,
-          runStartMs: Date.parse(merged.startedAt || EMPTY_STRING) || null,
-        },
-      );
-    }
-
-    if (!merged.progress && merged.status) {
-      const isDone = !isRunStatusActive(merged.status);
-      merged.progress = this.buildProgressPayload({
-        phase: isDone ? RUN_PROGRESS_PHASE.COMPLETED : RUN_PROGRESS_PHASE.SCENARIO_RUNNING,
-        message: `Run status: ${merged.status}`,
-        percent: isDone ? 100 : 50,
-      });
-    }
-
-    if (!merged.examplesArtifactUrl && merged.examplesArtifactPath) {
-      merged.examplesArtifactUrl = this.toOutputWebPath(
-        merged.examplesArtifactPath,
-      );
-    }
-    return merged;
   }
 
   /**
@@ -1480,113 +1155,11 @@ class AdminTestRunService {
    * @private
    */
   updateRunProgressFromLog(run, stream, line) {
-    const text = String(line || EMPTY_STRING).trim();
-    if (!text) {
-      return;
-    }
-
-    if (RUN_PROGRESS_PATTERN.CONFIG_LOADING.test(text)) {
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.STARTING,
-        message: text,
-        percent: Math.max(
-          RUN_PROGRESS_PERCENT.CONFIG_LOADING,
-          Number(run.progress?.percent || 0),
-        ),
-      });
-      return;
-    }
-
-    if (RUN_PROGRESS_PATTERN.CONFIG_LOADED.test(text)) {
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.STARTING,
-        message: text,
-        percent: Math.max(
-          RUN_PROGRESS_PERCENT.CONFIG_LOADED,
-          Number(run.progress?.percent || 0),
-        ),
-      });
-      return;
-    }
-
-    if (RUN_PROGRESS_PATTERN.SCENARIO_DISCOVERY.test(text)) {
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.STARTING,
-        message: text,
-        percent: Math.max(
-          RUN_PROGRESS_PERCENT.SCENARIO_DISCOVERY,
-          Number(run.progress?.percent || 0),
-        ),
-      });
-      return;
-    }
-
-    if (RUN_PROGRESS_PATTERN.SCENARIO_FOUND.test(text)) {
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.STARTING,
-        message: text,
-        percent: Math.max(
-          RUN_PROGRESS_PERCENT.SCENARIO_FOUND,
-          Number(run.progress?.percent || 0),
-        ),
-      });
-      return;
-    }
-
-    if (RUN_PROGRESS_PATTERN.BUILD_START.test(text)) {
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.BUILDING_IMAGE,
-        message: 'Building Docker image',
-        percent: Math.max(5, Number(run.progress?.percent || 0)),
-      });
-      return;
-    }
-
-    if (RUN_PROGRESS_PATTERN.BUILD_DONE.test(text)) {
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.BUILDING_IMAGE,
-        message: text,
-        percent: Math.max(20, Number(run.progress?.percent || 0)),
-      });
-      return;
-    }
-
-    const scenarioStartMatch = text.match(RUN_PROGRESS_PATTERN.SCENARIO_START);
-    if (scenarioStartMatch) {
-      const scenarioLabel = scenarioStartMatch[1] || run.scenario || 'scenario';
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.SCENARIO_RUNNING,
-        message: `Running ${scenarioLabel}`,
-        percent: Math.max(35, Number(run.progress?.percent || 0)),
-      });
-      return;
-    }
-
-    if (RUN_PROGRESS_PATTERN.SCENARIO_PASSED.test(text)) {
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.SCENARIO_RUNNING,
-        message: text,
-        percent: Math.max(95, Number(run.progress?.percent || 0)),
-      });
-      return;
-    }
-
-    if (RUN_PROGRESS_PATTERN.SCENARIO_FAILED.test(text)) {
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.FAILED,
-        message: text,
-        percent: Math.max(95, Number(run.progress?.percent || 0)),
-      });
-      return;
-    }
-
-    if (stream === ADMIN_TEST_LOG_STREAM.STDERR &&
-      Number(run.progress?.percent || 0) < 90) {
-      this.updateRunProgress(run, {
-        phase: run.progress?.phase || RUN_PROGRESS_PHASE.SCENARIO_RUNNING,
-        message: text,
-        percent: Math.max(40, Number(run.progress?.percent || 0)),
-      });
+    const update = inferProgressFromLog(
+      stream, line, run.progress, run.scenario,
+    );
+    if (update) {
+      this.updateRunProgress(run, update);
     }
   }
 
@@ -1597,15 +1170,7 @@ class AdminTestRunService {
    * @private
    */
   buildRunPlaybackOutputDir(runId) {
-    const trimmedRunId = typeof runId === 'string' ? runId.trim() : EMPTY_STRING;
-    if (!trimmedRunId) {
-      return ADMIN_TEST_RUN_PATH.OUTPUT_DIR;
-    }
-    return join(
-      ADMIN_TEST_RUN_PATH.OUTPUT_DIR,
-      RUN_PLAYBACK_OUTPUT_DIRNAME,
-      trimmedRunId,
-    );
+    return buildRunPlaybackOutputDir(runId);
   }
 
   /**
@@ -1616,13 +1181,7 @@ class AdminTestRunService {
    * @private
    */
   buildScenarioOutputDir(scenarioName, runId = null) {
-    if (!scenarioName || typeof scenarioName !== 'string') {
-      return null;
-    }
-    return join(
-      this.buildRunPlaybackOutputDir(runId),
-      scenarioName,
-    );
+    return buildScenarioOutputDir(scenarioName, runId);
   }
 
   /**
@@ -1638,77 +1197,18 @@ class AdminTestRunService {
    * @private
    */
   buildScenarioPlaybackPaths(scenarioName, runId = null) {
-    const scenarioOutputDir = this.buildScenarioOutputDir(scenarioName, runId);
-    if (!scenarioOutputDir) {
-      return null;
-    }
-    return {
-      eventsPath: join(
-        scenarioOutputDir,
-        ADMIN_TEST_DEFAULT.PLAYBACK_EVENTS_FILENAME,
-      ),
-      samplesPath: join(
-        scenarioOutputDir,
-        ADMIN_TEST_DEFAULT.PLAYBACK_SAMPLES_FILENAME,
-      ),
-      snapshotsPath: join(
-        scenarioOutputDir,
-        ADMIN_TEST_DEFAULT.PLAYBACK_SNAPSHOTS_FILENAME,
-      ),
-      manifestPath: join(
-        scenarioOutputDir,
-        ADMIN_TEST_DEFAULT.PLAYBACK_MANIFEST_FILENAME,
-      ),
-    };
+    return buildScenarioPlaybackPaths(scenarioName, runId);
   }
 
   /**
    * Build playback viewer URL for live follow mode.
    * @param {Object} payload
-   * @param {string|null} payload.eventsUrl
-   * @param {string|null} payload.samplesUrl
-   * @param {string|null} payload.snapshotsUrl
    * @param {Object} [options]
-   * @param {boolean} [options.follow]
-   * @param {boolean} [options.autoplay]
-   * @param {string} [options.runId]
-   * @param {number} [options.runStartMs]
    * @return {string|null}
    * @private
    */
   buildLivePlaybackViewerUrl(payload, options = {}) {
-    const params = new URLSearchParams();
-    if (payload?.eventsUrl) {
-      params.set('events', payload.eventsUrl);
-    }
-    if (payload?.samplesUrl) {
-      params.set('samples', payload.samplesUrl);
-    }
-    if (payload?.snapshotsUrl) {
-      params.set('snapshots', payload.snapshotsUrl);
-    }
-    if (options.follow) {
-      params.set('follow', '1');
-    }
-    if (options.autoplay) {
-      params.set('autoplay', '1');
-    }
-    if (options.runId) {
-      params.set('runId', options.runId);
-    }
-    if (Number.isFinite(Number(options.runStartMs)) &&
-      Number(options.runStartMs) > 0) {
-      params.set(
-        PLAYBACK_RUN_START_QUERY_KEY,
-        String(Math.floor(Number(options.runStartMs))),
-      );
-    }
-
-    const query = params.toString();
-    if (!query) {
-      return null;
-    }
-    return `${ADMIN_ROUTE.PLAYBACK_VIEWER}?${query}`;
+    return buildLivePlaybackViewerUrl(payload, options);
   }
 
   /**
@@ -1956,40 +1456,9 @@ class AdminTestRunService {
    * @private
    */
   serializeRun(run, options = {}) {
-    const payload = {
-      runId: run.runId,
-      scenario: run.scenario || null,
-      config: run.config || null,
-      gitHash: run.gitHash || null,
-      startedAt: run.startedAt || null,
-      endedAt: run.endedAt || null,
-      status: run.status || null,
-      outputReportPath: run.outputReportPath || null,
-      outputReportUrl: run.outputReportUrl ||
-        this.toOutputWebPath(run.outputReportPath),
-      playbackManifestPath: run.playbackManifestPath || null,
-      playbackManifestUrl: run.playbackManifestUrl || null,
-      playbackViewerUrl: run.playbackViewerUrl || null,
-      playbackEventsPath: run.playbackEventsPath || null,
-      playbackSamplesPath: run.playbackSamplesPath || null,
-      playbackSnapshotsPath: run.playbackSnapshotsPath || null,
-      playbackEventsUrl: run.playbackEventsUrl || null,
-      playbackSamplesUrl: run.playbackSamplesUrl || null,
-      playbackSnapshotsUrl: run.playbackSnapshotsUrl || null,
-      livePlaybackViewerUrl: run.livePlaybackViewerUrl || null,
-      examplesSummary: run.examplesSummary || null,
-      examplesArtifactPath: run.examplesArtifactPath || null,
-      examplesArtifactUrl: run.examplesArtifactUrl || null,
-      exitCode: run.exitCode ?? null,
-      signal: run.signal || null,
-      pid: run.pid || null,
-      progress: run.progress || null,
-      summary: run.summary || null,
-    };
-    if (options.includeLogs) {
-      payload.logs = Array.isArray(run.logBuffer) ? [...run.logBuffer] : [];
-    }
-    return payload;
+    return serializeRun(
+      run, options, this.outputDir, this.workspaceRoot,
+    );
   }
 
   /**
@@ -1999,15 +1468,8 @@ class AdminTestRunService {
    * @private
    */
   normalizeWorkspaceRelativePath(maybePath) {
-    if (!maybePath || typeof maybePath !== 'string') {
-      return null;
-    }
-    const absolutePath = resolve(this.workspaceRoot, maybePath);
-    if (!isPathInside(this.outputDir, absolutePath)) {
-      return null;
-    }
-    return normalizeWebPath(
-      relative(this.workspaceRoot, absolutePath),
+    return normalizeWorkspaceRelativePath(
+      maybePath, this.outputDir, this.workspaceRoot,
     );
   }
 
@@ -2018,13 +1480,9 @@ class AdminTestRunService {
    * @private
    */
   buildPlaybackViewerUrl(manifestPath) {
-    const manifestUrl = this.toOutputWebPath(manifestPath);
-    if (!manifestUrl) {
-      return null;
-    }
-    const encodedManifest = encodeURIComponent(manifestUrl);
-    return `${ADMIN_ROUTE.PLAYBACK_VIEWER}?` +
-      `${PLAYBACK_MANIFEST_QUERY_KEY}=${encodedManifest}`;
+    return buildPlaybackViewerUrl(
+      manifestPath, this.outputDir, this.workspaceRoot,
+    );
   }
 
   /**
@@ -2034,18 +1492,9 @@ class AdminTestRunService {
    * @private
    */
   toOutputWebPath(outputRelativePath) {
-    if (!outputRelativePath || typeof outputRelativePath !== 'string') {
-      return null;
-    }
-
-    const absolutePath = resolve(this.workspaceRoot, outputRelativePath);
-    if (!isPathInside(this.outputDir, absolutePath)) {
-      return null;
-    }
-    const relativeOutputPath = normalizeWebPath(
-      relative(this.outputDir, absolutePath),
+    return toOutputWebPath(
+      outputRelativePath, this.outputDir, this.workspaceRoot,
     );
-    return `${OUTPUT_ROUTE_PREFIX}${relativeOutputPath}`;
   }
 }
 

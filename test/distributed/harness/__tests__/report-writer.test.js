@@ -69,6 +69,8 @@ describe('ReportWriter', () => {
       assert.equal(entry.stackTrace, null);
       assert.equal(entry.trace, null);
       assert.equal(entry.traceAssertion, null);
+      assert.equal(entry.memoryLeak, null);
+      assert.equal(entry.memoryLeakAssertion, null);
     });
 
     it('includes load metrics with latency and throughput', () => {
@@ -261,6 +263,34 @@ describe('ReportWriter', () => {
         required: true,
         passed: true,
         eventCount: 3,
+      });
+    });
+
+    it('persists memory leak analysis and assertion metadata', () => {
+      const entry = buildScenarioEntry('memory-scenario', {
+        passed: true,
+        duration: 100,
+        memoryLeak: {
+          analyzed: true,
+          leakDetected: false,
+          leakingNodes: [],
+        },
+        memoryLeakAssertion: {
+          enabled: true,
+          required: true,
+          passed: true,
+        },
+      });
+
+      assert.deepEqual(entry.memoryLeak, {
+        analyzed: true,
+        leakDetected: false,
+        leakingNodes: [],
+      });
+      assert.deepEqual(entry.memoryLeakAssertion, {
+        enabled: true,
+        required: true,
+        passed: true,
       });
     });
   });

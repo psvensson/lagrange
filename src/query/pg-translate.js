@@ -6,7 +6,7 @@
  *               6.1, 6.2, 14.1, 14.2
  */
 
-import {EXPR_TYPE} from './sql-parser.js';
+import {EXPR_TYPE} from './parser-constants.js';
 import {PG_TRANSLATE_ERROR, PG_EXPR_TYPE} from './pg-compat-constants.js';
 import {resolveAffinity} from './pg-type-affinity.js';
 

@@ -14,6 +14,7 @@ import {
   runScenarios,
   normalizeScenarioPayload,
   evaluateTraceAssertions,
+  evaluateMemoryLeakAssertions,
   buildImage,
   deriveRunOutputDir,
   loadScenarioModule,
@@ -248,6 +249,57 @@ describe('evaluateTraceAssertions', () => {
     );
     assert.equal(result.passed, true);
     assert.equal(result.matchedRequiredLineagePrefix, true);
+  });
+});
+
+describe('evaluateMemoryLeakAssertions', () => {
+  it('returns null when memory leak checks are disabled', () => {
+    const result = evaluateMemoryLeakAssertions(
+      {analyzed: true, leakDetected: false},
+      {enabled: false},
+    );
+    assert.equal(result, null);
+  });
+
+  it('fails when samples are required but analysis is unavailable', () => {
+    const result = evaluateMemoryLeakAssertions(
+      {analyzed: false, leakDetected: false},
+      {enabled: true, requireSamples: true, failOnDetection: false},
+    );
+    assert.equal(result.enabled, true);
+    assert.equal(result.passed, false);
+    assert.equal(result.error, 'memory samples unavailable');
+  });
+
+  it('fails when leak detection is enabled and leak is found', () => {
+    const result = evaluateMemoryLeakAssertions(
+      {
+        analyzed: true,
+        leakDetected: true,
+        leakingNodeCount: 2,
+        leakingNodes: ['node-2', 'node-4'],
+      },
+      {enabled: true, requireSamples: false, failOnDetection: true},
+    );
+    assert.equal(result.passed, false);
+    assert.equal(
+      result.error,
+      'memory leak detected on nodes: node-2,node-4',
+    );
+  });
+
+  it('passes when analysis is present and no leak is detected', () => {
+    const result = evaluateMemoryLeakAssertions(
+      {
+        analyzed: true,
+        leakDetected: false,
+        leakingNodeCount: 0,
+        leakingNodes: [],
+      },
+      {enabled: true, requireSamples: true, failOnDetection: true},
+    );
+    assert.equal(result.passed, true);
+    assert.equal(result.error, null);
   });
 });
 

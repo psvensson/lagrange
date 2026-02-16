@@ -14,6 +14,7 @@ import {
   RESOURCE_DEFAULTS,
   LOAD_DEFAULTS,
   DEBUG_TRACE_DEFAULTS,
+  LEAK_DEFAULTS,
 } from './constants.js';
 
 /**
@@ -25,9 +26,9 @@ import {
  */
 function mergeWithDefaults(partial = {}) {
   const docker = partial.docker || {};
-  const mergedDocker = docker.hosts
-    ? {hosts: docker.hosts}
-    : {socketPath: docker.socketPath || DOCKER_DEFAULTS.socketPath};
+  const mergedDocker = docker.hosts ?
+    {hosts: docker.hosts} :
+    {socketPath: docker.socketPath || DOCKER_DEFAULTS.socketPath};
 
   return {
     size: partial.size || DEFAULT_CLUSTER_SIZE,
@@ -72,6 +73,21 @@ function mergeWithDefaults(partial = {}) {
       connectTimeoutMs: DEBUG_TRACE_DEFAULTS.connectTimeoutMs,
       requestTimeoutMs: DEBUG_TRACE_DEFAULTS.requestTimeoutMs,
       ...(partial.debugTrace || {}),
+    },
+    memoryLeak: {
+      enabled: LEAK_DEFAULTS.enabled,
+      failOnDetection: LEAK_DEFAULTS.failOnDetection,
+      requireSamples: LEAK_DEFAULTS.requireSamples,
+      minSamplesPerNode: LEAK_DEFAULTS.minSamplesPerNode,
+      warmupFraction: LEAK_DEFAULTS.warmupFraction,
+      minWarmupMs: LEAK_DEFAULTS.minWarmupMs,
+      minAnalysisWindowMs: LEAK_DEFAULTS.minAnalysisWindowMs,
+      maxPositiveSlopeBytesPerMin: LEAK_DEFAULTS.maxPositiveSlopeBytesPerMin,
+      minGrowthBytes: LEAK_DEFAULTS.minGrowthBytes,
+      minPositiveDeltaRatio: LEAK_DEFAULTS.minPositiveDeltaRatio,
+      captureHeapArtifacts: LEAK_DEFAULTS.captureHeapArtifacts,
+      heapSnapshotNearLimitCount: LEAK_DEFAULTS.heapSnapshotNearLimitCount,
+      ...(partial.memoryLeak || {}),
     },
     ...(partial.outputDir ? {outputDir: partial.outputDir} : {}),
     ...(partial.gcp ? {gcp: partial.gcp} : {}),

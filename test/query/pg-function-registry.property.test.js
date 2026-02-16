@@ -79,9 +79,14 @@ describe('Property 6: Function Registry Translation', () => {
           assert.equal(result.type, PG_EXPR_TYPE.FUNCTION_CALL);
           assert.equal(result.name, fnName);
         } else if (fnName === 'concat') {
-          // Concat: binary node with || operator
-          assert.equal(result.type, EXPR_TYPE.BINARY);
-          assert.equal(result.operator, '||');
+          // Concat with 1 arg: reduce returns the single element as-is
+          // Concat with 2+ args: binary node chain with || operator
+          if (argCount === 1) {
+            assert.equal(result.type, EXPR_TYPE.COLUMN_REF);
+          } else {
+            assert.equal(result.type, EXPR_TYPE.BINARY);
+            assert.equal(result.operator, '||');
+          }
         } else if (fnName === 'substring') {
           // Substring: function_call with name 'substr'
           assert.equal(result.type, PG_EXPR_TYPE.FUNCTION_CALL);

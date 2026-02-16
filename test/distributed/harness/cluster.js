@@ -41,6 +41,12 @@ const LOG_TAIL_LINES = 50;
 const BOOTSTRAP_HEALTH_PATH = '/health';
 const WS_HOST_ENV_KEY = 'TRANSPORT_WS_HOST';
 const WS_BIND_ALL_HOST = '0.0.0.0';
+const NODE_OPTIONS_ENV_KEY = 'NODE_OPTIONS';
+const NODE_OPTION_HEAP_PROF = '--heap-prof';
+const NODE_OPTION_HEAP_SNAPSHOT_NEAR_LIMIT_PREFIX =
+  '--heapsnapshot-near-heap-limit=';
+const HEAP_SNAPSHOT_NEAR_LIMIT_MIN_COUNT = 1;
+const HEAP_SNAPSHOT_NEAR_LIMIT_DEFAULT_COUNT = 2;
 const QUERY_MESSAGE_TYPE = 'query';
 const PARTITION_CALLBACK_MESSAGE_TYPE = 'partition_callback';
 const QUERY_RESULT_MESSAGE_TYPE = 'query_result';
@@ -79,6 +85,16 @@ const CLUSTER_STAGE_TEARDOWN_CAPTURE_FINALIZING =
   'teardown.capture.finalizing';
 const CLUSTER_STAGE_TEARDOWN_COMPLETE = 'teardown.complete';
 const CLUSTER_CONFIG_DOCKER_OPERATION_SINK = 'dockerOperationSink';
+const PROCESS_EVENT_EXIT = 'exit';
+const PROCESS_EVENT_SIGINT = 'SIGINT';
+const PROCESS_EVENT_SIGTERM = 'SIGTERM';
+const PROCESS_EVENT_UNCAUGHT_EXCEPTION = 'uncaughtException';
+const PROCESS_SIGNAL_EVENTS = Object.freeze([
+  PROCESS_EVENT_SIGINT,
+  PROCESS_EVENT_SIGTERM,
+]);
+const PROCESS_CLEANUP_REGISTRY = new Map();
+let processCleanupHandlersRegistered = false;
 
 /**
  * Simple HTTP GET with timeout using node:http.
@@ -543,6 +559,7 @@ class Cluster {
     this._traceRecorder = null;
     this._traceManifest = null;
     this._traceStartWarning = null;
+    this._cleanupUnregister = null;
   }
 
   /**
@@ -550,6 +567,13 @@ class Cluster {
    * bootstrap API, start joiners sequentially, wait for ACTIVE.
    */
   async start() {
+    if (!this._cleanupUnregister) {
+      this._cleanupUnregister = registerClusterCleanup(
+        this._providers[this._hostAssignment[0]],
+        this._clusterId,
+      );
+    }
+
     try {
       await this._playbackRecorder.start({
         scenarioName: this._scenarioName,
@@ -901,11 +925,19 @@ class Cluster {
     this._nodes.clear();
 
     this._started = false;
+    this._unregisterCleanup();
     if (errors.length > 0) {
       process.stderr.write(
         'Cluster stop warnings:\n' +
         errors.join('\n') + '\n',
       );
+    }
+  }
+
+  _unregisterCleanup() {
+    if (typeof this._cleanupUnregister === 'function') {
+      this._cleanupUnregister();
+      this._cleanupUnregister = null;
     }
   }
 
@@ -1216,6 +1248,23 @@ class Cluster {
     env[CONTAINER_ENV_KEYS.NODE_ADDRESS] =
       containerName + ':' + PORTS.REST;
     env[WS_HOST_ENV_KEY] = WS_BIND_ALL_HOST;
+    if (this._config?.memoryLeak?.captureHeapArtifacts === true) {
+      const nearLimitCount = Number.isInteger(
+        this._config?.memoryLeak?.heapSnapshotNearLimitCount,
+      ) &&
+      this._config.memoryLeak.heapSnapshotNearLimitCount >=
+        HEAP_SNAPSHOT_NEAR_LIMIT_MIN_COUNT ?
+        this._config.memoryLeak.heapSnapshotNearLimitCount :
+        HEAP_SNAPSHOT_NEAR_LIMIT_DEFAULT_COUNT;
+      const existingNodeOptions = String(env[NODE_OPTIONS_ENV_KEY] || '').trim();
+      const leakNodeOptions = [
+        NODE_OPTION_HEAP_PROF,
+        NODE_OPTION_HEAP_SNAPSHOT_NEAR_LIMIT_PREFIX + nearLimitCount,
+      ].join(' ');
+      env[NODE_OPTIONS_ENV_KEY] = existingNodeOptions ?
+        existingNodeOptions + ' ' + leakNodeOptions :
+        leakNodeOptions;
+    }
 
     if (seedIp) {
       env[CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS] =
@@ -1371,6 +1420,105 @@ async function bestEffortCleanup(provider, clusterId) {
 }
 
 /**
+ * Register one cluster for process-level best-effort cleanup.
+ * @param {DockerProvider} provider
+ * @param {string} clusterId
+ * @return {Function}
+ */
+function registerClusterCleanup(provider, clusterId) {
+  registerProcessCleanupHandlers();
+  PROCESS_CLEANUP_REGISTRY.set(clusterId, {
+    provider,
+    clusterId,
+  });
+  return () => {
+    PROCESS_CLEANUP_REGISTRY.delete(clusterId);
+  };
+}
+
+/**
+ * Install process cleanup handlers once per process.
+ */
+function registerProcessCleanupHandlers() {
+  if (processCleanupHandlersRegistered) {
+    return;
+  }
+  processCleanupHandlersRegistered = true;
+
+  process.on(PROCESS_EVENT_EXIT, handleExitCleanup);
+  for (const signal of PROCESS_SIGNAL_EVENTS) {
+    process.on(signal, handleSignalCleanup);
+  }
+  process.on(PROCESS_EVENT_UNCAUGHT_EXCEPTION, handleExceptionCleanup);
+}
+
+/**
+ * Snapshot and clear current cleanup registrations.
+ * @return {Array<Object>}
+ */
+function drainCleanupRegistry() {
+  const entries = Array.from(PROCESS_CLEANUP_REGISTRY.values());
+  PROCESS_CLEANUP_REGISTRY.clear();
+  return entries;
+}
+
+/**
+ * Trigger best-effort cleanup for all registered clusters.
+ * @param {Array<Object>} entries
+ * @return {Promise<void>}
+ */
+async function cleanupEntries(entries) {
+  await Promise.all(
+    entries.map((entry) =>
+      bestEffortCleanup(entry.provider, entry.clusterId),
+    ),
+  );
+}
+
+/**
+ * Handle process exit event.
+ */
+function handleExitCleanup() {
+  const entries = drainCleanupRegistry();
+  for (const entry of entries) {
+    bestEffortCleanup(entry.provider, entry.clusterId).catch(() => {});
+  }
+}
+
+/**
+ * Handle SIGINT/SIGTERM and preserve default process termination.
+ * @param {string} signal
+ */
+function handleSignalCleanup(signal) {
+  const entries = drainCleanupRegistry();
+  cleanupEntries(entries)
+    .catch(() => {})
+    .finally(() => {
+      process.removeListener(signal, handleSignalCleanup);
+      process.kill(process.pid, signal);
+    });
+}
+
+/**
+ * Handle uncaught exceptions without swallowing the original failure.
+ * @param {Error} error
+ */
+function handleExceptionCleanup(error) {
+  const entries = drainCleanupRegistry();
+  cleanupEntries(entries)
+    .catch(() => {})
+    .finally(() => {
+      process.removeListener(
+        PROCESS_EVENT_UNCAUGHT_EXCEPTION,
+        handleExceptionCleanup,
+      );
+      process.nextTick(() => {
+        throw error;
+      });
+    });
+}
+
+/**
  * Create a cluster.
  * Req 2.1, 2.2, 2.3
  *
@@ -1408,16 +1556,7 @@ function createCluster(config) {
 
   const cluster = new Cluster(config, providers, hostAssignment);
 
-  // Register best-effort cleanup on unexpected exit (Req 2.6)
-  const cleanupHandler = () => {
-    const provider = providers[0];
-    bestEffortCleanup(provider, cluster._clusterId)
-      .catch(() => {});
-  };
-  process.on('exit', cleanupHandler);
-  process.on('SIGINT', cleanupHandler);
-  process.on('SIGTERM', cleanupHandler);
-  process.on('uncaughtException', cleanupHandler);
+  registerProcessCleanupHandlers();
 
   return cluster;
 }
