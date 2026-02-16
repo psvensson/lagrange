@@ -49,7 +49,7 @@ const _partitionArb = (tableIds) => fc.record({
 });
 
 test('Property 9: Related Entity Counts', async (t) => {
-  await t.test('node service count matches actual services', async (t) => {
+  await t.test('node replica count matches actual replicas', async (t) => {
     fc.assert(
       fc.property(
         fc.array(nodeArb, {minLength: 1, maxLength: 3}),
@@ -89,14 +89,14 @@ test('Property 9: Related Entity Counts', async (t) => {
 
           const nav = new NavigationController(cache);
 
-          // Check each node's service count
+          // Check each node's replica count
           for (const node of uniqueNodes) {
             const counts = nav.getRelatedCounts('node', node.node_id);
             const actualCount = services.filter(
               (s) => s.node_id === node.node_id,
             ).length;
 
-            if (counts.services !== actualCount) {
+            if (counts.replicas !== actualCount) {
               return false;
             }
           }
@@ -106,7 +106,7 @@ test('Property 9: Related Entity Counts', async (t) => {
       ),
       {numRuns: 10},
     );
-    t.pass('node service count matches actual services');
+    t.pass('node replica count matches actual replicas');
   });
 
   await t.test('table partition count matches actual partitions', async (t) => {
@@ -253,8 +253,8 @@ test('Property 9: Related Entity Counts', async (t) => {
           const nav = new NavigationController(cache);
           const counts = nav.getRelatedCounts('node', nodeId);
 
-          // Should return 0 services for non-existent node
-          return counts.services === 0;
+          // Should return 0 services/replicas for non-existent node
+          return counts.services === 0 && counts.replicas === 0;
         },
       ),
       {numRuns: 10},

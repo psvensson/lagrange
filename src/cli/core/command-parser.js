@@ -201,7 +201,7 @@ export class CommandParser {
     // Special completions for known parameters
     if (command === 'goto' && paramIndex === 0) {
       const views = [
-        'nodes', 'services', 'tables', 'partitions',
+        'nodes', 'services', 'replicas', 'tables', 'partitions',
         'message_groups', 'sql', 'logs', 'config', 'contexts',
       ];
       return views.filter((v) => v.startsWith(prefix));

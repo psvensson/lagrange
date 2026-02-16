@@ -31,6 +31,7 @@ const VALID_CONNECTION_STATUSES = [
 const VALID_VIEWS = [
   'nodes',
   'services',
+  'replicas',
   'tables',
   'partitions',
   'message_groups',

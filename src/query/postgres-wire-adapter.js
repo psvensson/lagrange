@@ -10,6 +10,7 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {createSqlRequest} from './sql-request.js';
+import {PARSER_DIALECT} from './pg-compat-constants.js';
 import {
   EXECUTION_MODE,
   ADAPTER_SUBSYSTEM,
@@ -166,6 +167,7 @@ class PostgresWireAdapter {
       executionMode: EXECUTION_MODE.SQL_STATEMENT,
       budgets: options.budgets,
       hints: options.hints,
+      dialect: PARSER_DIALECT.POSTGRESQL,
     });
 
     this.logger.debug(ADAPTER_LOG_MSG.EXECUTING_VIA_SQLCORE, {

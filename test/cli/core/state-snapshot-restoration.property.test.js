@@ -16,7 +16,7 @@ test('Property 37: State Snapshot Restoration', async (t) => {
     'disconnected', 'connecting', 'connected', 'reconnecting', 'failed',
   ];
   const validViews = [
-    'nodes', 'services', 'tables', 'partitions',
+    'nodes', 'services', 'replicas', 'tables', 'partitions',
     'message_groups', 'sql', 'logs', 'config', 'contexts',
   ];
 

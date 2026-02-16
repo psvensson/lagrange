@@ -26,9 +26,11 @@ const CODE_CDC_EVENTS = Object.freeze([
 ]);
 
 const MODULE_MIRROR_ERROR_MSG = Object.freeze({
+  FUNCTION_ID_REQUIRED: 'ModuleMirror functionId is required',
   PROVIDER_REQUIRED: 'ModuleMirror moduleProvider is required',
   INVALID_PAYLOAD:
     'ModuleMirror provider returned invalid module payload',
+  INVALID_MODULE_ENTRY: 'ModuleMirror module entry must be an object',
   MANIFEST_REQUIRED: 'ModuleMirror provider missing module manifest',
   EXPORTS_REQUIRED: 'ModuleMirror provider missing module exports',
   WASM_BYTES_REQUIRED: 'ModuleMirror provider missing wasm bytes',
@@ -100,6 +102,28 @@ class ModuleMirror {
   }
 
   /**
+   * Store a module entry directly in the local cache.
+   *
+   * @param {string} functionId - Function identifier.
+   * @param {Object} moduleEntry - Module payload.
+   * @return {Promise<void>}
+   */
+  async setModule(functionId, moduleEntry) {
+    if (!functionId || typeof functionId !== TYPEOF.STRING) {
+      throw new Error(MODULE_MIRROR_ERROR_MSG.FUNCTION_ID_REQUIRED);
+    }
+    if (!moduleEntry || typeof moduleEntry !== TYPEOF.OBJECT) {
+      throw new Error(MODULE_MIRROR_ERROR_MSG.INVALID_MODULE_ENTRY);
+    }
+
+    const normalized = this._normalizeModulePayload(
+      moduleEntry.version ?? null,
+      moduleEntry,
+    );
+    await this._storeModuleEntry(functionId, normalized);
+  }
+
+  /**
    * Pull a module from a peer node and store it in the local
    * cache via the configured module provider.
    *
@@ -123,40 +147,8 @@ class ModuleMirror {
       throw new Error(MODULE_MIRROR_ERROR_MSG.INVALID_PAYLOAD);
     }
 
-    const payloadVersion = modulePayload.version ?? version;
-    const payloadManifest = modulePayload.manifest;
-    const payloadExports = modulePayload.exports;
-    if (!payloadManifest || typeof payloadManifest !== 'object') {
-      throw new Error(MODULE_MIRROR_ERROR_MSG.MANIFEST_REQUIRED);
-    }
-    if (!payloadExports || typeof payloadExports !== 'object') {
-      throw new Error(MODULE_MIRROR_ERROR_MSG.EXPORTS_REQUIRED);
-    }
-
-    let wasmBytes = modulePayload.wasmBytes;
-    if (Buffer.isBuffer(wasmBytes)) {
-      wasmBytes = Buffer.from(wasmBytes);
-    } else if (wasmBytes instanceof Uint8Array) {
-      wasmBytes = Buffer.from(wasmBytes);
-    } else if (typeof wasmBytes === 'string') {
-      wasmBytes = Buffer.from(wasmBytes, 'base64');
-    } else {
-      throw new Error(MODULE_MIRROR_ERROR_MSG.WASM_BYTES_REQUIRED);
-    }
-
-    const moduleEntry = {
-      version: payloadVersion,
-      wasmBytes,
-      manifest: payloadManifest,
-      exports: payloadExports,
-    };
-
-    await this._validateRuntimeManifest(functionId, moduleEntry);
-
-    this.localCache.set(functionId, {
-      ...moduleEntry,
-      updatedAt: Date.now(),
-    });
+    const normalized = this._normalizeModulePayload(version, modulePayload);
+    await this._storeModuleEntry(functionId, normalized);
   }
 
   /**
@@ -186,6 +178,60 @@ class ModuleMirror {
     throw new Error(
       `${MODULE_MIRROR_ERROR_MSG.RUNTIME_VALIDATION_FAILED}: ${detail}`,
     );
+  }
+
+  /**
+   * Normalize external module payload shape.
+   *
+   * @param {string|null} version
+   * @param {Object} modulePayload
+   * @return {{version: string, wasmBytes: Buffer, manifest: Object, exports: Object}}
+   * @private
+   */
+  _normalizeModulePayload(version, modulePayload) {
+    const payloadVersion = modulePayload.version ?? version;
+    const payloadManifest = modulePayload.manifest;
+    const payloadExports = modulePayload.exports;
+    if (!payloadManifest || typeof payloadManifest !== TYPEOF.OBJECT) {
+      throw new Error(MODULE_MIRROR_ERROR_MSG.MANIFEST_REQUIRED);
+    }
+    if (!payloadExports || typeof payloadExports !== TYPEOF.OBJECT) {
+      throw new Error(MODULE_MIRROR_ERROR_MSG.EXPORTS_REQUIRED);
+    }
+
+    let wasmBytes = modulePayload.wasmBytes;
+    if (Buffer.isBuffer(wasmBytes)) {
+      wasmBytes = Buffer.from(wasmBytes);
+    } else if (wasmBytes instanceof Uint8Array) {
+      wasmBytes = Buffer.from(wasmBytes);
+    } else if (typeof wasmBytes === TYPEOF.STRING) {
+      wasmBytes = Buffer.from(wasmBytes, 'base64');
+    } else {
+      throw new Error(MODULE_MIRROR_ERROR_MSG.WASM_BYTES_REQUIRED);
+    }
+
+    return {
+      version: String(payloadVersion ?? ''),
+      wasmBytes,
+      manifest: payloadManifest,
+      exports: payloadExports,
+    };
+  }
+
+  /**
+   * Validate and persist a normalized module entry.
+   *
+   * @param {string} functionId
+   * @param {{version: string, wasmBytes: Buffer, manifest: Object, exports: Object}} moduleEntry
+   * @return {Promise<void>}
+   * @private
+   */
+  async _storeModuleEntry(functionId, moduleEntry) {
+    await this._validateRuntimeManifest(functionId, moduleEntry);
+    this.localCache.set(functionId, {
+      ...moduleEntry,
+      updatedAt: Date.now(),
+    });
   }
 
   /**

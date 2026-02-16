@@ -15,6 +15,7 @@ const ADMIN_ROUTE = Object.freeze({
   TEST_RUN_BY_ID: '/api/admin/test-runs/:runId',
   TEST_RUN_STOP: '/api/admin/test-runs/:runId/stop',
   TEST_RUN_STREAM: '/api/admin/test-runs/:runId/stream',
+  SERVICE_DIAGNOSTICS: '/api/admin/diagnostics/services',
   DEBUG_SESSIONS: '/api/admin/debug/sessions',
   DEBUG_SESSION_BY_ID: '/api/admin/debug/sessions/:sessionId',
   DEBUG_SESSION_ATTACH: '/api/admin/debug/sessions/:sessionId/attach',
@@ -188,6 +189,11 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
   MISSING_CALLBACK_RUNTIME_KIND:
     'Partition callback message must include runtimeKind',
   QUERY_ENGINE_UNAVAILABLE: 'SQL query engine not available',
+  SERVICE_DIAGNOSTICS_UNAVAILABLE:
+    'Service lifecycle diagnostics provider is not available',
+  SERVICE_DISPATCH_OPERATION_UNSUPPORTED:
+    'Unsupported admin service-dispatch operation',
+  SYSTEM_CACHE_EMPTY: 'System table cache is empty',
   queryTimeout: (timeoutMs) => `Query timeout after ${timeoutMs}ms`,
 });
 

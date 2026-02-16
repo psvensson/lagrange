@@ -11,8 +11,18 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {TABLES} from '../../src/constants/index.js';
+import {
+  INITIAL_MESSAGE_GROUP_REPLICA_IDS,
+  INITIAL_REPLICA_IDS,
+  SystemTableName,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  META_SERVICE_ID,
+  SERVICE_DESCRIPTOR_FIELD,
+  SERVICE_LIFECYCLE_STATE,
+  TABLES,
+  UNIFIED_SERVICE_TYPE,
+} from '../../src/constants/index.js';
 
 /**
  * Initialize test environment with fast Raft elections.
@@ -128,6 +138,35 @@ test('Seed node bootstrap integration', async (t) => {
       t.ok(Array.isArray(services), 'services table should be in cache');
       t.ok(services.length > 0, 'services table should have entries');
 
+      const serviceDefinitions = systemTableCache.getAll(
+        TABLES.SERVICE_DEFINITIONS,
+      );
+      t.ok(Array.isArray(serviceDefinitions),
+        'service_definitions table should be in cache');
+      t.ok(
+        serviceDefinitions.some((row) => row.service_id === META_SERVICE_ID.WASM_META),
+        'service_definitions should include sys-wasm-meta',
+      );
+      t.ok(
+        serviceDefinitions.some((row) => row.service_id === META_SERVICE_ID.ADMIN_META),
+        'service_definitions should include sys-admin-meta',
+      );
+      const serviceEndpoints = systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS);
+      t.ok(Array.isArray(serviceEndpoints),
+        'service_endpoints table should be in cache');
+      t.ok(
+        serviceEndpoints.some((row) =>
+          row.service_id === META_SERVICE_ID.WASM_META &&
+            row.node_id === seedNodeId),
+        'service_endpoints should include sys-wasm-meta endpoint placement',
+      );
+      t.ok(
+        serviceEndpoints.some((row) =>
+          row.service_id === META_SERVICE_ID.ADMIN_META &&
+            row.node_id === seedNodeId),
+        'service_endpoints should include sys-admin-meta endpoint placement',
+      );
+
       const tables = systemTableCache.getAll(TABLES.TABLES);
       t.ok(Array.isArray(tables), 'tables table should be in cache');
       t.ok(tables.length > 0, 'tables table should have entries');
@@ -177,6 +216,84 @@ test('Seed node bootstrap integration', async (t) => {
       }
     }
   });
+
+  await t.test('bootstrap replica creation goes through unified lifecycle owners',
+    async (t) => {
+      const seedNodeId = '550e8400-e29b-41d4-a716-446655440009';
+      const seedWsPort = 18089;
+      const expectedMessageGroupCreates = INITIAL_MESSAGE_GROUP_REPLICA_IDS.length;
+      const expectedPartitionCreates = Object.values(INITIAL_REPLICA_IDS)
+        .reduce((sum, replicaIds) => sum + replicaIds.length, 0);
+
+      const bootstrapService = new BootstrapService({
+        nodeId: seedNodeId,
+        nodeAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: seedWsPort,
+        config: {
+          leadershipWaitTimeoutMs: 1000,
+          leadershipWaitInitialDelayMs: 10,
+          leadershipWaitMaxDelayMs: 100,
+          replicaStaggerDelayMs: 20,
+        },
+      });
+
+      let messageGroupCreateCalls = 0;
+      let partitionCreateCalls = 0;
+      const originalCreateMessageGroup =
+        bootstrapService.createBootstrapMessageGroupReplica.bind(bootstrapService);
+      const originalCreatePartition =
+        bootstrapService.createBootstrapPartitionReplica.bind(bootstrapService);
+
+      bootstrapService.createBootstrapMessageGroupReplica = async (context) => {
+        messageGroupCreateCalls++;
+        return originalCreateMessageGroup(context);
+      };
+      bootstrapService.createBootstrapPartitionReplica = async (context) => {
+        partitionCreateCalls++;
+        return originalCreatePartition(context);
+      };
+
+      try {
+        const result = await bootstrapService.bootstrap();
+        t.equal(result.success, true, 'bootstrap should succeed');
+        t.equal(
+          messageGroupCreateCalls,
+          expectedMessageGroupCreates,
+          'message-group replica creates should flow through lifecycle manager',
+        );
+        t.equal(
+          partitionCreateCalls,
+          expectedPartitionCreates,
+          'partition replica creates should flow through lifecycle manager',
+        );
+        t.ok(
+          bootstrapService.serviceLifecycleManager,
+          'service lifecycle manager should be initialized',
+        );
+        t.ok(
+          bootstrapService.serviceReconciler,
+          'service reconciler should be initialized',
+        );
+
+        const firstMessageGroupReplicaId = INITIAL_MESSAGE_GROUP_REPLICA_IDS[0];
+        const lifecycleState =
+          bootstrapService.serviceLifecycleManager.getReplicaState({
+            [SERVICE_DESCRIPTOR_FIELD.SERVICE_ID]: firstMessageGroupReplicaId,
+            [SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE]:
+              UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+            [SERVICE_DESCRIPTOR_FIELD.TENANT_ID]: seedNodeId,
+            [SERVICE_DESCRIPTOR_FIELD.REPLICA_ID]:
+              firstMessageGroupReplicaId,
+          });
+        t.equal(
+          lifecycleState,
+          SERVICE_LIFECYCLE_STATE.RUNNING,
+          'lifecycle manager should track running state for bootstrap services',
+        );
+      } finally {
+        await bootstrapService.shutdown().catch(() => {});
+      }
+    });
 
   await t.test('direct writes succeed during registration phase', async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440002';

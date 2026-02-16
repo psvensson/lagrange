@@ -21,7 +21,7 @@ async function writeExample(rootDir, options = {}) {
     level: options.level || 'basic',
     version: options.version || '1.0.0',
     entry: 'index.js',
-    runtimeKind: 'native_js',
+    runtimeKind: options.runtimeKind || 'native_js',
     callbackExport: 'run',
     select: options.select || 'SELECT 1',
     params: [],
@@ -35,7 +35,7 @@ async function writeExample(rootDir, options = {}) {
   };
 
   const source = options.source || [
-    "'use strict';",
+    '\'use strict\';',
     '',
     'module.exports.run = async function run(_ctx, batch) {',
     '  return batch.rows || [];',
@@ -72,6 +72,28 @@ test('examples runner - packageExample computes deterministic identity and diges
     await rm(root, {recursive: true, force: true});
   }
 });
+
+test('examples runner - packageExample builds wasm_component artifact blobs',
+  async (t) => {
+    const root = await mkdtemp(join(tmpdir(), TMP_PREFIX));
+    try {
+      const {exampleDir} = await writeExample(root, {
+        dirName: '06-wasm',
+        id: '06-wasm',
+        runtimeKind: 'wasm_component',
+      });
+      const packaged = await packageExample(exampleDir);
+
+      t.equal(packaged.runtimeKind, 'wasm_component');
+      t.equal(packaged.executorType, 'wasm_service');
+      const parsedBlob = JSON.parse(packaged.codeBlob);
+      t.equal(parsedBlob.format, 'js_wasm_component_v1');
+      t.equal(typeof parsedBlob.wasmBytesBase64, 'string');
+      t.equal(parsedBlob.runExport, 'run');
+    } finally {
+      await rm(root, {recursive: true, force: true});
+    }
+  });
 
 test('examples runner - validateExampleOutput enforces first-row contracts', async (t) => {
   const example = {

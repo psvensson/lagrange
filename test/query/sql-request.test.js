@@ -111,6 +111,50 @@ test('isSqlRequest - returns false for non-objects', (t) => {
   t.end();
 });
 
+test('createSqlRequest - dialect defaults to null', (t) => {
+  const req = createSqlRequest({statement: 'SELECT 1'});
+  t.equal(req.dialect, null);
+  t.end();
+});
+
+test('createSqlRequest - accepts explicit dialect string', (t) => {
+  const req = createSqlRequest({
+    statement: 'SELECT 1',
+    dialect: 'postgresql',
+  });
+  t.equal(req.dialect, 'postgresql');
+  t.end();
+});
+
+test('isSqlRequest - accepts request with dialect null', (t) => {
+  const req = createSqlRequest({statement: 'SELECT 1'});
+  t.ok(isSqlRequest(req));
+  t.equal(req.dialect, null);
+  t.end();
+});
+
+test('isSqlRequest - accepts request with dialect string', (t) => {
+  const req = createSqlRequest({
+    statement: 'SELECT 1',
+    dialect: 'postgresql',
+  });
+  t.ok(isSqlRequest(req));
+  t.end();
+});
+
+test('isSqlRequest - rejects non-string dialect', (t) => {
+  const fake = {
+    statement: 'SELECT 1',
+    parameters: [],
+    tenantId: 'system',
+    sessionId: 'default',
+    executionMode: EXECUTION_MODE.SQL_STATEMENT,
+    dialect: 123,
+  };
+  t.notOk(isSqlRequest(fake));
+  t.end();
+});
+
 test('isSqlRequest - returns false for incomplete objects', (t) => {
   t.notOk(isSqlRequest({statement: 'SELECT 1'}));
   t.notOk(isSqlRequest({statement: 'SELECT 1', parameters: []}));

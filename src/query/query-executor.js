@@ -34,6 +34,7 @@ import {
   QUERY_SQL,
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
+import {PG_EXPR_TYPE} from './pg-compat-constants.js';
 
 /**
  * QueryExecutor handles parallel query execution across partitions
@@ -464,7 +465,11 @@ class QueryExecutor {
     sql += '*';
 
     // FROM
-    sql += ` FROM ${ast.from.name}`;
+    if (ast.from.subquery) {
+      sql += ` FROM (${this.buildSelectSQL(ast.from.subquery)})`;
+    } else {
+      sql += ` FROM ${ast.from.name}`;
+    }
     if (ast.from.alias) {
       sql += ` AS ${ast.from.alias}`;
     }
@@ -1522,14 +1527,23 @@ class QueryExecutor {
     sql += cols.join(', ');
 
     // FROM
-    sql += ` FROM ${ast.from.name}`;
+    if (ast.from.subquery) {
+      sql += ` FROM (${this.buildSelectSQL(ast.from.subquery)})`;
+    } else {
+      sql += ` FROM ${ast.from.name}`;
+    }
     if (ast.from.alias) {
       sql += ` AS ${ast.from.alias}`;
     }
 
     // JOINs
     for (const join of ast.joins || []) {
-      sql += ` ${join.joinType} JOIN ${join.table.name}`;
+      if (join.table.subquery) {
+        sql += ` ${join.joinType} JOIN` +
+          ` (${this.buildSelectSQL(join.table.subquery)})`;
+      } else {
+        sql += ` ${join.joinType} JOIN ${join.table.name}`;
+      }
       if (join.table.alias) {
         sql += ` AS ${join.table.alias}`;
       }
@@ -1566,6 +1580,21 @@ class QueryExecutor {
       if (ast.limit.offset) {
         sql += ` OFFSET ${ast.limit.offset}`;
       }
+    }
+
+    // Set operations (UNION, UNION ALL, INTERSECT, EXCEPT)
+    if (ast.setOperation) {
+      sql += ` ${ast.setOperation.type}` +
+        ` ${this.buildSelectSQL(ast.setOperation.right)}`;
+    }
+
+    // CTE prefix
+    if (ast.ctes && ast.ctes.length > 0) {
+      const recursive = ast.recursive ? 'RECURSIVE ' : '';
+      const cteDefs = ast.ctes.map((c) =>
+        `${c.name} AS (${this.buildSelectSQL(c.query)})`,
+      );
+      sql = `WITH ${recursive}${cteDefs.join(', ')} ` + sql;
     }
 
     return sql;
@@ -1643,9 +1672,48 @@ class QueryExecutor {
     case 'parameter':
       return '?';
 
+    case PG_EXPR_TYPE.CAST:
+      return `CAST(${this.buildExpressionSQL(expr.expression)} AS ${expr.affinity})`;
+
+    case PG_EXPR_TYPE.CASE:
+      return this.buildCaseSQL(expr);
+
+    case PG_EXPR_TYPE.SUBQUERY:
+      return `(${this.buildSelectSQL(expr.query)})`;
+
+    case PG_EXPR_TYPE.EXISTS:
+      return `EXISTS (${this.buildSelectSQL(expr.query)})`;
+
+    case PG_EXPR_TYPE.FUNCTION_CALL: {
+      const fnArgs = expr.args.map((a) => this.buildExpressionSQL(a));
+      return `${expr.name}(${fnArgs.join(', ')})`;
+    }
+
     default:
       return '';
     }
+  }
+
+  /**
+   * Build SQL for a CASE WHEN expression.
+   * Handles both searched CASE (CASE WHEN ...) and simple CASE (CASE expr WHEN ...).
+   * @param {Object} expr - CASE AST node.
+   * @return {string} Reconstructed CASE SQL.
+   */
+  buildCaseSQL(expr) {
+    let sql = 'CASE';
+    if (expr.operand) {
+      sql += ' ' + this.buildExpressionSQL(expr.operand);
+    }
+    for (const cond of expr.conditions) {
+      sql += ' WHEN ' + this.buildExpressionSQL(cond.when);
+      sql += ' THEN ' + this.buildExpressionSQL(cond.then);
+    }
+    if (expr.elseExpr) {
+      sql += ' ELSE ' + this.buildExpressionSQL(expr.elseExpr);
+    }
+    sql += ' END';
+    return sql;
   }
 
   /**
@@ -1681,6 +1749,23 @@ class QueryExecutor {
   }
 
   /**
+   * Append RETURNING clause to a SQL string when present in the AST.
+   * @param {string} sql - SQL string to append to.
+   * @param {string[]|string|null} returning - RETURNING clause info.
+   * @return {string} SQL string with RETURNING appended if applicable.
+   * @private
+   */
+  appendReturning(sql, returning) {
+    if (!returning) {
+      return sql;
+    }
+    const cols = returning === '*'
+      ? '*'
+      : returning.join(', ');
+    return `${sql} ${SQL.RETURNING} ${cols}`;
+  }
+
+  /**
    * Build SQL for INSERT statement.
    * @param {Object} ast - INSERT AST.
    * @return {string} SQL string.
@@ -1710,7 +1795,7 @@ class QueryExecutor {
 
     sql += rows.join(', ');
 
-    return sql;
+    return this.appendReturning(sql, ast.returning);
   }
 
   /**
@@ -1766,7 +1851,7 @@ class QueryExecutor {
       sql += ` WHERE ${this.buildExpressionSQL(ast.where)}`;
     }
 
-    return sql;
+    return this.appendReturning(sql, ast.returning);
   }
 
   /**
@@ -1817,7 +1902,7 @@ class QueryExecutor {
       sql += ` WHERE ${this.buildExpressionSQL(ast.where)}`;
     }
 
-    return sql;
+    return this.appendReturning(sql, ast.returning);
   }
 }
 

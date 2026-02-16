@@ -12,6 +12,17 @@ export {NODE_STATE} from './node-state.js';
 export {NUM} from './numbers.js';
 export {SQL} from './sql.js';
 export {SERVICE_TYPE, SERVICE_PROFILE} from './service.js';
+export {
+  UNIFIED_SERVICE_TYPE,
+  ALLOWED_UNIFIED_SERVICE_TYPES,
+  SERVICE_LIFECYCLE_STATE,
+  SERVICE_LIFECYCLE_TRANSITIONS,
+  SERVICE_LIFECYCLE_OPERATION,
+  SERVICE_OPERATION_STATE,
+  SERVICE_DESCRIPTOR_FIELD,
+  SERVICE_MESSAGE_FIELD,
+  SERVICE_MESSAGE_REQUIRED_FIELDS,
+} from './unified-service-lifecycle.js';
 export {STATE} from './states.js';
 export {STRING} from './strings.js';
 export {SUBSYSTEM} from './subsystems.js';

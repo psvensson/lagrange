@@ -3,46 +3,46 @@ TAP version 14
     # Subtest: selection change updates detail for views with details
         ok 1 - selection change updates detail for views with details
         1..1
-    ok 1 - selection change updates detail for views with details # time=6.774ms
+    ok 1 - selection change updates detail for views with details # time=3.63ms
     
     # Subtest: selection change ignored for views without details
         ok 1 - selection change ignored for views without details
         1..1
-    ok 2 - selection change ignored for views without details # time=1.694ms
+    ok 2 - selection change ignored for views without details # time=1.031ms
     
     # Subtest: null selection clears detail data
         ok 1 - null selection clears detail data
         1..1
-    ok 3 - null selection clears detail data # time=1.579ms
+    ok 3 - null selection clears detail data # time=0.877ms
     
     # Subtest: view switch updates layout from config
         ok 1 - view switch updates layout from config
         1..1
-    ok 4 - view switch updates layout from config # time=0.733ms
+    ok 4 - view switch updates layout from config # time=0.505ms
     
     # Subtest: custom getDetailData function is used
         ok 1 - custom getDetailData function is used
         1..1
-    ok 5 - custom getDetailData function is used # time=1.729ms
+    ok 5 - custom getDetailData function is used # time=0.903ms
     
     # Subtest: unregistered view selection is ignored
         ok 1 - unregistered view selection is ignored
         1..1
-    ok 6 - unregistered view selection is ignored # time=1.224ms
+    ok 6 - unregistered view selection is ignored # time=0.674ms
     
     # Subtest: detail preserved on switch when configured
         ok 1 - detail preserved on switch when configured
         1..1
-    ok 7 - detail preserved on switch when configured # time=1.379ms
+    ok 7 - detail preserved on switch when configured # time=0.7ms
     
     # Subtest: detail cleared on switch when not preserving
         ok 1 - detail cleared on switch when not preserving
         1..1
-    ok 8 - detail cleared on switch when not preserving # time=1.306ms
+    ok 8 - detail cleared on switch when not preserving # time=0.683ms
     
     1..8
-ok 1 - Property 36: View-Detail Coordination Correctness # time=24.026ms
+ok 1 - Property 36: View-Detail Coordination Correctness # time=13.341ms
 
 1..1
 # { total: 8, pass: 8 }
-# time=31.578ms
+# time=19.549ms

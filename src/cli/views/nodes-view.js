@@ -151,7 +151,7 @@ export class NodesView extends BaseView {
 
     return {
       action: 'drillDown',
-      view: 'services',
+      view: 'replicas',
       context: {nodeId: selectedNode.node_id},
     };
   }
@@ -241,12 +241,12 @@ export class NodesView extends BaseView {
 
     // Build related counts
     const relatedCounts = {
-      Services: node.services_count ?? 0,
+      Replicas: node.services_count ?? 0,
     };
 
     // Build navigation links
     const navigationLinks = [
-      {label: 'View Services', target: 'services', key: 's'},
+      {label: 'View Replicas', target: 'replicas', key: 'r'},
     ];
 
     return {

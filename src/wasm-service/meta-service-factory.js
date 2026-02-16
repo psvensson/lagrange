@@ -10,6 +10,7 @@ import {
   META_SERVICE_ID,
   META_SERVICE_RUNTIME_REF,
   SERVICE_PROFILE,
+  UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {RUNTIME_KIND} from '../constants/runtime.js';
 import {
@@ -36,6 +37,7 @@ function createWasmMetaDefinition() {
     serviceId: META_SERVICE_ID.WASM_META,
     serviceName: META_SERVICE_ID.WASM_META,
     serviceProfile: SERVICE_PROFILE.DEFAULT,
+    serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
     handlerFunctionId: null,
     readConsistency: READ_CONSISTENCY_MODE.STRONG,
     writeConsistency: WRITE_CONSISTENCY_MODE.STRONG,
@@ -59,6 +61,7 @@ function createAdminMetaDefinition() {
     serviceId: META_SERVICE_ID.ADMIN_META,
     serviceName: META_SERVICE_ID.ADMIN_META,
     serviceProfile: SERVICE_PROFILE.DEFAULT,
+    serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
     handlerFunctionId: null,
     readConsistency: READ_CONSISTENCY_MODE.STRONG,
     writeConsistency: WRITE_CONSISTENCY_MODE.STRONG,

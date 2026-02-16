@@ -8,3 +8,8 @@ export {
   StandaloneTestRunServer,
   createStandaloneTestRunServer,
 } from './standalone-test-run-server.js';
+export {
+  ADMIN_SERVICE_OPERATION,
+  adaptAdminMessageToServiceMessage,
+  isAdminMessageDispatchable,
+} from './admin-service-message-adapter.js';

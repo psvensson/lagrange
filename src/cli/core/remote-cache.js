@@ -14,6 +14,8 @@
 const PRIMARY_KEYS = {
   nodes: 'node_id',
   services: 'service_id',
+  service_definitions: 'service_id',
+  service_endpoints: 'endpoint_id',
   partitions: 'partition_id',
   tables: 'table_id',
   message_groups: 'group_id',
@@ -23,6 +25,18 @@ const PRIMARY_KEYS = {
   contexts: 'context_id',
   replica_operations: 'operation_id',
 };
+
+const LOGICAL_SERVICE_STATUS = Object.freeze({
+  HEALTHY: 'healthy',
+  PARTIAL: 'partial',
+  DEGRADED: 'degraded',
+  UNKNOWN: 'unknown',
+});
+
+const HEALTHY_RUNTIME_STATUS = new Set([
+  'healthy',
+  'active',
+]);
 
 /**
  * RemoteCache class maintains a local copy of system tables synchronized via CDC
@@ -35,6 +49,8 @@ export class RemoteCache {
     this.tables = {
       nodes: new Map(),
       services: new Map(),
+      service_definitions: new Map(),
+      service_endpoints: new Map(),
       partitions: new Map(),
       tables: new Map(),
       message_groups: new Map(),
@@ -61,7 +77,10 @@ export class RemoteCache {
     if (!keyField) {
       throw new Error(`Unknown table: ${tableName}`);
     }
-    return record[keyField];
+    const camelKeyField = keyField.replace(/_([a-z])/g, (_match, letter) => {
+      return letter.toUpperCase();
+    });
+    return record[keyField] ?? record[camelKeyField] ?? record.id;
   }
 
   /**
@@ -78,6 +97,9 @@ export class RemoteCache {
       if (Array.isArray(records)) {
         for (const record of records) {
           const key = this.getPrimaryKey(tableName, record);
+          if (key === undefined || key === null) {
+            continue;
+          }
           this.tables[tableName].set(key, record);
         }
       }
@@ -181,18 +203,39 @@ export class RemoteCache {
   }
 
   /**
-   * Get services with optional filtering
+   * Get replica rows with optional filtering.
    * Requirements: 13.2
-   * @param {Object} filter - Optional filter with nodeId and/or type
-   * @return {Array} Array of service records
+   * @param {Object} filter - Optional filters (nodeId, type, partitionId, groupId, serviceId)
+   * @return {Array} Array of replica records
    */
   getServices(filter = {}) {
     let services = Array.from(this.tables.services.values());
+    services = services.concat(this.getRuntimeServices());
     if (filter.nodeId) {
-      services = services.filter((s) => s.node_id === filter.nodeId);
+      services = services.filter((service) => {
+        return this.resolveNodeId(service) === filter.nodeId;
+      });
     }
     if (filter.type) {
-      services = services.filter((s) => s.service_type === filter.type);
+      services = services.filter((service) => {
+        return this.resolveServiceType(service) === filter.type;
+      });
+    }
+    if (filter.partitionId) {
+      services = services.filter((service) => {
+        return service.partition_id === filter.partitionId;
+      });
+    }
+    if (filter.groupId) {
+      services = services.filter((service) => {
+        return service.group_id === filter.groupId;
+      });
+    }
+    if (filter.serviceId) {
+      services = services.filter((service) => {
+        return this.resolveServiceId(service) === filter.serviceId ||
+          service.logical_service_id === filter.serviceId;
+      });
     }
 
     // Enrich services with node_address from nodes table
@@ -200,12 +243,298 @@ export class RemoteCache {
       if (service.node_address) {
         return service;
       }
-      const node = this.tables.nodes.get(service.node_id);
-      if (node && node.node_address) {
-        return {...service, node_address: node.node_address};
+      const node = this.tables.nodes.get(this.resolveNodeId(service));
+      const nodeAddress = this.resolveNodeAddress(node);
+      if (nodeAddress) {
+        return {...service, node_address: nodeAddress};
       }
       return service;
     });
+  }
+
+  /**
+   * Get logical service rows (service definitions joined with endpoints).
+   * @param {Object} filter - Optional filters (nodeId, serviceId).
+   * @return {Array<Object>}
+   */
+  getLogicalServices(filter = {}) {
+    const logicalServices = [];
+    const definitions = Array.from(this.tables.service_definitions.values());
+    const endpointsByServiceId = this.getEndpointsByServiceId();
+
+    for (const definition of definitions) {
+      const serviceId = this.resolveServiceId(definition);
+      if (!serviceId) {
+        continue;
+      }
+
+      const endpoints = endpointsByServiceId.get(serviceId) || [];
+      const nodes = this.collectEndpointNodeIds(endpoints);
+      if (filter.nodeId && !nodes.includes(filter.nodeId)) {
+        continue;
+      }
+      if (filter.serviceId && serviceId !== filter.serviceId) {
+        continue;
+      }
+
+      const desiredReplicaCount = this.resolveReplicaCount(definition);
+      const observedReplicaCount = endpoints.length;
+      const healthyReplicaCount = this.countHealthyEndpoints(endpoints);
+
+      logicalServices.push({
+        ...definition,
+        service_id: serviceId,
+        service_name: definition.service_name || definition.serviceName || serviceId,
+        service_type: definition.service_type || definition.serviceType || 'runtime_service',
+        runtime_kind: definition.runtime_kind || definition.runtimeKind || null,
+        runtime_ref: definition.runtime_ref || definition.runtimeRef || null,
+        replica_count: desiredReplicaCount,
+        replica_count_observed: observedReplicaCount,
+        healthy_replica_count: healthyReplicaCount,
+        node_count: nodes.length,
+        nodes,
+        nodes_summary: nodes.length > 0 ? nodes.join(', ') : 'none',
+        status: this.resolveLogicalServiceStatus(
+          desiredReplicaCount,
+          observedReplicaCount,
+          healthyReplicaCount,
+        ),
+      });
+    }
+
+    return logicalServices;
+  }
+
+  /**
+   * Build runtime service rows from service definitions and endpoints.
+   * @return {Array<Object>} Runtime-backed service rows.
+   */
+  getRuntimeServices() {
+    const runtimeServices = [];
+    const definitions = Array.from(this.tables.service_definitions.values());
+    const endpointsByServiceId = this.getEndpointsByServiceId();
+
+    for (const definition of definitions) {
+      const serviceId = this.resolveServiceId(definition);
+      if (!serviceId) {
+        continue;
+      }
+
+      const endpoints = endpointsByServiceId.get(serviceId) || [];
+      for (const endpoint of endpoints) {
+        runtimeServices.push(this.createRuntimeServiceRow(definition, endpoint));
+      }
+    }
+
+    return runtimeServices;
+  }
+
+  /**
+   * Create one runtime service row for service inventory views.
+   * @param {Object} definition - service_definitions row.
+   * @param {Object} endpoint - service_endpoints row.
+   * @return {Object}
+   */
+  createRuntimeServiceRow(definition, endpoint) {
+    const serviceId = this.resolveServiceId(definition);
+    const endpointId = this.resolveEndpointId(endpoint);
+    const endpointAddress = this.formatEndpointAddress(endpoint);
+    const status = this.resolveRuntimeStatus(definition, endpoint);
+    const nodeId = this.resolveNodeId(endpoint);
+
+    return {
+      ...definition,
+      service_id: serviceId,
+      logical_service_id: serviceId,
+      service_type: 'runtime_service',
+      status,
+      node_id: nodeId,
+      endpoint_id: endpointId,
+      replica_id: endpointId,
+      address: endpointAddress,
+      row_key: `runtime:${serviceId}:${endpointId}`,
+    };
+  }
+
+  /**
+   * Format endpoint address with optional port.
+   * @param {Object|null} endpoint - Endpoint record.
+   * @return {string|null}
+   */
+  formatEndpointAddress(endpoint) {
+    const address = this.resolveNodeAddress(endpoint);
+    if (!address) {
+      return null;
+    }
+    const port = endpoint.port ?? endpoint.ws_port ?? endpoint.wsPort;
+    if (port === undefined || port === null) {
+      return address;
+    }
+    return `${address}:${port}`;
+  }
+
+  /**
+   * Resolve a service identifier from snake_case, camelCase, or id fallback.
+   * @param {Object|undefined|null} row
+   * @return {string}
+   */
+  resolveServiceId(row) {
+    if (!row) {
+      return '';
+    }
+    return row.service_id || row.serviceId || row.id || '';
+  }
+
+  /**
+   * Resolve a node identifier from snake_case or camelCase fields.
+   * @param {Object|undefined|null} row
+   * @return {string|null}
+   */
+  resolveNodeId(row) {
+    if (!row) {
+      return null;
+    }
+    return row.node_id || row.nodeId || null;
+  }
+
+  /**
+   * Resolve a service type from snake_case or legacy aliases.
+   * @param {Object|undefined|null} row
+   * @return {string|null}
+   */
+  resolveServiceType(row) {
+    if (!row) {
+      return null;
+    }
+    return row.service_type || row.serviceType || row.type || null;
+  }
+
+  /**
+   * Resolve endpoint identifier from snake_case, camelCase, or id fallback.
+   * @param {Object|undefined|null} endpoint
+   * @return {string|null}
+   */
+  resolveEndpointId(endpoint) {
+    if (!endpoint) {
+      return null;
+    }
+    return endpoint.endpoint_id || endpoint.endpointId || endpoint.id || null;
+  }
+
+  /**
+   * Resolve display address from common node/endpoint field variants.
+   * @param {Object|undefined|null} row
+   * @return {string|null}
+   */
+  resolveNodeAddress(row) {
+    if (!row) {
+      return null;
+    }
+    return row.node_address || row.nodeAddress || row.address || row.host || null;
+  }
+
+  /**
+   * Resolve runtime service status from endpoint health or definition status.
+   * @param {Object} definition
+   * @param {Object|null|undefined} endpoint
+   * @return {string}
+   */
+  resolveRuntimeStatus(definition, endpoint) {
+    return endpoint?.health_status ||
+      endpoint?.healthStatus ||
+      endpoint?.status ||
+      definition?.status ||
+      definition?.state ||
+      'unknown';
+  }
+
+  /**
+   * Group endpoint rows by service_id.
+   * @return {Map<string, Array<Object>>}
+   */
+  getEndpointsByServiceId() {
+    const endpointsByServiceId = new Map();
+    for (const endpoint of this.tables.service_endpoints.values()) {
+      const serviceId = this.resolveServiceId(endpoint);
+      if (!serviceId) {
+        continue;
+      }
+      if (!endpointsByServiceId.has(serviceId)) {
+        endpointsByServiceId.set(serviceId, []);
+      }
+      endpointsByServiceId.get(serviceId).push(endpoint);
+    }
+    return endpointsByServiceId;
+  }
+
+  /**
+   * Resolve desired replica count from definition fields.
+   * @param {Object} definition
+   * @return {number}
+   */
+  resolveReplicaCount(definition) {
+    const raw = definition?.replica_count ?? definition?.replicaCount ?? 0;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return 0;
+    }
+    return Math.floor(parsed);
+  }
+
+  /**
+   * Collect unique node IDs from endpoint rows.
+   * @param {Array<Object>} endpoints
+   * @return {Array<string>}
+   */
+  collectEndpointNodeIds(endpoints) {
+    const uniqueNodeIds = new Set();
+    for (const endpoint of endpoints) {
+      const nodeId = this.resolveNodeId(endpoint);
+      if (nodeId) {
+        uniqueNodeIds.add(nodeId);
+      }
+    }
+    return Array.from(uniqueNodeIds.values()).sort();
+  }
+
+  /**
+   * Count endpoints in a healthy state.
+   * @param {Array<Object>} endpoints
+   * @return {number}
+   */
+  countHealthyEndpoints(endpoints) {
+    return endpoints.reduce((count, endpoint) => {
+      const status = this.resolveRuntimeStatus(null, endpoint);
+      return HEALTHY_RUNTIME_STATUS.has(String(status).toLowerCase()) ?
+        count + 1 :
+        count;
+    }, 0);
+  }
+
+  /**
+   * Resolve logical-service health state from desired/observed counts.
+   * @param {number} desiredReplicaCount
+   * @param {number} observedReplicaCount
+   * @param {number} healthyReplicaCount
+   * @return {string}
+   */
+  resolveLogicalServiceStatus(
+    desiredReplicaCount,
+    observedReplicaCount,
+    healthyReplicaCount,
+  ) {
+    if (desiredReplicaCount <= 0) {
+      return observedReplicaCount === 0 ?
+        LOGICAL_SERVICE_STATUS.UNKNOWN :
+        LOGICAL_SERVICE_STATUS.HEALTHY;
+    }
+    if (healthyReplicaCount >= desiredReplicaCount) {
+      return LOGICAL_SERVICE_STATUS.HEALTHY;
+    }
+    if (healthyReplicaCount === 0) {
+      return LOGICAL_SERVICE_STATUS.DEGRADED;
+    }
+    return LOGICAL_SERVICE_STATUS.PARTIAL;
   }
 
   /**

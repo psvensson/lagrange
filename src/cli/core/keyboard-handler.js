@@ -21,7 +21,7 @@ export const INPUT_MODE = {
  */
 export const VIEW_KEYS = {
   '1': 'nodes',
-  '2': 'services',
+  '2': 'replicas',
   '3': 'tables',
   '4': 'partitions',
   '5': 'message_groups',
@@ -29,7 +29,7 @@ export const VIEW_KEYS = {
   '7': 'logs',
   '8': 'config',
   '9': 'contexts',
-  '0': 'operations',
+  '0': 'services',
 };
 
 /**

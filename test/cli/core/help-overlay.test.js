@@ -36,7 +36,7 @@ test('HelpOverlay', async (t) => {
 
     const viewHelp = overlay.getViewHelp();
     const views = [
-      'nodes', 'services', 'tables', 'partitions',
+      'nodes', 'services', 'replicas', 'tables', 'partitions',
       'message_groups', 'sql', 'logs', 'config', 'contexts',
     ];
 

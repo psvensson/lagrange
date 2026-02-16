@@ -17,6 +17,7 @@ import {RemoteCache} from '../../../src/cli/core/remote-cache.js';
 const VALID_VIEWS = [
   'nodes',
   'services',
+  'replicas',
   'tables',
   'partitions',
   'message_groups',
@@ -140,6 +141,7 @@ test('Property 7: Breadcrumb Accuracy', async (t) => {
           // For other views, breadcrumb should contain the view name
           const viewNames = {
             'services': 'Services',
+            'replicas': 'Replicas',
             'tables': 'Tables',
             'partitions': 'Partitions',
             'message_groups': 'Message Groups',

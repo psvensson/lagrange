@@ -28,7 +28,7 @@ test('ServicesView', async (t) => {
   t.test('constructor initializes with default state', async (t) => {
     const view = new ServicesView();
 
-    t.equal(view.viewName, 'services');
+    t.equal(view.viewName, 'replicas');
     t.equal(view.cache, null);
     t.equal(view.nodeFilter, null);
     t.equal(view.typeFilter, null);
@@ -336,7 +336,7 @@ test('ServicesView', async (t) => {
 
     const details = view.getSelectedDetails();
 
-    t.equal(details.title, 'Service: svc-1');
+    t.equal(details.title, 'Replica: svc-1');
     t.ok(details.sections.length >= 2);
     t.equal(details.sections[0].title, 'Basic Information');
     t.equal(details.sections[1].title, 'Replica State');

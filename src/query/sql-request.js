@@ -28,6 +28,7 @@ import {
  * @param {string} [fields.callbackExport] - Export name for callbacks.
  * @param {Object} [fields.budgets] - QueryBudget overrides.
  * @param {Object} [fields.hints] - PlannerHints overrides.
+ * @param {string|null} [fields.dialect] - Parser dialect hint.
  * @return {Readonly<Object>} Frozen SqlRequest.
  * @throws {Error} If required fields are missing or invalid.
  */
@@ -72,6 +73,7 @@ function createSqlRequest(fields) {
     runtimeKind: fields.runtimeKind ?? null,
     budgets: Object.freeze({...DEFAULT_QUERY_BUDGET, ...fields.budgets}),
     hints: fields.hints ? Object.freeze({...fields.hints}) : null,
+    dialect: fields.dialect ?? null,
   };
 
   return Object.freeze(request);
@@ -96,6 +98,11 @@ function isSqlRequest(obj) {
   if (obj.runtimeKind !== undefined &&
       obj.runtimeKind !== null &&
       typeof obj.runtimeKind !== TYPEOF.STRING) {
+    return false;
+  }
+  if (obj.dialect !== undefined &&
+      obj.dialect !== null &&
+      typeof obj.dialect !== TYPEOF.STRING) {
     return false;
   }
   return true;

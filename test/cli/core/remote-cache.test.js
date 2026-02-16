@@ -13,6 +13,10 @@ test('RemoteCache - constructor initializes empty tables', async (t) => {
   t.ok(cache.tables.logs instanceof Map, 'logs is a Map');
   t.ok(cache.tables.config instanceof Map, 'config is a Map');
   t.ok(cache.tables.contexts instanceof Map, 'contexts is a Map');
+  t.ok(cache.tables.service_definitions instanceof Map,
+    'service_definitions is a Map');
+  t.ok(cache.tables.service_endpoints instanceof Map,
+    'service_endpoints is a Map');
   t.equal(cache.lastUpdate, null, 'lastUpdate is null');
   t.equal(cache.cdcLag, 0, 'cdcLag is 0');
 });
@@ -118,6 +122,189 @@ test('RemoteCache - getServices filters by type', async (t) => {
   const filtered = cache.getServices({type: 'partition'});
   t.equal(filtered.length, 2, 'filtered to 2 services');
   t.ok(filtered.every((s) => s.service_type === 'partition'), 'all partitions');
+});
+
+test('RemoteCache - getServices includes runtime services from definitions/endpoints',
+  async (t) => {
+    const cache = new RemoteCache();
+    cache.loadFromDump({
+      nodes: [
+        {node_id: 'node-1', node_address: '127.0.0.1:8080'},
+      ],
+      services: [
+        {service_id: 'svc-1', node_id: 'node-1', service_type: 'partition'},
+      ],
+      service_definitions: [
+        {
+          service_id: 'sys-wasm-meta',
+          service_name: 'sys-wasm-meta',
+          service_profile: 'default',
+          runtime_kind: 'native_js',
+          runtime_ref: 'builtin://sys-wasm-meta',
+          status: 'active',
+        },
+      ],
+      service_endpoints: [
+        {
+          endpoint_id: 'endpoint-1',
+          service_id: 'sys-wasm-meta',
+          node_id: 'node-1',
+          address: '127.0.0.1',
+          port: 7091,
+          health_status: 'healthy',
+        },
+      ],
+    });
+
+    const runtimeServices = cache.getServices().filter((service) => {
+      return service.service_type === 'runtime_service';
+    });
+
+    t.equal(runtimeServices.length, 1, 'includes one runtime service row');
+    t.equal(runtimeServices[0].service_id, 'sys-wasm-meta',
+      'runtime service uses logical service id');
+    t.equal(runtimeServices[0].endpoint_id, 'endpoint-1',
+      'runtime service row contains endpoint id');
+    t.equal(runtimeServices[0].status, 'healthy',
+      'runtime service row uses endpoint health status');
+    t.equal(runtimeServices[0].node_address, '127.0.0.1:8080',
+      'runtime service row is enriched with node address');
+  });
+
+test('RemoteCache - runtime services support legacy id/camelCase payload fields',
+  async (t) => {
+    const cache = new RemoteCache();
+    cache.loadFromDump({
+      nodes: [
+        {id: 'node-1', address: '127.0.0.1:8080'},
+      ],
+      service_definitions: [
+        {
+          id: 'sys-admin-meta',
+          serviceName: 'sys-admin-meta',
+          runtimeKind: 'native_js',
+          status: 'active',
+        },
+      ],
+      service_endpoints: [
+        {
+          id: 'endpoint-1',
+          serviceId: 'sys-admin-meta',
+          nodeId: 'node-1',
+          address: '127.0.0.1',
+          port: 7090,
+          healthStatus: 'healthy',
+        },
+      ],
+    });
+
+    const runtimeServices = cache.getServices().filter((service) => {
+      return service.service_type === 'runtime_service';
+    });
+
+    t.equal(runtimeServices.length, 1, 'includes one runtime replica row');
+    t.equal(runtimeServices[0].service_id, 'sys-admin-meta',
+      'runtime row resolves service ID from legacy fields');
+    t.equal(runtimeServices[0].endpoint_id, 'endpoint-1',
+      'runtime row resolves endpoint ID from legacy fields');
+    t.equal(runtimeServices[0].node_id, 'node-1',
+      'runtime row resolves node ID from legacy fields');
+    t.equal(runtimeServices[0].status, 'healthy',
+      'runtime row prefers endpoint health status');
+    t.equal(runtimeServices[0].node_address, '127.0.0.1:8080',
+      'runtime row resolves node address from legacy node field');
+  });
+
+test('RemoteCache - node filter excludes runtime definitions without endpoints',
+  async (t) => {
+    const cache = new RemoteCache();
+    cache.loadFromDump({
+      services: [
+        {service_id: 'svc-1', node_id: 'node-1', service_type: 'partition'},
+      ],
+      service_definitions: [
+        {
+          service_id: 'sys-admin-meta',
+          service_name: 'sys-admin-meta',
+          runtime_kind: 'native_js',
+          status: 'active',
+        },
+      ],
+    });
+
+    const filtered = cache.getServices({nodeId: 'node-1'});
+    const runtimeRows = filtered.filter((service) => {
+      return service.service_type === 'runtime_service';
+    });
+    t.equal(runtimeRows.length, 0,
+      'runtime definitions without endpoints are not materialized as replicas');
+  });
+
+test('RemoteCache - getLogicalServices aggregates definitions and endpoints',
+  async (t) => {
+    const cache = new RemoteCache();
+    cache.loadFromDump({
+      service_definitions: [
+        {
+          service_id: 'sys-admin-meta',
+          service_name: 'sys-admin-meta',
+          runtime_kind: 'native_js',
+          runtime_ref: 'builtin://sys-admin-meta',
+          replica_count: 2,
+        },
+      ],
+      service_endpoints: [
+        {
+          endpoint_id: 'admin-ep-node-1',
+          service_id: 'sys-admin-meta',
+          node_id: 'node-1',
+          address: '127.0.0.1',
+          port: 7091,
+          health_status: 'healthy',
+        },
+        {
+          endpoint_id: 'admin-ep-node-2',
+          service_id: 'sys-admin-meta',
+          node_id: 'node-2',
+          address: '127.0.0.2',
+          port: 7091,
+          health_status: 'healthy',
+        },
+      ],
+    });
+
+    const logicalServices = cache.getLogicalServices();
+    t.equal(logicalServices.length, 1, 'returns one logical service');
+    t.equal(logicalServices[0].service_id, 'sys-admin-meta',
+      'returns expected service_id');
+    t.equal(logicalServices[0].replica_count, 2,
+      'includes desired replica count from definition');
+    t.equal(logicalServices[0].replica_count_observed, 2,
+      'includes observed replica count from endpoints');
+    t.equal(logicalServices[0].healthy_replica_count, 2,
+      'includes healthy replica count from endpoints');
+    t.equal(logicalServices[0].status, 'healthy',
+      'marks service healthy when desired replicas are healthy');
+  });
+
+test('RemoteCache - getLogicalServices supports nodeId filter', async (t) => {
+  const cache = new RemoteCache();
+  cache.loadFromDump({
+    service_definitions: [
+      {service_id: 'svc-a', service_name: 'svc-a', replica_count: 1},
+      {service_id: 'svc-b', service_name: 'svc-b', replica_count: 1},
+    ],
+    service_endpoints: [
+      {endpoint_id: 'a-1', service_id: 'svc-a', node_id: 'node-1', health_status: 'healthy'},
+      {endpoint_id: 'b-1', service_id: 'svc-b', node_id: 'node-2', health_status: 'healthy'},
+    ],
+  });
+
+  const nodeOneServices = cache.getLogicalServices({nodeId: 'node-1'});
+  t.equal(nodeOneServices.length, 1,
+    'filters logical services to those hosted on selected node');
+  t.equal(nodeOneServices[0].service_id, 'svc-a',
+    'returns logical service hosted on node-1');
 });
 
 test('RemoteCache - getPartitions filters by tableId', async (t) => {

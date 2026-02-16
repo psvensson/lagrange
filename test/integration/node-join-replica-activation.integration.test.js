@@ -243,10 +243,33 @@ test('Node join replica activation', {timeout: 30000}, async (t) => {
         httpPost,
       });
 
+      let joinLifecycleCreateCalls = 0;
+      const originalCreateJoinMessageGroup =
+        joiningService.createJoinMessageGroupReplica.bind(joiningService);
+      const reconcilerReasons = [];
+      const originalTriggerJoinReconciler =
+        joiningService.triggerJoinReconciler.bind(joiningService);
+      joiningService.createJoinMessageGroupReplica = async (context) => {
+        joinLifecycleCreateCalls++;
+        return originalCreateJoinMessageGroup(context);
+      };
+      joiningService.triggerJoinReconciler = async (reason) => {
+        reconcilerReasons.push(reason);
+        return originalTriggerJoinReconciler(reason);
+      };
+
       const joinResult = await joiningService.join();
       t.equal(joinResult.success, true, 'node join should succeed');
       t.ok(joinResult.messageGroupServices.size > 0, 'joining node should have message groups');
       t.ok(joinResult.messageRouter, 'joining node should have message router');
+      t.ok(
+        joinLifecycleCreateCalls > 0,
+        'join message-group startup should flow through unified lifecycle create hook',
+      );
+      t.ok(
+        reconcilerReasons.includes('joining_hydration_handoff'),
+        'join should hand hydrated desired/actual state to reconciler',
+      );
 
       // =========================================================================
       // PHASE 4: Verify joining node infrastructure is ready for replicas

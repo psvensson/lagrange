@@ -369,3 +369,570 @@ test('SQLParser - parses parameter placeholders', async (t) => {
 
   t.equal(ast.where.right.type, 'parameter');
 });
+
+// --- Subquery and derived table tests (Requirements: 9.1, 9.2, 9.3, 12.1) ---
+
+import {PARSER_DIALECT} from '../../src/query/pg-compat-constants.js';
+
+test('SQLParser - parses IN subquery in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.where.type, 'in');
+  t.equal(ast.where.negated, false);
+  t.ok(ast.where.subquery);
+  t.equal(ast.where.subquery.type, 'subquery');
+  t.equal(ast.where.subquery.query.type, 'SELECT');
+  t.equal(ast.where.subquery.query.from.name, 'orders');
+});
+
+test('SQLParser - parses NOT IN subquery in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT * FROM users WHERE id NOT IN (SELECT user_id FROM orders)',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.where.type, 'in');
+  t.equal(ast.where.negated, true);
+  t.ok(ast.where.subquery);
+  t.equal(ast.where.subquery.type, 'subquery');
+  t.equal(ast.where.subquery.query.type, 'SELECT');
+});
+
+test('SQLParser - parses scalar subquery in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT * FROM users WHERE age = (SELECT MAX(age) FROM users)',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.where.type, 'binary');
+  t.equal(ast.where.operator, '=');
+  t.equal(ast.where.right.type, 'subquery');
+  t.equal(ast.where.right.query.type, 'SELECT');
+});
+
+test('SQLParser - parses derived table in FROM in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT t.id FROM (SELECT id, name FROM users) AS t',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.from.type, 'table');
+  t.equal(ast.from.name, null);
+  t.equal(ast.from.alias, 't');
+  t.ok(ast.from.subquery);
+  t.equal(ast.from.subquery.type, 'SELECT');
+  t.equal(ast.from.subquery.from.name, 'users');
+  t.equal(ast.from.subquery.columns.length, 2);
+});
+
+test('SQLParser - parses IN subquery in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.where.type, 'in');
+  t.equal(ast.where.negated, false);
+  t.ok(ast.where.subquery);
+  t.equal(ast.where.subquery.type, 'subquery');
+  t.equal(ast.where.subquery.query.type, 'SELECT');
+  t.equal(ast.where.subquery.query.from.name, 'orders');
+});
+
+test('SQLParser - parses NOT IN subquery in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT * FROM users WHERE id NOT IN (SELECT user_id FROM orders)',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.where.type, 'in');
+  t.equal(ast.where.negated, true);
+  t.ok(ast.where.subquery);
+  t.equal(ast.where.subquery.query.type, 'SELECT');
+});
+
+test('SQLParser - parses scalar subquery in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT * FROM users WHERE age = (SELECT MAX(age) FROM users)',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.where.type, 'binary');
+  t.equal(ast.where.operator, '=');
+  t.equal(ast.where.right.type, 'subquery');
+  t.equal(ast.where.right.query.type, 'SELECT');
+});
+
+test('SQLParser - parses EXISTS subquery in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT * FROM users WHERE EXISTS ' +
+    '(SELECT 1 FROM orders WHERE orders.user_id = users.id)',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.where.type, 'exists');
+  t.ok(ast.where.query);
+  t.equal(ast.where.query.type, 'SELECT');
+  t.equal(ast.where.query.from.name, 'orders');
+});
+
+test('SQLParser - parses derived table in FROM in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT t.id FROM (SELECT id, name FROM users) AS t',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.from.type, 'table');
+  t.equal(ast.from.name, null);
+  t.equal(ast.from.alias, 't');
+  t.ok(ast.from.subquery);
+  t.equal(ast.from.subquery.type, 'SELECT');
+  t.equal(ast.from.subquery.from.name, 'users');
+});
+
+test('SQLParser - IN subquery preserves values list for non-subquery',
+  async (t) => {
+    const parser = new SQLParser(
+      'SELECT * FROM users WHERE id IN (\'a\', \'b\', \'c\')',
+    );
+    const ast = parser.parse();
+
+    t.equal(ast.where.type, 'in');
+    t.equal(ast.where.subquery, undefined);
+    t.equal(ast.where.values.length, 3);
+  });
+
+test('SQLParser - scalar subquery with comparison operators',
+  async (t) => {
+    const parser = new SQLParser(
+      'SELECT * FROM items WHERE price > (SELECT AVG(price) FROM items)',
+    );
+    const ast = parser.parse();
+
+    t.equal(ast.where.type, 'binary');
+    t.equal(ast.where.operator, '>');
+    t.equal(ast.where.right.type, 'subquery');
+    t.equal(ast.where.right.query.type, 'SELECT');
+  });
+
+test('SQLParser - derived table subquery has correct inner columns',
+  async (t) => {
+    const parser = new SQLParser(
+      'SELECT t.x FROM (SELECT id AS x FROM users) AS t',
+    );
+    const ast = parser.parse();
+
+    t.equal(ast.from.subquery.columns.length, 1);
+    t.equal(ast.from.subquery.columns[0].alias, 'x');
+  });
+
+// --- CTE (WITH clause) tests (Requirements: 10.1, 10.2, 10.3) ---
+
+test('SQLParser - parses simple CTE in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'WITH cte AS (SELECT 1 AS x) SELECT * FROM cte',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'SELECT');
+  t.ok(ast.ctes);
+  t.equal(ast.ctes.length, 1);
+  t.equal(ast.ctes[0].name, 'cte');
+  t.equal(ast.ctes[0].query.type, 'SELECT');
+  t.equal(ast.ctes[0].recursive, false);
+  t.equal(ast.recursive, false);
+  t.equal(ast.from.name, 'cte');
+});
+
+test('SQLParser - parses multiple CTEs in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) ' +
+    'SELECT * FROM a, b',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.ctes.length, 2);
+  t.equal(ast.ctes[0].name, 'a');
+  t.equal(ast.ctes[1].name, 'b');
+  t.equal(ast.ctes[0].query.type, 'SELECT');
+  t.equal(ast.ctes[1].query.type, 'SELECT');
+});
+
+test('SQLParser - parses simple CTE in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'WITH cte AS (SELECT 1 AS x) SELECT * FROM cte',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'SELECT');
+  t.ok(ast.ctes);
+  t.equal(ast.ctes.length, 1);
+  t.equal(ast.ctes[0].name, 'cte');
+  t.equal(ast.ctes[0].query.type, 'SELECT');
+  t.equal(ast.ctes[0].recursive, false);
+  t.equal(ast.recursive, false);
+  t.equal(ast.from.name, 'cte');
+});
+
+test('SQLParser - parses WITH RECURSIVE in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'WITH RECURSIVE cte AS (' +
+    'SELECT 1 AS x UNION ALL SELECT x + 1 FROM cte WHERE x < 10' +
+    ') SELECT * FROM cte',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.ok(ast.ctes);
+  t.equal(ast.ctes.length, 1);
+  t.equal(ast.ctes[0].name, 'cte');
+  t.equal(ast.ctes[0].recursive, true);
+  t.equal(ast.recursive, true);
+  t.equal(ast.ctes[0].query.type, 'SELECT');
+});
+
+test('SQLParser - parses multiple CTEs in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) ' +
+    'SELECT * FROM a, b',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.ctes.length, 2);
+  t.equal(ast.ctes[0].name, 'a');
+  t.equal(ast.ctes[1].name, 'b');
+  t.equal(ast.ctes[0].query.type, 'SELECT');
+  t.equal(ast.ctes[1].query.type, 'SELECT');
+});
+
+test('SQLParser - no CTE returns null ctes', async (t) => {
+  const parser = new SQLParser('SELECT * FROM users');
+  const ast = parser.parse();
+
+  t.equal(ast.ctes, null);
+  t.equal(ast.recursive, false);
+});
+
+// --- Set operation tests (Requirements: 13.1) ---
+
+test('SQLParser - parses UNION in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT 1 AS x UNION SELECT 2 AS x',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'SELECT');
+  t.ok(ast.setOperation);
+  t.equal(ast.setOperation.type, 'UNION');
+  t.ok(ast.setOperation.right);
+  t.equal(ast.setOperation.right.type, 'SELECT');
+});
+
+test('SQLParser - parses UNION ALL in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT 1 AS x UNION ALL SELECT 2 AS x',
+  );
+  const ast = parser.parse();
+
+  t.ok(ast.setOperation);
+  t.equal(ast.setOperation.type, 'UNION ALL');
+  t.equal(ast.setOperation.right.type, 'SELECT');
+});
+
+test('SQLParser - parses UNION in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT 1 AS x UNION SELECT 2 AS x',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'SELECT');
+  t.ok(ast.setOperation);
+  t.equal(ast.setOperation.type, 'UNION');
+  t.ok(ast.setOperation.right);
+  t.equal(ast.setOperation.right.type, 'SELECT');
+});
+
+test('SQLParser - parses UNION ALL in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT 1 AS x UNION ALL SELECT 2 AS x',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.ok(ast.setOperation);
+  t.equal(ast.setOperation.type, 'UNION ALL');
+  t.equal(ast.setOperation.right.type, 'SELECT');
+});
+
+test('SQLParser - parses INTERSECT in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT 1 AS x INTERSECT SELECT 1 AS x',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.ok(ast.setOperation);
+  t.equal(ast.setOperation.type, 'INTERSECT');
+  t.equal(ast.setOperation.right.type, 'SELECT');
+});
+
+test('SQLParser - parses EXCEPT in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT 1 AS x EXCEPT SELECT 2 AS x',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.ok(ast.setOperation);
+  t.equal(ast.setOperation.type, 'EXCEPT');
+  t.equal(ast.setOperation.right.type, 'SELECT');
+});
+
+test('SQLParser - parses chained UNION in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'SELECT 1 AS x UNION SELECT 2 AS x UNION SELECT 3 AS x',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.ok(ast.setOperation);
+  t.equal(ast.setOperation.type, 'UNION');
+  t.ok(ast.setOperation.right.setOperation);
+  t.equal(ast.setOperation.right.setOperation.type, 'UNION');
+  t.equal(ast.setOperation.right.setOperation.right.type, 'SELECT');
+});
+
+test('SQLParser - no set operation returns null', async (t) => {
+  const parser = new SQLParser('SELECT * FROM users');
+  const ast = parser.parse();
+
+  t.equal(ast.setOperation, null);
+});
+
+test('SQLParser - CTE inner query with set operation in PG mode',
+  async (t) => {
+    const parser = new SQLParser(
+      'WITH RECURSIVE cte AS (' +
+      'SELECT 1 AS x UNION ALL SELECT x + 1 FROM cte WHERE x < 5' +
+      ') SELECT * FROM cte',
+      {dialect: PARSER_DIALECT.POSTGRESQL},
+    );
+    const ast = parser.parse();
+
+    t.ok(ast.ctes);
+    t.equal(ast.ctes[0].query.type, 'SELECT');
+    t.ok(ast.ctes[0].query.setOperation);
+    t.equal(ast.ctes[0].query.setOperation.type, 'UNION ALL');
+  });
+
+// --- RETURNING clause tests (Requirements: 3.1) ---
+
+test('SQLParser - INSERT RETURNING * in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\') RETURNING *',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'INSERT');
+  t.equal(ast.table, 'users');
+  t.equal(ast.returning, '*');
+});
+
+test('SQLParser - INSERT RETURNING columns in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\') RETURNING id, name',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'INSERT');
+  t.same(ast.returning, ['id', 'name']);
+});
+
+test('SQLParser - INSERT without RETURNING in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\')',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'INSERT');
+  t.equal(ast.returning, null);
+});
+
+test('SQLParser - UPDATE RETURNING * in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'UPDATE users SET name = \'Bob\' WHERE id = \'a\' RETURNING *',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'UPDATE');
+  t.equal(ast.returning, '*');
+});
+
+test('SQLParser - UPDATE RETURNING columns in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'UPDATE users SET name = \'Bob\' WHERE id = \'a\' RETURNING id, name',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'UPDATE');
+  t.same(ast.returning, ['id', 'name']);
+});
+
+test('SQLParser - UPDATE without RETURNING', async (t) => {
+  const parser = new SQLParser(
+    'UPDATE users SET name = \'Bob\' WHERE id = \'a\'',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'UPDATE');
+  t.equal(ast.returning, null);
+});
+
+test('SQLParser - DELETE RETURNING * in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'DELETE FROM users WHERE id = \'a\' RETURNING *',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'DELETE');
+  t.equal(ast.returning, '*');
+});
+
+test('SQLParser - DELETE RETURNING columns in SQLite mode', async (t) => {
+  const parser = new SQLParser(
+    'DELETE FROM users WHERE id = \'a\' RETURNING id, name',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'DELETE');
+  t.same(ast.returning, ['id', 'name']);
+});
+
+test('SQLParser - DELETE without RETURNING', async (t) => {
+  const parser = new SQLParser('DELETE FROM users WHERE id = \'a\'');
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'DELETE');
+  t.equal(ast.returning, null);
+});
+
+test('SQLParser - INSERT RETURNING * in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\') RETURNING *',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'INSERT');
+  t.equal(ast.returning, '*');
+});
+
+test('SQLParser - INSERT RETURNING columns in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\') RETURNING id, name',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'INSERT');
+  t.same(ast.returning, ['id', 'name']);
+});
+
+test('SQLParser - UPDATE RETURNING * in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'UPDATE users SET name = \'Bob\' WHERE id = \'a\' RETURNING *',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'UPDATE');
+  t.equal(ast.returning, '*');
+});
+
+test('SQLParser - DELETE RETURNING columns in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'DELETE FROM users WHERE id = \'a\' RETURNING id, name',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'DELETE');
+  t.same(ast.returning, ['id', 'name']);
+});
+
+test('SQLParser - INSERT ON CONFLICT DO NOTHING in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\') ' +
+    'ON CONFLICT (id) DO NOTHING',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'INSERT');
+  t.equal(ast.table, 'users');
+  t.equal(ast.orIgnore, true);
+  t.equal(ast.orReplace, false);
+});
+
+test('SQLParser - INSERT ON CONFLICT DO UPDATE in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\') ' +
+    'ON CONFLICT (id) DO UPDATE SET name = \'Bob\'',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'INSERT');
+  t.equal(ast.table, 'users');
+  t.equal(ast.orReplace, true);
+  t.equal(ast.orIgnore, false);
+});
+
+test('SQLParser - INSERT without ON CONFLICT in PG mode', async (t) => {
+  const parser = new SQLParser(
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\')',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'INSERT');
+  t.equal(ast.orIgnore, false);
+  t.equal(ast.orReplace, false);
+});
+
+test('SQLParser - SQLite INSERT OR REPLACE unchanged in default mode',
+  async (t) => {
+    const parser = new SQLParser(
+      'INSERT OR REPLACE INTO users (id, name) ' +
+      'VALUES (\'a\', \'Alice\')',
+    );
+    const ast = parser.parse();
+
+    t.equal(ast.type, 'INSERT');
+    t.equal(ast.orReplace, true);
+    t.equal(ast.orIgnore, false);
+  });
+
+test('SQLParser - SQLite INSERT OR IGNORE unchanged in default mode',
+  async (t) => {
+    const parser = new SQLParser(
+      'INSERT OR IGNORE INTO users (id, name) ' +
+      'VALUES (\'a\', \'Alice\')',
+    );
+    const ast = parser.parse();
+
+    t.equal(ast.type, 'INSERT');
+    t.equal(ast.orIgnore, true);
+    t.equal(ast.orReplace, false);
+  });

@@ -15,6 +15,8 @@ import {ADMIN_DEFAULT} from './admin/admin-constants.js';
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
 import {NodeService} from './node/node-service.js';
 import {assertCritical} from './utils/assert.js';
+import {ModuleMirror} from './wasm-service/module-mirror.js';
+import {WasmExecutor} from './wasm-service/wasm-executor.js';
 import {
   ENTRYPOINT_DEFAULT,
   ENTRYPOINT_ENV,
@@ -39,6 +41,7 @@ export * from './cdc/index.js';
 export * from './message-group/index.js';
 export * from './node/index.js';
 export * from './rebalancer/index.js';
+export * from './service/index.js';
 export * from './threading/index.js';
 export * from './transport/index.js';
 export * from './storage/index.js';
@@ -96,6 +99,44 @@ function parseCommandLineArgs() {
   }
 
   return result;
+}
+
+/**
+ * Create runtime-owned wasm executor for SQL callback execution.
+ * @return {WasmExecutor}
+ */
+function createSqlCallbackWasmExecutor() {
+  return new WasmExecutor({
+    moduleMirror: new ModuleMirror(),
+  });
+}
+
+/**
+ * Create a diagnostics provider for unified lifecycle owners.
+ * @param {Object} owner - BootstrapService or NodeJoiningService instance.
+ * @return {Function}
+ */
+function createServiceDiagnosticsProvider(owner) {
+  return () => {
+    const lifecycleManager = owner?.serviceLifecycleManager || null;
+    const reconciler = owner?.serviceReconciler || null;
+
+    const lifecycleDiagnostics = lifecycleManager?.getDiagnosticsReport ?
+      lifecycleManager.getDiagnosticsReport() :
+      null;
+    const reconcilerDiagnostics = reconciler?.getDiagnosticsReport ?
+      reconciler.getDiagnosticsReport() :
+      null;
+
+    if (!lifecycleDiagnostics && !reconcilerDiagnostics) {
+      return null;
+    }
+
+    return {
+      lifecycle: lifecycleDiagnostics,
+      reconciler: reconcilerDiagnostics,
+    };
+  };
 }
 
 /**
@@ -303,12 +344,14 @@ async function main() {
     let sqlQueryEngine = null;
     if (joinResult.messageRouter) {
       const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
+      const wasmExecutor = createSqlCallbackWasmExecutor();
       sqlQueryEngine = new SQLQueryEngine({
         systemCache: systemTableCache,
         messageRouter: joinResult.messageRouter,
         nodeId: config.get(CONFIG_KEY.NODE_ID),
         runtimeDriverRegistry: nodeJoiningService.runtimeDriverRegistry,
         serviceRuntimeLifecycle: nodeJoiningService.serviceRuntimeLifecycle,
+        wasmExecutor,
       });
     }
 
@@ -317,6 +360,8 @@ async function main() {
       nodeId: config.get(CONFIG_KEY.NODE_ID),
       systemTableCache,
       sqlQueryEngine,
+      serviceDiagnosticsProvider:
+        createServiceDiagnosticsProvider(nodeJoiningService),
     });
 
     const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
@@ -436,12 +481,14 @@ async function main() {
     // Build partition registry keyed by partitionId (not replicaId)
     // Create SQL query engine for transparent query routing
     const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
+    const wasmExecutor = createSqlCallbackWasmExecutor();
     const sqlQueryEngine = new SQLQueryEngine({
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       nodeId: config.get(CONFIG_KEY.NODE_ID),
       runtimeDriverRegistry: bootstrapService.runtimeDriverRegistry,
       serviceRuntimeLifecycle: bootstrapService.serviceRuntimeLifecycle,
+      wasmExecutor,
     });
 
     // Set SQL query engine on bootstrap API for distributed node registration
@@ -452,6 +499,8 @@ async function main() {
       nodeId: config.get(CONFIG_KEY.NODE_ID),
       systemTableCache,
       sqlQueryEngine,
+      serviceDiagnosticsProvider:
+        createServiceDiagnosticsProvider(bootstrapService),
     });
 
     const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;

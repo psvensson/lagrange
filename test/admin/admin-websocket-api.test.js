@@ -331,6 +331,10 @@ test('AdminWebSocketAPI - cache dump on connection', async (t) => {
   t.ok(Array.isArray(message.data.tables), 'should have tables array');
   t.ok(Array.isArray(message.data.message_groups), 'should have message_groups');
   t.ok(Array.isArray(message.data.indices), 'should have indices array');
+  t.ok(Array.isArray(message.data.service_definitions),
+    'should have service_definitions array');
+  t.ok(Array.isArray(message.data.service_endpoints),
+    'should have service_endpoints array');
   t.ok(Array.isArray(message.data.latency_groups),
     'should include latency_groups in cache dump');
   t.ok(Array.isArray(message.data.inter_group_latencies),

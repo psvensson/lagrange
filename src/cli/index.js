@@ -26,7 +26,8 @@ import {HelpOverlay} from './core/help-overlay.js';
 import {ErrorHandler} from './core/error-handler.js';
 
 import {NodesView} from './views/nodes-view.js';
-import {ServicesView} from './views/services-view.js';
+import {ReplicasView} from './views/services-view.js';
+import {LogicalServicesView} from './views/logical-services-view.js';
 import {TablesView} from './views/tables-view.js';
 import {PartitionsView} from './views/partitions-view.js';
 import {MessageGroupsView} from './views/message-groups-view.js';
@@ -68,7 +69,7 @@ export {ConnectionManager} from './core/connection-manager.js';
  */
 const VIEW_NUMBERS = {
   [CLI_VIEW.NODES]: '1',
-  [CLI_VIEW.SERVICES]: '2',
+  [CLI_VIEW.REPLICAS]: '2',
   [CLI_VIEW.TABLES]: '3',
   [CLI_VIEW.PARTITIONS]: '4',
   [CLI_VIEW.MESSAGE_GROUPS]: '5',
@@ -76,6 +77,7 @@ const VIEW_NUMBERS = {
   [CLI_VIEW.LOGS]: '7',
   [CLI_VIEW.CONFIG]: '8',
   [CLI_VIEW.CONTEXTS]: '9',
+  [CLI_VIEW.SERVICES]: '0',
 };
 
 /**
@@ -483,7 +485,8 @@ export class AdminCLI {
     };
 
     this.viewManager.registerView('nodes', new NodesView(viewOptions));
-    this.viewManager.registerView('services', new ServicesView(viewOptions));
+    this.viewManager.registerView('services', new LogicalServicesView(viewOptions));
+    this.viewManager.registerView('replicas', new ReplicasView(viewOptions));
     this.viewManager.registerView('tables', new TablesView({
       ...viewOptions,
       metadataComputer: this.metadataComputer,
@@ -655,15 +658,15 @@ export class AdminCLI {
           '{bold}Shortcuts:{/bold}\n' +
           '  {cyan-fg}Ctrl+X{/cyan-fg}   Execute query\n' +
           '  {cyan-fg}Esc{/cyan-fg}      Clear input\n' +
-          '  {cyan-fg}1-9{/cyan-fg}      Switch to other views',
+          '  {cyan-fg}0-9{/cyan-fg}      Switch to other views',
         );
       }
     } else {
       this.sqlContainer.hide();
       this.mainTable.show();
 
-      // Services view always shows detail panel
-      if (viewName === 'services') {
+      // Services and replicas views always show detail panel.
+      if (viewName === 'services' || viewName === 'replicas') {
         this.showingDetail = true;
         this.detailPanel.show();
         this.mainTable.width = '60%';
@@ -691,6 +694,9 @@ export class AdminCLI {
       data = this.cache.getNodes();
       break;
     case 'services':
+      data = this.cache.getLogicalServices(this.navigation.currentContext || {});
+      break;
+    case 'replicas':
       data = this.cache.getServices(this.navigation.currentContext || {});
       break;
     case 'tables':
@@ -1241,7 +1247,7 @@ export class AdminCLI {
       hints = '{cyan-fg}Ctrl+X{/cyan-fg}:Execute  ' +
         '{cyan-fg}↑↓{/cyan-fg}:Navigate  ' +
         '{cyan-fg}Esc{/cyan-fg}:Clear  ' +
-        '{cyan-fg}1-9{/cyan-fg}:Views  ' +
+        '{cyan-fg}0-9{/cyan-fg}:Views  ' +
         '{cyan-fg}?{/cyan-fg}:Help';
     }
 

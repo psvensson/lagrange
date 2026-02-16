@@ -6,7 +6,13 @@
  * Requirements: 2.1, 3.1, 3.5
  */
 
-import {SQL, TABLES, NUM, SERVICE_PROFILE} from '../constants/index.js';
+import {
+  SQL,
+  TABLES,
+  NUM,
+  SERVICE_PROFILE,
+  UNIFIED_SERVICE_TYPE,
+} from '../constants/index.js';
 import {
   MODULE_MANIFEST_COL as COL,
 } from './module-manifest-constants.js';
@@ -32,6 +38,9 @@ import {
 import {
   validateRuntimeDescriptor,
 } from './runtime-descriptor-validator.js';
+import {
+  validateServiceDescriptor,
+} from '../service/service-descriptor.js';
 
 const META_COMMAND_ERROR_MSG = Object.freeze({
   MANIFEST_REQUIRED: 'Manifest is required for publish',
@@ -42,6 +51,7 @@ const META_COMMAND_ERROR_MSG = Object.freeze({
   SERVICE_NAME_REQUIRED: 'Service name is required',
   HANDLER_FUNCTION_REQUIRED: 'Handler function ID is required',
   REPLICA_COUNT_ODD: 'Replica count must be an odd number >= 3',
+  SERVICE_DESCRIPTOR_INVALID: 'Service descriptor is invalid',
   RUNTIME_DESCRIPTOR_INVALID: 'Runtime descriptor is invalid',
   RUNTIME_KIND_REQUIRED_FOR_UPDATE:
     'runtimeKind is required when updating runtime descriptor fields',
@@ -214,7 +224,12 @@ function handleCreateService(params) {
   }
 
   const row = serializeServiceDefinition(params);
-  const descriptorResult = validateRuntimeDescriptor({
+  const descriptorResult = validateServiceDescriptor({
+    serviceId: row[SD_COL.SERVICE_ID],
+    serviceType:
+      params.serviceType ||
+      UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+    replicaCount: row[SD_COL.REPLICA_COUNT],
     runtimeKind: row[SD_COL.RUNTIME_KIND],
     runtimeRef: row[SD_COL.RUNTIME_REF],
     runtimeConfig: row[SD_COL.RUNTIME_CONFIG],
@@ -223,7 +238,7 @@ function handleCreateService(params) {
     return {
       success: false,
       errors: [
-        META_COMMAND_ERROR_MSG.RUNTIME_DESCRIPTOR_INVALID,
+        META_COMMAND_ERROR_MSG.SERVICE_DESCRIPTOR_INVALID,
         ...descriptorResult.errors,
       ],
     };
@@ -308,13 +323,14 @@ function handleUpdateService(params) {
   for (let i = NUM.ZERO; i < fieldKeys.length; i++) {
     const key = fieldKeys[i];
     if (params[key] !== undefined) {
-      const value = key === 'resourceBudget' ?
-        JSON.stringify(params[key]) :
-        key === 'runtimeConfig' &&
-            typeof params[key] === 'object' &&
-            params[key] !== null ?
-              JSON.stringify(params[key]) :
-              params[key];
+      let value = params[key];
+      if (key === 'resourceBudget') {
+        value = JSON.stringify(params[key]);
+      } else if (key === 'runtimeConfig' &&
+        typeof params[key] === 'object' &&
+        params[key] !== null) {
+        value = JSON.stringify(params[key]);
+      }
       sqlParams.push(value);
       setClauses.push(
         `${UPDATABLE_FIELDS[key]} = ?${sqlParams.length}`,

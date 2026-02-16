@@ -209,38 +209,42 @@ export class ViewManager {
   handleCDCUpdate(change) {
     const {table, key, operation} = change;
 
-    // Map table names to view names
+    // Map table names to affected view names.
     const tableViewMap = {
-      'nodes': 'nodes',
-      'services': 'services',
-      'tables': 'tables',
-      'partitions': 'partitions',
-      'message_groups': 'message_groups',
-      'logs': 'logs',
-      'config': 'config',
-      'contexts': 'contexts',
-      'replica_operations': 'operations',
+      'nodes': ['nodes', 'replicas', 'services'],
+      'services': ['replicas'],
+      'service_definitions': ['services'],
+      'service_endpoints': ['services', 'replicas'],
+      'tables': ['tables'],
+      'partitions': ['partitions'],
+      'message_groups': ['message_groups'],
+      'logs': ['logs'],
+      'config': ['config'],
+      'contexts': ['contexts'],
+      'replica_operations': ['operations'],
     };
 
-    const viewName = tableViewMap[table];
-    if (!viewName) {
+    const affectedViews = tableViewMap[table];
+    if (!affectedViews || affectedViews.length === 0) {
       return;
     }
 
-    // Track changed row for highlighting
-    if (!this.changedRows.has(viewName)) {
-      this.changedRows.set(viewName, new Set());
-    }
-    this.changedRows.get(viewName).add(key);
+    for (const viewName of affectedViews) {
+      // Track changed row for highlighting.
+      if (!this.changedRows.has(viewName)) {
+        this.changedRows.set(viewName, new Set());
+      }
+      this.changedRows.get(viewName).add(key);
 
-    // Refresh if this affects the current view
-    if (this.currentViewName === viewName) {
-      this.refresh();
+      // Refresh if this affects the current view.
+      if (this.currentViewName === viewName) {
+        this.refresh();
 
-      // Clear highlight after delay
-      setTimeout(() => {
-        this.clearChangedRow(viewName, key);
-      }, 2000);
+        // Clear highlight after delay.
+        setTimeout(() => {
+          this.clearChangedRow(viewName, key);
+        }, 2000);
+      }
     }
 
     if (this.eventBus) {
@@ -248,8 +252,8 @@ export class ViewManager {
         table,
         key,
         operation,
-        viewName,
-        isCurrentView: this.currentViewName === viewName,
+        viewNames: affectedViews,
+        isCurrentView: affectedViews.includes(this.currentViewName),
       });
     }
   }
@@ -308,19 +312,21 @@ export class ViewManager {
    */
   isChangeRelevant(change) {
     const tableViewMap = {
-      'nodes': 'nodes',
-      'services': 'services',
-      'tables': 'tables',
-      'partitions': 'partitions',
-      'message_groups': 'message_groups',
-      'logs': 'logs',
-      'config': 'config',
-      'contexts': 'contexts',
-      'replica_operations': 'operations',
+      'nodes': ['nodes', 'replicas', 'services'],
+      'services': ['replicas'],
+      'service_definitions': ['services'],
+      'service_endpoints': ['services', 'replicas'],
+      'tables': ['tables'],
+      'partitions': ['partitions'],
+      'message_groups': ['message_groups'],
+      'logs': ['logs'],
+      'config': ['config'],
+      'contexts': ['contexts'],
+      'replica_operations': ['operations'],
     };
 
-    const viewName = tableViewMap[change.table];
-    return viewName === this.currentViewName;
+    const viewNames = tableViewMap[change.table] || [];
+    return viewNames.includes(this.currentViewName);
   }
 
   /**

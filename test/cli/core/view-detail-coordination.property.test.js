@@ -40,7 +40,7 @@ const dataItemArb = fc.record({
  * Generate a view name
  */
 const viewNameArb = fc.constantFrom(
-  'nodes', 'services', 'tables', 'partitions', 'message_groups',
+  'nodes', 'services', 'replicas', 'tables', 'partitions', 'message_groups',
 );
 
 test('Property 36: View-Detail Coordination Correctness', async (t) => {

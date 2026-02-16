@@ -23,14 +23,12 @@ import {
   generateCreateIndexSQL,
 } from '../system-table-schemas-constants.js';
 import {
-  createWasmMetaDefinition,
-  createAdminMetaDefinition,
-} from '../../wasm-service/meta-service-factory.js';
-import {
   SD_COL,
   SERVICE_DEFINITION_COLUMN_LIST,
-  serializeServiceDefinition,
 } from '../../wasm-service/wasm-service-models.js';
+import {
+  registerBuiltInMetaServiceDefinitions,
+} from '../shared/meta-service-definition-registration.js';
 
 /**
  * Phase constants for registration.
@@ -380,22 +378,14 @@ class RegistrationPhase extends EventEmitter {
    * @return {Promise<void>}
    */
   async registerMetaServiceDefinitions(_now) {
-    const wasmMetaDef = createWasmMetaDefinition();
-    const wasmMetaRow = serializeServiceDefinition(wasmMetaDef);
-    await this.cdcIntegrationService.upsertSystemTableRow(
-      SystemTableName.SERVICE_DEFINITIONS,
-      wasmMetaRow,
-    );
-
-    const adminMetaDef = createAdminMetaDefinition();
-    const adminMetaRow = serializeServiceDefinition(adminMetaDef);
-    await this.cdcIntegrationService.upsertSystemTableRow(
-      SystemTableName.SERVICE_DEFINITIONS,
-      adminMetaRow,
-    );
+    const metaServices = await registerBuiltInMetaServiceDefinitions({
+      upsertRow: async (tableName, row) => {
+        await this.cdcIntegrationService.upsertSystemTableRow(tableName, row);
+      },
+    });
 
     this.logger.debug(BOOTSTRAP_LOG_MSG.SERVICES_REGISTERED, {
-      metaServices: [wasmMetaDef.serviceId, adminMetaDef.serviceId],
+      metaServices,
     });
   }
 

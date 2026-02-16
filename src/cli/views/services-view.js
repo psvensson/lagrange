@@ -1,5 +1,5 @@
 /**
- * ServicesView - Displays services running on nodes
+ * ReplicasView - Displays concrete replicas running on nodes.
  *
  * Columns: service_id, type, node_id, status, address
  * Supports filtering by node and service type, drill-down to partition/message_group details.
@@ -17,6 +17,7 @@ export const SERVICE_TYPES = {
   PARTITION: 'partition',
   MESSAGE_GROUP: 'message_group',
   NODE: 'node',
+  RUNTIME_SERVICE: 'runtime_service',
 };
 
 /**
@@ -64,9 +65,9 @@ export const TRANSITIONAL_STATES = [
 ];
 
 /**
- * ServicesView displays services running on nodes
+ * ReplicasView displays concrete service replicas running on nodes.
  */
-export class ServicesView extends BaseView {
+class ReplicasView extends BaseView {
   /**
    * Creates a new ServicesView
    * @param {Object} options - View options
@@ -76,9 +77,10 @@ export class ServicesView extends BaseView {
   constructor(options = {}) {
     super(options);
     this.cache = options.cache || null;
-    this.viewName = 'services';
+    this.viewName = 'replicas';
     this.nodeFilter = null;
     this.typeFilter = null;
+    this.serviceIdFilter = null;
   }
 
   /**
@@ -180,6 +182,7 @@ export class ServicesView extends BaseView {
       'partition': 'Partition',
       'message_group': 'Message Group',
       'node': 'Node',
+      'runtime_service': 'Runtime Service',
     };
 
     return typeLabels[type] || type;
@@ -285,7 +288,7 @@ export class ServicesView extends BaseView {
    * @return {string} Unique key (service_id)
    */
   getItemKey(service) {
-    return service.service_id || '';
+    return service.row_key || service.service_id || '';
   }
 
   /**
@@ -314,6 +317,16 @@ export class ServicesView extends BaseView {
   clearServiceFilters() {
     this.nodeFilter = null;
     this.typeFilter = null;
+    this.serviceIdFilter = null;
+    this.updateFilteredData();
+  }
+
+  /**
+   * Set service ID filter for showing replicas of one logical service.
+   * @param {string|null} serviceId - Logical service ID to filter by.
+   */
+  setServiceIdFilter(serviceId) {
+    this.serviceIdFilter = serviceId || null;
     this.updateFilteredData();
   }
 
@@ -333,6 +346,14 @@ export class ServicesView extends BaseView {
     // Apply type filter
     if (this.typeFilter) {
       filtered = filtered.filter((s) => s.service_type === this.typeFilter);
+    }
+
+    // Apply logical service filter (runtime replicas).
+    if (this.serviceIdFilter) {
+      filtered = filtered.filter((s) => {
+        return s.service_id === this.serviceIdFilter ||
+          s.logical_service_id === this.serviceIdFilter;
+      });
     }
 
     // Apply text filter from base class
@@ -609,7 +630,7 @@ export class ServicesView extends BaseView {
     }
 
     return {
-      title: `Service: ${shortName}`,
+      title: `Replica: ${shortName}`,
       sections,
       navigationLinks,
     };
@@ -656,3 +677,6 @@ export class ServicesView extends BaseView {
     return `${value.toFixed(1)} ${units[i]}`;
   }
 }
+
+export {ReplicasView};
+export {ReplicasView as ServicesView};

@@ -273,12 +273,17 @@ class CDCGroupPropagationService extends EventEmitter {
         tableName: options.tableName,
         operation: options.operation,
       });
-      this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.SAFE_FALLBACK, {
+      const fallbackLogContext = {
         nodeId: this.nodeId,
         tableName: options.tableName,
         operation: options.operation,
         reason: options.fallbackReason,
-      });
+      };
+      if (options.fallbackReason === CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE) {
+        this.logger.debug(CDC_GROUP_PROPAGATION_LOG_MSG.SAFE_FALLBACK, fallbackLogContext);
+      } else {
+        this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.SAFE_FALLBACK, fallbackLogContext);
+      }
     }
 
     this.logger.debug(CDC_GROUP_PROPAGATION_LOG_MSG.PROPAGATED_SAFE, {

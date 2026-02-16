@@ -120,6 +120,16 @@ const ADAPTER_ERROR_MSG = Object.freeze({
     'native_js callback export not found in module exports',
   NATIVE_CALLBACK_COMPILE_FAILED:
     'native_js callback compilation failed',
+  WASM_CALLBACK_EXECUTOR_REQUIRED:
+    'wasm_component callback execution requires a wasmExecutor',
+  WASM_CALLBACK_MODULE_MIRROR_REQUIRED:
+    'wasm_component callback execution requires a module mirror',
+  WASM_CALLBACK_SOURCE_INVALID:
+    'wasm_component callback artifact must contain non-empty source',
+  WASM_CALLBACK_EXPORT_NOT_FOUND:
+    'wasm_component callback export not found in module exports',
+  WASM_CALLBACK_COMPILE_FAILED:
+    'wasm_component callback artifact compilation failed',
   REGISTRY_UNKNOWN_RUNTIME_KIND:
     'Unknown runtime kind; no fallback driver allowed: ',
   REGISTRY_OCI_CONTAINER_GATED:

@@ -7,7 +7,10 @@
  * @module wasm-service/sql-profile-factory
  */
 
-import {SERVICE_PROFILE} from '../constants/index.js';
+import {
+  SERVICE_PROFILE,
+  UNIFIED_SERVICE_TYPE,
+} from '../constants/index.js';
 import {SQL_ENGINE_RUNTIME_KIND} from '../constants/runtime.js';
 import {
   SQL_ENGINE_PROFILE,
@@ -49,6 +52,7 @@ function createSqlEngineDefinition(options) {
     serviceId: options.serviceId,
     serviceName: options.serviceName,
     serviceProfile: SERVICE_PROFILE.SQL_ENGINE,
+    serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
     handlerFunctionId: SQL_PROFILE_DEFAULT.HANDLER_FUNCTION_ID,
     runtimeKind: SQL_ENGINE_RUNTIME_KIND,
     runtimeRef: null,

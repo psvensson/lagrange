@@ -19,6 +19,38 @@ After migration, all mutations route through:
 Ingress remains fixed on `ws://<host>:8081/api/admin/stream`, but this endpoint
 is an adapter ingress only. It is not a node-local mutation owner.
 
+Dispatchable admin messages (`query`, `partition_callback`, `refresh`) are
+translated into canonical `Service_Message` envelopes before execution/dispatch.
+This keeps one envelope contract across ingress protocols.
+
+## Unified Service_Message Translation
+
+`AdminWebSocketAPI` uses `adaptAdminMessageToServiceMessage(...)` to map
+dispatchable admin messages into canonical envelopes:
+
+1. `messageId`
+2. `serviceId`
+3. `serviceType`
+4. `operation`
+5. `payload`
+6. `traceId`
+
+Translated envelopes always execute through the `ServiceDispatcher` contract.
+When no external dispatcher is injected, `AdminWebSocketAPI` creates a local
+dispatcher shim that executes the same canonical envelope operations without
+re-introducing legacy per-message handler branching.
+
+## Unified Lifecycle Diagnostics Endpoint
+
+Admin ingress exposes unified lifecycle diagnostics:
+
+- `GET /api/admin/diagnostics/services`
+
+Payload includes:
+
+1. `reconciler` cycle/action stats and recent decisions.
+2. `lifecycle` operation metrics and adapter selection counts.
+
 ## Before / After
 
 ### Direct table writes → MetaWriteExecutor
@@ -116,65 +148,21 @@ WASM actions received by `sys-admin-meta` are auto-delegated via
 checks `WASM_DELEGATION_ACTIONS` and routes through
 `MetaServiceRouter` to the `sys-wasm-meta` leader.
 
-## Staged Rollout
+## Final-State Rules
 
-### Phase 1: Deploy with `observe` enforcement mode
+The shipped model is hard-cutover:
 
-Set `AdminWebSocketAPI` enforcement mode to
-`ADMIN_ENFORCEMENT_MODE.OBSERVE`. This maps to
-`MUTATION_GUARD_MODE.WARN` in the adapter guard.
-
-```javascript
-import {
-  guardMutation, MUTATION_GUARD_MODE,
-} from './admin-mutation-guard.js';
-
-const check = guardMutation(action, MUTATION_GUARD_MODE.WARN);
-// check.allowed === true even for deprecated paths
-// check.warning is set for deprecated paths
-```
-
-In this phase:
-- All existing code paths continue to work
-- Deprecation warnings are logged for bypass paths
-  (`DEPRECATION_WARNING.DIRECT_MUTATION`,
-   `DEPRECATION_WARNING.DIRECT_CACHE_WRITE`,
-   `DEPRECATION_WARNING.LEGACY_ADMIN_HANDLER`)
-- `isDeprecatedPath()` from `src/admin/admin-deprecation.js`
-  identifies any action not in the known meta-service action set
-- Monitor logs for deprecation warnings to find remaining callers
-
-### Phase 2: Switch to `enforce` enforcement mode
-
-Once all callers have migrated, set
-`ADMIN_ENFORCEMENT_MODE.ENFORCE`. This maps to
-`MUTATION_GUARD_MODE.REJECT`:
-
-```javascript
-const check = guardMutation(action, MUTATION_GUARD_MODE.REJECT);
-// check.allowed === false for deprecated paths
-// check.error === 'Direct mutation path is rejected.
-//   Use meta-service commands.'
-// check.code === 'BYPASS_REJECTED'
-```
-
-In this phase:
-- Deprecated paths return hard errors
-- Any missed callers surface immediately as failures
-- Meta-service commands are the only working path
-
-### Phase 3: Remove deprecated code
-
-- Remove direct partition write call sites
-- Remove node-local admin handlers that bypassed the adapter
-- Remove `warn` mode branches from guard logic
-- The adapter layer (`AdminApiAdapter`) remains as the stable
-  entry point forwarding to meta-service handlers
+1. All admin mutations route through `sys-admin-meta` or `sys-wasm-meta`.
+2. Dispatchable websocket messages always translate to canonical
+   `Service_Message` envelopes before execution.
+3. Adapter ingress does not own lifecycle, metadata mutation, or placement.
+4. SQL/CDC is the only metadata write path.
+5. Legacy direct mutation and node-local ownership paths are not valid.
 
 ## CLI Compatibility
 
 `AdminCliCompat` (`src/admin/admin-cli-compat.js`) preserves the
-existing CLI WebSocket message contract during the transition.
+existing CLI WebSocket message contract.
 
 The contract validates both directions:
 
@@ -193,23 +181,6 @@ Use `validateIncomingMessage()` and `validateOutgoingMessage()`
 to verify messages conform to the contract. The adapter layer
 translates between these CLI message formats and the meta-service
 command handler interface, so CLI users see no change.
-
-## Deprecation Timeline
-
-| What | Status | Removal |
-|------|--------|---------|
-| Direct partition writes for system data | Deprecated | Phase 3 |
-| Node-local admin mutation handlers | Deprecated | Phase 3 |
-| Direct cache writes | Deprecated | Phase 3 |
-| `AdminApiAdapter` (compatibility layer) | Active | Retained |
-| `AdminCliCompat` (CLI contract) | Active | Retained |
-| `MUTATION_GUARD_MODE.WARN` | Active | Phase 3 |
-
-Actions identified as deprecated by `isDeprecatedPath()` are any
-action string not present in `ADMIN_META_ACTION` or
-`WASM_META_ACTION`. The known action sets are defined in:
-- `src/admin/admin-meta-command-handlers.js` (ADMIN_META_ACTION)
-- `src/constants/wasm-meta.js` (WASM_META_ACTION)
 
 ## Related Docs
 

@@ -39,6 +39,7 @@ const CLI_COLOR_SCHEME = Object.freeze({
 const CLI_VIEW = Object.freeze({
   NODES: 'nodes',
   SERVICES: 'services',
+  REPLICAS: 'replicas',
   TABLES: 'tables',
   PARTITIONS: 'partitions',
   MESSAGE_GROUPS: 'message_groups',
@@ -51,6 +52,7 @@ const CLI_VIEW = Object.freeze({
 const CLI_VIEW_LIST = Object.freeze([
   CLI_VIEW.NODES,
   CLI_VIEW.SERVICES,
+  CLI_VIEW.REPLICAS,
   CLI_VIEW.TABLES,
   CLI_VIEW.PARTITIONS,
   CLI_VIEW.MESSAGE_GROUPS,

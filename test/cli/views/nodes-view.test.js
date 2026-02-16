@@ -162,7 +162,7 @@ test('NodesView', async (t) => {
 
     t.same(action, {
       action: 'drillDown',
-      view: 'services',
+      view: 'replicas',
       context: {nodeId: 'node-1'},
     });
   });
@@ -184,7 +184,7 @@ test('NodesView', async (t) => {
 
     t.same(result, {
       action: 'drillDown',
-      view: 'services',
+      view: 'replicas',
       context: {nodeId: 'node-1'},
     });
   });
@@ -197,7 +197,7 @@ test('NodesView', async (t) => {
 
     t.same(result, {
       action: 'drillDown',
-      view: 'services',
+      view: 'replicas',
       context: {nodeId: 'node-1'},
     });
   });

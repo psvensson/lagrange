@@ -83,13 +83,15 @@ class WasmComponentCallbackDriver {
     const func = {
       function_id: descriptor.callbackModuleRef,
     };
-    const context = {
-      partitionId: batch.partitionId,
-      callbackExport: descriptor.callbackExport,
-      callbackContext: options?.callbackContext || null,
-      debugScope: options?.debugScope || null,
-      debug: options?.debug || null,
-    };
+    const callbackContext = options?.callbackContext || null;
+    const context = callbackContext ?
+      Object.create(callbackContext) :
+      {};
+    context.partitionId = batch.partitionId;
+    context.callbackExport = descriptor.callbackExport;
+    context.callbackContext = callbackContext;
+    context.debugScope = options?.debugScope || null;
+    context.debug = options?.debug || null;
     const args = {rows: batch.rows};
 
     const execResult = await this.wasmExecutor.execute(

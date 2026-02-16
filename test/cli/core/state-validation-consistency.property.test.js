@@ -48,7 +48,7 @@ test('Property 33: State Validation Consistency', async (t) => {
         // Generate invalid view name
         fc.string({minLength: 1, maxLength: 20})
           .filter((s) => ![
-            'nodes', 'services', 'tables', 'partitions',
+            'nodes', 'services', 'replicas', 'tables', 'partitions',
             'message_groups', 'sql', 'logs', 'config', 'contexts',
           ].includes(s)),
         (invalidView) => {
@@ -149,7 +149,7 @@ test('Property 33: State Validation Consistency', async (t) => {
       'disconnected', 'connecting', 'connected', 'reconnecting', 'failed',
     ];
     const validViews = [
-      'nodes', 'services', 'tables', 'partitions',
+      'nodes', 'services', 'replicas', 'tables', 'partitions',
       'message_groups', 'sql', 'logs', 'config', 'contexts',
     ];
 

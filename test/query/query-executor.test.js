@@ -845,3 +845,749 @@ test('QueryExecutor - handles redirect when leader also fails', async (t) => {
   t.equal(result.success, true, 'overall query succeeds');
   t.equal(result.rows.length, 0, 'no rows when all replicas fail');
 });
+
+// --- RETURNING clause reconstruction tests (Requirements: 3.2, 3.3) ---
+
+test('QueryExecutor - buildInsertSQL appends RETURNING *', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const ast = parseSQL(
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\') RETURNING *',
+  );
+  const sql = executor.buildInsertSQL(ast);
+
+  t.match(sql, /RETURNING \*$/);
+});
+
+test('QueryExecutor - buildInsertSQL appends RETURNING columns', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const ast = parseSQL(
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\') RETURNING id, name',
+  );
+  const sql = executor.buildInsertSQL(ast);
+
+  t.match(sql, /RETURNING id, name$/);
+});
+
+test('QueryExecutor - buildInsertSQL omits RETURNING when absent', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const ast = parseSQL(
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\')',
+  );
+  const sql = executor.buildInsertSQL(ast);
+
+  t.notMatch(sql, /RETURNING/);
+});
+
+test('QueryExecutor - buildUpdateSQL appends RETURNING *', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const ast = parseSQL(
+    'UPDATE users SET name = \'Bob\' WHERE id = \'a\' RETURNING *',
+  );
+  const sql = executor.buildUpdateSQL(ast);
+
+  t.match(sql, /RETURNING \*$/);
+});
+
+test('QueryExecutor - buildUpdateSQL appends RETURNING columns', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const ast = parseSQL(
+    'UPDATE users SET name = \'Bob\' WHERE id = \'a\' RETURNING id, name',
+  );
+  const sql = executor.buildUpdateSQL(ast);
+
+  t.match(sql, /RETURNING id, name$/);
+});
+
+test('QueryExecutor - buildUpdateSQL omits RETURNING when absent', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const ast = parseSQL(
+    'UPDATE users SET name = \'Bob\' WHERE id = \'a\'',
+  );
+  const sql = executor.buildUpdateSQL(ast);
+
+  t.notMatch(sql, /RETURNING/);
+});
+
+test('QueryExecutor - buildDeleteSQL appends RETURNING *', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const ast = parseSQL(
+    'DELETE FROM users WHERE id = \'a\' RETURNING *',
+  );
+  const sql = executor.buildDeleteSQL(ast);
+
+  t.match(sql, /RETURNING \*$/);
+});
+
+test('QueryExecutor - buildDeleteSQL appends RETURNING columns', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const ast = parseSQL(
+    'DELETE FROM users WHERE id = \'a\' RETURNING id, name',
+  );
+  const sql = executor.buildDeleteSQL(ast);
+
+  t.match(sql, /RETURNING id, name$/);
+});
+
+test('QueryExecutor - buildDeleteSQL omits RETURNING when absent', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const ast = parseSQL('DELETE FROM users WHERE id = \'a\'');
+  const sql = executor.buildDeleteSQL(ast);
+
+  t.notMatch(sql, /RETURNING/);
+});
+
+// --- Derived table FROM clause tests (Requirements: 12.2) ---
+
+test('QueryExecutor - buildSelectSQL emits derived table in FROM',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache(['p1']),
+    });
+    const ast = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: '*'}],
+      from: {
+        type: 'table',
+        name: null,
+        alias: 't',
+        subquery: {
+          type: 'SELECT',
+          columns: [{type: 'column_ref', table: null, column: 'id'}],
+          from: {type: 'table', name: 'users', alias: null},
+          joins: [],
+          where: null,
+          groupBy: null,
+          having: null,
+          orderBy: null,
+          limit: null,
+        },
+      },
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+    };
+    const sql = executor.buildSelectSQL(ast);
+
+    t.match(sql, /FROM \(SELECT id FROM users\) AS t/);
+  });
+
+test('QueryExecutor - buildSelectSQL emits derived table in JOIN',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache(['p1']),
+    });
+    const ast = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: '*'}],
+      from: {type: 'table', name: 'orders', alias: null},
+      joins: [{
+        joinType: 'INNER',
+        table: {
+          type: 'table',
+          name: null,
+          alias: 'u',
+          subquery: {
+            type: 'SELECT',
+            columns: [{type: 'column_ref', table: null, column: 'id'}],
+            from: {type: 'table', name: 'users', alias: null},
+            joins: [],
+            where: null,
+            groupBy: null,
+            having: null,
+            orderBy: null,
+            limit: null,
+          },
+        },
+        condition: {
+          type: 'binary_expr',
+          operator: '=',
+          left: {type: 'column_ref', table: 'orders', column: 'user_id'},
+          right: {type: 'column_ref', table: 'u', column: 'id'},
+        },
+      }],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+    };
+    const sql = executor.buildSelectSQL(ast);
+
+    t.match(sql, /FROM orders/);
+    t.match(sql, /INNER JOIN \(SELECT id FROM users\) AS u/);
+  });
+
+test('QueryExecutor - buildSelectSQL uses table name when no subquery',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache(['p1']),
+    });
+    const ast = parseSQL('SELECT * FROM users WHERE id = \'1\'');
+    const sql = executor.buildSelectSQL(ast);
+
+    t.match(sql, /FROM users/);
+    t.notMatch(sql, /FROM \(/);
+  });
+
+// --- CAST expression reconstruction tests (Requirements: 6.4) ---
+
+test('QueryExecutor - buildExpressionSQL emits CAST with affinity',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const expr = {
+      type: 'cast',
+      expression: {type: 'column_ref', table: null, column: 'age'},
+      affinity: 'TEXT',
+    };
+    const sql = executor.buildExpressionSQL(expr);
+
+    t.equal(sql, 'CAST(age AS TEXT)');
+  });
+
+test('QueryExecutor - buildExpressionSQL emits CAST with nested expression',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const expr = {
+      type: 'cast',
+      expression: {type: 'literal', value: 42},
+      affinity: 'REAL',
+    };
+    const sql = executor.buildExpressionSQL(expr);
+
+    t.equal(sql, 'CAST(42 AS REAL)');
+  });
+
+// --- CASE expression reconstruction tests (Requirements: 11.3) ---
+
+test('QueryExecutor - buildExpressionSQL emits searched CASE WHEN',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const expr = {
+      type: 'case',
+      operand: null,
+      conditions: [
+        {
+          when: {
+            type: 'binary',
+            operator: '>',
+            left: {type: 'column_ref', table: null, column: 'age'},
+            right: {type: 'literal', value: 18},
+          },
+          then: {type: 'literal', value: 'adult'},
+        },
+      ],
+      elseExpr: {type: 'literal', value: 'minor'},
+    };
+    const sql = executor.buildExpressionSQL(expr);
+
+    t.equal(sql, 'CASE WHEN (age > 18) THEN \'adult\' ELSE \'minor\' END');
+  });
+
+test('QueryExecutor - buildExpressionSQL emits CASE with multiple WHEN',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const expr = {
+      type: 'case',
+      operand: null,
+      conditions: [
+        {
+          when: {
+            type: 'binary',
+            operator: '=',
+            left: {type: 'column_ref', table: null, column: 'status'},
+            right: {type: 'literal', value: 'active'},
+          },
+          then: {type: 'literal', value: 1},
+        },
+        {
+          when: {
+            type: 'binary',
+            operator: '=',
+            left: {type: 'column_ref', table: null, column: 'status'},
+            right: {type: 'literal', value: 'pending'},
+          },
+          then: {type: 'literal', value: 2},
+        },
+      ],
+      elseExpr: {type: 'literal', value: 0},
+    };
+    const sql = executor.buildExpressionSQL(expr);
+
+    t.match(sql, /CASE WHEN/);
+    t.match(sql, /THEN 1/);
+    t.match(sql, /THEN 2/);
+    t.match(sql, /ELSE 0 END/);
+  });
+
+test('QueryExecutor - buildExpressionSQL emits simple CASE with operand',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const expr = {
+      type: 'case',
+      operand: {type: 'column_ref', table: null, column: 'status'},
+      conditions: [
+        {
+          when: {type: 'literal', value: 'active'},
+          then: {type: 'literal', value: 1},
+        },
+      ],
+      elseExpr: null,
+    };
+    const sql = executor.buildExpressionSQL(expr);
+
+    t.equal(sql, 'CASE status WHEN \'active\' THEN 1 END');
+  });
+
+// --- Subquery expression reconstruction tests (Requirements: 9.4) ---
+
+test('QueryExecutor - buildExpressionSQL emits subquery',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const expr = {
+      type: 'subquery',
+      query: {
+        type: 'SELECT',
+        columns: [{type: 'column_ref', table: null, column: 'id'}],
+        from: {type: 'table', name: 'users', alias: null},
+        joins: [],
+        where: null,
+        groupBy: null,
+        having: null,
+        orderBy: null,
+        limit: null,
+      },
+    };
+    const sql = executor.buildExpressionSQL(expr);
+
+    t.equal(sql, '(SELECT id FROM users)');
+  });
+
+// --- EXISTS expression reconstruction tests (Requirements: 9.4) ---
+
+test('QueryExecutor - buildExpressionSQL emits EXISTS subquery',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const expr = {
+      type: 'exists',
+      query: {
+        type: 'SELECT',
+        columns: [{type: 'literal', value: 1}],
+        from: {type: 'table', name: 'orders', alias: null},
+        joins: [],
+        where: {
+          type: 'binary',
+          operator: '=',
+          left: {type: 'column_ref', table: 'orders', column: 'user_id'},
+          right: {type: 'column_ref', table: 'u', column: 'id'},
+        },
+        groupBy: null,
+        having: null,
+        orderBy: null,
+        limit: null,
+      },
+    };
+    const sql = executor.buildExpressionSQL(expr);
+
+    t.equal(
+      sql,
+      'EXISTS (SELECT 1 FROM orders' +
+      ' WHERE (orders.user_id = u.id))',
+    );
+  });
+
+// --- Function call expression reconstruction tests (Requirements: 6.4) ---
+
+test('QueryExecutor - buildExpressionSQL emits function_call',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const expr = {
+      type: 'function_call',
+      name: 'LOWER',
+      args: [
+        {type: 'column_ref', table: null, column: 'name'},
+      ],
+    };
+    const sql = executor.buildExpressionSQL(expr);
+
+    t.equal(sql, 'LOWER(name)');
+  });
+
+test('QueryExecutor - buildExpressionSQL emits function_call with multiple args',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const expr = {
+      type: 'function_call',
+      name: 'COALESCE',
+      args: [
+        {type: 'column_ref', table: null, column: 'nickname'},
+        {type: 'column_ref', table: null, column: 'name'},
+        {type: 'literal', value: 'unknown'},
+      ],
+    };
+    const sql = executor.buildExpressionSQL(expr);
+
+    t.equal(sql, 'COALESCE(nickname, name, \'unknown\')');
+  });
+
+test('QueryExecutor - buildExpressionSQL emits function_call with no args',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const expr = {
+      type: 'function_call',
+      name: 'datetime',
+      args: [{type: 'literal', value: 'now'}],
+    };
+    const sql = executor.buildExpressionSQL(expr);
+
+    t.equal(sql, 'datetime(\'now\')');
+  });
+
+// --- CTE prefix reconstruction tests (Requirements: 10.2) ---
+
+test('QueryExecutor - buildSelectSQL emits CTE prefix',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const ast = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: '*'}],
+      from: {type: 'table', name: 'active_users', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+      ctes: [{
+        name: 'active_users',
+        query: {
+          type: 'SELECT',
+          columns: [{type: 'column_ref', table: null, column: '*'}],
+          from: {type: 'table', name: 'users', alias: null},
+          joins: [],
+          where: {
+            type: 'binary',
+            operator: '=',
+            left: {type: 'column_ref', table: null, column: 'status'},
+            right: {type: 'literal', value: 'active'},
+          },
+          groupBy: null,
+          having: null,
+          orderBy: null,
+          limit: null,
+        },
+        recursive: false,
+      }],
+      recursive: false,
+    };
+    const sql = executor.buildSelectSQL(ast);
+
+    t.match(sql, /^WITH active_users AS \(/);
+    t.match(sql, /SELECT \* FROM users WHERE/);
+    t.match(sql, /\) SELECT \* FROM active_users$/);
+  });
+
+test('QueryExecutor - buildSelectSQL emits WITH RECURSIVE prefix',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const ast = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: '*'}],
+      from: {type: 'table', name: 'tree', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+      ctes: [{
+        name: 'tree',
+        query: {
+          type: 'SELECT',
+          columns: [{type: 'column_ref', table: null, column: 'id'}],
+          from: {type: 'table', name: 'nodes', alias: null},
+          joins: [],
+          where: null,
+          groupBy: null,
+          having: null,
+          orderBy: null,
+          limit: null,
+        },
+        recursive: true,
+      }],
+      recursive: true,
+    };
+    const sql = executor.buildSelectSQL(ast);
+
+    t.match(sql, /^WITH RECURSIVE tree AS \(/);
+  });
+
+test('QueryExecutor - buildSelectSQL emits multiple CTEs',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const innerSelect = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      from: {type: 'table', name: 'users', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+    };
+    const ast = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: '*'}],
+      from: {type: 'table', name: 'cte_a', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+      ctes: [
+        {name: 'cte_a', query: innerSelect, recursive: false},
+        {name: 'cte_b', query: innerSelect, recursive: false},
+      ],
+      recursive: false,
+    };
+    const sql = executor.buildSelectSQL(ast);
+
+    t.match(sql, /^WITH cte_a AS \(/);
+    t.match(sql, /cte_b AS \(/);
+    t.match(sql, /SELECT \* FROM cte_a$/);
+  });
+
+test('QueryExecutor - buildSelectSQL omits CTE when ctes is empty',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const ast = parseSQL('SELECT * FROM users');
+    const sql = executor.buildSelectSQL(ast);
+
+    t.notMatch(sql, /WITH/);
+  });
+
+// --- Set operation reconstruction tests (Requirements: 13.2) ---
+
+test('QueryExecutor - buildSelectSQL emits UNION',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const rightSelect = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      from: {type: 'table', name: 'archived_users', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+    };
+    const ast = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      from: {type: 'table', name: 'users', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+      setOperation: {type: 'UNION', right: rightSelect},
+    };
+    const sql = executor.buildSelectSQL(ast);
+
+    t.match(sql, /SELECT id FROM users UNION SELECT id FROM archived_users/);
+  });
+
+test('QueryExecutor - buildSelectSQL emits UNION ALL',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const rightSelect = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: 'name'}],
+      from: {type: 'table', name: 'contacts', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+    };
+    const ast = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: 'name'}],
+      from: {type: 'table', name: 'users', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+      setOperation: {type: 'UNION ALL', right: rightSelect},
+    };
+    const sql = executor.buildSelectSQL(ast);
+
+    t.match(sql, /UNION ALL SELECT name FROM contacts/);
+  });
+
+test('QueryExecutor - buildSelectSQL emits INTERSECT',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const rightSelect = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      from: {type: 'table', name: 'premium', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+    };
+    const ast = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      from: {type: 'table', name: 'users', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+      setOperation: {type: 'INTERSECT', right: rightSelect},
+    };
+    const sql = executor.buildSelectSQL(ast);
+
+    t.match(sql, /INTERSECT SELECT id FROM premium/);
+  });
+
+test('QueryExecutor - buildSelectSQL emits EXCEPT',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const rightSelect = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      from: {type: 'table', name: 'banned', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+    };
+    const ast = {
+      type: 'SELECT',
+      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      from: {type: 'table', name: 'users', alias: null},
+      joins: [],
+      where: null,
+      groupBy: null,
+      having: null,
+      orderBy: null,
+      limit: null,
+      setOperation: {type: 'EXCEPT', right: rightSelect},
+    };
+    const sql = executor.buildSelectSQL(ast);
+
+    t.match(sql, /EXCEPT SELECT id FROM banned/);
+  });
+
+test('QueryExecutor - buildSelectSQL omits set operation when absent',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([]),
+    });
+    const ast = parseSQL('SELECT id FROM users');
+    const sql = executor.buildSelectSQL(ast);
+
+    t.notMatch(sql, /UNION|INTERSECT|EXCEPT/);
+  });

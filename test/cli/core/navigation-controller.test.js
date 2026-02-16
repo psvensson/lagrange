@@ -127,10 +127,29 @@ test('NavigationController', async (t) => {
     const cache = new RemoteCache();
     cache.loadFromDump({
       nodes: [{node_id: 'node-1'}],
-      services: [
-        {service_id: 's1', node_id: 'node-1'},
-        {service_id: 's2', node_id: 'node-1'},
-        {service_id: 's3', node_id: 'node-2'},
+      service_definitions: [
+        {service_id: 'sys-admin-meta', replica_count: 2},
+        {service_id: 'sys-wasm-meta', replica_count: 2},
+      ],
+      service_endpoints: [
+        {
+          endpoint_id: 'admin-ep-1',
+          service_id: 'sys-admin-meta',
+          node_id: 'node-1',
+          health_status: 'healthy',
+        },
+        {
+          endpoint_id: 'wasm-ep-1',
+          service_id: 'sys-wasm-meta',
+          node_id: 'node-1',
+          health_status: 'healthy',
+        },
+        {
+          endpoint_id: 'admin-ep-2',
+          service_id: 'sys-admin-meta',
+          node_id: 'node-2',
+          health_status: 'healthy',
+        },
       ],
     });
 
@@ -138,6 +157,7 @@ test('NavigationController', async (t) => {
     const counts = nav.getRelatedCounts('node', 'node-1');
 
     t.equal(counts.services, 2);
+    t.equal(counts.replicas, 2);
   });
 
   t.test('getRelatedCounts returns counts for table', async (t) => {
@@ -161,7 +181,15 @@ test('NavigationController', async (t) => {
     const cache = new RemoteCache();
     cache.loadFromDump({
       nodes: [{node_id: 'node-1'}, {node_id: 'node-2'}],
-      services: [{service_id: 's1', node_id: 'node-1'}],
+      service_definitions: [{service_id: 'sys-admin-meta', replica_count: 1}],
+      service_endpoints: [
+        {
+          endpoint_id: 'admin-ep-1',
+          service_id: 'sys-admin-meta',
+          node_id: 'node-1',
+          health_status: 'healthy',
+        },
+      ],
     });
 
     const nav = new NavigationController(cache);

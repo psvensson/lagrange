@@ -2,7 +2,8 @@
  * NavigationController - Manages hierarchical navigation state and breadcrumbs
  *
  * Supports navigation paths:
- * - nodes → services → partition/message_group details
+ * - nodes → replicas → partition/message_group details
+ * - services → replicas
  * - tables → partitions → replicas → nodes
  *
  * Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6
@@ -97,6 +98,9 @@ export class NavigationController {
       if (context.nodeId) {
         return `Services (${context.nodeId})`;
       }
+      if (context.serviceId) {
+        return `Service: ${context.serviceId}`;
+      }
       return 'Services';
     case 'tables':
       return context.tableName ?
@@ -115,6 +119,15 @@ export class NavigationController {
         `MG: ${context.groupId}` :
         'Message Groups';
     case 'replicas':
+      if (context.serviceId) {
+        return `Replicas (${context.serviceId})`;
+      }
+      if (context.nodeId) {
+        return `Replicas (${context.nodeId})`;
+      }
+      if (context.groupId) {
+        return `Replicas (${context.groupId})`;
+      }
       return context.partitionId ?
         `Replicas (${context.partitionId})` :
         'Replicas';
@@ -273,6 +286,8 @@ export class NavigationController {
     case 'nodes':
       return this.cache.getNodes();
     case 'services':
+      return this.cache.getLogicalServices(this.currentContext || {});
+    case 'replicas':
       return this.cache.getServices(this.currentContext || {});
     case 'tables':
       return this.cache.getTables();
@@ -304,7 +319,8 @@ export class NavigationController {
     switch (entityType) {
     case 'node':
       return {
-        services: this.cache.getServices({nodeId: entityId}).length,
+        services: this.cache.getLogicalServices({nodeId: entityId}).length,
+        replicas: this.cache.getServices({nodeId: entityId}).length,
       };
     case 'table':
       return {

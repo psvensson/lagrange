@@ -17,6 +17,8 @@ Active operator path:
    replicated meta services:
    - `sys-wasm-meta` for WASM module/service lifecycle
    - `sys-admin-meta` for generic admin commands and WASM delegation
+4. Dispatchable ingress messages are translated to canonical `Service_Message`
+   envelopes and executed through the shared dispatcher contract.
 
 ## 2. Prerequisites
 
@@ -266,6 +268,16 @@ SELECT endpoint_id, service_id, node_id, protocol, address, port, health_status
 FROM service_endpoints
 WHERE service_id = 'svc-acme-hello';
 ```
+
+### 5.3 Unified Lifecycle Convergence
+
+Service startup and maintenance are ownership-controlled:
+
+1. `service_definitions` is desired state for replica count and runtime
+   descriptor (`runtime_kind`, `runtime_ref`, `runtime_config`).
+2. `ServiceReconciler` computes drift between desired and actual service rows.
+3. `ServiceLifecycleManager` is the only owner of create/start/stop/restart.
+4. Built-ins and userland WASM services converge through the same path.
 
 ## 6. Administer Existing Services
 
@@ -521,7 +533,15 @@ If no meta leader is routable, routing fails with
    `debug_snapshots`) follow SQL/CDC ownership; no direct cache writes are
    allowed in debug paths.
 
-## 13. Related Docs
+## 13. Non-Negotiable Anti-Patterns
+
+1. Direct writes to metadata tables from runtime driver code.
+2. Direct service replica startup outside `ServiceLifecycleManager`.
+3. Ingress handlers that bypass canonical `Service_Message` translation.
+4. Parallel lifecycle owners for built-ins vs userland services.
+5. Local cache mutation outside CDC/bootstrap hydration ownership.
+
+## 14. Related Docs
 
 1. `docs/component-distribution.md` (package identity, OCI refs, dependency locks)
 2. `docs/admin-migration-guide.md` (migration to meta-service owned admin paths)

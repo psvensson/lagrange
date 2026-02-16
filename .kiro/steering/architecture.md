@@ -73,6 +73,46 @@ To prevent overlap and contradictory runtime behavior:
 16. **Runtime Mutation Ownership:** Runtime drivers must not write system
     metadata directly; service and operation mutations flow through SQL/CDC.
 
+## Unified Service Lifecycle Owners (Hard Cutover)
+
+Final owner map for service lifecycle cutover:
+
+1. `ServiceLifecycleManager` is the only owner of create/start/stop/restart
+   for all service kinds (`partition`, `message_group`, `runtime_service`).
+2. `ServiceReconciler` is the only owner of desired-vs-actual convergence and
+   emits lifecycle actions only through `ServiceLifecycleManager`.
+3. `ServiceDispatcher` is the only canonical dispatch path for
+   `Service_Message` envelopes after ingress adapter translation.
+4. `AdminWebSocketAPI` remains an ingress adapter and first translates
+   dispatchable messages into canonical `Service_Message` envelopes.
+5. `ServiceTypeAdapter` implementations are execution adapters only and do not
+   own metadata writes.
+
+Required observability dimensions across lifecycle, reconciliation, and
+dispatch logs:
+
+1. `serviceId`
+2. `serviceType`
+3. `runtimeKind`
+4. `operationId`
+5. `nodeId`
+
+Unified diagnostics surface:
+
+1. `GET /api/admin/diagnostics/services` exposes reconciler decision history
+   and lifecycle adapter selection/metrics snapshots.
+
+Unified lifecycle anti-patterns (forbidden):
+
+1. Direct startup of partition/message-group replicas from bootstrap/join phase
+   entrypoints (`phaseMessageGroups`, `phasePartitions`,
+   `phaseCreateSelfHostedMessageGroup`, `phaseJoinExistingMessageGroup`).
+2. Branching admin ingress behavior on "dispatcher path vs local path" before
+   canonical envelope translation.
+3. Parallel reconciliation loops outside `ServiceReconciler`.
+4. Feature flags or fallback branches that preserve pre-cutover lifecycle
+   ownership paths.
+
 ## Ownership Consolidation (Architecture Traceability)
 
 This section is the canonical owner map for consolidation work tracked in:
@@ -628,6 +668,180 @@ SQL service instances are modeled as replicated service definitions with
 `SQL_ENGINE_RUNTIME_KIND`). They share the same placement, rebalancing,
 failover, endpoint registration, and runtime lifecycle ownership as other
 replicated services. No parallel SQL-specific scaling framework exists.
+
+### PostgreSQL SQL Compatibility Layer (Active)
+
+The SQL parser (`SQLParser`) supports a dual-dialect mode: `sqlite` (default)
+and `postgresql`. When dialect is `postgresql`, the parser uses
+`node-sql-parser`'s PostgreSQL mode and applies AST translations to produce
+SQLite-compatible Internal_AST nodes. The translation is a pure preprocessing
+step within the parse phase — no new execution paths are created.
+
+Active translations:
+- Positional parameters (`$1`, `$2`) → SQLite `?` with param reordering
+- Boolean literals (`TRUE`/`FALSE`) → integer `1`/`0`
+- Type casts (`::type`, `CAST AS pg_type`) → `CAST AS sqlite_affinity`
+- Function name mapping (PG → SQLite equivalents via extensible registry)
+- Date/time functions (`NOW()`, `EXTRACT`, `DATE_TRUNC`) → `strftime()`
+- `ILIKE` → `LOWER() LIKE LOWER()`
+- `INSERT ON CONFLICT` → `INSERT OR REPLACE`/`INSERT OR IGNORE`
+- `RETURNING` clause pass-through (SQLite 3.35+)
+- Subqueries, CTEs, CASE WHEN, derived tables, set operations pass-through
+
+Dialect flows through `SqlRequest.dialect` from `PostgresWireAdapter` to
+`SqlCore` to `SQLParser`. Internal system queries omit dialect, defaulting
+to SQLite mode. No component outside the parse phase is aware of dialect.
+
+Spec: `.kiro/specs/pg-sql-compat-layer/`
+
+### PostgreSQL Compatibility — Future Directions (Planned)
+
+The following capabilities are required for full PostgreSQL client
+compatibility but are not yet implemented. Each item describes the gap,
+the architectural challenge, and a sketch of the intended approach.
+
+#### Window Functions
+
+**Gap**: `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LAG()`, `LEAD()`,
+`NTILE()`, `OVER(PARTITION BY ... ORDER BY ...)`.
+
+**Challenge**: SQLite supports window functions natively, so single-partition
+queries can pass through. Cross-partition queries require the in-memory
+aggregator in `QueryExecutor` to evaluate window functions after merging
+partition results, which changes the aggregation pipeline.
+
+**Approach**: Detect window functions during AST conversion. For
+single-partition queries, pass through to SQLite. For multi-partition
+queries, fetch all rows first, then apply window function evaluation
+in `QueryExecutor.aggregateSelectResults()` using a post-merge window
+evaluator. The evaluator would partition rows by the `PARTITION BY`
+clause, sort within each partition, and compute window values.
+
+#### Multi-Partition Transactions
+
+**Gap**: PostgreSQL clients expect multi-statement transactions that span
+multiple tables (and therefore multiple partitions).
+
+**Challenge**: The system currently limits transactions to a single
+partition. True distributed transactions require two-phase commit (2PC)
+or a similar coordination protocol across partition leaders.
+
+**Approach**: Implement a lightweight 2PC coordinator in `SqlCore`:
+1. `BEGIN` creates a transaction context tracking all touched partitions
+2. Each write records the target partition in the transaction context
+3. `COMMIT` sends prepare messages to all partition leaders via
+   `MessageRouter`, waits for all acks, then sends commit messages
+4. `ROLLBACK` sends abort to all prepared partitions
+5. Timeout and failure recovery: if any partition fails to prepare,
+   abort all; if coordinator crashes after prepare, recovery log
+   (persisted in a dedicated partition) drives resolution
+6. Read-your-writes within a transaction: buffer uncommitted writes
+   at the coordinator and merge with partition reads
+
+This is a significant architectural addition. A phased approach would
+start with read-only multi-partition transactions (no 2PC needed),
+then add write support.
+
+#### EXPLAIN / EXPLAIN ANALYZE
+
+**Gap**: PG clients and ORMs use `EXPLAIN` and `EXPLAIN ANALYZE` to
+inspect query plans. The system has no plan output format.
+
+**Challenge**: The system's query planning is implicit (partition
+resolution + scatter-gather), not a traditional cost-based optimizer
+with a plan tree.
+
+**Approach**: Intercept `EXPLAIN` statements in `SqlCore.executeQuery()`:
+1. Parse the inner statement normally
+2. Run partition resolution to determine target partitions
+3. Build a synthetic plan tree describing: partition count, join
+   strategy (nested loop, hash), aggregation location (partition
+   vs coordinator), estimated row counts from partition metadata
+4. For `EXPLAIN ANALYZE`, execute the query and annotate the plan
+   with actual row counts, timing, and partition-level metrics
+5. Return the plan as a result set with columns matching PG's
+   `EXPLAIN` output format (`QUERY PLAN` text column)
+
+#### Schema Introspection (pg_catalog, information_schema)
+
+**Gap**: Every PG client, ORM, and tool queries `pg_catalog.pg_class`,
+`pg_catalog.pg_type`, `pg_catalog.pg_attribute`,
+`information_schema.tables`, `information_schema.columns`, etc. on
+connect. Without these, `psql`, pgAdmin, Prisma, SQLAlchemy, and
+similar tools cannot function.
+
+**Challenge**: This is the single largest compatibility hurdle. The
+system stores table metadata in the `tables` system table with a
+different schema than PG's catalog tables.
+
+**Approach**: Implement virtual table shims as query interceptors:
+1. Detect queries targeting `pg_catalog.*` or `information_schema.*`
+   tables during parsing
+2. Rewrite these queries against the system cache (`tables`,
+   `partitions`, `indices` system tables) with column mapping
+3. Synthesize PG-compatible result sets with expected column names
+   and types (e.g., `pg_class.relname`, `pg_class.relkind`,
+   `pg_type.typname`)
+4. Start with the minimum set required by common clients:
+   - `information_schema.tables` (table name, type)
+   - `information_schema.columns` (column name, type, nullable)
+   - `pg_catalog.pg_type` (type OIDs for wire protocol)
+   - `pg_catalog.pg_class` (relation metadata)
+5. Expand coverage incrementally based on client compatibility
+   testing
+
+This can be implemented as a query rewrite layer in `SqlCore` that
+intercepts catalog queries before they reach partition resolution.
+
+#### PG-Specific Types (JSONB, ARRAY, UUID, SERIAL)
+
+**Gap**: PostgreSQL has rich type system features that SQLite's type
+affinity model does not support natively.
+
+**Challenge**: SQLite stores everything as TEXT, INTEGER, REAL, BLOB,
+or NULL. PG types like `JSONB` (with operators `->`, `->>`, `@>`),
+`ARRAY` (with `ANY`, `ALL`, array indexing), and `UUID` have no
+direct SQLite equivalent.
+
+**Approach**:
+- **JSONB**: SQLite has `json_extract()`, `json_each()`, etc. since
+  3.38. Map PG JSONB operators to SQLite JSON functions:
+  `col->>'key'` → `json_extract(col, '$.key')`,
+  `col @> '{"k":"v"}'` → `json_extract(col, '$.k') = 'v'`
+- **ARRAY**: Store as JSON arrays in TEXT columns. Map PG array
+  operators to JSON functions: `ANY(array_col)` → `json_each()` join
+- **UUID**: Store as TEXT with CHECK constraint for format validation.
+  Map `gen_random_uuid()` to a custom SQLite function
+- **SERIAL/BIGSERIAL**: Map to `INTEGER PRIMARY KEY AUTOINCREMENT`
+  during CREATE TABLE translation
+
+#### Sequences
+
+**Gap**: PG sequences (`CREATE SEQUENCE`, `nextval()`, `currval()`,
+`setval()`) are independent objects with their own state.
+
+**Challenge**: SQLite has no sequence concept. `AUTOINCREMENT` is
+table-bound and has different semantics (never reuses rowids).
+
+**Approach**: Implement sequences as rows in a dedicated `_sequences`
+system table with columns `(name, current_value, increment, min, max,
+cycle)`. Map `nextval('seq')` to an atomic increment query against
+this table. This requires the sequence table to be a single-partition
+table (or use distributed counters) to guarantee uniqueness.
+
+#### NOTIFY / LISTEN
+
+**Gap**: PG's pub/sub mechanism for real-time event notification.
+
+**Challenge**: The system already has CDC event propagation which is
+conceptually similar but uses a different protocol.
+
+**Approach**: Map PG `NOTIFY channel, payload` to CDC event emission
+on a virtual `_notifications` table partitioned by channel name.
+Map `LISTEN channel` to a CDC subscription on that channel's
+partition. The `PostgresWireAdapter` would maintain per-session
+subscription state and push async notification messages through the
+wire protocol when CDC events arrive for subscribed channels.
 
 ### Distributed Movement Primitives
 Cross-partition data movement is restricted to three explicit primitives,

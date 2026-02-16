@@ -89,17 +89,27 @@ import {
   ENDPOINT_STATUS,
   NUM,
   PROTOCOL,
+  RUNTIME_KIND,
+  SERVICE_DESCRIPTOR_FIELD,
+  SERVICE_LIFECYCLE_STATE,
   SERVICE_TYPE,
   STATE,
   STRING,
   TABLES,
   TRANSPORT_TYPE,
   TYPEOF,
+  UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {CDC_EVENT} from '../cdc/cdc-constants.js';
 import {createJoiningPhaseOwners} from './owners/join-phase-owners.js';
+import {
+  MessageGroupServiceAdapter,
+  RuntimeServiceAdapter,
+  ServiceLifecycleManager,
+  ServiceReconciler,
+} from '../service/index.js';
 
 const JoiningPhase = JOINING_PHASE;
 const JoiningEvent = BOOTSTRAP_EVENT;
@@ -108,6 +118,13 @@ const JOINING_REQUIRED_WRITE_TABLES = Object.freeze([
   TABLES.NODE_ENDPOINTS,
 ]);
 const DEFAULT_CACHE_SYNC_TABLES = new Set(CACHE_HYDRATION_TABLES);
+const JOINING_UNIFIED_RECONCILE = Object.freeze({
+  INFRA_READY_REASON: 'joining_infrastructure_ready',
+  MESSAGE_GROUPS_REASON: 'joining_message_groups',
+  HYDRATION_REASON: 'joining_hydration_handoff',
+  CHECK_INTERVAL_MS: 60 * 60 * 1000,
+  RUNTIME_KIND: RUNTIME_KIND.NATIVE_JS,
+});
 
 /**
  * Maps each JOINING_PHASE to its index in the cleanup steps array.
@@ -181,6 +198,15 @@ class NodeJoiningService extends EventEmitter {
     this.transport = null;
     // MessageRouter for unified local/remote message routing
     this.messageRouter = null;
+    // Unified lifecycle desired-state descriptors for join-created services.
+    this.joinDesiredServiceDefinitions = new Map();
+    // Join replica creation options keyed by canonical serviceId.
+    this.joinReplicaOptionsByServiceId = new Map();
+    // Track message-group replicas created for deferred election start.
+    this.joinMessageGroupReplicas = [];
+    // Unified lifecycle owners for joining message-group startup.
+    this.serviceLifecycleManager = null;
+    this.serviceReconciler = null;
 
     // Replica handler for CREATE_REPLICA/REMOVE_REPLICA execution
     this.replicaHandler = null;
@@ -708,6 +734,285 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
+   * Build a canonical descriptor for join-managed unified lifecycle replicas.
+   * @param {string} serviceType
+   * @param {string} serviceId
+   * @return {Object}
+   * @private
+   */
+  createJoinServiceDescriptor(serviceType, serviceId) {
+    return {
+      [SERVICE_DESCRIPTOR_FIELD.SERVICE_ID]: serviceId,
+      [SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE]: serviceType,
+      [SERVICE_DESCRIPTOR_FIELD.TENANT_ID]: this.nodeId,
+      [SERVICE_DESCRIPTOR_FIELD.REPLICA_ID]: serviceId,
+      [SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT]: NUM.ONE,
+      [SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND]:
+        JOINING_UNIFIED_RECONCILE.RUNTIME_KIND,
+      [SERVICE_DESCRIPTOR_FIELD.RUNTIME_REF]: null,
+      [SERVICE_DESCRIPTOR_FIELD.RUNTIME_CONFIG]: null,
+    };
+  }
+
+  /**
+   * Queue one join replica for desired-state reconciliation.
+   * @param {Object} descriptor
+   * @param {Object} options
+   * @return {void}
+   * @private
+   */
+  queueJoinServiceReplica(descriptor, options) {
+    const serviceId = descriptor[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
+    this.joinDesiredServiceDefinitions.set(serviceId, descriptor);
+    this.joinReplicaOptionsByServiceId.set(serviceId, options);
+  }
+
+  /**
+   * Resolve join replica options for one serviceId.
+   * @param {string} serviceId
+   * @param {string} serviceType
+   * @return {Object}
+   * @private
+   */
+  resolveJoinReplicaOptions(serviceId, serviceType) {
+    const options = this.joinReplicaOptionsByServiceId.get(serviceId) || null;
+    assertCritical(options, `Missing join replica options for ${serviceId}`);
+    assertCritical(
+      options.serviceType === serviceType,
+      `Join replica type mismatch for ${serviceId}: expected ${serviceType}`,
+    );
+    return options;
+  }
+
+  /**
+   * Build local actual-state rows for join reconciliation.
+   * @return {Object[]}
+   * @private
+   */
+  buildJoinActualStateRows() {
+    if (!this.serviceLifecycleManager) {
+      return [];
+    }
+
+    const rows = [];
+    for (const replicaId of this.messageGroupServices.keys()) {
+      const handle = this.createJoinServiceDescriptor(
+        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+        replicaId,
+      );
+      rows.push({
+        ...handle,
+        [SERVICE_DESCRIPTOR_FIELD.LIFECYCLE_STATE]:
+          this.serviceLifecycleManager.getReplicaState(handle),
+      });
+    }
+
+    return rows;
+  }
+
+  /**
+   * Initialize unified lifecycle owners for join-time service startup.
+   * @return {Promise<void>}
+   * @private
+   */
+  async initializeJoiningLifecycleOwners() {
+    if (this.serviceLifecycleManager && this.serviceReconciler) {
+      return;
+    }
+
+    this.serviceLifecycleManager = new ServiceLifecycleManager();
+    this.serviceLifecycleManager.registerAdapter(
+      new MessageGroupServiceAdapter({
+        createReplica: (context) => this.createJoinMessageGroupReplica(context),
+        startReplica: (replicaHandle, context) =>
+          this.startJoinMessageGroupReplica(replicaHandle, context),
+        stopReplica: (replicaHandle, context) =>
+          this.stopJoinMessageGroupReplica(replicaHandle, context),
+      }),
+    );
+    this.serviceLifecycleManager.registerAdapter(
+      new RuntimeServiceAdapter({
+        serviceRuntimeLifecycle: this.serviceRuntimeLifecycle,
+      }),
+    );
+
+    this.serviceReconciler = new ServiceReconciler({
+      lifecycleManager: this.serviceLifecycleManager,
+      desiredStateReader: async () => [...this.joinDesiredServiceDefinitions.values()],
+      actualStateReader: async () => this.buildJoinActualStateRows(),
+      checkIntervalMs: JOINING_UNIFIED_RECONCILE.CHECK_INTERVAL_MS,
+    });
+    await this.serviceReconciler.start();
+  }
+
+  /**
+   * Trigger one join reconciliation cycle.
+   * @param {string} reason
+   * @return {Promise<void>}
+   * @private
+   */
+  async triggerJoinReconciler(reason) {
+    assertCritical(
+      this.serviceReconciler,
+      'Join reconciler must be initialized before reconciliation',
+    );
+    await this.serviceReconciler.trigger(reason, {
+      nodeId: this.nodeId,
+      phase: this.phase,
+    });
+  }
+
+  /**
+   * Stop unified lifecycle owners and clear join desired-state catalogs.
+   * @return {void}
+   * @private
+   */
+  stopJoiningLifecycleOwners() {
+    if (this.serviceReconciler) {
+      this.serviceReconciler.stop();
+      this.serviceReconciler = null;
+    }
+    this.serviceLifecycleManager = null;
+    this.joinDesiredServiceDefinitions.clear();
+    this.joinReplicaOptionsByServiceId.clear();
+    this.joinMessageGroupReplicas = [];
+  }
+
+  /**
+   * Unified lifecycle create hook for join message-group replicas.
+   * @param {Object} context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async createJoinMessageGroupReplica(context) {
+    const definition = context?.definition || {};
+    const serviceId = definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
+    const options = this.resolveJoinReplicaOptions(
+      serviceId,
+      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+    );
+
+    if (this.messageGroupServices.has(options.replicaId)) {
+      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
+    }
+
+    if (options.createDelayMs > NUM.ZERO) {
+      await this.sleep(options.createDelayMs);
+    }
+
+    const messageGroup = new MessageGroupService({
+      groupId: options.groupId,
+      replicaId: options.replicaId,
+      nodeId: this.nodeId,
+      replicaIds: options.replicaIds,
+      transport: this.messageRouter,
+      peerAddresses: options.peerAddresses,
+      deferElection: Boolean(options.deferElection),
+    });
+
+    const unifiedAddress = `${this.nodeId}${ADDRESS.SEPARATOR}` +
+      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${options.replicaId}`;
+    this.messageRouter.register(unifiedAddress, (envelope) => {
+      if (options.logEnvelope) {
+        this.logger.debug(JOINING_LOG_MSG.JOIN_MESSAGE_RECEIVED, {
+          address: unifiedAddress,
+          envelopeType: envelope?.type || envelope?.payload?.type,
+          from: envelope?.from || envelope?.payload?.address,
+        });
+      }
+      return messageGroup.receiveMessage(envelope);
+    });
+
+    if (options.logRegistration) {
+      this.logger.info(JOINING_LOG_MSG.JOIN_HANDLER_REGISTERED, {
+        unifiedAddress,
+        nodeId: this.nodeId,
+      });
+    }
+
+    await messageGroup.initialize();
+    this.messageGroupServices.set(options.replicaId, messageGroup);
+    this.joinMessageGroupReplicas.push(messageGroup);
+
+    this.logger.debug(JOINING_LOG_MSG.MESSAGE_GROUP_REPLICA_CREATED, {
+      groupId: options.groupId,
+      replicaId: options.replicaId,
+      replicaIndex: options.replicaIndex,
+      nodeId: this.nodeId,
+    });
+
+    return {status: SERVICE_LIFECYCLE_STATE.CREATED};
+  }
+
+  /**
+   * Unified lifecycle start hook for join message-group replicas.
+   * @param {Object} replicaHandle
+   * @param {Object} _context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async startJoinMessageGroupReplica(replicaHandle, _context) {
+    const serviceId = replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
+      replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
+    const options = this.resolveJoinReplicaOptions(
+      serviceId,
+      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+    );
+    const messageGroup = this.messageGroupServices.get(options.replicaId);
+
+    assertCritical(
+      messageGroup,
+      `Join message-group replica ${options.replicaId} missing at start`,
+    );
+
+    if (!options.deferElection) {
+      messageGroup.startElection();
+    }
+
+    return {
+      status: SERVICE_LIFECYCLE_STATE.RUNNING,
+      deferred: Boolean(options.deferElection),
+    };
+  }
+
+  /**
+   * Unified lifecycle stop hook for join message-group replicas.
+   * @param {Object} replicaHandle
+   * @param {Object} _context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async stopJoinMessageGroupReplica(replicaHandle, _context) {
+    const serviceId = replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
+      replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
+    const options = this.resolveJoinReplicaOptions(
+      serviceId,
+      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+    );
+    const messageGroup = this.messageGroupServices.get(options.replicaId);
+    if (!messageGroup) {
+      return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
+    }
+
+    if (messageGroup.shutdown) {
+      await messageGroup.shutdown();
+    }
+
+    const unifiedAddress = `${this.nodeId}${ADDRESS.SEPARATOR}` +
+      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${options.replicaId}`;
+    if (this.messageRouter) {
+      this.messageRouter.unregister(unifiedAddress);
+    }
+
+    this.messageGroupServices.delete(options.replicaId);
+    this.joinMessageGroupReplicas = this.joinMessageGroupReplicas.filter(
+      (service) => service !== messageGroup,
+    );
+
+    return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
+  }
+
+  /**
    * Phase 3a: Create self-hosted message group (3 replicas on this node).
    * Requirements: 8.3 - Services created AFTER self-connection established.
    * @param {Object} assignment - Assignment instructions.
@@ -729,10 +1034,8 @@ class NodeJoiningService extends EventEmitter {
       throw new Error(JOINING_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
     }
 
-    // Stagger delay between replica creations to allow handlers to be registered
     const replicaStaggerDelayMs = this.config.replicaStaggerDelayMs;
 
-    // Generate replica IDs
     const replicaIds = [];
     for (let i = NUM.ZERO; i < replicaCount; i++) {
       replicaIds.push(`${groupId}-r${i}`);
@@ -744,61 +1047,41 @@ class NodeJoiningService extends EventEmitter {
         `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`,
     );
 
-    // Track replicas created for this group to start elections after all are ready
-    const groupReplicas = [];
-
-    // Create all replicas on this node with staggered delays
-    // Use deferElection to prevent election storms - elections start after all ready
-    for (let i = NUM.ZERO; i < replicaIds.length; i++) {
-      const replicaId = replicaIds[i];
-
-      // Stagger replica creation to allow handlers to be registered
-      // First replica starts immediately, subsequent replicas wait
-      if (i > NUM.ZERO) {
-        await new Promise((resolve) => setTimeout(resolve, replicaStaggerDelayMs));
-      }
-
-      const messageGroup = new MessageGroupService({
-        groupId,
-        replicaId,
-        nodeId: this.nodeId,
-        replicaIds,
-        peerAddresses,
-        // Use MessageRouter directly for all communication
-        transport: this.messageRouter,
-        // Defer election until all replicas are created to prevent election storms
-        deferElection: true,
-      });
-
-      // Register with MessageRouter using unified address format
-      // Requirements: 1.1, 5.1 - Unified address format ${nodeId}/${entityType}/${entityId}
-      const unifiedAddress = `${this.nodeId}${ADDRESS.SEPARATOR}` +
-        `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`;
-      this.messageRouter.register(unifiedAddress, (envelope) => {
-        return messageGroup.receiveMessage(envelope);
-      });
-
-      await messageGroup.initialize();
-
-      this.messageGroupServices.set(replicaId, messageGroup);
-      groupReplicas.push(messageGroup);
-
-      this.logger.debug(JOINING_LOG_MSG.MESSAGE_GROUP_REPLICA_CREATED, {
-        groupId,
-        replicaId,
-        replicaIndex: i,
-        nodeId: this.nodeId,
-      });
+    this.joinMessageGroupReplicas = [];
+    for (let index = NUM.ZERO; index < replicaIds.length; index++) {
+      const replicaId = replicaIds[index];
+      this.queueJoinServiceReplica(
+        this.createJoinServiceDescriptor(
+          UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+          replicaId,
+        ),
+        {
+          serviceType: UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+          groupId,
+          replicaId,
+          replicaIds,
+          replicaIndex: index,
+          peerAddresses,
+          deferElection: true,
+          createDelayMs: index > NUM.ZERO ?
+            index * replicaStaggerDelayMs :
+            NUM.ZERO,
+          logEnvelope: false,
+          logRegistration: false,
+        },
+      );
     }
 
-    // All replicas for this group are created and registered
-    // Now start elections - they can communicate with each other
+    await this.triggerJoinReconciler(
+      JOINING_UNIFIED_RECONCILE.MESSAGE_GROUPS_REASON,
+    );
+
     this.logger.debug(JOINING_LOG_MSG.MESSAGE_GROUP_ELECTIONS_START, {
       groupId,
-      replicaCount: groupReplicas.length,
+      replicaCount: this.joinMessageGroupReplicas.length,
     });
 
-    for (const messageGroup of groupReplicas) {
+    for (const messageGroup of this.joinMessageGroupReplicas) {
       messageGroup.startElection();
     }
 
@@ -904,36 +1187,32 @@ class NodeJoiningService extends EventEmitter {
         STRING.NOT_AVAILABLE,
     });
 
-    const messageGroup = new MessageGroupService({
-      groupId,
-      replicaId: replicaId,
-      nodeId: this.nodeId,
-      replicaIds: allReplicaIds,
-      // Use MessageRouter directly for all communication
-      transport: this.messageRouter,
-      // Use unified peer addresses for cross-node Raft communication
-      peerAddresses: peerAddresses || [],
-    });
+    this.queueJoinServiceReplica(
+      this.createJoinServiceDescriptor(
+        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+        replicaId,
+      ),
+      {
+        serviceType: UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+        groupId,
+        replicaId,
+        replicaIds: allReplicaIds,
+        replicaIndex: NUM.ZERO,
+        peerAddresses: peerAddresses || [],
+        deferElection: false,
+        createDelayMs: NUM.ZERO,
+        logEnvelope: true,
+        logRegistration: true,
+      },
+    );
+    await this.triggerJoinReconciler(
+      JOINING_UNIFIED_RECONCILE.MESSAGE_GROUPS_REASON,
+    );
 
-    // Register with MessageRouter using unified address format
-    // Requirements: 1.1, 5.1 - Unified address format ${nodeId}/${entityType}/${entityId}
-    const unifiedAddress = `${this.nodeId}${ADDRESS.SEPARATOR}` +
-      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`;
-    this.messageRouter.register(unifiedAddress, (envelope) => {
-      this.logger.debug(JOINING_LOG_MSG.JOIN_MESSAGE_RECEIVED, {
-        address: unifiedAddress,
-        envelopeType: envelope?.type || envelope?.payload?.type,
-        from: envelope?.from || envelope?.payload?.address,
-      });
-      return messageGroup.receiveMessage(envelope);
-    });
-
-    this.logger.info(JOINING_LOG_MSG.JOIN_HANDLER_REGISTERED, {
-      unifiedAddress,
-      nodeId: this.nodeId,
-    });
-
-    await messageGroup.initialize();
+    const messageGroup = assertCritical(
+      this.messageGroupServices.get(replicaId),
+      JOINING_ERROR_MSG.MESSAGE_GROUP_LEADER_REQUIRED,
+    );
 
     this.logger.info(JOINING_LOG_MSG.JOIN_SERVICE_INITIALIZED, {
       nodeId: this.nodeId,
@@ -945,8 +1224,6 @@ class NodeJoiningService extends EventEmitter {
       raftState: messageGroup.raft?.state,
       raftTerm: messageGroup.raft?.term,
     });
-
-    this.messageGroupServices.set(replicaId, messageGroup);
 
     // Update the services table to point this replica to the new node
     // This is an UPDATE, not INSERT - the replica ID already exists
@@ -1568,6 +1845,10 @@ class NodeJoiningService extends EventEmitter {
     // Use MessageRouter directly for all services
     // MessageRouter handles both local and remote message delivery
     this.transport = this.messageRouter;
+    await this.initializeJoiningLifecycleOwners();
+    await this.triggerJoinReconciler(
+      JOINING_UNIFIED_RECONCILE.INFRA_READY_REASON,
+    );
 
     // Get seed node WebSocket address from bootstrap response or options
     const seedWsAddress = assertCritical(
@@ -2051,6 +2332,12 @@ class NodeJoiningService extends EventEmitter {
 
       // Subscribe to CDC events to keep cache updated
       await this.subscribeToCDCEvents();
+
+      // Hand hydrated desired/actual state to unified reconciler once.
+      await this.triggerJoinReconciler(
+        JOINING_UNIFIED_RECONCILE.HYDRATION_REASON,
+      );
+      this.stopJoiningLifecycleOwners();
     } catch (error) {
       const errorContext = {
         nodeId: this.nodeId,
@@ -2719,6 +3006,8 @@ class NodeJoiningService extends EventEmitter {
           hasRouter: !!this.messageRouter,
         });
 
+      this.stopJoiningLifecycleOwners();
+
       if (this.messageRouter && this.messageRouter.shutdown) {
         await this.messageRouter.shutdown();
       }
@@ -2758,6 +3047,7 @@ class NodeJoiningService extends EventEmitter {
       messageGroupServices: this.messageGroupServices.size,
       partitionServices: this.partitionServices.size,
     });
+    this.stopJoiningLifecycleOwners();
     LatencyTopologySetup.stop(this.latencyTopology);
     this.latencyTopology = null;
 

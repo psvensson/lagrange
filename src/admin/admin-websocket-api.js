@@ -38,8 +38,16 @@ import {TRANSPORT_EVENT} from '../constants/transport.js';
 import {createSqlRequest} from '../query/sql-request.js';
 import {EXECUTION_MODE} from '../query/sql-adapter-constants.js';
 import {guardedAdaptAdminAction} from './admin-api-adapter.js';
-import {ADMIN_META_ACTION} from './admin-meta-command-handlers.js';
+import {
+  ADMIN_META_ACTION,
+  CACHE_DUMP_TABLES,
+} from './admin-meta-command-handlers.js';
 import {MUTATION_GUARD_MODE} from './admin-mutation-guard.js';
+import {
+  ADMIN_SERVICE_OPERATION,
+  adaptAdminMessageToServiceMessage,
+  isAdminMessageDispatchable,
+} from './admin-service-message-adapter.js';
 import {AdminTestRunService} from './admin-test-run-service.js';
 import {DebugMetadataStore} from '../debug-runtime/debug-metadata-service.js';
 import {TraceCollector} from '../debug/trace-collector.js';
@@ -99,6 +107,23 @@ const HTTP_HEADER_VALUE = Object.freeze({
 const SSE_FRAME_PREFIX = 'data: ';
 const SSE_FRAME_SUFFIX = '\n\n';
 const EMPTY_STRING = '';
+const ADMIN_LOCAL_DISPATCH = Object.freeze({
+  TARGET_ADDRESS: 'local/admin-websocket-api',
+});
+
+/**
+ * Build a typed admin-operation error used for websocket responses.
+ * @param {string} errorCode
+ * @param {string} message
+ * @param {string|null} [hint]
+ * @return {Error}
+ */
+function createAdminOperationError(errorCode, message, hint = null) {
+  const error = new Error(message);
+  error.adminErrorCode = errorCode;
+  error.adminHint = hint;
+  return error;
+}
 
 /**
  * AdminWebSocketAPI — node-local compatibility adapter for
@@ -130,6 +155,9 @@ class AdminWebSocketAPI {
         null);
     this.debugDapRouter = options.debugDapRouter || null;
     this.traceCollector = options.traceCollector || new TraceCollector();
+    this.serviceDispatcher =
+      options.serviceDispatcher || this.createLocalServiceDispatcher();
+    this.serviceDiagnosticsProvider = options.serviceDiagnosticsProvider || null;
     this.enableAdminStream = options.enableAdminStream !== false;
 
     // Configuration
@@ -263,6 +291,9 @@ class AdminWebSocketAPI {
         nodeId: this.nodeId,
         connectedClients: this.clients.size,
       };
+    });
+    this.fastify.get(ADMIN_ROUTE.SERVICE_DIAGNOSTICS, async (_request, reply) => {
+      return this.handleServiceDiagnostics(reply);
     });
 
     // Test administration endpoints.
@@ -1154,22 +1185,43 @@ class AdminWebSocketAPI {
    * @private
    */
   sendCacheDump(clientInfo, tables) {
+    const cacheDump = this.buildValidatedCacheDump(tables);
+    this.sendCacheDumpPayload(clientInfo, cacheDump);
+  }
+
+  /**
+   * Build and validate one cache-dump payload.
+   * @param {Array<string>} [tables] - Optional table filter.
+   * @return {Object}
+   * @private
+   */
+  buildValidatedCacheDump(tables) {
     const cacheDump = this.buildCacheDump(tables);
-
-    // Check if cache is empty (all tables have 0 rows) - Requirement 3.3
-    const isEmpty = Object.values(cacheDump).every((arr) => arr.length === NUM.ZERO);
+    const isEmpty = Object.values(cacheDump).every((rows) =>
+      Array.isArray(rows) && rows.length === NUM.ZERO,
+    );
     if (isEmpty) {
-      throw new Error('System table cache is empty');
+      throw createAdminOperationError(
+        ErrorCode.INTERNAL_ERROR,
+        ADMIN_ERROR_MESSAGE.SYSTEM_CACHE_EMPTY,
+      );
     }
+    return cacheDump;
+  }
 
-    const message = {
+  /**
+   * Send one prepared cache-dump payload.
+   * @param {Object} clientInfo
+   * @param {Object} cacheDump
+   * @private
+   */
+  sendCacheDumpPayload(clientInfo, cacheDump) {
+    this.sendToClient(clientInfo, {
       type: MessageType.CACHE_DUMP,
       timestamp: Date.now(),
       nodeId: this.nodeId,
       data: cacheDump,
-    };
-
-    this.sendToClient(clientInfo, message);
+    });
 
     this.logger.debug(ADMIN_LOG_MSG.CACHE_DUMP_SENT, {
       clientId: clientInfo.id,
@@ -1184,23 +1236,7 @@ class AdminWebSocketAPI {
    * @private
    */
   buildCacheDump(tables) {
-    const targetTables = tables || [
-      TABLES.NODES,
-      TABLES.SERVICES,
-      TABLES.PARTITIONS,
-      TABLES.TABLES,
-      TABLES.MESSAGE_GROUPS,
-      TABLES.INDICES,
-      TABLES.LOGS,
-      TABLES.CONFIG,
-      TABLES.CONTEXTS,
-      TABLES.LIVE_QUERIES,
-      TABLES.DEBUG_SESSIONS,
-      TABLES.DEBUG_BREAKPOINTS,
-      TABLES.DEBUG_SNAPSHOTS,
-      TABLES.LATENCY_GROUPS,
-      TABLES.INTER_GROUP_LATENCIES,
-    ];
+    const targetTables = tables || CACHE_DUMP_TABLES;
     const dump = {};
 
     if (!this.systemTableCache ||
@@ -1217,6 +1253,195 @@ class AdminWebSocketAPI {
     }
 
     return dump;
+  }
+
+  /**
+   * Create default local dispatcher implementing canonical dispatch interface.
+   * @return {Object}
+   * @private
+   */
+  createLocalServiceDispatcher() {
+    return {
+      dispatch: async (envelope, context = {}) => {
+        const payload = await this.executeLocalServiceEnvelope(envelope, context);
+        return {
+          envelope,
+          target: {
+            targetAddress: ADMIN_LOCAL_DISPATCH.TARGET_ADDRESS,
+            targetNodeId: this.nodeId,
+          },
+          delivery: {
+            acknowledged: true,
+            payload,
+          },
+        };
+      },
+    };
+  }
+
+  /**
+   * Execute one canonical Service_Message envelope locally.
+   * @param {Object} envelope
+   * @param {Object} _context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async executeLocalServiceEnvelope(envelope, _context) {
+    const operation = envelope?.operation;
+    const payload = envelope?.payload || {};
+
+    if (operation === ADMIN_SERVICE_OPERATION.EXECUTE_QUERY) {
+      return {
+        queryResult: await this.executeLocalQueryEnvelope(payload),
+      };
+    }
+    if (operation === ADMIN_SERVICE_OPERATION.EXECUTE_PARTITION_CALLBACK) {
+      return {
+        queryResult: await this.executeLocalPartitionCallbackEnvelope(payload),
+      };
+    }
+    if (operation === ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP) {
+      return {
+        cacheDump: this.executeLocalCacheDumpEnvelope(),
+      };
+    }
+
+    throw createAdminOperationError(
+      ErrorCode.INTERNAL_ERROR,
+      `${ADMIN_ERROR_MESSAGE.SERVICE_DISPATCH_OPERATION_UNSUPPORTED}: ${operation}`,
+    );
+  }
+
+  /**
+   * Execute canonical query operation payload.
+   * @param {Object} payload
+   * @return {Promise<Object>}
+   * @private
+   */
+  async executeLocalQueryEnvelope(payload) {
+    const queryId = payload?.queryId || null;
+    const sql = payload?.sql;
+    const params = payload?.params || [];
+
+    if (!queryId) {
+      throw createAdminOperationError(
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_QUERY_ID,
+        ADMIN_ERROR_HINT.MISSING_QUERY_ID,
+      );
+    }
+    if (!sql || typeof sql !== TYPEOF.STRING) {
+      throw createAdminOperationError(
+        ErrorCode.SYNTAX_ERROR,
+        ADMIN_ERROR_MESSAGE.MISSING_SQL,
+        ADMIN_ERROR_HINT.MISSING_SQL,
+      );
+    }
+
+    const routed = guardedAdaptAdminAction(
+      ADMIN_META_ACTION.EXECUTE_QUERY,
+      {sql, queryParams: params},
+      this.systemTableCache,
+      this.resolveMutationGuardMode(),
+    );
+    if (!routed.success) {
+      throw createAdminOperationError(
+        routed.code || ErrorCode.INTERNAL_ERROR,
+        routed.error || ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE,
+      );
+    }
+
+    const result = await this.executeQueryWithTimeout(
+      routed.sql,
+      routed.params || [],
+      queryId,
+    );
+    if (routed.warning) {
+      result.warning = routed.warning;
+    }
+    return result;
+  }
+
+  /**
+   * Execute canonical partition-callback payload.
+   * @param {Object} payload
+   * @return {Promise<Object>}
+   * @private
+   */
+  async executeLocalPartitionCallbackEnvelope(payload) {
+    const queryId = payload?.queryId || null;
+    const statement = payload?.statement;
+    const parameters = payload?.parameters || [];
+    const callbackModuleRef = payload?.callbackModuleRef;
+    const callbackExport = payload?.callbackExport;
+    const runtimeKind = payload?.runtimeKind;
+
+    if (!queryId) {
+      throw createAdminOperationError(
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_QUERY_ID,
+        ADMIN_ERROR_HINT.MISSING_QUERY_ID,
+      );
+    }
+    if (!statement || typeof statement !== TYPEOF.STRING) {
+      throw createAdminOperationError(
+        ErrorCode.SYNTAX_ERROR,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_STATEMENT,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_STATEMENT,
+      );
+    }
+    if (!callbackModuleRef || typeof callbackModuleRef !== TYPEOF.STRING) {
+      throw createAdminOperationError(
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_MODULE_REF,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_MODULE_REF,
+      );
+    }
+    if (!callbackExport || typeof callbackExport !== TYPEOF.STRING) {
+      throw createAdminOperationError(
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_EXPORT,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_EXPORT,
+      );
+    }
+    if (!runtimeKind || typeof runtimeKind !== TYPEOF.STRING) {
+      throw createAdminOperationError(
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_RUNTIME_KIND,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_RUNTIME_KIND,
+      );
+    }
+
+    return this.executeSqlRequestWithTimeout(createSqlRequest({
+      statement,
+      parameters,
+      sessionId: queryId,
+      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
+      callbackModuleRef,
+      callbackExport,
+      runtimeKind,
+    }));
+  }
+
+  /**
+   * Execute canonical cache-dump operation payload.
+   * @return {Object}
+   * @private
+   */
+  executeLocalCacheDumpEnvelope() {
+    const routed = guardedAdaptAdminAction(
+      ADMIN_META_ACTION.GET_CACHE_DUMP,
+      {},
+      this.systemTableCache,
+      this.resolveMutationGuardMode(),
+    );
+    if (!routed.success) {
+      throw createAdminOperationError(
+        routed.code || ErrorCode.INTERNAL_ERROR,
+        routed.error || ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE,
+      );
+    }
+    return this.buildValidatedCacheDump(routed.tables);
   }
 
   /**
@@ -1250,15 +1475,15 @@ class AdminWebSocketAPI {
 
     switch (message.type) {
     case MessageType.QUERY:
-      this.handleQueryMessage(clientInfo, message);
+      this.handleDispatchableAdminMessage(clientInfo, message);
       break;
 
     case MessageType.PARTITION_CALLBACK:
-      this.handlePartitionCallbackMessage(clientInfo, message);
+      this.handleDispatchableAdminMessage(clientInfo, message);
       break;
 
     case MessageType.REFRESH:
-      this.handleRefreshMessage(clientInfo, message);
+      this.handleDispatchableAdminMessage(clientInfo, message);
       break;
 
     default:
@@ -1272,62 +1497,170 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Handle one dispatchable admin message by first translating to
+   * canonical Service_Message envelope.
+   * @param {Object} clientInfo - Client information.
+   * @param {Object} message - Admin websocket message.
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleDispatchableAdminMessage(clientInfo, message) {
+    if (!isAdminMessageDispatchable(message.type)) {
+      return;
+    }
+
+    const envelope = adaptAdminMessageToServiceMessage(message, {
+      clientId: clientInfo.id,
+      tenantId: message.tenantId || null,
+      principal: message.principal || null,
+      traceId: message.traceId || null,
+    });
+    await this.handleServiceDispatchEnvelope(clientInfo, message, envelope);
+  }
+
+  /**
+   * Handle dispatchable admin messages through ServiceDispatcher.
+   * @param {Object} clientInfo - Client information.
+   * @param {Object} message - Admin websocket message.
+   * @private
+   */
+  async handleServiceDispatchMessage(clientInfo, message) {
+    const envelope = adaptAdminMessageToServiceMessage(message, {
+      clientId: clientInfo.id,
+      tenantId: message.tenantId || null,
+      principal: message.principal || null,
+      traceId: message.traceId || null,
+    });
+    return this.handleServiceDispatchEnvelope(clientInfo, message, envelope);
+  }
+
+  /**
+   * Dispatch one canonical envelope through the shared service dispatcher.
+   * @param {Object} clientInfo - Client information.
+   * @param {Object} message - Original admin websocket message.
+   * @param {Object} envelope - Canonical service-message envelope.
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleServiceDispatchEnvelope(clientInfo, message, envelope) {
+    const queryId = message.queryId || message.messageId || null;
+
+    try {
+      const dispatchResult = await this.serviceDispatcher.dispatch(
+        envelope,
+        {
+          clientInfo,
+          nodeId: this.nodeId,
+          traceId: envelope.traceId || null,
+          tenantId: envelope.tenantId || null,
+          principal: envelope.principal || null,
+        },
+      );
+
+      const deliveryPayload = dispatchResult.delivery?.payload || {};
+      const operation = dispatchResult.envelope.operation;
+
+      if (operation === ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP) {
+        const cacheDump = deliveryPayload.cacheDump || deliveryPayload.data || null;
+        if (!cacheDump || typeof cacheDump !== TYPEOF.OBJECT) {
+          throw new Error(ADMIN_ERROR_MESSAGE.SYSTEM_CACHE_EMPTY);
+        }
+        this.sendCacheDumpPayload(clientInfo, cacheDump);
+        return;
+      }
+
+      if (deliveryPayload.queryResult &&
+        typeof deliveryPayload.queryResult === TYPEOF.OBJECT) {
+        this.sendQueryResult(
+          clientInfo,
+          queryId || envelope.messageId,
+          deliveryPayload.queryResult,
+        );
+        return;
+      }
+
+      const deliveryResults = Array.isArray(deliveryPayload.results) ?
+        deliveryPayload.results :
+        [];
+      this.sendQueryResult(clientInfo, queryId || envelope.messageId, {
+        operation,
+        results: deliveryResults,
+        count: deliveryResults.length,
+      });
+    } catch (error) {
+      const errorCode = this.getErrorCode(error);
+      this.sendError(clientInfo, queryId, errorCode, error.message, error.adminHint);
+    }
+  }
+
+  /**
+   * Resolve unified lifecycle diagnostics report payload.
+   * @return {Object|null}
+   * @private
+   */
+  resolveServiceDiagnosticsReport() {
+    if (!this.serviceDiagnosticsProvider ||
+      typeof this.serviceDiagnosticsProvider !== TYPEOF.FUNCTION) {
+      return null;
+    }
+
+    const report = this.serviceDiagnosticsProvider();
+    if (!report || typeof report !== TYPEOF.OBJECT) {
+      return null;
+    }
+    return report;
+  }
+
+  /**
+   * Handle lifecycle/reconciler diagnostics route.
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleServiceDiagnostics(reply) {
+    const report = this.resolveServiceDiagnosticsReport();
+    if (!report) {
+      reply
+        .code(HTTP_STATUS.SERVICE_UNAVAILABLE)
+        .send({error: ADMIN_ERROR_MESSAGE.SERVICE_DIAGNOSTICS_UNAVAILABLE});
+      return;
+    }
+
+    reply.code(HTTP_STATUS.OK).send({
+      nodeId: this.nodeId,
+      timestamp: Date.now(),
+      diagnostics: report,
+    });
+  }
+
+  /**
    * Handle query message.
    * @param {Object} clientInfo - Client information.
    * @param {Object} message - Query message.
    * @private
    */
   async handleQueryMessage(clientInfo, message) {
-    const {queryId, sql, params} = message;
-
-    if (!queryId) {
-      this.sendError(clientInfo, null, ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.MISSING_QUERY_ID, ADMIN_ERROR_HINT.MISSING_QUERY_ID);
-      return;
-    }
-
-    if (!sql || typeof sql !== TYPEOF.STRING) {
-      this.sendError(clientInfo, queryId, ErrorCode.SYNTAX_ERROR,
-        ADMIN_ERROR_MESSAGE.MISSING_SQL, ADMIN_ERROR_HINT.MISSING_SQL);
-      return;
-    }
+    const queryId = message.queryId || null;
+    const payload = {
+      queryId,
+      sql: message.sql,
+      params: message.params || [],
+    };
 
     this.logger.debug(ADMIN_LOG_MSG.EXECUTING_QUERY, {
       clientId: clientInfo.id,
       queryId,
-      sql: sql.substring(NUM.ZERO, ADMIN_LIMIT.SQL_PREVIEW_LENGTH),
+      sql: typeof payload.sql === TYPEOF.STRING ?
+        payload.sql.substring(NUM.ZERO, ADMIN_LIMIT.SQL_PREVIEW_LENGTH) :
+        null,
     });
 
     try {
-      const routed = guardedAdaptAdminAction(
-        ADMIN_META_ACTION.EXECUTE_QUERY,
-        {sql, queryParams: params || []},
-        this.systemTableCache,
-        this.resolveMutationGuardMode(),
-      );
-      if (!routed.success) {
-        this.sendError(
-          clientInfo,
-          queryId,
-          routed.code || ErrorCode.INTERNAL_ERROR,
-          routed.error || ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE,
-        );
-        return;
-      }
-
-      const result = await this.executeQueryWithTimeout(
-        routed.sql,
-        routed.params || [],
-        queryId,
-      );
-      if (routed.warning) {
-        result.warning = routed.warning;
-      }
-
+      const result = await this.executeLocalQueryEnvelope(payload);
       this.sendQueryResult(clientInfo, queryId, result);
     } catch (error) {
       const errorCode = this.getErrorCode(error);
-      this.sendError(clientInfo, queryId, errorCode, error.message);
+      this.sendError(clientInfo, queryId, errorCode, error.message, error.adminHint);
     }
   }
 
@@ -1338,71 +1671,34 @@ class AdminWebSocketAPI {
    * @private
    */
   async handlePartitionCallbackMessage(clientInfo, message) {
-    const queryId = message.queryId;
-    const statement = message.statement || message.sql;
-    const parameters = message.parameters || message.params || [];
-    const callbackModuleRef = message.callbackModuleRef;
-    const callbackExport = message.callbackExport;
-    const runtimeKind = message.runtimeKind;
-
-    if (!queryId) {
-      this.sendError(clientInfo, null, ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.MISSING_QUERY_ID, ADMIN_ERROR_HINT.MISSING_QUERY_ID);
-      return;
-    }
-
-    if (!statement || typeof statement !== TYPEOF.STRING) {
-      this.sendError(clientInfo, queryId, ErrorCode.SYNTAX_ERROR,
-        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_STATEMENT,
-        ADMIN_ERROR_HINT.MISSING_CALLBACK_STATEMENT);
-      return;
-    }
-
-    if (!callbackModuleRef || typeof callbackModuleRef !== TYPEOF.STRING) {
-      this.sendError(clientInfo, queryId, ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_MODULE_REF,
-        ADMIN_ERROR_HINT.MISSING_CALLBACK_MODULE_REF);
-      return;
-    }
-
-    if (!callbackExport || typeof callbackExport !== TYPEOF.STRING) {
-      this.sendError(clientInfo, queryId, ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_EXPORT,
-        ADMIN_ERROR_HINT.MISSING_CALLBACK_EXPORT);
-      return;
-    }
-
-    if (!runtimeKind || typeof runtimeKind !== TYPEOF.STRING) {
-      this.sendError(clientInfo, queryId, ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_RUNTIME_KIND,
-        ADMIN_ERROR_HINT.MISSING_CALLBACK_RUNTIME_KIND);
-      return;
-    }
+    const queryId = message.queryId || null;
+    const payload = {
+      queryId,
+      statement: message.statement || message.sql,
+      parameters: message.parameters || message.params || [],
+      callbackModuleRef: message.callbackModuleRef,
+      callbackExport: message.callbackExport,
+      runtimeKind: message.runtimeKind,
+    };
 
     this.logger.debug(ADMIN_LOG_MSG.EXECUTING_QUERY, {
       clientId: clientInfo.id,
       queryId,
-      sql: statement.substring(NUM.ZERO, ADMIN_LIMIT.SQL_PREVIEW_LENGTH),
+      sql: typeof payload.statement === TYPEOF.STRING ?
+        payload.statement.substring(NUM.ZERO, ADMIN_LIMIT.SQL_PREVIEW_LENGTH) :
+        null,
       executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-      callbackModuleRef,
-      callbackExport,
-      runtimeKind,
+      callbackModuleRef: payload.callbackModuleRef,
+      callbackExport: payload.callbackExport,
+      runtimeKind: payload.runtimeKind,
     });
 
     try {
-      const result = await this.executeSqlRequestWithTimeout(createSqlRequest({
-        statement,
-        parameters,
-        sessionId: queryId,
-        executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-        callbackModuleRef,
-        callbackExport,
-        runtimeKind,
-      }));
+      const result = await this.executeLocalPartitionCallbackEnvelope(payload);
       this.sendQueryResult(clientInfo, queryId, result);
     } catch (error) {
       const errorCode = this.getErrorCode(error);
-      this.sendError(clientInfo, queryId, errorCode, error.message);
+      this.sendError(clientInfo, queryId, errorCode, error.message, error.adminHint);
     }
   }
 
@@ -1532,23 +1828,12 @@ class AdminWebSocketAPI {
       clientId: clientInfo.id,
     });
 
-    const routed = guardedAdaptAdminAction(
-      ADMIN_META_ACTION.GET_CACHE_DUMP,
-      {},
-      this.systemTableCache,
-      this.resolveMutationGuardMode(),
-    );
-    if (!routed.success) {
-      this.sendError(
-        clientInfo,
-        null,
-        routed.code || ErrorCode.INTERNAL_ERROR,
-        routed.error || ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE,
-      );
-      return;
+    try {
+      this.sendCacheDumpPayload(clientInfo, this.executeLocalCacheDumpEnvelope());
+    } catch (error) {
+      const errorCode = this.getErrorCode(error);
+      this.sendError(clientInfo, null, errorCode, error.message, error.adminHint);
     }
-
-    this.sendCacheDump(clientInfo, routed.tables);
   }
 
   /**
@@ -1625,6 +1910,9 @@ class AdminWebSocketAPI {
    * @private
    */
   getErrorCode(error) {
+    if (error && typeof error.adminErrorCode === TYPEOF.STRING) {
+      return error.adminErrorCode;
+    }
     const message = error.message.toLowerCase();
 
     if (message.includes(ADMIN_ERROR_MATCH.PARSE) ||

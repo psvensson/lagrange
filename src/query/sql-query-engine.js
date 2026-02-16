@@ -61,14 +61,21 @@ import {
   ADAPTER_LOG_MSG,
   CALLBACK_RUNTIME_KIND,
 } from './sql-adapter-constants.js';
+import {parseCallbackModuleArtifact} from './callback-module-artifact.js';
+import {reorderParams} from './pg-translate.js';
 
 const CODE_LOOKUP_BY_FUNCTION_ID_SQL =
   `SELECT * FROM ${TABLES.CODE} WHERE function_id = ?`;
 const CODE_LOOKUP_BY_FUNCTION_NAME_SQL =
   `SELECT * FROM ${TABLES.CODE} WHERE function_name = ?`;
+const MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL =
+  `SELECT * FROM ${TABLES.MODULE_MANIFESTS} ` +
+  'WHERE artifact_pointer = ? ORDER BY created_at DESC LIMIT 1';
 const NATIVE_CALLBACK_EXPORTS_ARG = 'exports';
 const NATIVE_CALLBACK_MODULE_ARG = 'module';
 const NATIVE_CALLBACK_RETURN_LINE = 'return module.exports;';
+const DEFAULT_CODE_VERSION = '1';
+const ZERO_SHA256_DIGEST = 'sha256:' + '0'.repeat(64);
 
 /**
  * SQLQueryEngine is the main entry point for SQL query processing.
@@ -130,6 +137,7 @@ class SQLQueryEngine {
     this.serviceRuntimeLifecycle = options.serviceRuntimeLifecycle || null;
     this.debugSessionResolver = options.debugSessionResolver || null;
     this.traceCollector = options.traceCollector || null;
+    this.wasmExecutor = options.wasmExecutor || null;
 
     // Transaction state per client/session
     this.activeTransactions = new Map(); // sessionId -> {partitionId, partition}
@@ -214,6 +222,14 @@ class SQLQueryEngine {
   }
 
   /**
+   * Set wasm executor used by wasm_component callbacks.
+   * @param {Object} wasmExecutor - WasmExecutor instance.
+   */
+  setWasmExecutor(wasmExecutor) {
+    this.wasmExecutor = wasmExecutor || null;
+  }
+
+  /**
    * Execute a canonical SqlRequest with execution-mode dispatch.
    *
    * This is the single owning dispatch entrypoint for
@@ -244,6 +260,7 @@ class SQLQueryEngine {
       case EXECUTION_MODE.SQL_STATEMENT:
         result = await this.executeQuery(statement, parameters, {
           sessionId,
+          dialect: sqlRequest.dialect,
         });
         break;
 
@@ -338,6 +355,16 @@ class SQLQueryEngine {
       sqlRequest,
       executionContext,
     );
+    const wasmExecutor = sqlRequest.wasmExecutor || this.wasmExecutor || null;
+
+    if (runtimeKind === CALLBACK_RUNTIME_KIND.WASM_COMPONENT) {
+      if (!wasmExecutor) {
+        throw new Error(
+          ADAPTER_ERROR_MSG.WASM_CALLBACK_EXECUTOR_REQUIRED,
+        );
+      }
+      await this.ensureWasmCallbackModuleLoaded(sqlRequest, wasmExecutor);
+    }
 
     // 3. Create callback runtime selector as a strict
     // adapter over unified runtime selection ownership.
@@ -355,7 +382,7 @@ class SQLQueryEngine {
           sqlRequest.callbackRuntimeDriverRegistry ||
           createCallbackDriverRegistry({
             runtimeDriverRegistry: unifiedRuntimeRegistry,
-            wasmExecutor: sqlRequest.wasmExecutor || null,
+            wasmExecutor,
             ociFeatureGateEnabled: Boolean(
               sqlRequest.ociFeatureGateEnabled,
             ),
@@ -388,7 +415,13 @@ class SQLQueryEngine {
 
     const hostResult = await host.execute(
       dispatchResult.batches, descriptor,
-      {handler},
+      {
+        handler,
+        serviceDefinitionId:
+          sqlRequest.serviceDefinitionId || callbackModuleRef || null,
+        nodeId: sqlRequest.nodeId || this.nodeId || null,
+        replicaId: sqlRequest.replicaId || null,
+      },
     );
 
     this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_COMPLETE, {
@@ -455,18 +488,10 @@ class SQLQueryEngine {
     sessionId,
     executionContext,
   ) {
-    const byFunctionId = await this.executeQuery(
-      CODE_LOOKUP_BY_FUNCTION_ID_SQL,
-      [callbackModuleRef],
-      {sessionId},
+    const codeRow = await this.lookupCallbackCodeRow(
+      callbackModuleRef,
+      sessionId,
     );
-    const codeRow = byFunctionId.rows?.[0] ||
-      (await this.executeQuery(
-        CODE_LOOKUP_BY_FUNCTION_NAME_SQL,
-        [callbackModuleRef],
-        {sessionId},
-      )).rows?.[0] ||
-      null;
 
     if (!codeRow) {
       throw new Error(
@@ -479,28 +504,10 @@ class SQLQueryEngine {
     if (typeof source !== 'string' || !source.trim()) {
       throw new Error(ADAPTER_ERROR_MSG.NATIVE_CALLBACK_SOURCE_INVALID);
     }
-
-    const module = {exports: {}};
-    let evaluated = null;
-    try {
-      const moduleFactory = new Function(
-        NATIVE_CALLBACK_EXPORTS_ARG,
-        NATIVE_CALLBACK_MODULE_ARG,
-        `${source}\n${NATIVE_CALLBACK_RETURN_LINE}`,
-      );
-      evaluated = moduleFactory(module.exports, module);
-    } catch (error) {
-      const compileError = new Error(
-        `${ADAPTER_ERROR_MSG.NATIVE_CALLBACK_COMPILE_FAILED}: ${error.message}`,
-      );
-      compileError.cause = error;
-      throw compileError;
-    }
-
-    const compiledExports = evaluated &&
-      typeof evaluated === 'object' ?
-      evaluated :
-      module.exports;
+    const compiledExports = this.compileCallbackModuleSource(
+      source,
+      ADAPTER_ERROR_MSG.NATIVE_CALLBACK_COMPILE_FAILED,
+    );
     const rawHandler = compiledExports ?
       compiledExports[callbackExport] :
       null;
@@ -515,6 +522,240 @@ class SQLQueryEngine {
       callbackCtx || executionContext,
       batch,
       descriptor,
+    );
+  }
+
+  /**
+   * Resolve callback source row from the code table.
+   *
+   * @param {string} callbackModuleRef
+   * @param {string} sessionId
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async lookupCallbackCodeRow(callbackModuleRef, sessionId) {
+    const byFunctionId = await this.executeQuery(
+      CODE_LOOKUP_BY_FUNCTION_ID_SQL,
+      [callbackModuleRef],
+      {sessionId},
+    );
+    if (byFunctionId.rows?.[0]) {
+      return byFunctionId.rows[0];
+    }
+
+    const byFunctionName = await this.executeQuery(
+      CODE_LOOKUP_BY_FUNCTION_NAME_SQL,
+      [callbackModuleRef],
+      {sessionId},
+    );
+    return byFunctionName.rows?.[0] || null;
+  }
+
+  /**
+   * Compile CommonJS callback source and return module exports object.
+   *
+   * @param {string} source
+   * @param {string} compileErrorPrefix
+   * @return {Object}
+   * @private
+   */
+  compileCallbackModuleSource(source, compileErrorPrefix) {
+    const module = {exports: {}};
+    let evaluated = null;
+    try {
+      const moduleFactory = new Function(
+        NATIVE_CALLBACK_EXPORTS_ARG,
+        NATIVE_CALLBACK_MODULE_ARG,
+        `${source}\n${NATIVE_CALLBACK_RETURN_LINE}`,
+      );
+      evaluated = moduleFactory(module.exports, module);
+    } catch (error) {
+      const compileError = new Error(
+        `${compileErrorPrefix}: ${error.message}`,
+      );
+      compileError.cause = error;
+      throw compileError;
+    }
+
+    return evaluated &&
+      typeof evaluated === 'object' ?
+      evaluated :
+      module.exports;
+  }
+
+  /**
+   * Resolve latest module manifest row by artifact pointer.
+   *
+   * @param {string} callbackModuleRef
+   * @param {string} sessionId
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async resolveLatestModuleManifestRow(callbackModuleRef, sessionId) {
+    const manifestLookup = await this.executeQuery(
+      MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL,
+      [callbackModuleRef],
+      {sessionId},
+    );
+    return manifestLookup.rows?.[0] || null;
+  }
+
+  /**
+   * Parse a JSON-encoded array field with safe fallback.
+   *
+   * @param {*} rawValue
+   * @param {string[]} fallback
+   * @return {string[]}
+   * @private
+   */
+  parseJsonArrayField(rawValue, fallback) {
+    if (Array.isArray(rawValue)) {
+      return rawValue.filter((entry) => typeof entry === 'string');
+    }
+    if (typeof rawValue !== 'string' || !rawValue.trim()) {
+      return fallback;
+    }
+    try {
+      const parsed = JSON.parse(rawValue);
+      return Array.isArray(parsed) ?
+        parsed.filter((entry) => typeof entry === 'string') :
+        fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  /**
+   * Build a validated manifest object for module mirror insertion.
+   *
+   * @param {Object|null} manifestRow
+   * @param {string} runExport
+   * @param {string} callbackModuleRef
+   * @return {Object}
+   * @private
+   */
+  buildWasmCallbackManifest(manifestRow, runExport, callbackModuleRef) {
+    const declaredExports = this.parseJsonArrayField(
+      manifestRow?.exports,
+      [runExport],
+    );
+    const exportsWithRun = declaredExports.includes(runExport) ?
+      declaredExports :
+      [...declaredExports, runExport];
+
+    return {
+      namespace: manifestRow?.namespace || 'examples',
+      name: manifestRow?.name || callbackModuleRef,
+      version: String(manifestRow?.version || '1.0.0'),
+      digest: manifestRow?.digest || ZERO_SHA256_DIGEST,
+      runExport,
+      exports: exportsWithRun,
+      dependencies: this.parseJsonArrayField(
+        manifestRow?.dependencies,
+        [],
+      ),
+      capabilities: this.parseJsonArrayField(
+        manifestRow?.capabilities,
+        [],
+      ),
+      sourceReference: manifestRow?.source_reference || null,
+      artifactPointer:
+        manifestRow?.artifact_pointer || callbackModuleRef,
+    };
+  }
+
+  /**
+   * Ensure a wasm_component callback module is loaded into module mirror.
+   *
+   * @param {Readonly<Object>} sqlRequest
+   * @param {Object} wasmExecutor
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensureWasmCallbackModuleLoaded(sqlRequest, wasmExecutor) {
+    const callbackModuleRef = sqlRequest.callbackModuleRef;
+    const moduleMirror = wasmExecutor.moduleMirror || null;
+    if (!moduleMirror || typeof moduleMirror.getModule !== 'function') {
+      throw new Error(
+        ADAPTER_ERROR_MSG.WASM_CALLBACK_MODULE_MIRROR_REQUIRED,
+      );
+    }
+
+    const existing = moduleMirror.getModule(callbackModuleRef);
+    if (existing) {
+      return;
+    }
+
+    const sessionId = sqlRequest.sessionId || QUERY_SESSION.DEFAULT;
+    const codeRow = await this.lookupCallbackCodeRow(
+      callbackModuleRef,
+      sessionId,
+    );
+    if (!codeRow) {
+      throw new Error(
+        `${ADAPTER_ERROR_MSG.NATIVE_CALLBACK_MODULE_NOT_FOUND}: ` +
+        callbackModuleRef,
+      );
+    }
+    const codeBlob = codeRow.code_blob;
+    if (typeof codeBlob !== 'string' || !codeBlob.trim()) {
+      throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_SOURCE_INVALID);
+    }
+
+    const parsedArtifact = parseCallbackModuleArtifact(codeBlob);
+    if (!parsedArtifact.source || typeof parsedArtifact.source !== 'string') {
+      throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_SOURCE_INVALID);
+    }
+
+    const compiledExports = this.compileCallbackModuleSource(
+      parsedArtifact.source,
+      ADAPTER_ERROR_MSG.WASM_CALLBACK_COMPILE_FAILED,
+    );
+
+    const manifestRow = await this.resolveLatestModuleManifestRow(
+      callbackModuleRef,
+      sessionId,
+    );
+    const runExport = manifestRow?.run_export ||
+      parsedArtifact.runExport ||
+      sqlRequest.callbackExport;
+    const manifest = this.buildWasmCallbackManifest(
+      manifestRow,
+      runExport,
+      callbackModuleRef,
+    );
+    const rawHandler = compiledExports ?
+      compiledExports[manifest.runExport] :
+      null;
+    if (typeof rawHandler !== 'function') {
+      throw new Error(
+        `${ADAPTER_ERROR_MSG.WASM_CALLBACK_EXPORT_NOT_FOUND}: ` +
+        manifest.runExport,
+      );
+    }
+
+    const moduleEntry = {
+      version: String(codeRow.version ?? DEFAULT_CODE_VERSION),
+      wasmBytes: Buffer.from(parsedArtifact.wasmBytes),
+      manifest,
+      exports: compiledExports,
+    };
+
+    if (typeof moduleMirror.setModule === 'function') {
+      await moduleMirror.setModule(callbackModuleRef, moduleEntry);
+      return;
+    }
+    if (moduleMirror.localCache &&
+      typeof moduleMirror.localCache.set === 'function') {
+      moduleMirror.localCache.set(callbackModuleRef, {
+        ...moduleEntry,
+        updatedAt: Date.now(),
+      });
+      return;
+    }
+
+    throw new Error(
+      ADAPTER_ERROR_MSG.WASM_CALLBACK_MODULE_MIRROR_REQUIRED,
     );
   }
 
@@ -649,8 +890,12 @@ class SQLQueryEngine {
     // Parse the SQL
     let ast;
     try {
-      const parser = new SQLParser(sql);
+      const parser = new SQLParser(sql, {dialect: options.dialect});
       ast = parser.parse();
+      // If PG mode produced param mapping, reorder params
+      if (ast._paramMapping && ast._paramMapping.length > 0) {
+        params = reorderParams(params, ast._paramMapping);
+      }
     } catch (parseError) {
       this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
         sql: sql.substring(0, 100),

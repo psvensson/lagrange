@@ -16,6 +16,7 @@ const SQL = Object.freeze({
   LIMIT: 'LIMIT',
   ORDER_BY: 'ORDER BY',
   GROUP_BY: 'GROUP BY',
+  RETURNING: 'RETURNING',
 });
 
 export {SQL};

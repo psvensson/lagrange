@@ -3,7 +3,8 @@
  */
 
 export {NodesView, WARNING_THRESHOLDS} from './nodes-view.js';
-export {ServicesView, SERVICE_TYPES} from './services-view.js';
+export {ReplicasView, ServicesView, SERVICE_TYPES} from './services-view.js';
+export {LogicalServicesView, LOGICAL_SERVICE_STATE} from './logical-services-view.js';
 export {TablesView, SIZE_UNITS, POLICY_SUMMARY_MAX_LENGTH} from './tables-view.js';
 export {PartitionsView} from './partitions-view.js';
 export {MessageGroupsView} from './message-groups-view.js';

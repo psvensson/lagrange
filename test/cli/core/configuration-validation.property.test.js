@@ -13,7 +13,7 @@ import {ConfigManager} from '../../../src/cli/core/config-manager.js';
 
 // Valid configuration values
 const VALID_VIEWS = [
-  'nodes', 'services', 'tables', 'partitions',
+  'nodes', 'services', 'replicas', 'tables', 'partitions',
   'message_groups', 'sql', 'logs', 'config', 'contexts',
 ];
 const VALID_COLOR_SCHEMES = ['default', 'monochrome'];

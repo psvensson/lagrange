@@ -23,6 +23,12 @@ function buildCallbackRows(callbackModuleRef) {
   if (callbackModuleRef.includes('05-guardrail-failure')) {
     return [{ok: true, error: 'blocked unbounded nested call'}];
   }
+  if (callbackModuleRef.includes('06-wasm-remote-replica')) {
+    return [{
+      wasmCompiled: true,
+      remotePartitionReplica: true,
+    }];
+  }
   return [];
 }
 
@@ -47,17 +53,17 @@ describe('examples-catalog scenario', () => {
 
       const result = await run(cluster);
 
-      assert.equal(result.exampleResults.total, 5);
-      assert.equal(result.exampleResults.passed, 5);
+      assert.equal(result.exampleResults.total, 6);
+      assert.equal(result.exampleResults.passed, 6);
       assert.equal(result.exampleResults.failed, 0);
       assert.equal(result.exampleResults.requiredFailed, 0);
       assert.equal(Array.isArray(result.examples), true);
-      assert.equal(result.examples.length, 5);
+      assert.equal(result.examples.length, 6);
 
       const artifact = JSON.parse(
         await readFile(result.artifactPath, 'utf8'),
       );
-      assert.equal(artifact.summary.total, 5);
+      assert.equal(artifact.summary.total, 6);
       assert.equal(artifact.summary.failed, 0);
     } finally {
       await rm(outputDir, {recursive: true, force: true});

@@ -149,6 +149,17 @@ test('CDCGroupPropagationService uses safe mode when configured', async (t) => {
     latencyTreeService: tree,
     nowFn: () => 1000,
   });
+  const warnLogs = [];
+  const debugLogs = [];
+  service.logger = {
+    info() {},
+    warn(message, context) {
+      warnLogs.push({message, context});
+    },
+    debug(message, context) {
+      debugLogs.push({message, context});
+    },
+  };
   service.initialize();
   service.start();
 
@@ -168,6 +179,11 @@ test('CDCGroupPropagationService uses safe mode when configured', async (t) => {
   assert.equal(router.calls.length, 0);
   assert.equal(service.getStats().safeCount, 1);
   assert.equal(service.getStats().fallbackCount, 1);
+  assert.equal(warnLogs.length, 0, 'config safe mode fallback should not warn');
+  assert.ok(
+    debugLogs.some((entry) => entry.message === 'Falling back to safe CDC propagation mode'),
+    'config safe mode fallback should emit debug diagnostic',
+  );
 
   service.stop();
   teardownConfig();
@@ -273,6 +289,14 @@ test('CDCGroupPropagationService falls back when coordinator address is missing'
       latencyTreeService: tree,
       nowFn: () => 3000,
     });
+    const warnLogs = [];
+    service.logger = {
+      info() {},
+      warn(message, context) {
+        warnLogs.push({message, context});
+      },
+      debug() {},
+    };
     const fallbackEvents = [];
     service.on('cdcGroupSafeFallback', (payload) => fallbackEvents.push(payload));
     service.initialize();
@@ -294,6 +318,10 @@ test('CDCGroupPropagationService falls back when coordinator address is missing'
     assert.equal(router.calls.length, 0);
     assert.equal(fallbackEvents.length, 1);
     assert.equal(fallbackEvents[0].reason, result.fallbackReason);
+    assert.ok(
+      warnLogs.some((entry) => entry.message === 'Falling back to safe CDC propagation mode'),
+      'non-config fallback reasons should remain warnings',
+    );
 
     service.stop();
     teardownConfig();

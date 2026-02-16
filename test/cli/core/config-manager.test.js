@@ -70,7 +70,7 @@ test('ConfigManager - validateField validates string enum', async (t) => {
   t.same(manager.validateField('default_view', 'tables'), {valid: true});
   t.same(manager.validateField('default_view', 'invalid'), {
     valid: false,
-    error: 'Must be one of: nodes, services, tables, partitions, ' +
+    error: 'Must be one of: nodes, services, replicas, tables, partitions, ' +
            'message_groups, sql, logs, config, contexts',
   });
 });

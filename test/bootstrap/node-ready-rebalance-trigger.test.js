@@ -127,6 +127,54 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
   });
 
   await t.test(
+    'logs no-transition skip at debug level to avoid default log noise',
+    async (t) => {
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
+        },
+      });
+
+      const infoLogs = [];
+      const debugLogs = [];
+      bootstrapService.logger = {
+        info(message, context) {
+          infoLogs.push({message, context});
+        },
+        debug(message, context) {
+          debugLogs.push({message, context});
+        },
+        warn() {},
+        error() {},
+      };
+
+      const event = createNodeEvent('node-8', LEASE_VALID_MS, STATE.DISCONNECTED);
+      const previousRow = createPreviousNodeRow('node-8', LEASE_VALID_MS);
+      const scheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        event,
+        previousRow,
+      );
+
+      t.equal(scheduled, false, 'already-ready nodes should not schedule rebalance');
+      t.ok(
+        debugLogs.some((entry) =>
+          entry.message ===
+            'Skipping node-ready rebalance trigger: no not-ready to ready transition'),
+        'should emit no-transition diagnostic at debug level',
+      );
+      t.equal(
+        infoLogs.some((entry) =>
+          entry.message ===
+            'Skipping node-ready rebalance trigger: no not-ready to ready transition'),
+        false,
+        'no-transition skip should not be emitted at info level',
+      );
+    },
+  );
+
+  await t.test(
     'schedules rebalance when UPDATE payload omits node_id but previous row has identity',
     async (t) => {
       const bootstrapService = new BootstrapService({

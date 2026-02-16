@@ -8,11 +8,50 @@
 import nodeSqlParser from 'node-sql-parser';
 const {Parser} = nodeSqlParser;
 import {LoggingService} from '../logging/logging-service.js';
+import {PARSER_DIALECT, PG_EXPR_TYPE} from './pg-compat-constants.js';
+import {
+  translateBooleanLiteral,
+  translatePositionalParam,
+  translateTypeCast,
+  translateIlike,
+  translateOnConflict,
+} from './pg-translate.js';
+import {translateFunctionCall} from './pg-function-registry.js';
 
 const PARSER_CONFIG = Object.freeze({
   DATABASE: 'sqlite',
+  DATABASE_PG: 'postgresql',
   SUBSYSTEM: 'sql-parser',
 });
+
+/**
+ * PG AST node type identifiers from node-sql-parser in PG mode.
+ */
+const PG_NODE_TYPE = Object.freeze({
+  VAR: 'var',
+  CAST: 'cast',
+  CASE: 'case',
+  FUNCTION: 'function',
+  EXTRACT: 'extract',
+});
+
+/**
+ * PG AST prefix for positional parameters ($1, $2, ...).
+ */
+const PG_PARAM_PREFIX = '$';
+
+/**
+ * PG AST CASE arg type identifiers.
+ */
+const PG_CASE_ARG_TYPE = Object.freeze({
+  WHEN: 'when',
+  ELSE: 'else',
+});
+
+/**
+ * EXISTS function name as produced by node-sql-parser PG mode.
+ */
+const PG_EXISTS_NAME = 'EXISTS';
 
 const AST_TYPE = Object.freeze({
   SELECT: 'SELECT',
@@ -54,10 +93,12 @@ const EXPR_TYPE = Object.freeze({
 });
 
 class SQLParser {
-  constructor(sql) {
+  constructor(sql, options = {}) {
     this.sql = sql;
+    this.dialect = options.dialect || PARSER_DIALECT.SQLITE;
     this.parser = new Parser();
     this.logger = this.initLogger();
+    this.positionalParams = [];
   }
 
   initLogger() {
@@ -85,8 +126,16 @@ class SQLParser {
     }
 
     try {
-      const externalAst = this.parser.astify(this.sql, {database: PARSER_CONFIG.DATABASE});
-      return this.convertAst(externalAst);
+      const dbMode = this.dialect === PARSER_DIALECT.POSTGRESQL
+        ? PARSER_CONFIG.DATABASE_PG
+        : PARSER_CONFIG.DATABASE;
+      const externalAst = this.parser.astify(this.sql, {database: dbMode});
+      const ast = this.convertAst(externalAst);
+      if (this.dialect === PARSER_DIALECT.POSTGRESQL &&
+          this.positionalParams.length > 0) {
+        ast._paramMapping = this.positionalParams;
+      }
+      return ast;
     } catch (error) {
       const errorMsg = 'SQL Parse Error: ' + error.message;
       this.logger.error(errorMsg, {sql: this.sql});
@@ -121,9 +170,21 @@ class SQLParser {
     }
   }
   convertSelect(ast) {
+    // PG mode: distinct is {type: 'DISTINCT'|null} vs SQLite string
+    const distinct = typeof ast.distinct === 'object'
+      ? ast.distinct?.type === 'DISTINCT'
+      : ast.distinct === 'DISTINCT';
+
+    const ctes = this.convertCtes(ast.with);
+    const recursive = ast.with ?
+      ast.with.some((c) => !!c.recursive) :
+      false;
+
+    const setOperation = this.convertSetOperation(ast);
+
     return {
       type: AST_TYPE.SELECT,
-      distinct: ast.distinct === 'DISTINCT',
+      distinct,
       columns: this.convertColumns(ast.columns),
       from: this.convertFrom(ast.from),
       joins: this.convertJoins(ast.from),
@@ -132,6 +193,49 @@ class SQLParser {
       having: ast.having ? this.convertExpression(ast.having) : null,
       orderBy: ast.orderby ? this.convertOrderBy(ast.orderby) : null,
       limit: ast.limit ? this.convertLimit(ast.limit) : null,
+      ctes,
+      recursive,
+      setOperation,
+    };
+  }
+
+  /**
+   * Convert WITH clause CTE definitions from node-sql-parser AST.
+   * Handles both PG mode (stmt is direct select AST) and SQLite mode
+   * (stmt wraps in {tableList, columnList, ast}).
+   * @param {Array|null} withClause - Raw with clause array.
+   * @returns {Array|null} Converted CTE definitions or null.
+   */
+  convertCtes(withClause) {
+    if (!withClause || withClause.length === 0) {
+      return null;
+    }
+    return withClause.map((cte) => {
+      const name = cte.name?.value || cte.name;
+      // PG mode: stmt is the select AST directly
+      // SQLite mode: stmt wraps in {tableList, columnList, ast}
+      const stmtAst = cte.stmt?.ast || cte.stmt;
+      return {
+        name,
+        query: this.convertSelect(stmtAst),
+        recursive: !!cte.recursive,
+      };
+    });
+  }
+
+  /**
+   * Convert set operation (_next / set_op) from node-sql-parser AST.
+   * Handles UNION, UNION ALL, INTERSECT, EXCEPT in both dialects.
+   * @param {Object} ast - Raw select AST that may contain _next.
+   * @returns {Object|null} Set operation node or null.
+   */
+  convertSetOperation(ast) {
+    if (!ast._next || !ast.set_op) {
+      return null;
+    }
+    return {
+      type: ast.set_op.toUpperCase(),
+      right: this.convertSelect(ast._next),
     };
   }
 
@@ -152,14 +256,21 @@ class SQLParser {
       values.push(rowValues);
     }
 
-    return {
+    const insertAst = {
       type: AST_TYPE.INSERT,
       table: tableName,
       columns,
       values,
       orReplace: insertMode === 'replace',
       orIgnore: insertMode === 'ignore',
+      returning: this.convertReturning(ast.returning),
     };
+
+    if (this.dialect === PARSER_DIALECT.POSTGRESQL && ast.conflict) {
+      translateOnConflict(insertAst, ast.conflict);
+    }
+
+    return insertAst;
   }
 
   /**
@@ -198,6 +309,7 @@ class SQLParser {
       table: tableName,
       assignments,
       where: ast.where ? this.convertExpression(ast.where) : null,
+      returning: this.convertReturning(ast.returning),
     };
   }
 
@@ -207,7 +319,44 @@ class SQLParser {
       type: AST_TYPE.DELETE,
       table: tableName,
       where: ast.where ? this.convertExpression(ast.where) : null,
+      returning: this.convertReturning(ast.returning),
     };
+  }
+
+  /**
+   * Convert a RETURNING clause from node-sql-parser AST.
+   * Handles both SQLite and PG mode AST shapes.
+   * @param {Object|null} returning - Raw returning clause from parser AST.
+   * @return {string[]|string|null} Column names, '*', or null.
+   * @private
+   */
+  convertReturning(returning) {
+    if (!returning || !returning.columns || returning.columns.length === 0) {
+      return null;
+    }
+    const columns = returning.columns;
+    // Check for RETURNING * — column is the string '*' in both modes
+    if (columns.length === 1 && columns[0].expr &&
+        columns[0].expr.type === 'column_ref' &&
+        columns[0].expr.column === '*') {
+      return '*';
+    }
+    // Extract column names — handle both PG and SQLite AST shapes
+    const names = [];
+    for (const col of columns) {
+      const expr = col.expr;
+      if (expr && expr.type === 'column_ref') {
+        const colRef = expr.column;
+        if (typeof colRef === 'string') {
+          // SQLite mode: column is a plain string
+          names.push(colRef);
+        } else if (colRef && colRef.expr && colRef.expr.value) {
+          // PG mode: column is {expr: {type: 'default', value: 'name'}}
+          names.push(colRef.expr.value);
+        }
+      }
+    }
+    return names.length > 0 ? names : null;
   }
 
   convertCreate(ast) {
@@ -316,6 +465,17 @@ class SQLParser {
       return null;
     }
     const firstTable = from[0];
+
+    // Derived table: FROM (SELECT ...) AS alias
+    if (firstTable.expr?.ast) {
+      return {
+        type: EXPR_TYPE.TABLE,
+        name: null,
+        alias: firstTable.as || null,
+        subquery: this.convertSelect(firstTable.expr.ast),
+      };
+    }
+
     return {
       type: EXPR_TYPE.TABLE,
       name: firstTable.table,
@@ -331,15 +491,28 @@ class SQLParser {
     for (let i = 1; i < from.length; i++) {
       const joinDef = from[i];
       if (joinDef.join) {
-        joins.push({
-          type: EXPR_TYPE.JOIN,
-          joinType: this.normalizeJoinType(joinDef.join),
-          table: {
+        // Derived table in JOIN: joinDef.expr.ast exists
+        let table;
+        if (joinDef.expr?.ast) {
+          table = {
+            type: EXPR_TYPE.TABLE,
+            name: null,
+            alias: joinDef.as || null,
+            subquery: this.convertSelect(joinDef.expr.ast),
+          };
+        } else {
+          table = {
             type: EXPR_TYPE.TABLE,
             name: joinDef.table,
             alias: joinDef.as || null,
-          },
-          condition: joinDef.on ? this.convertExpression(joinDef.on) : null,
+          };
+        }
+        joins.push({
+          type: EXPR_TYPE.JOIN,
+          joinType: this.normalizeJoinType(joinDef.join),
+          table,
+          condition: joinDef.on ?
+            this.convertExpression(joinDef.on) : null,
         });
       }
     }
@@ -383,6 +556,23 @@ class SQLParser {
     if (!expr) {
       return null;
     }
+
+    // PG-specific node types (only when dialect is postgresql)
+    if (this.dialect === PARSER_DIALECT.POSTGRESQL) {
+      const pgResult = this.convertPgExpression(expr);
+      if (pgResult) {
+        return pgResult;
+      }
+    }
+
+    // Scalar subquery: node has .ast property (SELECT wrapped in parens)
+    if (expr.ast && expr.parentheses) {
+      return {
+        type: PG_EXPR_TYPE.SUBQUERY,
+        query: this.convertSelect(expr.ast),
+      };
+    }
+
     switch (expr.type) {
     case 'binary_expr':
       return this.convertBinaryExpr(expr);
@@ -419,10 +609,142 @@ class SQLParser {
     }
   }
 
+  /**
+   * Handles PG-specific AST node types produced by node-sql-parser
+   * in postgresql mode. Returns null if the node is not PG-specific
+   * and should fall through to the standard switch.
+   * @param {Object} expr - PG AST expression node.
+   * @returns {Object|null} Converted Internal_AST node, or null.
+   */
+  convertPgExpression(expr) {
+    const convertExprFn = this.convertExpression.bind(this);
+
+    switch (expr.type) {
+    case PG_NODE_TYPE.VAR:
+      if (expr.prefix === PG_PARAM_PREFIX) {
+        return translatePositionalParam(
+          {value: expr.name}, this.positionalParams,
+        );
+      }
+      return null;
+
+    case PG_NODE_TYPE.CAST:
+      return translateTypeCast(
+        {expr: expr.expr, target: {dataType: expr.target[0]?.dataType}},
+        convertExprFn,
+      );
+
+    case PG_NODE_TYPE.CASE:
+      return this.convertPgCase(expr);
+
+    case PG_NODE_TYPE.FUNCTION:
+      return this.convertPgFunction(expr);
+
+    case PG_NODE_TYPE.EXTRACT:
+      return this.convertPgExtract(expr);
+
+    case 'bool':
+      return translateBooleanLiteral(expr);
+
+    default:
+      return null;
+    }
+  }
+
+  /**
+   * Converts a PG CASE expression to an Internal_AST CASE node.
+   * @param {Object} expr - PG case AST node.
+   * @returns {Object} Internal_AST case node.
+   */
+  convertPgCase(expr) {
+    const conditions = [];
+    let elseExpr = null;
+
+    for (const arg of expr.args) {
+      if (arg.type === PG_CASE_ARG_TYPE.WHEN) {
+        conditions.push({
+          when: this.convertExpression(arg.cond),
+          then: this.convertExpression(arg.result),
+        });
+      } else if (arg.type === PG_CASE_ARG_TYPE.ELSE) {
+        elseExpr = this.convertExpression(arg.result);
+      }
+    }
+
+    return {
+      type: PG_EXPR_TYPE.CASE,
+      operand: expr.expr ? this.convertExpression(expr.expr) : null,
+      conditions,
+      elseExpr,
+    };
+  }
+
+  /**
+   * Converts a PG function call or EXISTS expression.
+   * EXISTS is parsed as a function node by node-sql-parser PG mode.
+   * @param {Object} expr - PG function AST node.
+   * @returns {Object} Internal_AST node.
+   */
+  convertPgFunction(expr) {
+    const nameParts = expr.name?.name || [];
+    const funcName = nameParts.length > 0
+      ? nameParts[0].value
+      : '';
+    const argValues = expr.args?.value || [];
+
+    // EXISTS is parsed as a function with a subquery argument
+    if (funcName.toUpperCase() === PG_EXISTS_NAME) {
+      const subqueryArg = argValues[0];
+      const innerAst = subqueryArg?.ast || subqueryArg;
+      return {
+        type: PG_EXPR_TYPE.EXISTS,
+        query: this.convertSelect(innerAst),
+      };
+    }
+
+    const convertExprFn = this.convertExpression.bind(this);
+    return translateFunctionCall(funcName, argValues, convertExprFn);
+  }
+
+  /**
+   * Converts a PG EXTRACT(field FROM expr) expression.
+   * node-sql-parser PG mode produces {type: 'extract', args: {field, source}}.
+   * @param {Object} expr - PG extract AST node.
+   * @returns {Object} Internal_AST cast node wrapping strftime.
+   */
+  convertPgExtract(expr) {
+    const field = expr.args?.field || '';
+    const source = expr.args?.source;
+    const convertExprFn = this.convertExpression.bind(this);
+    return translateFunctionCall(
+      'extract', [{value: field}, source], convertExprFn,
+    );
+  }
+
   convertBinaryExpr(expr) {
     const operator = expr.operator.toUpperCase();
 
+    // PG-specific: ILIKE / NOT ILIKE → LIKE with LOWER wrapping
+    if (this.dialect === PARSER_DIALECT.POSTGRESQL &&
+        (operator === 'ILIKE' || operator === 'NOT ILIKE')) {
+      return translateIlike(expr, this.convertExpression.bind(this));
+    }
+
     if (operator === 'IN' || operator === 'NOT IN') {
+      // IN subquery: right is expr_list with a single element having .ast
+      if (Array.isArray(expr.right.value) &&
+          expr.right.value.length === 1 &&
+          expr.right.value[0]?.ast) {
+        return {
+          type: EXPR_TYPE.IN,
+          expression: this.convertExpression(expr.left),
+          subquery: {
+            type: PG_EXPR_TYPE.SUBQUERY,
+            query: this.convertSelect(expr.right.value[0].ast),
+          },
+          negated: operator === 'NOT IN',
+        };
+      }
       const values = Array.isArray(expr.right.value) ?
         expr.right.value.map((v) => this.convertValue(v)) :
         [this.convertExpression(expr.right)];
@@ -484,10 +806,14 @@ class SQLParser {
   }
 
   convertColumnRef(expr) {
+    // PG mode wraps column name in {expr: {type: 'default', value: name}}
+    const column = (typeof expr.column === 'object' && expr.column?.expr)
+      ? expr.column.expr.value
+      : expr.column;
     return {
       type: EXPR_TYPE.COLUMN_REF,
       table: expr.table || null,
-      column: expr.column,
+      column,
     };
   }
 
@@ -512,6 +838,19 @@ class SQLParser {
     if (!val) {
       return {type: EXPR_TYPE.LITERAL, value: null};
     }
+
+    // PG-specific value types
+    if (this.dialect === PARSER_DIALECT.POSTGRESQL) {
+      if (val.type === PG_NODE_TYPE.VAR && val.prefix === PG_PARAM_PREFIX) {
+        return translatePositionalParam(
+          {value: val.name}, this.positionalParams,
+        );
+      }
+      if (val.type === 'bool') {
+        return translateBooleanLiteral(val);
+      }
+    }
+
     switch (val.type) {
     case 'number':
       return {type: EXPR_TYPE.LITERAL, value: val.value};

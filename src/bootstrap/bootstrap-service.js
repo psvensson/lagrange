@@ -94,6 +94,10 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
 import {
+  registerBuiltInMetaServiceDefinitions,
+  registerBuiltInMetaServiceEndpoints,
+} from './shared/meta-service-definition-registration.js';
+import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
 import {createSeedPhaseOwners} from './owners/seed-phase-owners.js';
@@ -104,14 +108,25 @@ import {
 import {isNodeRecordReady} from '../node/node-readiness-policy.js';
 import {BOOTSTRAP_SUB_PHASE} from '../node/node-constants.js';
 import {
+  MessageGroupServiceAdapter,
+  PartitionServiceAdapter,
+  RuntimeServiceAdapter,
+  ServiceLifecycleManager,
+  ServiceReconciler,
+} from '../service/index.js';
+import {
   ADDRESS,
   COLUMN,
   ENTITY_TYPE,
   NUM,
+  RUNTIME_KIND,
+  SERVICE_DESCRIPTOR_FIELD,
+  SERVICE_LIFECYCLE_STATE,
   SERVICE_TYPE,
   STATE,
   STRING,
   TABLES,
+  UNIFIED_SERVICE_TYPE,
   CDC_OPERATION,
 } from '../constants/index.js';
 
@@ -128,6 +143,13 @@ const BOOTSTRAP_REPLICA_PROGRESS = Object.freeze({
   PREFIX: '[replica-create]',
   TYPE_PARTITION: 'partition',
   SPINNER_IDLE: '|',
+});
+const BOOTSTRAP_UNIFIED_RECONCILE = Object.freeze({
+  INFRA_READY_REASON: 'bootstrap_infrastructure_ready',
+  MESSAGE_GROUPS_REASON: 'bootstrap_message_groups',
+  PARTITIONS_REASON: 'bootstrap_partitions',
+  CHECK_INTERVAL_MS: 60 * 60 * 1000,
+  RUNTIME_KIND: RUNTIME_KIND.NATIVE_JS,
 });
 const DEFAULT_CACHE_SYNC_TABLES = new Set(CACHE_HYDRATION_TABLES);
 
@@ -209,6 +231,15 @@ class BootstrapService extends EventEmitter {
     this.messageRouter = null;
     // Track message group replicas for deferred election start
     this.messageGroupReplicas = [];
+    // Track partition replicas for deferred election start
+    this.partitionReplicas = [];
+    // Unified lifecycle desired-state descriptors for bootstrap-created services.
+    this.bootstrapDesiredServiceDefinitions = new Map();
+    // Replica creation options keyed by canonical serviceId.
+    this.bootstrapReplicaOptionsByServiceId = new Map();
+    // Unified lifecycle owners for hard-cutover startup orchestration.
+    this.serviceLifecycleManager = null;
+    this.serviceReconciler = null;
     // Replica handler for CREATE_REPLICA/REMOVE_REPLICA execution
     this.replicaHandler = null;
 
@@ -472,6 +503,441 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
+   * Build a canonical unified descriptor for bootstrap-managed replicas.
+   * @param {string} serviceType
+   * @param {string} serviceId
+   * @return {Object}
+   * @private
+   */
+  createBootstrapServiceDescriptor(serviceType, serviceId) {
+    return {
+      [SERVICE_DESCRIPTOR_FIELD.SERVICE_ID]: serviceId,
+      [SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE]: serviceType,
+      [SERVICE_DESCRIPTOR_FIELD.TENANT_ID]: this.nodeId,
+      [SERVICE_DESCRIPTOR_FIELD.REPLICA_ID]: serviceId,
+      [SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT]: NUM.ONE,
+      [SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND]:
+        BOOTSTRAP_UNIFIED_RECONCILE.RUNTIME_KIND,
+      [SERVICE_DESCRIPTOR_FIELD.RUNTIME_REF]: null,
+      [SERVICE_DESCRIPTOR_FIELD.RUNTIME_CONFIG]: null,
+    };
+  }
+
+  /**
+   * Queue a bootstrap replica in desired state and option catalogs.
+   * @param {Object} descriptor
+   * @param {Object} options
+   * @return {void}
+   * @private
+   */
+  queueBootstrapServiceReplica(descriptor, options) {
+    const serviceId = descriptor[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
+    this.bootstrapDesiredServiceDefinitions.set(serviceId, descriptor);
+    this.bootstrapReplicaOptionsByServiceId.set(serviceId, options);
+  }
+
+  /**
+   * Resolve bootstrap replica options for one serviceId.
+   * @param {string} serviceId
+   * @param {string} serviceType
+   * @return {Object}
+   * @private
+   */
+  resolveBootstrapReplicaOptions(serviceId, serviceType) {
+    const options = this.bootstrapReplicaOptionsByServiceId.get(serviceId) || null;
+    assertCritical(
+      options,
+      `Missing bootstrap replica options for service ${serviceId}`,
+    );
+    assertCritical(
+      options.serviceType === serviceType,
+      `Bootstrap service type mismatch for ${serviceId}: expected ${serviceType}`,
+    );
+    return options;
+  }
+
+  /**
+   * Build local actual-state rows for bootstrap service reconciliation.
+   * @return {Object[]}
+   * @private
+   */
+  buildBootstrapActualStateRows() {
+    if (!this.serviceLifecycleManager) {
+      return [];
+    }
+
+    const rows = [];
+
+    for (const replicaId of this.messageGroupServices.keys()) {
+      const handle = this.createBootstrapServiceDescriptor(
+        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+        replicaId,
+      );
+      rows.push({
+        ...handle,
+        [SERVICE_DESCRIPTOR_FIELD.LIFECYCLE_STATE]:
+          this.serviceLifecycleManager.getReplicaState(handle),
+      });
+    }
+
+    for (const replicaId of this.partitionServices.keys()) {
+      const handle = this.createBootstrapServiceDescriptor(
+        UNIFIED_SERVICE_TYPE.PARTITION,
+        replicaId,
+      );
+      rows.push({
+        ...handle,
+        [SERVICE_DESCRIPTOR_FIELD.LIFECYCLE_STATE]:
+          this.serviceLifecycleManager.getReplicaState(handle),
+      });
+    }
+
+    return rows;
+  }
+
+  /**
+   * Initialize unified lifecycle owners for bootstrap orchestration.
+   * @return {Promise<void>}
+   * @private
+   */
+  async initializeUnifiedLifecycleOwners() {
+    if (this.serviceLifecycleManager && this.serviceReconciler) {
+      return;
+    }
+
+    this.serviceLifecycleManager = new ServiceLifecycleManager();
+    this.serviceLifecycleManager.registerAdapter(
+      new MessageGroupServiceAdapter({
+        createReplica: (context) => this.createBootstrapMessageGroupReplica(context),
+        startReplica: (replicaHandle, context) =>
+          this.startBootstrapMessageGroupReplica(replicaHandle, context),
+        stopReplica: (replicaHandle, context) =>
+          this.stopBootstrapMessageGroupReplica(replicaHandle, context),
+      }),
+    );
+    this.serviceLifecycleManager.registerAdapter(
+      new PartitionServiceAdapter({
+        createReplica: (context) => this.createBootstrapPartitionReplica(context),
+        startReplica: (replicaHandle, context) =>
+          this.startBootstrapPartitionReplica(replicaHandle, context),
+        stopReplica: (replicaHandle, context) =>
+          this.stopBootstrapPartitionReplica(replicaHandle, context),
+      }),
+    );
+    this.serviceLifecycleManager.registerAdapter(
+      new RuntimeServiceAdapter({
+        serviceRuntimeLifecycle: this.serviceRuntimeLifecycle,
+      }),
+    );
+
+    this.serviceReconciler = new ServiceReconciler({
+      lifecycleManager: this.serviceLifecycleManager,
+      desiredStateReader: async () =>
+        [...this.bootstrapDesiredServiceDefinitions.values()],
+      actualStateReader: async () => this.buildBootstrapActualStateRows(),
+      checkIntervalMs: BOOTSTRAP_UNIFIED_RECONCILE.CHECK_INTERVAL_MS,
+    });
+
+    await this.serviceReconciler.start();
+  }
+
+  /**
+   * Trigger one bootstrap reconciliation cycle.
+   * @param {string} reason
+   * @return {Promise<void>}
+   * @private
+   */
+  async triggerBootstrapReconciler(reason) {
+    assertCritical(
+      this.serviceReconciler,
+      'Bootstrap reconciler must be initialized before reconciliation',
+    );
+    await this.serviceReconciler.trigger(reason, {
+      nodeId: this.nodeId,
+      phase: this.phase,
+    });
+  }
+
+  /**
+   * Stop unified lifecycle owners and clear bootstrap desired-state catalogs.
+   * @return {void}
+   * @private
+   */
+  stopUnifiedLifecycleOwners() {
+    if (this.serviceReconciler) {
+      this.serviceReconciler.stop();
+      this.serviceReconciler = null;
+    }
+    this.serviceLifecycleManager = null;
+    this.bootstrapDesiredServiceDefinitions.clear();
+    this.bootstrapReplicaOptionsByServiceId.clear();
+  }
+
+  /**
+   * Unified lifecycle create hook for message-group replicas.
+   * @param {Object} context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async createBootstrapMessageGroupReplica(context) {
+    const definition = context?.definition || {};
+    const serviceId = definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
+    const options = this.resolveBootstrapReplicaOptions(
+      serviceId,
+      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+    );
+
+    if (this.messageGroupServices.has(options.replicaId)) {
+      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
+    }
+
+    if (options.createDelayMs > NUM.ZERO) {
+      await this.sleep(options.createDelayMs);
+    }
+
+    const messageGroup = new MessageGroupService({
+      groupId: options.groupId,
+      replicaId: options.replicaId,
+      nodeId: this.nodeId,
+      replicaIds: options.replicaIds,
+      peerAddresses: options.peerAddresses,
+      transport: this.messageRouter,
+      deferElection: Boolean(options.deferElection),
+    });
+
+    const unifiedAddress = `${this.nodeId}${ADDRESS.SEPARATOR}` +
+      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${options.replicaId}`;
+    this.messageRouter.register(unifiedAddress, (envelope) => {
+      return messageGroup.receiveMessage(envelope);
+    });
+
+    await messageGroup.initialize();
+
+    this.messageGroupServices.set(options.replicaId, messageGroup);
+    this.messageGroupReplicas.push(messageGroup);
+    this.servicesCreated++;
+
+    this.logger.debug(BootstrapLog.MESSAGE_GROUP_REPLICA_CREATED, {
+      groupId: options.groupId,
+      replicaId: options.replicaId,
+      replicaIndex: options.replicaIndex,
+      nodeId: this.nodeId,
+    });
+
+    return {status: SERVICE_LIFECYCLE_STATE.CREATED};
+  }
+
+  /**
+   * Unified lifecycle start hook for message-group replicas.
+   * @param {Object} replicaHandle
+   * @param {Object} _context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async startBootstrapMessageGroupReplica(replicaHandle, _context) {
+    const serviceId = replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
+      replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
+    const options = this.resolveBootstrapReplicaOptions(
+      serviceId,
+      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+    );
+    const messageGroup = this.messageGroupServices.get(options.replicaId);
+
+    assertCritical(
+      messageGroup,
+      `Message-group replica ${options.replicaId} missing at start`,
+    );
+
+    if (!options.deferElection) {
+      messageGroup.startElection();
+    }
+
+    return {
+      status: SERVICE_LIFECYCLE_STATE.RUNNING,
+      deferred: Boolean(options.deferElection),
+    };
+  }
+
+  /**
+   * Unified lifecycle stop hook for message-group replicas.
+   * @param {Object} replicaHandle
+   * @param {Object} _context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async stopBootstrapMessageGroupReplica(replicaHandle, _context) {
+    const serviceId = replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
+      replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
+    const options = this.resolveBootstrapReplicaOptions(
+      serviceId,
+      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+    );
+    const messageGroup = this.messageGroupServices.get(options.replicaId);
+    if (!messageGroup) {
+      return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
+    }
+
+    if (messageGroup.shutdown) {
+      await messageGroup.shutdown();
+    }
+
+    const unifiedAddress = `${this.nodeId}${ADDRESS.SEPARATOR}` +
+      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${options.replicaId}`;
+    if (this.messageRouter) {
+      this.messageRouter.unregister(unifiedAddress);
+    }
+
+    this.messageGroupServices.delete(options.replicaId);
+    this.messageGroupReplicas = this.messageGroupReplicas.filter(
+      (service) => service !== messageGroup,
+    );
+
+    return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
+  }
+
+  /**
+   * Unified lifecycle create hook for partition replicas.
+   * @param {Object} context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async createBootstrapPartitionReplica(context) {
+    const definition = context?.definition || {};
+    const serviceId = definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
+    const options = this.resolveBootstrapReplicaOptions(
+      serviceId,
+      UNIFIED_SERVICE_TYPE.PARTITION,
+    );
+
+    if (this.partitionServices.has(options.replicaId)) {
+      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
+    }
+
+    if (options.createDelayMs > NUM.ZERO) {
+      await this.sleep(options.createDelayMs);
+    }
+
+    const progress = this.startPartitionReplicaProgress({
+      tableName: options.tableName,
+      partitionId: options.partitionId,
+      replicaId: options.replicaId,
+      peerTotal: Math.max(NUM.ZERO, options.replicaIds.length - NUM.ONE),
+    });
+
+    try {
+      const partition = new PartitionService({
+        partitionId: options.partitionId,
+        tableId: options.tableName,
+        tableName: options.tableName,
+        schema: options.schema,
+        keyRange: {start: null, end: null},
+        replicaId: options.replicaId,
+        replicaIds: options.replicaIds,
+        peerAddresses: options.peerAddresses,
+        nodeId: this.nodeId,
+        transport: this.transport,
+        dbPath: options.dbPath,
+        messageGroupService: this.getLeaderMessageGroupService(),
+        messageRouter: this.messageRouter,
+        rebalanceCoordinator: this.rebalanceCoordinator,
+        deferElection: Boolean(options.deferElection),
+        suppressLifecycleLogs: true,
+        onInitializationStage: (stageEvent) =>
+          this.updatePartitionReplicaProgress(progress, stageEvent),
+      });
+
+      await partition.initialize();
+      this.partitionServices.set(options.replicaId, partition);
+      this.partitionReplicas.push(partition);
+      this.servicesCreated++;
+      this.finishPartitionReplicaProgress(progress);
+
+      this.logger.debug(BootstrapLog.PARTITION_REPLICA_CREATED, {
+        tableName: options.tableName,
+        partitionId: options.partitionId,
+        replicaId: options.replicaId,
+        replicaIndex: options.replicaIndex,
+        nodeId: this.nodeId,
+      });
+    } catch (error) {
+      this.failPartitionReplicaProgress(progress, error);
+      throw error;
+    }
+
+    return {status: SERVICE_LIFECYCLE_STATE.CREATED};
+  }
+
+  /**
+   * Unified lifecycle start hook for partition replicas.
+   * @param {Object} replicaHandle
+   * @param {Object} _context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async startBootstrapPartitionReplica(replicaHandle, _context) {
+    const serviceId = replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
+      replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
+    const options = this.resolveBootstrapReplicaOptions(
+      serviceId,
+      UNIFIED_SERVICE_TYPE.PARTITION,
+    );
+    const partition = this.partitionServices.get(options.replicaId);
+
+    assertCritical(
+      partition,
+      `Partition replica ${options.replicaId} missing at start`,
+    );
+
+    if (!options.deferElection) {
+      partition.startElection();
+    }
+
+    return {
+      status: SERVICE_LIFECYCLE_STATE.RUNNING,
+      deferred: Boolean(options.deferElection),
+    };
+  }
+
+  /**
+   * Unified lifecycle stop hook for partition replicas.
+   * @param {Object} replicaHandle
+   * @param {Object} _context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async stopBootstrapPartitionReplica(replicaHandle, _context) {
+    const serviceId = replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
+      replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
+    const options = this.resolveBootstrapReplicaOptions(
+      serviceId,
+      UNIFIED_SERVICE_TYPE.PARTITION,
+    );
+    const partition = this.partitionServices.get(options.replicaId);
+    if (!partition) {
+      return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
+    }
+
+    if (partition.shutdown) {
+      await partition.shutdown();
+    }
+
+    const unifiedAddress = partition.getUnifiedAddress ?
+      partition.getUnifiedAddress() :
+      `${this.nodeId}${ADDRESS.SEPARATOR}${ENTITY_TYPE.PARTITION}` +
+      `${ADDRESS.SEPARATOR}${options.replicaId}`;
+    if (this.messageRouter) {
+      this.messageRouter.unregister(unifiedAddress);
+    }
+
+    this.partitionServices.delete(options.replicaId);
+    this.partitionReplicas = this.partitionReplicas.filter(
+      (service) => service !== partition,
+    );
+
+    return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
+  }
+
+  /**
    * Phase 1: Infrastructure setup.
    * Initialize node service and transport.
    * Requirements: 2.1, 2.2, 2.3 - Use WebSocket-based transport for message groups.
@@ -536,6 +1002,11 @@ class BootstrapService extends EventEmitter {
       hasSelfConnection: wsPort ? this.messageRouter.hasSelfConnection() : false,
       owner: 'MessageRouterSetup',
     });
+
+    await this.initializeUnifiedLifecycleOwners();
+    await this.triggerBootstrapReconciler(
+      BOOTSTRAP_UNIFIED_RECONCILE.INFRA_READY_REASON,
+    );
   }
 
 
@@ -550,8 +1021,6 @@ class BootstrapService extends EventEmitter {
   async phaseMessageGroups() {
     const groupId = INITIAL_MESSAGE_GROUP_ID;
     const replicaIds = INITIAL_MESSAGE_GROUP_REPLICA_IDS;
-
-    // Stagger delay between replica creations to allow handlers to be registered
     const replicaStaggerDelayMs = this.config.replicaStaggerDelayMs;
 
     this.logger.debug(BootstrapLog.CREATING_MESSAGE_GROUP, {
@@ -560,63 +1029,37 @@ class BootstrapService extends EventEmitter {
       nodeId: this.nodeId,
     });
 
-    // Track replicas created for this group - elections start AFTER partitions are created
     this.messageGroupReplicas = [];
-
-    // Create all 3 replicas on seed node with staggered delays
-    // Use deferElection to prevent election storms - elections start after ALL services ready
     const peerAddresses = replicaIds.map((replicaId) =>
       `${this.nodeId}${ADDRESS.SEPARATOR}` +
       `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`,
     );
-    for (let i = NUM.ZERO; i < replicaIds.length; i++) {
-      const replicaId = replicaIds[i];
-
-      // Stagger replica creation to allow handlers to be registered
-      // First replica starts immediately, subsequent replicas wait
-      if (i > NUM.ZERO) {
-        await new Promise((resolve) => setTimeout(resolve, replicaStaggerDelayMs));
-      }
-
-      const messageGroup = new MessageGroupService({
-        groupId,
-        replicaId,
-        nodeId: this.nodeId,
-        replicaIds,
-        peerAddresses,
-        // Use MessageRouter directly for all communication
-        transport: this.messageRouter,
-        // Defer election until ALL services (message groups + partitions) are created
-        deferElection: true,
-      });
-
-      // Register with MessageRouter using unified address format
-      // Requirements: 1.1, 5.1 - Unified address format ${nodeId}/${entityType}/${entityId}
-      const unifiedAddress = `${this.nodeId}${ADDRESS.SEPARATOR}` +
-        `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`;
-      this.messageRouter.register(unifiedAddress, (envelope) => {
-        return messageGroup.receiveMessage(envelope);
-      });
-
-      await messageGroup.initialize();
-
-      this.messageGroupServices.set(replicaId, messageGroup);
-      this.messageGroupReplicas.push(messageGroup);
-      this.servicesCreated++;
-
-      this.logger.debug(BootstrapLog.MESSAGE_GROUP_REPLICA_CREATED, {
-        groupId,
-        replicaId,
-        replicaIndex: i,
-        nodeId: this.nodeId,
-      });
+    for (let index = NUM.ZERO; index < replicaIds.length; index++) {
+      const replicaId = replicaIds[index];
+      this.queueBootstrapServiceReplica(
+        this.createBootstrapServiceDescriptor(
+          UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+          replicaId,
+        ),
+        {
+          serviceType: UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+          groupId,
+          replicaId,
+          replicaIds,
+          replicaIndex: index,
+          peerAddresses,
+          deferElection: true,
+          createDelayMs: index > NUM.ZERO ?
+            index * replicaStaggerDelayMs :
+            NUM.ZERO,
+        },
+      );
     }
 
+    await this.triggerBootstrapReconciler(
+      BOOTSTRAP_UNIFIED_RECONCILE.MESSAGE_GROUPS_REASON,
+    );
     this.messageGroupsCreated++;
-
-    // NOTE: Elections are NOT started here - they will be started in phasePartitions()
-    // after ALL partitions are created. This prevents election storms where message
-    // group elections interfere with partition creation.
     this.logger.debug(BootstrapLog.MESSAGE_GROUPS_CREATED_DEFERRED, {
       groupId,
       replicaCount: this.messageGroupReplicas.length,
@@ -1184,16 +1627,9 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   async phasePartitions() {
-    // Stagger delay between replica creations to prevent election storms
-    // When all replicas start simultaneously, they all timeout and start elections
-    // at similar times, causing repeated failed elections
     const replicaStaggerDelayMs = this.config.replicaStaggerDelayMs;
+    this.partitionReplicas = [];
 
-    // Track ALL replicas across ALL partitions to start elections after all are ready
-    // This prevents election storms where elections from different partitions interfere
-    const allPartitionReplicas = [];
-
-    // Create partitions for each system table
     for (const schema of SYSTEM_TABLE_SCHEMAS) {
       const tableName = schema.tableName;
       const partitionId = INITIAL_PARTITION_IDS[tableName];
@@ -1206,22 +1642,12 @@ class BootstrapService extends EventEmitter {
         nodeId: this.nodeId,
       });
 
-      // Create all 3 replicas on seed node with staggered delays
-      // Use deferElection to prevent election storms - elections start after ALL ready
       const peerAddresses = replicaIds.map((replicaId) =>
         `${this.nodeId}${ADDRESS.SEPARATOR}` +
         `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}${replicaId}`,
       );
-      for (let i = NUM.ZERO; i < replicaIds.length; i++) {
-        const replicaId = replicaIds[i];
-
-        // Stagger replica creation to allow handlers to be registered
-        // First replica starts immediately, subsequent replicas wait
-        if (i > NUM.ZERO) {
-          await new Promise((resolve) => setTimeout(resolve, replicaStaggerDelayMs));
-        }
-
-        // Generate database path using DataDirectoryManager
+      for (let index = NUM.ZERO; index < replicaIds.length; index++) {
+        const replicaId = replicaIds[index];
         let dbPath = DEFAULT_BOOTSTRAP_CONFIG.partitionDbPath;
         if (this.dataDirectoryManager && this.dataDirectoryManager.isInitialized()) {
           dbPath = this.dataDirectoryManager.getPartitionDbPath(partitionId, replicaId);
@@ -1229,68 +1655,35 @@ class BootstrapService extends EventEmitter {
           dbPath = this.config.partitionDbPath;
         }
 
-        const progress = this.startPartitionReplicaProgress({
-          tableName,
-          partitionId,
-          replicaId,
-          peerTotal: Math.max(NUM.ZERO, replicaIds.length - NUM.ONE),
-        });
-
-        try {
-          const partition = new PartitionService({
-            partitionId,
-            tableId: tableName,
+        this.queueBootstrapServiceReplica(
+          this.createBootstrapServiceDescriptor(
+            UNIFIED_SERVICE_TYPE.PARTITION,
+            replicaId,
+          ),
+          {
+            serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
             tableName,
             schema,
-            keyRange: {start: null, end: null}, // Full key space
-            replicaId,
-            replicaIds,
-            peerAddresses,
-            nodeId: this.nodeId,
-            transport: this.transport,
-            dbPath,
-            // Pass message group service for CREATE_REPLICA/REMOVE_REPLICA messages
-            messageGroupService: this.getLeaderMessageGroupService(),
-            // Pass MessageRouter for cross-node lifecycle messages
-            messageRouter: this.messageRouter,
-            rebalanceCoordinator: this.rebalanceCoordinator,
-            // Defer election until ALL partitions are created to prevent election storms
-            deferElection: true,
-            // Collapse per-replica startup chatter into one staged progress line.
-            suppressLifecycleLogs: true,
-            onInitializationStage: (stageEvent) =>
-              this.updatePartitionReplicaProgress(progress, stageEvent),
-          });
-
-          await partition.initialize();
-
-          this.partitionServices.set(replicaId, partition);
-          allPartitionReplicas.push(partition);
-          this.servicesCreated++;
-          this.finishPartitionReplicaProgress(progress);
-
-          this.logger.debug(BootstrapLog.PARTITION_REPLICA_CREATED, {
-            tableName,
             partitionId,
             replicaId,
-            replicaIndex: i,
-            nodeId: this.nodeId,
-          });
-        } catch (error) {
-          this.failPartitionReplicaProgress(progress, error);
-          throw error;
-        }
+            replicaIds,
+            replicaIndex: index,
+            peerAddresses,
+            dbPath,
+            deferElection: true,
+            createDelayMs: index > NUM.ZERO ?
+              index * replicaStaggerDelayMs :
+              NUM.ZERO,
+          },
+        );
       }
-
-      this.partitionsCreated++;
     }
 
-    // ALL partitions are now created and registered
-    // Now start elections on ALL Raft groups (message groups + partitions)
-    // Starting them together prevents election storms where one group's elections
-    // interfere with another group's elections during creation
+    await this.triggerBootstrapReconciler(
+      BOOTSTRAP_UNIFIED_RECONCILE.PARTITIONS_REASON,
+    );
+    this.partitionsCreated = SYSTEM_TABLE_SCHEMAS.length;
 
-    // First, start message group elections (they were created in phase 2)
     if (this.messageGroupReplicas && this.messageGroupReplicas.length > NUM.ZERO) {
       this.logger.info(BootstrapLog.STARTING_MG_ELECTIONS, {
         totalReplicas: this.messageGroupReplicas.length,
@@ -1314,19 +1707,19 @@ class BootstrapService extends EventEmitter {
       });
     }
 
-    // Now start partition elections
     this.logger.info(BootstrapLog.STARTING_PARTITION_ELECTIONS, {
-      totalReplicas: allPartitionReplicas.length,
+      totalReplicas: this.partitionReplicas.length,
       partitionsCreated: this.partitionsCreated,
       nodeId: this.nodeId,
     });
 
-    for (const partition of allPartitionReplicas) {
+    for (const partition of this.partitionReplicas) {
       partition.startElection();
     }
 
-    // Initialize AssignmentEpochManager with initial epoch containing partition assignments
-    // Requirements: 3.4, 4.1 - Fetch/create epoch during bootstrap
+    if (this.serviceReconciler) {
+      this.serviceReconciler.stop();
+    }
     await this.initializeEpochManager();
 
     this.logger.debug(BootstrapLog.PARTITIONS_CREATED, {
@@ -1633,7 +2026,7 @@ class BootstrapService extends EventEmitter {
     }
 
     if (wasReady) {
-      this.logger.info(
+      this.logger.debug(
         'Skipping node-ready rebalance trigger: no not-ready to ready transition',
         {
           nodeId,
@@ -1761,6 +2154,9 @@ class BootstrapService extends EventEmitter {
 
     // Register all services
     await this.registerServices(timestamp);
+
+    // Register built-in runtime service definitions.
+    await this.registerMetaServiceDefinitions();
 
     // Register system tables metadata
     await this.registerSystemTables(timestamp);
@@ -1913,6 +2309,33 @@ class BootstrapService extends EventEmitter {
     this.logger.debug(BootstrapLog.SERVICES_REGISTERED, {
       messageGroupServices: this.messageGroupServices.size,
       partitionServices: this.partitionServices.size,
+    });
+  }
+
+  /**
+   * Register built-in runtime service definitions.
+   * @return {Promise<void>}
+   * @private
+   */
+  async registerMetaServiceDefinitions() {
+    const systemTableWriter = this.ensureSystemTableWriter();
+    const metaServices = await registerBuiltInMetaServiceDefinitions({
+      upsertRow: async (tableName, row) => {
+        await systemTableWriter.upsertSystemTableRow(tableName, row);
+      },
+    });
+    const metaEndpoints = await registerBuiltInMetaServiceEndpoints({
+      upsertRow: async (tableName, row) => {
+        await systemTableWriter.upsertSystemTableRow(tableName, row);
+      },
+      nodeId: this.nodeId,
+      nodeAddress: this.nodeAddress,
+      wsPort: this.wsPort,
+    });
+
+    this.logger.debug(BootstrapLog.SERVICES_REGISTERED, {
+      metaServices,
+      metaEndpoints,
     });
   }
 
@@ -3126,6 +3549,7 @@ class BootstrapService extends EventEmitter {
         });
 
       await this.quiesceRebalancers();
+      this.stopUnifiedLifecycleOwners();
 
       // Disable the system table writer to prevent further writes
       if (this.systemTableWriter && this.systemTableWriter.disable) {
@@ -3253,6 +3677,7 @@ class BootstrapService extends EventEmitter {
         }
       }
       this.partitionServices.clear();
+      this.partitionReplicas = [];
 
       this.logger.info(
         BootstrapLog.FAILED_BOOTSTRAP_CLEANUP_PARTITIONS_DONE, {
@@ -3339,6 +3764,8 @@ class BootstrapService extends EventEmitter {
         BootstrapLog.FAILED_BOOTSTRAP_CLEANUP_INFRASTRUCTURE, {
           nodeId: this.nodeId,
         });
+
+      this.stopUnifiedLifecycleOwners();
 
       if (this.messageRouter && this.messageRouter.shutdown) {
         await this.messageRouter.shutdown();
@@ -3454,6 +3881,7 @@ class BootstrapService extends EventEmitter {
     });
 
     this.clearNodeReadyRebalanceState();
+    this.stopUnifiedLifecycleOwners();
     await this.quiesceRebalancers();
     LatencyTopologySetup.stop(this.latencyTopology);
     this.latencyTopology = null;
@@ -3532,6 +3960,7 @@ class BootstrapService extends EventEmitter {
       }
     }
     this.partitionServices.clear();
+    this.partitionReplicas = [];
 
     // Shutdown message group services
     for (const [replicaId, messageGroup] of this.messageGroupServices) {
@@ -3556,6 +3985,7 @@ class BootstrapService extends EventEmitter {
       }
     }
     this.messageGroupServices.clear();
+    this.messageGroupReplicas = [];
 
     // Shutdown message router
     if (this.messageRouter && this.messageRouter.shutdown) {

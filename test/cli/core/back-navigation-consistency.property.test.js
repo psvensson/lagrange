@@ -18,6 +18,7 @@ import {RemoteCache} from '../../../src/cli/core/remote-cache.js';
 const VALID_VIEWS = [
   'nodes',
   'services',
+  'replicas',
   'tables',
   'partitions',
   'message_groups',

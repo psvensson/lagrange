@@ -56,7 +56,7 @@ export class HelpOverlay {
         name: 'Views',
         shortcuts: [
           {key: '1', description: 'Nodes view'},
-          {key: '2', description: 'Services view'},
+          {key: '2', description: 'Replicas view'},
           {key: '3', description: 'Tables view'},
           {key: '4', description: 'Partitions view'},
           {key: '5', description: 'Message Groups view'},
@@ -64,7 +64,7 @@ export class HelpOverlay {
           {key: '7', description: 'Logs view'},
           {key: '8', description: 'Config view'},
           {key: '9', description: 'Contexts view'},
-          {key: '0', description: 'Operations view'},
+          {key: '0', description: 'Services view'},
         ],
       },
       {
@@ -104,10 +104,17 @@ export class HelpOverlay {
       },
       services: {
         title: 'Services View',
-        description: 'Displays services running on nodes.',
+        description: 'Displays logical service definitions and health.',
         shortcuts: [
-          {key: 'Enter', description: 'View service details'},
-          {key: 't', description: 'Filter by service type'},
+          {key: 'Enter', description: 'View replicas for selected service'},
+        ],
+      },
+      replicas: {
+        title: 'Replicas View',
+        description: 'Displays concrete replicas running on nodes.',
+        shortcuts: [
+          {key: 'Enter', description: 'View replica details'},
+          {key: 't', description: 'Filter by replica type'},
         ],
       },
       tables: {
