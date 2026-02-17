@@ -88,6 +88,13 @@ const CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES = new Set([
   SystemTableName.NODES,
   SystemTableName.NODE_ENDPOINTS,
 ]);
+const WRITE_PHASE_FIELD_ENTRY_BUILD_MS = 'entryBuildMs';
+const WRITE_PHASE_FIELD_LOG_APPEND_MS = 'logAppendMs';
+const WRITE_PHASE_FIELD_SQLITE_RUN_MS = 'sqliteRunMs';
+const WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS = 'raftCommandDispatchMs';
+const WRITE_PHASE_FIELD_FORWARD_DELIVER_MS = 'forwardDeliverMs';
+const WRITE_PHASE_FIELD_APPLY_WRITE_MS = 'applyWriteMs';
+const WRITE_PHASE_FIELD_TOTAL_MS = 'totalMs';
 
 function shouldEmitCdcRowFetchInfoLog(tableName) {
   return !CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES.has(tableName);
@@ -2039,6 +2046,87 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Resolve write-correlation identifiers for metrics payloads.
+   * @param {Object} entry - Write entry.
+   * @return {Object}
+   * @private
+   */
+  resolveWriteMetricCorrelation(entry) {
+    const requestId = this.normalizeMetricIdentifier(
+      entry?.requestId || entry?.request_id,
+    );
+    const correlationId = this.normalizeMetricIdentifier(
+      entry?.correlationId || entry?.correlation_id,
+    );
+    const operationId = this.normalizeMetricIdentifier(
+      entry?.operationId || entry?.operation_id || entry?.id,
+    ) ||
+      requestId ||
+      correlationId ||
+      this.partitionId + ':' + this.replicaId + ':' + String(entry?.proposedAt || Date.now());
+
+    return {
+      operationId,
+      requestId,
+      correlationId: correlationId || requestId || operationId,
+    };
+  }
+
+  /**
+   * Normalize identifier-like values for metric payload fields.
+   * @param {*} value - Candidate value.
+   * @return {string|null}
+   * @private
+   */
+  normalizeMetricIdentifier(value) {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    const normalized = String(value).trim();
+    return normalized.length > NUM.ZERO ? normalized : null;
+  }
+
+  /**
+   * Record a write phase timing duration.
+   * @param {Object|null} phaseTimings - Target phase timing object.
+   * @param {string} field - Phase field name.
+   * @param {number} startedAtMs - Phase start timestamp.
+   * @private
+   */
+  recordWritePhaseDuration(phaseTimings, field, startedAtMs) {
+    if (!phaseTimings || !Number.isFinite(startedAtMs)) {
+      return;
+    }
+    const durationMs = Math.max(NUM.ZERO, Date.now() - startedAtMs);
+    phaseTimings[field] = durationMs;
+  }
+
+  /**
+   * Merge baseline and measured write phase timings for metric payloads.
+   * @param {Object} phaseTimings - Measured phase timings.
+   * @param {number} totalDurationMs - End-to-end write duration.
+   * @param {number} entryBuildMs - Entry-construction duration.
+   * @return {Object}
+   * @private
+   */
+  buildWritePhaseTimingPayload(phaseTimings, totalDurationMs, entryBuildMs) {
+    return {
+      [WRITE_PHASE_FIELD_ENTRY_BUILD_MS]: entryBuildMs,
+      [WRITE_PHASE_FIELD_FORWARD_DELIVER_MS]:
+        phaseTimings?.[WRITE_PHASE_FIELD_FORWARD_DELIVER_MS] || NUM.ZERO,
+      [WRITE_PHASE_FIELD_LOG_APPEND_MS]:
+        phaseTimings?.[WRITE_PHASE_FIELD_LOG_APPEND_MS] || NUM.ZERO,
+      [WRITE_PHASE_FIELD_SQLITE_RUN_MS]:
+        phaseTimings?.[WRITE_PHASE_FIELD_SQLITE_RUN_MS] || NUM.ZERO,
+      [WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS]:
+        phaseTimings?.[WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS] || NUM.ZERO,
+      [WRITE_PHASE_FIELD_APPLY_WRITE_MS]:
+        phaseTimings?.[WRITE_PHASE_FIELD_APPLY_WRITE_MS] || NUM.ZERO,
+      [WRITE_PHASE_FIELD_TOTAL_MS]: Math.max(NUM.ZERO, totalDurationMs),
+    };
+  }
+
+  /**
    * Propose a write operation through Raft.
    * @param {Object} operation - Write operation.
    * @return {Promise<Object>} Operation result.
@@ -2047,6 +2135,7 @@ class PartitionService extends EventEmitter {
   async proposeWrite(operation) {
     const proposeStartMs = Date.now();
     const timestamp = this.hlcClock.now();
+    const entryBuildStartMs = Date.now();
 
     const entry = {
       ...operation,
@@ -2054,12 +2143,15 @@ class PartitionService extends EventEmitter {
       proposedBy: this.replicaId,
       proposedAt: Date.now(),
     };
+    const entryBuildMs = Math.max(NUM.ZERO, Date.now() - entryBuildStartMs);
+    const correlation = this.resolveWriteMetricCorrelation(entry);
 
     const isLeader = this.role === RaftRole.LEADER;
 
     // If we're the leader, append and replicate
     if (isLeader) {
-      const result = await this.applyWrite(entry);
+      const phaseTimings = {};
+      const result = await this.applyWrite(entry, phaseTimings);
       const durationMs = Date.now() - proposeStartMs;
       try {
         this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
@@ -2067,6 +2159,16 @@ class PartitionService extends EventEmitter {
           durationMs,
           isLeader: true,
           forwarded: false,
+          operationId: correlation.operationId,
+          requestId: correlation.requestId,
+          correlationId: correlation.correlationId,
+          acknowledged: result?.success === true,
+          error: result?.success === true ? null : (result?.error || null),
+          writePhaseTimingMs: this.buildWritePhaseTimingPayload(
+            phaseTimings,
+            durationMs,
+            entryBuildMs,
+          ),
         });
       } catch (_metricsErr) {
         // Metrics logging must not propagate to callers
@@ -2076,6 +2178,8 @@ class PartitionService extends EventEmitter {
 
     // If we're not the leader, forward to leader
     if (this.leaderId && this.transport) {
+      const phaseTimings = {};
+      const forwardDeliverStartMs = Date.now();
       try {
         const leaderAddress = this.resolveLeaderAddress();
         if (!leaderAddress) {
@@ -2084,7 +2188,15 @@ class PartitionService extends EventEmitter {
         const result = await this.transport.deliver(leaderAddress, {
           type: PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE,
           operation: entry,
+          operationId: correlation.operationId,
+          requestId: correlation.requestId,
+          correlationId: correlation.correlationId,
         });
+        this.recordWritePhaseDuration(
+          phaseTimings,
+          WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
+          forwardDeliverStartMs,
+        );
         const durationMs = Date.now() - proposeStartMs;
         try {
           this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
@@ -2092,12 +2204,27 @@ class PartitionService extends EventEmitter {
             durationMs,
             isLeader: false,
             forwarded: true,
+            operationId: correlation.operationId,
+            requestId: correlation.requestId,
+            correlationId: correlation.correlationId,
+            acknowledged: result?.acknowledged === true,
+            error: result?.acknowledged === true ? null : (result?.error || null),
+            writePhaseTimingMs: this.buildWritePhaseTimingPayload(
+              phaseTimings,
+              durationMs,
+              entryBuildMs,
+            ),
           });
         } catch (_metricsErr) {
           // Metrics logging must not propagate to callers
         }
         return result;
       } catch (error) {
+        this.recordWritePhaseDuration(
+          phaseTimings,
+          WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
+          forwardDeliverStartMs,
+        );
         const durationMs = Date.now() - proposeStartMs;
         try {
           this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
@@ -2105,6 +2232,16 @@ class PartitionService extends EventEmitter {
             durationMs,
             isLeader: false,
             forwarded: true,
+            operationId: correlation.operationId,
+            requestId: correlation.requestId,
+            correlationId: correlation.correlationId,
+            acknowledged: false,
+            error: error?.message || null,
+            writePhaseTimingMs: this.buildWritePhaseTimingPayload(
+              phaseTimings,
+              durationMs,
+              entryBuildMs,
+            ),
           });
         } catch (_metricsErr) {
           // Metrics logging must not propagate to callers
@@ -2123,10 +2260,12 @@ class PartitionService extends EventEmitter {
   /**
    * Apply a write operation (leader only).
    * @param {Object} entry - Write entry.
+   * @param {Object|null} phaseTimings - Optional phase timing collector.
    * @return {Promise<Object>} Operation result.
    * @private
    */
-  async applyWrite(entry) {
+  async applyWrite(entry, phaseTimings = null) {
+    const applyStartMs = Date.now();
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLY_WRITE_CALLED, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
@@ -2137,13 +2276,25 @@ class PartitionService extends EventEmitter {
     });
 
     // Append to Raft log
+    const logAppendStartMs = Date.now();
     const logEntry = this.storage.appendEntry(entry);
+    this.recordWritePhaseDuration(
+      phaseTimings,
+      WRITE_PHASE_FIELD_LOG_APPEND_MS,
+      logAppendStartMs,
+    );
 
     // Execute the SQL
     let result;
+    const sqliteRunStartMs = Date.now();
     try {
       const stmt = this.db.prepare(entry.sql);
       const info = stmt.run(...(entry.params || []));
+      this.recordWritePhaseDuration(
+        phaseTimings,
+        WRITE_PHASE_FIELD_SQLITE_RUN_MS,
+        sqliteRunStartMs,
+      );
 
       result = {
         success: true,
@@ -2164,6 +2315,11 @@ class PartitionService extends EventEmitter {
       // Schedule size update
       this.scheduleSizeUpdate();
     } catch (error) {
+      this.recordWritePhaseDuration(
+        phaseTimings,
+        WRITE_PHASE_FIELD_SQLITE_RUN_MS,
+        sqliteRunStartMs,
+      );
       result = {
         success: false,
         error: error.message,
@@ -2178,6 +2334,7 @@ class PartitionService extends EventEmitter {
     // Requirements: 11.9
     const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
     if (isLiferaftLeader) {
+      const raftCommandDispatchStartMs = Date.now();
       const entryKey = this.getCommittedEntryKey(entry);
       this.trackAppliedEntryKey(entryKey);
       this.raft.command(entry, (err) => {
@@ -2188,7 +2345,17 @@ class PartitionService extends EventEmitter {
           });
         }
       });
+      this.recordWritePhaseDuration(
+        phaseTimings,
+        WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
+        raftCommandDispatchStartMs,
+      );
     }
+    this.recordWritePhaseDuration(
+      phaseTimings,
+      WRITE_PHASE_FIELD_APPLY_WRITE_MS,
+      applyStartMs,
+    );
 
     return result;
   }

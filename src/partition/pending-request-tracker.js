@@ -13,6 +13,17 @@ import {
   PENDING_REQUEST_LOG_MSG,
 } from './partition-constants.js';
 
+const WAIT_TIME_BUCKETS = Object.freeze([
+  {upperBoundMs: 10, label: 'le_10ms'},
+  {upperBoundMs: 50, label: 'le_50ms'},
+  {upperBoundMs: 100, label: 'le_100ms'},
+  {upperBoundMs: 250, label: 'le_250ms'},
+  {upperBoundMs: 500, label: 'le_500ms'},
+  {upperBoundMs: 1000, label: 'le_1000ms'},
+  {upperBoundMs: 5000, label: 'le_5000ms'},
+]);
+const WAIT_TIME_BUCKET_OVERFLOW = 'gt_5000ms';
+
 /**
  * PendingRequestTracker manages pending lifecycle requests using a Map.
  * Each request is tracked with resolve/reject callbacks and automatic timeout.
@@ -58,7 +69,63 @@ class PendingRequestTracker {
       staleCleanedTotal: NUM.ZERO,
       backpressureRejectTotal: NUM.ZERO,
       maxPendingObserved: NUM.ZERO,
+      waitTimeSampleCount: NUM.ZERO,
+      waitTimeTotalMs: NUM.ZERO,
+      waitTimeMaxMs: NUM.ZERO,
+      waitTimeHistogram: this.createWaitTimeHistogram(),
     };
+  }
+
+  /**
+   * Create a fresh wait-time histogram bucket map.
+   * @return {Object}
+   * @private
+   */
+  createWaitTimeHistogram() {
+    const histogram = {};
+    for (const bucket of WAIT_TIME_BUCKETS) {
+      histogram[bucket.label] = NUM.ZERO;
+    }
+    histogram[WAIT_TIME_BUCKET_OVERFLOW] = NUM.ZERO;
+    return histogram;
+  }
+
+  /**
+   * Resolve histogram bucket label for a wait duration.
+   * @param {number} durationMs
+   * @return {string}
+   * @private
+   */
+  resolveWaitTimeBucket(durationMs) {
+    const normalized = Number.isFinite(durationMs) ?
+      Math.max(NUM.ZERO, Math.floor(durationMs)) :
+      NUM.ZERO;
+    for (const bucket of WAIT_TIME_BUCKETS) {
+      if (normalized <= bucket.upperBoundMs) {
+        return bucket.label;
+      }
+    }
+    return WAIT_TIME_BUCKET_OVERFLOW;
+  }
+
+  /**
+   * Record a wait-time observation in aggregate stats.
+   * @param {number} durationMs
+   * @private
+   */
+  recordWaitTime(durationMs) {
+    const normalized = Number.isFinite(durationMs) ?
+      Math.max(NUM.ZERO, Math.floor(durationMs)) :
+      NUM.ZERO;
+    this.stats.waitTimeSampleCount += NUM.ONE;
+    this.stats.waitTimeTotalMs += normalized;
+    this.stats.waitTimeMaxMs = Math.max(
+      this.stats.waitTimeMaxMs,
+      normalized,
+    );
+    const bucket = this.resolveWaitTimeBucket(normalized);
+    this.stats.waitTimeHistogram[bucket] =
+      (this.stats.waitTimeHistogram[bucket] || NUM.ZERO) + NUM.ONE;
   }
 
   /**
@@ -94,9 +161,11 @@ class PendingRequestTracker {
 
     return new Promise((resolve, reject) => {
       const timeoutMs = metadata.timeoutMs || this.defaultTimeoutMs;
+      const startedAt = Date.now();
 
       const timeoutId = setTimeout(() => {
         this.pendingRequests.delete(requestId);
+        this.recordWaitTime(Date.now() - startedAt);
         this.stats.timedOutTotal += NUM.ONE;
         this.stats.rejectedTotal += NUM.ONE;
         this.logger.warn(PENDING_REQUEST_LOG_MSG.REQUEST_TIMED_OUT, {
@@ -112,7 +181,7 @@ class PendingRequestTracker {
         reject,
         timeoutId,
         metadata,
-        startedAt: Date.now(),
+        startedAt,
       });
       this.stats.trackedTotal += NUM.ONE;
       this.updateMaxPendingObserved();
@@ -137,11 +206,13 @@ class PendingRequestTracker {
       clearTimeout(pending.timeoutId);
       this.pendingRequests.delete(requestId);
       pending.resolve(ack);
+      const durationMs = Date.now() - pending.startedAt;
+      this.recordWaitTime(durationMs);
       this.stats.resolvedTotal += NUM.ONE;
 
       this.logger.debug(PENDING_REQUEST_LOG_MSG.REQUEST_RESOLVED, {
         requestId,
-        durationMs: Date.now() - pending.startedAt,
+        durationMs,
       });
 
       return true;
@@ -165,6 +236,7 @@ class PendingRequestTracker {
 
       const errorObj = error instanceof Error ? error : new Error(error);
       pending.reject(errorObj);
+      this.recordWaitTime(Date.now() - pending.startedAt);
       this.stats.rejectedTotal += NUM.ONE;
 
       this.logger.debug(PENDING_REQUEST_LOG_MSG.REQUEST_REJECTED, {
@@ -205,6 +277,10 @@ class PendingRequestTracker {
     const saturationPercent = this.maxPendingRequests > NUM.ZERO ?
       Math.round((pendingCount / this.maxPendingRequests) * NUM.HUNDRED) :
       NUM.ZERO;
+    const waitTimeSampleCount = this.stats.waitTimeSampleCount;
+    const waitTimeAvgMs = waitTimeSampleCount > NUM.ZERO ?
+      Math.round(this.stats.waitTimeTotalMs / waitTimeSampleCount) :
+      NUM.ZERO;
     return {
       pendingCount,
       maxPendingRequests: this.maxPendingRequests,
@@ -220,6 +296,12 @@ class PendingRequestTracker {
       staleCleanedTotal: this.stats.staleCleanedTotal,
       backpressureRejectTotal: this.stats.backpressureRejectTotal,
       maxPendingObserved: this.stats.maxPendingObserved,
+      waitTime: {
+        sampleCount: waitTimeSampleCount,
+        avgMs: waitTimeAvgMs,
+        maxMs: this.stats.waitTimeMaxMs,
+        histogram: {...this.stats.waitTimeHistogram},
+      },
     };
   }
 
@@ -250,6 +332,7 @@ class PendingRequestTracker {
 
     for (const [_requestId, pending] of this.pendingRequests) {
       clearTimeout(pending.timeoutId);
+      this.recordWaitTime(Date.now() - pending.startedAt);
       pending.reject(new Error(PENDING_REQUEST_LOG_MSG.TRACKER_SHUTDOWN));
     }
     this.stats.rejectedTotal += count;
@@ -312,6 +395,7 @@ class PendingRequestTracker {
       if (elapsed > timeoutMs + PENDING_REQUEST_DEFAULT.STALE_REQUEST_BUFFER_MS) {
         clearTimeout(pending.timeoutId);
         this.pendingRequests.delete(requestId);
+        this.recordWaitTime(elapsed);
         pending.reject(new Error(PENDING_REQUEST_ERROR_MSG.staleRequest(elapsed)));
         cleanedCount += NUM.ONE;
         this.stats.staleCleanedTotal += NUM.ONE;

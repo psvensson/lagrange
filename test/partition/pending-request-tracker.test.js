@@ -40,6 +40,9 @@ test('PendingRequestTracker', async (t) => {
       t.equal(stats.pendingCount, 0, 'starts with zero pending');
       t.equal(stats.trackedTotal, 0, 'starts with zero tracked');
       t.equal(stats.backpressureRejectTotal, 0, 'starts with zero backpressure');
+      t.equal(stats.waitTime.sampleCount, 0, 'starts with zero wait samples');
+      t.equal(stats.waitTime.avgMs, 0, 'starts with zero wait average');
+      t.equal(stats.waitTime.maxMs, 0, 'starts with zero wait max');
     } finally {
       tracker.clear();
     }
@@ -73,6 +76,11 @@ test('PendingRequestTracker', async (t) => {
     const settledStats = tracker.getStats();
     t.equal(settledStats.pendingCount, 0, 'pending request cleared after resolve');
     t.equal(settledStats.resolvedTotal, 1, 'resolved count increments');
+    t.equal(settledStats.waitTime.sampleCount, 1, 'wait sample recorded on resolve');
+    t.ok(
+      settledStats.waitTime.maxMs >= 0,
+      'wait max is non-negative after resolve',
+    );
     tracker.clear();
   });
 
@@ -103,6 +111,14 @@ test('PendingRequestTracker', async (t) => {
       t.equal(stats.timedOutTotal, 1, 'timeout counter increments');
       t.equal(stats.rejectedTotal, 1, 'rejection counter increments');
       t.equal(stats.trackedTotal, 1, 'tracked counter increments');
+      t.equal(
+        stats.waitTime.sampleCount, 1,
+        'wait sample recorded on timeout rejection',
+      );
+      t.ok(
+        stats.waitTime.avgMs >= 0,
+        'wait average is non-negative after timeout',
+      );
     } finally {
       tracker.clear();
     }

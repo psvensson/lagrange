@@ -38,6 +38,17 @@ const RouterMessageType = ROUTER_MESSAGE_TYPE;
 const IPV6_ANY_HOST = '::';
 const IPV6_HOST_PREFIX = '[';
 const IPV6_HOST_SUFFIX = ']';
+const QUEUE_WAIT_BUCKETS = Object.freeze([
+  {upperBoundMs: 1, label: 'le_1ms'},
+  {upperBoundMs: 5, label: 'le_5ms'},
+  {upperBoundMs: 10, label: 'le_10ms'},
+  {upperBoundMs: 25, label: 'le_25ms'},
+  {upperBoundMs: 50, label: 'le_50ms'},
+  {upperBoundMs: 100, label: 'le_100ms'},
+  {upperBoundMs: 500, label: 'le_500ms'},
+  {upperBoundMs: 1000, label: 'le_1000ms'},
+]);
+const QUEUE_WAIT_BUCKET_OVERFLOW = 'gt_1000ms';
 
 // In-process transport for test environments. This is only enabled when explicitly
 // requested via options.inProcess to avoid hidden behavior in production.
@@ -98,6 +109,111 @@ function createInProcWebSocketPair() {
   a._open();
   b._open();
   return {a, b};
+}
+
+function normalizeIdentifier(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const normalized = String(value).trim();
+  return normalized.length > TRANSPORT_NUM.ZERO ? normalized : null;
+}
+
+function createQueueWaitHistogram() {
+  const histogram = {};
+  for (const bucket of QUEUE_WAIT_BUCKETS) {
+    histogram[bucket.label] = TRANSPORT_NUM.ZERO;
+  }
+  histogram[QUEUE_WAIT_BUCKET_OVERFLOW] = TRANSPORT_NUM.ZERO;
+  return histogram;
+}
+
+function resolveQueueWaitBucket(durationMs) {
+  const normalized = Number.isFinite(durationMs) ?
+    Math.max(TRANSPORT_NUM.ZERO, Math.floor(durationMs)) :
+    TRANSPORT_NUM.ZERO;
+  for (const bucket of QUEUE_WAIT_BUCKETS) {
+    if (normalized <= bucket.upperBoundMs) {
+      return bucket.label;
+    }
+  }
+  return QUEUE_WAIT_BUCKET_OVERFLOW;
+}
+
+function recordQueueWaitDuration(queue, durationMs) {
+  if (!queue) {
+    return;
+  }
+  const normalized = Number.isFinite(durationMs) ?
+    Math.max(TRANSPORT_NUM.ZERO, Math.floor(durationMs)) :
+    TRANSPORT_NUM.ZERO;
+  queue.queueWaitSampleCount =
+    (queue.queueWaitSampleCount || TRANSPORT_NUM.ZERO) +
+    TRANSPORT_NUM.ONE;
+  queue.queueWaitTotalMs =
+    (queue.queueWaitTotalMs || TRANSPORT_NUM.ZERO) +
+    normalized;
+  queue.queueWaitMaxMs = Math.max(
+    queue.queueWaitMaxMs || TRANSPORT_NUM.ZERO,
+    normalized,
+  );
+  if (!queue.queueWaitHistogram) {
+    queue.queueWaitHistogram = createQueueWaitHistogram();
+  }
+  const bucket = resolveQueueWaitBucket(normalized);
+  queue.queueWaitHistogram[bucket] =
+    (queue.queueWaitHistogram[bucket] || TRANSPORT_NUM.ZERO) +
+    TRANSPORT_NUM.ONE;
+}
+
+function buildQueueWaitSummary(queue) {
+  const sampleCount = queue?.queueWaitSampleCount || TRANSPORT_NUM.ZERO;
+  const totalMs = queue?.queueWaitTotalMs || TRANSPORT_NUM.ZERO;
+  return {
+    sampleCount,
+    avgMs: sampleCount > TRANSPORT_NUM.ZERO ?
+      Math.round(totalMs / sampleCount) :
+      TRANSPORT_NUM.ZERO,
+    maxMs: queue?.queueWaitMaxMs || TRANSPORT_NUM.ZERO,
+    histogram: {...(queue?.queueWaitHistogram || createQueueWaitHistogram())},
+  };
+}
+
+function resolveRequestIdFromMessage(message) {
+  return normalizeIdentifier(
+    message?.requestId ||
+      message?.request_id ||
+      message?.payload?.requestId ||
+      message?.payload?.request_id,
+  );
+}
+
+function resolveOperationIdFromMessage(message) {
+  return normalizeIdentifier(
+    message?.operationId ||
+      message?.operation_id ||
+      message?.id ||
+      message?.payload?.operationId ||
+      message?.payload?.operation_id,
+  );
+}
+
+function normalizeDeliveryOutcome(outcome) {
+  if (outcome &&
+    typeof outcome === TRANSPORT_TYPEOF.OBJECT &&
+    Object.prototype.hasOwnProperty.call(outcome, 'result') &&
+    Object.prototype.hasOwnProperty.call(outcome, 'queueWaitMs')) {
+    return {
+      result: outcome.result,
+      queueWaitMs: Number.isFinite(outcome.queueWaitMs) ?
+        Math.max(TRANSPORT_NUM.ZERO, Math.floor(outcome.queueWaitMs)) :
+        TRANSPORT_NUM.ZERO,
+    };
+  }
+  return {
+    result: outcome,
+    queueWaitMs: TRANSPORT_NUM.ZERO,
+  };
 }
 
 /**
@@ -1247,6 +1363,10 @@ class MessageRouter extends EventEmitter {
         inFlight: TRANSPORT_NUM.ZERO,
         pending: [],
         maxConcurrent: this.outboundQueueMaxConcurrent,
+        queueWaitSampleCount: TRANSPORT_NUM.ZERO,
+        queueWaitTotalMs: TRANSPORT_NUM.ZERO,
+        queueWaitMaxMs: TRANSPORT_NUM.ZERO,
+        queueWaitHistogram: createQueueWaitHistogram(),
       });
     }
     return this.outboundQueues.get(nodeId);
@@ -1276,7 +1396,7 @@ class MessageRouter extends EventEmitter {
     const queue = this.getOutboundQueue(nodeId);
 
     return new Promise((resolve, reject) => {
-      queue.pending.push({deliverFn, resolve, reject});
+      queue.pending.push({deliverFn, resolve, reject, queuedAt: Date.now()});
       this.processOutboundQueue(nodeId);
     });
   }
@@ -1296,12 +1416,17 @@ class MessageRouter extends EventEmitter {
       queue.pending.length > TRANSPORT_NUM.ZERO) {
       const item = queue.pending.shift();
       queue.inFlight += TRANSPORT_NUM.ONE;
+      const queueWaitMs = Math.max(
+        TRANSPORT_NUM.ZERO,
+        Date.now() - (item?.queuedAt || Date.now()),
+      );
+      recordQueueWaitDuration(queue, queueWaitMs);
 
       Promise.resolve()
         .then(() => item.deliverFn())
         .then((result) => {
           queue.inFlight -= TRANSPORT_NUM.ONE;
-          item.resolve(result);
+          item.resolve({result, queueWaitMs});
           this.processOutboundQueue(nodeId);
         })
         .catch((error) => {
@@ -1452,6 +1577,8 @@ class MessageRouter extends EventEmitter {
 
     const messageId = message.messageId || uuidv4();
     const correlationId = message.correlationId || messageId;
+    const requestId = resolveRequestIdFromMessage(message);
+    const operationId = resolveOperationIdFromMessage(message);
     this.messageCount += TRANSPORT_NUM.ONE;
 
     // Determine target node
@@ -1474,7 +1601,7 @@ class MessageRouter extends EventEmitter {
       throw new Error(ROUTER_ERROR_MSG.invalidAddressFormat(targetAddress));
     }
 
-    let result;
+    let deliveryOutcome;
 
     if (targetNodeId === this.nodeId) {
       // If the target resolves to this node but we do not have a
@@ -1484,28 +1611,35 @@ class MessageRouter extends EventEmitter {
       const hasSelfConn =
         selfConn && selfConn.state === ConnectionState.CONNECTED;
       if (!hasSelfConn) {
-        result = {
-          messageId,
-          correlationId,
-          acknowledged: false,
-          error: ROUTER_ERROR_MSG.noConnectionToNode(this.nodeId),
+        deliveryOutcome = {
+          result: {
+            messageId,
+            correlationId,
+            acknowledged: false,
+            error: ROUTER_ERROR_MSG.noConnectionToNode(this.nodeId),
+          },
+          queueWaitMs: TRANSPORT_NUM.ZERO,
         };
       } else {
-        result = await this.deliverRemote(
+        deliveryOutcome = await this.deliverRemote(
           targetAddress, messageId, message,
           targetNodeId, correlationId,
         );
       }
     } else {
-      result = await this.deliverRemote(
+      deliveryOutcome = await this.deliverRemote(
         targetAddress, messageId, message,
         targetNodeId, correlationId,
       );
     }
+    const normalizedOutcome = normalizeDeliveryOutcome(deliveryOutcome);
+    const result = normalizedOutcome.result;
+    const queueWaitMs = normalizedOutcome.queueWaitMs;
 
     try {
       const queue = this.outboundQueues.get(targetNodeId);
       const queueDepth = queue ? queue.pending.length : TRANSPORT_NUM.ZERO;
+      const queueWaitSummary = buildQueueWaitSummary(queue);
       const durationMs = Date.now() - deliverStartMs;
       const acknowledged = result?.acknowledged === true;
       const trigger = this.getDeliverMetricTrigger(
@@ -1521,9 +1655,15 @@ class MessageRouter extends EventEmitter {
         }
         this.logger.info(METRICS_LOG_TAG.TRANSPORT_DELIVER, {
           targetNodeId,
+          messageId,
+          correlationId,
+          requestId,
+          operationId,
           durationMs,
           messageCount: this.messageCount,
           queueDepth,
+          queueWaitMs,
+          queueWaitSummary,
           acknowledged,
           trigger,
           error: acknowledged ? null : (result?.error || null),
@@ -1740,6 +1880,7 @@ class MessageRouter extends EventEmitter {
         inFlight: queue.inFlight,
         pending: queue.pending.length,
         maxConcurrent: queue.maxConcurrent,
+        queueWait: buildQueueWaitSummary(queue),
       };
     }
 

@@ -87,7 +87,7 @@ test(
           const requiredFields = [
             'scenario', 'passed', 'duration',
             'convergenceTiming', 'error', 'loadMetrics',
-            'optimizationPriorities',
+            'optimizationPriorities', 'partitionHotspots',
           ];
           for (const entry of entries) {
             for (const field of requiredFields) {

@@ -58,6 +58,15 @@ test('deliver emits metrics.transport.deliver with expected fields',
     t.ok(metric.data.messageCount >= 1, 'messageCount at least 1');
     t.equal(typeof metric.data.queueDepth, 'number');
     t.ok(metric.data.queueDepth >= 0, 'queueDepth non-negative');
+    t.equal(metric.data.messageId, metric.data.correlationId);
+    t.equal(typeof metric.data.queueWaitMs, 'number');
+    t.ok(metric.data.queueWaitMs >= 0, 'queueWaitMs non-negative');
+    t.equal(typeof metric.data.queueWaitSummary, 'object');
+    t.equal(
+      typeof metric.data.queueWaitSummary.sampleCount,
+      'number',
+      'queue wait summary sample count present',
+    );
 
     await router.shutdown();
   });
@@ -207,10 +216,37 @@ test('deliver metric has structured fields with correct types',
     t.ok('durationMs' in metric.data, 'has durationMs');
     t.ok('messageCount' in metric.data, 'has messageCount');
     t.ok('queueDepth' in metric.data, 'has queueDepth');
+    t.ok('messageId' in metric.data, 'has messageId');
+    t.ok('correlationId' in metric.data, 'has correlationId');
+    t.ok('queueWaitMs' in metric.data, 'has queueWaitMs');
+    t.ok('queueWaitSummary' in metric.data, 'has queueWaitSummary');
     t.equal(
       Number.isInteger(metric.data.durationMs), true,
       'durationMs is integer',
     );
+
+    await router.shutdown();
+  });
+
+test('deliver metric includes request and operation correlation fields',
+  async (t) => {
+    const router = new MessageRouter({nodeId: 'node-6'});
+    await router.initialize({startServer: false});
+
+    const infoCalls = collectInfoCalls(router);
+
+    await router.deliver('node-6/partition/p1', {
+      type: 'test',
+      request_id: 'req-6',
+      operationId: 'op-6',
+    });
+
+    const metric = infoCalls.find(
+      (c) => c.tag === METRICS_LOG_TAG.TRANSPORT_DELIVER,
+    );
+    t.ok(metric, 'metric emitted');
+    t.equal(metric.data.requestId, 'req-6');
+    t.equal(metric.data.operationId, 'op-6');
 
     await router.shutdown();
   });
