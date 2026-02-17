@@ -59,14 +59,14 @@ test('executeSQL emits metrics.cdc.sql_route on success', async (t) => {
   const service = createService();
   const infoCalls = collectInfoCalls(service);
 
-  const sql = `INSERT INTO ${SystemTableName.NODES} (node_id) VALUES (?)`;
-  await service.executeSQL(sql, ['node-1']);
+  const sql = `INSERT INTO ${SystemTableName.SERVICES} (service_id) VALUES (?)`;
+  await service.executeSQL(sql, ['svc-1']);
 
   const metric = infoCalls.find(
     (c) => c.tag === METRICS_LOG_TAG.CDC_SQL_ROUTE,
   );
   t.ok(metric, 'metrics.cdc.sql_route log emitted');
-  t.equal(metric.data.tableName, SystemTableName.NODES);
+  t.equal(metric.data.tableName, SystemTableName.SERVICES);
   t.equal(typeof metric.data.durationMs, 'number');
   t.ok(metric.data.durationMs >= 0, 'durationMs non-negative');
   t.equal(metric.data.attempt, 1);
@@ -80,7 +80,7 @@ test('executeSQL sql_route metric has correct structured fields',
     const service = createService();
     const infoCalls = collectInfoCalls(service);
 
-    const sql = `UPDATE ${SystemTableName.NODES} SET status = ?`;
+    const sql = `UPDATE ${SystemTableName.SERVICES} SET status = ?`;
     await service.executeSQL(sql, ['active']);
 
     const metric = infoCalls.find(
@@ -133,8 +133,8 @@ test('executeSQL sql_route metric uses info level, not debug',
       return originalDebug(tag, data);
     };
 
-    const sql = `INSERT INTO ${SystemTableName.NODES} (node_id) VALUES (?)`;
-    await service.executeSQL(sql, ['node-1']);
+    const sql = `INSERT INTO ${SystemTableName.SERVICES} (service_id) VALUES (?)`;
+    await service.executeSQL(sql, ['svc-1']);
 
     const debugMetric = debugCalls.find(
       (c) => c.tag === METRICS_LOG_TAG.CDC_SQL_ROUTE,
@@ -154,8 +154,8 @@ test('executeSQL does not break on logger failure for sql_route',
       return originalInfo(...args);
     };
 
-    const sql = `INSERT INTO ${SystemTableName.NODES} (node_id) VALUES (?)`;
-    const result = await service.executeSQL(sql, ['node-1']);
+    const sql = `INSERT INTO ${SystemTableName.SERVICES} (service_id) VALUES (?)`;
+    const result = await service.executeSQL(sql, ['svc-1']);
     t.ok(result.success, 'executeSQL succeeds despite logger failure');
     t.end();
   });
@@ -179,13 +179,70 @@ test('executeSQL sql_route metric reflects retry attempt on transient',
     service.retryDelayMs = 1;
     const infoCalls = collectInfoCalls(service);
 
-    const sql = `INSERT INTO ${SystemTableName.NODES} (node_id) VALUES (?)`;
-    await service.executeSQL(sql, ['node-1']);
+    const sql = `INSERT INTO ${SystemTableName.SERVICES} (service_id) VALUES (?)`;
+    await service.executeSQL(sql, ['svc-1']);
 
     const metric = infoCalls.find(
       (c) => c.tag === METRICS_LOG_TAG.CDC_SQL_ROUTE,
     );
     t.ok(metric, 'metric emitted after retry');
     t.equal(metric.data.attempt, 2, 'attempt reflects retry count');
+    t.end();
+  });
+
+test('executeSQL does not emit sql_route metric for logs table writes',
+  async (t) => {
+    const service = createService();
+    const infoCalls = collectInfoCalls(service);
+
+    const sql =
+      `INSERT INTO ${SystemTableName.LOGS} ` +
+      '(log_id, timestamp, level, node_id, message, created_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?)';
+    await service.executeSQL(sql, [
+      'log-1',
+      Date.now(),
+      'INFO',
+      'node-1',
+      'message',
+      Date.now(),
+    ]);
+
+    const metric = infoCalls.find(
+      (c) => c.tag === METRICS_LOG_TAG.CDC_SQL_ROUTE,
+    );
+    t.notOk(metric, 'no sql_route metric for logs table writes');
+    t.end();
+  });
+
+test('executeSQL does not emit sql_route metric for nodes table writes',
+  async (t) => {
+    const service = createService();
+    const infoCalls = collectInfoCalls(service);
+
+    const sql = `UPDATE ${SystemTableName.NODES} SET status = ? WHERE node_id = ?`;
+    await service.executeSQL(sql, ['active', 'node-1']);
+
+    const metric = infoCalls.find(
+      (c) => c.tag === METRICS_LOG_TAG.CDC_SQL_ROUTE,
+    );
+    t.notOk(metric, 'no sql_route metric for nodes table writes');
+    t.end();
+  });
+
+test('executeSQL does not emit sql_route metric for node_endpoints table writes',
+  async (t) => {
+    const service = createService();
+    const infoCalls = collectInfoCalls(service);
+
+    const sql =
+      `INSERT OR REPLACE INTO ${SystemTableName.NODE_ENDPOINTS} ` +
+      '(endpoint_id, node_id) VALUES (?, ?)';
+    await service.executeSQL(sql, ['ep-1', 'node-1']);
+
+    const metric = infoCalls.find(
+      (c) => c.tag === METRICS_LOG_TAG.CDC_SQL_ROUTE,
+    );
+    t.notOk(metric, 'no sql_route metric for node_endpoints table writes');
     t.end();
   });

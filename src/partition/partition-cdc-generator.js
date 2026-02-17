@@ -6,6 +6,7 @@
 
 import {CDC_OPERATION, NUM, SQL} from '../constants/index.js';
 import {STRING} from '../constants/strings.js';
+import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
@@ -381,10 +382,12 @@ class PartitionCDCGenerator {
         const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE ${pkColumn} = ?`);
         const row = stmt.get(pkValue);
         if (row) {
-          this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
-            tableName,
-            rowKeys: Object.keys(row),
-          });
+          if (tableName !== SystemTableName.LOGS) {
+            this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
+              tableName,
+              rowKeys: Object.keys(row),
+            });
+          }
           return row;
         }
       } catch (err) {
@@ -412,20 +415,24 @@ class PartitionCDCGenerator {
     if (whereMatch && this.db) {
       const keyColumn = whereMatch[NUM.ONE];
       const keyValue = whereMatch[NUM.TWO];
-      this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
-        tableName,
-        keyColumn,
-        keyValue,
-      });
+      if (tableName !== SystemTableName.LOGS) {
+        this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
+          tableName,
+          keyColumn,
+          keyValue,
+        });
+      }
       // Query the updated row to get full data for CDC
       try {
         const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE ${keyColumn} = ?`);
         const row = stmt.get(keyValue);
         if (row) {
-          this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
-            tableName,
-            rowKeys: Object.keys(row),
-          });
+          if (tableName !== SystemTableName.LOGS) {
+            this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
+              tableName,
+              rowKeys: Object.keys(row),
+            });
+          }
           return row;
         } else {
           this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_NO_ROW_UPDATE, {

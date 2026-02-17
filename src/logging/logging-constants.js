@@ -15,6 +15,13 @@ const LOGGING_DEFAULT = Object.freeze({
   MAX_BUFFER_SIZE: NUM.THOUSAND,
   PRETTY_PRINT: false,
   SHOW_METRICS_IN_CONSOLE: false,
+  PERSIST_METRICS_LOGS: false,
+});
+
+const LOGGING_DIAGNOSTICS_DEFAULT = Object.freeze({
+  TOP_LIMIT: NUM.TEN,
+  MAX_SUBSYSTEM_CARDINALITY: NUM.THOUSAND,
+  MAX_METRIC_TAG_CARDINALITY: NUM.HUNDRED,
 });
 
 const LOGGING_PRETTY = Object.freeze({
@@ -28,6 +35,8 @@ const LOGGING_LOG_MSG = Object.freeze({
   LOGS_TABLE_READY: 'Logs table ready, flushing buffer',
   LOGS_TABLE_SERVICE_INITIALIZED: 'LogsTableService initialized',
   LOGS_TABLE_SERVICE_SHUTDOWN: 'LogsTableService shutdown',
+  logsDroppedByBackpressure: (dropped, maxPendingWrites) =>
+    `LogsTableService dropped ${dropped} logs (maxPendingWrites=${maxPendingWrites})`,
   connectedLoggingService: (count) =>
     `Connected to LoggingService, flushed ${count} buffered entries`,
 });
@@ -103,6 +112,8 @@ const LOGS_TABLE_DEFAULT = Object.freeze({
   FLUSH_INTERVAL_MS: NUM.FIVE * NUM.THOUSAND,
   MAX_RETRIES: NUM.THREE,
   RETRY_DELAY_MS: NUM.THOUSAND,
+  MAX_PENDING_WRITES: NUM.TEN_THOUSAND,
+  BACKPRESSURE_WARNING_INTERVAL: NUM.THOUSAND,
 });
 
 const LOGGING_SUBSYSTEM = Object.freeze({
@@ -113,6 +124,7 @@ const LOGGING_SUBSYSTEM = Object.freeze({
 export {
   LOG_LEVELS,
   LOGGING_DEFAULT,
+  LOGGING_DIAGNOSTICS_DEFAULT,
   LOGGING_ERROR_MSG,
   LOGGING_LOG_MSG,
   LOGGING_PRETTY,

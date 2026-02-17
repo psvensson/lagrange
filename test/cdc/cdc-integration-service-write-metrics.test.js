@@ -70,20 +70,42 @@ function makeNodeData() {
   };
 }
 
+function makeServiceData() {
+  return {
+    service_id: 'svc-1',
+    service_type: 'partition',
+    node_id: 'node-1',
+    status: 'active',
+    created_at: Date.now(),
+    updated_at: Date.now(),
+  };
+}
+
+function makeLogData() {
+  return {
+    log_id: 'log-1',
+    timestamp: Date.now(),
+    level: 'INFO',
+    node_id: 'node-1',
+    message: 'test log',
+    created_at: Date.now(),
+  };
+}
+
 test('insertSystemTableRow emits metrics.cdc.write on success',
   async (t) => {
     const service = createService();
     const infoCalls = collectInfoCalls(service);
 
     await service.insertSystemTableRow(
-      SystemTableName.NODES, makeNodeData(),
+      SystemTableName.SERVICES, makeServiceData(),
     );
 
     const metric = infoCalls.find(
       (c) => c.tag === METRICS_LOG_TAG.CDC_WRITE,
     );
     t.ok(metric, 'metrics.cdc.write log emitted');
-    t.equal(metric.data.tableName, SystemTableName.NODES);
+    t.equal(metric.data.tableName, SystemTableName.SERVICES);
     t.equal(metric.data.operation, CDC_OPERATION.INSERT);
     t.equal(typeof metric.data.sqlDurationMs, 'number');
     t.ok(metric.data.sqlDurationMs >= 0, 'sqlDurationMs non-negative');
@@ -103,8 +125,8 @@ test('updateSystemTableRow emits metrics.cdc.write on success',
     const infoCalls = collectInfoCalls(service);
 
     await service.updateSystemTableRow(
-      SystemTableName.NODES,
-      {node_id: 'node-1'},
+      SystemTableName.SERVICES,
+      {service_id: 'svc-1'},
       {status: 'ready'},
     );
 
@@ -112,7 +134,7 @@ test('updateSystemTableRow emits metrics.cdc.write on success',
       (c) => c.tag === METRICS_LOG_TAG.CDC_WRITE,
     );
     t.ok(metric, 'metrics.cdc.write log emitted');
-    t.equal(metric.data.tableName, SystemTableName.NODES);
+    t.equal(metric.data.tableName, SystemTableName.SERVICES);
     t.equal(metric.data.operation, CDC_OPERATION.UPDATE);
     t.equal(typeof metric.data.sqlDurationMs, 'number');
     t.ok(metric.data.sqlDurationMs >= 0, 'sqlDurationMs non-negative');
@@ -132,7 +154,7 @@ test('CDC write metric totalDurationMs equals sql + cacheWait',
     const infoCalls = collectInfoCalls(service);
 
     await service.insertSystemTableRow(
-      SystemTableName.NODES, makeNodeData(),
+      SystemTableName.SERVICES, makeServiceData(),
     );
 
     const metric = infoCalls.find(
@@ -156,7 +178,7 @@ test('CDC write metric uses info level, not debug', async (t) => {
   };
 
   await service.insertSystemTableRow(
-    SystemTableName.NODES, makeNodeData(),
+    SystemTableName.SERVICES, makeServiceData(),
   );
 
   const debugMetric = debugCalls.find(
@@ -178,7 +200,7 @@ test('CDC write metric does not break insert on logger failure',
     };
 
     const result = await service.insertSystemTableRow(
-      SystemTableName.NODES, makeNodeData(),
+      SystemTableName.SERVICES, makeServiceData(),
     );
     t.ok(result.success, 'insert succeeds despite logger failure');
     t.end();
@@ -196,8 +218,8 @@ test('CDC write metric does not break update on logger failure',
     };
 
     const result = await service.updateSystemTableRow(
-      SystemTableName.NODES,
-      {node_id: 'node-1'},
+      SystemTableName.SERVICES,
+      {service_id: 'svc-1'},
       {status: 'ready'},
     );
     t.ok(result.success, 'update succeeds despite logger failure');
@@ -210,7 +232,7 @@ test('CDC write metric has structured fields with correct types',
     const infoCalls = collectInfoCalls(service);
 
     await service.insertSystemTableRow(
-      SystemTableName.NODES, makeNodeData(),
+      SystemTableName.SERVICES, makeServiceData(),
     );
 
     const metric = infoCalls.find(
@@ -235,5 +257,73 @@ test('CDC write metric has structured fields with correct types',
       Number.isInteger(metric.data.totalDurationMs), true,
       'totalDurationMs is integer',
     );
+    t.end();
+  });
+
+test('insertSystemTableRow does not emit metrics.cdc.write for logs table',
+  async (t) => {
+    const service = createService();
+    const infoCalls = collectInfoCalls(service);
+
+    await service.insertSystemTableRow(
+      SystemTableName.LOGS, makeLogData(),
+    );
+
+    const metric = infoCalls.find(
+      (c) => c.tag === METRICS_LOG_TAG.CDC_WRITE,
+    );
+    t.notOk(metric, 'no metrics.cdc.write for logs table inserts');
+    t.end();
+  });
+
+test('updateSystemTableRow does not emit metrics.cdc.write for logs table',
+  async (t) => {
+    const service = createService();
+    const infoCalls = collectInfoCalls(service);
+
+    await service.updateSystemTableRow(
+      SystemTableName.LOGS,
+      {log_id: 'log-1'},
+      {message: 'updated'},
+    );
+
+    const metric = infoCalls.find(
+      (c) => c.tag === METRICS_LOG_TAG.CDC_WRITE,
+    );
+    t.notOk(metric, 'no metrics.cdc.write for logs table updates');
+    t.end();
+  });
+
+test('insertSystemTableRow does not emit metrics.cdc.write for nodes table',
+  async (t) => {
+    const service = createService();
+    const infoCalls = collectInfoCalls(service);
+
+    await service.insertSystemTableRow(
+      SystemTableName.NODES, makeNodeData(),
+    );
+
+    const metric = infoCalls.find(
+      (c) => c.tag === METRICS_LOG_TAG.CDC_WRITE,
+    );
+    t.notOk(metric, 'no metrics.cdc.write for nodes table inserts');
+    t.end();
+  });
+
+test('updateSystemTableRow does not emit metrics.cdc.write for nodes table',
+  async (t) => {
+    const service = createService();
+    const infoCalls = collectInfoCalls(service);
+
+    await service.updateSystemTableRow(
+      SystemTableName.NODES,
+      {node_id: 'node-1'},
+      {status: 'ready'},
+    );
+
+    const metric = infoCalls.find(
+      (c) => c.tag === METRICS_LOG_TAG.CDC_WRITE,
+    );
+    t.notOk(metric, 'no metrics.cdc.write for nodes table updates');
     t.end();
   });

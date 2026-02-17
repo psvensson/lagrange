@@ -54,8 +54,11 @@ test('LogsTableService default config', async (t) => {
 
 test('LogsTableService writeLogEntry queues entries', async (t) => {
   LogsTableService.resetInstance();
+  const mockCdcService = {
+    insertSystemTableRow: async () => {},
+  };
   const service = LogsTableService.getInstance();
-  service.initialize();
+  service.initialize({cdcIntegrationService: mockCdcService});
 
   const entry = {
     logId: 'log-1',
@@ -71,8 +74,103 @@ test('LogsTableService writeLogEntry queues entries', async (t) => {
   const stats = service.getStats();
   t.equal(stats.pendingWrites, 1, 'should queue the entry');
 
+  await service.shutdown();
   LogsTableService.resetInstance();
 });
+
+test('LogsTableService bounds pending queue and drops overflow', async (t) => {
+  LogsTableService.resetInstance();
+  const mockCdcService = {
+    insertSystemTableRow: async () => {},
+  };
+  const service = new LogsTableService({
+    cdcIntegrationService: mockCdcService,
+    batchSize: 100,
+    maxPendingWrites: 2,
+  });
+  service.initialize();
+
+  await service.writeLogEntry({
+    logId: 'log-1',
+    timestamp: Date.now(),
+    level: 'INFO',
+    nodeId: 'test-node',
+    message: 'Message 1',
+    createdAt: Date.now(),
+  });
+  await service.writeLogEntry({
+    logId: 'log-2',
+    timestamp: Date.now(),
+    level: 'INFO',
+    nodeId: 'test-node',
+    message: 'Message 2',
+    createdAt: Date.now(),
+  });
+  await service.writeLogEntry({
+    logId: 'log-3',
+    timestamp: Date.now(),
+    level: 'INFO',
+    nodeId: 'test-node',
+    message: 'Message 3',
+    createdAt: Date.now(),
+  });
+
+  const stats = service.getStats();
+  t.equal(stats.pendingWrites, 2, 'should cap pending writes to maxPendingWrites');
+  t.equal(stats.droppedWrites, 1, 'should count dropped writes when queue overflows');
+
+  await service.shutdown();
+});
+
+test('LogsTableService prioritizes non-metrics entries when queue is full',
+  async (t) => {
+    LogsTableService.resetInstance();
+    const mockCdcService = {
+      insertSystemTableRow: async () => {},
+    };
+    const service = new LogsTableService({
+      cdcIntegrationService: mockCdcService,
+      batchSize: 100,
+      maxPendingWrites: 2,
+    });
+    service.initialize();
+
+    await service.writeLogEntry({
+      logId: 'log-metric-1',
+      timestamp: Date.now(),
+      level: 'INFO',
+      nodeId: 'test-node',
+      message: 'metrics.transport.deliver',
+      createdAt: Date.now(),
+    });
+    await service.writeLogEntry({
+      logId: 'log-metric-2',
+      timestamp: Date.now(),
+      level: 'INFO',
+      nodeId: 'test-node',
+      message: 'metrics.transport.deliver',
+      createdAt: Date.now(),
+    });
+    await service.writeLogEntry({
+      logId: 'log-important',
+      timestamp: Date.now(),
+      level: 'WARN',
+      nodeId: 'test-node',
+      message: 'important.control_plane.event',
+      createdAt: Date.now(),
+    });
+
+    const pendingMessages = service.pendingWrites.map((entry) => entry.message);
+    t.equal(
+      pendingMessages.includes('important.control_plane.event'),
+      true,
+      'should keep non-metrics entry under backpressure',
+    );
+    t.equal(service.getStats().pendingWrites, 2, 'should keep queue capped');
+    t.equal(service.getStats().droppedWrites, 1, 'should drop one metrics entry');
+
+    await service.shutdown();
+  });
 
 test('LogsTableService flush with mock CDC service', async (t) => {
   LogsTableService.resetInstance();

@@ -10,6 +10,7 @@ import {
   ConfigValueType,
   CONFIG_DEFINITIONS,
 } from '../../src/config/dynamic-config-service.js';
+import {CONFIG_KEY} from '../../src/config/config-constants.js';
 
 /**
  * Create a mock CDC integration service.
@@ -259,9 +260,9 @@ test('DynamicConfigService requiresRestart', async (t) => {
     service.requiresRestart('node.restApiPort'),
     'restApiPort should require restart',
   );
-  t.ok(
+  t.notOk(
     service.requiresRestart('raft.electionTimeoutMinMs'),
-    'raft election timeout should require restart',
+    'raft election timeout should support hot reload',
   );
 
   t.notOk(
@@ -285,9 +286,9 @@ test('DynamicConfigService getRestartRequiredKeys', async (t) => {
   t.ok(Array.isArray(restartKeys), 'should return array');
   t.ok(restartKeys.includes('node.restApiPort'),
     'should include restApiPort');
-  t.ok(
+  t.notOk(
     restartKeys.includes('raft.electionTimeoutMinMs'),
-    'should include raft timeout',
+    'should not include raft timeout',
   );
   t.notOk(
     restartKeys.includes('logging.level'),
@@ -309,6 +310,10 @@ test('DynamicConfigService getHotReloadKeys', async (t) => {
   t.ok(
     hotReloadKeys.includes('partition.splitThresholdBytes'),
     'should include split threshold',
+  );
+  t.ok(
+    hotReloadKeys.includes('raft.electionTimeoutMinMs'),
+    'should include raft timeout',
   );
   t.notOk(
     hotReloadKeys.includes('node.restApiPort'),
@@ -401,6 +406,35 @@ test('DynamicConfigService handleCDCEvent', async (t) => {
   const cachedValue = await service.get('logging.level');
   t.equal(cachedValue, 'error', 'cache should be updated');
 });
+
+test('DynamicConfigService handleCDCEvent resolves definition type when value_type is missing',
+  async (t) => {
+    const service = new DynamicConfigService({
+      nodeId: 'test-node',
+    });
+    await service.initialize();
+
+    let observedValue = null;
+    service.watch(CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS, (newValue) => {
+      observedValue = newValue;
+    });
+
+    await service.handleCDCEvent({
+      operation: 'UPDATE',
+      data: {
+        config_key: CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS,
+        config_value: 'false',
+      },
+    });
+
+    t.equal(
+      observedValue,
+      false,
+      'watcher should receive boolean when CDC payload omits value_type',
+    );
+    const cachedValue = await service.get(CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS);
+    t.equal(cachedValue, false, 'cache should store boolean value');
+  });
 
 test('DynamicConfigService getStats', async (t) => {
   const mockCDC = createMockCDCService();

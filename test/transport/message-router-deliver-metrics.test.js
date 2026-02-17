@@ -9,6 +9,7 @@ import {MessageRouter} from '../../src/transport/message-router.js';
 import {METRICS_LOG_TAG} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TRANSPORT_METRIC} from '../../src/constants/transport.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -61,6 +62,27 @@ test('deliver emits metrics.transport.deliver with expected fields',
     await router.shutdown();
   });
 
+test('deliver metric does not treat queueDepth=1 as backpressure',
+  async (t) => {
+    const router = new MessageRouter({nodeId: 'node-threshold'});
+    await router.initialize({startServer: false});
+
+    const trigger = router.getDeliverMetricTrigger(
+      'remote-node',
+      1,
+      1,
+      true,
+    );
+
+    t.equal(
+      trigger,
+      null,
+      'queue depth of one should not emit backpressure metrics',
+    );
+
+    await router.shutdown();
+  });
+
 test('deliver samples successful metrics instead of logging every success',
   async (t) => {
     const router = new MessageRouter({nodeId: 'node-sampled'});
@@ -69,7 +91,7 @@ test('deliver samples successful metrics instead of logging every success',
     const infoCalls = collectInfoCalls(router);
     router.deliverRemote = async () => ({acknowledged: true});
 
-    for (let i = 0; i < 64; i++) {
+    for (let i = 0; i < TRANSPORT_METRIC.DELIVER_SUCCESS_SAMPLE_EVERY; i++) {
       await router.deliver(
         'remote-node/partition/p1',
         {type: 'test'},
@@ -131,6 +153,38 @@ test('deliver metric does not break delivery on logger failure',
       'node-3/partition/p1', {type: 'test'},
     );
     t.ok(result, 'deliver returns result despite logger failure');
+
+    await router.shutdown();
+  });
+
+test('deliver samples repeated fault metrics per target',
+  async (t) => {
+    const router = new MessageRouter({nodeId: 'node-faults'});
+    await router.initialize({startServer: false});
+
+    const infoCalls = collectInfoCalls(router);
+    router.deliverRemote = async () => ({
+      acknowledged: false,
+      error: 'simulated-fault',
+    });
+
+    for (let i = 0; i < 5; i++) {
+      await router.deliver(
+        'remote-node/partition/p1',
+        {type: 'test'},
+        {targetNodeId: 'remote-node'},
+      );
+    }
+
+    const deliverMetrics = infoCalls.filter(
+      (c) => c.tag === METRICS_LOG_TAG.TRANSPORT_DELIVER,
+    );
+    t.equal(
+      deliverMetrics.length,
+      1,
+      'should emit first fault metric and sample subsequent repeated faults',
+    );
+    t.equal(deliverMetrics[0].data.trigger, 'fault');
 
     await router.shutdown();
   });

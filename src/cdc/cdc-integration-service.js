@@ -72,6 +72,24 @@ const EPOCH_CONFIG_KEY = CDC_EPOCH_CONFIG_KEY;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Determine whether CDC write-route metrics should be emitted for a table.
+ * Metrics for logs table writes are skipped to avoid feedback loops where
+ * persisted metrics generate more persisted metrics. Heartbeat-driven writes
+ * for nodes and node_endpoints are also excluded to avoid periodic idle noise.
+ * @param {string|null} tableName
+ * @return {boolean}
+ */
+const TABLE_WRITE_METRIC_SUPPRESSED_TABLES = new Set([
+  SystemTableName.LOGS,
+  SystemTableName.NODES,
+  SystemTableName.NODE_ENDPOINTS,
+]);
+
+function shouldEmitTableWriteMetric(tableName) {
+  return !TABLE_WRITE_METRIC_SUPPRESSED_TABLES.has(tableName);
+}
+
+/**
  * CDCIntegrationService routes all system table writes through SQL queries.
  * This ensures cache updates only happen via CDC events, maintaining consistency.
  * Queries are routed transparently to wherever the partition leader is.
@@ -514,17 +532,19 @@ class CDCIntegrationService extends EventEmitter {
           throw new Error(message);
         }
 
-        try {
-          const durationMs = Date.now() - attemptStartMs;
-          this.logger.info(METRICS_LOG_TAG.CDC_SQL_ROUTE, {
-            durationMs,
-            attempt,
-            maxAttempts,
-            bootstrapMode: this.bootstrapMode,
-            tableName,
-          });
-        } catch (_metricsErr) {
-          // Metrics logging must not propagate to callers
+        if (shouldEmitTableWriteMetric(tableName)) {
+          try {
+            const durationMs = Date.now() - attemptStartMs;
+            this.logger.info(METRICS_LOG_TAG.CDC_SQL_ROUTE, {
+              durationMs,
+              attempt,
+              maxAttempts,
+              bootstrapMode: this.bootstrapMode,
+              tableName,
+            });
+          } catch (_metricsErr) {
+            // Metrics logging must not propagate to callers
+          }
         }
 
         return result;
@@ -945,16 +965,18 @@ class CDCIntegrationService extends EventEmitter {
       }
       const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
 
-      try {
-        this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
-          tableName,
-          operation: CDC_OPERATION.INSERT,
-          sqlDurationMs,
-          cacheWaitDurationMs,
-          totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
-        });
-      } catch (_metricsErr) {
-        // Metrics logging must not propagate to callers
+      if (shouldEmitTableWriteMetric(tableName)) {
+        try {
+          this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
+            tableName,
+            operation: CDC_OPERATION.INSERT,
+            sqlDurationMs,
+            cacheWaitDurationMs,
+            totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
+          });
+        } catch (_metricsErr) {
+          // Metrics logging must not propagate to callers
+        }
       }
 
       this.stats.inserts++;
@@ -1055,16 +1077,18 @@ class CDCIntegrationService extends EventEmitter {
       }
       const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
 
-      try {
-        this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
-          tableName,
-          operation: CDC_OPERATION.UPDATE,
-          sqlDurationMs,
-          cacheWaitDurationMs,
-          totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
-        });
-      } catch (_metricsErr) {
-        // Metrics logging must not propagate to callers
+      if (shouldEmitTableWriteMetric(tableName)) {
+        try {
+          this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
+            tableName,
+            operation: CDC_OPERATION.UPDATE,
+            sqlDurationMs,
+            cacheWaitDurationMs,
+            totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
+          });
+        } catch (_metricsErr) {
+          // Metrics logging must not propagate to callers
+        }
       }
 
       this.stats.updates++;

@@ -4,6 +4,8 @@
 
 import {ConfigurationManager} from './config/configuration-manager.js';
 import {CONFIG_KEY} from './config/config-constants.js';
+import {createDynamicConfigStartupWiring} from
+  './config/dynamic-config-startup-wiring.js';
 import {LoggingService} from './logging/logging-service.js';
 import {LogsTableService} from './logging/logs-table-service.js';
 import {HLCClockService} from './hlc/hlc-clock-service.js';
@@ -14,6 +16,8 @@ import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
 import {ADMIN_DEFAULT} from './admin/admin-constants.js';
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
 import {NodeService} from './node/node-service.js';
+import {ResourceDiagnosticsSampler} from
+  './diagnostics/resource-diagnostics-sampler.js';
 import {createLiveQueryStartupWiring} from
   './live-query/live-query-startup-wiring.js';
 import {assertCritical} from './utils/assert.js';
@@ -116,9 +120,14 @@ function createSqlCallbackWasmExecutor() {
 /**
  * Create a diagnostics provider for unified lifecycle owners.
  * @param {Object} owner - BootstrapService or NodeJoiningService instance.
- * @return {Function}
+ * @return {Function} Provider returning lifecycle/reconciler/resource diagnostics.
  */
 function createServiceDiagnosticsProvider(owner) {
+  const resourceDiagnosticsSampler = new ResourceDiagnosticsSampler({
+    nodeId: owner?.nodeId || null,
+    owner,
+  });
+
   return () => {
     const lifecycleManager = owner?.serviceLifecycleManager || null;
     const reconciler = owner?.serviceReconciler || null;
@@ -129,14 +138,16 @@ function createServiceDiagnosticsProvider(owner) {
     const reconcilerDiagnostics = reconciler?.getDiagnosticsReport ?
       reconciler.getDiagnosticsReport() :
       null;
+    const resourceDiagnostics = resourceDiagnosticsSampler.getReport();
 
-    if (!lifecycleDiagnostics && !reconcilerDiagnostics) {
+    if (!lifecycleDiagnostics && !reconcilerDiagnostics && !resourceDiagnostics) {
       return null;
     }
 
     return {
       lifecycle: lifecycleDiagnostics,
       reconciler: reconcilerDiagnostics,
+      resources: resourceDiagnostics,
     };
   };
 }
@@ -247,6 +258,42 @@ async function shutdownLogsTablePersistence(logsTableService, logger) {
     await logsTableService.shutdown();
   } catch (error) {
     logger.warn(ENTRYPOINT_LOG_MSG.LOGS_TABLE_SHUTDOWN_FAILED, {
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * Start runtime dynamic configuration wiring.
+ * @param {Object} options
+ * @param {Object} logger
+ * @return {Promise<Object|null>}
+ */
+async function startDynamicConfigWiring(options, logger) {
+  try {
+    return await createDynamicConfigStartupWiring(options);
+  } catch (error) {
+    logger.warn(ENTRYPOINT_LOG_MSG.DYNAMIC_CONFIG_WIRING_FAILED, {
+      error: error.message,
+    });
+    return null;
+  }
+}
+
+/**
+ * Stop runtime dynamic configuration wiring.
+ * @param {Object|null} dynamicConfigWiring
+ * @param {Object} logger
+ */
+function shutdownDynamicConfigWiring(dynamicConfigWiring, logger) {
+  if (!dynamicConfigWiring) {
+    return;
+  }
+
+  try {
+    dynamicConfigWiring.shutdown();
+  } catch (error) {
+    logger.warn(ENTRYPOINT_LOG_MSG.DYNAMIC_CONFIG_WIRING_SHUTDOWN_FAILED, {
       error: error.message,
     });
   }
@@ -391,6 +438,15 @@ async function main() {
       });
     }
 
+    const joinDynamicConfigWiring = await startDynamicConfigWiring({
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
+      systemTableCache,
+      sqlQueryEngine,
+      messageGroupServices: joinResult.messageGroupServices,
+      partitionServices: joinResult.partitionServices,
+      runtimeOwner: nodeJoiningService,
+    }, mainLogger);
+
     // Start Admin WebSocket API for this node
     const joinAdminStartup = createAdminAPIWithLiveQuery({
       nodeId: config.get(CONFIG_KEY.NODE_ID),
@@ -429,6 +485,7 @@ async function main() {
           joinLogsPersistence.getService() ||
           await joinLogsPersistence.promise;
         await shutdownLogsTablePersistence(joinLogsTableService, mainLogger);
+        shutdownDynamicConfigWiring(joinDynamicConfigWiring, mainLogger);
         await nodeJoiningService.cleanup();
         await adminAPI.shutdown();
         liveQueryWiring.shutdown();
@@ -530,6 +587,15 @@ async function main() {
       wasmExecutor,
     });
 
+    const seedDynamicConfigWiring = await startDynamicConfigWiring({
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
+      systemTableCache,
+      sqlQueryEngine,
+      messageGroupServices: bootstrapResult.messageGroupServices,
+      partitionServices: bootstrapResult.partitionServices,
+      runtimeOwner: bootstrapService,
+    }, mainLogger);
+
     // Set SQL query engine on bootstrap API for distributed node registration
     bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
 
@@ -572,6 +638,7 @@ async function main() {
           seedLogsPersistence.getService() ||
           await seedLogsPersistence.promise;
         await shutdownLogsTablePersistence(seedLogsTableService, mainLogger);
+        shutdownDynamicConfigWiring(seedDynamicConfigWiring, mainLogger);
         await bootstrapService.shutdown();
         await bootstrapAPI.shutdown();
         await adminAPI.shutdown();

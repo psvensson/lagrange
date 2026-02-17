@@ -9,6 +9,7 @@ import {LoggingService} from './logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {METRICS_LOG_PREFIX} from '../constants/metrics-constants.js';
 import {
   LOGGING_ERROR_MSG,
   LOGGING_LOG_MSG,
@@ -44,6 +45,10 @@ class LogsTableService extends EventEmitter {
       config.get(CONFIG_KEY.LOGGING_MAX_RETRIES) || LOGS_TABLE_DEFAULT.MAX_RETRIES;
     this.retryDelayMs = options.retryDelayMs ||
       config.get(CONFIG_KEY.LOGGING_RETRY_DELAY_MS) || LOGS_TABLE_DEFAULT.RETRY_DELAY_MS;
+    this.maxPendingWrites = Number.isFinite(options.maxPendingWrites) &&
+      options.maxPendingWrites > 0 ?
+      Math.floor(options.maxPendingWrites) :
+      LOGS_TABLE_DEFAULT.MAX_PENDING_WRITES;
 
     // State
     this.initialized = false;
@@ -52,6 +57,7 @@ class LogsTableService extends EventEmitter {
     this.isWriting = false;
     this.writeCount = 0;
     this.errorCount = 0;
+    this.droppedWrites = 0;
 
     // Logging (use console until we're fully initialized to avoid recursion)
     this.logger = console;
@@ -135,6 +141,19 @@ class LogsTableService extends EventEmitter {
   async writeLogEntry(entry) {
     if (!entry) {
       return;
+    }
+
+    if (this.pendingWrites.length >= this.maxPendingWrites) {
+      if (this.isMetricsLogEntry(entry)) {
+        this.recordDroppedWrite();
+        return;
+      }
+
+      const droppedMetrics = this.dropPendingMetricsLogEntry();
+      if (!droppedMetrics) {
+        this.recordDroppedWrite();
+        return;
+      }
     }
 
     // Add to pending writes
@@ -292,7 +311,55 @@ class LogsTableService extends EventEmitter {
       writeCount: this.writeCount,
       errorCount: this.errorCount,
       isWriting: this.isWriting,
+      maxPendingWrites: this.maxPendingWrites,
+      droppedWrites: this.droppedWrites,
     };
+  }
+
+  /**
+   * Check whether an entry is metrics namespace log.
+   * @param {Object} entry - Log entry.
+   * @return {boolean}
+   * @private
+   */
+  isMetricsLogEntry(entry) {
+    return typeof entry?.message === 'string' &&
+      entry.message.startsWith(METRICS_LOG_PREFIX);
+  }
+
+  /**
+   * Drop one queued metrics log entry to make room for non-metrics logs.
+   * @return {boolean} True when a metrics entry was dropped.
+   * @private
+   */
+  dropPendingMetricsLogEntry() {
+    for (let index = 0; index < this.pendingWrites.length; index++) {
+      const entry = this.pendingWrites[index];
+      if (!this.isMetricsLogEntry(entry)) {
+        continue;
+      }
+      this.pendingWrites.splice(index, 1);
+      this.recordDroppedWrite();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Update drop counters and emit throttled warning log.
+   * @private
+   */
+  recordDroppedWrite() {
+    this.droppedWrites += 1;
+    if (this.droppedWrites === 1 ||
+      this.droppedWrites % LOGS_TABLE_DEFAULT.BACKPRESSURE_WARNING_INTERVAL === 0) {
+      this.logger.warn(
+        LOGGING_LOG_MSG.logsDroppedByBackpressure(
+          this.droppedWrites,
+          this.maxPendingWrites,
+        ),
+      );
+    }
   }
 
   /**

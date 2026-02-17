@@ -370,9 +370,13 @@ class DynamicConfigService extends EventEmitter {
     const key = data[CONFIG_TABLE_COLUMN.KEY];
 
     if (operation === CDC_OPERATION.INSERT || operation === CDC_OPERATION.UPDATE) {
+      const valueType = this.resolveValueType(
+        key,
+        data[CONFIG_TABLE_COLUMN.VALUE_TYPE],
+      );
       const newValue = this.deserializeValue(
         data[CONFIG_TABLE_COLUMN.VALUE],
-        data[CONFIG_TABLE_COLUMN.VALUE_TYPE],
+        valueType,
       );
       const oldValue = this.configCache.get(key);
 
@@ -381,9 +385,10 @@ class DynamicConfigService extends EventEmitter {
 
       // Notify watchers if value changed
       if (oldValue !== newValue) {
-        await this.notifyWatchers(key, newValue, this.serializeValue(
-          oldValue, data[CONFIG_TABLE_COLUMN.VALUE_TYPE],
-        ));
+        const oldValueSerialized = oldValue === undefined ?
+          undefined :
+          this.serializeValue(oldValue, valueType);
+        await this.notifyWatchers(key, newValue, oldValueSerialized);
       }
     } else if (operation === CDC_OPERATION.DELETE) {
       this.configCache.delete(key);
@@ -610,6 +615,28 @@ class DynamicConfigService extends EventEmitter {
     if (typeof value === TYPEOF.NUMBER) return ConfigValueType.NUMBER;
     if (typeof value === TYPEOF.BOOLEAN) return ConfigValueType.BOOLEAN;
     if (typeof value === TYPEOF.OBJECT) return ConfigValueType.JSON;
+    return ConfigValueType.STRING;
+  }
+
+  /**
+   * Resolve value type for incoming CDC config events.
+   * CDC update payloads can omit value_type, so fall back to key metadata.
+   * @param {string} key - Config key.
+   * @param {string} valueType - Value type from CDC payload.
+   * @return {string} Resolved value type.
+   * @private
+   */
+  resolveValueType(key, valueType) {
+    if (typeof valueType === TYPEOF.STRING &&
+      valueType.length > NUM.ZERO) {
+      return valueType;
+    }
+
+    const definition = CONFIG_DEFINITIONS[key];
+    if (definition?.type) {
+      return definition.type;
+    }
+
     return ConfigValueType.STRING;
   }
 

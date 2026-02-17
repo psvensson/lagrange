@@ -167,6 +167,7 @@ This section is the canonical owner map for consolidation work tracked in:
 | Message-group CDC apply path | `CDCHandler` | `MessageGroupService` |
 | System cache key mapping | `SYSTEM_CACHE_KEY_DESCRIPTOR` | `SystemTableCache`, `SQLiteSystemCache` |
 | Runtime startup wiring | `createRuntimeStartupWiring` | Startup constructors only |
+| Dynamic config hot-reload wiring | `createDynamicConfigStartupWiring` | Entrypoint startup only |
 | Partition callback runtime ownership | `RuntimeDriverRegistry` injection | `SQLQueryEngine`, `CallbackRuntimeDriverRegistry` |
 
 No-dual-path policy for these concerns is mandatory:
@@ -1736,6 +1737,15 @@ Configuration is centralized in ConfigurationManager with sections:
 - `query` - Query execution settings
 - `bootstrap` - Bootstrap process settings
 
+Runtime dynamic configuration wiring is startup-owned and CDC-fed from the
+`config` system table:
+- `logging.persistMetricsLogs` applies immediately to `LoggingService`.
+- `raft.heartbeatIntervalMs`, `raft.electionTimeoutMinMs`,
+  `raft.electionTimeoutMaxMs` apply immediately to live `MessageGroupService`
+  and `PartitionService` replicas through `applyRaftTimingConfig()`.
+- The same raft timing values are written into `ConfigurationManager` so
+  replicas created after a dynamic update use the latest timing values.
+
 ## Performance Metrics Instrumentation
 
 Structured metrics logging is emitted on hot paths using the `metrics.*`
@@ -1778,8 +1788,12 @@ Constants: `METRICS_LOG_TAG` in `src/constants/metrics-constants.js`.
 - `metrics.transport.deliver` is sampled for steady-state success traffic;
   immediate emission still happens for faults, slow deliveries, and
   queue backpressure transitions.
-- Metric-tagged logs are hidden from default process console output and
-  remain available in structured logging persistence for deeper analysis.
+- Metric-tagged logs are hidden from default process console output.
+- Metrics persistence into the logs table is controlled by
+  `logging.persistMetricsLogs` and defaults to disabled (`false`).
+- CDC row-fetch info logs (`FETCHED_INSERT_ROW`, `FETCHING_UPDATE_ROW`,
+  `FETCHED_UPDATE_ROW`) are suppressed for `logs` table writes to prevent
+  write-amplification feedback loops in logging persistence.
 - No new dependencies, caches, or state introduced by instrumentation.
 - Metrics logging failures do not propagate to callers.
 

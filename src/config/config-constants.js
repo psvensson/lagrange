@@ -130,6 +130,37 @@ const CONFIG_KEY = Object.freeze({
   RAFT_ELECTION_TIMEOUT_MIN_MS: 'raft.electionTimeoutMinMs',
   RAFT_ELECTION_TIMEOUT_MAX_MS: 'raft.electionTimeoutMaxMs',
   RAFT_HEARTBEAT_INTERVAL_MS: 'raft.heartbeatIntervalMs',
+  RAFT_ADAPTIVE_TIMING_ENABLED: 'raft.adaptiveTimingEnabled',
+  RAFT_ADAPTIVE_TIMING_SAMPLE_INTERVAL_MS:
+    'raft.adaptiveTimingSampleIntervalMs',
+  RAFT_ADAPTIVE_TIMING_PROMOTE_SAMPLES:
+    'raft.adaptiveTimingPromoteSamples',
+  RAFT_ADAPTIVE_TIMING_DEMOTE_SAMPLES:
+    'raft.adaptiveTimingDemoteSamples',
+  RAFT_ADAPTIVE_TIMING_HIGH_CPU_PERCENT:
+    'raft.adaptiveTimingHighCpuPercent',
+  RAFT_ADAPTIVE_TIMING_LOW_CPU_PERCENT:
+    'raft.adaptiveTimingLowCpuPercent',
+  RAFT_ADAPTIVE_TIMING_HIGH_WRITE_BYTES_PER_SEC:
+    'raft.adaptiveTimingHighWriteBytesPerSec',
+  RAFT_ADAPTIVE_TIMING_LOW_WRITE_BYTES_PER_SEC:
+    'raft.adaptiveTimingLowWriteBytesPerSec',
+  RAFT_ADAPTIVE_TIMING_HIGH_RSS_GROWTH_BYTES_PER_MIN:
+    'raft.adaptiveTimingHighRssGrowthBytesPerMin',
+  RAFT_ADAPTIVE_TIMING_LOW_RSS_GROWTH_BYTES_PER_MIN:
+    'raft.adaptiveTimingLowRssGrowthBytesPerMin',
+  RAFT_ADAPTIVE_TIMING_ACTIVE_HEARTBEAT_INTERVAL_MS:
+    'raft.adaptiveTimingActiveHeartbeatIntervalMs',
+  RAFT_ADAPTIVE_TIMING_ACTIVE_ELECTION_TIMEOUT_MIN_MS:
+    'raft.adaptiveTimingActiveElectionTimeoutMinMs',
+  RAFT_ADAPTIVE_TIMING_ACTIVE_ELECTION_TIMEOUT_MAX_MS:
+    'raft.adaptiveTimingActiveElectionTimeoutMaxMs',
+  RAFT_ADAPTIVE_TIMING_IDLE_HEARTBEAT_INTERVAL_MS:
+    'raft.adaptiveTimingIdleHeartbeatIntervalMs',
+  RAFT_ADAPTIVE_TIMING_IDLE_ELECTION_TIMEOUT_MIN_MS:
+    'raft.adaptiveTimingIdleElectionTimeoutMinMs',
+  RAFT_ADAPTIVE_TIMING_IDLE_ELECTION_TIMEOUT_MAX_MS:
+    'raft.adaptiveTimingIdleElectionTimeoutMaxMs',
 
   MESSAGE_GROUP_REPLICA_COUNT: 'messageGroup.replicaCount',
   MESSAGE_GROUP_DELIVERY_TIMEOUT_MS: 'messageGroup.deliveryTimeoutMs',
@@ -159,6 +190,7 @@ const CONFIG_KEY = Object.freeze({
   LOGGING_FLUSH_INTERVAL_MS: 'logging.flushIntervalMs',
   LOGGING_MAX_RETRIES: 'logging.maxRetries',
   LOGGING_RETRY_DELAY_MS: 'logging.retryDelayMs',
+  LOGGING_PERSIST_METRICS_LOGS: 'logging.persistMetricsLogs',
   LOGGING_QUERY_DEFAULT_LIMIT: 'logging.queryDefaultLimit',
   LOGGING_QUERY_MAX_LIMIT: 'logging.queryMaxLimit',
   LOGGING_DEFAULT_TIME_RANGE_MS: 'logging.defaultTimeRangeMs',
@@ -303,6 +335,22 @@ const CONFIG_SCHEMA = {
         electionTimeoutMinMs: {type: 'number', minimum: 100},
         electionTimeoutMaxMs: {type: 'number', minimum: 200},
         heartbeatIntervalMs: {type: 'number', minimum: 10},
+        adaptiveTimingEnabled: {type: 'boolean'},
+        adaptiveTimingSampleIntervalMs: {type: 'number', minimum: 1},
+        adaptiveTimingPromoteSamples: {type: 'number', minimum: 1},
+        adaptiveTimingDemoteSamples: {type: 'number', minimum: 1},
+        adaptiveTimingHighCpuPercent: {type: 'number', minimum: 0, maximum: 100},
+        adaptiveTimingLowCpuPercent: {type: 'number', minimum: 0, maximum: 100},
+        adaptiveTimingHighWriteBytesPerSec: {type: 'number', minimum: 0},
+        adaptiveTimingLowWriteBytesPerSec: {type: 'number', minimum: 0},
+        adaptiveTimingHighRssGrowthBytesPerMin: {type: 'number', minimum: 0},
+        adaptiveTimingLowRssGrowthBytesPerMin: {type: 'number', minimum: 0},
+        adaptiveTimingActiveHeartbeatIntervalMs: {type: 'number', minimum: 10},
+        adaptiveTimingActiveElectionTimeoutMinMs: {type: 'number', minimum: 100},
+        adaptiveTimingActiveElectionTimeoutMaxMs: {type: 'number', minimum: 200},
+        adaptiveTimingIdleHeartbeatIntervalMs: {type: 'number', minimum: 10},
+        adaptiveTimingIdleElectionTimeoutMinMs: {type: 'number', minimum: 100},
+        adaptiveTimingIdleElectionTimeoutMaxMs: {type: 'number', minimum: 200},
         snapshotThreshold: {type: 'number', minimum: 100},
         maxLogEntriesPerAppend: {type: 'number', minimum: 1},
         leadershipWaitTimeoutMs: {type: 'number', minimum: 1000},
@@ -348,6 +396,7 @@ const CONFIG_SCHEMA = {
         bufferSize: {type: 'number', minimum: 1},
         flushIntervalMs: {type: 'number', minimum: 100},
         retentionDays: {type: 'number', minimum: 1},
+        persistMetricsLogs: {type: 'boolean'},
         maxFileSizeBytes: {type: 'number', minimum: 1048576},
       },
       additionalProperties: false,
@@ -512,6 +561,22 @@ const DEFAULT_CONFIG = {
     electionTimeoutMinMs: 1000,
     electionTimeoutMaxMs: 3000,
     heartbeatIntervalMs: 50,
+    adaptiveTimingEnabled: false,
+    adaptiveTimingSampleIntervalMs: 5000,
+    adaptiveTimingPromoteSamples: 2,
+    adaptiveTimingDemoteSamples: 6,
+    adaptiveTimingHighCpuPercent: 2,
+    adaptiveTimingLowCpuPercent: 0.8,
+    adaptiveTimingHighWriteBytesPerSec: 262144,
+    adaptiveTimingLowWriteBytesPerSec: 65536,
+    adaptiveTimingHighRssGrowthBytesPerMin: 10485760,
+    adaptiveTimingLowRssGrowthBytesPerMin: 2097152,
+    adaptiveTimingActiveHeartbeatIntervalMs: 50,
+    adaptiveTimingActiveElectionTimeoutMinMs: 1000,
+    adaptiveTimingActiveElectionTimeoutMaxMs: 3000,
+    adaptiveTimingIdleHeartbeatIntervalMs: 150,
+    adaptiveTimingIdleElectionTimeoutMinMs: 3000,
+    adaptiveTimingIdleElectionTimeoutMaxMs: 5000,
     snapshotThreshold: 10000,
     maxLogEntriesPerAppend: 100,
     leadershipWaitTimeoutMs: 30000,
@@ -545,6 +610,7 @@ const DEFAULT_CONFIG = {
     bufferSize: 1000,
     flushIntervalMs: 5000,
     retentionDays: 7,
+    persistMetricsLogs: false,
     maxFileSizeBytes: 104857600, // 100MB
   },
   transport: {
@@ -644,6 +710,7 @@ const ENV_MAPPINGS = {
   REST_API_PORT: CONFIG_KEY.NODE_REST_API_PORT,
   LOG_LEVEL: CONFIG_KEY.LOGGING_LEVEL,
   LOG_PRETTY_PRINT: CONFIG_KEY.LOGGING_PRETTY_PRINT,
+  LOG_PERSIST_METRICS: CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS,
   SEED_NODE_ADDRESS: CONFIG_KEY.NODE_SEED_NODE_ADDRESS,
   TRANSPORT_WS_HOST: 'transport.wsHost',
   RAFT_ELECTION_TIMEOUT_MIN_MS: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS,
@@ -699,20 +766,116 @@ const CONFIG_DEFINITIONS = {
   [CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS]: {
     defaultValue: DEFAULT_CONFIG.raft.electionTimeoutMinMs,
     type: CONFIG_VALUE_TYPE.NUMBER,
-    requiresRestart: true,
+    requiresRestart: false,
     description: 'Minimum election timeout in milliseconds',
   },
   [CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS]: {
     defaultValue: DEFAULT_CONFIG.raft.electionTimeoutMaxMs,
     type: CONFIG_VALUE_TYPE.NUMBER,
-    requiresRestart: true,
+    requiresRestart: false,
     description: 'Maximum election timeout in milliseconds',
   },
   [CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS]: {
     defaultValue: DEFAULT_CONFIG.raft.heartbeatIntervalMs,
     type: CONFIG_VALUE_TYPE.NUMBER,
-    requiresRestart: true,
+    requiresRestart: false,
     description: 'Raft heartbeat interval in milliseconds',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_ENABLED]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingEnabled,
+    type: CONFIG_VALUE_TYPE.BOOLEAN,
+    requiresRestart: false,
+    description: 'Enable adaptive raft timing based on observed node load',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_SAMPLE_INTERVAL_MS]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingSampleIntervalMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Adaptive raft timing sampling interval in milliseconds',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_PROMOTE_SAMPLES]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingPromoteSamples,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Consecutive high-load samples needed to switch to active timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_DEMOTE_SAMPLES]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingDemoteSamples,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Consecutive low-load samples needed to switch to idle timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_HIGH_CPU_PERCENT]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingHighCpuPercent,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'High-load CPU threshold for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_LOW_CPU_PERCENT]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingLowCpuPercent,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Low-load CPU threshold for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_HIGH_WRITE_BYTES_PER_SEC]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingHighWriteBytesPerSec,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'High-load write-rate threshold for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_LOW_WRITE_BYTES_PER_SEC]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingLowWriteBytesPerSec,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Low-load write-rate threshold for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_HIGH_RSS_GROWTH_BYTES_PER_MIN]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingHighRssGrowthBytesPerMin,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'High-load RSS growth threshold for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_LOW_RSS_GROWTH_BYTES_PER_MIN]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingLowRssGrowthBytesPerMin,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Low-load RSS growth threshold for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_ACTIVE_HEARTBEAT_INTERVAL_MS]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingActiveHeartbeatIntervalMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Active-profile heartbeat interval for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_ACTIVE_ELECTION_TIMEOUT_MIN_MS]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingActiveElectionTimeoutMinMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Active-profile minimum election timeout for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_ACTIVE_ELECTION_TIMEOUT_MAX_MS]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingActiveElectionTimeoutMaxMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Active-profile maximum election timeout for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_IDLE_HEARTBEAT_INTERVAL_MS]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingIdleHeartbeatIntervalMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Idle-profile heartbeat interval for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_IDLE_ELECTION_TIMEOUT_MIN_MS]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingIdleElectionTimeoutMinMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Idle-profile minimum election timeout for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_IDLE_ELECTION_TIMEOUT_MAX_MS]: {
+    defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingIdleElectionTimeoutMaxMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Idle-profile maximum election timeout for adaptive raft timing',
   },
 
   // Message group configuration
@@ -791,6 +954,12 @@ const CONFIG_DEFINITIONS = {
     type: CONFIG_VALUE_TYPE.NUMBER,
     requiresRestart: false,
     description: 'Log retention period in days',
+  },
+  [CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS]: {
+    defaultValue: DEFAULT_CONFIG.logging.persistMetricsLogs,
+    type: CONFIG_VALUE_TYPE.BOOLEAN,
+    requiresRestart: false,
+    description: 'Persist metrics.* logs into the logs table',
   },
 
   // Rebalancer configuration

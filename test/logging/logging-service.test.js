@@ -192,6 +192,35 @@ test('LoggingService all log methods', async (t) => {
   LoggingService.resetInstance();
 });
 
+test('LoggingService does not persist logs below configured level', async (t) => {
+  LoggingService.resetInstance();
+  const logger = LoggingService.getInstance();
+  logger.initialize({nodeId: 'test-node', level: 'info'});
+
+  const flushedEntries = [];
+  await logger.onLogsTableReady((entry) => {
+    flushedEntries.push(entry);
+  });
+  const flushedBeforeDebug = flushedEntries.length;
+
+  logger.debug('debug-no-persist', {subsystem: 'message-router'});
+
+  t.equal(logger.getBufferSize(), 0, 'should not buffer debug log at info level');
+  t.equal(
+    flushedEntries.length,
+    flushedBeforeDebug,
+    'should not persist debug log at info level',
+  );
+  const diagnostics = logger.getDiagnosticsStats();
+  t.equal(
+    diagnostics.logsSuppressedByLevel,
+    1,
+    'should expose level-suppressed log count',
+  );
+
+  LoggingService.resetInstance();
+});
+
 test('LoggingService suppresses metrics logs from default console sink',
   async (t) => {
     LoggingService.resetInstance();
@@ -214,8 +243,11 @@ test('LoggingService suppresses metrics logs from default console sink',
     });
 
     t.equal(sinkCalls.length, 0, 'should not write metrics to console sink');
-    t.equal(logger.getBufferSize(), 1, 'should still buffer the metric entry');
-    t.equal(logger.buffer[0].message, 'metrics.transport.deliver');
+    t.equal(
+      logger.getBufferSize(),
+      0,
+      'should not persist metrics with default persistence settings',
+    );
 
     LoggingService.resetInstance();
   });
@@ -247,6 +279,80 @@ test('LoggingService allows metrics logs when override is enabled',
 
     LoggingService.resetInstance();
   });
+
+test('LoggingService can suppress metrics logs from persistence', async (t) => {
+  LoggingService.resetInstance();
+  const logger = LoggingService.getInstance();
+  logger.initialize({
+    nodeId: 'test-node',
+    level: 'info',
+    persistMetricsLogs: false,
+  });
+
+  logger.info('metrics.transport.deliver', {
+    durationMs: 1,
+  });
+
+  t.equal(logger.getBufferSize(), 0, 'should not buffer metrics when persistence is disabled');
+  const diagnostics = logger.getDiagnosticsStats();
+  t.equal(diagnostics.metricsLogs, 1, 'should count metrics log invocation');
+  t.equal(
+    diagnostics.metricsSuppressedFromPersistence,
+    1,
+    'should count suppressed metrics persistence',
+  );
+  t.equal(diagnostics.persistMetricsLogs, false, 'should expose persistence setting');
+
+  LoggingService.resetInstance();
+});
+
+test('LoggingService can update metrics persistence at runtime', async (t) => {
+  LoggingService.resetInstance();
+  const logger = LoggingService.getInstance();
+  logger.initialize({
+    nodeId: 'test-node',
+    level: 'info',
+    persistMetricsLogs: true,
+  });
+
+  logger.setPersistMetricsLogs(false);
+
+  logger.info('metrics.transport.deliver', {
+    durationMs: 1,
+  });
+
+  t.equal(
+    logger.getBufferSize(),
+    0,
+    'should stop buffering metrics after runtime disable',
+  );
+  t.equal(
+    logger.getDiagnosticsStats().persistMetricsLogs,
+    false,
+    'diagnostics should reflect runtime toggle',
+  );
+
+  LoggingService.resetInstance();
+});
+
+test('LoggingService exposes subsystem and metric-tag diagnostics', async (t) => {
+  LoggingService.resetInstance();
+  const logger = LoggingService.getInstance();
+  logger.initialize({nodeId: 'test-node', level: 'info'});
+
+  const queryLogger = logger.forSubsystem('query-executor');
+  queryLogger.info('metrics.query.dispatch', {durationMs: 1});
+  queryLogger.info('regular.log.message');
+
+  const diagnostics = logger.getDiagnosticsStats();
+  t.equal(diagnostics.totalLogs, 2, 'should track total logs');
+  t.equal(diagnostics.metricsLogs, 1, 'should track metrics logs');
+  t.equal(diagnostics.nonMetricsLogs, 1, 'should track non-metrics logs');
+  t.equal(diagnostics.topMetricTags[0].tag, 'metrics.query.dispatch');
+  t.equal(diagnostics.topSubsystems[0].subsystem, 'query-executor');
+
+  LoggingService.resetInstance();
+});
 
 test('cleanup', async (t) => {
   LoggingService.resetInstance();

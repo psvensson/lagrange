@@ -22,6 +22,10 @@ import {PendingRequestTracker} from './pending-request-tracker.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {
+  applyRuntimeRaftTiming,
+  computeReplicaElectionTimeouts,
+} from '../raft/raft-timing-utils.js';
+import {
   SystemTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {AddressManager} from '../address/address-manager.js';
@@ -78,6 +82,16 @@ const RaftRole = PARTITION_RAFT_ROLE;
  * CDC operation types.
  */
 const CDCOperation = CDC_OPERATION;
+
+const CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES = new Set([
+  SystemTableName.LOGS,
+  SystemTableName.NODES,
+  SystemTableName.NODE_ENDPOINTS,
+]);
+
+function shouldEmitCdcRowFetchInfoLog(tableName) {
+  return !CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES.has(tableName);
+}
 
 /**
  * Raft log entry for partition operations.
@@ -411,6 +425,7 @@ class PartitionService extends EventEmitter {
     // CRITICAL: Learners must defer elections to prevent disrupting existing leadership
     this.deferElection = options.deferElection || this.isJoiningExistingGroup;
     this.electionStarted = false;
+    this.raftTimingConfig = null;
     // ReplicaStateMachine for tracking replica lifecycle states
     this.replicaStateMachine = options.replicaStateMachine || null;
 
@@ -631,28 +646,21 @@ class PartitionService extends EventEmitter {
       PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MIN_DEFAULT_MS;
     const baseElectionMaxMs = config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS) ||
       PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MAX_DEFAULT_MS;
-
-    // Add replica-index-based jitter to election timeouts to prevent oscillation
-    // Lower-indexed replicas (r1) have shorter timeouts and win elections first
-    // This provides deterministic leadership without modifying Raft protocol
-    //
-    // For dynamically created replicas (UUID-based IDs during rebalancing),
-    // indexOf() returns -1. We use a hash-based fallback to ensure these
-    // replicas get consistently higher jitter than existing replicas.
-    let replicaIndex = this.replicaIds.indexOf(this.replicaId);
-    if (replicaIndex < 0) {
-      // Hash-based fallback for UUID replica IDs not in the original list
-      // This ensures new replicas joining during rebalancing don't disrupt
-      // existing leadership by having unpredictable election timeouts
-      const hashCode = this.replicaId.split('').reduce(
-        (acc, char) => acc + char.charCodeAt(0), 0,
-      );
-      // Add offset to ensure new replicas have higher jitter than existing ones
-      replicaIndex = this.replicaIds.length + (hashCode % 10);
-    }
-    const jitterMs = replicaIndex * PARTITION_SERVICE_VALUE.ELECTION_JITTER_PER_REPLICA_MS;
-    const electionMinMs = baseElectionMinMs + jitterMs;
-    const electionMaxMs = baseElectionMaxMs + jitterMs;
+    const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
+      replicaId: this.replicaId,
+      replicaIds: this.replicaIds,
+      baseElectionMinMs,
+      baseElectionMaxMs,
+      electionJitterPerReplicaMs:
+        PARTITION_SERVICE_VALUE.ELECTION_JITTER_PER_REPLICA_MS,
+    });
+    this.raftTimingConfig = {
+      heartbeatMs,
+      baseElectionMinMs,
+      baseElectionMaxMs,
+      electionMinMs,
+      electionMaxMs,
+    };
 
     // Create extended LifeRaft class with our transport using ES6 class inheritance
     // Requirements: 10.1, 10.2, 10.3, 10.4, 10.5
@@ -975,6 +983,67 @@ class PartitionService extends EventEmitter {
       // Use a random timeout to stagger elections across replicas
       this.raft.heartbeat(this.raft.timeout());
     }
+  }
+
+  /**
+   * Apply raft timing configuration to this live replica.
+   * @param {Object} timingConfig
+   * @param {number} timingConfig.heartbeatIntervalMs
+   * @param {number} timingConfig.electionTimeoutMinMs
+   * @param {number} timingConfig.electionTimeoutMaxMs
+   * @return {boolean} True when applied to an initialized raft instance.
+   */
+  applyRaftTimingConfig(timingConfig = {}) {
+    const heartbeatMs = timingConfig.heartbeatIntervalMs;
+    const baseElectionMinMs = timingConfig.electionTimeoutMinMs;
+    const baseElectionMaxMs = timingConfig.electionTimeoutMaxMs;
+    if (!Number.isFinite(heartbeatMs) ||
+      !Number.isFinite(baseElectionMinMs) ||
+      !Number.isFinite(baseElectionMaxMs) ||
+      baseElectionMinMs > baseElectionMaxMs) {
+      return false;
+    }
+
+    const {electionMinMs, electionMaxMs, jitterMs} =
+      computeReplicaElectionTimeouts({
+        replicaId: this.replicaId,
+        replicaIds: this.replicaIds,
+        baseElectionMinMs,
+        baseElectionMaxMs,
+        electionJitterPerReplicaMs:
+          PARTITION_SERVICE_VALUE.ELECTION_JITTER_PER_REPLICA_MS,
+      });
+    this.raftTimingConfig = {
+      heartbeatMs,
+      baseElectionMinMs,
+      baseElectionMaxMs,
+      electionMinMs,
+      electionMaxMs,
+    };
+
+    const shouldRearmTimer = this.replicaIds.length > NUM.ONE &&
+      (!this.deferElection || this.electionStarted);
+    const applied = applyRuntimeRaftTiming({
+      raft: this.raft,
+      heartbeatMs,
+      electionMinMs,
+      electionMaxMs,
+      rearmTimer: shouldRearmTimer,
+    });
+    if (!applied) {
+      return false;
+    }
+
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.APPLIED_RUNTIME_RAFT_TIMING, {
+      partitionId: this.partitionId,
+      replicaId: this.replicaId,
+      heartbeatMs,
+      electionMinMs,
+      electionMaxMs,
+      jitterMs,
+      rearmTimer: shouldRearmTimer,
+    });
+    return true;
   }
 
   /**
@@ -2390,10 +2459,12 @@ class PartitionService extends EventEmitter {
         const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE ${pkColumn} = ?`);
         const row = stmt.get(pkValue);
         if (row) {
-          this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
-            tableName,
-            rowKeys: Object.keys(row),
-          });
+          if (shouldEmitCdcRowFetchInfoLog(tableName)) {
+            this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
+              tableName,
+              rowKeys: Object.keys(row),
+            });
+          }
           return row;
         }
       } catch (err) {
@@ -2421,20 +2492,24 @@ class PartitionService extends EventEmitter {
     if (whereMatch) {
       const keyColumn = whereMatch[NUM.ONE];
       const keyValue = whereMatch[NUM.TWO];
-      this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
-        tableName,
-        keyColumn,
-        keyValue,
-      });
+      if (shouldEmitCdcRowFetchInfoLog(tableName)) {
+        this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
+          tableName,
+          keyColumn,
+          keyValue,
+        });
+      }
       // Query the updated row to get full data for CDC
       try {
         const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE ${keyColumn} = ?`);
         const row = stmt.get(keyValue);
         if (row) {
-          this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
-            tableName,
-            rowKeys: Object.keys(row),
-          });
+          if (shouldEmitCdcRowFetchInfoLog(tableName)) {
+            this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
+              tableName,
+              rowKeys: Object.keys(row),
+            });
+          }
           return row;
         } else {
           this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_NO_ROW_UPDATE, {

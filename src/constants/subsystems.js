@@ -294,6 +294,9 @@ const SUBSYSTEM = Object.freeze({
   /** Config logging subsystem */
   LOGGING_CONFIG: 'config',
 
+  /** Runtime resource diagnostics sampler */
+  RESOURCE_DIAGNOSTICS: 'resource-diagnostics',
+
   // ============================================================================
   // Address - Address resolution
   // ============================================================================

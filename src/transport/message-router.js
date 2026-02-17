@@ -195,6 +195,7 @@ class MessageRouter extends EventEmitter {
 
     // Metric sampling state for high-volume transport delivery logging.
     this.deliverMetricSampleByTarget = new Map();
+    this.deliverMetricFaultSampleByTarget = new Map();
     this.deliverMetricQueueDepthByTarget = new Map();
 
     // Function to resolve service address to node ID
@@ -1382,8 +1383,24 @@ class MessageRouter extends EventEmitter {
    */
   getDeliverMetricTrigger(targetNodeId, durationMs, queueDepth, acknowledged) {
     if (!acknowledged) {
-      return TRANSPORT_METRIC_TRIGGER.FAULT;
+      const faultSampleCount = (
+        this.deliverMetricFaultSampleByTarget.get(targetNodeId) ||
+        TRANSPORT_NUM.ZERO
+      ) + TRANSPORT_NUM.ONE;
+      this.deliverMetricFaultSampleByTarget.set(
+        targetNodeId,
+        faultSampleCount,
+      );
+      if (
+        faultSampleCount === TRANSPORT_NUM.ONE ||
+        faultSampleCount %
+          TRANSPORT_METRIC.DELIVER_FAULT_SAMPLE_EVERY === TRANSPORT_NUM.ZERO
+      ) {
+        return TRANSPORT_METRIC_TRIGGER.FAULT;
+      }
+      return null;
     }
+    this.deliverMetricFaultSampleByTarget.set(targetNodeId, TRANSPORT_NUM.ZERO);
 
     if (durationMs >= TRANSPORT_METRIC.DELIVER_SLOW_THRESHOLD_MS) {
       return TRANSPORT_METRIC_TRIGGER.SLOW;

@@ -29,6 +29,10 @@ import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {InMemoryLogAdapter} from '../raft/in-memory-log-adapter.js';
 import {isRaftPacket, RAFT_PACKET_TYPES} from '../raft/raft-packet-utils.js';
 import {RAFT_ELECTION_TIMING, RAFT_EVENT} from '../raft/constants.js';
+import {
+  applyRuntimeRaftTiming,
+  computeReplicaElectionTimeouts,
+} from '../raft/raft-timing-utils.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
   UnifiedRebalancer,
@@ -273,6 +277,7 @@ class MessageGroupService extends EventEmitter {
     // This prevents election storms when multiple replicas are created on the same node
     this.deferElection = options.deferElection || false;
     this.electionStarted = false;
+    this.raftTimingConfig = null;
   }
 
 
@@ -449,31 +454,29 @@ class MessageGroupService extends EventEmitter {
     // Get Raft configuration from ConfigurationManager
     // Requirements: 7.1, 7.2, 7.3, 7.4
     const config = ConfigurationManager.getInstance();
-    const heartbeatMs = config.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS) || 150;
-    const baseElectionMinMs = config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS) || 1000;
-    const baseElectionMaxMs = config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS) || 3000;
-
-    // Add replica-index-based jitter to election timeouts to prevent oscillation
-    // Lower-indexed replicas (r1) have shorter timeouts and win elections first
-    // This provides deterministic leadership without modifying Raft protocol
-    //
-    // For dynamically created replicas (UUID-based IDs during rebalancing),
-    // indexOf() returns -1. We use a hash-based fallback to ensure these
-    // replicas get consistently higher jitter than existing replicas.
-    let replicaIndex = this.replicaIds.indexOf(this.replicaId);
-    if (replicaIndex < NUM.ZERO) {
-      // Hash-based fallback for UUID replica IDs not in the original list
-      // This ensures new replicas joining during rebalancing don't disrupt
-      // existing leadership by having unpredictable election timeouts
-      const hashCode = this.replicaId.split(STRING.EMPTY).reduce(
-        (acc, char) => acc + char.charCodeAt(NUM.ZERO), NUM.ZERO,
-      );
-      // Add offset to ensure new replicas have higher jitter than existing ones
-      replicaIndex = this.replicaIds.length + (hashCode % NUM.TEN);
-    }
-    const jitterMs = replicaIndex * RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS;
-    const electionMinMs = baseElectionMinMs + jitterMs;
-    const electionMaxMs = baseElectionMaxMs + jitterMs;
+    const heartbeatMs =
+      config.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS) ||
+      RAFT_ELECTION_TIMING.HEARTBEAT_DEFAULT_MS;
+    const baseElectionMinMs =
+      config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS) ||
+      RAFT_ELECTION_TIMING.ELECTION_MIN_DEFAULT_MS;
+    const baseElectionMaxMs =
+      config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS) ||
+      RAFT_ELECTION_TIMING.ELECTION_MAX_DEFAULT_MS;
+    const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
+      replicaId: this.replicaId,
+      replicaIds: this.replicaIds,
+      baseElectionMinMs,
+      baseElectionMaxMs,
+      electionJitterPerReplicaMs: RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,
+    });
+    this.raftTimingConfig = {
+      heartbeatMs,
+      baseElectionMinMs,
+      baseElectionMaxMs,
+      electionMinMs,
+      electionMaxMs,
+    };
 
     // Create extended LifeRaft class with our transport using ES6 class inheritance
     // Requirements: 2.1, 2.2, 3.1, 3.2, 3.3, 3.4
@@ -740,6 +743,67 @@ class MessageGroupService extends EventEmitter {
       // Use a random timeout to stagger elections across replicas
       this.raft.heartbeat(this.raft.timeout());
     }
+  }
+
+  /**
+   * Apply raft timing configuration to this live replica.
+   * @param {Object} timingConfig
+   * @param {number} timingConfig.heartbeatIntervalMs
+   * @param {number} timingConfig.electionTimeoutMinMs
+   * @param {number} timingConfig.electionTimeoutMaxMs
+   * @return {boolean} True when applied to an initialized raft instance.
+   */
+  applyRaftTimingConfig(timingConfig = {}) {
+    const heartbeatMs = timingConfig.heartbeatIntervalMs;
+    const baseElectionMinMs = timingConfig.electionTimeoutMinMs;
+    const baseElectionMaxMs = timingConfig.electionTimeoutMaxMs;
+    if (!Number.isFinite(heartbeatMs) ||
+      !Number.isFinite(baseElectionMinMs) ||
+      !Number.isFinite(baseElectionMaxMs) ||
+      baseElectionMinMs > baseElectionMaxMs) {
+      return false;
+    }
+
+    const {electionMinMs, electionMaxMs, jitterMs} =
+      computeReplicaElectionTimeouts({
+        replicaId: this.replicaId,
+        replicaIds: this.replicaIds,
+        baseElectionMinMs,
+        baseElectionMaxMs,
+        electionJitterPerReplicaMs:
+          RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,
+      });
+    this.raftTimingConfig = {
+      heartbeatMs,
+      baseElectionMinMs,
+      baseElectionMaxMs,
+      electionMinMs,
+      electionMaxMs,
+    };
+
+    const shouldRearmTimer = this.replicaIds.length > NUM.ONE &&
+      (!this.deferElection || this.electionStarted);
+    const applied = applyRuntimeRaftTiming({
+      raft: this.raft,
+      heartbeatMs,
+      electionMinMs,
+      electionMaxMs,
+      rearmTimer: shouldRearmTimer,
+    });
+    if (!applied) {
+      return false;
+    }
+
+    this.logger.info('Applied runtime raft timing configuration', {
+      groupId: this.groupId,
+      replicaId: this.replicaId,
+      heartbeatMs,
+      electionMinMs,
+      electionMaxMs,
+      jitterMs,
+      rearmTimer: shouldRearmTimer,
+    });
+    return true;
   }
 
 

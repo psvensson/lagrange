@@ -199,6 +199,7 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   SINGLE_REPLICA_LEADER: 'Single replica - becoming leader immediately',
   INITIALIZED: 'Partition service initialized',
   STARTING_ELECTION_TIMER: 'Starting Raft election timer',
+  APPLIED_RUNTIME_RAFT_TIMING: 'Applied runtime raft timing configuration',
   CREATED_TABLE: 'Created table',
   ADDED_CONNECTION_STATE: 'Added connection_state column to nodes table',
   MIGRATED_CONNECTION_STATE_FROM_LEGACY_WS:
