@@ -145,6 +145,38 @@ test('ReplicaRecoveryService - start and stop', async (t) => {
   t.end();
 });
 
+test('ReplicaRecoveryService - idle cadence backs off and resets on activity',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const mockCache = createMockCache({
+      nodes: [{node_id: 'node-1', status: NodeStatus.ACTIVE}],
+      partitions: [],
+      message_groups: [],
+      services: [],
+    });
+    const service = new ReplicaRecoveryService({
+      nodeId: 'test-node',
+      systemTableCache: mockCache,
+      cdcIntegrationService: mockCDC,
+    });
+    service.initialize();
+
+    const idleSummary = await service.checkReplicaCounts();
+    service.updateCheckCadence(idleSummary);
+    t.ok(
+      service.currentCheckIntervalMs > service.checkIntervalMs,
+      'should increase interval after idle cycle',
+    );
+
+    service.updateCheckCadence({hadActivity: true});
+    t.equal(
+      service.currentCheckIntervalMs,
+      service.checkIntervalMs,
+      'should reset interval to base when activity is detected',
+    );
+    t.end();
+  });
+
 test('ReplicaRecoveryService - start requires initialization', async (t) => {
   const service = new ReplicaRecoveryService({
     nodeId: 'test-node',

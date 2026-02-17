@@ -3,8 +3,9 @@
  *
  * Property 13: Heartbeat service periodic writes
  * For any running HeartbeatService instance, after N heartbeat intervals
- * have elapsed, the service shall have issued N heartbeat update writes
- * via CDC (within a tolerance of ±1 for timing).
+ * have elapsed, the service shall issue N node heartbeat updates and
+ * throttle node_endpoints upserts to avoid rewriting unchanged endpoints
+ * on every heartbeat.
  *
  * **Validates: Requirements 8.2**
  */
@@ -52,17 +53,24 @@ function createMockCache() {
  * @return {Object} Mock CDC service with writeCount.
  */
 function createMockCdc() {
-  let writeCount = 0;
+  let updateCount = 0;
+  let upsertCount = 0;
   return {
     get writeCount() {
-      return writeCount;
+      return updateCount + upsertCount;
+    },
+    get updateCount() {
+      return updateCount;
+    },
+    get upsertCount() {
+      return upsertCount;
     },
     updateSystemTableRow: async () => {
-      writeCount++;
+      updateCount++;
       return {success: true};
     },
     upsertSystemTableRow: async () => {
-      writeCount++;
+      upsertCount++;
       return {success: true};
     },
   };
@@ -95,13 +103,18 @@ test('Property 13: Heartbeat service periodic writes',
             service.heartbeatCount++;
           }
 
-          // Each heartbeat writes 2 rows: nodes + node_endpoints
-          const expectedWrites = heartbeatCount * 2;
+          // Heartbeat updates nodes every beat, and endpoint upsert is throttled.
+          const expectedNodeWrites = heartbeatCount;
+          const expectedEndpointWrites = 1;
 
           t.equal(
-            mockCdc.writeCount, expectedWrites,
+            mockCdc.updateCount, expectedNodeWrites,
             `${heartbeatCount} heartbeats should produce ` +
-            `${expectedWrites} CDC writes`,
+            `${expectedNodeWrites} node heartbeat updates`,
+          );
+          t.equal(
+            mockCdc.upsertCount, expectedEndpointWrites,
+            'unchanged endpoint should be upserted once during the burst',
           );
 
           t.equal(

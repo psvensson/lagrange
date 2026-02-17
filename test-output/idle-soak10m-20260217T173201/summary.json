@@ -1,0 +1,192 @@
+{
+  "runId": "idle-soak10m-20260217T173201",
+  "samples": 120,
+  "actualDurationSec": 621,
+  "cpuPercent": {
+    "avg": 1.8372499999999998,
+    "p50": 1.8,
+    "p95": 1.97,
+    "max": 6.07
+  },
+  "eventLoopUtilizationPercent": {
+    "avg": 45.248833333333316,
+    "p95": 49.45,
+    "max": 100
+  },
+  "writeBytesPerSec": {
+    "avg": 533805.9327499999,
+    "p95": 90932.01,
+    "max": 43645456.95
+  },
+  "trendWriteBytesPerSec": {
+    "last": 26760.31
+  },
+  "rssBytes": {
+    "first": 238600192,
+    "last": 236691456,
+    "delta": -1908736
+  },
+  "trendRssGrowthBytesPerMin": {
+    "last": 362808.05
+  },
+  "lastTopGrowingSignals": [
+    {
+      "signal": "logging.logsSuppressedByLevel",
+      "delta": 282975,
+      "ratePerSec": 4444.12
+    },
+    {
+      "signal": "messageRouter.messageCount",
+      "delta": 70420,
+      "ratePerSec": 1105.95
+    },
+    {
+      "signal": "transport.messageCount",
+      "delta": 70420,
+      "ratePerSec": 1105.95
+    },
+    {
+      "signal": "logging.totalLogs",
+      "delta": 3528,
+      "ratePerSec": 55.41
+    },
+    {
+      "signal": "logging.metricsLogs",
+      "delta": 3527,
+      "ratePerSec": 55.39
+    },
+    {
+      "signal": "logging.metricsSuppressedFromConsole",
+      "delta": 3527,
+      "ratePerSec": 55.39
+    },
+    {
+      "signal": "logging.metricsSuppressedFromPersistence",
+      "delta": 3527,
+      "ratePerSec": 55.39
+    },
+    {
+      "signal": "logging.metricsSuppressedByResolution",
+      "delta": 3513,
+      "ratePerSec": 55.17
+    },
+    {
+      "signal": "cdcIntegration.total",
+      "delta": 16,
+      "ratePerSec": 0.25
+    },
+    {
+      "signal": "cdcIntegration.updates",
+      "delta": 15,
+      "ratePerSec": 0.24
+    }
+  ],
+  "lastLogging": {
+    "totalLogs": 47303,
+    "metricsLogs": 44907,
+    "nonMetricsLogs": 2396,
+    "logsSuppressedByLevel": 2885874,
+    "metricsSuppressedFromConsole": 44907,
+    "metricsSuppressedFromPersistence": 44907,
+    "metricsSuppressedByResolution": 44760,
+    "metricsSuppressedByDetailedWindow": 0,
+    "level": "info",
+    "persistMetricsLogs": false,
+    "showMetricsInConsole": false,
+    "metricsDefaultResolutionMs": 30000,
+    "metricsDetailedWindowEnabled": false,
+    "metricsDetailedWindowTtlMs": 300000,
+    "metricsDetailedWindowRemainingMs": 0,
+    "bufferSize": 0,
+    "logsTableReady": true,
+    "topSubsystems": [
+      {
+        "subsystem": "message-router",
+        "count": 35949
+      },
+      {
+        "subsystem": "partition",
+        "count": 2736
+      },
+      {
+        "subsystem": "sql-query-engine",
+        "count": 2506
+      },
+      {
+        "subsystem": "parallel-query-coordinator",
+        "count": 1352
+      },
+      {
+        "subsystem": "cdc-integration",
+        "count": 1003
+      },
+      {
+        "subsystem": "message-group",
+        "count": 835
+      },
+      {
+        "subsystem": "query-executor",
+        "count": 763
+      },
+      {
+        "subsystem": "cdc-group-propagation",
+        "count": 462
+      },
+      {
+        "subsystem": "rebalancer",
+        "count": 423
+      },
+      {
+        "subsystem": "replica-state-machine",
+        "count": 360
+      }
+    ],
+    "topMetricTags": [
+      {
+        "tag": "metrics.transport.deliver",
+        "count": 35945
+      },
+      {
+        "tag": "metrics.query.lifecycle",
+        "count": 2506
+      },
+      {
+        "tag": "metrics.partition.raft_propose",
+        "count": 1743
+      },
+      {
+        "tag": "metrics.fanout.complete",
+        "count": 1352
+      },
+      {
+        "tag": "metrics.cdc.propagation",
+        "count": 816
+      },
+      {
+        "tag": "metrics.partition.sqlite",
+        "count": 783
+      },
+      {
+        "tag": "metrics.select.distributed",
+        "count": 763
+      },
+      {
+        "tag": "metrics.cdc.write",
+        "count": 545
+      },
+      {
+        "tag": "metrics.cdc.sql_route",
+        "count": 454
+      }
+    ]
+  },
+  "lastLogsTable": {
+    "initialized": true,
+    "pendingWrites": 0,
+    "writeCount": 1149,
+    "errorCount": 0,
+    "isWriting": false,
+    "maxPendingWrites": 10000,
+    "droppedWrites": 0
+  }
+}

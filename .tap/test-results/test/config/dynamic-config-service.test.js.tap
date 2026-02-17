@@ -1,24 +1,24 @@
 TAP version 14
 # Subtest: DynamicConfigService initialization
     ok 1 - should not be initialized before init
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
     ok 2 - should be initialized after init
     1..2
-ok 1 - DynamicConfigService initialization # time=10.047ms
+ok 1 - DynamicConfigService initialization # time=5.095ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService get with default value
     ok 1 - should return default value for missing key
     1..1
-ok 2 - DynamicConfigService get with default value # time=1.253ms
+ok 2 - DynamicConfigService get with default value # time=0.599ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService get from SQL engine
     ok 1 - should return value from SQL engine
     1..1
-ok 3 - DynamicConfigService get from SQL engine # time=0.704ms
+ok 3 - DynamicConfigService get from SQL engine # time=0.363ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration updated {
   key: 'logging.level',
   updatedBy: 'test-user',
@@ -32,30 +32,30 @@ Configuration updated {
     ok 5 - should insert correct key
     ok 6 - should record who made change
     1..6
-ok 4 - DynamicConfigService set value # time=1.532ms
+ok 4 - DynamicConfigService set value # time=0.905ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration updated { key: 'logging.level', updatedBy: 'admin', requiresRestart: false }
 # Subtest: DynamicConfigService update existing value
     ok 1 - should succeed
     ok 2 - should update row
     ok 3 - should record who made change
     1..3
-ok 5 - DynamicConfigService update existing value # time=0.922ms
+ok 5 - DynamicConfigService update existing value # time=0.558ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService validation - invalid log level
     ok 1 - should reject invalid log level
     1..1
-ok 6 - DynamicConfigService validation - invalid log level # time=2.039ms
+ok 6 - DynamicConfigService validation - invalid log level # time=1.116ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService validation - wrong type
     ok 1 - should reject wrong type
     1..1
-ok 7 - DynamicConfigService validation - wrong type # time=0.727ms
+ok 7 - DynamicConfigService validation - wrong type # time=0.419ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration watcher registered { key: 'logging.level' }
 Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart: false }
 # Subtest: DynamicConfigService watchers
@@ -64,27 +64,27 @@ Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart
 Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart: false }
     ok 3 - watcher should not be called after unsubscribe
     1..3
-ok 8 - DynamicConfigService watchers # time=1.443ms
+ok 8 - DynamicConfigService watchers # time=0.875ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService requiresRestart
     ok 1 - restApiPort should require restart
     ok 2 - raft election timeout should support hot reload
     ok 3 - logging.level should not require restart
     ok 4 - split threshold should not require restart
     1..4
-ok 9 - DynamicConfigService requiresRestart # time=0.699ms
+ok 9 - DynamicConfigService requiresRestart # time=0.43ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService getRestartRequiredKeys
     ok 1 - should return array
     ok 2 - should include restApiPort
     ok 3 - should not include raft timeout
     ok 4 - should not include logging.level
     1..4
-ok 10 - DynamicConfigService getRestartRequiredKeys # time=0.791ms
+ok 10 - DynamicConfigService getRestartRequiredKeys # time=0.444ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService getHotReloadKeys
     ok 1 - should return array
     ok 2 - should include logging.level
@@ -92,9 +92,9 @@ Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59
     ok 4 - should include raft timeout
     ok 5 - should not include restApiPort
     1..5
-ok 11 - DynamicConfigService getHotReloadKeys # time=0.833ms
+ok 11 - DynamicConfigService getHotReloadKeys # time=0.487ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration updated {
   key: 'node.heartbeatIntervalMs',
   updatedBy: 'test',
@@ -111,9 +111,9 @@ Configuration updated {
 Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart: false }
     ok 3 - should use string type
     1..3
-ok 12 - DynamicConfigService value types # time=1.22ms
+ok 12 - DynamicConfigService value types # time=0.66ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService getMetadata
     ok 1 - should return metadata
     ok 2 - should have correct type
@@ -122,25 +122,25 @@ Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59
     ok 5 - should have default value
     ok 6 - should return null for unknown key
     1..6
-ok 13 - DynamicConfigService getMetadata # time=0.897ms
+ok 13 - DynamicConfigService getMetadata # time=0.492ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration watcher registered { key: 'logging.level' }
 # Subtest: DynamicConfigService handleCDCEvent
     ok 1 - watcher should be called on CDC event
     ok 2 - cache should be updated
     1..2
-ok 14 - DynamicConfigService handleCDCEvent # time=0.827ms
+ok 14 - DynamicConfigService handleCDCEvent # time=0.431ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration watcher registered { key: 'logging.persistMetricsLogs' }
 # Subtest: DynamicConfigService handleCDCEvent resolves definition type when value_type is missing
     ok 1 - watcher should receive boolean when CDC payload omits value_type
     ok 2 - cache should store boolean value
     1..2
-ok 15 - DynamicConfigService handleCDCEvent resolves definition type when value_type is missing # time=0.757ms
+ok 15 - DynamicConfigService handleCDCEvent resolves definition type when value_type is missing # time=0.431ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart: false }
 # Subtest: DynamicConfigService getStats
     ok 1 - should track reads
@@ -148,7 +148,7 @@ Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart
     ok 3 - should have watcher count
     ok 4 - should have cached keys count
     1..4
-ok 16 - DynamicConfigService getStats # time=0.956ms
+ok 16 - DynamicConfigService getStats # time=0.533ms
 
 # Subtest: CONFIG_DEFINITIONS coverage
     ok 1 - should have definitions
@@ -300,99 +300,111 @@ ok 16 - DynamicConfigService getStats # time=0.956ms
     ok 147 - logging.persistMetricsLogs should have type
     ok 148 - logging.persistMetricsLogs should have requiresRestart
     ok 149 - logging.persistMetricsLogs should have description
-    ok 150 - rebalancer.periodicCheckIntervalMs should have defaultValue
-    ok 151 - rebalancer.periodicCheckIntervalMs should have type
-    ok 152 - rebalancer.periodicCheckIntervalMs should have requiresRestart
-    ok 153 - rebalancer.periodicCheckIntervalMs should have description
-    ok 154 - rebalancer.maxConcurrentMoves should have defaultValue
-    ok 155 - rebalancer.maxConcurrentMoves should have type
-    ok 156 - rebalancer.maxConcurrentMoves should have requiresRestart
-    ok 157 - rebalancer.maxConcurrentMoves should have description
-    ok 158 - rebalancer.storageSoftPressurePercent should have defaultValue
-    ok 159 - rebalancer.storageSoftPressurePercent should have type
-    ok 160 - rebalancer.storageSoftPressurePercent should have requiresRestart
-    ok 161 - rebalancer.storageSoftPressurePercent should have description
-    ok 162 - rebalancer.storageHardPressurePercent should have defaultValue
-    ok 163 - rebalancer.storageHardPressurePercent should have type
-    ok 164 - rebalancer.storageHardPressurePercent should have requiresRestart
-    ok 165 - rebalancer.storageHardPressurePercent should have description
-    ok 166 - rebalancer.storageReservationTtlMs should have defaultValue
-    ok 167 - rebalancer.storageReservationTtlMs should have type
-    ok 168 - rebalancer.storageReservationTtlMs should have requiresRestart
-    ok 169 - rebalancer.storageReservationTtlMs should have description
-    ok 170 - rebalancer.storageEmergencyHeadroomPercent should have defaultValue
-    ok 171 - rebalancer.storageEmergencyHeadroomPercent should have type
-    ok 172 - rebalancer.storageEmergencyHeadroomPercent should have requiresRestart
-    ok 173 - rebalancer.storageEmergencyHeadroomPercent should have description
-    ok 174 - rebalancer.minimumReplicaBytes should have defaultValue
-    ok 175 - rebalancer.minimumReplicaBytes should have type
-    ok 176 - rebalancer.minimumReplicaBytes should have requiresRestart
-    ok 177 - rebalancer.minimumReplicaBytes should have description
-    ok 178 - rebalancer.splitAmplificationFactor should have defaultValue
-    ok 179 - rebalancer.splitAmplificationFactor should have type
-    ok 180 - rebalancer.splitAmplificationFactor should have requiresRestart
-    ok 181 - rebalancer.splitAmplificationFactor should have description
-    ok 182 - rebalancer.partitionReplicaOverheadBytes should have defaultValue
-    ok 183 - rebalancer.partitionReplicaOverheadBytes should have type
-    ok 184 - rebalancer.partitionReplicaOverheadBytes should have requiresRestart
-    ok 185 - rebalancer.partitionReplicaOverheadBytes should have description
-    ok 186 - rebalancer.messageGroupReplicaOverheadBytes should have defaultValue
-    ok 187 - rebalancer.messageGroupReplicaOverheadBytes should have type
-    ok 188 - rebalancer.messageGroupReplicaOverheadBytes should have requiresRestart
-    ok 189 - rebalancer.messageGroupReplicaOverheadBytes should have description
-    ok 190 - rebalancer.serviceReplicaOverheadBytes should have defaultValue
-    ok 191 - rebalancer.serviceReplicaOverheadBytes should have type
-    ok 192 - rebalancer.serviceReplicaOverheadBytes should have requiresRestart
-    ok 193 - rebalancer.serviceReplicaOverheadBytes should have description
-    ok 194 - rebalancer.storageAdmissionMode should have defaultValue
-    ok 195 - rebalancer.storageAdmissionMode should have type
-    ok 196 - rebalancer.storageAdmissionMode should have requiresRestart
-    ok 197 - rebalancer.storageAdmissionMode should have description
-    ok 198 - latency.groupThresholdMs should have defaultValue
-    ok 199 - latency.groupThresholdMs should have type
-    ok 200 - latency.groupThresholdMs should have requiresRestart
-    ok 201 - latency.groupThresholdMs should have description
-    ok 202 - latency.recalcIntervalMs should have defaultValue
-    ok 203 - latency.recalcIntervalMs should have type
-    ok 204 - latency.recalcIntervalMs should have requiresRestart
-    ok 205 - latency.recalcIntervalMs should have description
-    ok 206 - latency.recalcJitterRatio should have defaultValue
-    ok 207 - latency.recalcJitterRatio should have type
-    ok 208 - latency.recalcJitterRatio should have requiresRestart
-    ok 209 - latency.recalcJitterRatio should have description
-    ok 210 - latency.pingTimeoutMs should have defaultValue
-    ok 211 - latency.pingTimeoutMs should have type
-    ok 212 - latency.pingTimeoutMs should have requiresRestart
-    ok 213 - latency.pingTimeoutMs should have description
-    ok 214 - latency.pingRetryCount should have defaultValue
-    ok 215 - latency.pingRetryCount should have type
-    ok 216 - latency.pingRetryCount should have requiresRestart
-    ok 217 - latency.pingRetryCount should have description
-    ok 218 - latency.smoothingAlpha should have defaultValue
-    ok 219 - latency.smoothingAlpha should have type
-    ok 220 - latency.smoothingAlpha should have requiresRestart
-    ok 221 - latency.smoothingAlpha should have description
-    ok 222 - latency.propagationMode should have defaultValue
-    ok 223 - latency.propagationMode should have type
-    ok 224 - latency.propagationMode should have requiresRestart
-    ok 225 - latency.propagationMode should have description
-    ok 226 - queryCoordinator.maxParallelPartitions should have defaultValue
-    ok 227 - queryCoordinator.maxParallelPartitions should have type
-    ok 228 - queryCoordinator.maxParallelPartitions should have requiresRestart
-    ok 229 - queryCoordinator.maxParallelPartitions should have description
-    ok 230 - queryCoordinator.queryTimeoutMs should have defaultValue
-    ok 231 - queryCoordinator.queryTimeoutMs should have type
-    ok 232 - queryCoordinator.queryTimeoutMs should have requiresRestart
-    ok 233 - queryCoordinator.queryTimeoutMs should have description
-    ok 234 - queryCoordinator.speculativeExecutionEnabled should have defaultValue
-    ok 235 - queryCoordinator.speculativeExecutionEnabled should have type
-    ok 236 - queryCoordinator.speculativeExecutionEnabled should have requiresRestart
-    ok 237 - queryCoordinator.speculativeExecutionEnabled should have description
-    1..237
-ok 17 - CONFIG_DEFINITIONS coverage # time=15.205ms
+    ok 150 - logging.metricsDefaultResolutionMs should have defaultValue
+    ok 151 - logging.metricsDefaultResolutionMs should have type
+    ok 152 - logging.metricsDefaultResolutionMs should have requiresRestart
+    ok 153 - logging.metricsDefaultResolutionMs should have description
+    ok 154 - logging.metricsDetailedWindowEnabled should have defaultValue
+    ok 155 - logging.metricsDetailedWindowEnabled should have type
+    ok 156 - logging.metricsDetailedWindowEnabled should have requiresRestart
+    ok 157 - logging.metricsDetailedWindowEnabled should have description
+    ok 158 - logging.metricsDetailedWindowTtlMs should have defaultValue
+    ok 159 - logging.metricsDetailedWindowTtlMs should have type
+    ok 160 - logging.metricsDetailedWindowTtlMs should have requiresRestart
+    ok 161 - logging.metricsDetailedWindowTtlMs should have description
+    ok 162 - rebalancer.periodicCheckIntervalMs should have defaultValue
+    ok 163 - rebalancer.periodicCheckIntervalMs should have type
+    ok 164 - rebalancer.periodicCheckIntervalMs should have requiresRestart
+    ok 165 - rebalancer.periodicCheckIntervalMs should have description
+    ok 166 - rebalancer.maxConcurrentMoves should have defaultValue
+    ok 167 - rebalancer.maxConcurrentMoves should have type
+    ok 168 - rebalancer.maxConcurrentMoves should have requiresRestart
+    ok 169 - rebalancer.maxConcurrentMoves should have description
+    ok 170 - rebalancer.storageSoftPressurePercent should have defaultValue
+    ok 171 - rebalancer.storageSoftPressurePercent should have type
+    ok 172 - rebalancer.storageSoftPressurePercent should have requiresRestart
+    ok 173 - rebalancer.storageSoftPressurePercent should have description
+    ok 174 - rebalancer.storageHardPressurePercent should have defaultValue
+    ok 175 - rebalancer.storageHardPressurePercent should have type
+    ok 176 - rebalancer.storageHardPressurePercent should have requiresRestart
+    ok 177 - rebalancer.storageHardPressurePercent should have description
+    ok 178 - rebalancer.storageReservationTtlMs should have defaultValue
+    ok 179 - rebalancer.storageReservationTtlMs should have type
+    ok 180 - rebalancer.storageReservationTtlMs should have requiresRestart
+    ok 181 - rebalancer.storageReservationTtlMs should have description
+    ok 182 - rebalancer.storageEmergencyHeadroomPercent should have defaultValue
+    ok 183 - rebalancer.storageEmergencyHeadroomPercent should have type
+    ok 184 - rebalancer.storageEmergencyHeadroomPercent should have requiresRestart
+    ok 185 - rebalancer.storageEmergencyHeadroomPercent should have description
+    ok 186 - rebalancer.minimumReplicaBytes should have defaultValue
+    ok 187 - rebalancer.minimumReplicaBytes should have type
+    ok 188 - rebalancer.minimumReplicaBytes should have requiresRestart
+    ok 189 - rebalancer.minimumReplicaBytes should have description
+    ok 190 - rebalancer.splitAmplificationFactor should have defaultValue
+    ok 191 - rebalancer.splitAmplificationFactor should have type
+    ok 192 - rebalancer.splitAmplificationFactor should have requiresRestart
+    ok 193 - rebalancer.splitAmplificationFactor should have description
+    ok 194 - rebalancer.partitionReplicaOverheadBytes should have defaultValue
+    ok 195 - rebalancer.partitionReplicaOverheadBytes should have type
+    ok 196 - rebalancer.partitionReplicaOverheadBytes should have requiresRestart
+    ok 197 - rebalancer.partitionReplicaOverheadBytes should have description
+    ok 198 - rebalancer.messageGroupReplicaOverheadBytes should have defaultValue
+    ok 199 - rebalancer.messageGroupReplicaOverheadBytes should have type
+    ok 200 - rebalancer.messageGroupReplicaOverheadBytes should have requiresRestart
+    ok 201 - rebalancer.messageGroupReplicaOverheadBytes should have description
+    ok 202 - rebalancer.serviceReplicaOverheadBytes should have defaultValue
+    ok 203 - rebalancer.serviceReplicaOverheadBytes should have type
+    ok 204 - rebalancer.serviceReplicaOverheadBytes should have requiresRestart
+    ok 205 - rebalancer.serviceReplicaOverheadBytes should have description
+    ok 206 - rebalancer.storageAdmissionMode should have defaultValue
+    ok 207 - rebalancer.storageAdmissionMode should have type
+    ok 208 - rebalancer.storageAdmissionMode should have requiresRestart
+    ok 209 - rebalancer.storageAdmissionMode should have description
+    ok 210 - latency.groupThresholdMs should have defaultValue
+    ok 211 - latency.groupThresholdMs should have type
+    ok 212 - latency.groupThresholdMs should have requiresRestart
+    ok 213 - latency.groupThresholdMs should have description
+    ok 214 - latency.recalcIntervalMs should have defaultValue
+    ok 215 - latency.recalcIntervalMs should have type
+    ok 216 - latency.recalcIntervalMs should have requiresRestart
+    ok 217 - latency.recalcIntervalMs should have description
+    ok 218 - latency.recalcJitterRatio should have defaultValue
+    ok 219 - latency.recalcJitterRatio should have type
+    ok 220 - latency.recalcJitterRatio should have requiresRestart
+    ok 221 - latency.recalcJitterRatio should have description
+    ok 222 - latency.pingTimeoutMs should have defaultValue
+    ok 223 - latency.pingTimeoutMs should have type
+    ok 224 - latency.pingTimeoutMs should have requiresRestart
+    ok 225 - latency.pingTimeoutMs should have description
+    ok 226 - latency.pingRetryCount should have defaultValue
+    ok 227 - latency.pingRetryCount should have type
+    ok 228 - latency.pingRetryCount should have requiresRestart
+    ok 229 - latency.pingRetryCount should have description
+    ok 230 - latency.smoothingAlpha should have defaultValue
+    ok 231 - latency.smoothingAlpha should have type
+    ok 232 - latency.smoothingAlpha should have requiresRestart
+    ok 233 - latency.smoothingAlpha should have description
+    ok 234 - latency.propagationMode should have defaultValue
+    ok 235 - latency.propagationMode should have type
+    ok 236 - latency.propagationMode should have requiresRestart
+    ok 237 - latency.propagationMode should have description
+    ok 238 - queryCoordinator.maxParallelPartitions should have defaultValue
+    ok 239 - queryCoordinator.maxParallelPartitions should have type
+    ok 240 - queryCoordinator.maxParallelPartitions should have requiresRestart
+    ok 241 - queryCoordinator.maxParallelPartitions should have description
+    ok 242 - queryCoordinator.queryTimeoutMs should have defaultValue
+    ok 243 - queryCoordinator.queryTimeoutMs should have type
+    ok 244 - queryCoordinator.queryTimeoutMs should have requiresRestart
+    ok 245 - queryCoordinator.queryTimeoutMs should have description
+    ok 246 - queryCoordinator.speculativeExecutionEnabled should have defaultValue
+    ok 247 - queryCoordinator.speculativeExecutionEnabled should have type
+    ok 248 - queryCoordinator.speculativeExecutionEnabled should have requiresRestart
+    ok 249 - queryCoordinator.speculativeExecutionEnabled should have description
+    1..249
+ok 17 - CONFIG_DEFINITIONS coverage # time=8.831ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
-Configuration seeding complete { seeded: 59, skipped: 0 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
+Configuration seeding complete { seeded: 62, skipped: 0 }
 # Subtest: DynamicConfigService seedConfiguration
     ok 1 - should seed some keys
     ok 2 - should return skipped array
@@ -404,25 +416,25 @@ Configuration seeding complete { seeded: 59, skipped: 0 }
     ok 8 - should have default_value
     ok 9 - should record updatedBy
     1..9
-ok 18 - DynamicConfigService seedConfiguration # time=1.758ms
+ok 18 - DynamicConfigService seedConfiguration # time=3.224ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
-Configuration seeding complete { seeded: 58, skipped: 1 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
+Configuration seeding complete { seeded: 61, skipped: 1 }
 # Subtest: DynamicConfigService seedConfiguration skips existing
     ok 1 - should skip existing key
     ok 2 - should not seed existing key
     1..2
-ok 19 - DynamicConfigService seedConfiguration skips existing # time=1.11ms
+ok 19 - DynamicConfigService seedConfiguration skips existing # time=1.084ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
-Configuration seeding complete { seeded: 59, skipped: 0 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
+Configuration seeding complete { seeded: 62, skipped: 0 }
 # Subtest: DynamicConfigService seedConfiguration from env vars
     ok 1 - should insert heartbeat interval
     ok 2 - should use env var value
     1..2
-ok 20 - DynamicConfigService seedConfiguration from env vars # time=1.107ms
+ok 20 - DynamicConfigService seedConfiguration from env vars # time=1ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration watcher registered { key: 'partition.splitThresholdBytes' }
 Configuration updated {
   key: 'partition.splitThresholdBytes',
@@ -434,9 +446,9 @@ Configuration updated {
     ok 2 - watcher should be called
     ok 3 - should receive new value
     1..3
-ok 21 - DynamicConfigService hot reload notification # time=0.607ms
+ok 21 - DynamicConfigService hot reload notification # time=0.571ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration watcher registered { key: 'node.restApiPort' }
 Configuration updated { key: 'node.restApiPort', updatedBy: 'admin', requiresRestart: true }
 # Subtest: DynamicConfigService restart-required notification
@@ -444,9 +456,9 @@ Configuration updated { key: 'node.restApiPort', updatedBy: 'admin', requiresRes
     ok 2 - watcher should still be called
     ok 3 - should receive new value
     1..3
-ok 22 - DynamicConfigService restart-required notification # time=0.622ms
+ok 22 - DynamicConfigService restart-required notification # time=0.527ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration watcher registered { key: 'logging.level' }
 Configuration watcher registered { key: 'logging.level' }
 Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart: false }
@@ -454,9 +466,9 @@ Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart
     ok 1 - first watcher should be called
     ok 2 - second watcher should be called
     1..2
-ok 23 - DynamicConfigService multiple watchers # time=0.587ms
+ok 23 - DynamicConfigService multiple watchers # time=0.534ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration watcher registered { key: 'logging.level' }
 Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart: false }
 # Subtest: DynamicConfigService event emission
@@ -464,21 +476,21 @@ Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart
     ok 2 - should have new value
     ok 3 - change event should be emitted
     1..3
-ok 24 - DynamicConfigService event emission # time=0.609ms
+ok 24 - DynamicConfigService event emission # time=0.546ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService validation - negative number
     ok 1 - should reject negative values
     1..1
-ok 25 - DynamicConfigService validation - negative number # time=0.448ms
+ok 25 - DynamicConfigService validation - negative number # time=0.389ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService validation - boolean type
     ok 1 - should reject non-boolean for boolean config
     1..1
-ok 26 - DynamicConfigService validation - boolean type # time=0.396ms
+ok 26 - DynamicConfigService validation - boolean type # time=0.377ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration updated {
   key: 'logging.level',
   updatedBy: 'admin-user',
@@ -489,9 +501,9 @@ Configuration updated {
     ok 2 - should have timestamp <= after
     ok 3 - should have created_at
     1..3
-ok 27 - DynamicConfigService auditing - timestamp recorded # time=0.498ms
+ok 27 - DynamicConfigService auditing - timestamp recorded # time=0.431ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration updated {
   key: 'logging.level',
   updatedBy: 'operator@example.com',
@@ -500,9 +512,9 @@ Configuration updated {
 # Subtest: DynamicConfigService auditing - updatedBy recorded
     ok 1 - should record who made the change
     1..1
-ok 28 - DynamicConfigService auditing - updatedBy recorded # time=0.393ms
+ok 28 - DynamicConfigService auditing - updatedBy recorded # time=0.368ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 Configuration updated {
   key: 'logging.level',
   updatedBy: 'security-admin',
@@ -512,9 +524,9 @@ Configuration updated {
     ok 1 - should record updater
     ok 2 - should record update time
     1..2
-ok 29 - DynamicConfigService auditing - update records change # time=0.444ms
+ok 29 - DynamicConfigService auditing - update records change # time=0.411ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService validateValue method
     ok 1 - should accept valid log level
     ok 2 - should reject number for string config
@@ -524,22 +536,22 @@ Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59
     ok 6 - should accept valid boolean
     ok 7 - should allow unknown keys
     1..7
-ok 30 - DynamicConfigService validateValue method # time=0.491ms
+ok 30 - DynamicConfigService validateValue method # time=0.566ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService getAll returns defaults
     ok 1 - should have logging.level
     ok 2 - should have default value
     ok 3 - should have heartbeat interval
     1..3
-ok 31 - DynamicConfigService getAll returns defaults # time=0.533ms
+ok 31 - DynamicConfigService getAll returns defaults # time=0.485ms
 
-Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 59 }
+Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 62 }
 # Subtest: DynamicConfigService clearCache
     ok 1 - cache should be empty after clear
     1..1
-ok 32 - DynamicConfigService clearCache # time=0.339ms
+ok 32 - DynamicConfigService clearCache # time=0.315ms
 
 1..32
-# { total: 328, pass: 328 }
-# time=74.023ms
+# { total: 340, pass: 340 }
+# time=50.378ms

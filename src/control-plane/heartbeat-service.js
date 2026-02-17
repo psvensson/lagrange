@@ -92,11 +92,18 @@ class HeartbeatService extends EventEmitter {
     this.readyLeaseMs =
       config.get(HEARTBEAT_CONFIG_KEY.READY_LEASE_MS) ||
       HEARTBEAT_DEFAULT.READY_LEASE_MS;
+    this.endpointRefreshIntervalMs =
+      Number.isFinite(options.endpointRefreshIntervalMs) &&
+      options.endpointRefreshIntervalMs > ZERO ?
+        Math.floor(options.endpointRefreshIntervalMs) :
+        HEARTBEAT_DEFAULT.ENDPOINT_REFRESH_INTERVAL_MS;
 
     this.heartbeatTimer = null;
     this.heartbeatConsecutiveFailures = NUM.ZERO;
     this.heartbeatCount = NUM.ZERO;
     this.state = HEARTBEAT_STATE.CREATED;
+    this.lastEndpointUpsertAt = null;
+    this.lastEndpointUpsertSignature = null;
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -284,14 +291,33 @@ class HeartbeatService extends EventEmitter {
       updateRow,
     );
 
-    // Register WebSocket endpoint
+    // Register or refresh WebSocket endpoint, but avoid rewriting unchanged
+    // endpoint rows on every heartbeat.
     const endpointId = `ep-${this.nodeId}-ws`;
     const existingEp = cache.get(
       SystemTableName.NODE_ENDPOINTS, endpointId,
     ) || null;
+    const endpointRow = this.buildEndpointRow(existingEp, now);
+    if (this.shouldUpsertEndpointRow(endpointRow, now)) {
+      await this.cdcIntegrationService.upsertSystemTableRow(
+        SystemTableName.NODE_ENDPOINTS, endpointRow,
+      );
+      this.lastEndpointUpsertAt = now;
+      this.lastEndpointUpsertSignature =
+        this.buildEndpointUpsertSignature(endpointRow);
+    }
+  }
 
-    const endpointRow = {
-      [COLUMN.ENDPOINT_ID]: endpointId,
+  /**
+   * Build node endpoint row payload for node_endpoints upsert.
+   * @param {Object|null} existingEp
+   * @param {number} now
+   * @return {Object}
+   * @private
+   */
+  buildEndpointRow(existingEp, now) {
+    return {
+      [COLUMN.ENDPOINT_ID]: `ep-${this.nodeId}-ws`,
       [COLUMN.NODE_ID]: this.nodeId,
       [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
       [COLUMN.ADDRESS]: this.nodeAddress,
@@ -302,10 +328,48 @@ class HeartbeatService extends EventEmitter {
       [COLUMN.CREATED_AT]: existingEp?.[COLUMN.CREATED_AT] || now,
       [COLUMN.UPDATED_AT]: now,
     };
+  }
 
-    await this.cdcIntegrationService.upsertSystemTableRow(
-      SystemTableName.NODE_ENDPOINTS, endpointRow,
-    );
+  /**
+   * Build signature used to detect materially-changed endpoint rows.
+   * @param {Object} endpointRow
+   * @return {string}
+   * @private
+   */
+  buildEndpointUpsertSignature(endpointRow) {
+    return JSON.stringify({
+      endpointId: endpointRow[COLUMN.ENDPOINT_ID],
+      nodeId: endpointRow[COLUMN.NODE_ID],
+      transportType: endpointRow[COLUMN.TRANSPORT_TYPE],
+      address: endpointRow[COLUMN.ADDRESS],
+      priority: endpointRow[COLUMN.PRIORITY],
+      metadata: endpointRow[COLUMN.METADATA],
+      status: endpointRow[COLUMN.STATUS],
+    });
+  }
+
+  /**
+   * Determine whether endpoint row should be upserted on this heartbeat.
+   * @param {Object} endpointRow
+   * @param {number} now
+   * @return {boolean}
+   * @private
+   */
+  shouldUpsertEndpointRow(endpointRow, now) {
+    const signature = this.buildEndpointUpsertSignature(endpointRow);
+    if (this.lastEndpointUpsertSignature !== signature) {
+      return true;
+    }
+
+    // Keep eventual consistency safety refresh for long-running processes.
+    if (!Number.isFinite(this.lastEndpointUpsertAt)) {
+      return true;
+    }
+    if (now - this.lastEndpointUpsertAt >= this.endpointRefreshIntervalMs) {
+      return true;
+    }
+
+    return false;
   }
 
   /**

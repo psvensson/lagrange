@@ -93,6 +93,67 @@ test('Dynamic config startup wiring applies initial metrics persistence setting'
   LoggingService.resetInstance();
 });
 
+test('Dynamic config startup wiring applies initial metrics policy settings', async (t) => {
+  LoggingService.resetInstance();
+  const loggingService = LoggingService.getInstance();
+  loggingService.initialize({
+    nodeId: 'test-node',
+    persistMetricsLogs: false,
+    metricsDefaultResolutionMs: 1000,
+    metricsDetailedWindowEnabled: false,
+    metricsDetailedWindowTtlMs: 5000,
+  });
+
+  const messageGroupService = new EventEmitter();
+  const sqlQueryEngine = createMockSqlQueryEngine({
+    [CONFIG_KEY.LOGGING_METRICS_DEFAULT_RESOLUTION_MS]: {
+      config_key: CONFIG_KEY.LOGGING_METRICS_DEFAULT_RESOLUTION_MS,
+      config_value: '15000',
+      value_type: ConfigValueType.NUMBER,
+    },
+    [CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_TTL_MS]: {
+      config_key: CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_TTL_MS,
+      config_value: '120000',
+      value_type: ConfigValueType.NUMBER,
+    },
+    [CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_ENABLED]: {
+      config_key: CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_ENABLED,
+      config_value: 'true',
+      value_type: ConfigValueType.BOOLEAN,
+    },
+  });
+
+  const wiring = await createDynamicConfigStartupWiring({
+    nodeId: 'test-node',
+    sqlQueryEngine,
+    messageGroupServices: new Map([['group-1', messageGroupService]]),
+  });
+
+  const diagnostics = loggingService.getDiagnosticsStats();
+  t.equal(
+    diagnostics.metricsDefaultResolutionMs,
+    15000,
+    'startup should apply metrics resolution from persisted config',
+  );
+  t.equal(
+    diagnostics.metricsDetailedWindowTtlMs,
+    120000,
+    'startup should apply detailed window TTL from persisted config',
+  );
+  t.equal(
+    diagnostics.metricsDetailedWindowEnabled,
+    true,
+    'startup should apply detailed metrics window enablement',
+  );
+  t.ok(
+    diagnostics.metricsDetailedWindowRemainingMs > 0,
+    'startup should initialize detailed window remaining lifetime',
+  );
+
+  wiring.shutdown();
+  LoggingService.resetInstance();
+});
+
 test('Dynamic config startup wiring applies config CDC updates at runtime', async (t) => {
   LoggingService.resetInstance();
   const loggingService = LoggingService.getInstance();
@@ -162,6 +223,74 @@ test('Dynamic config startup wiring applies config CDC updates at runtime', asyn
 
   LoggingService.resetInstance();
 });
+
+test('Dynamic config startup wiring applies metrics policy CDC updates at runtime',
+  async (t) => {
+    LoggingService.resetInstance();
+    const loggingService = LoggingService.getInstance();
+    loggingService.initialize({
+      nodeId: 'test-node',
+      persistMetricsLogs: false,
+      metricsDefaultResolutionMs: 1000,
+      metricsDetailedWindowEnabled: false,
+      metricsDetailedWindowTtlMs: 5000,
+    });
+
+    const messageGroupService = new EventEmitter();
+    const sqlQueryEngine = createMockSqlQueryEngine();
+
+    const wiring = await createDynamicConfigStartupWiring({
+      nodeId: 'test-node',
+      sqlQueryEngine,
+      messageGroupServices: new Map([['group-1', messageGroupService]]),
+    });
+
+    messageGroupService.emit('cdcApplied', {
+      tableName: TABLES.CONFIG,
+      operation: 'UPDATE',
+      data: {
+        config_key: CONFIG_KEY.LOGGING_METRICS_DEFAULT_RESOLUTION_MS,
+        config_value: '25000',
+      },
+    });
+    messageGroupService.emit('cdcApplied', {
+      tableName: TABLES.CONFIG,
+      operation: 'UPDATE',
+      data: {
+        config_key: CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_TTL_MS,
+        config_value: '45000',
+      },
+    });
+    messageGroupService.emit('cdcApplied', {
+      tableName: TABLES.CONFIG,
+      operation: 'UPDATE',
+      data: {
+        config_key: CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_ENABLED,
+        config_value: 'true',
+      },
+    });
+    await flushAsync();
+
+    const diagnostics = loggingService.getDiagnosticsStats();
+    t.equal(
+      diagnostics.metricsDefaultResolutionMs,
+      25000,
+      'cdc update should apply metrics resolution dynamically',
+    );
+    t.equal(
+      diagnostics.metricsDetailedWindowTtlMs,
+      45000,
+      'cdc update should apply detailed window TTL dynamically',
+    );
+    t.equal(
+      diagnostics.metricsDetailedWindowEnabled,
+      true,
+      'cdc update should enable detailed metrics window dynamically',
+    );
+
+    wiring.shutdown();
+    LoggingService.resetInstance();
+  });
 
 test('Dynamic config startup wiring applies initial raft timing settings', async (t) => {
   const config = ConfigurationManager.getInstance();

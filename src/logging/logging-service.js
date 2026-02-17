@@ -26,6 +26,18 @@ const LOGGING_LEVEL_INDEX = Object.freeze(
   }, {}),
 );
 
+const LOGGING_METRICS_SUPPRESS_REASON = Object.freeze({
+  NONE: null,
+  RESOLUTION: 'resolution',
+  DETAILED_WINDOW: 'detailedWindow',
+});
+
+const LOGGING_METRICS_DETAIL_LEVEL = Object.freeze({
+  DETAILED: 'detailed',
+  TIER_B_SHORT: 'b',
+  TIER_B: 'tier_b',
+});
+
 /**
  * LoggingService provides structured logging with bootstrap buffering.
  */
@@ -46,6 +58,14 @@ class LoggingService {
     this.initialized = false;
     this.showMetricsInConsole = LOGGING_DEFAULT.SHOW_METRICS_IN_CONSOLE;
     this.persistMetricsLogs = LOGGING_DEFAULT.PERSIST_METRICS_LOGS;
+    this.metricsDefaultResolutionMs =
+      LOGGING_DEFAULT.METRICS_DEFAULT_RESOLUTION_MS;
+    this.metricsDetailedWindowEnabled =
+      LOGGING_DEFAULT.METRICS_DETAILED_WINDOW_ENABLED;
+    this.metricsDetailedWindowTtlMs =
+      LOGGING_DEFAULT.METRICS_DETAILED_WINDOW_TTL_MS;
+    this.metricsDetailedWindowExpiresAtMs = null;
+    this.metricsLastEmissionByTag = new Map();
     this.level = LOGGING_LEVEL_FALLBACK;
     this.levelPriority = this.getLogLevelPriority(LOGGING_LEVEL_FALLBACK);
     this.diagnostics = this.createDiagnosticsState();
@@ -76,6 +96,12 @@ class LoggingService {
    *   for `metrics.*` log tags (disabled by default).
    * @param {boolean} [options.persistMetricsLogs] - Persist `metrics.*` logs
    *   into logs-table buffering/write pipeline.
+   * @param {number} [options.metricsDefaultResolutionMs] - Default per-tag
+   *   emission resolution for `metrics.*` logs.
+   * @param {boolean} [options.metricsDetailedWindowEnabled] - Enable
+   *   high-detail metrics for a bounded debug window.
+   * @param {number} [options.metricsDetailedWindowTtlMs] - TTL in
+   *   milliseconds for the high-detail metrics debug window.
    */
   initialize(options = {}) {
     const config = ConfigurationManager.getInstance();
@@ -99,6 +125,21 @@ class LoggingService {
       options.persistMetricsLogs ??
       config.get(CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS) ??
       LOGGING_DEFAULT.PERSIST_METRICS_LOGS;
+    this.setMetricsDefaultResolutionMs(
+      options.metricsDefaultResolutionMs ??
+      config.get(CONFIG_KEY.LOGGING_METRICS_DEFAULT_RESOLUTION_MS) ??
+      LOGGING_DEFAULT.METRICS_DEFAULT_RESOLUTION_MS,
+    );
+    this.setMetricsDetailedWindowTtlMs(
+      options.metricsDetailedWindowTtlMs ??
+      config.get(CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_TTL_MS) ??
+      LOGGING_DEFAULT.METRICS_DETAILED_WINDOW_TTL_MS,
+    );
+    this.setMetricsDetailedWindowEnabled(
+      options.metricsDetailedWindowEnabled ??
+      config.get(CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_ENABLED) ??
+      LOGGING_DEFAULT.METRICS_DETAILED_WINDOW_ENABLED,
+    );
 
     // Configure pino logger
     const pinoOptions = {
@@ -139,6 +180,8 @@ class LoggingService {
       logsSuppressedByLevel: 0,
       metricsSuppressedFromConsole: 0,
       metricsSuppressedFromPersistence: 0,
+      metricsSuppressedByResolution: 0,
+      metricsSuppressedByDetailedWindow: 0,
       subsystemCounts: new Map(),
       metricTagCounts: new Map(),
     };
@@ -177,6 +220,128 @@ class LoggingService {
   isMetricsLogMessage(message) {
     return typeof message === 'string' &&
       message.startsWith(METRICS_LOG_PREFIX);
+  }
+
+  /**
+   * Determine whether metrics context requests high-detail Tier-B logging.
+   * @param {Object} context
+   * @return {boolean}
+   * @private
+   */
+  isDetailedMetricsContext(context = {}) {
+    if (!context || typeof context !== 'object') {
+      return false;
+    }
+    if (context.metricsDetailed === true) {
+      return true;
+    }
+
+    const detailLevel = typeof context.metricsDetailLevel === 'string' ?
+      context.metricsDetailLevel.toLowerCase() :
+      null;
+    if (detailLevel === LOGGING_METRICS_DETAIL_LEVEL.DETAILED) {
+      return true;
+    }
+
+    const tier = typeof context.metricsTier === 'string' ?
+      context.metricsTier.toLowerCase() :
+      null;
+    return tier === LOGGING_METRICS_DETAIL_LEVEL.TIER_B ||
+      tier === LOGGING_METRICS_DETAIL_LEVEL.TIER_B_SHORT;
+  }
+
+  /**
+   * Check if the detailed metrics debug window is currently active.
+   * @param {number} [nowMs]
+   * @return {boolean}
+   * @private
+   */
+  isMetricsDetailedWindowActive(nowMs = Date.now()) {
+    if (!this.metricsDetailedWindowEnabled) {
+      return false;
+    }
+
+    if (!Number.isFinite(this.metricsDetailedWindowExpiresAtMs)) {
+      return false;
+    }
+
+    if (nowMs >= this.metricsDetailedWindowExpiresAtMs) {
+      this.metricsDetailedWindowEnabled = false;
+      this.metricsDetailedWindowExpiresAtMs = null;
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Return remaining detailed debug window lifetime in milliseconds.
+   * @param {number} [nowMs]
+   * @return {number}
+   * @private
+   */
+  getMetricsDetailedWindowRemainingMs(nowMs = Date.now()) {
+    if (!this.isMetricsDetailedWindowActive(nowMs)) {
+      return 0;
+    }
+    return Math.max(0, this.metricsDetailedWindowExpiresAtMs - nowMs);
+  }
+
+  /**
+   * Track last successful metrics emission timestamp for a tag.
+   * @param {string} tag
+   * @param {number} nowMs
+   * @private
+   */
+  setMetricsTagLastEmission(tag, nowMs) {
+    if (this.metricsLastEmissionByTag.has(tag)) {
+      this.metricsLastEmissionByTag.set(tag, nowMs);
+      return;
+    }
+
+    if (this.metricsLastEmissionByTag.size >=
+      LOGGING_DIAGNOSTICS_DEFAULT.MAX_METRIC_TAG_CARDINALITY) {
+      return;
+    }
+
+    this.metricsLastEmissionByTag.set(tag, nowMs);
+  }
+
+  /**
+   * Resolve whether a metrics log should be emitted in current policy state.
+   * @param {string} message
+   * @param {Object} context
+   * @return {{shouldEmit: boolean, suppressReason: string|null}}
+   * @private
+   */
+  shouldEmitMetricsMessage(message, context = {}) {
+    const nowMs = Date.now();
+    const detailedWindowActive = this.isMetricsDetailedWindowActive(nowMs);
+
+    if (this.isDetailedMetricsContext(context) && !detailedWindowActive) {
+      return {
+        shouldEmit: false,
+        suppressReason: LOGGING_METRICS_SUPPRESS_REASON.DETAILED_WINDOW,
+      };
+    }
+
+    const resolutionMs = Math.max(0, this.metricsDefaultResolutionMs);
+    if (!detailedWindowActive && resolutionMs > 0) {
+      const lastEmissionMs = this.metricsLastEmissionByTag.get(message);
+      if (Number.isFinite(lastEmissionMs) &&
+        (nowMs - lastEmissionMs) < resolutionMs) {
+        return {
+          shouldEmit: false,
+          suppressReason: LOGGING_METRICS_SUPPRESS_REASON.RESOLUTION,
+        };
+      }
+    }
+
+    this.setMetricsTagLastEmission(message, nowMs);
+    return {
+      shouldEmit: true,
+      suppressReason: LOGGING_METRICS_SUPPRESS_REASON.NONE,
+    };
   }
 
   /**
@@ -224,6 +389,7 @@ class LoggingService {
    * @param {boolean} options.isMetricsMessage
    * @param {boolean} options.shouldWriteToConsole
    * @param {boolean} options.shouldPersist
+   * @param {string|null} options.metricsSuppressReason
    * @param {string} options.message
    * @param {Object} options.context
    * @private
@@ -233,6 +399,7 @@ class LoggingService {
     const isMetricsMessage = options.isMetricsMessage;
     const shouldWriteToConsole = options.shouldWriteToConsole;
     const shouldPersist = options.shouldPersist;
+    const metricsSuppressReason = options.metricsSuppressReason;
     const message = options.message;
     const context = options.context || {};
 
@@ -249,6 +416,14 @@ class LoggingService {
       }
       if (!shouldPersist) {
         this.diagnostics.metricsSuppressedFromPersistence += 1;
+      }
+      if (metricsSuppressReason ===
+        LOGGING_METRICS_SUPPRESS_REASON.RESOLUTION) {
+        this.diagnostics.metricsSuppressedByResolution += 1;
+      }
+      if (metricsSuppressReason ===
+        LOGGING_METRICS_SUPPRESS_REASON.DETAILED_WINDOW) {
+        this.diagnostics.metricsSuppressedByDetailedWindow += 1;
       }
       this.incrementBoundedCounter(
         this.diagnostics.metricTagCounts,
@@ -313,9 +488,18 @@ class LoggingService {
         this.diagnostics.metricsSuppressedFromConsole,
       metricsSuppressedFromPersistence:
         this.diagnostics.metricsSuppressedFromPersistence,
+      metricsSuppressedByResolution:
+        this.diagnostics.metricsSuppressedByResolution,
+      metricsSuppressedByDetailedWindow:
+        this.diagnostics.metricsSuppressedByDetailedWindow,
       level: this.level,
       persistMetricsLogs: this.persistMetricsLogs,
       showMetricsInConsole: this.showMetricsInConsole,
+      metricsDefaultResolutionMs: this.metricsDefaultResolutionMs,
+      metricsDetailedWindowEnabled: this.metricsDetailedWindowEnabled,
+      metricsDetailedWindowTtlMs: this.metricsDetailedWindowTtlMs,
+      metricsDetailedWindowRemainingMs:
+        this.getMetricsDetailedWindowRemainingMs(),
       bufferSize: this.buffer.length,
       logsTableReady: this.logsTableReady,
       topSubsystems: this.getTopCounterEntries(
@@ -339,16 +523,25 @@ class LoggingService {
     const normalizedLevel = this.normalizeLogLevel(level);
     const isLevelEnabled = this.isLogLevelEnabled(normalizedLevel);
     const isMetricsMessage = this.isMetricsLogMessage(message);
+    const metricsPolicy = (isLevelEnabled && isMetricsMessage) ?
+      this.shouldEmitMetricsMessage(message, context) :
+      {
+        shouldEmit: true,
+        suppressReason: LOGGING_METRICS_SUPPRESS_REASON.NONE,
+      };
     const shouldWriteToConsole = isLevelEnabled &&
-      (this.showMetricsInConsole || !isMetricsMessage);
+      (!isMetricsMessage ||
+        (this.showMetricsInConsole && metricsPolicy.shouldEmit));
     const shouldPersist = isLevelEnabled &&
-      (this.persistMetricsLogs || !isMetricsMessage);
+      (!isMetricsMessage ||
+        (this.persistMetricsLogs && metricsPolicy.shouldEmit));
 
     this.recordDiagnostics({
       isLevelEnabled,
       isMetricsMessage,
       shouldWriteToConsole,
       shouldPersist,
+      metricsSuppressReason: metricsPolicy.suppressReason,
       message,
       context,
     });
@@ -546,6 +739,60 @@ class LoggingService {
     }
 
     this.persistMetricsLogs = persistMetricsLogs;
+    return true;
+  }
+
+  /**
+   * Update default metrics emission resolution at runtime.
+   * @param {number} metricsDefaultResolutionMs
+   * @return {boolean} True when the update was applied.
+   */
+  setMetricsDefaultResolutionMs(metricsDefaultResolutionMs) {
+    if (!Number.isFinite(metricsDefaultResolutionMs) ||
+      metricsDefaultResolutionMs < 0) {
+      return false;
+    }
+
+    this.metricsDefaultResolutionMs = Math.floor(metricsDefaultResolutionMs);
+    return true;
+  }
+
+  /**
+   * Update detailed metrics window TTL at runtime.
+   * @param {number} metricsDetailedWindowTtlMs
+   * @return {boolean} True when the update was applied.
+   */
+  setMetricsDetailedWindowTtlMs(metricsDetailedWindowTtlMs) {
+    if (!Number.isFinite(metricsDetailedWindowTtlMs) ||
+      metricsDetailedWindowTtlMs < 1000) {
+      return false;
+    }
+
+    this.metricsDetailedWindowTtlMs = Math.floor(metricsDetailedWindowTtlMs);
+    if (this.metricsDetailedWindowEnabled) {
+      this.metricsDetailedWindowExpiresAtMs =
+        Date.now() + this.metricsDetailedWindowTtlMs;
+    }
+    return true;
+  }
+
+  /**
+   * Enable or disable detailed Tier-B metrics emission window.
+   * @param {boolean} metricsDetailedWindowEnabled
+   * @return {boolean} True when the update was applied.
+   */
+  setMetricsDetailedWindowEnabled(metricsDetailedWindowEnabled) {
+    if (typeof metricsDetailedWindowEnabled !== 'boolean') {
+      return false;
+    }
+
+    this.metricsDetailedWindowEnabled = metricsDetailedWindowEnabled;
+    if (metricsDetailedWindowEnabled) {
+      this.metricsDetailedWindowExpiresAtMs =
+        Date.now() + this.metricsDetailedWindowTtlMs;
+    } else {
+      this.metricsDetailedWindowExpiresAtMs = null;
+    }
     return true;
   }
 

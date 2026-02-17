@@ -457,6 +457,34 @@ describe('ServiceReconciler action emission', () => {
 });
 
 describe('ServiceReconciler loop and telemetry', () => {
+  it('demotes idle interval completion logs to debug level', async () => {
+    const lifecycleManager = new SpyLifecycleManager();
+    const infoLogs = [];
+    const debugLogs = [];
+    const reconciler = new ServiceReconciler({
+      lifecycleManager,
+      desiredStateReader: async () => [],
+      actualStateReader: async () => [],
+      logger: {
+        debug: (message, payload) => debugLogs.push({message, payload}),
+        info: (message, payload) => infoLogs.push({message, payload}),
+        error: () => {},
+      },
+    });
+
+    await reconciler.trigger('interval', {nodeId: 'node-1'});
+
+    assert.equal(
+      infoLogs.length,
+      0,
+      'idle interval cycles should avoid info-level completion logs',
+    );
+    assert.ok(
+      debugLogs.some((entry) => entry.payload?.actionCount === 0),
+      'idle interval cycles should still emit debug completion diagnostics',
+    );
+  });
+
   it('runs event-triggered reconciliation cycles', async () => {
     const lifecycleManager = new SpyLifecycleManager();
     let desiredReads = 0;

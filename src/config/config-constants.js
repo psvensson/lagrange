@@ -191,6 +191,12 @@ const CONFIG_KEY = Object.freeze({
   LOGGING_MAX_RETRIES: 'logging.maxRetries',
   LOGGING_RETRY_DELAY_MS: 'logging.retryDelayMs',
   LOGGING_PERSIST_METRICS_LOGS: 'logging.persistMetricsLogs',
+  LOGGING_METRICS_DEFAULT_RESOLUTION_MS:
+    'logging.metricsDefaultResolutionMs',
+  LOGGING_METRICS_DETAILED_WINDOW_ENABLED:
+    'logging.metricsDetailedWindowEnabled',
+  LOGGING_METRICS_DETAILED_WINDOW_TTL_MS:
+    'logging.metricsDetailedWindowTtlMs',
   LOGGING_QUERY_DEFAULT_LIMIT: 'logging.queryDefaultLimit',
   LOGGING_QUERY_MAX_LIMIT: 'logging.queryMaxLimit',
   LOGGING_DEFAULT_TIME_RANGE_MS: 'logging.defaultTimeRangeMs',
@@ -397,6 +403,9 @@ const CONFIG_SCHEMA = {
         flushIntervalMs: {type: 'number', minimum: 100},
         retentionDays: {type: 'number', minimum: 1},
         persistMetricsLogs: {type: 'boolean'},
+        metricsDefaultResolutionMs: {type: 'number', minimum: 0},
+        metricsDetailedWindowEnabled: {type: 'boolean'},
+        metricsDetailedWindowTtlMs: {type: 'number', minimum: 1000},
         maxFileSizeBytes: {type: 'number', minimum: 1048576},
       },
       additionalProperties: false,
@@ -611,6 +620,9 @@ const DEFAULT_CONFIG = {
     flushIntervalMs: 5000,
     retentionDays: 7,
     persistMetricsLogs: false,
+    metricsDefaultResolutionMs: 30000,
+    metricsDetailedWindowEnabled: false,
+    metricsDetailedWindowTtlMs: 300000,
     maxFileSizeBytes: 104857600, // 100MB
   },
   transport: {
@@ -711,6 +723,12 @@ const ENV_MAPPINGS = {
   LOG_LEVEL: CONFIG_KEY.LOGGING_LEVEL,
   LOG_PRETTY_PRINT: CONFIG_KEY.LOGGING_PRETTY_PRINT,
   LOG_PERSIST_METRICS: CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS,
+  LOG_METRICS_DEFAULT_RESOLUTION_MS:
+    CONFIG_KEY.LOGGING_METRICS_DEFAULT_RESOLUTION_MS,
+  LOG_METRICS_DETAILED_WINDOW_ENABLED:
+    CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_ENABLED,
+  LOG_METRICS_DETAILED_WINDOW_TTL_MS:
+    CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_TTL_MS,
   SEED_NODE_ADDRESS: CONFIG_KEY.NODE_SEED_NODE_ADDRESS,
   TRANSPORT_WS_HOST: 'transport.wsHost',
   RAFT_ELECTION_TIMEOUT_MIN_MS: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS,
@@ -960,6 +978,24 @@ const CONFIG_DEFINITIONS = {
     type: CONFIG_VALUE_TYPE.BOOLEAN,
     requiresRestart: false,
     description: 'Persist metrics.* logs into the logs table',
+  },
+  [CONFIG_KEY.LOGGING_METRICS_DEFAULT_RESOLUTION_MS]: {
+    defaultValue: DEFAULT_CONFIG.logging.metricsDefaultResolutionMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Default per-tag metrics sampling resolution in milliseconds',
+  },
+  [CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_ENABLED]: {
+    defaultValue: DEFAULT_CONFIG.logging.metricsDetailedWindowEnabled,
+    type: CONFIG_VALUE_TYPE.BOOLEAN,
+    requiresRestart: false,
+    description: 'Enable high-detail metrics debug window',
+  },
+  [CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_TTL_MS]: {
+    defaultValue: DEFAULT_CONFIG.logging.metricsDetailedWindowTtlMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'TTL for high-detail metrics debug window in milliseconds',
   },
 
   // Rebalancer configuration

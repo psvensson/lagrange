@@ -146,6 +146,29 @@ test('FailureDetector - start and stop', async (t) => {
   t.end();
 });
 
+test('FailureDetector - adaptive reset timer is demand-driven', async (t) => {
+  const mockCDC = createMockCDCService();
+  const mockEngine = createMockSqlEngine();
+  const detector = new FailureDetector({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockEngine,
+    cdcIntegrationService: mockCDC,
+  });
+  detector.initialize();
+
+  detector.start();
+  t.equal(detector.adaptiveResetTimer, null,
+    'should not schedule reset timer before failures');
+
+  await detector.checkFlapping('node-1', Date.now());
+  t.ok(detector.adaptiveResetTimer,
+    'should start reset timer once failures are tracked');
+
+  detector.stop();
+  t.equal(detector.adaptiveResetTimer, null, 'should clear reset timer on stop');
+  t.end();
+});
+
 test('FailureDetector - start requires initialization', async (t) => {
   const detector = new FailureDetector({
     nodeId: 'test-node',

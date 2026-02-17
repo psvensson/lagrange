@@ -1,0 +1,43 @@
+{
+  "runDate": "2026-02-17",
+  "runs": [
+    {
+      "clusterSize": 3,
+      "report": "test-output/postgres-baseline-size3-current-20260217.report.json",
+      "passed": true,
+      "durationMs": 91270,
+      "comparison": {
+        "sutOpsPerSec": 70.02994701681641,
+        "sutP99LatencyMs": 700,
+        "baselineTps": 3830.93009,
+        "baselineLatencyAvgMs": 2.088,
+        "throughputRatioSutToBaseline": 0.018280142255693424,
+        "p99LatencyRatioSutToBaselineAvg": 335.2490421455939
+      },
+      "convergence": {
+        "settledAfterMs": 5166,
+        "leaderChanges": 0,
+        "maxOverTargetMs": 0
+      }
+    },
+    {
+      "clusterSize": 5,
+      "report": "test-output/postgres-baseline-size5-current-20260217.report.json",
+      "passed": true,
+      "durationMs": 100821,
+      "comparison": {
+        "sutOpsPerSec": 20.059066054563,
+        "sutP99LatencyMs": 4587,
+        "baselineTps": 3632.512658,
+        "baselineLatencyAvgMs": 2.202,
+        "throughputRatioSutToBaseline": 0.005522091164744126,
+        "p99LatencyRatioSutToBaselineAvg": 2083.106267029973
+      },
+      "convergence": {
+        "settledAfterMs": 5847,
+        "leaderChanges": 0,
+        "maxOverTargetMs": 0
+      }
+    }
+  ]
+}

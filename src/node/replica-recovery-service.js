@@ -82,6 +82,8 @@ class ReplicaRecoveryService extends EventEmitter {
 
     // State
     this.checkTimer = null;
+    this.monitoringActive = false;
+    this.currentCheckIntervalMs = this.checkIntervalMs;
     this.pendingRecoveries = new Map(); // entityId -> recovery info
     this.recoveryCount = 0;
 
@@ -133,7 +135,7 @@ class ReplicaRecoveryService extends EventEmitter {
       throw new Error(REPLICA_RECOVERY_ERROR_MSG.NOT_INITIALIZED);
     }
 
-    if (this.checkTimer) {
+    if (this.monitoringActive) {
       return; // Already running
     }
 
@@ -142,29 +144,18 @@ class ReplicaRecoveryService extends EventEmitter {
       intervalMs: this.checkIntervalMs,
     });
 
-    this.checkTimer = setInterval(async () => {
-      try {
-        await this.checkReplicaCounts();
-      } catch (error) {
-        if (error?.isCritical) {
-          throw error;
-        }
-        this.logger.error(REPLICA_RECOVERY_LOG_MSG.CHECK_ERROR, {
-          nodeId: this.nodeId,
-          error: error.message,
-        });
-        throw error;
-      }
-    }, this.checkIntervalMs);
-    this.checkTimer.unref();
+    this.monitoringActive = true;
+    this.currentCheckIntervalMs = this.checkIntervalMs;
+    this.scheduleNextCheck(this.currentCheckIntervalMs);
   }
 
   /**
    * Stop the replica recovery monitoring loop.
    */
   stop() {
+    this.monitoringActive = false;
     if (this.checkTimer) {
-      clearInterval(this.checkTimer);
+      clearTimeout(this.checkTimer);
       this.checkTimer = null;
     }
 
@@ -175,47 +166,146 @@ class ReplicaRecoveryService extends EventEmitter {
 
   /**
    * Check replica counts for all partitions and message groups.
-   * @return {Promise<void>}
+   * @return {Promise<Object>} Summary of cycle activity.
    */
   async checkReplicaCounts() {
-    await this.checkPartitionReplicas();
-    await this.checkMessageGroupReplicas();
+    const partitionSummary = await this.checkPartitionReplicas();
+    const messageGroupSummary = await this.checkMessageGroupReplicas();
+    const deficitCount = partitionSummary.deficitCount +
+      messageGroupSummary.deficitCount;
+    const recoveryCount = partitionSummary.recoveryCount +
+      messageGroupSummary.recoveryCount;
+
+    return {
+      deficitCount,
+      recoveryCount,
+      hadActivity: deficitCount > REPLICA_RECOVERY_NUM.ZERO ||
+        recoveryCount > REPLICA_RECOVERY_NUM.ZERO ||
+        this.pendingRecoveries.size > REPLICA_RECOVERY_NUM.ZERO,
+    };
   }
 
   /**
    * Check partition replica counts and trigger recovery if needed.
-   * @return {Promise<void>}
+   * @return {Promise<Object>} Summary for partition entities.
    * @private
    */
   async checkPartitionReplicas() {
     const partitions = this.getPartitions();
+    let deficitCount = REPLICA_RECOVERY_NUM.ZERO;
+    let recoveryCount = REPLICA_RECOVERY_NUM.ZERO;
 
     for (const partition of partitions) {
       const healthyReplicas = this.getHealthyPartitionReplicas(partition.partition_id);
       const targetCount = partition.replica_count || this.minPartitionReplicas;
 
       if (healthyReplicas.length < targetCount) {
-        await this.triggerPartitionRecovery(partition, healthyReplicas, targetCount);
+        deficitCount += 1;
+        recoveryCount += await this.triggerPartitionRecovery(
+          partition,
+          healthyReplicas,
+          targetCount,
+        );
       }
     }
+
+    return {
+      deficitCount,
+      recoveryCount,
+    };
   }
 
   /**
    * Check message group replica counts and trigger recovery if needed.
-   * @return {Promise<void>}
+   * @return {Promise<Object>} Summary for message group entities.
    * @private
    */
   async checkMessageGroupReplicas() {
     const messageGroups = this.getMessageGroups();
+    let deficitCount = REPLICA_RECOVERY_NUM.ZERO;
+    let recoveryCount = REPLICA_RECOVERY_NUM.ZERO;
 
     for (const group of messageGroups) {
       const healthyReplicas = this.getHealthyMessageGroupReplicas(group.group_id);
       const targetCount = group.replica_count || this.minMessageGroupReplicas;
 
       if (healthyReplicas.length < targetCount) {
-        await this.triggerMessageGroupRecovery(group, healthyReplicas, targetCount);
+        deficitCount += 1;
+        recoveryCount += await this.triggerMessageGroupRecovery(
+          group,
+          healthyReplicas,
+          targetCount,
+        );
       }
     }
+
+    return {
+      deficitCount,
+      recoveryCount,
+    };
+  }
+
+  /**
+   * Schedule the next monitoring cycle as a one-shot timer.
+   * @param {number} delayMs - Delay before next cycle.
+   * @private
+   */
+  scheduleNextCheck(delayMs) {
+    if (!this.monitoringActive) {
+      return;
+    }
+
+    const boundedDelay = Math.max(
+      this.checkIntervalMs,
+      Math.min(delayMs, REPLICA_RECOVERY_DEFAULT.MAX_CHECK_INTERVAL_MS),
+    );
+
+    this.checkTimer = setTimeout(async () => {
+      this.checkTimer = null;
+      if (!this.monitoringActive) {
+        return;
+      }
+
+      let cycleSummary = {
+        hadActivity: false,
+      };
+      try {
+        cycleSummary = await this.checkReplicaCounts();
+      } catch (error) {
+        if (error?.isCritical) {
+          throw error;
+        }
+        this.logger.error(REPLICA_RECOVERY_LOG_MSG.CHECK_ERROR, {
+          nodeId: this.nodeId,
+          error: error.message,
+        });
+      }
+
+      this.updateCheckCadence(cycleSummary);
+      this.scheduleNextCheck(this.currentCheckIntervalMs);
+    }, boundedDelay);
+
+    this.checkTimer.unref();
+  }
+
+  /**
+   * Adapt monitoring cadence based on recent activity.
+   * @param {Object} cycleSummary - Summary returned from checkReplicaCounts.
+   */
+  updateCheckCadence(cycleSummary = {}) {
+    if (cycleSummary.hadActivity) {
+      this.currentCheckIntervalMs = this.checkIntervalMs;
+      return;
+    }
+
+    const nextIntervalMs = Math.floor(
+      this.currentCheckIntervalMs *
+      REPLICA_RECOVERY_DEFAULT.IDLE_BACKOFF_MULTIPLIER,
+    );
+    this.currentCheckIntervalMs = Math.min(
+      REPLICA_RECOVERY_DEFAULT.MAX_CHECK_INTERVAL_MS,
+      Math.max(this.checkIntervalMs, nextIntervalMs),
+    );
   }
 
   /**
@@ -223,7 +313,7 @@ class ReplicaRecoveryService extends EventEmitter {
    * @param {Object} partition - Partition needing recovery.
    * @param {Array<Object>} healthyReplicas - Current healthy replicas.
    * @param {number} targetCount - Target replica count.
-   * @return {Promise<void>}
+   * @return {Promise<number>} Number of replicas created.
    * @private
    */
   async triggerPartitionRecovery(partition, healthyReplicas, targetCount) {
@@ -232,7 +322,7 @@ class ReplicaRecoveryService extends EventEmitter {
 
     // Check if recovery is already pending
     if (this.pendingRecoveries.has(recoveryKey)) {
-      return;
+      return REPLICA_RECOVERY_NUM.ZERO;
     }
 
     this.logger.warn(REPLICA_RECOVERY_LOG_MSG.PARTITION_BELOW_MIN, {
@@ -258,7 +348,7 @@ class ReplicaRecoveryService extends EventEmitter {
         partitionId: partition.partition_id,
         needed,
       });
-      return;
+      return REPLICA_RECOVERY_NUM.ZERO;
     }
 
     // Mark recovery as pending
@@ -270,12 +360,15 @@ class ReplicaRecoveryService extends EventEmitter {
     });
 
     // Create replacement replicas
+    let createdCount = REPLICA_RECOVERY_NUM.ZERO;
     for (const node of targetNodes) {
       await this.createPartitionReplica(partition, node.node_id);
+      createdCount += 1;
     }
 
     // Clear pending recovery
     this.pendingRecoveries.delete(recoveryKey);
+    return createdCount;
   }
 
   /**
@@ -283,7 +376,7 @@ class ReplicaRecoveryService extends EventEmitter {
    * @param {Object} group - Message group needing recovery.
    * @param {Array<Object>} healthyReplicas - Current healthy replicas.
    * @param {number} targetCount - Target replica count.
-   * @return {Promise<void>}
+   * @return {Promise<number>} Number of replicas created.
    * @private
    */
   async triggerMessageGroupRecovery(group, healthyReplicas, targetCount) {
@@ -292,7 +385,7 @@ class ReplicaRecoveryService extends EventEmitter {
 
     // Check if recovery is already pending
     if (this.pendingRecoveries.has(recoveryKey)) {
-      return;
+      return REPLICA_RECOVERY_NUM.ZERO;
     }
 
     this.logger.warn(REPLICA_RECOVERY_LOG_MSG.MESSAGE_GROUP_BELOW_MIN, {
@@ -317,7 +410,7 @@ class ReplicaRecoveryService extends EventEmitter {
         groupId: group.group_id,
         needed,
       });
-      return;
+      return REPLICA_RECOVERY_NUM.ZERO;
     }
 
     // Mark recovery as pending
@@ -329,12 +422,15 @@ class ReplicaRecoveryService extends EventEmitter {
     });
 
     // Create replacement replicas
+    let createdCount = REPLICA_RECOVERY_NUM.ZERO;
     for (const node of targetNodes) {
       await this.createMessageGroupReplica(group, node.node_id);
+      createdCount += 1;
     }
 
     // Clear pending recovery
     this.pendingRecoveries.delete(recoveryKey);
+    return createdCount;
   }
 
   /**
@@ -621,11 +717,12 @@ class ReplicaRecoveryService extends EventEmitter {
     return {
       nodeId: this.nodeId,
       checkIntervalMs: this.checkIntervalMs,
+      currentCheckIntervalMs: this.currentCheckIntervalMs,
       minPartitionReplicas: this.minPartitionReplicas,
       minMessageGroupReplicas: this.minMessageGroupReplicas,
       pendingRecoveries: this.pendingRecoveries.size,
       recoveryCount: this.recoveryCount,
-      isRunning: this.checkTimer !== null,
+      isRunning: this.monitoringActive,
       initialized: this.initialized,
     };
   }
@@ -643,7 +740,7 @@ class ReplicaRecoveryService extends EventEmitter {
    * @return {boolean} True if running.
    */
   isRunning() {
-    return this.checkTimer !== null;
+    return this.monitoringActive;
   }
 
   /**

@@ -219,8 +219,8 @@ class FailureDetector extends EventEmitter {
     }, this.checkIntervalMs);
     this.checkTimer.unref();
 
-    // Start adaptive threshold reset timer
-    this.startAdaptiveThresholdReset();
+    // Reset timer is demand-driven and only runs after observed failures.
+    this.ensureAdaptiveThresholdResetTimer();
   }
 
   /**
@@ -232,10 +232,7 @@ class FailureDetector extends EventEmitter {
       this.checkTimer = null;
     }
 
-    if (this.adaptiveResetTimer) {
-      clearInterval(this.adaptiveResetTimer);
-      this.adaptiveResetTimer = null;
-    }
+    this.stopAdaptiveThresholdResetTimer();
 
     this.logger.info(FAILURE_DETECTOR_LOG_MSG.STOPPED, {
       nodeId: this.nodeId,
@@ -575,14 +572,15 @@ class FailureDetector extends EventEmitter {
     // Record this failure
     failures.push(now);
     this.recentFailures.set(nodeId, failures);
+    this.ensureAdaptiveThresholdResetTimer();
   }
 
   /**
-   * Start adaptive threshold reset timer.
+   * Ensure adaptive threshold reset timer is running when needed.
    * @private
    */
-  startAdaptiveThresholdReset() {
-    if (this.adaptiveResetTimer) {
+  ensureAdaptiveThresholdResetTimer() {
+    if (this.adaptiveResetTimer || this.recentFailures.size === NUM.ZERO) {
       return;
     }
 
@@ -607,8 +605,24 @@ class FailureDetector extends EventEmitter {
           });
         }
       }
+
+      if (this.recentFailures.size === NUM.ZERO) {
+        this.stopAdaptiveThresholdResetTimer();
+      }
     }, FAILURE_DETECTOR_DEFAULT.ADAPTIVE_RESET_INTERVAL_MS);
     this.adaptiveResetTimer.unref();
+  }
+
+  /**
+   * Stop adaptive threshold reset timer if running.
+   * @private
+   */
+  stopAdaptiveThresholdResetTimer() {
+    if (!this.adaptiveResetTimer) {
+      return;
+    }
+    clearInterval(this.adaptiveResetTimer);
+    this.adaptiveResetTimer = null;
   }
 
   /**

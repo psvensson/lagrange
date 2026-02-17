@@ -16,6 +16,7 @@ const RESOURCE_DIAGNOSTICS_DEFAULT = Object.freeze({
   HISTORY_LIMIT: 180,
   TREND_WINDOW_SAMPLES: 12,
   TOP_SIGNAL_LIMIT: 12,
+  COMPACT_TOP_SIGNAL_LIMIT: 10,
   MAX_FLATTEN_DEPTH: 4,
   MAX_SIGNAL_COUNT: 2048,
   MIN_ELAPSED_MS: 1,
@@ -123,13 +124,39 @@ class ResourceDiagnosticsSampler {
    */
   getReport() {
     const latestSample = this.collect();
+    const latest = this.buildPublicSample(latestSample);
+    const trend = this.buildTrendReport();
     return {
       nodeId: this.nodeId,
       sampleCount: this.samples.length,
       historyLimit: this.historyLimit,
       trendWindowSamples: this.trendWindowSamples,
-      latest: this.buildPublicSample(latestSample),
-      trend: this.buildTrendReport(),
+      latest,
+      trend,
+      compact: this.buildCompactReport(latest, trend),
+    };
+  }
+
+  /**
+   * Build compact operator-facing diagnostics view.
+   * @param {Object} latest
+   * @param {Object|null} trend
+   * @return {Object}
+   * @private
+   */
+  buildCompactReport(latest, trend) {
+    return {
+      cpuPercent: latest?.process?.cpuPercent ?? null,
+      eventLoopUtilizationPercent:
+        latest?.process?.eventLoopUtilizationPercent ?? null,
+      rssGrowthPerMinBytes: trend?.rssGrowthPerMinBytes ?? null,
+      writeRateBytesPerSec: trend?.writeRateBytesPerSec ?? null,
+      topGrowingSignals: Array.isArray(trend?.topGrowingSignals) ?
+        trend.topGrowingSignals.slice(
+          NUM.ZERO,
+          RESOURCE_DIAGNOSTICS_DEFAULT.COMPACT_TOP_SIGNAL_LIMIT,
+        ) :
+        [],
     };
   }
 

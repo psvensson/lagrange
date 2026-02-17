@@ -129,3 +129,59 @@ test('HeartbeatService does not emit warning below usage threshold', async (t) =
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
+
+test('HeartbeatService throttles endpoint upserts but refreshes after interval', async (t) => {
+  initEnv();
+
+  const counters = {
+    nodeUpdates: 0,
+    endpointUpserts: 0,
+  };
+  const service = new HeartbeatService({
+    nodeId: 'node-c',
+    nodeAddress: '10.0.0.3:8080',
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => {
+        counters.nodeUpdates += 1;
+        return {success: true};
+      },
+      upsertSystemTableRow: async () => {
+        counters.endpointUpserts += 1;
+        return {success: true};
+      },
+    },
+    systemTableCache: createMockCache(),
+    endpointRefreshIntervalMs: 100,
+  });
+
+  const originalNow = Date.now;
+  let now = 0;
+  Date.now = () => now;
+  try {
+    await service.sendHeartbeat(null, null);
+    now += 10;
+    await service.sendHeartbeat(null, null);
+    now += 10;
+    await service.sendHeartbeat(null, null);
+
+    t.equal(counters.nodeUpdates, 3, 'should update nodes row every heartbeat');
+    t.equal(
+      counters.endpointUpserts,
+      1,
+      'should avoid repeated endpoint upserts inside refresh window',
+    );
+
+    now += 150;
+    await service.sendHeartbeat(null, null);
+    t.equal(
+      counters.endpointUpserts,
+      2,
+      'should refresh endpoint row after refresh interval elapses',
+    );
+  } finally {
+    Date.now = originalNow;
+  }
+
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+});

@@ -181,19 +181,53 @@ async function createDynamicConfigStartupWiring(options = {}) {
     }
   };
 
-  const applyPersistMetricsLogs = (value) => {
-    if (typeof value !== TYPEOF.BOOLEAN) {
-      return;
-    }
-    loggingService.setPersistMetricsLogs(value);
-  };
-
-  watcherUnsubscribers.push(dynamicConfigService.watch(
-    CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS,
-    (newValue) => {
-      applyPersistMetricsLogs(newValue);
+  const loggingDynamicAppliers = [
+    {
+      key: CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS,
+      apply: (value) => {
+        if (typeof value !== TYPEOF.BOOLEAN) {
+          return;
+        }
+        loggingService.setPersistMetricsLogs(value);
+      },
     },
-  ));
+    {
+      key: CONFIG_KEY.LOGGING_METRICS_DEFAULT_RESOLUTION_MS,
+      apply: (value) => {
+        if (!Number.isFinite(value) || value < 0) {
+          return;
+        }
+        loggingService.setMetricsDefaultResolutionMs(value);
+      },
+    },
+    {
+      key: CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_TTL_MS,
+      apply: (value) => {
+        if (!Number.isFinite(value) || value < 1000) {
+          return;
+        }
+        loggingService.setMetricsDetailedWindowTtlMs(value);
+      },
+    },
+    {
+      key: CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_ENABLED,
+      apply: (value) => {
+        if (typeof value !== TYPEOF.BOOLEAN) {
+          return;
+        }
+        loggingService.setMetricsDetailedWindowEnabled(value);
+      },
+    },
+  ];
+
+  for (const entry of loggingDynamicAppliers) {
+    watcherUnsubscribers.push(dynamicConfigService.watch(
+      entry.key,
+      (newValue) => {
+        entry.apply(newValue);
+      },
+    ));
+  }
 
   for (const key of DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEYS) {
     watcherUnsubscribers.push(dynamicConfigService.watch(
@@ -212,15 +246,16 @@ async function createDynamicConfigStartupWiring(options = {}) {
     ));
   }
 
-  try {
-    const persistMetricsLogs = await dynamicConfigService.get(
-      CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS,
-    );
-    applyPersistMetricsLogs(persistMetricsLogs);
-  } catch (error) {
-    logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
-      error: error.message,
-    });
+  for (const entry of loggingDynamicAppliers) {
+    try {
+      const value = await dynamicConfigService.get(entry.key);
+      entry.apply(value);
+    } catch (error) {
+      logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
+        key: entry.key,
+        error: error.message,
+      });
+    }
   }
 
   for (const key of DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEYS) {

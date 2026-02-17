@@ -3883,6 +3883,26 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Get compact partition runtime statistics for diagnostics attribution.
+   * @return {Object}
+   */
+  getStats() {
+    const pendingRequestTrackerStats = this.pendingRequestTracker &&
+      typeof this.pendingRequestTracker.getStats === 'function' ?
+      this.pendingRequestTracker.getStats() :
+      null;
+    return {
+      partitionId: this.partitionId,
+      replicaId: this.replicaId,
+      role: this.role,
+      isLeader: this.isLeader,
+      initialized: this.initialized,
+      pendingRequestCount: pendingRequestTrackerStats?.pendingCount || NUM.ZERO,
+      pendingRequestTracker: pendingRequestTrackerStats,
+    };
+  }
+
+  /**
    * Shutdown the partition service.
    * @return {Promise<void>}
    */

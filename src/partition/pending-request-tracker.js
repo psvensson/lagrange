@@ -23,6 +23,7 @@ class PendingRequestTracker {
    * @param {Object} options - Configuration options.
    * @param {number} options.defaultTimeoutMs - Default timeout in milliseconds (default: 30000).
    * @param {number} options.cleanupIntervalMs - Cleanup interval in milliseconds (default: 60000).
+   * @param {number} options.maxPendingRequests - Maximum tracked requests before backpressure.
    */
   constructor(options = {}) {
     this.pendingRequests = new Map();
@@ -30,12 +31,45 @@ class PendingRequestTracker {
       PENDING_REQUEST_DEFAULT.REQUEST_TIMEOUT_MS;
     this.cleanupIntervalMs = options.cleanupIntervalMs ||
       PENDING_REQUEST_DEFAULT.CLEANUP_INTERVAL_MS;
+    this.maxPendingRequests = Number.isFinite(options.maxPendingRequests) &&
+      options.maxPendingRequests > NUM.ZERO ?
+      Math.floor(options.maxPendingRequests) :
+      PENDING_REQUEST_DEFAULT.MAX_PENDING_REQUESTS;
     this.cleanupTimer = null;
+    this.stats = this.createStatsState();
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(PARTITION_SUBSYSTEM.PENDING_REQUEST_TRACKER) : console;
+  }
+
+  /**
+   * Create baseline tracker statistics state.
+   * @return {Object}
+   * @private
+   */
+  createStatsState() {
+    return {
+      trackedTotal: NUM.ZERO,
+      resolvedTotal: NUM.ZERO,
+      rejectedTotal: NUM.ZERO,
+      timedOutTotal: NUM.ZERO,
+      staleCleanedTotal: NUM.ZERO,
+      backpressureRejectTotal: NUM.ZERO,
+      maxPendingObserved: NUM.ZERO,
+    };
+  }
+
+  /**
+   * Update max pending watermark using current queue size.
+   * @private
+   */
+  updateMaxPendingObserved() {
+    this.stats.maxPendingObserved = Math.max(
+      this.stats.maxPendingObserved,
+      this.pendingRequests.size,
+    );
   }
 
   /**
@@ -45,11 +79,26 @@ class PendingRequestTracker {
    * @return {Promise<Object>} Promise that resolves with ACK or rejects on timeout.
    */
   track(requestId, metadata = {}) {
+    if (this.pendingRequests.size >= this.maxPendingRequests) {
+      this.stats.backpressureRejectTotal += NUM.ONE;
+      this.logger.warn(PENDING_REQUEST_LOG_MSG.BACKPRESSURE_APPLIED, {
+        requestId,
+        type: metadata.type,
+        pendingCount: this.pendingRequests.size,
+        maxPendingRequests: this.maxPendingRequests,
+      });
+      throw new Error(
+        PENDING_REQUEST_ERROR_MSG.backpressure(this.maxPendingRequests),
+      );
+    }
+
     return new Promise((resolve, reject) => {
       const timeoutMs = metadata.timeoutMs || this.defaultTimeoutMs;
 
       const timeoutId = setTimeout(() => {
         this.pendingRequests.delete(requestId);
+        this.stats.timedOutTotal += NUM.ONE;
+        this.stats.rejectedTotal += NUM.ONE;
         this.logger.warn(PENDING_REQUEST_LOG_MSG.REQUEST_TIMED_OUT, {
           requestId,
           timeoutMs,
@@ -65,6 +114,8 @@ class PendingRequestTracker {
         metadata,
         startedAt: Date.now(),
       });
+      this.stats.trackedTotal += NUM.ONE;
+      this.updateMaxPendingObserved();
 
       this.logger.debug(PENDING_REQUEST_LOG_MSG.TRACKING_REQUEST, {
         requestId,
@@ -86,6 +137,7 @@ class PendingRequestTracker {
       clearTimeout(pending.timeoutId);
       this.pendingRequests.delete(requestId);
       pending.resolve(ack);
+      this.stats.resolvedTotal += NUM.ONE;
 
       this.logger.debug(PENDING_REQUEST_LOG_MSG.REQUEST_RESOLVED, {
         requestId,
@@ -113,6 +165,7 @@ class PendingRequestTracker {
 
       const errorObj = error instanceof Error ? error : new Error(error);
       pending.reject(errorObj);
+      this.stats.rejectedTotal += NUM.ONE;
 
       this.logger.debug(PENDING_REQUEST_LOG_MSG.REQUEST_REJECTED, {
         requestId,
@@ -144,6 +197,33 @@ class PendingRequestTracker {
   }
 
   /**
+   * Get bounded queue and lifecycle statistics.
+   * @return {Object}
+   */
+  getStats() {
+    const pendingCount = this.pendingRequests.size;
+    const saturationPercent = this.maxPendingRequests > NUM.ZERO ?
+      Math.round((pendingCount / this.maxPendingRequests) * NUM.HUNDRED) :
+      NUM.ZERO;
+    return {
+      pendingCount,
+      maxPendingRequests: this.maxPendingRequests,
+      availableCapacity: Math.max(
+        NUM.ZERO,
+        this.maxPendingRequests - pendingCount,
+      ),
+      saturationPercent,
+      trackedTotal: this.stats.trackedTotal,
+      resolvedTotal: this.stats.resolvedTotal,
+      rejectedTotal: this.stats.rejectedTotal,
+      timedOutTotal: this.stats.timedOutTotal,
+      staleCleanedTotal: this.stats.staleCleanedTotal,
+      backpressureRejectTotal: this.stats.backpressureRejectTotal,
+      maxPendingObserved: this.stats.maxPendingObserved,
+    };
+  }
+
+  /**
    * Get metadata for a pending request.
    * @param {string} requestId - Request ID.
    * @return {Object|null} Request metadata or null if not found.
@@ -172,6 +252,7 @@ class PendingRequestTracker {
       clearTimeout(pending.timeoutId);
       pending.reject(new Error(PENDING_REQUEST_LOG_MSG.TRACKER_SHUTDOWN));
     }
+    this.stats.rejectedTotal += count;
 
     this.pendingRequests.clear();
 
@@ -233,6 +314,8 @@ class PendingRequestTracker {
         this.pendingRequests.delete(requestId);
         pending.reject(new Error(PENDING_REQUEST_ERROR_MSG.staleRequest(elapsed)));
         cleanedCount += NUM.ONE;
+        this.stats.staleCleanedTotal += NUM.ONE;
+        this.stats.rejectedTotal += NUM.ONE;
 
         this.logger.warn(PENDING_REQUEST_LOG_MSG.CLEANED_STALE_REQUEST, {
           requestId,

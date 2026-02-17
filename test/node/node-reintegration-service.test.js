@@ -140,6 +140,42 @@ test('NodeReintegrationService - start and stop', async (t) => {
   t.end();
 });
 
+test('NodeReintegrationService - idle cadence backs off and resets on activity',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const now = Date.now();
+    const mockCache = createMockCache({
+      nodes: [
+        {
+          node_id: 'node-1',
+          status: NodeStatus.ACTIVE,
+          last_heartbeat: now - 500,
+        },
+      ],
+    });
+    const service = new NodeReintegrationService({
+      nodeId: 'test-node',
+      systemTableCache: mockCache,
+      cdcIntegrationService: mockCDC,
+    });
+    service.initialize();
+
+    const idleSummary = await service.checkRecoveringNodes();
+    service.updateCheckCadence(idleSummary);
+    t.ok(
+      service.currentCheckIntervalMs > service.checkIntervalMs,
+      'should increase interval after idle cycle',
+    );
+
+    service.updateCheckCadence({hadActivity: true});
+    t.equal(
+      service.currentCheckIntervalMs,
+      service.checkIntervalMs,
+      'should reset interval to base when activity is detected',
+    );
+    t.end();
+  });
+
 test('NodeReintegrationService - start requires initialization', async (t) => {
   const service = new NodeReintegrationService({
     nodeId: 'test-node',

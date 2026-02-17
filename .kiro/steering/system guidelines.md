@@ -183,6 +183,11 @@ If the answer to any of 4/5/6 is yes, you are violating this contract.
 - When changes are made to the system, update `architecture.md` to reflect them.
 - The architecture doc is the canonical reference for component ownership and
   data flow. Keep it accurate.
+- The `docs/` directory is for end-user documentation only.
+- End-user documentation updates in `docs/` may be paired with corresponding
+  end-user code/examples in `examples/` when useful.
+- Internal engineering specs, design notes, and implementation planning
+  documents belong in `.kiro/specs/`, not `docs/`.
 
 ---
 

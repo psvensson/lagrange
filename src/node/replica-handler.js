@@ -1536,15 +1536,101 @@ class ReplicaHandler extends EventEmitter {
   }
 
   /**
+   * Aggregate pending-request tracker telemetry from local replica services.
+   * @return {Object}
+   * @private
+   */
+  getPendingRequestTrackerAggregate() {
+    const aggregate = {
+      pendingCount: NUM.ZERO,
+      maxPendingRequests: NUM.ZERO,
+      availableCapacity: NUM.ZERO,
+      saturationPercent: NUM.ZERO,
+      trackedTotal: NUM.ZERO,
+      resolvedTotal: NUM.ZERO,
+      rejectedTotal: NUM.ZERO,
+      timedOutTotal: NUM.ZERO,
+      staleCleanedTotal: NUM.ZERO,
+      backpressureRejectTotal: NUM.ZERO,
+      maxPendingObserved: NUM.ZERO,
+      replicaCountWithTracker: NUM.ZERO,
+    };
+
+    for (const service of this.localServices.values()) {
+      if (!service || typeof service.getStats !== REPLICA_HANDLER_TYPEOF.FUNCTION) {
+        continue;
+      }
+
+      let serviceStats = null;
+      try {
+        serviceStats = service.getStats();
+      } catch (_error) {
+        continue;
+      }
+
+      const tracker = serviceStats?.pendingRequestTracker;
+      if (!tracker || typeof tracker !== REPLICA_HANDLER_TYPEOF.OBJECT) {
+        continue;
+      }
+
+      aggregate.replicaCountWithTracker += NUM.ONE;
+      aggregate.pendingCount += Number.isFinite(tracker.pendingCount) ?
+        tracker.pendingCount :
+        NUM.ZERO;
+      aggregate.maxPendingRequests += Number.isFinite(tracker.maxPendingRequests) ?
+        tracker.maxPendingRequests :
+        NUM.ZERO;
+      aggregate.availableCapacity += Number.isFinite(tracker.availableCapacity) ?
+        tracker.availableCapacity :
+        NUM.ZERO;
+      aggregate.trackedTotal += Number.isFinite(tracker.trackedTotal) ?
+        tracker.trackedTotal :
+        NUM.ZERO;
+      aggregate.resolvedTotal += Number.isFinite(tracker.resolvedTotal) ?
+        tracker.resolvedTotal :
+        NUM.ZERO;
+      aggregate.rejectedTotal += Number.isFinite(tracker.rejectedTotal) ?
+        tracker.rejectedTotal :
+        NUM.ZERO;
+      aggregate.timedOutTotal += Number.isFinite(tracker.timedOutTotal) ?
+        tracker.timedOutTotal :
+        NUM.ZERO;
+      aggregate.staleCleanedTotal += Number.isFinite(tracker.staleCleanedTotal) ?
+        tracker.staleCleanedTotal :
+        NUM.ZERO;
+      aggregate.backpressureRejectTotal +=
+        Number.isFinite(tracker.backpressureRejectTotal) ?
+          tracker.backpressureRejectTotal :
+          NUM.ZERO;
+      aggregate.maxPendingObserved = Math.max(
+        aggregate.maxPendingObserved,
+        Number.isFinite(tracker.maxPendingObserved) ?
+          tracker.maxPendingObserved :
+          NUM.ZERO,
+      );
+    }
+
+    if (aggregate.maxPendingRequests > NUM.ZERO) {
+      aggregate.saturationPercent = Math.round(
+        (aggregate.pendingCount / aggregate.maxPendingRequests) * NUM.HUNDRED,
+      );
+    }
+
+    return aggregate;
+  }
+
+  /**
    * Get handler statistics.
    * @return {Object} Statistics object.
    */
   getStats() {
+    const pendingRequestTracker = this.getPendingRequestTrackerAggregate();
     return {
       nodeId: this.nodeId,
       initialized: this.initialized,
       localReplicaCount: this.localReplicas.size,
       inProgressOperationCount: this.inProgressOperations.size,
+      pendingRequestTracker,
     };
   }
 

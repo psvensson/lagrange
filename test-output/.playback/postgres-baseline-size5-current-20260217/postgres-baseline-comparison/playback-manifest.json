@@ -1,0 +1,19 @@
+{
+  "scenarioName": "postgres-baseline-comparison",
+  "startedAt": 1771349965617,
+  "endedAt": 1771350078466,
+  "durationMs": 112849,
+  "files": {
+    "events": "test-output/.playback/postgres-baseline-size5-current-20260217/postgres-baseline-comparison/events.ndjson",
+    "samples": "test-output/.playback/postgres-baseline-size5-current-20260217/postgres-baseline-comparison/samples.ndjson",
+    "snapshots": "test-output/.playback/postgres-baseline-size5-current-20260217/postgres-baseline-comparison/snapshots.ndjson",
+    "manifest": "test-output/.playback/postgres-baseline-size5-current-20260217/postgres-baseline-comparison/playback-manifest.json",
+    "viewer": "test-output/.playback/postgres-baseline-size5-current-20260217/postgres-baseline-comparison/playback-viewer.html"
+  },
+  "counts": {
+    "events": 217,
+    "samples": 464,
+    "snapshots": 80
+  },
+  "warnings": []
+}

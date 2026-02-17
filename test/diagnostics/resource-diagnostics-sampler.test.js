@@ -42,6 +42,20 @@ test('ResourceDiagnosticsSampler returns process and component snapshots', async
     3,
     'should include owner component stats',
   );
+  assert.equal(
+    typeof report.compact.cpuPercent,
+    'number',
+    'should expose compact cpu percent field',
+  );
+  assert.equal(
+    typeof report.compact.eventLoopUtilizationPercent,
+    'number',
+    'should expose compact event-loop utilization field',
+  );
+  assert.ok(
+    Array.isArray(report.compact.topGrowingSignals),
+    'should expose compact top growing signals list',
+  );
 
   teardown();
   t.end();
@@ -78,6 +92,15 @@ test('ResourceDiagnosticsSampler ranks growing component signals', async (t) => 
   assert.ok(
     topSignals.some((entry) => entry.signal === 'messageRouter.delivered'),
     'should include growing delivered signal',
+  );
+  assert.ok(
+    secondReport.compact.topGrowingSignals.length <= 10,
+    'compact top growing signals should be capped at 10 entries',
+  );
+  assert.equal(
+    secondReport.compact.rssGrowthPerMinBytes,
+    secondReport.trend.rssGrowthPerMinBytes,
+    'compact report should mirror trend rss growth value',
   );
 
   teardown();

@@ -51,6 +51,7 @@ test('CDCHandler - initialize starts handler', async (t) => {
   handler.initialize();
 
   t.equal(handler.initialized, true, 'Should be initialized');
+  t.equal(handler.flushTimer, null, 'Should not schedule idle flush timer');
 
   handler.shutdown();
 });
@@ -277,6 +278,33 @@ test('CDCHandler - auto-flush when buffer full', async (t) => {
   // Both records should be in cache
   t.ok(cache.get('nodes', 'node-1'), 'Should have node-1');
   t.ok(cache.get('nodes', 'node-2'), 'Should have node-2');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - delayed flush is demand-driven and self-clearing', async (t) => {
+  const handler = new CDCHandler(cache, {
+    bufferSize: 10,
+    flushIntervalMs: 10,
+  });
+  handler.initialize();
+  handler.subscribe('nodes');
+
+  const ts1 = hlcClock.now().toString();
+  handler.handleEvent({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.INSERT,
+    data: {id: 'node-delayed'},
+    timestamp: ts1,
+  });
+
+  t.ok(handler.flushTimer, 'Should schedule delayed flush when buffer has events');
+
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  const record = cache.get('nodes', 'node-delayed');
+  t.ok(record, 'Delayed flush should apply buffered event');
+  t.equal(handler.flushTimer, null, 'Flush timer should clear after buffer drains');
 
   handler.shutdown();
 });

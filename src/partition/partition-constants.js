@@ -160,6 +160,7 @@ const PENDING_REQUEST_DEFAULT = Object.freeze({
   REQUEST_TIMEOUT_MS: 30000,
   CLEANUP_INTERVAL_MS: 60000,
   STALE_REQUEST_BUFFER_MS: 5000,
+  MAX_PENDING_REQUESTS: 1024,
 });
 
 const PENDING_REQUEST_LOG_MSG = Object.freeze({
@@ -167,6 +168,7 @@ const PENDING_REQUEST_LOG_MSG = Object.freeze({
   TRACKING_REQUEST: 'Tracking request',
   REQUEST_RESOLVED: 'Request resolved',
   REQUEST_REJECTED: 'Request rejected',
+  BACKPRESSURE_APPLIED: 'Pending request tracker at capacity',
   NO_PENDING_REQUEST_RESOLVE: 'No pending request found for resolution',
   NO_PENDING_REQUEST_REJECT: 'No pending request found for rejection',
   TRACKER_SHUTDOWN: 'Tracker shutdown',
@@ -179,6 +181,8 @@ const PENDING_REQUEST_ERROR_MSG = Object.freeze({
     `ACK timeout after ${timeoutMs}ms for request ${requestId}`,
   staleRequest: (elapsedMs) =>
     `Stale request cleanup after ${elapsedMs}ms`,
+  backpressure: (maxPendingRequests) =>
+    `Pending request tracker at capacity (${maxPendingRequests})`,
 });
 
 const PENDING_REQUEST_VALUE = Object.freeze({

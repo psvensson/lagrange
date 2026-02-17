@@ -90,8 +90,8 @@ class CDCHandler extends EventEmitter {
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem('cdc-handler') : console;
 
-    // Flush interval
-    this.flushInterval = null;
+    // Flush scheduling
+    this.flushTimer = null;
     this.initialized = false;
   }
 
@@ -102,12 +102,6 @@ class CDCHandler extends EventEmitter {
     if (this.initialized) {
       return;
     }
-
-    // Start periodic flush
-    this.flushInterval = setInterval(() => {
-      this.flushAllBuffers();
-    }, this.flushIntervalMs);
-    this.flushInterval.unref();
 
     this.initialized = true;
 
@@ -218,6 +212,7 @@ class CDCHandler extends EventEmitter {
       key: cdcEvent.getKey(),
       bufferSize: buffer.length,
     });
+    this.scheduleBufferedFlush();
 
     // Flush if buffer is full
     if (buffer.length >= this.bufferSize) {
@@ -289,6 +284,7 @@ class CDCHandler extends EventEmitter {
 
     // Clear buffer
     this.eventBuffer.set(tableName, []);
+    this.reconcileFlushScheduling();
 
     this.logger.debug('Flushed CDC buffer', {
       tableName,
@@ -303,6 +299,66 @@ class CDCHandler extends EventEmitter {
     for (const tableName of this.subscriptions) {
       this.flushBuffer(tableName);
     }
+  }
+
+  /**
+   * Check whether any table has buffered events.
+   * @return {boolean}
+   * @private
+   */
+  hasBufferedEvents() {
+    for (const buffer of this.eventBuffer.values()) {
+      if (Array.isArray(buffer) && buffer.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Schedule one delayed flush while buffered events exist.
+   * @private
+   */
+  scheduleBufferedFlush() {
+    if (this.flushTimer || !this.hasBufferedEvents()) {
+      return;
+    }
+
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      this.flushAllBuffers();
+      if (this.hasBufferedEvents()) {
+        this.scheduleBufferedFlush();
+      }
+    }, this.flushIntervalMs);
+
+    if (this.flushTimer.unref) {
+      this.flushTimer.unref();
+    }
+  }
+
+  /**
+   * Cancel any pending delayed flush.
+   * @private
+   */
+  cancelScheduledFlush() {
+    if (!this.flushTimer) {
+      return;
+    }
+    clearTimeout(this.flushTimer);
+    this.flushTimer = null;
+  }
+
+  /**
+   * Keep delayed flush scheduling aligned with current buffer state.
+   * @private
+   */
+  reconcileFlushScheduling() {
+    if (this.hasBufferedEvents()) {
+      this.scheduleBufferedFlush();
+      return;
+    }
+    this.cancelScheduledFlush();
   }
 
   /**
@@ -454,10 +510,7 @@ class CDCHandler extends EventEmitter {
    * Shutdown the CDC handler.
    */
   shutdown() {
-    if (this.flushInterval) {
-      clearInterval(this.flushInterval);
-      this.flushInterval = null;
-    }
+    this.cancelScheduledFlush();
 
     // Flush remaining events
     this.flushAllBuffers();

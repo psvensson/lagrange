@@ -527,13 +527,18 @@ class ServiceReconciler extends EventEmitter {
           actionCount: actions.length,
           execution,
         });
-        this._logger.info(RECONCILER_LOG.CYCLE_COMPLETE, {
+        const cycleLogPayload = {
           reason: nextReason,
           metadata: nextMetadata,
           durationMs,
           actionCount: actions.length,
           nodeId: nextMetadata?.nodeId || null,
-        });
+        };
+        if (actions.length > 0 || nextReason !== 'interval') {
+          this._logger.info(RECONCILER_LOG.CYCLE_COMPLETE, cycleLogPayload);
+        } else {
+          this._logger.debug(RECONCILER_LOG.CYCLE_COMPLETE, cycleLogPayload);
+        }
 
         if (this._rerunRequested && this._pendingTrigger) {
           nextReason = this._pendingTrigger.reason;

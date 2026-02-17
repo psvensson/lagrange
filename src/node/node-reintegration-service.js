@@ -67,6 +67,8 @@ class NodeReintegrationService extends EventEmitter {
 
     // State
     this.checkTimer = null;
+    this.monitoringActive = false;
+    this.currentCheckIntervalMs = this.checkIntervalMs;
     this.pendingReintegrations = new Map(); // nodeId -> reintegration info
     this.cleanupTimers = new Map(); // nodeId -> cleanup timer
     this.reintegrationCount = NUM.ZERO;
@@ -118,7 +120,7 @@ class NodeReintegrationService extends EventEmitter {
       throw new Error(NODE_REINTEGRATION_ERROR_MSG.NOT_INITIALIZED);
     }
 
-    if (this.checkTimer) {
+    if (this.monitoringActive) {
       return; // Already running
     }
 
@@ -127,28 +129,18 @@ class NodeReintegrationService extends EventEmitter {
       intervalMs: this.checkIntervalMs,
     });
 
-    this.checkTimer = setInterval(async () => {
-      try {
-        await this.checkRecoveringNodes();
-      } catch (error) {
-        if (error?.isCritical) {
-          throw error;
-        }
-        this.logger.error(NODE_REINTEGRATION_LOG_MSG.CHECK_ERROR, {
-          nodeId: this.nodeId,
-          error: error.message,
-        });
-      }
-    }, this.checkIntervalMs);
-    this.checkTimer.unref();
+    this.monitoringActive = true;
+    this.currentCheckIntervalMs = this.checkIntervalMs;
+    this.scheduleNextCheck(this.currentCheckIntervalMs);
   }
 
   /**
    * Stop the node reintegration monitoring loop.
    */
   stop() {
+    this.monitoringActive = false;
     if (this.checkTimer) {
-      clearInterval(this.checkTimer);
+      clearTimeout(this.checkTimer);
       this.checkTimer = null;
     }
 
@@ -159,10 +151,11 @@ class NodeReintegrationService extends EventEmitter {
 
   /**
    * Check for recovering nodes and process reintegration.
-   * @return {Promise<void>}
+   * @return {Promise<Object>} Summary of cycle activity.
    */
   async checkRecoveringNodes() {
     const nodes = this.getNodes();
+    let recoveringNodeCount = NUM.ZERO;
 
     for (const node of nodes) {
       // Skip self
@@ -172,9 +165,79 @@ class NodeReintegrationService extends EventEmitter {
 
       // Process recovering nodes
       if (node.status === NODE_STATUS.RECOVERING) {
+        recoveringNodeCount += NUM.ONE;
         await this.processRecoveringNode(node);
       }
     }
+
+    return {
+      recoveringNodeCount,
+      hadActivity: recoveringNodeCount > NUM.ZERO ||
+        this.pendingReintegrations.size > NUM.ZERO,
+    };
+  }
+
+  /**
+   * Schedule the next monitoring cycle as a one-shot timer.
+   * @param {number} delayMs - Delay before next cycle.
+   * @private
+   */
+  scheduleNextCheck(delayMs) {
+    if (!this.monitoringActive) {
+      return;
+    }
+
+    const boundedDelay = Math.max(
+      this.checkIntervalMs,
+      Math.min(delayMs, NODE_REINTEGRATION_DEFAULT.MAX_CHECK_INTERVAL_MS),
+    );
+
+    this.checkTimer = setTimeout(async () => {
+      this.checkTimer = null;
+      if (!this.monitoringActive) {
+        return;
+      }
+
+      let cycleSummary = {
+        hadActivity: false,
+      };
+      try {
+        cycleSummary = await this.checkRecoveringNodes();
+      } catch (error) {
+        if (error?.isCritical) {
+          throw error;
+        }
+        this.logger.error(NODE_REINTEGRATION_LOG_MSG.CHECK_ERROR, {
+          nodeId: this.nodeId,
+          error: error.message,
+        });
+      }
+
+      this.updateCheckCadence(cycleSummary);
+      this.scheduleNextCheck(this.currentCheckIntervalMs);
+    }, boundedDelay);
+
+    this.checkTimer.unref();
+  }
+
+  /**
+   * Adapt monitoring cadence based on recent activity.
+   * @param {Object} cycleSummary - Summary returned from checkRecoveringNodes.
+   */
+  updateCheckCadence(cycleSummary = {}) {
+    if (cycleSummary.hadActivity) {
+      this.currentCheckIntervalMs = this.checkIntervalMs;
+      return;
+    }
+
+    const nextIntervalMs = Math.floor(
+      this.currentCheckIntervalMs *
+      NODE_REINTEGRATION_DEFAULT.IDLE_BACKOFF_MULTIPLIER,
+    );
+    this.currentCheckIntervalMs = Math.min(
+      NODE_REINTEGRATION_DEFAULT.MAX_CHECK_INTERVAL_MS,
+      Math.max(this.checkIntervalMs, nextIntervalMs),
+    );
   }
 
   /**
@@ -452,10 +515,11 @@ class NodeReintegrationService extends EventEmitter {
     return {
       nodeId: this.nodeId,
       checkIntervalMs: this.checkIntervalMs,
+      currentCheckIntervalMs: this.currentCheckIntervalMs,
       healthCheckCount: this.healthCheckCount,
       pendingReintegrations: this.pendingReintegrations.size,
       reintegrationCount: this.reintegrationCount,
-      isRunning: this.checkTimer !== null,
+      isRunning: this.monitoringActive,
       initialized: this.initialized,
     };
   }
@@ -481,7 +545,7 @@ class NodeReintegrationService extends EventEmitter {
    * @return {boolean} True if running.
    */
   isRunning() {
-    return this.checkTimer !== null;
+    return this.monitoringActive;
   }
 
   /**

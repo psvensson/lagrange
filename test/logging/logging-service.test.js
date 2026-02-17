@@ -335,6 +335,107 @@ test('LoggingService can update metrics persistence at runtime', async (t) => {
   LoggingService.resetInstance();
 });
 
+test('LoggingService applies per-tag metrics resolution throttling', async (t) => {
+  LoggingService.resetInstance();
+  const logger = LoggingService.getInstance();
+  logger.initialize({
+    nodeId: 'test-node',
+    level: 'info',
+    persistMetricsLogs: true,
+    metricsDefaultResolutionMs: 60000,
+  });
+
+  logger.info('metrics.transport.deliver', {durationMs: 1});
+  logger.info('metrics.transport.deliver', {durationMs: 2});
+  logger.info('metrics.query.dispatch', {durationMs: 3});
+
+  t.equal(
+    logger.getBufferSize(),
+    2,
+    'should keep one metrics sample per tag inside resolution window',
+  );
+
+  const diagnostics = logger.getDiagnosticsStats();
+  t.equal(
+    diagnostics.metricsSuppressedByResolution,
+    1,
+    'should count metrics suppressed by resolution',
+  );
+
+  LoggingService.resetInstance();
+});
+
+test('LoggingService gates detailed metrics behind debug window', async (t) => {
+  LoggingService.resetInstance();
+  const logger = LoggingService.getInstance();
+  const originalNow = Date.now;
+  let nowMs = 1000;
+  Date.now = () => nowMs;
+
+  try {
+    logger.initialize({
+      nodeId: 'test-node',
+      level: 'info',
+      persistMetricsLogs: true,
+      metricsDefaultResolutionMs: 0,
+      metricsDetailedWindowTtlMs: 2000,
+      metricsDetailedWindowEnabled: false,
+    });
+
+    logger.info('metrics.query.dispatch', {
+      metricsDetailLevel: 'detailed',
+      durationMs: 5,
+    });
+
+    t.equal(
+      logger.getBufferSize(),
+      0,
+      'should suppress detailed metrics when window is disabled',
+    );
+
+    logger.setMetricsDetailedWindowEnabled(true);
+    nowMs += 1000;
+
+    logger.info('metrics.query.dispatch', {
+      metricsDetailLevel: 'detailed',
+      durationMs: 6,
+    });
+
+    t.equal(
+      logger.getBufferSize(),
+      1,
+      'should emit detailed metrics while debug window is active',
+    );
+
+    nowMs += 3000;
+    logger.info('metrics.query.dispatch', {
+      metricsDetailLevel: 'detailed',
+      durationMs: 7,
+    });
+
+    t.equal(
+      logger.getBufferSize(),
+      1,
+      'should stop emitting detailed metrics after window expiry',
+    );
+
+    const diagnostics = logger.getDiagnosticsStats();
+    t.equal(
+      diagnostics.metricsSuppressedByDetailedWindow,
+      2,
+      'should count detailed metrics suppressed outside debug window',
+    );
+    t.equal(
+      diagnostics.metricsDetailedWindowEnabled,
+      false,
+      'window should auto-disable after TTL expiry',
+    );
+  } finally {
+    Date.now = originalNow;
+    LoggingService.resetInstance();
+  }
+});
+
 test('LoggingService exposes subsystem and metric-tag diagnostics', async (t) => {
   LoggingService.resetInstance();
   const logger = LoggingService.getInstance();

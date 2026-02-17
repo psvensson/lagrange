@@ -717,9 +717,79 @@ test('ReplicaHandler', async (t) => {
     t.equal(stats.initialized, true, 'initialized flag correct');
     t.equal(stats.localReplicaCount, 2, 'correct local replica count');
     t.equal(stats.inProgressOperationCount, 1, 'correct in-progress count');
+    t.ok(stats.pendingRequestTracker, 'pending request tracker aggregate exists');
 
     handler.shutdown();
   });
+
+  t.test('getStats aggregates pending request tracker telemetry',
+    async (t) => {
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+      handler.localServices.set('replica-a', {
+        getStats() {
+          return {
+            pendingRequestTracker: {
+              pendingCount: 2,
+              maxPendingRequests: 5,
+              availableCapacity: 3,
+              trackedTotal: 10,
+              resolvedTotal: 7,
+              rejectedTotal: 3,
+              timedOutTotal: 1,
+              staleCleanedTotal: 0,
+              backpressureRejectTotal: 2,
+              maxPendingObserved: 4,
+            },
+          };
+        },
+      });
+      handler.localServices.set('replica-b', {
+        getStats() {
+          return {
+            pendingRequestTracker: {
+              pendingCount: 1,
+              maxPendingRequests: 10,
+              availableCapacity: 9,
+              trackedTotal: 8,
+              resolvedTotal: 6,
+              rejectedTotal: 2,
+              timedOutTotal: 0,
+              staleCleanedTotal: 1,
+              backpressureRejectTotal: 0,
+              maxPendingObserved: 3,
+            },
+          };
+        },
+      });
+
+      const stats = handler.getStats();
+      const pending = stats.pendingRequestTracker;
+
+      t.equal(
+        pending.replicaCountWithTracker,
+        2,
+        'should count services with tracker telemetry',
+      );
+      t.equal(pending.pendingCount, 3, 'aggregates pending counts');
+      t.equal(pending.maxPendingRequests, 15, 'aggregates capacity');
+      t.equal(pending.availableCapacity, 12, 'aggregates available capacity');
+      t.equal(pending.backpressureRejectTotal, 2, 'aggregates backpressure');
+      t.equal(pending.maxPendingObserved, 4, 'retains highest observed pending');
+      t.equal(pending.saturationPercent, 20, 'computes aggregate saturation');
+
+      handler.shutdown();
+    });
 
   t.test('emits events during lifecycle operations', async (t) => {
     const cache = createSeededCache();
