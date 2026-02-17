@@ -520,6 +520,121 @@ test('waitForConvergence — timeout diagnostics include membership and operatio
     }
   });
 
+test('waitForConvergence — does not double-count replicated services snapshots',
+  async () => {
+    const servicesRows = [
+      {
+        service_type: 'partition',
+        status: 'ACTIVE',
+        raft_role: 'leader',
+        address: 'node-a/p1/r0',
+        partition_id: 'p1',
+      },
+      {
+        service_type: 'partition',
+        status: 'ACTIVE',
+        raft_role: 'follower',
+        address: 'node-b/p1/r1',
+        partition_id: 'p1',
+      },
+      {
+        service_type: 'partition',
+        status: 'ACTIVE',
+        raft_role: 'follower',
+        address: 'node-c/p1/r2',
+        partition_id: 'p1',
+      },
+    ];
+    const partitionsRows = [{partition_id: 'p1'}];
+
+    function createSnapshotNode(nodeId) {
+      return {
+        id: nodeId,
+        isReachable: async () => true,
+        query: async (sql) => {
+          if (sql.includes('FROM services')) {
+            return {rows: servicesRows};
+          }
+          if (sql.includes('FROM partitions')) {
+            return {rows: partitionsRows};
+          }
+          return {rows: []};
+        },
+      };
+    }
+
+    const nodeA = createSnapshotNode('mock-snapshot-a');
+    const nodeB = createSnapshotNode('mock-snapshot-b');
+    const result = await waitForConvergence([nodeA, nodeB], {
+      settleTimeoutMs: 80,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 80,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+    });
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+  });
+
+test('waitForConvergence — requires leader coverage for all partitions',
+  async () => {
+    const node = {
+      id: 'mock-partitions-missing-leader',
+      isReachable: async () => true,
+      query: async (sql) => {
+        if (sql.includes('FROM partitions')) {
+          return {
+            rows: [{partition_id: 'p1'}, {partition_id: 'p2'}],
+          };
+        }
+        if (sql.includes('FROM services')) {
+          return {
+            rows: [
+              {
+                service_type: 'partition',
+                status: 'ACTIVE',
+                raft_role: 'leader',
+                address: 'node-a/p1/r0',
+                partition_id: 'p1',
+              },
+              {
+                service_type: 'partition',
+                status: 'ACTIVE',
+                raft_role: 'follower',
+                address: 'node-b/p1/r1',
+                partition_id: 'p1',
+              },
+              {
+                service_type: 'partition',
+                status: 'ACTIVE',
+                raft_role: 'follower',
+                address: 'node-c/p1/r2',
+                partition_id: 'p1',
+              },
+            ],
+          };
+        }
+        return {rows: []};
+      },
+    };
+
+    try {
+      await waitForConvergence([node], {
+        settleTimeoutMs: 80,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 80,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+      });
+      assert.fail('Expected timeout when a partition has no leader');
+    } catch (err) {
+      assert.ok(
+        err.message.includes('Convergence timeout'),
+        'Expected timeout error message',
+      );
+    }
+  });
+
 // -------------------------------------------------------
 // Custom thresholds override defaults (Req 5.2)
 // -------------------------------------------------------

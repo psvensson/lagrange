@@ -275,26 +275,60 @@ function finalizeOverTargetState(state, endTimeMs) {
 }
 
 /**
- * Query services table on all reachable nodes and return the
- * combined rows. Skips unreachable nodes.
+ * Query a single reachable node for cluster convergence state.
+ * Uses one node snapshot to avoid counting the same cluster-wide
+ * services rows multiple times across nodes.
  *
  * @param {Array<Object>} nodes - NodeHandle instances.
- * @returns {Promise<Array<Object>>} Rows from reachable nodes.
+ * @returns {Promise<Object>} Snapshot details.
  */
-async function queryReachableServices(nodes) {
-  const allRows = [];
+async function queryReachableClusterSnapshot(nodes) {
+  let lastError = null;
   for (const node of nodes) {
     try {
       const report = await probeNodeReachability(node);
-      if (!report.reachable) continue;
-      const result = await node.query(SERVICES_QUERY);
-      const rows = (result && result.rows) || [];
-      allRows.push(...rows);
-    } catch (_err) {
-      // Node unreachable — skip.
+      if (!report.reachable) {
+        continue;
+      }
+      const [servicesResult, partitionsResult] =
+        await Promise.all([
+          node.query(SERVICES_QUERY),
+          node.query(PARTITIONS_QUERY),
+        ]);
+      const servicesRows = Array.isArray(servicesResult?.rows) ?
+        servicesResult.rows :
+        [];
+      const expectedPartitionIds = extractPartitionIds(partitionsResult?.rows);
+      return {
+        nodeId: String(node?.id || VALUE_UNKNOWN),
+        servicesRows,
+        expectedPartitionIds,
+        error: null,
+      };
+    } catch (err) {
+      lastError = err?.message || String(err);
     }
   }
-  return allRows;
+  return {
+    nodeId: null,
+    servicesRows: [],
+    expectedPartitionIds: new Set(),
+    error: lastError,
+  };
+}
+
+function extractPartitionIds(rows) {
+  const partitionIds = new Set();
+  if (!Array.isArray(rows)) {
+    return partitionIds;
+  }
+  for (const row of rows) {
+    if (!row?.partition_id) {
+      continue;
+    }
+    partitionIds.add(String(row.partition_id));
+  }
+  return partitionIds;
 }
 
 /**
@@ -331,17 +365,23 @@ async function waitForConvergence(nodes, options = {}) {
   let latestCounts = new Map();
   let latestLeaders = new Map();
   let latestRows = [];
+  let latestExpectedPartitionIds = new Set();
+  let latestSnapshotNodeId = null;
+  let latestSnapshotError = null;
 
   const startMs = Date.now();
   const deadline = startMs + settleTimeoutMs;
 
   while (Date.now() <= deadline) {
     const now = Date.now();
-    const rows = await queryReachableServices(nodes);
-    latestRows = rows;
+    const snapshot = await queryReachableClusterSnapshot(nodes);
+    latestRows = snapshot.servicesRows;
+    latestExpectedPartitionIds = snapshot.expectedPartitionIds;
+    latestSnapshotNodeId = snapshot.nodeId;
+    latestSnapshotError = snapshot.error;
 
-    latestCounts = countVotersPerPartition(rows);
-    latestLeaders = extractLeaders(rows);
+    latestCounts = countVotersPerPartition(latestRows);
+    latestLeaders = extractLeaders(latestRows);
 
     // Detect leader changes.
     for (const [pid, addr] of latestLeaders) {
@@ -363,8 +403,8 @@ async function waitForConvergence(nodes, options = {}) {
       (c) => c > targetVoterCount,
     );
     const quietElapsed = now - lastLeaderChangeAt;
-    const allHaveLeaders = latestCounts.size > 0 &&
-      [...latestCounts.keys()].every(
+    const allHaveLeaders = latestExpectedPartitionIds.size > 0 &&
+      [...latestExpectedPartitionIds].every(
         (pid) => latestLeaders.has(pid),
       );
 
@@ -415,6 +455,7 @@ async function waitForConvergence(nodes, options = {}) {
       overTargetSummary[pid] = entry.maxOverTargetMs;
     }
   }
+  const expectedPartitions = [...latestExpectedPartitionIds].sort();
 
   const partitionMembership = buildPartitionMembership(
     latestRows,
@@ -438,6 +479,8 @@ async function waitForConvergence(nodes, options = {}) {
     'Convergence timeout after ' + settleTimeoutMs + 'ms. ' +
     'Leader changes: ' + leaderChanges + '. ' +
     'Max over-target: ' + maxOT + 'ms. ' +
+    'Snapshot node: ' + (latestSnapshotNodeId || VALUE_UNKNOWN) + '. ' +
+    'Expected partitions: ' + JSON.stringify(expectedPartitions) + '. ' +
     'Voter counts: ' + JSON.stringify(voterSummary) + '. ' +
     'Leaders: ' + JSON.stringify(leaderSummary) + '. ' +
     'Over-target durations: ' + JSON.stringify(overTargetSummary) + '. ' +
@@ -451,6 +494,9 @@ async function waitForConvergence(nodes, options = {}) {
     leaderChanges,
     maxOverTargetMs: maxOT,
     overTargetDurations: overTargetSummary,
+    expectedPartitions,
+    snapshotNodeId: latestSnapshotNodeId,
+    snapshotError: latestSnapshotError,
     partitionMembership,
     operationHistory,
     operationHistoryError,

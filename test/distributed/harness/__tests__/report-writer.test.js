@@ -71,6 +71,8 @@ describe('ReportWriter', () => {
       assert.equal(entry.traceAssertion, null);
       assert.equal(entry.memoryLeak, null);
       assert.equal(entry.memoryLeakAssertion, null);
+      assert.ok(Array.isArray(entry.optimizationPriorities));
+      assert.ok(entry.optimizationPriorities.length > 0);
     });
 
     it('includes load metrics with latency and throughput', () => {
@@ -135,6 +137,7 @@ describe('ReportWriter', () => {
 
         assert.ok(report.timestamp);
         assert.ok(report.summary);
+        assert.ok(report.optimizationSummary);
         assert.ok(Array.isArray(report.scenarios));
         assert.equal(report.scenarios.length, 2);
       });
@@ -179,6 +182,7 @@ describe('ReportWriter', () => {
         assert.equal(report.summary.passed, 0);
         assert.equal(report.summary.failed, 0);
         assert.equal(report.summary.duration, 0);
+        assert.deepEqual(report.optimizationSummary.topComponents, []);
         assert.deepEqual(report.scenarios, []);
       });
 
@@ -292,6 +296,73 @@ describe('ReportWriter', () => {
         required: true,
         passed: true,
       });
+    });
+
+    it('prioritizes replication and latency when baseline gap is large', () => {
+      const entry = buildScenarioEntry('postgres-baseline-comparison', {
+        passed: true,
+        duration: 100,
+        loadMetrics: {
+          total: 1000,
+          success: 1000,
+          failed: 0,
+          errors: 0,
+          latency: {p50: 10, p95: 500, p99: 1200},
+          opsPerSec: 40,
+        },
+        details: {
+          details: {
+            comparison: {
+              throughputRatioSutToBaseline: 0.005,
+              sutOpsPerSec: 40,
+              baselineTps: 4000,
+              p99LatencyRatioSutToBaselineAvg: 600,
+              sutP99LatencyMs: 1200,
+              baselineLatencyAvgMs: 2,
+            },
+            convergence: {
+              settledAfterMs: 6000,
+              leaderChanges: 0,
+              maxOverTargetMs: 0,
+            },
+          },
+        },
+      });
+
+      assert.ok(Array.isArray(entry.optimizationPriorities));
+      assert.ok(
+        entry.optimizationPriorities.some((item) =>
+          item.component === 'replication_write_path' &&
+          item.signal === 'baseline_throughput_gap',
+        ),
+      );
+      assert.ok(
+        entry.optimizationPriorities.some((item) =>
+          item.component === 'tail_latency_path' &&
+          item.signal === 'baseline_latency_gap',
+        ),
+      );
+    });
+
+    it('prioritizes memory lifecycle when leak is detected', () => {
+      const entry = buildScenarioEntry('memory-soak', {
+        passed: false,
+        duration: 100,
+        memoryLeak: {
+          analyzed: true,
+          leakDetected: true,
+          leakingNodeCount: 2,
+          leakingNodes: ['node-a', 'node-b'],
+        },
+      });
+
+      assert.ok(Array.isArray(entry.optimizationPriorities));
+      assert.ok(
+        entry.optimizationPriorities.some((item) =>
+          item.component === 'memory_lifecycle' &&
+          item.priority === 'critical',
+        ),
+      );
     });
   });
 
