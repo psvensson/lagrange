@@ -418,6 +418,108 @@ test('waitForConvergence — timeout error includes voter counts from partial st
   }
 });
 
+test('waitForConvergence — timeout diagnostics include membership and operation history',
+  async () => {
+    const node = {
+      id: 'mock-membership-node',
+      isReachable: async () => true,
+      query: async (sql) => {
+        if (sql.includes('FROM replica_operations')) {
+          return {
+            rows: [
+              {
+                operation_id: 'op-1',
+                partition_id: 'p1',
+                operation: 'add_replica',
+                status: 'pending',
+                from_node_id: 'seed',
+                to_node_id: 'joiner-1',
+                updated_at: '2026-02-17T00:00:00.000Z',
+              },
+              {
+                operation_id: 'op-2',
+                partition_id: 'p1',
+                operation: 'promote_learner',
+                status: 'running',
+                from_node_id: 'seed',
+                to_node_id: 'joiner-2',
+                updated_at: '2026-02-17T00:00:01.000Z',
+              },
+            ],
+          };
+        }
+        return {
+          rows: [
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'leader',
+              address: 'seed/p1/r1',
+              node_id: 'seed',
+              partition_id: 'p1',
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address: 'joiner-1/p1/r2',
+              node_id: 'joiner-1',
+              partition_id: 'p1',
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address: 'joiner-2/p1/r3',
+              node_id: 'joiner-2',
+              partition_id: 'p1',
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address: 'joiner-3/p1/r4',
+              node_id: 'joiner-3',
+              partition_id: 'p1',
+            },
+          ],
+        };
+      },
+    };
+
+    try {
+      await waitForConvergence([node], {
+        settleTimeoutMs: 50,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 0,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+      });
+      assert.fail('Expected convergence timeout error');
+    } catch (err) {
+      assert.ok(
+        err.message.includes('Replica membership'),
+        'Error message should include replica membership snippet',
+      );
+      assert.ok(
+        err.message.includes('Operation history'),
+        'Error message should include operation history snippet',
+      );
+      assert.ok(
+        err.diagnostics.partitionMembership,
+        'Diagnostics should include partition membership dump',
+      );
+      assert.ok(
+        Array.isArray(err.diagnostics.operationHistory),
+        'Diagnostics should include operation history snippet',
+      );
+      assert.ok(
+        err.diagnostics.operationHistory.length > 0,
+        'Operation history should include at least one operation',
+      );
+    }
+  });
+
 // -------------------------------------------------------
 // Custom thresholds override defaults (Req 5.2)
 // -------------------------------------------------------

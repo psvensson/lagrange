@@ -413,6 +413,101 @@ test('PlaybackRecorder aggregates service rows across reachable nodes', async ()
   }
 });
 
+test('PlaybackRecorder defers topology capture until admin readiness is observed',
+  async () => {
+    const outputDir = await mkdtemp(
+      join(tmpdir(), 'playback-recorder-admin-ready-'),
+    );
+
+    let queryCallCount = 0;
+    const node = {
+      id: 'node-1',
+      containerId: 'container-1',
+      _dockerProvider: {
+        async getContainerStats() {
+          return {
+            cpuPercent: 11.5,
+            memoryUsageBytes: 1024,
+            memoryLimitBytes: 4096,
+            rxBytes: 4,
+            txBytes: 9,
+          };
+        },
+      },
+      async getReachabilityDiagnostics() {
+        return {
+          nodeId: 'node-1',
+          reachable: false,
+          adminReady: false,
+          bootstrapHealth: {
+            attempted: true,
+            ok: true,
+            statusCode: 200,
+          },
+          adminHealth: {
+            attempted: true,
+            ok: false,
+            statusCode: -1,
+            error: 'http_status_-1',
+          },
+          adminWs: {
+            attempted: true,
+            ok: false,
+            error: 'connect ECONNREFUSED',
+          },
+          sqlProbe: {
+            attempted: false,
+            ok: false,
+            query: 'SELECT node_id FROM nodes LIMIT 1',
+          },
+          lastError: 'connect ECONNREFUSED',
+        };
+      },
+      async query() {
+        queryCallCount++;
+        throw new Error('query should not run before admin readiness');
+      },
+    };
+
+    const cluster = {
+      getNodes() {
+        return [node];
+      },
+    };
+
+    const recorder = new PlaybackRecorder({
+      outputDir,
+      topologyPollIntervalMs: 60000,
+      resourcePollIntervalMs: 60000,
+    });
+
+    try {
+      await recorder.start({
+        scenarioName: 'admin-readiness-defer',
+        cluster,
+      });
+
+      const manifest = await recorder.stop({
+        reason: 'admin-not-ready',
+      });
+      const warningCodes = (manifest.warnings || [])
+        .map((warning) => warning.code);
+
+      assert.equal(
+        queryCallCount,
+        0,
+        'topology queries should be deferred before admin readiness',
+      );
+      assert.equal(
+        warningCodes.includes('query-node-unavailable'),
+        false,
+        'should not emit unreachable warnings before admin readiness',
+      );
+    } finally {
+      await rm(outputDir, {recursive: true, force: true});
+    }
+  });
+
 test('PlaybackRecorder truncates scenario playback files on new run', async () => {
   const outputDir = await mkdtemp(
     join(tmpdir(), 'playback-recorder-truncate-'),

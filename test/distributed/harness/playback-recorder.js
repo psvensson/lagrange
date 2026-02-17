@@ -58,6 +58,10 @@ const WARNING_CODE_STATS_API_MISSING = 'stats-api-missing';
 
 const CAPTURE_ERROR_MESSAGE = 'capture-error';
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
+const REACHABILITY_SOURCE_LEGACY = 'legacy_probe';
+const REACHABILITY_ERROR_LEGACY_UNAVAILABLE =
+  'legacy reachability probe unavailable';
+const REACHABILITY_DETAILS_KEY = 'reachability';
 
 function extractRows(result) {
   if (!result || typeof result !== 'object') {
@@ -73,6 +77,68 @@ function extractRows(result) {
     return result[FIELD_RESULTS];
   }
   return [];
+}
+
+function normalizeProbeResult(probe) {
+  return {
+    attempted: probe?.attempted === true,
+    ok: probe?.ok === true,
+    statusCode: Number.isInteger(probe?.statusCode) ?
+      probe.statusCode :
+      null,
+    error: typeof probe?.error === 'string' ? probe.error : null,
+    url: typeof probe?.url === 'string' ? probe.url : null,
+    endpoint: typeof probe?.endpoint === 'string' ? probe.endpoint : null,
+    query: typeof probe?.query === 'string' ? probe.query : null,
+  };
+}
+
+function normalizeReachabilityDiagnostics(node, report) {
+  const nodeId = String(report?.nodeId || node?.id || 'unknown');
+  const reachable = report?.reachable === true;
+  const adminReady = report?.adminReady === true ||
+    report?.adminHealth?.ok === true ||
+    report?.adminWs?.ok === true ||
+    report?.sqlProbe?.ok === true;
+  const lastError = typeof report?.lastError === 'string' ?
+    report.lastError :
+    null;
+
+  return {
+    nodeId,
+    timestamp: Number.isFinite(report?.timestamp) ?
+      report.timestamp :
+      Date.now(),
+    reachable,
+    adminReady,
+    reachableBy: typeof report?.reachableBy === 'string' ?
+      report.reachableBy :
+      null,
+    bootstrapHealth: normalizeProbeResult(report?.bootstrapHealth),
+    adminHealth: normalizeProbeResult(report?.adminHealth),
+    adminWs: normalizeProbeResult(report?.adminWs),
+    sqlProbe: normalizeProbeResult(report?.sqlProbe),
+    lastError,
+  };
+}
+
+function buildLegacyReachabilityDiagnostics(node, reachable, errorMessage) {
+  return {
+    nodeId: String(node?.id || 'unknown'),
+    timestamp: Date.now(),
+    reachable: reachable === true,
+    adminReady: reachable === true,
+    reachableBy: reachable === true ?
+      REACHABILITY_SOURCE_LEGACY :
+      null,
+    bootstrapHealth: normalizeProbeResult(null),
+    adminHealth: normalizeProbeResult(null),
+    adminWs: normalizeProbeResult(null),
+    sqlProbe: normalizeProbeResult(null),
+    lastError: reachable === true ?
+      null :
+      (errorMessage || REACHABILITY_ERROR_LEGACY_UNAVAILABLE),
+  };
 }
 
 function mapBy(rows, keyField) {
@@ -689,6 +755,7 @@ class PlaybackRecorder {
     this._topologyPollTimer = null;
     this._resourcePollTimer = null;
     this._started = false;
+    this._adminReadinessObserved = false;
   }
 
   async start(context = {}) {
@@ -742,6 +809,7 @@ class PlaybackRecorder {
 
     this._startedAt = Date.now();
     this._started = true;
+    this._adminReadinessObserved = false;
 
     this.recordEvent({
       type: PLAYBACK_EVENT_TYPE.CLUSTER_START,
@@ -896,11 +964,21 @@ class PlaybackRecorder {
     if (!this._cluster) {
       return;
     }
-    const snapshotNodes = await this._selectReachableSnapshotNodes();
+    const selection = await this._selectReachableSnapshotNodes();
+    const snapshotNodes = selection.nodes;
+    if (selection.adminReady) {
+      this._adminReadinessObserved = true;
+    }
     if (snapshotNodes.length === 0) {
+      if (!this._adminReadinessObserved) {
+        return;
+      }
       this._captureWarning(
         WARNING_CODE_QUERY_NODE_UNAVAILABLE,
-        'No reachable node available for topology snapshot query',
+        'No admin-ready reachable node available for topology snapshot query',
+        {
+          [REACHABILITY_DETAILS_KEY]: selection.diagnostics,
+        },
       );
       return;
     }
@@ -930,6 +1008,12 @@ class PlaybackRecorder {
                 `${WARNING_CODE_SERVICE_QUERY_FAILED}-${nodeId}`,
                 'Failed to query services on node ' + nodeId +
                   ': ' + err.message,
+                {
+                  nodeId,
+                  error: err.message,
+                  [REACHABILITY_DETAILS_KEY]:
+                    selection.byNode[nodeId] || null,
+                },
               );
               return {
                 nodeId,
@@ -964,6 +1048,11 @@ class PlaybackRecorder {
       this._captureWarning(
         WARNING_CODE_TOPOLOGY_CAPTURE_FAILED,
         'Failed to capture topology snapshot: ' + err.message,
+        {
+          anchorNodeId: String(anchorNode?.id || 'unknown'),
+          error: err.message,
+          [REACHABILITY_DETAILS_KEY]: selection.diagnostics,
+        },
       );
     }
   }
@@ -1029,23 +1118,76 @@ class PlaybackRecorder {
   async _selectReachableSnapshotNodes() {
     const nodes = this._selectSnapshotNodes();
     if (!Array.isArray(nodes) || nodes.length === 0) {
-      return [];
+      return {
+        nodes: [],
+        diagnostics: [],
+        byNode: {},
+        adminReady: false,
+      };
     }
     const reachable = [];
+    const diagnostics = [];
+    const byNode = {};
+    let adminReady = false;
     for (const node of nodes) {
+      const report = await this._probeNodeReachability(node);
+      diagnostics.push(report);
+      byNode[report.nodeId] = report;
+      if (report.adminReady) {
+        adminReady = true;
+      }
       try {
-        if (typeof node.isReachable === 'function') {
-          const isReachable = await node.isReachable();
-          if (!isReachable) {
-            continue;
-          }
+        if (report.reachable === true && report.adminReady === true) {
+          reachable.push(node);
         }
-        reachable.push(node);
-      } catch {
+      } catch (_err) {
         // Ignore individual node reachability failures.
       }
     }
-    return reachable;
+    return {
+      nodes: reachable,
+      diagnostics,
+      byNode,
+      adminReady,
+    };
+  }
+
+  async _probeNodeReachability(node) {
+    if (!node || typeof node !== 'object') {
+      return buildLegacyReachabilityDiagnostics(
+        node,
+        false,
+        REACHABILITY_ERROR_LEGACY_UNAVAILABLE,
+      );
+    }
+
+    try {
+      if (typeof node.getReachabilityDiagnostics === 'function') {
+        const report = await node.getReachabilityDiagnostics();
+        return normalizeReachabilityDiagnostics(node, report);
+      }
+
+      if (typeof node.isReachable === 'function') {
+        const result = await node.isReachable();
+        if (result && typeof result === 'object' &&
+          Object.prototype.hasOwnProperty.call(result, 'reachable')) {
+          return normalizeReachabilityDiagnostics(node, result);
+        }
+        return buildLegacyReachabilityDiagnostics(node, result === true);
+      }
+    } catch (err) {
+      return buildLegacyReachabilityDiagnostics(node, false, err.message);
+    }
+
+    if (typeof node.query === 'function') {
+      return buildLegacyReachabilityDiagnostics(node, true);
+    }
+
+    return buildLegacyReachabilityDiagnostics(
+      node,
+      false,
+      REACHABILITY_ERROR_LEGACY_UNAVAILABLE,
+    );
   }
 
   _appendNdjson(stream, data) {
@@ -1055,27 +1197,37 @@ class PlaybackRecorder {
     stream.write(JSON.stringify(data) + NEWLINE);
   }
 
-  _captureWarning(code, message) {
+  _captureWarning(code, message, details = null) {
     if (this._warningCodes.has(code)) {
       return;
     }
     this._warningCodes.add(code);
 
+    const warningDetails = details && typeof details === 'object' ?
+      details :
+      null;
     const warning = {
       code,
       message,
       timestamp: Date.now(),
+      details: warningDetails,
     };
     this._warnings.push(warning);
 
     if (this._started) {
+      const eventDetails = warningDetails ?
+        {
+          message,
+          ...warningDetails,
+        } :
+        {
+          message,
+        };
       this.recordEvent({
         type: PLAYBACK_EVENT_TYPE.WARNING,
         scope: SCOPE_CAPTURE,
         entityId: code,
-        details: {
-          message,
-        },
+        details: eventDetails,
       });
     }
   }

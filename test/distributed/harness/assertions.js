@@ -17,9 +17,140 @@ const SERVICES_QUERY =
 const NODES_QUERY =
   'SELECT * FROM nodes WHERE status = \'active\'';
 const PARTITIONS_QUERY = 'SELECT * FROM partitions';
+const REPLICA_OPERATIONS_QUERY = 'SELECT * FROM replica_operations';
 
 // --- Service row field values ---
 const RAFT_ROLE_LEARNER = 'learner';
+const REACHABILITY_SUMMARY_SEPARATOR = ', ';
+const REACHABILITY_SUMMARY_SOURCE_UNKNOWN = 'unknown';
+const REACHABILITY_SUMMARY_ERROR_NONE = 'none';
+const STATUS_LEADER = 'leader';
+const STATUS_UNKNOWN = 'unknown';
+const VALUE_UNKNOWN = 'unknown';
+const VALUE_NONE = 'none';
+const VALUE_UNAVAILABLE = 'unavailable';
+const REPLICA_MEMBERSHIP_SEPARATOR = '; ';
+const REPLICA_MEMBER_SEPARATOR = ',';
+const MEMBER_SNIPPET_PREFIX = '[';
+const MEMBER_SNIPPET_SUFFIX = ']';
+const MEMBER_REPLICA_PREFIX = ' replicas=';
+const MEMBER_LEADER_PREFIX = ' leader=';
+const MEMBER_VOTER_PREFIX = ' voters=';
+const MEMBER_VOTER_SEPARATOR = '/';
+const SNIPPET_EXTRA_PREFIX = '+';
+const SNIPPET_EXTRA_SUFFIX = ' more';
+const PARTITION_MEMBERSHIP_SNIPPET_LIMIT = 12;
+const PARTITION_REPLICA_SNIPPET_LIMIT = 6;
+const OPERATION_HISTORY_LIMIT = 20;
+const OPERATION_HISTORY_SNIPPET_LIMIT = 8;
+const OPERATION_HISTORY_SEPARATOR = ' | ';
+const OPERATION_HISTORY_AT_PREFIX = '@';
+const OPERATION_FIELD_CANDIDATE_IDS = Object.freeze([
+  'operation_id',
+  'operationId',
+  'id',
+]);
+const OPERATION_FIELD_CANDIDATE_PARTITION_IDS = Object.freeze([
+  'partition_id',
+  'partitionId',
+]);
+const OPERATION_FIELD_CANDIDATE_TYPES = Object.freeze([
+  'operation',
+  'operation_type',
+  'type',
+  'action',
+]);
+const OPERATION_FIELD_CANDIDATE_STATUSES = Object.freeze([
+  'status',
+  'state',
+]);
+const OPERATION_FIELD_CANDIDATE_FROM_NODE_IDS = Object.freeze([
+  'from_node_id',
+  'source_node_id',
+  'sourceNodeId',
+]);
+const OPERATION_FIELD_CANDIDATE_TO_NODE_IDS = Object.freeze([
+  'to_node_id',
+  'target_node_id',
+  'targetNodeId',
+]);
+const OPERATION_FIELD_CANDIDATE_TIMESTAMPS = Object.freeze([
+  'updated_at',
+  'completed_at',
+  'started_at',
+  'created_at',
+  'timestamp',
+]);
+
+/**
+ * Probe reachability with structured diagnostics when available.
+ * @param {Object} node
+ * @returns {Promise<Object>}
+ */
+async function probeNodeReachability(node) {
+  if (typeof node?.getReachabilityDiagnostics === 'function') {
+    const diagnostics = await node.getReachabilityDiagnostics();
+    return {
+      nodeId: String(diagnostics?.nodeId || node?.id || 'unknown'),
+      reachable: diagnostics?.reachable === true,
+      reachableBy: diagnostics?.reachableBy || null,
+      lastError: diagnostics?.lastError || null,
+      diagnostics,
+    };
+  }
+
+  if (typeof node?.isReachable === 'function') {
+    const result = await node.isReachable();
+    if (result && typeof result === 'object' &&
+      Object.prototype.hasOwnProperty.call(result, 'reachable')) {
+      return {
+        nodeId: String(result?.nodeId || node?.id || 'unknown'),
+        reachable: result?.reachable === true,
+        reachableBy: result?.reachableBy || null,
+        lastError: result?.lastError || null,
+        diagnostics: result,
+      };
+    }
+
+    return {
+      nodeId: String(node?.id || 'unknown'),
+      reachable: result === true,
+      reachableBy: null,
+      lastError: result === true ? null : 'legacy reachability probe failed',
+      diagnostics: null,
+    };
+  }
+
+  return {
+    nodeId: String(node?.id || 'unknown'),
+    reachable: false,
+    reachableBy: null,
+    lastError: 'node does not expose reachability probe',
+    diagnostics: null,
+  };
+}
+
+/**
+ * Build a compact one-line reachability summary for diagnostics.
+ * @param {Array<Object>} reports
+ * @returns {string}
+ */
+function summarizeReachabilityReports(reports) {
+  if (!Array.isArray(reports) || reports.length === 0) {
+    return '';
+  }
+  const parts = [];
+  for (const report of reports) {
+    const source = report?.reachableBy || REACHABILITY_SUMMARY_SOURCE_UNKNOWN;
+    const error = report?.lastError || REACHABILITY_SUMMARY_ERROR_NONE;
+    const state = report?.reachable === true ? 'reachable' : 'unreachable';
+    parts.push(
+      String(report?.nodeId || 'unknown') +
+      '[' + state + ',source=' + source + ',error=' + error + ']',
+    );
+  }
+  return parts.join(REACHABILITY_SUMMARY_SEPARATOR);
+}
 
 /**
  * Check whether a services row represents a voter-ready
@@ -36,13 +167,13 @@ const RAFT_ROLE_LEARNER = 'learner';
 function isVoterReady(row) {
   if (!row) return false;
   if (row.service_type !== 'partition') return false;
-  const status = typeof row.status === 'string'
-    ? row.status.toLowerCase()
-    : '';
+  const status = typeof row.status === 'string' ?
+    row.status.toLowerCase() :
+    '';
   if (status !== 'active') return false;
-  const role = typeof row.raft_role === 'string'
-    ? row.raft_role.toLowerCase()
-    : null;
+  const role = typeof row.raft_role === 'string' ?
+    row.raft_role.toLowerCase() :
+    null;
   if (!role || role === RAFT_ROLE_LEARNER) return false;
   if (!row.address) return false;
   return true;
@@ -154,8 +285,8 @@ async function queryReachableServices(nodes) {
   const allRows = [];
   for (const node of nodes) {
     try {
-      const reachable = await node.isReachable();
-      if (!reachable) continue;
+      const report = await probeNodeReachability(node);
+      if (!report.reachable) continue;
       const result = await node.query(SERVICES_QUERY);
       const rows = (result && result.rows) || [];
       allRows.push(...rows);
@@ -199,6 +330,7 @@ async function waitForConvergence(nodes, options = {}) {
   let lastLeaderChangeAt = Date.now();
   let latestCounts = new Map();
   let latestLeaders = new Map();
+  let latestRows = [];
 
   const startMs = Date.now();
   const deadline = startMs + settleTimeoutMs;
@@ -206,6 +338,7 @@ async function waitForConvergence(nodes, options = {}) {
   while (Date.now() <= deadline) {
     const now = Date.now();
     const rows = await queryReachableServices(nodes);
+    latestRows = rows;
 
     latestCounts = countVotersPerPartition(rows);
     latestLeaders = extractLeaders(rows);
@@ -283,14 +416,33 @@ async function waitForConvergence(nodes, options = {}) {
     }
   }
 
+  const partitionMembership = buildPartitionMembership(
+    latestRows,
+    targetVoterCount,
+  );
+  const membershipSnippet = formatPartitionMembershipSnippet(
+    partitionMembership,
+  );
+  const operationHistoryResult = await collectReplicaOperationHistory(
+    nodes,
+    OPERATION_HISTORY_LIMIT,
+  );
+  const operationHistory = operationHistoryResult.rows;
+  const operationHistoryError = operationHistoryResult.error;
+  const operationHistorySnippet = formatOperationHistorySnippet(
+    operationHistory,
+    operationHistoryError,
+  );
+
   const msg =
     'Convergence timeout after ' + settleTimeoutMs + 'ms. ' +
     'Leader changes: ' + leaderChanges + '. ' +
     'Max over-target: ' + maxOT + 'ms. ' +
     'Voter counts: ' + JSON.stringify(voterSummary) + '. ' +
     'Leaders: ' + JSON.stringify(leaderSummary) + '. ' +
-    'Over-target durations: ' +
-    JSON.stringify(overTargetSummary);
+    'Over-target durations: ' + JSON.stringify(overTargetSummary) + '. ' +
+    'Replica membership: ' + membershipSnippet + '. ' +
+    'Operation history: ' + operationHistorySnippet;
 
   const err = new Error(msg);
   err.diagnostics = {
@@ -299,9 +451,250 @@ async function waitForConvergence(nodes, options = {}) {
     leaderChanges,
     maxOverTargetMs: maxOT,
     overTargetDurations: overTargetSummary,
+    partitionMembership,
+    operationHistory,
+    operationHistoryError,
     elapsedMs: Date.now() - startMs,
   };
   throw err;
+}
+
+function buildPartitionMembership(rows, targetVoterCount) {
+  const grouped = new Map();
+  for (const row of rows) {
+    if (!row || row.service_type !== 'partition' || !row.partition_id) {
+      continue;
+    }
+    const partitionId = String(row.partition_id);
+    if (!grouped.has(partitionId)) {
+      grouped.set(partitionId, []);
+    }
+    grouped.get(partitionId).push({
+      nodeId: row.node_id ? String(row.node_id) : null,
+      address: row.address ? String(row.address) : null,
+      status: row.status ? String(row.status) : null,
+      raftRole: row.raft_role ? String(row.raft_role) : null,
+      voterReady: isVoterReady(row),
+    });
+  }
+
+  const membership = {};
+  for (const [partitionId, replicas] of grouped) {
+    replicas.sort(compareReplicaMembershipEntries);
+    const voterCount = replicas.filter((replica) =>
+      replica.voterReady === true).length;
+    const leader = replicas.find((replica) =>
+      String(replica.raftRole || '').toLowerCase() === STATUS_LEADER,
+    );
+    membership[partitionId] = {
+      targetVoterCount,
+      voterCount,
+      leader: leader?.address || leader?.nodeId || null,
+      replicas: replicas.map((replica) => ({
+        nodeId: replica.nodeId,
+        address: replica.address,
+        status: replica.status,
+        raftRole: replica.raftRole,
+      })),
+    };
+  }
+
+  return membership;
+}
+
+function compareReplicaMembershipEntries(left, right) {
+  const leftKey = String(
+    left.nodeId || left.address || VALUE_UNKNOWN,
+  );
+  const rightKey = String(
+    right.nodeId || right.address || VALUE_UNKNOWN,
+  );
+  return leftKey.localeCompare(rightKey);
+}
+
+function formatPartitionMembershipSnippet(partitionMembership) {
+  const partitionIds = Object.keys(partitionMembership).sort();
+  if (partitionIds.length === 0) {
+    return VALUE_NONE;
+  }
+
+  const limitedPartitionIds = partitionIds.slice(
+    0,
+    PARTITION_MEMBERSHIP_SNIPPET_LIMIT,
+  );
+  const parts = limitedPartitionIds.map((partitionId) =>
+    formatSinglePartitionMembershipSnippet(
+      partitionId,
+      partitionMembership[partitionId],
+    ),
+  );
+  if (partitionIds.length > limitedPartitionIds.length) {
+    parts.push(
+      SNIPPET_EXTRA_PREFIX +
+      (partitionIds.length - limitedPartitionIds.length) +
+      SNIPPET_EXTRA_SUFFIX,
+    );
+  }
+  return parts.join(REPLICA_MEMBERSHIP_SEPARATOR);
+}
+
+function formatSinglePartitionMembershipSnippet(partitionId, details) {
+  const replicas = Array.isArray(details?.replicas) ?
+    details.replicas :
+    [];
+  const visibleReplicas = replicas.slice(0, PARTITION_REPLICA_SNIPPET_LIMIT);
+  const replicaSummary = visibleReplicas
+    .map((replica) => formatReplicaMembershipEntry(replica))
+    .join(REPLICA_MEMBER_SEPARATOR);
+  const replicaOverflow = replicas.length - visibleReplicas.length;
+  const replicaSuffix = replicaOverflow > 0 ?
+    REPLICA_MEMBER_SEPARATOR +
+    SNIPPET_EXTRA_PREFIX + replicaOverflow + SNIPPET_EXTRA_SUFFIX :
+    '';
+  const voterCount = Number.isFinite(details?.voterCount) ?
+    details.voterCount :
+    0;
+  const targetVoterCount = Number.isFinite(details?.targetVoterCount) ?
+    details.targetVoterCount :
+    0;
+  const leader = details?.leader || VALUE_NONE;
+  return partitionId +
+    MEMBER_SNIPPET_PREFIX +
+    MEMBER_VOTER_PREFIX + voterCount +
+    MEMBER_VOTER_SEPARATOR + targetVoterCount +
+    MEMBER_LEADER_PREFIX + leader +
+    MEMBER_REPLICA_PREFIX + replicaSummary + replicaSuffix +
+    MEMBER_SNIPPET_SUFFIX;
+}
+
+function formatReplicaMembershipEntry(replica) {
+  const node = replica?.nodeId || replica?.address || VALUE_UNKNOWN;
+  const role = replica?.raftRole || STATUS_UNKNOWN;
+  const status = replica?.status || STATUS_UNKNOWN;
+  return node + ':' + role + ':' + status;
+}
+
+async function collectReplicaOperationHistory(nodes, limit) {
+  let lastError = null;
+  for (const node of nodes) {
+    try {
+      const report = await probeNodeReachability(node);
+      if (!report.reachable) {
+        continue;
+      }
+      const result = await node.query(REPLICA_OPERATIONS_QUERY);
+      const rows = Array.isArray(result?.rows) ? result.rows : [];
+      return {
+        rows: summarizeReplicaOperations(rows, limit),
+        error: null,
+      };
+    } catch (err) {
+      lastError = err?.message || String(err);
+    }
+  }
+  return {
+    rows: [],
+    error: lastError,
+  };
+}
+
+function summarizeReplicaOperations(rows, limit) {
+  const normalized = rows
+    .filter((row) => row && typeof row === 'object')
+    .map((row) => normalizeReplicaOperationRow(row))
+    .sort((left, right) =>
+      parseTimestampMs(right.at) - parseTimestampMs(left.at),
+    );
+  return normalized.slice(0, limit);
+}
+
+function normalizeReplicaOperationRow(row) {
+  return {
+    operationId: pickFirstFieldValue(row, OPERATION_FIELD_CANDIDATE_IDS),
+    partitionId: pickFirstFieldValue(
+      row,
+      OPERATION_FIELD_CANDIDATE_PARTITION_IDS,
+    ),
+    type: pickFirstFieldValue(row, OPERATION_FIELD_CANDIDATE_TYPES),
+    status: pickFirstFieldValue(row, OPERATION_FIELD_CANDIDATE_STATUSES),
+    fromNodeId: pickFirstFieldValue(
+      row,
+      OPERATION_FIELD_CANDIDATE_FROM_NODE_IDS,
+    ),
+    toNodeId: pickFirstFieldValue(
+      row,
+      OPERATION_FIELD_CANDIDATE_TO_NODE_IDS,
+    ),
+    at: pickFirstFieldValue(row, OPERATION_FIELD_CANDIDATE_TIMESTAMPS),
+  };
+}
+
+function pickFirstFieldValue(row, candidates) {
+  for (const key of candidates) {
+    if (Object.prototype.hasOwnProperty.call(row, key) &&
+      row[key] !== null &&
+      row[key] !== undefined) {
+      const value = String(row[key]);
+      if (value.length > 0) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+function parseTimestampMs(value) {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  const parsed = Date.parse(String(value));
+  if (Number.isFinite(parsed)) {
+    return parsed;
+  }
+  return 0;
+}
+
+function formatOperationHistorySnippet(operationHistory, operationHistoryError) {
+  if (operationHistoryError) {
+    return VALUE_UNAVAILABLE + '(' + operationHistoryError + ')';
+  }
+  if (!Array.isArray(operationHistory) || operationHistory.length === 0) {
+    return VALUE_NONE;
+  }
+  const visibleOperations = operationHistory.slice(
+    0,
+    OPERATION_HISTORY_SNIPPET_LIMIT,
+  );
+  const parts = visibleOperations.map((entry) =>
+    formatOperationHistoryEntry(entry),
+  );
+  if (operationHistory.length > visibleOperations.length) {
+    parts.push(
+      SNIPPET_EXTRA_PREFIX +
+      (operationHistory.length - visibleOperations.length) +
+      SNIPPET_EXTRA_SUFFIX,
+    );
+  }
+  return parts.join(OPERATION_HISTORY_SEPARATOR);
+}
+
+function formatOperationHistoryEntry(entry) {
+  const operationId = entry?.operationId || VALUE_UNKNOWN;
+  const partitionId = entry?.partitionId || VALUE_UNKNOWN;
+  const type = entry?.type || VALUE_UNKNOWN;
+  const status = entry?.status || VALUE_UNKNOWN;
+  const fromNodeId = entry?.fromNodeId || VALUE_UNKNOWN;
+  const toNodeId = entry?.toNodeId || VALUE_UNKNOWN;
+  const at = entry?.at || VALUE_UNKNOWN;
+  return operationId + ':' +
+    partitionId + ':' +
+    type + ':' +
+    status + ':' +
+    fromNodeId + '->' + toNodeId +
+    OPERATION_HISTORY_AT_PREFIX + at;
 }
 
 /**
@@ -313,19 +706,23 @@ async function waitForConvergence(nodes, options = {}) {
  */
 async function assertConsistency(nodes) {
   const reachable = [];
+  const reports = [];
   for (const node of nodes) {
     try {
-      const ok = await node.isReachable();
-      if (ok) reachable.push(node);
+      const report = await probeNodeReachability(node);
+      reports.push(report);
+      if (report.reachable) reachable.push(node);
     } catch (_err) {
       // skip
     }
   }
 
   if (reachable.length < 2) {
+    const summary = summarizeReachabilityReports(reports);
     throw new Error(
       'Cannot assert consistency: fewer than 2 reachable ' +
-      'nodes (found ' + reachable.length + ')',
+      'nodes (found ' + reachable.length + '). Reachability: ' +
+      summary,
     );
   }
 
@@ -435,18 +832,22 @@ function sortObjectKeys(obj) {
  */
 async function assertDataIntegrity(nodes, table, expectedRows) {
   const reachable = [];
+  const reports = [];
   for (const node of nodes) {
     try {
-      const ok = await node.isReachable();
-      if (ok) reachable.push(node);
+      const report = await probeNodeReachability(node);
+      reports.push(report);
+      if (report.reachable) reachable.push(node);
     } catch (_err) {
       // skip
     }
   }
 
   if (reachable.length === 0) {
+    const summary = summarizeReachabilityReports(reports);
     throw new Error(
-      'Cannot assert data integrity: no reachable nodes',
+      'Cannot assert data integrity: no reachable nodes. Reachability: ' +
+      summary,
     );
   }
 

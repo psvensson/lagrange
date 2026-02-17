@@ -281,6 +281,12 @@ const PLAYBACK_EVENT_TYPE = Object.freeze({
   WARNING: 'capture.warning',
 });
 
+// --- Log Subscription Capabilities ---
+const LOG_SUBSCRIPTION_CAPABILITY = Object.freeze({
+  STREAM_EVENTS: 'streamEvents',
+  LIVE_SELECT_QUERY: 'liveSelectQuery',
+});
+
 // --- CLI Runner Constants ---
 const DEFAULT_CONFIG_PATH = 'test/distributed/config/local.json';
 const DEFAULT_REPORT_OUTPUT = 'test-output/report.json';
@@ -326,6 +332,7 @@ export {
   BENCHMARK_DEFAULTS,
   PLAYBACK,
   PLAYBACK_EVENT_TYPE,
+  LOG_SUBSCRIPTION_CAPABILITY,
   CLI,
   EXIT_CODES,
 };

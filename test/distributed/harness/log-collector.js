@@ -8,7 +8,10 @@
 
 import {writeFile, mkdir} from 'node:fs/promises';
 import {join} from 'node:path';
-import {OUTPUT} from './constants.js';
+import {
+  OUTPUT,
+  LOG_SUBSCRIPTION_CAPABILITY,
+} from './constants.js';
 
 const LIVE_SELECT_PREFIX = 'LIVE SELECT * FROM logs';
 const FINAL_SNAPSHOT_QUERY = 'SELECT * FROM logs ORDER BY timestamp';
@@ -28,6 +31,21 @@ const SOURCE_CONTAINER = 'container';
 const SOURCE_LIVE_STREAM = 'live';
 const RESULT_ROWS = 'rows';
 const RESULT_RESULTS = 'results';
+const ENCODING_LATIN1 = 'latin1';
+const ENCODING_UTF8 = 'utf8';
+const DOCKER_LOG_FRAME_HEADER_BYTES = 8;
+const DOCKER_LOG_FRAME_LENGTH_OFFSET = 4;
+const DOCKER_LOG_FRAME_PADDING_OFFSET = 1;
+const DOCKER_LOG_FRAME_PADDING_LENGTH = 3;
+const DOCKER_LOG_STREAM_STDOUT = 1;
+const DOCKER_LOG_STREAM_STDERR = 2;
+const DOCKER_LOG_OPTION_RAW_BUFFER = 'rawBuffer';
+const LIVE_SELECT_UNSUPPORTED_TOKEN_SYNTAX = 'syntax';
+const LIVE_SELECT_UNSUPPORTED_TOKEN_PARSE = 'parse';
+const DEFAULT_LOG_SUBSCRIPTION_CAPABILITIES = Object.freeze({
+  [LOG_SUBSCRIPTION_CAPABILITY.STREAM_EVENTS]: false,
+  [LOG_SUBSCRIPTION_CAPABILITY.LIVE_SELECT_QUERY]: true,
+});
 
 /**
  * LogCollector — buffers log events from live query subscription
@@ -73,8 +91,9 @@ class LogCollector {
     this._node = node;
     this._filter = filter || null;
     this._subscriptionActive = true;
+    const capabilities = resolveLogSubscriptionCapabilities(node);
 
-    if (typeof node.subscribeLogStream === 'function') {
+    if (capabilities[LOG_SUBSCRIPTION_CAPABILITY.STREAM_EVENTS]) {
       try {
         this._unsubscribeLiveStream = await node.subscribeLogStream(
           (entry) => {
@@ -91,11 +110,18 @@ class LogCollector {
       }
     }
 
+    if (!capabilities[LOG_SUBSCRIPTION_CAPABILITY.LIVE_SELECT_QUERY]) {
+      return;
+    }
+
     const query = this.buildSubscriptionQuery(filter);
     try {
       const result = await node.query(query);
       this._appendEntries(extractRows(result));
-    } catch (_err) {
+    } catch (err) {
+      if (isUnsupportedLiveSelectError(err)) {
+        return;
+      }
       // Subscription may not return immediately; node stored
       // for later snapshot collection.
     }
@@ -131,10 +157,11 @@ class LogCollector {
       try {
         const logs = await dockerProvider.getContainerLogs(
           node.containerId,
+          {
+            [DOCKER_LOG_OPTION_RAW_BUFFER]: true,
+          },
         );
-        const lines = typeof logs === 'string' ?
-          logs.split(NEWLINE).filter((l) => l.length > ZERO) :
-          [];
+        const lines = extractContainerLogLines(logs);
         for (const line of lines) {
           this._appendEntry({
             [FIELD_NODE_ID]: node.id,
@@ -340,6 +367,130 @@ function extractLogId(entry) {
   }
   const value = String(raw);
   return value.length > ZERO ? value : null;
+}
+
+function resolveLogSubscriptionCapabilities(node) {
+  const capabilities = {
+    ...DEFAULT_LOG_SUBSCRIPTION_CAPABILITIES,
+    [LOG_SUBSCRIPTION_CAPABILITY.STREAM_EVENTS]:
+      typeof node?.subscribeLogStream === 'function',
+  };
+
+  if (typeof node?.getLogSubscriptionCapabilities !== 'function') {
+    return capabilities;
+  }
+
+  const provided = node.getLogSubscriptionCapabilities();
+  if (!provided || typeof provided !== 'object') {
+    return capabilities;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(
+    provided,
+    LOG_SUBSCRIPTION_CAPABILITY.STREAM_EVENTS,
+  )) {
+    capabilities[LOG_SUBSCRIPTION_CAPABILITY.STREAM_EVENTS] =
+      provided[LOG_SUBSCRIPTION_CAPABILITY.STREAM_EVENTS] === true;
+  }
+  if (Object.prototype.hasOwnProperty.call(
+    provided,
+    LOG_SUBSCRIPTION_CAPABILITY.LIVE_SELECT_QUERY,
+  )) {
+    capabilities[LOG_SUBSCRIPTION_CAPABILITY.LIVE_SELECT_QUERY] =
+      provided[LOG_SUBSCRIPTION_CAPABILITY.LIVE_SELECT_QUERY] === true;
+  }
+  return capabilities;
+}
+
+function isUnsupportedLiveSelectError(err) {
+  const message = String(err?.message || err || '').toLowerCase();
+  return message.includes(LIVE_SELECT_UNSUPPORTED_TOKEN_SYNTAX) ||
+    message.includes(LIVE_SELECT_UNSUPPORTED_TOKEN_PARSE);
+}
+
+function extractContainerLogLines(logs) {
+  if (Buffer.isBuffer(logs)) {
+    const demultiplexed = decodeDockerLogFrames(logs);
+    const text = demultiplexed === null ?
+      logs.toString(ENCODING_UTF8) :
+      demultiplexed;
+    return text
+      .split(NEWLINE)
+      .filter((line) => line.length > ZERO);
+  }
+
+  if (typeof logs !== 'string') {
+    return [];
+  }
+  const demultiplexed = demultiplexDockerLogString(logs);
+  return demultiplexed
+    .split(NEWLINE)
+    .filter((line) => line.length > ZERO);
+}
+
+function demultiplexDockerLogString(logPayload) {
+  if (logPayload.length === ZERO) {
+    return logPayload;
+  }
+  const framedPayload = Buffer.from(logPayload, ENCODING_LATIN1);
+  const decoded = decodeDockerLogFrames(framedPayload);
+  if (decoded === null) {
+    return logPayload;
+  }
+  return decoded;
+}
+
+function decodeDockerLogFrames(payload) {
+  if (!Buffer.isBuffer(payload) ||
+    payload.length < DOCKER_LOG_FRAME_HEADER_BYTES) {
+    return null;
+  }
+
+  let offset = ZERO;
+  let frameCount = ZERO;
+  const chunks = [];
+  while (offset + DOCKER_LOG_FRAME_HEADER_BYTES <= payload.length) {
+    const streamType = payload[offset];
+    if (streamType !== DOCKER_LOG_STREAM_STDOUT &&
+      streamType !== DOCKER_LOG_STREAM_STDERR) {
+      return null;
+    }
+    for (
+      let i = DOCKER_LOG_FRAME_PADDING_OFFSET;
+      i < DOCKER_LOG_FRAME_PADDING_OFFSET + DOCKER_LOG_FRAME_PADDING_LENGTH;
+      i++
+    ) {
+      if (payload[offset + i] !== ZERO) {
+        return null;
+      }
+    }
+
+    const frameLength = payload.readUInt32BE(
+      offset + DOCKER_LOG_FRAME_LENGTH_OFFSET,
+    );
+    const framePayloadStart = offset + DOCKER_LOG_FRAME_HEADER_BYTES;
+    const framePayloadEnd = framePayloadStart + frameLength;
+    if (framePayloadEnd > payload.length) {
+      return null;
+    }
+
+    if (frameLength > ZERO) {
+      chunks.push(payload.subarray(framePayloadStart, framePayloadEnd));
+    }
+    offset = framePayloadEnd;
+    frameCount++;
+    if (offset === payload.length) {
+      break;
+    }
+  }
+
+  if (frameCount === ZERO || offset !== payload.length) {
+    return null;
+  }
+  if (chunks.length === ZERO) {
+    return '';
+  }
+  return Buffer.concat(chunks).toString(ENCODING_UTF8);
 }
 
 export {LogCollector, formatLogEntry, compareTimestamps};

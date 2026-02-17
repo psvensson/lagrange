@@ -24,8 +24,19 @@ import {join} from 'node:path';
 import {access, rm} from 'node:fs/promises';
 import {randomBytes} from 'node:crypto';
 import {LogCollector} from '../log-collector.js';
+import {LOG_SUBSCRIPTION_CAPABILITY} from '../constants.js';
 
 const LIVE_SELECT_BASE = 'LIVE SELECT * FROM logs';
+const DOCKER_STREAM_STDOUT = 1;
+const DOCKER_STREAM_STDERR = 2;
+
+function buildDockerLogFrame(streamType, text) {
+  const payload = Buffer.from(text, 'utf8');
+  const header = Buffer.alloc(8);
+  header[0] = streamType;
+  header.writeUInt32BE(payload.length, 4);
+  return Buffer.concat([header, payload]);
+}
 
 /**
  * Generate a unique temp directory path for test isolation.
@@ -342,6 +353,34 @@ test('startLiveSubscription handles query failure gracefully',
     assert.equal(buffer.length, 0);
   });
 
+test('startLiveSubscription skips LIVE SELECT when capability disables it',
+  async (_t) => {
+    let queryCalls = 0;
+    const mockNode = {
+      id: 'node-capability-aware',
+      containerId: 'c-capability-aware',
+      getLogSubscriptionCapabilities: () => ({
+        [LOG_SUBSCRIPTION_CAPABILITY.STREAM_EVENTS]: true,
+        [LOG_SUBSCRIPTION_CAPABILITY.LIVE_SELECT_QUERY]: false,
+      }),
+      query: async () => {
+        queryCalls++;
+        return {rows: []};
+      },
+      subscribeLogStream: async () => () => {},
+      isReachable: async () => true,
+    };
+
+    const collector = new LogCollector(tempDir());
+    await collector.startLiveSubscription(mockNode);
+
+    assert.equal(
+      queryCalls,
+      0,
+      'LIVE SELECT query should be skipped when capability is disabled',
+    );
+  });
+
 /**
  * Unit test: collectFinalSnapshot queries and appends to buffer
  * Validates: Requirements 7.4
@@ -514,6 +553,43 @@ test('collectContainerFallback parses Docker logs',
     assert.equal(buffer[3].node_id, 'node-2');
     assert.equal(buffer[3].message, 'Ready');
     assert.equal(buffer[3].source, 'container');
+  });
+
+test('collectContainerFallback demultiplexes Docker-framed logs',
+  async (_t) => {
+    const multiplexed = Buffer.concat([
+      buildDockerLogFrame(DOCKER_STREAM_STDOUT, 'stdout line 1\n'),
+      buildDockerLogFrame(DOCKER_STREAM_STDERR, 'stderr line 2\n'),
+      buildDockerLogFrame(DOCKER_STREAM_STDOUT, 'stdout line 3'),
+    ]);
+
+    let observedOptions = null;
+    const mockDockerProvider = {
+      getContainerLogs: async (_containerId, options) => {
+        observedOptions = options;
+        return multiplexed;
+      },
+    };
+
+    const nodes = [
+      {id: 'node-1', containerId: 'c1'},
+    ];
+
+    const collector = new LogCollector(tempDir());
+    await collector.collectContainerFallback(
+      mockDockerProvider, nodes,
+    );
+
+    const buffer = collector.getBuffer();
+    assert.equal(buffer.length, 3);
+    assert.equal(buffer[0].message, 'stdout line 1');
+    assert.equal(buffer[1].message, 'stderr line 2');
+    assert.equal(buffer[2].message, 'stdout line 3');
+    assert.equal(
+      observedOptions.rawBuffer,
+      true,
+      'collector should request raw Docker log buffer',
+    );
   });
 
 /**

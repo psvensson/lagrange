@@ -202,3 +202,6 @@ This section exists because LLMs tend to generate these patterns. Do not:
   the single source of truth on demand.
 
 When you catch yourself about to do any of these: stop, search, reuse.
+
+If you run in to long periods of failures or have a hard time implementing something, take a step back and consider if changing the local architecutre in some way would make your current taks easier - while still adhering to all other rules. 
+In that case, bring it to attention and come with a suggestion instead of just plodding on.

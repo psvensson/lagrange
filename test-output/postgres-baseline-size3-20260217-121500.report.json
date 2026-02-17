@@ -1,0 +1,78 @@
+{
+  "timestamp": "2026-02-17T11:31:30.281Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 91896
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 91896,
+      "startedAt": "2026-02-17T11:29:52.606Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Cannot assert consistency: fewer than 2 reachable nodes (found 1)",
+      "stackTrace": "Error: Cannot assert consistency: fewer than 2 reachable nodes (found 1)\n    at assertConsistency (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/assertions.js:326:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/postgres-baseline-comparison.js:440:3)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:444:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:935:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1771327792619,
+        "endedAt": 1771327890280,
+        "durationMs": 97661,
+        "files": {
+          "events": "test-output/.playback/postgres-baseline-size3-20260217-121500/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/.playback/postgres-baseline-size3-20260217-121500/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/.playback/postgres-baseline-size3-20260217-121500/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/.playback/postgres-baseline-size3-20260217-121500/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/.playback/postgres-baseline-size3-20260217-121500/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 118,
+          "samples": 255,
+          "snapshots": 82
+        },
+        "warnings": [
+          {
+            "code": "query-node-unavailable",
+            "message": "No reachable node available for topology snapshot query",
+            "timestamp": 1771327793636
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null
+    }
+  ]
+}

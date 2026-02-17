@@ -1,0 +1,35 @@
+{
+  "scenarioName": "postgres-baseline-comparison",
+  "startedAt": 1771328235945,
+  "endedAt": 1771328304491,
+  "durationMs": 68546,
+  "files": {
+    "events": "test-output/.playback/postgres-baseline-size3-20260217-123642-three-node/postgres-baseline-comparison/events.ndjson",
+    "samples": "test-output/.playback/postgres-baseline-size3-20260217-123642-three-node/postgres-baseline-comparison/samples.ndjson",
+    "snapshots": "test-output/.playback/postgres-baseline-size3-20260217-123642-three-node/postgres-baseline-comparison/snapshots.ndjson",
+    "manifest": "test-output/.playback/postgres-baseline-size3-20260217-123642-three-node/postgres-baseline-comparison/playback-manifest.json",
+    "viewer": "test-output/.playback/postgres-baseline-size3-20260217-123642-three-node/postgres-baseline-comparison/playback-viewer.html"
+  },
+  "counts": {
+    "events": 96,
+    "samples": 151,
+    "snapshots": 47
+  },
+  "warnings": [
+    {
+      "code": "query-node-unavailable",
+      "message": "No reachable node available for topology snapshot query",
+      "timestamp": 1771328236958
+    },
+    {
+      "code": "topology-capture-failed",
+      "message": "Failed to capture topology snapshot: Admin API query failed for node 143197e0-377f-45bf-a090-b7d0a040ef32: connect ECONNREFUSED 172.19.0.2:8081",
+      "timestamp": 1771328245951
+    },
+    {
+      "code": "service-query-failed-143197e0-377f-45bf-a090-b7d0a040ef32",
+      "message": "Failed to query services on node 143197e0-377f-45bf-a090-b7d0a040ef32: Admin API query failed for node 143197e0-377f-45bf-a090-b7d0a040ef32: connect ECONNREFUSED 172.19.0.2:8081",
+      "timestamp": 1771328245952
+    }
+  ]
+}

@@ -328,6 +328,164 @@ test('Unit: NodeHandle.isReachable checks bootstrap health endpoint', async () =
   }
 });
 
+test('Unit: NodeHandle.isReachable uses admin health when bootstrap health is unavailable',
+  async () => {
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.JOINER,
+      {getContainerLogs: async () => ''},
+    );
+
+    const originalGet = http.get;
+    const originalQuery = node.query;
+    const calledUrls = [];
+    let queryCalled = false;
+    http.get = (url, _options, callback) => {
+      calledUrls.push(String(url));
+      const req = {
+        on: (event, handler) => {
+          if (event === 'error' && String(url).includes(':8080/health')) {
+            process.nextTick(() => handler(new Error('connect ECONNREFUSED')));
+          }
+          return req;
+        },
+        destroy: () => {},
+      };
+      if (String(url).includes(':8081/health')) {
+        process.nextTick(() => {
+          callback({
+            statusCode: 200,
+            resume: () => {},
+          });
+        });
+      }
+      return req;
+    };
+    node.query = async () => {
+      queryCalled = true;
+      throw new Error('query probe should not be used');
+    };
+
+    try {
+      const reachable = await node.isReachable();
+      assert.strictEqual(reachable, true, 'admin health probe should mark node reachable');
+      assert.strictEqual(queryCalled, false, 'should not issue query fallback');
+      assert.ok(calledUrls.some((url) => url.includes(':8080/health')),
+        'should probe bootstrap health endpoint first');
+      assert.ok(calledUrls.some((url) => url.includes(':8081/health')),
+        'should probe admin health endpoint');
+    } finally {
+      http.get = originalGet;
+      node.query = originalQuery;
+    }
+  });
+
+test('Unit: NodeHandle.isReachable falls back to admin query when HTTP probes are unavailable',
+  async () => {
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.JOINER,
+      {getContainerLogs: async () => ''},
+    );
+
+    const originalGet = http.get;
+    let queryProbeCount = 0;
+    const calledUrls = [];
+    const originalQuery = node.query;
+    const originalGetAdminSocket = node._getAdminSocket;
+    http.get = (url, _options, _callback) => {
+      calledUrls.push(String(url));
+      const req = {
+        on: (event, handler) => {
+          if (event === 'error') {
+            process.nextTick(() => handler(new Error('connect ECONNREFUSED')));
+          }
+          return req;
+        },
+        destroy: () => {},
+      };
+      return req;
+    };
+    node.query = async (sql) => {
+      if (sql === 'SELECT node_id FROM nodes LIMIT 1') {
+        queryProbeCount += 1;
+      }
+      return {rows: [{ok: 1}]};
+    };
+    node._getAdminSocket = async () => {
+      throw new Error('connect ECONNREFUSED 127.0.0.1:8081');
+    };
+
+    try {
+      const reachable = await node.isReachable();
+      assert.strictEqual(reachable, true,
+        'admin query probe should mark node reachable');
+      assert.strictEqual(queryProbeCount, 1, 'should issue exactly one admin probe');
+      assert.strictEqual(calledUrls.length, 2,
+        'should attempt both bootstrap and admin HTTP health probes');
+    } finally {
+      http.get = originalGet;
+      node.query = originalQuery;
+      node._getAdminSocket = originalGetAdminSocket;
+    }
+  });
+
+test('Unit: NodeHandle.getReachabilityDiagnostics reports all probe stages on failure',
+  async () => {
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.JOINER,
+      {getContainerLogs: async () => ''},
+    );
+
+    const originalGet = http.get;
+    const originalQuery = node.query;
+    const originalGetAdminSocket = node._getAdminSocket;
+    http.get = (_url, _options, callback) => {
+      const req = {
+        on: () => req,
+        destroy: () => {},
+      };
+      process.nextTick(() => {
+        callback({
+          statusCode: 503,
+          resume: () => {},
+        });
+      });
+      return req;
+    };
+    node._getAdminSocket = async () => {
+      throw new Error('admin ws unavailable');
+    };
+    node.query = async () => {
+      throw new Error('sql probe failed');
+    };
+
+    try {
+      const diagnostics = await node.getReachabilityDiagnostics();
+      assert.strictEqual(diagnostics.reachable, false);
+      assert.strictEqual(diagnostics.bootstrapHealth.attempted, true);
+      assert.strictEqual(diagnostics.bootstrapHealth.ok, false);
+      assert.strictEqual(diagnostics.adminHealth.attempted, true);
+      assert.strictEqual(diagnostics.adminHealth.ok, false);
+      assert.strictEqual(diagnostics.adminWs.attempted, true);
+      assert.strictEqual(diagnostics.adminWs.ok, false);
+      assert.strictEqual(diagnostics.sqlProbe.attempted, true);
+      assert.strictEqual(diagnostics.sqlProbe.ok, false);
+      assert.strictEqual(diagnostics.lastError, 'sql probe failed');
+    } finally {
+      http.get = originalGet;
+      node.query = originalQuery;
+      node._getAdminSocket = originalGetAdminSocket;
+    }
+  });
+
 test('Unit: NodeHandle.query sends queryId and ignores initial cache dump', async () => {
   const server = new WebSocketServer({
     host: '127.0.0.1',

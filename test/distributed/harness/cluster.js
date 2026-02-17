@@ -27,6 +27,7 @@ import {
   NETWORK,
   NODE_ROLES,
   PLAYBACK_EVENT_TYPE,
+  LOG_SUBSCRIPTION_CAPABILITY,
 } from './constants.js';
 
 const BOOTSTRAP_POLL_INTERVAL_MS = 500;
@@ -39,6 +40,8 @@ const FETCH_TIMEOUT_MS = 1000;
 const ADMIN_QUERY_TIMEOUT_MS = 5000;
 const LOG_TAIL_LINES = 50;
 const BOOTSTRAP_HEALTH_PATH = '/health';
+const ADMIN_HEALTH_PATH = '/health';
+const ADMIN_STREAM_PATH = '/api/admin/stream';
 const WS_HOST_ENV_KEY = 'TRANSPORT_WS_HOST';
 const WS_BIND_ALL_HOST = '0.0.0.0';
 const NODE_OPTIONS_ENV_KEY = 'NODE_OPTIONS';
@@ -54,6 +57,13 @@ const CDC_EVENT_MESSAGE_TYPE = 'cdc_event';
 const LIVE_QUERY_EVENT_MESSAGE_TYPE = 'live_query_event';
 const LIVE_QUERY_INITIAL_MESSAGE_TYPE = 'live_query_initial';
 const LOGS_TABLE_NAME = 'logs';
+const REACHABILITY_PROBE_SQL = 'SELECT node_id FROM nodes LIMIT 1';
+const REACHABILITY_SOURCE_BOOTSTRAP_HEALTH = 'bootstrap_health';
+const REACHABILITY_SOURCE_ADMIN_HEALTH = 'admin_health';
+const REACHABILITY_SOURCE_ADMIN_WS = 'admin_ws';
+const REACHABILITY_SOURCE_SQL_PROBE = 'sql_probe';
+const REACHABILITY_STATUS_HTTP = 'http_status_';
+const REACHABILITY_ERROR_UNKNOWN = 'unknown reachability error';
 const STATUS_ACTIVE_LOWER = ACTIVE_STATE.toLowerCase();
 const WS_READY_STATE_OPEN = 1;
 const PLAYBACK_SCOPE_CLUSTER = 'cluster';
@@ -115,6 +125,68 @@ function httpGet(url, timeoutMs) {
 }
 
 /**
+ * Build a reusable probe object for reachability diagnostics.
+ * @param {Object} options
+ * @param {boolean} [options.attempted]
+ * @param {boolean} [options.ok]
+ * @param {number|null} [options.statusCode]
+ * @param {string|null} [options.error]
+ * @param {string|null} [options.url]
+ * @param {string|null} [options.endpoint]
+ * @param {string|null} [options.query]
+ * @returns {Object}
+ */
+function createProbeResult(options = {}) {
+  return {
+    attempted: options.attempted === true,
+    ok: options.ok === true,
+    statusCode: Number.isInteger(options.statusCode) ?
+      options.statusCode :
+      null,
+    error: typeof options.error === 'string' ?
+      options.error :
+      null,
+    url: typeof options.url === 'string' ? options.url : null,
+    endpoint: typeof options.endpoint === 'string' ?
+      options.endpoint :
+      null,
+    query: typeof options.query === 'string' ? options.query : null,
+  };
+}
+
+/**
+ * Convert a caught error value into a stable diagnostic string.
+ * @param {*} error
+ * @returns {string}
+ */
+function normalizeProbeError(error) {
+  if (error && typeof error.message === 'string' && error.message.length > 0) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error.length > 0) {
+    return error;
+  }
+  return REACHABILITY_ERROR_UNKNOWN;
+}
+
+/**
+ * Build a health probe result from an HTTP status code.
+ * @param {string} url
+ * @param {number} statusCode
+ * @returns {Object}
+ */
+function buildHealthProbeResult(url, statusCode) {
+  const ok = statusCode >= HTTP_OK_LOWER && statusCode <= HTTP_OK_UPPER;
+  return createProbeResult({
+    attempted: true,
+    ok,
+    statusCode,
+    url,
+    error: ok ? null : REACHABILITY_STATUS_HTTP + String(statusCode),
+  });
+}
+
+/**
  * Lightweight handle for interacting with a single cluster node.
  */
 class NodeHandle {
@@ -136,6 +208,7 @@ class NodeHandle {
     this._adminSocketReady = null;
     this._pendingQueries = new Map();
     this._logStreamListeners = new Set();
+    this._lastReachabilityDiagnostics = null;
   }
 
   /**
@@ -287,6 +360,19 @@ class NodeHandle {
     }
     return () => {
       this._logStreamListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Advertise harness log-subscription capabilities for this node.
+   * LIVE SELECT is disabled to avoid parser-noise on unsupported syntax;
+   * streaming events come from the admin socket.
+   * @returns {{streamEvents: boolean, liveSelectQuery: boolean}}
+   */
+  getLogSubscriptionCapabilities() {
+    return {
+      [LOG_SUBSCRIPTION_CAPABILITY.STREAM_EVENTS]: true,
+      [LOG_SUBSCRIPTION_CAPABILITY.LIVE_SELECT_QUERY]: false,
     };
   }
 
@@ -490,12 +576,129 @@ class NodeHandle {
     );
   }
 
+  /**
+   * Probe node reachability with detailed diagnostics.
+   * @returns {Promise<Object>}
+   */
+  async getReachabilityDiagnostics() {
+    const bootstrapUrl =
+      'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_HEALTH_PATH;
+    const adminUrl =
+      'http://' + this.ip + ':' + this._adminApiPort + ADMIN_HEALTH_PATH;
+    const adminEndpoint =
+      'ws://' + this.ip + ':' + this._adminApiPort + ADMIN_STREAM_PATH;
+
+    const diagnostics = {
+      nodeId: this.id,
+      timestamp: Date.now(),
+      reachable: false,
+      reachableBy: null,
+      adminReady: false,
+      bootstrapHealth: createProbeResult({
+        url: bootstrapUrl,
+      }),
+      adminHealth: createProbeResult({
+        url: adminUrl,
+      }),
+      adminWs: createProbeResult({
+        endpoint: adminEndpoint,
+      }),
+      sqlProbe: createProbeResult({
+        query: REACHABILITY_PROBE_SQL,
+      }),
+      lastError: null,
+    };
+
+    const bootstrapStatus = await httpGet(bootstrapUrl, FETCH_TIMEOUT_MS);
+    diagnostics.bootstrapHealth = buildHealthProbeResult(
+      bootstrapUrl,
+      bootstrapStatus,
+    );
+    if (diagnostics.bootstrapHealth.ok) {
+      diagnostics.reachable = true;
+      diagnostics.reachableBy = REACHABILITY_SOURCE_BOOTSTRAP_HEALTH;
+      this._lastReachabilityDiagnostics = diagnostics;
+      return diagnostics;
+    }
+    diagnostics.lastError = diagnostics.bootstrapHealth.error;
+
+    const adminStatus = await httpGet(adminUrl, FETCH_TIMEOUT_MS);
+    diagnostics.adminHealth = buildHealthProbeResult(
+      adminUrl,
+      adminStatus,
+    );
+    if (diagnostics.adminHealth.ok) {
+      diagnostics.reachable = true;
+      diagnostics.reachableBy = REACHABILITY_SOURCE_ADMIN_HEALTH;
+      diagnostics.adminReady = true;
+      diagnostics.lastError = null;
+      this._lastReachabilityDiagnostics = diagnostics;
+      return diagnostics;
+    }
+    diagnostics.lastError = diagnostics.adminHealth.error;
+
+    try {
+      await this._getAdminSocket();
+      diagnostics.adminWs = createProbeResult({
+        attempted: true,
+        ok: true,
+        endpoint: adminEndpoint,
+      });
+      diagnostics.reachable = true;
+      diagnostics.reachableBy = REACHABILITY_SOURCE_ADMIN_WS;
+      diagnostics.adminReady = true;
+      diagnostics.lastError = null;
+      this._lastReachabilityDiagnostics = diagnostics;
+      return diagnostics;
+    } catch (err) {
+      diagnostics.adminWs = createProbeResult({
+        attempted: true,
+        ok: false,
+        endpoint: adminEndpoint,
+        error: normalizeProbeError(err),
+      });
+      diagnostics.lastError = diagnostics.adminWs.error;
+    }
+
+    try {
+      await this.query(REACHABILITY_PROBE_SQL);
+      diagnostics.sqlProbe = createProbeResult({
+        attempted: true,
+        ok: true,
+        query: REACHABILITY_PROBE_SQL,
+      });
+      diagnostics.reachable = true;
+      diagnostics.reachableBy = REACHABILITY_SOURCE_SQL_PROBE;
+      diagnostics.adminReady = true;
+      diagnostics.lastError = null;
+      this._lastReachabilityDiagnostics = diagnostics;
+      return diagnostics;
+    } catch (err) {
+      diagnostics.sqlProbe = createProbeResult({
+        attempted: true,
+        ok: false,
+        query: REACHABILITY_PROBE_SQL,
+        error: normalizeProbeError(err),
+      });
+      diagnostics.lastError = diagnostics.sqlProbe.error;
+    }
+
+    this._lastReachabilityDiagnostics = diagnostics;
+    return diagnostics;
+  }
+
   /** Check if node is reachable via HTTP GET to REST port. */
   async isReachable() {
-    const url =
-      'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_HEALTH_PATH;
-    const status = await httpGet(url, FETCH_TIMEOUT_MS);
-    return status >= HTTP_OK_LOWER && status <= HTTP_OK_UPPER;
+    const diagnostics = await this.getReachabilityDiagnostics();
+    return diagnostics.reachable === true;
+  }
+
+  /**
+   * Return the latest computed reachability diagnostics.
+   * @returns {Object|null}
+   */
+  getLastReachabilityDiagnostics() {
+    return this._lastReachabilityDiagnostics;
   }
 }
 

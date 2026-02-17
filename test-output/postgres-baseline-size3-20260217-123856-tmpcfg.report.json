@@ -1,0 +1,78 @@
+{
+  "timestamp": "2026-02-17T11:40:35.082Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 52290
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 52290,
+      "startedAt": "2026-02-17T11:39:31.259Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Convergence timeout after 30000ms. Leader changes: 0. Max over-target: 30184ms. Voter counts: {\"code-p1\":9,\"config-p1\":9,\"contexts-p1\":9,\"debug_breakpoints-p1\":9,\"debug_sessions-p1\":9,\"debug_snapshots-p1\":9,\"indices-p1\":9,\"inter_group_latencies-p1\":9,\"latency_groups-p1\":9,\"live_queries-p1\":9,\"logs-p1\":9,\"message_groups-p1\":9,\"module_dependency_locks-p1\":9,\"module_manifests-p1\":9,\"node_endpoints-p1\":9,\"nodes-p1\":9,\"package_registry_mappings-p1\":9,\"package_registry_overrides-p1\":9,\"partitions-p1\":9,\"replica_operations-p1\":9,\"service_definitions-p1\":9,\"service_endpoints-p1\":9,\"service_timers-p1\":9,\"services-p1\":9,\"sql_transaction_participants-p1\":9,\"sql_transactions-p1\":9,\"sql_write_operations-p1\":9,\"storage_reservations-p1\":9,\"tables-p1\":9,\"wasm_operations-p1\":9}. Leaders: {\"code-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/code-p1-r1\",\"config-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/config-p1-r1\",\"contexts-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/contexts-p1-r1\",\"debug_breakpoints-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/debug_breakpoints-p1-r1\",\"debug_sessions-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/debug_sessions-p1-r1\",\"debug_snapshots-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/debug_snapshots-p1-r1\",\"indices-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/indices-p1-r1\",\"inter_group_latencies-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/inter_group_latencies-p1-r1\",\"latency_groups-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/latency_groups-p1-r1\",\"live_queries-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/live_queries-p1-r1\",\"logs-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/logs-p1-r1\",\"message_groups-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/message_groups-p1-r1\",\"module_dependency_locks-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/module_dependency_locks-p1-r1\",\"module_manifests-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/module_manifests-p1-r1\",\"node_endpoints-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/node_endpoints-p1-r1\",\"nodes-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/nodes-p1-r1\",\"package_registry_mappings-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/package_registry_mappings-p1-r1\",\"package_registry_overrides-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/package_registry_overrides-p1-r1\",\"partitions-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/partitions-p1-r1\",\"replica_operations-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/replica_operations-p1-r1\",\"service_definitions-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/service_definitions-p1-r1\",\"service_endpoints-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/service_endpoints-p1-r1\",\"service_timers-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/service_timers-p1-r1\",\"services-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/services-p1-r1\",\"sql_transaction_participants-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/sql_transaction_participants-p1-r1\",\"sql_transactions-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/sql_transactions-p1-r1\",\"sql_write_operations-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/sql_write_operations-p1-r1\",\"storage_reservations-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/storage_reservations-p1-r1\",\"tables-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/tables-p1-r1\",\"wasm_operations-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/wasm_operations-p1-r1\"}. Over-target durations: {\"code-p1\":30184,\"config-p1\":30184,\"contexts-p1\":30184,\"debug_breakpoints-p1\":30184,\"debug_sessions-p1\":30184,\"debug_snapshots-p1\":30184,\"indices-p1\":30184,\"inter_group_latencies-p1\":30184,\"latency_groups-p1\":30184,\"live_queries-p1\":30184,\"logs-p1\":30184,\"message_groups-p1\":30184,\"module_dependency_locks-p1\":30184,\"module_manifests-p1\":30184,\"node_endpoints-p1\":30184,\"nodes-p1\":30184,\"package_registry_mappings-p1\":30184,\"package_registry_overrides-p1\":30184,\"partitions-p1\":30184,\"replica_operations-p1\":30184,\"service_definitions-p1\":30184,\"service_endpoints-p1\":30184,\"service_timers-p1\":30184,\"services-p1\":30184,\"sql_transaction_participants-p1\":30184,\"sql_transactions-p1\":30184,\"sql_write_operations-p1\":30184,\"storage_reservations-p1\":30184,\"tables-p1\":30184,\"wasm_operations-p1\":30184}",
+      "stackTrace": "Error: Convergence timeout after 30000ms. Leader changes: 0. Max over-target: 30184ms. Voter counts: {\"code-p1\":9,\"config-p1\":9,\"contexts-p1\":9,\"debug_breakpoints-p1\":9,\"debug_sessions-p1\":9,\"debug_snapshots-p1\":9,\"indices-p1\":9,\"inter_group_latencies-p1\":9,\"latency_groups-p1\":9,\"live_queries-p1\":9,\"logs-p1\":9,\"message_groups-p1\":9,\"module_dependency_locks-p1\":9,\"module_manifests-p1\":9,\"node_endpoints-p1\":9,\"nodes-p1\":9,\"package_registry_mappings-p1\":9,\"package_registry_overrides-p1\":9,\"partitions-p1\":9,\"replica_operations-p1\":9,\"service_definitions-p1\":9,\"service_endpoints-p1\":9,\"service_timers-p1\":9,\"services-p1\":9,\"sql_transaction_participants-p1\":9,\"sql_transactions-p1\":9,\"sql_write_operations-p1\":9,\"storage_reservations-p1\":9,\"tables-p1\":9,\"wasm_operations-p1\":9}. Leaders: {\"code-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/code-p1-r1\",\"config-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/config-p1-r1\",\"contexts-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/contexts-p1-r1\",\"debug_breakpoints-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/debug_breakpoints-p1-r1\",\"debug_sessions-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/debug_sessions-p1-r1\",\"debug_snapshots-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/debug_snapshots-p1-r1\",\"indices-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/indices-p1-r1\",\"inter_group_latencies-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/inter_group_latencies-p1-r1\",\"latency_groups-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/latency_groups-p1-r1\",\"live_queries-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/live_queries-p1-r1\",\"logs-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/logs-p1-r1\",\"message_groups-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/message_groups-p1-r1\",\"module_dependency_locks-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/module_dependency_locks-p1-r1\",\"module_manifests-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/module_manifests-p1-r1\",\"node_endpoints-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/node_endpoints-p1-r1\",\"nodes-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/nodes-p1-r1\",\"package_registry_mappings-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/package_registry_mappings-p1-r1\",\"package_registry_overrides-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/package_registry_overrides-p1-r1\",\"partitions-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/partitions-p1-r1\",\"replica_operations-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/replica_operations-p1-r1\",\"service_definitions-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/service_definitions-p1-r1\",\"service_endpoints-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/service_endpoints-p1-r1\",\"service_timers-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/service_timers-p1-r1\",\"services-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/services-p1-r1\",\"sql_transaction_participants-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/sql_transaction_participants-p1-r1\",\"sql_transactions-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/sql_transactions-p1-r1\",\"sql_write_operations-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/sql_write_operations-p1-r1\",\"storage_reservations-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/storage_reservations-p1-r1\",\"tables-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/tables-p1-r1\",\"wasm_operations-p1\":\"393d8227-3329-45b0-b8e1-db3752ab12c6/partition/wasm_operations-p1-r1\"}. Over-target durations: {\"code-p1\":30184,\"config-p1\":30184,\"contexts-p1\":30184,\"debug_breakpoints-p1\":30184,\"debug_sessions-p1\":30184,\"debug_snapshots-p1\":30184,\"indices-p1\":30184,\"inter_group_latencies-p1\":30184,\"latency_groups-p1\":30184,\"live_queries-p1\":30184,\"logs-p1\":30184,\"message_groups-p1\":30184,\"module_dependency_locks-p1\":30184,\"module_manifests-p1\":30184,\"node_endpoints-p1\":30184,\"nodes-p1\":30184,\"package_registry_mappings-p1\":30184,\"package_registry_overrides-p1\":30184,\"partitions-p1\":30184,\"replica_operations-p1\":30184,\"service_definitions-p1\":30184,\"service_endpoints-p1\":30184,\"service_timers-p1\":30184,\"services-p1\":30184,\"sql_transaction_participants-p1\":30184,\"sql_transactions-p1\":30184,\"sql_write_operations-p1\":30184,\"storage_reservations-p1\":30184,\"tables-p1\":30184,\"wasm_operations-p1\":30184}\n    at waitForConvergence (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/assertions.js:295:15)\n    at async Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/postgres-baseline-comparison.js:291:23)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:444:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:935:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1771328371261,
+        "endedAt": 1771328435080,
+        "durationMs": 63819,
+        "files": {
+          "events": "test-output/.playback/postgres-baseline-size3-20260217-123856-tmpcfg/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/.playback/postgres-baseline-size3-20260217-123856-tmpcfg/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/.playback/postgres-baseline-size3-20260217-123856-tmpcfg/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/.playback/postgres-baseline-size3-20260217-123856-tmpcfg/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/.playback/postgres-baseline-size3-20260217-123856-tmpcfg/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 34,
+          "samples": 138,
+          "snapshots": 43
+        },
+        "warnings": [
+          {
+            "code": "query-node-unavailable",
+            "message": "No reachable node available for topology snapshot query",
+            "timestamp": 1771328372277
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null
+    }
+  ]
+}

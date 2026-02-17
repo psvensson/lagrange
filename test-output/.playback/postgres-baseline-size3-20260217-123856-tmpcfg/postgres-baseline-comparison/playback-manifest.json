@@ -1,0 +1,25 @@
+{
+  "scenarioName": "postgres-baseline-comparison",
+  "startedAt": 1771328371261,
+  "endedAt": 1771328435080,
+  "durationMs": 63819,
+  "files": {
+    "events": "test-output/.playback/postgres-baseline-size3-20260217-123856-tmpcfg/postgres-baseline-comparison/events.ndjson",
+    "samples": "test-output/.playback/postgres-baseline-size3-20260217-123856-tmpcfg/postgres-baseline-comparison/samples.ndjson",
+    "snapshots": "test-output/.playback/postgres-baseline-size3-20260217-123856-tmpcfg/postgres-baseline-comparison/snapshots.ndjson",
+    "manifest": "test-output/.playback/postgres-baseline-size3-20260217-123856-tmpcfg/postgres-baseline-comparison/playback-manifest.json",
+    "viewer": "test-output/.playback/postgres-baseline-size3-20260217-123856-tmpcfg/postgres-baseline-comparison/playback-viewer.html"
+  },
+  "counts": {
+    "events": 34,
+    "samples": 138,
+    "snapshots": 43
+  },
+  "warnings": [
+    {
+      "code": "query-node-unavailable",
+      "message": "No reachable node available for topology snapshot query",
+      "timestamp": 1771328372277
+    }
+  ]
+}

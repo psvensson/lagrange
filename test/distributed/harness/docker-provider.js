@@ -31,6 +31,8 @@ const DOCKER_OP_REMOVE_CONTAINER = 'container.remove';
 const DOCKER_OP_CONNECT_NETWORK = 'network.connect';
 const DOCKER_OP_DISCONNECT_NETWORK = 'network.disconnect';
 const DEFAULT_BUILD_LABELS = Object.freeze({});
+const CONTAINER_LOG_OPTION_RAW_BUFFER = 'rawBuffer';
+const UTF8_ENCODING = 'utf8';
 
 class DockerProvider {
   /**
@@ -525,7 +527,8 @@ class DockerProvider {
    * @param {number} [options.tail] - Number of lines from end
    * @param {boolean} [options.timestamps] - Include timestamps
    * @param {string} [options.since] - Logs since timestamp
-   * @returns {Promise<string>}
+   * @param {boolean} [options.rawBuffer] - Return raw Docker log buffer
+   * @returns {Promise<string|Buffer>}
    */
   async getContainerLogs(containerId, options = {}) {
     const container = this._docker.getContainer(containerId);
@@ -544,7 +547,10 @@ class DockerProvider {
       logOpts.since = options.since;
     }
     const buffer = await container.logs(logOpts);
-    return buffer.toString('utf8');
+    if (options[CONTAINER_LOG_OPTION_RAW_BUFFER] === true) {
+      return buffer;
+    }
+    return buffer.toString(UTF8_ENCODING);
   }
 
   /**
