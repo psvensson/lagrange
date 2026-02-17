@@ -1,0 +1,88 @@
+{
+  "timestamp": "2026-02-17T10:53:56.510Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 61309
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 61309,
+      "startedAt": "2026-02-17T10:52:41.478Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "(HTTP code 409) container stopped/paused - container d1e4a8132d459fc4e9735fab018eddeb0d3e6f71f111f104e0c03fe0ea6cd980 is not running ",
+      "stackTrace": "Error: (HTTP code 409) container stopped/paused - container d1e4a8132d459fc4e9735fab018eddeb0d3e6f71f111f104e0c03fe0ea6cd980 is not running \n    at /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/docker-modem/lib/modem.js:383:17\n    at getCause (/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/docker-modem/lib/modem.js:418:7)\n    at Modem.buildPayload (/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/docker-modem/lib/modem.js:379:5)\n    at IncomingMessage.<anonymous> (/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/docker-modem/lib/modem.js:347:16)\n    at IncomingMessage.emit (node:events:531:35)\n    at endReadableNT (node:internal/streams/readable:1698:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1771325561479,
+        "endedAt": 1771325636509,
+        "durationMs": 75030,
+        "files": {
+          "events": "test-output/.playback/postgres-baseline-20260217-115115/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/.playback/postgres-baseline-20260217-115115/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/.playback/postgres-baseline-20260217-115115/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/.playback/postgres-baseline-20260217-115115/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/.playback/postgres-baseline-20260217-115115/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 144,
+          "samples": 269,
+          "snapshots": 52
+        },
+        "warnings": [
+          {
+            "code": "query-node-unavailable",
+            "message": "No reachable node available for topology snapshot query",
+            "timestamp": 1771325562485
+          },
+          {
+            "code": "topology-capture-failed",
+            "message": "Failed to capture topology snapshot: Admin API query failed for node bd0dae08-718b-406a-a806-662522e193f9: connect ECONNREFUSED 172.19.0.2:8081",
+            "timestamp": 1771325570497
+          },
+          {
+            "code": "service-query-failed-bd0dae08-718b-406a-a806-662522e193f9",
+            "message": "Failed to query services on node bd0dae08-718b-406a-a806-662522e193f9: Admin API query failed for node bd0dae08-718b-406a-a806-662522e193f9: connect ECONNREFUSED 172.19.0.2:8081",
+            "timestamp": 1771325570497
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null
+    }
+  ]
+}

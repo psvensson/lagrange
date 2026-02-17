@@ -104,6 +104,8 @@ function mergeWithDefaults(partial = {}) {
       readyTimeoutMs: BENCHMARK_DEFAULTS.readyTimeoutMs,
       readyPollIntervalMs: BENCHMARK_DEFAULTS.readyPollIntervalMs,
       tableName: BENCHMARK_DEFAULTS.tableName,
+      replicationFactor: BENCHMARK_DEFAULTS.replicationFactor,
+      syncReplicaAcks: BENCHMARK_DEFAULTS.syncReplicaAcks,
       ...(partial.benchmark || {}),
     },
     ...(partial.outputDir ? {outputDir: partial.outputDir} : {}),

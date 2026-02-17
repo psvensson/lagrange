@@ -10,6 +10,8 @@ import assert from 'node:assert/strict';
 import {BENCHMARK_DEFAULTS} from '../harness/constants.js';
 import {
   buildPgbenchScript,
+  execShell,
+  shellQuote,
   writePgbenchScript,
   waitForPostgresReady,
   ensureBenchmarkTable,
@@ -24,9 +26,189 @@ const POSTGRES_ENV_DB_KEY = 'POSTGRES_DB';
 const POSTGRES_ENV_AUTH_METHOD_KEY = 'POSTGRES_HOST_AUTH_METHOD';
 const POSTGRES_ENV_AUTH_METHOD_VALUE = 'scram-sha-256';
 const BENCHMARK_CONTAINER_NAME_PREFIX = 'ddb-benchmark-postgres-';
+const BENCHMARK_PRIMARY_SUFFIX = '-primary';
+const BENCHMARK_REPLICA_SUFFIX_PREFIX = '-replica-';
+const LOCALHOST = '127.0.0.1';
+const SHELL_COMMAND = 'sh';
+const SHELL_LOGIN_ARG = '-lc';
+const SYNC_STANDBY_TEMPLATE_PREFIX = 'ANY ';
+const SYNC_STANDBY_TEMPLATE_SUFFIX = ' (*)';
+const PSQL_ON_ERROR_STOP = '-v ON_ERROR_STOP=1';
+const PSQL_TUPLES_ONLY = '-tA';
+const REPLICATION_STATE_STREAMING = 'streaming';
+const REPLICATION_HBA_IPV4 = 'host replication all 0.0.0.0/0 scram-sha-256';
+const REPLICATION_HBA_IPV6 = 'host replication all ::/0 scram-sha-256';
+const DEFAULT_REPLICATION_PORT = 5432;
+const MIN_REPLICATION_FACTOR = 1;
+const BOOTSTRAP_DB_NAME = 'replication';
+const POSTGRES_ENTRYPOINT_COMMAND = 'docker-entrypoint.sh postgres';
+const POSTGRES_BINARY_PATH_EXPORT =
+  'export PATH="$PATH:/usr/lib/postgresql/$PG_MAJOR/bin"';
+const SYNCHRONOUS_COMMIT_ON = 'on';
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildPsqlCommand(options = {}) {
+  const host = String(options.host || LOCALHOST);
+  const port = Number.isInteger(options.port) ?
+    options.port :
+    DEFAULT_REPLICATION_PORT;
+  const user = String(options.user || 'postgres');
+  const password = String(options.password || '');
+  const database = String(options.database || 'postgres');
+  const sql = String(options.sql || '');
+  const tuplesOnly = options.tuplesOnly === true ? PSQL_TUPLES_ONLY : '';
+
+  return [
+    `PGPASSWORD='${shellQuote(password)}'`,
+    'psql',
+    PSQL_ON_ERROR_STOP,
+    tuplesOnly,
+    `-h '${shellQuote(host)}'`,
+    `-p ${port}`,
+    `-U '${shellQuote(user)}'`,
+    `-d '${shellQuote(database)}'`,
+    `-c '${shellQuote(sql)}'`,
+  ].filter((part) => part.length > ZERO).join(' ');
+}
+
+function buildSynchronousStandbySetting(syncReplicaAcks) {
+  return SYNC_STANDBY_TEMPLATE_PREFIX +
+    String(syncReplicaAcks) +
+    SYNC_STANDBY_TEMPLATE_SUFFIX;
+}
+
+function buildReplicaBootstrapCommand(primaryContainerName, replicaName, benchmarkConfig) {
+  const basebackupConnectionString = [
+    `host=${primaryContainerName}`,
+    `port=${benchmarkConfig.port}`,
+    `user=${benchmarkConfig.user}`,
+    `password=${benchmarkConfig.password}`,
+    `dbname=${BOOTSTRAP_DB_NAME}`,
+    `application_name=${replicaName}`,
+  ].join(' ');
+
+  return [
+    'set -e',
+    'if [ ! -s "$PGDATA/PG_VERSION" ]; then',
+    '  rm -rf "$PGDATA"/*',
+    `  until pg_isready -h '${shellQuote(primaryContainerName)}' ` +
+      `-p ${benchmarkConfig.port} -U '${shellQuote(benchmarkConfig.user)}'; do`,
+    '    sleep 1',
+    '  done',
+    `  pg_basebackup --dbname='${shellQuote(basebackupConnectionString)}' ` +
+      '-D "$PGDATA" -Fp -Xs -P -R',
+    'fi',
+    POSTGRES_BINARY_PATH_EXPORT,
+    `exec ${POSTGRES_ENTRYPOINT_COMMAND}`,
+  ].join('\n');
+}
+
+async function configurePrimaryReplication(provider, containerId, benchmarkConfig) {
+  if (benchmarkConfig.replicationFactor <= ONE) {
+    return;
+  }
+
+  const syncSetting = buildSynchronousStandbySetting(
+    benchmarkConfig.syncReplicaAcks,
+  );
+  const commands = [
+    `echo "${REPLICATION_HBA_IPV4}" >> "$PGDATA/pg_hba.conf"`,
+    `echo "${REPLICATION_HBA_IPV6}" >> "$PGDATA/pg_hba.conf"`,
+    buildPsqlCommand({
+      host: LOCALHOST,
+      port: benchmarkConfig.port,
+      user: benchmarkConfig.user,
+      password: benchmarkConfig.password,
+      database: benchmarkConfig.database,
+      sql: `ALTER SYSTEM SET synchronous_commit = '${SYNCHRONOUS_COMMIT_ON}'`,
+    }),
+    buildPsqlCommand({
+      host: LOCALHOST,
+      port: benchmarkConfig.port,
+      user: benchmarkConfig.user,
+      password: benchmarkConfig.password,
+      database: benchmarkConfig.database,
+      sql: `ALTER SYSTEM SET synchronous_standby_names = '${syncSetting}'`,
+    }),
+    buildPsqlCommand({
+      host: LOCALHOST,
+      port: benchmarkConfig.port,
+      user: benchmarkConfig.user,
+      password: benchmarkConfig.password,
+      database: benchmarkConfig.database,
+      sql: 'SELECT pg_reload_conf()',
+    }),
+  ];
+
+  const shellCommand = commands.join(' && ');
+  await execShell(
+    provider,
+    containerId,
+    shellCommand,
+    'configure postgres primary replication',
+  );
+}
+
+async function waitForStreamingReplicas(provider, primaryContainerId, benchmarkConfig) {
+  const requiredReplicaCount = benchmarkConfig.replicationFactor - ONE;
+  if (requiredReplicaCount <= ZERO) {
+    return;
+  }
+
+  const deadline = Date.now() + benchmarkConfig.readyTimeoutMs;
+  while (Date.now() < deadline) {
+    const queryCommand = buildPsqlCommand({
+      host: LOCALHOST,
+      port: benchmarkConfig.port,
+      user: benchmarkConfig.user,
+      password: benchmarkConfig.password,
+      database: benchmarkConfig.database,
+      sql:
+        'SELECT count(*) FROM pg_stat_replication ' +
+        `WHERE state = '${REPLICATION_STATE_STREAMING}'`,
+      tuplesOnly: true,
+    });
+
+    const output = await execShell(
+      provider,
+      primaryContainerId,
+      queryCommand,
+      'check postgres replication status',
+    );
+    const replicaCount = Number.parseInt(String(output).trim(), 10);
+    if (Number.isInteger(replicaCount) && replicaCount >= requiredReplicaCount) {
+      return;
+    }
+    await sleep(benchmarkConfig.readyPollIntervalMs);
+  }
+
+  throw new Error(
+    'Postgres replicas did not reach streaming state within ' +
+    benchmarkConfig.readyTimeoutMs + 'ms',
+  );
+}
 
 function resolveBenchmarkConfig(cluster) {
   const configured = cluster?._config?.benchmark || {};
+  const replicationFactor = Number.isInteger(configured.replicationFactor) &&
+    configured.replicationFactor >= MIN_REPLICATION_FACTOR ?
+    configured.replicationFactor :
+    BENCHMARK_DEFAULTS.replicationFactor;
+  const maxSyncReplicaAcks = Math.max(ZERO, replicationFactor - ONE);
+  const minSyncReplicaAcks = replicationFactor > ONE ? ONE : ZERO;
+  const syncReplicaAcks = Number.isInteger(configured.syncReplicaAcks) ?
+    Math.max(
+      minSyncReplicaAcks,
+      Math.min(configured.syncReplicaAcks, maxSyncReplicaAcks),
+    ) :
+    Math.max(
+      minSyncReplicaAcks,
+      Math.min(BENCHMARK_DEFAULTS.syncReplicaAcks, maxSyncReplicaAcks),
+    );
+
   return {
     baselineImage: configured.baselineImage ||
       BENCHMARK_DEFAULTS.baselineImage,
@@ -56,6 +238,8 @@ function resolveBenchmarkConfig(cluster) {
       configured.readyPollIntervalMs :
       BENCHMARK_DEFAULTS.readyPollIntervalMs,
     tableName: configured.tableName || BENCHMARK_DEFAULTS.tableName,
+    replicationFactor,
+    syncReplicaAcks,
   };
 }
 
@@ -116,13 +300,18 @@ async function run(cluster) {
   });
   const loadMetrics = await sutLoadRun.waitComplete();
 
-  let baselineContainerId = null;
-  let baselineContainerIp = null;
+  const baselineContainers = [];
+  let baselinePrimaryContainerId = null;
+  let baselinePrimaryContainerIp = null;
+  const baselineReplicaContainerIps = [];
   let baselineMetrics = null;
 
   try {
-    const baselineContainer = await provider.createContainer({
-      name: BENCHMARK_CONTAINER_NAME_PREFIX + Date.now(),
+    const benchmarkRunId = Date.now();
+    const primaryContainerName =
+      BENCHMARK_CONTAINER_NAME_PREFIX + benchmarkRunId + BENCHMARK_PRIMARY_SUFFIX;
+    const primaryContainer = await provider.createContainer({
+      name: primaryContainerName,
       image: benchmarkConfig.baselineImage,
       network: networkName,
       env: {
@@ -134,24 +323,77 @@ async function run(cluster) {
       resourceLimits: cluster?._config?.resourceLimits || {},
       startTimeout: cluster?._config?.timeouts?.nodeStartup,
     });
+    baselineContainers.push(primaryContainer);
 
-    baselineContainerId = baselineContainer.containerId;
-    baselineContainerIp = baselineContainer.ip;
+    baselinePrimaryContainerId = primaryContainer.containerId;
+    baselinePrimaryContainerIp = primaryContainer.ip;
 
-    await waitForPostgresReady(provider, baselineContainerId, {
-      host: '127.0.0.1',
+    await waitForPostgresReady(provider, baselinePrimaryContainerId, {
+      host: LOCALHOST,
       port: benchmarkConfig.port,
       user: benchmarkConfig.user,
       database: benchmarkConfig.database,
       timeoutMs: benchmarkConfig.readyTimeoutMs,
       pollIntervalMs: benchmarkConfig.readyPollIntervalMs,
     });
+    await configurePrimaryReplication(
+      provider,
+      baselinePrimaryContainerId,
+      benchmarkConfig,
+    );
+
+    for (
+      let replicaIndex = ONE;
+      replicaIndex < benchmarkConfig.replicationFactor;
+      replicaIndex += ONE
+    ) {
+      const replicaName =
+        BENCHMARK_CONTAINER_NAME_PREFIX +
+        benchmarkRunId +
+        BENCHMARK_REPLICA_SUFFIX_PREFIX +
+        replicaIndex;
+      const replicaBootstrapCommand = buildReplicaBootstrapCommand(
+        primaryContainerName,
+        replicaName,
+        benchmarkConfig,
+      );
+      const replicaContainer = await provider.createContainer({
+        name: replicaName,
+        image: benchmarkConfig.baselineImage,
+        network: networkName,
+        env: {
+          [POSTGRES_ENV_USER_KEY]: benchmarkConfig.user,
+          [POSTGRES_ENV_PASSWORD_KEY]: benchmarkConfig.password,
+          [POSTGRES_ENV_DB_KEY]: benchmarkConfig.database,
+          [POSTGRES_ENV_AUTH_METHOD_KEY]: POSTGRES_ENV_AUTH_METHOD_VALUE,
+        },
+        command: [SHELL_COMMAND, SHELL_LOGIN_ARG, replicaBootstrapCommand],
+        resourceLimits: cluster?._config?.resourceLimits || {},
+        startTimeout: cluster?._config?.timeouts?.nodeStartup,
+      });
+      baselineContainers.push(replicaContainer);
+      baselineReplicaContainerIps.push(replicaContainer.ip);
+
+      await waitForPostgresReady(provider, replicaContainer.containerId, {
+        host: LOCALHOST,
+        port: benchmarkConfig.port,
+        user: benchmarkConfig.user,
+        database: benchmarkConfig.database,
+        timeoutMs: benchmarkConfig.readyTimeoutMs,
+        pollIntervalMs: benchmarkConfig.readyPollIntervalMs,
+      });
+    }
+    await waitForStreamingReplicas(
+      provider,
+      baselinePrimaryContainerId,
+      benchmarkConfig,
+    );
 
     const script = buildPgbenchScript();
-    await writePgbenchScript(provider, baselineContainerId, script);
+    await writePgbenchScript(provider, baselinePrimaryContainerId, script);
 
-    await ensureBenchmarkTable(provider, baselineContainerId, {
-      host: '127.0.0.1',
+    await ensureBenchmarkTable(provider, baselinePrimaryContainerId, {
+      host: LOCALHOST,
       port: benchmarkConfig.port,
       user: benchmarkConfig.user,
       password: benchmarkConfig.password,
@@ -159,8 +401,8 @@ async function run(cluster) {
       tableName: benchmarkConfig.tableName,
     });
 
-    baselineMetrics = await runPgbench(provider, baselineContainerId, {
-      host: '127.0.0.1',
+    baselineMetrics = await runPgbench(provider, baselinePrimaryContainerId, {
+      host: LOCALHOST,
       port: benchmarkConfig.port,
       user: benchmarkConfig.user,
       password: benchmarkConfig.password,
@@ -170,14 +412,18 @@ async function run(cluster) {
       jobs: benchmarkConfig.jobs,
     });
   } finally {
-    if (baselineContainerId) {
+    for (let i = baselineContainers.length - ONE; i >= ZERO; i -= ONE) {
+      const containerId = baselineContainers[i]?.containerId;
+      if (!containerId) {
+        continue;
+      }
       try {
-        await provider.stopContainer(baselineContainerId);
+        await provider.stopContainer(containerId);
       } catch (_stopErr) {
         // Best-effort cleanup.
       }
       try {
-        await provider.removeContainer(baselineContainerId);
+        await provider.removeContainer(containerId);
       } catch (_removeErr) {
         // Best-effort cleanup.
       }
@@ -206,7 +452,10 @@ async function run(cluster) {
       baseline: {
         engine: 'postgres',
         image: benchmarkConfig.baselineImage,
-        containerIp: baselineContainerIp,
+        containerIp: baselinePrimaryContainerIp,
+        replicaContainerIps: baselineReplicaContainerIps,
+        replicationFactor: benchmarkConfig.replicationFactor,
+        syncReplicaAcks: benchmarkConfig.syncReplicaAcks,
         metrics: baselineMetrics,
       },
       systemUnderTest: {

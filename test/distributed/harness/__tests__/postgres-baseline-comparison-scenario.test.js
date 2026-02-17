@@ -7,17 +7,22 @@ import {
 } from '../../scenarios/postgres-baseline-comparison.js';
 
 describe('postgres-baseline-comparison scenario', () => {
-  it('returns baseline comparison metrics and cleans up benchmark container', async () => {
+  it('returns baseline comparison metrics and cleans up benchmark containers', async () => {
     const commandLog = [];
     const providerCalls = [];
+    const createdContainers = [];
+    const stoppedContainers = [];
+    const removedContainers = [];
 
     const provider = {
-      createContainer: async () => {
+      createContainer: async (options) => {
         providerCalls.push('createContainer');
+        createdContainers.push(options);
+        const index = createdContainers.length;
         return {
-          containerId: 'benchmark-postgres-1',
-          ip: '172.18.0.77',
-          name: 'benchmark-postgres-1',
+          containerId: `benchmark-postgres-${index}`,
+          ip: `172.18.0.${76 + index}`,
+          name: `benchmark-postgres-${index}`,
         };
       },
       execInContainer: async (_containerId, cmd) => {
@@ -45,6 +50,13 @@ describe('postgres-baseline-comparison scenario', () => {
             stderr: '',
           };
         }
+        if (command.includes('pg_stat_replication')) {
+          return {
+            exitCode: 0,
+            stdout: '2\n',
+            stderr: '',
+          };
+        }
 
         return {
           exitCode: 0,
@@ -52,11 +64,13 @@ describe('postgres-baseline-comparison scenario', () => {
           stderr: '',
         };
       },
-      stopContainer: async () => {
+      stopContainer: async (containerId) => {
         providerCalls.push('stopContainer');
+        stoppedContainers.push(containerId);
       },
-      removeContainer: async () => {
+      removeContainer: async (containerId) => {
         providerCalls.push('removeContainer');
+        removedContainers.push(containerId);
       },
     };
 
@@ -70,6 +84,8 @@ describe('postgres-baseline-comparison scenario', () => {
           loadOpsPerSec: 80,
           loadDuration: '10s',
           tableName: 'benchmark_events',
+          replicationFactor: 3,
+          syncReplicaAcks: 1,
         },
         convergence: {
           settleTimeoutMs: 1000,
@@ -127,19 +143,65 @@ describe('postgres-baseline-comparison scenario', () => {
       result.details.comparison.p99LatencyRatioSutToBaselineAvg,
       1.2,
     );
+    assert.equal(
+      result.details.baseline.replicationFactor,
+      3,
+      'scenario should report replicated baseline factor',
+    );
 
     assert.ok(
       commandLog.some((command) => command.includes('pg_isready')),
       'scenario should wait for baseline postgres readiness',
     );
     assert.ok(
+      commandLog.some((command) => command.includes('synchronous_standby_names')),
+      'scenario should configure synchronous replication on baseline primary',
+    );
+    assert.ok(
+      createdContainers.some((container) =>
+        String(container?.command?.[2] || '').includes('pg_basebackup')),
+      'scenario should initialize replicas with pg_basebackup bootstrap command',
+    );
+    assert.ok(
+      createdContainers.some((container) =>
+        String(container?.command?.[2] || '').includes(
+          'export PATH="$PATH:/usr/lib/postgresql/$PG_MAJOR/bin"',
+        )),
+      'scenario should export postgres binary path before invoking entrypoint',
+    );
+    assert.ok(
       commandLog.some((command) => command.includes('pgbench -n')),
       'scenario should run pgbench against baseline postgres',
     );
+    assert.equal(
+      createdContainers.length,
+      3,
+      'scenario should create one primary and two replica benchmark containers',
+    );
     assert.ok(
-      providerCalls.includes('stopContainer') &&
-      providerCalls.includes('removeContainer'),
-      'scenario should stop and remove benchmark container in teardown',
+      createdContainers.some((container) =>
+        String(container.name || '').includes('-primary')),
+      'scenario should name one benchmark primary container',
+    );
+    assert.ok(
+      createdContainers.some((container) =>
+        String(container.name || '').includes('-replica-1')),
+      'scenario should name the first benchmark replica container',
+    );
+    assert.ok(
+      createdContainers.some((container) =>
+        String(container.name || '').includes('-replica-2')),
+      'scenario should name the second benchmark replica container',
+    );
+    assert.equal(
+      stoppedContainers.length,
+      3,
+      'scenario should stop all benchmark containers in teardown',
+    );
+    assert.equal(
+      removedContainers.length,
+      3,
+      'scenario should remove all benchmark containers in teardown',
     );
     assert.ok(
       providerCalls.includes('assertConsistency'),
@@ -155,6 +217,8 @@ describe('postgres-baseline-comparison scenario', () => {
           clients: 16,
           jobs: 8,
           loadDuration: '45s',
+          replicationFactor: 5,
+          syncReplicaAcks: 2,
         },
       },
     };
@@ -165,6 +229,8 @@ describe('postgres-baseline-comparison scenario', () => {
     assert.equal(resolved.clients, 16);
     assert.equal(resolved.jobs, 8);
     assert.equal(resolved.loadDuration, '45s');
+    assert.equal(resolved.replicationFactor, 5);
+    assert.equal(resolved.syncReplicaAcks, 2);
     assert.equal(typeof resolved.durationSeconds, 'number');
     assert.equal(typeof resolved.user, 'string');
   });

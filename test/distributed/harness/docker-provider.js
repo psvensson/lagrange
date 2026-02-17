@@ -247,6 +247,8 @@ class DockerProvider {
       labels = {},
       resourceLimits = {},
       startTimeout = TIMEOUTS.NODE_STARTUP,
+      command = null,
+      entrypoint = null,
     } = options;
 
     this._emitOperation(DOCKER_OP_CREATE_CONTAINER, {
@@ -264,6 +266,12 @@ class DockerProvider {
       Image: image,
       Env: envArray,
       Labels: labels,
+      ...(Array.isArray(entrypoint) && entrypoint.length > ZERO ?
+        {Entrypoint: entrypoint} :
+        {}),
+      ...(Array.isArray(command) && command.length > ZERO ?
+        {Cmd: command} :
+        {}),
       ExposedPorts: {
         [`${PORTS.REST}/tcp`]: {},
         [`${PORTS.ADMIN_API}/tcp`]: {},

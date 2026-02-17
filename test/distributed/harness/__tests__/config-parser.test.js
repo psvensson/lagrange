@@ -126,6 +126,14 @@ test('Unit: mergeWithDefaults fills all fields from empty object', async (t) => 
         config.benchmark.clients,
         BENCHMARK_DEFAULTS.clients,
       );
+      assert.strictEqual(
+        config.benchmark.replicationFactor,
+        BENCHMARK_DEFAULTS.replicationFactor,
+      );
+      assert.strictEqual(
+        config.benchmark.syncReplicaAcks,
+        BENCHMARK_DEFAULTS.syncReplicaAcks,
+      );
     },
   );
 });
@@ -160,6 +168,8 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
         clients: 10,
         jobs: 5,
         tableName: 'bench_custom',
+        replicationFactor: 5,
+        syncReplicaAcks: 2,
       },
     };
 
@@ -207,6 +217,8 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
     assert.strictEqual(config.benchmark.clients, 10);
     assert.strictEqual(config.benchmark.jobs, 5);
     assert.strictEqual(config.benchmark.tableName, 'bench_custom');
+    assert.strictEqual(config.benchmark.replicationFactor, 5);
+    assert.strictEqual(config.benchmark.syncReplicaAcks, 2);
     assert.strictEqual(
       config.benchmark.loadOpsPerSec,
       BENCHMARK_DEFAULTS.loadOpsPerSec,

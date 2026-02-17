@@ -193,6 +193,52 @@ test('Unit: createContainer passes correct env vars to Docker', async (t) => {
   );
 });
 
+test('Unit: createContainer forwards optional command and entrypoint', async (t) => {
+  await t.test(
+    'createContainer passes Cmd and Entrypoint when provided',
+    async () => {
+      const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+
+      let capturedOpts = null;
+      const fakeContainer = {
+        id: 'fake-container-cmd-123',
+        start: async () => {},
+      };
+
+      provider._docker.createContainer = async (opts) => {
+        capturedOpts = opts;
+        return fakeContainer;
+      };
+      provider._waitForRunning = async () => {};
+      provider.inspectContainer = async () => ({
+        NetworkSettings: {
+          Networks: {'test-net': {IPAddress: '172.18.0.3'}},
+        },
+      });
+
+      await provider.createContainer({
+        name: 'test-node-cmd',
+        image: 'postgres:16',
+        network: 'test-net',
+        command: ['sh', '-lc', 'echo hello'],
+        entrypoint: ['docker-entrypoint.sh'],
+      });
+
+      assert.ok(capturedOpts, 'createContainer was called');
+      assert.deepStrictEqual(
+        capturedOpts.Cmd,
+        ['sh', '-lc', 'echo hello'],
+        'Cmd should be passed through',
+      );
+      assert.deepStrictEqual(
+        capturedOpts.Entrypoint,
+        ['docker-entrypoint.sh'],
+        'Entrypoint should be passed through',
+      );
+    },
+  );
+});
+
 test('Unit: container start timeout error and cleanup', async (t) => {
   await t.test(
     'throws error and cleans up when container never reaches running state',

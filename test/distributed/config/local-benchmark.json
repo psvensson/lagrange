@@ -27,7 +27,9 @@
     "loadDuration": "30s",
     "readyTimeoutMs": 30000,
     "readyPollIntervalMs": 500,
-    "tableName": "benchmark_events"
+    "tableName": "benchmark_events",
+    "replicationFactor": 3,
+    "syncReplicaAcks": 1
   },
   "memoryLeak": {
     "enabled": false,

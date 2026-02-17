@@ -276,6 +276,8 @@ export {
   PGBENCH_SCRIPT_PATH,
   buildPgbenchScript,
   parsePgbenchOutput,
+  shellQuote,
+  execShell,
   writePgbenchScript,
   waitForPostgresReady,
   ensureBenchmarkTable,
