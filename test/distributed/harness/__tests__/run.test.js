@@ -9,6 +9,9 @@ import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {relative} from 'node:path';
 import {URL} from 'node:url';
+import {mkdtemp, rm, writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 import {
   parseArgs,
   runScenarios,
@@ -17,6 +20,7 @@ import {
   evaluateMemoryLeakAssertions,
   buildImage,
   deriveRunOutputDir,
+  loadHistoricalReports,
   loadScenarioModule,
   shouldPrintLiveLogEntry,
 } from '../../run.js';
@@ -401,6 +405,36 @@ describe('deriveRunOutputDir', () => {
   it('falls back to output basename when report extension differs', () => {
     const outputDir = deriveRunOutputDir('test-output/results.json');
     assert.equal(outputDir, 'test-output/.playback/results');
+  });
+});
+
+describe('loadHistoricalReports', () => {
+  it('loads existing output report and sibling .report.json files', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'historical-report-test-'));
+    const outputPath = join(tempDir, 'latest.report.json');
+    const siblingPath = join(tempDir, 'older.report.json');
+    const invalidPath = join(tempDir, 'invalid.report.json');
+
+    try {
+      await writeFile(outputPath, JSON.stringify({
+        timestamp: '2026-02-17T10:00:00.000Z',
+        scenarios: [{scenario: 's1'}],
+      }));
+      await writeFile(siblingPath, JSON.stringify({
+        timestamp: '2026-02-16T10:00:00.000Z',
+        scenarios: [{scenario: 's0'}],
+      }));
+      await writeFile(invalidPath, '{"not":"a-report"}');
+
+      const reports = await loadHistoricalReports(outputPath);
+      assert.equal(reports.length, 2);
+      assert.equal(reports[0].path, outputPath);
+      assert.equal(reports[1].path, siblingPath);
+      assert.equal(reports[0].scenarios[0].scenario, 's1');
+      assert.equal(reports[1].scenarios[0].scenario, 's0');
+    } finally {
+      await rm(tempDir, {recursive: true, force: true});
+    }
   });
 });
 

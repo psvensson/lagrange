@@ -11,6 +11,8 @@ import {dirname} from 'node:path';
 /** Indentation for JSON output. */
 const JSON_INDENT = 2;
 const ZERO = 0;
+const STANDARD_SUMMARY_SIMILARITY_FALLBACK = 'default';
+const STANDARD_SUMMARY_BASELINE_ENGINE = 'postgres';
 
 // --- Optimization priority metadata ---
 const PRIORITY_CRITICAL = 'critical';
@@ -37,12 +39,16 @@ const SIGNAL_BASELINE_LATENCY_GAP = 'baseline_latency_gap';
 const SIGNAL_INTERNAL_TAIL_LATENCY = 'internal_tail_latency';
 const SIGNAL_CONVERGENCE_SETTLE_TIME = 'convergence_settle_time';
 const SIGNAL_OVER_TARGET_VOTER_DURATION = 'over_target_voter_duration';
+const SIGNAL_PARTITION_HOTSPOTS = 'partition_hotspots';
 const SIGNAL_LOAD_FAILURE_RATE = 'load_failure_rate';
 const SIGNAL_MEMORY_LEAK = 'memory_leak';
 const SIGNAL_LOG_ANOMALIES = 'log_anomalies';
 
 const MAX_OPTIMIZATION_ITEMS_PER_SCENARIO = 3;
 const OPTIMIZATION_SUMMARY_TOP_COMPONENT_LIMIT = 5;
+const OPTIMIZATION_SUMMARY_TOP_PARTITION_LIMIT = 5;
+const PARTITION_HOTSPOT_LIMIT = 8;
+const PARTITION_HOTSPOT_RECENT_OP_LIMIT = 3;
 
 // --- Scoring thresholds ---
 const THROUGHPUT_RATIO_CRITICAL = 0.01;
@@ -117,6 +123,7 @@ function buildScenarioEntry(scenarioName, result) {
     entry.loadMetrics = null;
   }
 
+  entry.partitionHotspots = buildPartitionHotspots(entry);
   entry.optimizationPriorities = buildOptimizationPriorities(entry);
 
   return entry;
@@ -137,6 +144,9 @@ function buildOptimizationPriorities(scenarioEntry) {
   const loadMetrics = scenarioEntry?.loadMetrics || null;
   const memoryLeak = scenarioEntry?.memoryLeak || null;
   const analysisSummary = scenarioEntry?.analysisSummary || null;
+  const partitionHotspots = Array.isArray(scenarioEntry?.partitionHotspots) ?
+    scenarioEntry.partitionHotspots :
+    [];
 
   const throughputRatio = normalizeFiniteNumber(
     comparison?.throughputRatioSutToBaseline,
@@ -257,6 +267,31 @@ function buildOptimizationPriorities(scenarioEntry) {
     });
   }
 
+  if (partitionHotspots.length > ZERO) {
+    const primaryHotspot = partitionHotspots[ZERO];
+    const primaryScore = normalizeFiniteNumber(primaryHotspot?.hotspotScore) || ZERO;
+    if (primaryScore > ZERO) {
+      priorities.push({
+        component: COMPONENT_CONVERGENCE_CONTROL_PLANE,
+        signal: SIGNAL_PARTITION_HOTSPOTS,
+        priority: primaryScore >= SCORE_HIGH ? PRIORITY_HIGH : PRIORITY_MEDIUM,
+        score: Math.min(SCORE_CRITICAL, Math.max(SCORE_MEDIUM, primaryScore)),
+        reason:
+          'Per-partition diagnostics indicate localized membership churn ' +
+          'and operation pressure on specific partitions.',
+        evidence: {
+          hotspotCount: partitionHotspots.length,
+          topPartitionId: primaryHotspot?.partitionId || null,
+          topPartitionScore: primaryScore,
+          topPartitionOverTargetMs:
+            normalizeFiniteNumber(primaryHotspot?.overTargetMs) || ZERO,
+          topPartitionExcessVoters:
+            normalizeFiniteNumber(primaryHotspot?.excessVoters) || ZERO,
+        },
+      });
+    }
+  }
+
   const totalLoadOps = normalizeFiniteNumber(loadMetrics?.total) || ZERO;
   const failedLoadOps = normalizeFiniteNumber(loadMetrics?.failed) || ZERO;
   const erroredLoadOps = normalizeFiniteNumber(loadMetrics?.errors) || ZERO;
@@ -340,6 +375,149 @@ function resolveBenchmarkDetails(details) {
     return details.details;
   }
   return null;
+}
+
+function resolveConvergenceDiagnostics(scenarioEntry) {
+  const benchmarkDetails = resolveBenchmarkDetails(scenarioEntry?.details);
+  const candidates = [
+    scenarioEntry?.details?.diagnostics,
+    scenarioEntry?.details?.convergenceDiagnostics,
+    scenarioEntry?.convergenceTiming?.diagnostics,
+    benchmarkDetails?.convergenceDiagnostics,
+    benchmarkDetails?.convergence?.diagnostics,
+  ];
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === 'object') {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function buildPartitionHotspots(scenarioEntry) {
+  const diagnostics = resolveConvergenceDiagnostics(scenarioEntry);
+  if (!diagnostics) {
+    return null;
+  }
+  const partitionMembership = diagnostics.partitionMembership &&
+    typeof diagnostics.partitionMembership === 'object' ?
+    diagnostics.partitionMembership :
+    {};
+  const overTargetDurations = diagnostics.overTargetDurations &&
+    typeof diagnostics.overTargetDurations === 'object' ?
+    diagnostics.overTargetDurations :
+    {};
+  const operationsByPartition = groupOperationHistoryByPartition(
+    diagnostics.operationHistory,
+  );
+
+  const partitionIds = new Set([
+    ...Object.keys(partitionMembership),
+    ...Object.keys(overTargetDurations),
+    ...operationsByPartition.keys(),
+  ]);
+  if (partitionIds.size === ZERO) {
+    return null;
+  }
+
+  const hotspots = [];
+  for (const partitionId of [...partitionIds].sort()) {
+    const membership = partitionMembership[partitionId] || {};
+    const overTargetMs = normalizeFiniteNumber(overTargetDurations[partitionId]) ||
+      ZERO;
+    const voterCount = normalizeFiniteNumber(membership.voterCount) || ZERO;
+    const targetVoterCount = normalizeFiniteNumber(membership.targetVoterCount) || ZERO;
+    const excessVoters = Math.max(ZERO, voterCount - targetVoterCount);
+    const replicaCount = Array.isArray(membership.replicas) ?
+      membership.replicas.length :
+      ZERO;
+    const operations = operationsByPartition.get(partitionId) || [];
+    const operationSampleCount = operations.length;
+    const hotspotScore = Math.round(
+      overTargetMs +
+      (excessVoters * 1000) +
+      (operationSampleCount * 50),
+    );
+    hotspots.push({
+      partitionId: String(partitionId),
+      hotspotScore,
+      overTargetMs,
+      voterCount,
+      targetVoterCount,
+      excessVoters,
+      leader: membership.leader || null,
+      replicaCount,
+      operationSampleCount,
+      recentOperations: operations.slice(
+        ZERO,
+        PARTITION_HOTSPOT_RECENT_OP_LIMIT,
+      ),
+    });
+  }
+
+  hotspots.sort(comparePartitionHotspots);
+  return hotspots.slice(ZERO, PARTITION_HOTSPOT_LIMIT);
+}
+
+function groupOperationHistoryByPartition(operationHistory) {
+  const grouped = new Map();
+  if (!Array.isArray(operationHistory)) {
+    return grouped;
+  }
+
+  for (const row of operationHistory) {
+    const partitionId = String(row?.partitionId || '');
+    if (!partitionId) {
+      continue;
+    }
+    if (!grouped.has(partitionId)) {
+      grouped.set(partitionId, []);
+    }
+    grouped.get(partitionId).push(normalizeOperationRow(row));
+  }
+
+  for (const operations of grouped.values()) {
+    operations.sort((left, right) =>
+      parseTimestampMs(right?.at) - parseTimestampMs(left?.at));
+  }
+  return grouped;
+}
+
+function normalizeOperationRow(row) {
+  return {
+    operationId: row?.operationId || null,
+    type: row?.type || null,
+    status: row?.status || null,
+    fromNodeId: row?.fromNodeId || null,
+    toNodeId: row?.toNodeId || null,
+    at: row?.at || null,
+  };
+}
+
+function parseTimestampMs(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return ZERO;
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : ZERO;
+}
+
+function comparePartitionHotspots(left, right) {
+  const leftScore = normalizeFiniteNumber(left?.hotspotScore) || ZERO;
+  const rightScore = normalizeFiniteNumber(right?.hotspotScore) || ZERO;
+  if (leftScore !== rightScore) {
+    return rightScore - leftScore;
+  }
+  const leftOverTargetMs = normalizeFiniteNumber(left?.overTargetMs) || ZERO;
+  const rightOverTargetMs = normalizeFiniteNumber(right?.overTargetMs) || ZERO;
+  if (leftOverTargetMs !== rightOverTargetMs) {
+    return rightOverTargetMs - leftOverTargetMs;
+  }
+  return String(left?.partitionId || COMPONENT_UNKNOWN)
+    .localeCompare(String(right?.partitionId || COMPONENT_UNKNOWN));
 }
 
 function normalizeFiniteNumber(value) {
@@ -464,11 +642,262 @@ function computeOptimizationSummary(scenarios) {
     })
     .slice(ZERO, OPTIMIZATION_SUMMARY_TOP_COMPONENT_LIMIT);
 
+  const topPartitions = computePartitionHotspotSummary(scenarios);
+
   return {
     totalPriorityItems: items.length,
     scenariosWithPriorities: new Set(items.map((item) =>
       String(item.scenario || COMPONENT_UNKNOWN))).size,
     topComponents,
+    topPartitions,
+  };
+}
+
+function computePartitionHotspotSummary(scenarios) {
+  const byPartition = new Map();
+  for (const scenario of scenarios) {
+    const hotspots = Array.isArray(scenario?.partitionHotspots) ?
+      scenario.partitionHotspots :
+      [];
+    for (const hotspot of hotspots) {
+      const partitionId = String(hotspot?.partitionId || COMPONENT_UNKNOWN);
+      if (!byPartition.has(partitionId)) {
+        byPartition.set(partitionId, {
+          partitionId,
+          count: ZERO,
+          highestScore: ZERO,
+          maxOverTargetMs: ZERO,
+          scenarios: new Set(),
+        });
+      }
+      const aggregate = byPartition.get(partitionId);
+      aggregate.count++;
+      aggregate.scenarios.add(String(scenario?.scenario || COMPONENT_UNKNOWN));
+      const score = normalizeFiniteNumber(hotspot?.hotspotScore) || ZERO;
+      const overTargetMs = normalizeFiniteNumber(hotspot?.overTargetMs) || ZERO;
+      if (score > aggregate.highestScore) {
+        aggregate.highestScore = score;
+      }
+      if (overTargetMs > aggregate.maxOverTargetMs) {
+        aggregate.maxOverTargetMs = overTargetMs;
+      }
+    }
+  }
+
+  return [...byPartition.values()]
+    .map((entry) => ({
+      partitionId: entry.partitionId,
+      count: entry.count,
+      highestScore: entry.highestScore,
+      maxOverTargetMs: entry.maxOverTargetMs,
+      scenarios: [...entry.scenarios].sort(),
+    }))
+    .sort((left, right) => {
+      if (left.highestScore !== right.highestScore) {
+        return right.highestScore - left.highestScore;
+      }
+      if (left.count !== right.count) {
+        return right.count - left.count;
+      }
+      return left.partitionId.localeCompare(right.partitionId);
+    })
+    .slice(ZERO, OPTIMIZATION_SUMMARY_TOP_PARTITION_LIMIT);
+}
+
+function buildScenarioWorkloadSignature(entry) {
+  const benchmarkDetails = resolveBenchmarkDetails(entry?.details);
+  const benchmark = benchmarkDetails?.benchmark;
+  if (!benchmark || typeof benchmark !== 'object') {
+    return STANDARD_SUMMARY_SIMILARITY_FALLBACK;
+  }
+
+  const signature = {
+    workload: benchmark.workload || null,
+    durationSeconds: normalizeFiniteNumber(benchmark.durationSeconds),
+    clients: normalizeFiniteNumber(benchmark.clients),
+    jobs: normalizeFiniteNumber(benchmark.jobs),
+    replicationFactor: normalizeFiniteNumber(benchmark.replicationFactor),
+  };
+  return JSON.stringify(signature);
+}
+
+function buildScenarioSimilarityKey(entry) {
+  const scenarioName = String(entry?.scenario || COMPONENT_UNKNOWN);
+  return scenarioName + '|' + buildScenarioWorkloadSignature(entry);
+}
+
+function buildScenarioSnapshot(entry) {
+  return {
+    passed: entry?.passed === true,
+    durationMs: normalizeFiniteNumber(entry?.duration) || ZERO,
+    opsPerSec: normalizeFiniteNumber(entry?.loadMetrics?.opsPerSec),
+    p99LatencyMs: normalizeFiniteNumber(entry?.loadMetrics?.latency?.p99),
+  };
+}
+
+function buildPostgresBaselineSnapshot(entry) {
+  const benchmarkDetails = resolveBenchmarkDetails(entry?.details);
+  const comparison = benchmarkDetails?.comparison;
+  if (!comparison || typeof comparison !== 'object') {
+    return null;
+  }
+
+  const throughputRatioSutToBaseline = normalizeFiniteNumber(
+    comparison.throughputRatioSutToBaseline,
+  );
+  const p99LatencyRatioSutToBaselineAvg = normalizeFiniteNumber(
+    comparison.p99LatencyRatioSutToBaselineAvg,
+  );
+  const sutOpsPerSec = normalizeFiniteNumber(comparison.sutOpsPerSec);
+  const baselineTps = normalizeFiniteNumber(comparison.baselineTps);
+  const sutP99LatencyMs = normalizeFiniteNumber(comparison.sutP99LatencyMs);
+  const baselineLatencyAvgMs = normalizeFiniteNumber(
+    comparison.baselineLatencyAvgMs,
+  );
+  const hasAnyBaselineMetric = throughputRatioSutToBaseline !== null ||
+    p99LatencyRatioSutToBaselineAvg !== null ||
+    sutOpsPerSec !== null ||
+    baselineTps !== null ||
+    sutP99LatencyMs !== null ||
+    baselineLatencyAvgMs !== null;
+  if (!hasAnyBaselineMetric) {
+    return null;
+  }
+
+  const baseline = benchmarkDetails?.baseline &&
+    typeof benchmarkDetails.baseline === 'object' ?
+    benchmarkDetails.baseline :
+    null;
+  return {
+    engine: baseline?.engine || STANDARD_SUMMARY_BASELINE_ENGINE,
+    throughputRatioSutToBaseline,
+    p99LatencyRatioSutToBaselineAvg,
+    sutOpsPerSec,
+    baselineTps,
+    sutP99LatencyMs,
+    baselineLatencyAvgMs,
+    cache: baseline?.cache || null,
+  };
+}
+
+function computeAbsoluteDelta(currentValue, previousValue) {
+  const current = normalizeFiniteNumber(currentValue);
+  const previous = normalizeFiniteNumber(previousValue);
+  if (current === null || previous === null) {
+    return null;
+  }
+  return current - previous;
+}
+
+function computeRatioDelta(currentValue, previousValue) {
+  const current = normalizeFiniteNumber(currentValue);
+  const previous = normalizeFiniteNumber(previousValue);
+  if (current === null || previous === null || previous === ZERO) {
+    return null;
+  }
+  return (current - previous) / previous;
+}
+
+function buildDeltaSnapshot(current, previous) {
+  return {
+    passedChanged: current.passed !== previous.passed,
+    durationMs: computeAbsoluteDelta(current.durationMs, previous.durationMs),
+    durationRatio: computeRatioDelta(current.durationMs, previous.durationMs),
+    opsPerSec: computeAbsoluteDelta(current.opsPerSec, previous.opsPerSec),
+    opsPerSecRatio: computeRatioDelta(current.opsPerSec, previous.opsPerSec),
+    p99LatencyMs: computeAbsoluteDelta(current.p99LatencyMs, previous.p99LatencyMs),
+    p99LatencyMsRatio: computeRatioDelta(
+      current.p99LatencyMs,
+      previous.p99LatencyMs,
+    ),
+  };
+}
+
+function normalizeHistoryReports(historyReports) {
+  if (!Array.isArray(historyReports)) {
+    return [];
+  }
+  const normalized = [];
+  for (const report of historyReports) {
+    if (!report || typeof report !== 'object') {
+      continue;
+    }
+    if (!Array.isArray(report.scenarios)) {
+      continue;
+    }
+    normalized.push({
+      timestamp: report.timestamp || null,
+      path: report.path || null,
+      scenarios: report.scenarios,
+    });
+  }
+  normalized.sort((left, right) =>
+    parseTimestampMs(right.timestamp) - parseTimestampMs(left.timestamp));
+  return normalized;
+}
+
+function computeStandardSummary(scenarios, historyReports) {
+  const normalizedHistory = normalizeHistoryReports(historyReports);
+  const previousBySimilarityKey = new Map();
+
+  for (const historicalReport of normalizedHistory) {
+    for (const historicalScenario of historicalReport.scenarios) {
+      const similarityKey = buildScenarioSimilarityKey(historicalScenario);
+      if (previousBySimilarityKey.has(similarityKey)) {
+        continue;
+      }
+      previousBySimilarityKey.set(similarityKey, {
+        reportTimestamp: historicalReport.timestamp,
+        reportPath: historicalReport.path,
+        scenario: historicalScenario,
+      });
+    }
+  }
+
+  let scenariosComparedToPrevious = ZERO;
+  let scenariosComparedToPostgresBaseline = ZERO;
+  const scenarioSummaries = [];
+
+  for (const scenario of scenarios) {
+    const similarityKey = buildScenarioSimilarityKey(scenario);
+    const currentSnapshot = buildScenarioSnapshot(scenario);
+    const postgresBaseline = buildPostgresBaselineSnapshot(scenario);
+    if (postgresBaseline) {
+      scenariosComparedToPostgresBaseline++;
+    }
+
+    const previousMatch = previousBySimilarityKey.get(similarityKey) || null;
+    let previousSimilarRun = null;
+    let deltaVsPrevious = null;
+    if (previousMatch) {
+      const previousSnapshot = buildScenarioSnapshot(previousMatch.scenario);
+      previousSimilarRun = {
+        reportTimestamp: previousMatch.reportTimestamp || null,
+        reportPath: previousMatch.reportPath || null,
+        ...previousSnapshot,
+      };
+      deltaVsPrevious = buildDeltaSnapshot(
+        currentSnapshot,
+        previousSnapshot,
+      );
+      scenariosComparedToPrevious++;
+    }
+
+    scenarioSummaries.push({
+      scenario: String(scenario?.scenario || COMPONENT_UNKNOWN),
+      similarityKey,
+      current: currentSnapshot,
+      previousSimilarRun,
+      deltaVsPrevious,
+      postgresBaseline,
+    });
+  }
+
+  return {
+    historicalReportsConsidered: normalizedHistory.length,
+    scenariosComparedToPrevious,
+    scenariosComparedToPostgresBaseline,
+    scenarios: scenarioSummaries,
   };
 }
 
@@ -503,9 +932,10 @@ class ReportWriter {
   /**
    * @param {string} outputPath - File path for the JSON report
    */
-  constructor(outputPath) {
+  constructor(outputPath, options = {}) {
     this.outputPath = outputPath;
     this.scenarios = [];
+    this.historyReports = normalizeHistoryReports(options.historyReports);
   }
 
   /**
@@ -529,6 +959,10 @@ class ReportWriter {
       timestamp: new Date().toISOString(),
       summary: computeSummary(this.scenarios),
       optimizationSummary: computeOptimizationSummary(this.scenarios),
+      standardSummary: computeStandardSummary(
+        this.scenarios,
+        this.historyReports,
+      ),
       scenarios: this.scenarios,
     };
 
@@ -542,4 +976,10 @@ class ReportWriter {
   }
 }
 
-export {ReportWriter, buildScenarioEntry, computeSummary, JSON_INDENT};
+export {
+  ReportWriter,
+  buildScenarioEntry,
+  computeSummary,
+  computeStandardSummary,
+  JSON_INDENT,
+};

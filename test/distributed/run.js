@@ -12,6 +12,7 @@
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {basename, dirname, extname, join, resolve} from 'node:path';
 import {execFile} from 'node:child_process';
+import {readdir, readFile} from 'node:fs/promises';
 import {parseConfig} from './harness/config-parser.js';
 import {
   discoverScenarios,
@@ -83,6 +84,8 @@ const IMAGE_BUILD_WITH_COMMIT_PREFIX = ' for commit ';
 const RUN_OUTPUT_DIRNAME = '.playback';
 const REPORT_JSON_EXTENSION = '.report.json';
 const FALLBACK_OUTPUT_BASENAME = 'report';
+const HISTORICAL_REPORT_SCAN_LIMIT = 20;
+const UTF8_ENCODING = 'utf8';
 const TRACE_ASSERTION_ERROR_PREFIX = 'Trace assertion failed: ';
 const TRACE_ASSERTION_MISSING_ARTIFACT = 'trace artifact missing';
 const TRACE_ASSERTION_NO_EVENTS = 'no trace events captured';
@@ -283,6 +286,68 @@ function deriveRunOutputDir(reportOutputPath) {
   return join(reportDir, RUN_OUTPUT_DIRNAME, outputBasename);
 }
 
+function parseTimestampMs(value) {
+  const parsed = Date.parse(String(value || ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * Load previous reports in the same directory for historical comparisons.
+ * Includes:
+ * - the current output path (if it already exists from a prior run)
+ * - any sibling *.report.json files
+ * @param {string} reportOutputPath
+ * @return {Promise<Array<Object>>}
+ */
+async function loadHistoricalReports(reportOutputPath) {
+  const resolvedOutputPath = resolve(
+    String(reportOutputPath || CLI.DEFAULT_OUTPUT),
+  );
+  const reportDir = dirname(resolvedOutputPath);
+  const candidatePaths = new Set([resolvedOutputPath]);
+
+  try {
+    const entries = await readdir(reportDir, {withFileTypes: true});
+    for (const entry of entries) {
+      if (!entry.isFile()) {
+        continue;
+      }
+      if (!entry.name.endsWith(REPORT_JSON_EXTENSION)) {
+        continue;
+      }
+      candidatePaths.add(resolve(join(reportDir, entry.name)));
+    }
+  } catch (_scanErr) {
+    // Best-effort history loading.
+  }
+
+  const historicalReports = [];
+  for (const candidatePath of candidatePaths) {
+    try {
+      const raw = await readFile(candidatePath, UTF8_ENCODING);
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') {
+        continue;
+      }
+      if (!Array.isArray(parsed.scenarios)) {
+        continue;
+      }
+      historicalReports.push({
+        path: candidatePath,
+        timestamp: parsed.timestamp || null,
+        summary: parsed.summary || null,
+        scenarios: parsed.scenarios,
+      });
+    } catch (_readErr) {
+      // Ignore unreadable or invalid report files.
+    }
+  }
+
+  historicalReports.sort((left, right) =>
+    parseTimestampMs(right.timestamp) - parseTimestampMs(left.timestamp));
+  return historicalReports.slice(0, HISTORICAL_REPORT_SCAN_LIMIT);
+}
+
 function dockerActionLine(action, details) {
   return `${action} ${details}`.trim();
 }
@@ -394,12 +459,15 @@ function extractBuildProgressLine(event) {
  * @param {{
  *   output: string,
  *   verbose: boolean,
+ *   historyReports?: Array<Object>,
  *   dockerOperationSink?: Function|null,
  * }} options
  * @returns {Promise<{report: ReportWriter, hasFailures: boolean}>}
  */
 async function runScenarios(config, scenarios, options) {
-  const report = new ReportWriter(options.output);
+  const report = new ReportWriter(options.output, {
+    historyReports: options?.historyReports,
+  });
   let hasFailures = false;
   const dockerOperationSink = typeof options?.dockerOperationSink === 'function' ?
     options.dockerOperationSink :
@@ -491,6 +559,12 @@ async function runScenarios(config, scenarios, options) {
     } catch (err) {
       const duration = Date.now() - startMs;
       hasFailures = true;
+      const errorDiagnostics = err &&
+        typeof err === 'object' &&
+        err.diagnostics &&
+        typeof err.diagnostics === 'object' ?
+        err.diagnostics :
+        null;
 
       // Attempt fallback log collection on failure
       const analysisSummary = null;
@@ -521,6 +595,7 @@ async function runScenarios(config, scenarios, options) {
         error: err.message,
         stackTrace: err.stack || null,
         analysisSummary,
+        details: errorDiagnostics ? {diagnostics: errorDiagnostics} : null,
       };
 
       if (options.verbose) {
@@ -938,6 +1013,7 @@ async function main() {
     {
       output: args.output,
       verbose: args.verbose,
+      historyReports: await loadHistoricalReports(args.output),
       dockerOperationSink,
     },
   );
@@ -978,4 +1054,5 @@ export {
   shouldPrintLiveLogEntry,
   resolveGitDirty,
   deriveRunOutputDir,
+  loadHistoricalReports,
 };

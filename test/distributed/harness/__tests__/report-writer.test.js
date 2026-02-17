@@ -8,6 +8,7 @@ import {
   ReportWriter,
   buildScenarioEntry,
   computeSummary,
+  computeStandardSummary,
   JSON_INDENT,
 } from '../report-writer.js';
 
@@ -71,6 +72,7 @@ describe('ReportWriter', () => {
       assert.equal(entry.traceAssertion, null);
       assert.equal(entry.memoryLeak, null);
       assert.equal(entry.memoryLeakAssertion, null);
+      assert.equal(entry.partitionHotspots, null);
       assert.ok(Array.isArray(entry.optimizationPriorities));
       assert.ok(entry.optimizationPriorities.length > 0);
     });
@@ -138,6 +140,7 @@ describe('ReportWriter', () => {
         assert.ok(report.timestamp);
         assert.ok(report.summary);
         assert.ok(report.optimizationSummary);
+        assert.ok(report.standardSummary);
         assert.ok(Array.isArray(report.scenarios));
         assert.equal(report.scenarios.length, 2);
       });
@@ -183,6 +186,14 @@ describe('ReportWriter', () => {
         assert.equal(report.summary.failed, 0);
         assert.equal(report.summary.duration, 0);
         assert.deepEqual(report.optimizationSummary.topComponents, []);
+        assert.deepEqual(report.optimizationSummary.topPartitions, []);
+        assert.equal(report.standardSummary.historicalReportsConsidered, 0);
+        assert.equal(report.standardSummary.scenariosComparedToPrevious, 0);
+        assert.equal(
+          report.standardSummary.scenariosComparedToPostgresBaseline,
+          0,
+        );
+        assert.deepEqual(report.standardSummary.scenarios, []);
         assert.deepEqual(report.scenarios, []);
       });
 
@@ -214,6 +225,7 @@ describe('ReportWriter', () => {
       assert.equal(entry.loadMetrics, null);
       assert.equal(entry.trace, null);
       assert.equal(entry.traceAssertion, null);
+      assert.equal(entry.partitionHotspots, null);
     });
 
     it('persists scenario details and exampleResults payload', () => {
@@ -364,6 +376,197 @@ describe('ReportWriter', () => {
         ),
       );
     });
+
+    it('builds partition hotspots from convergence diagnostics', () => {
+      const entry = buildScenarioEntry('convergence-hotspots', {
+        passed: false,
+        duration: 100,
+        details: {
+          diagnostics: {
+            overTargetDurations: {
+              p1: 4500,
+              p2: 250,
+            },
+            partitionMembership: {
+              p1: {
+                voterCount: 5,
+                targetVoterCount: 3,
+                leader: 'node-a',
+                replicas: [{nodeId: 'node-a'}, {nodeId: 'node-b'}],
+              },
+              p2: {
+                voterCount: 3,
+                targetVoterCount: 3,
+                leader: 'node-b',
+                replicas: [{nodeId: 'node-b'}],
+              },
+            },
+            operationHistory: [
+              {
+                partitionId: 'p1',
+                operationId: 'op-1',
+                status: 'running',
+                at: '2026-02-17T12:00:00.000Z',
+              },
+              {
+                partitionId: 'p2',
+                operationId: 'op-2',
+                status: 'completed',
+                at: '2026-02-17T11:59:00.000Z',
+              },
+            ],
+          },
+        },
+      });
+
+      assert.ok(Array.isArray(entry.partitionHotspots));
+      assert.equal(entry.partitionHotspots[0].partitionId, 'p1');
+      assert.ok(entry.partitionHotspots[0].hotspotScore > 0);
+      assert.ok(
+        entry.optimizationPriorities.some((item) =>
+          item.signal === 'partition_hotspots',
+        ),
+      );
+    });
+  });
+
+  describe('optimization summary', () => {
+    it('aggregates top partition hotspots across scenarios', async () => {
+      const writer = new ReportWriter(outputPath);
+      writer.addResult('scenario-a', {
+        passed: false,
+        duration: 100,
+        details: {
+          diagnostics: {
+            overTargetDurations: {'p-main': 2000},
+            partitionMembership: {
+              'p-main': {
+                voterCount: 4,
+                targetVoterCount: 3,
+                leader: 'node-a',
+                replicas: [{nodeId: 'node-a'}],
+              },
+            },
+            operationHistory: [],
+          },
+        },
+      });
+      writer.addResult('scenario-b', {
+        passed: false,
+        duration: 100,
+        details: {
+          diagnostics: {
+            overTargetDurations: {'p-main': 500},
+            partitionMembership: {
+              'p-main': {
+                voterCount: 4,
+                targetVoterCount: 3,
+                leader: 'node-b',
+                replicas: [{nodeId: 'node-b'}],
+              },
+            },
+            operationHistory: [],
+          },
+        },
+      });
+
+      await writer.write();
+      const report = JSON.parse(await readFile(outputPath, 'utf8'));
+      assert.ok(Array.isArray(report.optimizationSummary.topPartitions));
+      assert.equal(report.optimizationSummary.topPartitions[0].partitionId, 'p-main');
+      assert.equal(report.optimizationSummary.topPartitions[0].count, 2);
+    });
+  });
+
+  describe('standard summary', () => {
+    it('compares current scenario against latest previous similar run', async () => {
+      const writer = new ReportWriter(outputPath, {
+        historyReports: [
+          {
+            path: '/tmp/previous.report.json',
+            timestamp: '2026-02-16T10:00:00.000Z',
+            scenarios: [
+              {
+                scenario: 'postgres-baseline-comparison',
+                passed: true,
+                duration: 1000,
+                loadMetrics: {
+                  opsPerSec: 40,
+                  latency: {p99: 20},
+                },
+                details: {
+                  details: {
+                    benchmark: {
+                      workload: 'custom-mixed-insert-select',
+                      durationSeconds: 30,
+                      clients: 8,
+                      jobs: 4,
+                    },
+                    comparison: {
+                      throughputRatioSutToBaseline: 0.02,
+                      p99LatencyRatioSutToBaselineAvg: 80,
+                      sutOpsPerSec: 40,
+                      baselineTps: 2000,
+                      sutP99LatencyMs: 20,
+                      baselineLatencyAvgMs: 0.25,
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      });
+      writer.addResult('postgres-baseline-comparison', {
+        passed: true,
+        duration: 1200,
+        loadMetrics: {
+          opsPerSec: 50,
+          latency: {p99: 25},
+        },
+        details: {
+          details: {
+            benchmark: {
+              workload: 'custom-mixed-insert-select',
+              durationSeconds: 30,
+              clients: 8,
+              jobs: 4,
+            },
+            baseline: {
+              engine: 'postgres',
+              cache: {hit: true},
+            },
+            comparison: {
+              throughputRatioSutToBaseline: 0.025,
+              p99LatencyRatioSutToBaselineAvg: 100,
+              sutOpsPerSec: 50,
+              baselineTps: 2000,
+              sutP99LatencyMs: 25,
+              baselineLatencyAvgMs: 0.25,
+            },
+          },
+        },
+      });
+
+      await writer.write();
+      const report = JSON.parse(await readFile(outputPath, 'utf8'));
+      const summary = report.standardSummary;
+      assert.equal(summary.historicalReportsConsidered, 1);
+      assert.equal(summary.scenariosComparedToPrevious, 1);
+      assert.equal(summary.scenariosComparedToPostgresBaseline, 1);
+      assert.equal(summary.scenarios.length, 1);
+
+      const entry = summary.scenarios[0];
+      assert.equal(entry.scenario, 'postgres-baseline-comparison');
+      assert.equal(entry.previousSimilarRun.reportPath, '/tmp/previous.report.json');
+      assert.equal(entry.previousSimilarRun.durationMs, 1000);
+      assert.equal(entry.deltaVsPrevious.durationMs, 200);
+      assert.equal(entry.deltaVsPrevious.opsPerSec, 10);
+      assert.equal(entry.deltaVsPrevious.p99LatencyMs, 5);
+      assert.equal(entry.postgresBaseline.engine, 'postgres');
+      assert.equal(entry.postgresBaseline.throughputRatioSutToBaseline, 0.025);
+      assert.deepEqual(entry.postgresBaseline.cache, {hit: true});
+    });
   });
 
   describe('computeSummary', () => {
@@ -386,6 +589,16 @@ describe('ReportWriter', () => {
       assert.equal(summary.passed, 0);
       assert.equal(summary.failed, 0);
       assert.equal(summary.duration, 0);
+    });
+  });
+
+  describe('computeStandardSummary', () => {
+    it('returns empty summary for empty scenarios/history', () => {
+      const summary = computeStandardSummary([], []);
+      assert.equal(summary.historicalReportsConsidered, 0);
+      assert.equal(summary.scenariosComparedToPrevious, 0);
+      assert.equal(summary.scenariosComparedToPostgresBaseline, 0);
+      assert.deepEqual(summary.scenarios, []);
     });
   });
 

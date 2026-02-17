@@ -134,6 +134,18 @@ test('Unit: mergeWithDefaults fills all fields from empty object', async (t) => 
         config.benchmark.syncReplicaAcks,
         BENCHMARK_DEFAULTS.syncReplicaAcks,
       );
+      assert.strictEqual(
+        config.benchmark.cacheBaselineMetrics,
+        BENCHMARK_DEFAULTS.cacheBaselineMetrics,
+      );
+      assert.strictEqual(
+        config.benchmark.refreshBaselineMetrics,
+        BENCHMARK_DEFAULTS.refreshBaselineMetrics,
+      );
+      assert.strictEqual(
+        config.benchmark.baselineCacheTtlMs,
+        BENCHMARK_DEFAULTS.baselineCacheTtlMs,
+      );
     },
   );
 });
@@ -170,6 +182,9 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
         tableName: 'bench_custom',
         replicationFactor: 5,
         syncReplicaAcks: 2,
+        cacheBaselineMetrics: false,
+        refreshBaselineMetrics: true,
+        baselineCacheTtlMs: 60000,
       },
     };
 
@@ -219,6 +234,9 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
     assert.strictEqual(config.benchmark.tableName, 'bench_custom');
     assert.strictEqual(config.benchmark.replicationFactor, 5);
     assert.strictEqual(config.benchmark.syncReplicaAcks, 2);
+    assert.strictEqual(config.benchmark.cacheBaselineMetrics, false);
+    assert.strictEqual(config.benchmark.refreshBaselineMetrics, true);
+    assert.strictEqual(config.benchmark.baselineCacheTtlMs, 60000);
     assert.strictEqual(
       config.benchmark.loadOpsPerSec,
       BENCHMARK_DEFAULTS.loadOpsPerSec,

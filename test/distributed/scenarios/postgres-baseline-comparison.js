@@ -7,6 +7,15 @@
  */
 
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {mkdir, readFile, writeFile} from 'node:fs/promises';
+import {
+  arch as osArch,
+  cpus as osCpus,
+  hostname as osHostname,
+  platform as osPlatform,
+} from 'node:os';
+import {dirname, join} from 'node:path';
 import {BENCHMARK_DEFAULTS} from '../harness/constants.js';
 import {
   buildPgbenchScript,
@@ -45,6 +54,17 @@ const POSTGRES_ENTRYPOINT_COMMAND = 'docker-entrypoint.sh postgres';
 const POSTGRES_BINARY_PATH_EXPORT =
   'export PATH="$PATH:/usr/lib/postgresql/$PG_MAJOR/bin"';
 const SYNCHRONOUS_COMMIT_ON = 'on';
+const BASELINE_CACHE_SCHEMA_VERSION = 1;
+const BASELINE_CACHE_DIRNAME = 'postgres-baseline-cache';
+const BASELINE_CACHE_FILE_EXTENSION = '.json';
+const BASELINE_CACHE_HASH_ALGORITHM = 'sha256';
+const BASELINE_CACHE_HIT_REASON = 'cache-hit';
+const BASELINE_CACHE_DISABLED_REASON = 'cache-disabled';
+const BASELINE_CACHE_REFRESH_REASON = 'cache-refresh-requested';
+const BASELINE_CACHE_MISS_REASON = 'cache-miss';
+const BASELINE_CACHE_STALE_REASON = 'cache-stale';
+const BASELINE_CACHE_INVALID_REASON = 'cache-invalid';
+const BASELINE_CACHE_STORE_REASON = 'cache-stored';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -208,6 +228,10 @@ function resolveBenchmarkConfig(cluster) {
       minSyncReplicaAcks,
       Math.min(BENCHMARK_DEFAULTS.syncReplicaAcks, maxSyncReplicaAcks),
     );
+  const baselineCacheTtlMs = Number.isFinite(configured.baselineCacheTtlMs) &&
+    configured.baselineCacheTtlMs >= ZERO ?
+    Math.floor(configured.baselineCacheTtlMs) :
+    BENCHMARK_DEFAULTS.baselineCacheTtlMs;
 
   return {
     baselineImage: configured.baselineImage ||
@@ -240,6 +264,9 @@ function resolveBenchmarkConfig(cluster) {
     tableName: configured.tableName || BENCHMARK_DEFAULTS.tableName,
     replicationFactor,
     syncReplicaAcks,
+    cacheBaselineMetrics: configured.cacheBaselineMetrics !== false,
+    refreshBaselineMetrics: configured.refreshBaselineMetrics === true,
+    baselineCacheTtlMs,
   };
 }
 
@@ -256,6 +283,163 @@ function resolvePrimaryProvider(cluster) {
     null;
   assert.ok(provider, 'Primary Docker provider is not available on cluster');
   return provider;
+}
+
+function resolveCacheBaseDir(cluster) {
+  const outputDir = cluster?._config?.outputDir;
+  if (typeof outputDir !== 'string' || outputDir.length === ZERO) {
+    return null;
+  }
+  return outputDir;
+}
+
+function resolveMachineProfile() {
+  const cpuList = osCpus() || [];
+  const firstCpu = cpuList[ZERO] || {};
+  return {
+    platform: osPlatform(),
+    arch: osArch(),
+    hostname: osHostname(),
+    cpuCount: cpuList.length,
+    cpuModel: String(firstCpu.model || 'unknown'),
+  };
+}
+
+function buildBaselineCacheIdentity(benchmarkConfig, cacheBaseDir) {
+  const signature = {
+    schemaVersion: BASELINE_CACHE_SCHEMA_VERSION,
+    engine: 'postgres',
+    machine: resolveMachineProfile(),
+    benchmark: {
+      baselineImage: benchmarkConfig.baselineImage,
+      user: benchmarkConfig.user,
+      database: benchmarkConfig.database,
+      port: benchmarkConfig.port,
+      durationSeconds: benchmarkConfig.durationSeconds,
+      clients: benchmarkConfig.clients,
+      jobs: benchmarkConfig.jobs,
+      tableName: benchmarkConfig.tableName,
+      replicationFactor: benchmarkConfig.replicationFactor,
+      syncReplicaAcks: benchmarkConfig.syncReplicaAcks,
+    },
+  };
+  const digest = createHash(BASELINE_CACHE_HASH_ALGORITHM)
+    .update(JSON.stringify(signature))
+    .digest('hex');
+  const key = `v${BASELINE_CACHE_SCHEMA_VERSION}-${digest}`;
+  const path = cacheBaseDir ?
+    join(cacheBaseDir, BASELINE_CACHE_DIRNAME, key + BASELINE_CACHE_FILE_EXTENSION) :
+    null;
+  return {key, path, signature};
+}
+
+function buildBaselineCacheMetadata(cacheIdentity, fields = {}) {
+  return {
+    enabled: true,
+    hit: false,
+    key: cacheIdentity?.key || null,
+    path: cacheIdentity?.path || null,
+    cachedAt: null,
+    reason: null,
+    ...fields,
+  };
+}
+
+function isValidBaselineMetrics(metrics) {
+  if (!metrics || typeof metrics !== 'object') {
+    return false;
+  }
+  const tps = Number(metrics.tps);
+  return Number.isFinite(tps) && tps > ZERO;
+}
+
+function isCacheEntryFresh(cachedAt, ttlMs) {
+  if (!Number.isFinite(ttlMs) || ttlMs <= ZERO) {
+    return true;
+  }
+  const cachedAtMs = Date.parse(String(cachedAt || ''));
+  if (!Number.isFinite(cachedAtMs)) {
+    return false;
+  }
+  return (Date.now() - cachedAtMs) <= ttlMs;
+}
+
+async function loadBaselineMetricsFromCache(cacheIdentity, benchmarkConfig) {
+  const metadata = buildBaselineCacheMetadata(cacheIdentity, {
+    enabled: benchmarkConfig.cacheBaselineMetrics === true,
+  });
+  if (metadata.enabled !== true) {
+    metadata.reason = BASELINE_CACHE_DISABLED_REASON;
+    return {metrics: null, metadata};
+  }
+  if (benchmarkConfig.refreshBaselineMetrics === true) {
+    metadata.reason = BASELINE_CACHE_REFRESH_REASON;
+    return {metrics: null, metadata};
+  }
+  if (!cacheIdentity?.path) {
+    metadata.reason = BASELINE_CACHE_MISS_REASON;
+    return {metrics: null, metadata};
+  }
+
+  try {
+    const raw = await readFile(cacheIdentity.path, 'utf8');
+    const parsed = JSON.parse(raw);
+    const cachedAt = parsed?.cachedAt || null;
+    if (!isCacheEntryFresh(cachedAt, benchmarkConfig.baselineCacheTtlMs)) {
+      metadata.cachedAt = cachedAt;
+      metadata.reason = BASELINE_CACHE_STALE_REASON;
+      return {metrics: null, metadata};
+    }
+    const metrics = parsed?.metrics;
+    if (!isValidBaselineMetrics(metrics)) {
+      metadata.cachedAt = cachedAt;
+      metadata.reason = BASELINE_CACHE_INVALID_REASON;
+      return {metrics: null, metadata};
+    }
+
+    metadata.hit = true;
+    metadata.cachedAt = cachedAt;
+    metadata.reason = BASELINE_CACHE_HIT_REASON;
+    return {metrics, metadata};
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      metadata.reason = BASELINE_CACHE_MISS_REASON;
+      return {metrics: null, metadata};
+    }
+    metadata.reason = BASELINE_CACHE_INVALID_REASON;
+    return {metrics: null, metadata};
+  }
+}
+
+async function storeBaselineMetricsInCache(
+  cacheIdentity,
+  benchmarkConfig,
+  baselineMetrics,
+) {
+  const metadata = buildBaselineCacheMetadata(cacheIdentity, {
+    enabled: benchmarkConfig.cacheBaselineMetrics === true,
+    hit: false,
+  });
+  if (metadata.enabled !== true || !cacheIdentity?.path ||
+      !isValidBaselineMetrics(baselineMetrics)) {
+    metadata.reason = metadata.enabled === true ?
+      BASELINE_CACHE_MISS_REASON :
+      BASELINE_CACHE_DISABLED_REASON;
+    return metadata;
+  }
+
+  const payload = {
+    schemaVersion: BASELINE_CACHE_SCHEMA_VERSION,
+    key: cacheIdentity.key,
+    signature: cacheIdentity.signature,
+    cachedAt: new Date().toISOString(),
+    metrics: baselineMetrics,
+  };
+  await mkdir(dirname(cacheIdentity.path), {recursive: true});
+  await writeFile(cacheIdentity.path, JSON.stringify(payload, null, 2), 'utf8');
+  metadata.cachedAt = payload.cachedAt;
+  metadata.reason = BASELINE_CACHE_STORE_REASON;
+  return metadata;
 }
 
 function buildComparison(loadMetrics, baselineMetrics) {
@@ -300,65 +484,34 @@ async function run(cluster) {
   });
   const loadMetrics = await sutLoadRun.waitComplete();
 
+  const cacheBaseDir = resolveCacheBaseDir(cluster);
+  const baselineCacheIdentity = buildBaselineCacheIdentity(
+    benchmarkConfig,
+    cacheBaseDir,
+  );
+  let baselineCacheMetadata = buildBaselineCacheMetadata(
+    baselineCacheIdentity,
+    {enabled: benchmarkConfig.cacheBaselineMetrics === true},
+  );
+  const cachedBaseline = await loadBaselineMetricsFromCache(
+    baselineCacheIdentity,
+    benchmarkConfig,
+  );
+  baselineCacheMetadata = cachedBaseline.metadata;
+
   const baselineContainers = [];
   let baselinePrimaryContainerId = null;
   let baselinePrimaryContainerIp = null;
   const baselineReplicaContainerIps = [];
-  let baselineMetrics = null;
+  let baselineMetrics = cachedBaseline.metrics || null;
 
-  try {
-    const benchmarkRunId = Date.now();
-    const primaryContainerName =
-      BENCHMARK_CONTAINER_NAME_PREFIX + benchmarkRunId + BENCHMARK_PRIMARY_SUFFIX;
-    const primaryContainer = await provider.createContainer({
-      name: primaryContainerName,
-      image: benchmarkConfig.baselineImage,
-      network: networkName,
-      env: {
-        [POSTGRES_ENV_USER_KEY]: benchmarkConfig.user,
-        [POSTGRES_ENV_PASSWORD_KEY]: benchmarkConfig.password,
-        [POSTGRES_ENV_DB_KEY]: benchmarkConfig.database,
-        [POSTGRES_ENV_AUTH_METHOD_KEY]: POSTGRES_ENV_AUTH_METHOD_VALUE,
-      },
-      resourceLimits: cluster?._config?.resourceLimits || {},
-      startTimeout: cluster?._config?.timeouts?.nodeStartup,
-    });
-    baselineContainers.push(primaryContainer);
-
-    baselinePrimaryContainerId = primaryContainer.containerId;
-    baselinePrimaryContainerIp = primaryContainer.ip;
-
-    await waitForPostgresReady(provider, baselinePrimaryContainerId, {
-      host: LOCALHOST,
-      port: benchmarkConfig.port,
-      user: benchmarkConfig.user,
-      database: benchmarkConfig.database,
-      timeoutMs: benchmarkConfig.readyTimeoutMs,
-      pollIntervalMs: benchmarkConfig.readyPollIntervalMs,
-    });
-    await configurePrimaryReplication(
-      provider,
-      baselinePrimaryContainerId,
-      benchmarkConfig,
-    );
-
-    for (
-      let replicaIndex = ONE;
-      replicaIndex < benchmarkConfig.replicationFactor;
-      replicaIndex += ONE
-    ) {
-      const replicaName =
-        BENCHMARK_CONTAINER_NAME_PREFIX +
-        benchmarkRunId +
-        BENCHMARK_REPLICA_SUFFIX_PREFIX +
-        replicaIndex;
-      const replicaBootstrapCommand = buildReplicaBootstrapCommand(
-        primaryContainerName,
-        replicaName,
-        benchmarkConfig,
-      );
-      const replicaContainer = await provider.createContainer({
-        name: replicaName,
+  if (!baselineMetrics) {
+    try {
+      const benchmarkRunId = Date.now();
+      const primaryContainerName =
+        BENCHMARK_CONTAINER_NAME_PREFIX + benchmarkRunId + BENCHMARK_PRIMARY_SUFFIX;
+      const primaryContainer = await provider.createContainer({
+        name: primaryContainerName,
         image: benchmarkConfig.baselineImage,
         network: networkName,
         env: {
@@ -367,14 +520,15 @@ async function run(cluster) {
           [POSTGRES_ENV_DB_KEY]: benchmarkConfig.database,
           [POSTGRES_ENV_AUTH_METHOD_KEY]: POSTGRES_ENV_AUTH_METHOD_VALUE,
         },
-        command: [SHELL_COMMAND, SHELL_LOGIN_ARG, replicaBootstrapCommand],
         resourceLimits: cluster?._config?.resourceLimits || {},
         startTimeout: cluster?._config?.timeouts?.nodeStartup,
       });
-      baselineContainers.push(replicaContainer);
-      baselineReplicaContainerIps.push(replicaContainer.ip);
+      baselineContainers.push(primaryContainer);
 
-      await waitForPostgresReady(provider, replicaContainer.containerId, {
+      baselinePrimaryContainerId = primaryContainer.containerId;
+      baselinePrimaryContainerIp = primaryContainer.ip;
+
+      await waitForPostgresReady(provider, baselinePrimaryContainerId, {
         host: LOCALHOST,
         port: benchmarkConfig.port,
         user: benchmarkConfig.user,
@@ -382,50 +536,106 @@ async function run(cluster) {
         timeoutMs: benchmarkConfig.readyTimeoutMs,
         pollIntervalMs: benchmarkConfig.readyPollIntervalMs,
       });
-    }
-    await waitForStreamingReplicas(
-      provider,
-      baselinePrimaryContainerId,
-      benchmarkConfig,
-    );
+      await configurePrimaryReplication(
+        provider,
+        baselinePrimaryContainerId,
+        benchmarkConfig,
+      );
 
-    const script = buildPgbenchScript();
-    await writePgbenchScript(provider, baselinePrimaryContainerId, script);
+      for (
+        let replicaIndex = ONE;
+        replicaIndex < benchmarkConfig.replicationFactor;
+        replicaIndex += ONE
+      ) {
+        const replicaName =
+          BENCHMARK_CONTAINER_NAME_PREFIX +
+          benchmarkRunId +
+          BENCHMARK_REPLICA_SUFFIX_PREFIX +
+          replicaIndex;
+        const replicaBootstrapCommand = buildReplicaBootstrapCommand(
+          primaryContainerName,
+          replicaName,
+          benchmarkConfig,
+        );
+        const replicaContainer = await provider.createContainer({
+          name: replicaName,
+          image: benchmarkConfig.baselineImage,
+          network: networkName,
+          env: {
+            [POSTGRES_ENV_USER_KEY]: benchmarkConfig.user,
+            [POSTGRES_ENV_PASSWORD_KEY]: benchmarkConfig.password,
+            [POSTGRES_ENV_DB_KEY]: benchmarkConfig.database,
+            [POSTGRES_ENV_AUTH_METHOD_KEY]: POSTGRES_ENV_AUTH_METHOD_VALUE,
+          },
+          command: [SHELL_COMMAND, SHELL_LOGIN_ARG, replicaBootstrapCommand],
+          resourceLimits: cluster?._config?.resourceLimits || {},
+          startTimeout: cluster?._config?.timeouts?.nodeStartup,
+        });
+        baselineContainers.push(replicaContainer);
+        baselineReplicaContainerIps.push(replicaContainer.ip);
 
-    await ensureBenchmarkTable(provider, baselinePrimaryContainerId, {
-      host: LOCALHOST,
-      port: benchmarkConfig.port,
-      user: benchmarkConfig.user,
-      password: benchmarkConfig.password,
-      database: benchmarkConfig.database,
-      tableName: benchmarkConfig.tableName,
-    });
-
-    baselineMetrics = await runPgbench(provider, baselinePrimaryContainerId, {
-      host: LOCALHOST,
-      port: benchmarkConfig.port,
-      user: benchmarkConfig.user,
-      password: benchmarkConfig.password,
-      database: benchmarkConfig.database,
-      durationSeconds: benchmarkConfig.durationSeconds,
-      clients: benchmarkConfig.clients,
-      jobs: benchmarkConfig.jobs,
-    });
-  } finally {
-    for (let i = baselineContainers.length - ONE; i >= ZERO; i -= ONE) {
-      const containerId = baselineContainers[i]?.containerId;
-      if (!containerId) {
-        continue;
+        await waitForPostgresReady(provider, replicaContainer.containerId, {
+          host: LOCALHOST,
+          port: benchmarkConfig.port,
+          user: benchmarkConfig.user,
+          database: benchmarkConfig.database,
+          timeoutMs: benchmarkConfig.readyTimeoutMs,
+          pollIntervalMs: benchmarkConfig.readyPollIntervalMs,
+        });
       }
+      await waitForStreamingReplicas(
+        provider,
+        baselinePrimaryContainerId,
+        benchmarkConfig,
+      );
+
+      const script = buildPgbenchScript();
+      await writePgbenchScript(provider, baselinePrimaryContainerId, script);
+
+      await ensureBenchmarkTable(provider, baselinePrimaryContainerId, {
+        host: LOCALHOST,
+        port: benchmarkConfig.port,
+        user: benchmarkConfig.user,
+        password: benchmarkConfig.password,
+        database: benchmarkConfig.database,
+        tableName: benchmarkConfig.tableName,
+      });
+
+      baselineMetrics = await runPgbench(provider, baselinePrimaryContainerId, {
+        host: LOCALHOST,
+        port: benchmarkConfig.port,
+        user: benchmarkConfig.user,
+        password: benchmarkConfig.password,
+        database: benchmarkConfig.database,
+        durationSeconds: benchmarkConfig.durationSeconds,
+        clients: benchmarkConfig.clients,
+        jobs: benchmarkConfig.jobs,
+      });
       try {
-        await provider.stopContainer(containerId);
-      } catch (_stopErr) {
-        // Best-effort cleanup.
+        baselineCacheMetadata = await storeBaselineMetricsInCache(
+          baselineCacheIdentity,
+          benchmarkConfig,
+          baselineMetrics,
+        );
+      } catch (_cacheStoreErr) {
+        baselineCacheMetadata.reason = BASELINE_CACHE_INVALID_REASON;
       }
-      try {
-        await provider.removeContainer(containerId);
-      } catch (_removeErr) {
-        // Best-effort cleanup.
+    } finally {
+      for (let i = baselineContainers.length - ONE; i >= ZERO; i -= ONE) {
+        const containerId = baselineContainers[i]?.containerId;
+        if (!containerId) {
+          continue;
+        }
+        try {
+          await provider.stopContainer(containerId);
+        } catch (_stopErr) {
+          // Best-effort cleanup.
+        }
+        try {
+          await provider.removeContainer(containerId);
+        } catch (_removeErr) {
+          // Best-effort cleanup.
+        }
       }
     }
   }
@@ -456,6 +666,7 @@ async function run(cluster) {
         replicaContainerIps: baselineReplicaContainerIps,
         replicationFactor: benchmarkConfig.replicationFactor,
         syncReplicaAcks: benchmarkConfig.syncReplicaAcks,
+        cache: baselineCacheMetadata,
         metrics: baselineMetrics,
       },
       systemUnderTest: {

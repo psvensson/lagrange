@@ -1,5 +1,8 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtemp, rm} from 'node:fs/promises';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 import {
   run,
   resolveBenchmarkConfig,
@@ -219,6 +222,9 @@ describe('postgres-baseline-comparison scenario', () => {
           loadDuration: '45s',
           replicationFactor: 5,
           syncReplicaAcks: 2,
+          cacheBaselineMetrics: false,
+          refreshBaselineMetrics: true,
+          baselineCacheTtlMs: 60000,
         },
       },
     };
@@ -231,6 +237,9 @@ describe('postgres-baseline-comparison scenario', () => {
     assert.equal(resolved.loadDuration, '45s');
     assert.equal(resolved.replicationFactor, 5);
     assert.equal(resolved.syncReplicaAcks, 2);
+    assert.equal(resolved.cacheBaselineMetrics, false);
+    assert.equal(resolved.refreshBaselineMetrics, true);
+    assert.equal(resolved.baselineCacheTtlMs, 60000);
     assert.equal(typeof resolved.durationSeconds, 'number');
     assert.equal(typeof resolved.user, 'string');
   });
@@ -252,4 +261,113 @@ describe('postgres-baseline-comparison scenario', () => {
     assert.equal(comparison.throughputRatioSutToBaseline, 1.5);
     assert.equal(comparison.p99LatencyRatioSutToBaselineAvg, 2);
   });
+
+  it('reuses cached baseline metrics for repeated runs on same machine/profile',
+    async () => {
+      const outputDir = await mkdtemp(
+        join(tmpdir(), 'postgres-baseline-cache-test-'),
+      );
+      const createdContainers = [];
+      let pgbenchCalls = 0;
+      const provider = {
+        createContainer: async (options) => {
+          createdContainers.push(options);
+          const index = createdContainers.length;
+          return {
+            containerId: `benchmark-postgres-${index}`,
+            ip: `172.18.0.${80 + index}`,
+            name: `benchmark-postgres-${index}`,
+          };
+        },
+        execInContainer: async (_containerId, cmd) => {
+          const command = String(cmd[2] || '');
+          if (command.includes('pg_isready')) {
+            return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+          }
+          if (command.includes('pg_stat_replication')) {
+            return {exitCode: 0, stdout: '2\n', stderr: ''};
+          }
+          if (command.includes('pgbench -n')) {
+            pgbenchCalls++;
+            return {
+              exitCode: 0,
+              stdout: [
+                'number of transactions actually processed: 600',
+                'number of failed transactions: 1',
+                'latency average = 12.500 ms',
+                'latency stddev = 2.000 ms',
+                'tps = 100.000000 (without initial connection time)',
+              ].join('\n'),
+              stderr: '',
+            };
+          }
+          return {exitCode: 0, stdout: '', stderr: ''};
+        },
+        stopContainer: async () => {},
+        removeContainer: async () => {},
+      };
+
+      const cluster = {
+        _config: {
+          outputDir,
+          benchmark: {
+            baselineImage: 'postgres:16',
+            durationSeconds: 10,
+            clients: 4,
+            jobs: 2,
+            loadOpsPerSec: 80,
+            loadDuration: '10s',
+            tableName: 'benchmark_events',
+            replicationFactor: 3,
+            syncReplicaAcks: 1,
+            cacheBaselineMetrics: true,
+            refreshBaselineMetrics: false,
+          },
+          convergence: {
+            settleTimeoutMs: 1000,
+            quietWindowMs: 100,
+            targetVoterCount: 3,
+          },
+          resourceLimits: {
+            memory: '1g',
+            cpus: '1.0',
+          },
+          timeouts: {
+            nodeStartup: 1000,
+          },
+        },
+        _providers: [provider],
+        _hostAssignment: [0],
+        _networkName: 'test-net',
+        getNodes: () => [{id: 'seed-1', role: 'seed'}],
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        startLoad: () => ({
+          waitComplete: async () => ({
+            total: 120,
+            success: 118,
+            failed: 2,
+            errors: 2,
+            opsPerSec: 84,
+            latency: {p50: 3, p95: 7, p99: 15},
+          }),
+        }),
+        assertConsistency: async () => {},
+      };
+
+      try {
+        const first = await run(cluster);
+        assert.equal(first.details.baseline.cache.hit, false);
+        assert.equal(first.details.baseline.cache.reason, 'cache-stored');
+        assert.equal(createdContainers.length, 3);
+        assert.equal(pgbenchCalls, 1);
+
+        const second = await run(cluster);
+        assert.equal(second.details.baseline.cache.hit, true);
+        assert.equal(second.details.baseline.cache.reason, 'cache-hit');
+        assert.equal(createdContainers.length, 3);
+        assert.equal(pgbenchCalls, 1);
+      } finally {
+        await rm(outputDir, {recursive: true, force: true});
+      }
+    });
 });
