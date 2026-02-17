@@ -20,7 +20,7 @@ import {
 import {
   NodeStorageBudgetService,
 } from '../../src/rebalancer/node-storage-budget-service.js';
-import {COLUMN, NUM, STATE, TABLES} from '../../src/constants/index.js';
+import {COLUMN, NUM, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {
   STORAGE_BUDGET_SOURCE,
 } from '../../src/rebalancer/storage-capacity-constants.js';
@@ -40,7 +40,7 @@ function buildNodeRow(overrides = {}) {
     [COLUMN.CPU_USAGE_PERCENT]: NUM.ZERO,
     [COLUMN.MEMORY_USAGE_PERCENT]: NUM.ZERO,
     [COLUMN.DISK_USAGE_PERCENT]: NUM.ZERO,
-    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.LAST_HEARTBEAT]: Date.now(),
     [COLUMN.CREATED_AT]: Date.now(),
     ...overrides,
@@ -292,7 +292,7 @@ describe('Heartbeat budget preservation (Req 9.2)', () => {
       cpu_usage_percent: NUM.ZERO,
       memory_usage_percent: NUM.ZERO,
       disk_usage_percent: NUM.ZERO,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       connection_state: 'ready',
       capabilities: '[]',
       last_heartbeat: Date.now(),
@@ -336,7 +336,7 @@ describe('Heartbeat budget preservation (Req 9.2)', () => {
         cpu_cores: 4,
         memory_mb: 8192,
         disk_gb: NUM.HUNDRED,
-        status: STATE.ACTIVE,
+        status: SERVICE_STATUS.ACTIVE,
         capabilities: '[]',
       }),
     };

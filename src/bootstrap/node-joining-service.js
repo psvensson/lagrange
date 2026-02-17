@@ -92,6 +92,7 @@ import {
   RUNTIME_KIND,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
+  SERVICE_STATUS,
   SERVICE_TYPE,
   STATE,
   STRING,
@@ -1267,7 +1268,7 @@ class NodeJoiningService extends EventEmitter {
       group_id: groupId,
       replica_id: replicaId,
       raft_role: service.getRole ? service.getRole() : service.role,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       address: `${this.nodeId}${ADDRESS.SEPARATOR}` +
         `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`,
       created_at: now,
@@ -1297,6 +1298,11 @@ class NodeJoiningService extends EventEmitter {
       } else {
         const systemTableCache = NodeService.getInstance().getSystemTableCache();
         if (systemTableCache) {
+          // Bootstrap timing exception: local cache seeding is required here because
+          // join-time CDC subscriptions are activated later in phaseQuerySystemState().
+          // Control-plane address resolution and readiness checks may consult the
+          // local services cache before CDC fanout reaches this node.
+          // See architecture.md: Sanctioned direct applySystemTableChange call sites.
           systemTableCache.applySystemTableChange(
             TABLES.SERVICES,
             CDC_OPERATION.UPSERT,
@@ -1721,7 +1727,7 @@ class NodeJoiningService extends EventEmitter {
     const candidates = cache.filter(TABLES.SERVICES, (row) => {
       return row?.service_type === SERVICE_TYPE.MESSAGE_GROUP &&
         row?.group_id === groupId &&
-        row?.status === STATE.ACTIVE &&
+        row?.status === SERVICE_STATUS.ACTIVE &&
         typeof row?.address === TYPEOF.STRING &&
         row.address.length > NUM.ZERO;
     });
@@ -2181,6 +2187,9 @@ class NodeJoiningService extends EventEmitter {
         if (!operation) {
           continue;
         }
+        // Bootstrap hydration exception: joining nodes must hydrate local cache
+        // from bootstrap snapshots before CDC subscriptions are active.
+        // See architecture.md: Sanctioned direct applySystemTableChange call sites.
         systemTableCache.applySystemTableChange(tableName, operation, record);
         totalRecords++;
       }
@@ -2408,7 +2417,7 @@ class NodeJoiningService extends EventEmitter {
       [COLUMN.CPU_USAGE_PERCENT]: NUM.ZERO,
       [COLUMN.MEMORY_USAGE_PERCENT]: NUM.ZERO,
       [COLUMN.DISK_USAGE_PERCENT]: NUM.ZERO,
-      [COLUMN.STATUS]: STATE.ACTIVE,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
       [COLUMN.CAPABILITIES]: JSON.stringify([]),
       [COLUMN.LAST_HEARTBEAT]: now,
@@ -3632,13 +3641,13 @@ class NodeJoiningService extends EventEmitter {
         service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
         groupIds.has(service?.[COLUMN.GROUP_ID]) &&
         service?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-        service?.[COLUMN.STATUS] === STATE.ACTIVE,
+        service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
       ) :
       (systemTableCache.getAll?.(TABLES.SERVICES) || []).filter((service) =>
         service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
         groupIds.has(service?.[COLUMN.GROUP_ID]) &&
         service?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-        service?.[COLUMN.STATUS] === STATE.ACTIVE,
+        service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
       );
 
     return services.length > NUM.ZERO;

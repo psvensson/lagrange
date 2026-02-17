@@ -15,7 +15,7 @@ import fc from 'fast-check';
 import {QueryRouter} from '../../src/query/query-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {SERVICE_TYPE, STATE, TABLES, NUM} from '../../src/constants/index.js';
+import {NUM, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {QUERY_RESPONSE_TYPE} from '../../src/query/query-constants.js';
 
@@ -56,7 +56,7 @@ function createServiceEntry(partitionId, serviceId, address, raftRole) {
     partition_id: partitionId,
     service_id: serviceId,
     service_type: SERVICE_TYPE.PARTITION,
-    status: STATE.ACTIVE,
+    status: SERVICE_STATUS.ACTIVE,
     address,
     raft_role: raftRole,
     node_id: 'node-1',

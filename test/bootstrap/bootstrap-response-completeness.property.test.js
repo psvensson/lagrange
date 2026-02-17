@@ -13,7 +13,7 @@ import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
-import {SERVICE_TYPE, STATE} from '../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 beforeEach(() => {
@@ -78,7 +78,7 @@ function ensureLeaderServices(systemTableData) {
       service.partition_id === partitionId &&
       service.service_type === SERVICE_TYPE.PARTITION &&
       service.raft_role === RAFT_ROLE.LEADER &&
-      service.status === STATE.ACTIVE,
+      service.status === SERVICE_STATUS.ACTIVE,
     );
 
     if (!hasLeader) {
@@ -89,7 +89,7 @@ function ensureLeaderServices(systemTableData) {
         node_id: seedNodeId,
         address: seedNodeAddress,
         raft_role: RAFT_ROLE.LEADER,
-        status: STATE.ACTIVE,
+        status: SERVICE_STATUS.ACTIVE,
       });
     }
   }
@@ -107,7 +107,7 @@ function ensureLeaderServices(systemTableData) {
       service.group_id === groupId &&
       service.service_type === SERVICE_TYPE.MESSAGE_GROUP &&
       service.raft_role === RAFT_ROLE.LEADER &&
-      service.status === STATE.ACTIVE,
+      service.status === SERVICE_STATUS.ACTIVE,
     );
 
     if (!hasLeader) {
@@ -118,7 +118,7 @@ function ensureLeaderServices(systemTableData) {
         node_id: seedNodeId,
         address: seedNodeAddress,
         raft_role: RAFT_ROLE.LEADER,
-        status: STATE.ACTIVE,
+        status: SERVICE_STATUS.ACTIVE,
       });
     }
   }

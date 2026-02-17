@@ -23,8 +23,8 @@ import {assertCritical} from '../utils/assert.js';
 import {generateCorrelationId} from '../utils/correlation.js';
 import {
   COLUMN,
+  SERVICE_STATUS,
   SERVICE_TYPE,
-  STATE,
   TABLES,
   NUM,
 } from '../constants/index.js';
@@ -244,7 +244,7 @@ class QueryRouter {
     const services = this.systemCache.filter(TABLES.SERVICES, (s) =>
       s.partition_id === partitionId &&
       s.service_type === SERVICE_TYPE.PARTITION &&
-      s.status === STATE.ACTIVE,
+      s.status === SERVICE_STATUS.ACTIVE,
     ) || [];
 
     if (services.length === NUM.ZERO) {

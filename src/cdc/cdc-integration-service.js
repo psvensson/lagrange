@@ -22,7 +22,7 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {
-  CDC_OPERATION, COLUMN, ERRORS, METRICS_LOG_TAG, NUM, SQL, STATE,
+  CDC_OPERATION, COLUMN, ERRORS, METRICS_LOG_TAG, NUM, SERVICE_STATUS, SQL, STATE,
   STRING, TYPEOF, ADDRESS, PROTOCOL,
 } from '../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
@@ -814,7 +814,7 @@ class CDCIntegrationService extends EventEmitter {
       rowData.disk_usage_percent = NUM.ZERO;
     }
     if (!rowData.status) {
-      rowData.status = STATE.ACTIVE;
+      rowData.status = SERVICE_STATUS.ACTIVE;
     }
     if (!rowData.connection_state) {
       rowData.connection_state = STATE.DISCONNECTED;

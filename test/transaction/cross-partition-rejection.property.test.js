@@ -1,7 +1,7 @@
 /**
- * Property Test: Cross-Partition Transaction Rejection
- * Property 47: For any transaction that attempts to modify data in multiple partitions,
- * the system should return an error indicating cross-partition transactions are not supported.
+ * Property Test: Cross-Partition Transaction Coordination
+ * Property 47: For any transaction that modifies data in multiple partitions,
+ * the system should coordinate the write across all touched participants.
  * All queries route through message router using service addresses from system cache.
  * Validates: Requirements 21.3
  */
@@ -55,6 +55,7 @@ function createMockSystemCache(tables, partitions) {
     node_id: 'test-node',
     address: `test-node/partition/${p.partition_id}`,
     status: 'active',
+    raft_role: 'leader',
   }));
 
   return {
@@ -93,10 +94,29 @@ const crossPartitionKeysArb = fc.tuple(
   fc.stringOf(fc.constantFrom(...'xyz'), {minLength: 1, maxLength: 2}),
 );
 
-test('Property 47: Cross-partition INSERT is rejected', async (t) => {
+/**
+ * Normalize participant IDs from transaction state.
+ * @param {Object} txState - Transaction state.
+ * @return {Array<string>} Participant partition IDs.
+ */
+function getParticipantIds(txState) {
+  const participants = txState?.participants;
+  if (participants instanceof Map) {
+    return Array.from(participants.keys());
+  }
+  if (participants instanceof Set) {
+    return Array.from(participants);
+  }
+  if (Array.isArray(participants)) {
+    return participants;
+  }
+  return [];
+}
+
+test('Property 47: Cross-partition INSERT enlists all touched partitions', async (t) => {
   /**
-   * Property: For any INSERT that would affect multiple partitions within a transaction,
-   * the system should return an error with CROSS_PARTITION_TRANSACTION code.
+   * Property: For any cross-partition INSERT within a transaction,
+   * the transaction tracks all touched participants.
    */
   await fc.assert(
     fc.asyncProperty(
@@ -133,23 +153,25 @@ test('Property 47: Cross-partition INSERT is rejected', async (t) => {
           {sessionId},
         );
 
+        const txState = engine.activeTransactions.get(sessionId);
+        const participants = getParticipantIds(txState);
         mockPartitionData.clear();
 
-        // Should be rejected with cross-partition error
-        return result.success === false &&
-               result.errorCode === 'CROSS_PARTITION_TRANSACTION';
+        return result.success === true &&
+               participants.includes('p1') &&
+               participants.includes('p2');
       },
     ),
     {numRuns: 10},
   );
 
-  t.pass('Cross-partition INSERT rejection property holds');
+  t.pass('Cross-partition INSERT participant tracking property holds');
 });
 
-test('Property 47: Cross-partition UPDATE is rejected', async (t) => {
+test('Property 47: Cross-partition UPDATE enlists all touched partitions', async (t) => {
   /**
-   * Property: For any UPDATE that would affect multiple partitions within a transaction,
-   * the system should return an error.
+   * Property: For any cross-partition UPDATE within a transaction,
+   * the transaction tracks all touched participants.
    */
   await fc.assert(
     fc.asyncProperty(
@@ -192,23 +214,25 @@ test('Property 47: Cross-partition UPDATE is rejected', async (t) => {
           {sessionId},
         );
 
+        const txState = engine.activeTransactions.get(sessionId);
+        const participants = getParticipantIds(txState);
         mockPartitionData.clear();
 
-        // Should be rejected because UPDATE affects multiple partitions
-        return result.success === false &&
-               result.errorCode === 'CROSS_PARTITION_TRANSACTION';
+        return result.success === true &&
+               participants.includes('p1') &&
+               participants.includes('p2');
       },
     ),
     {numRuns: 10},
   );
 
-  t.pass('Cross-partition UPDATE rejection property holds');
+  t.pass('Cross-partition UPDATE participant tracking property holds');
 });
 
-test('Property 47: Cross-partition DELETE is rejected', async (t) => {
+test('Property 47: Cross-partition DELETE enlists all touched partitions', async (t) => {
   /**
-   * Property: For any DELETE that would affect multiple partitions within a transaction,
-   * the system should return an error.
+   * Property: For any cross-partition DELETE within a transaction,
+   * the transaction tracks all touched participants.
    */
   await fc.assert(
     fc.asyncProperty(
@@ -251,23 +275,25 @@ test('Property 47: Cross-partition DELETE is rejected', async (t) => {
           {sessionId},
         );
 
+        const txState = engine.activeTransactions.get(sessionId);
+        const participants = getParticipantIds(txState);
         mockPartitionData.clear();
 
-        // Should be rejected because DELETE affects multiple partitions
-        return result.success === false &&
-               result.errorCode === 'CROSS_PARTITION_TRANSACTION';
+        return result.success === true &&
+               participants.includes('p1') &&
+               participants.includes('p2');
       },
     ),
     {numRuns: 10},
   );
 
-  t.pass('Cross-partition DELETE rejection property holds');
+  t.pass('Cross-partition DELETE participant tracking property holds');
 });
 
-test('Property 47: Error message indicates cross-partition not supported', async (t) => {
+test('Property 47: Cross-partition writes keep transaction active', async (t) => {
   /**
-   * Property: The error message should clearly indicate that cross-partition
-   * transactions are not supported.
+   * Property: A successful cross-partition write keeps the transaction active
+   * until explicit COMMIT/ROLLBACK.
    */
   await fc.assert(
     fc.asyncProperty(
@@ -301,15 +327,14 @@ test('Property 47: Error message indicates cross-partition not supported', async
           {sessionId},
         );
 
+        const active = engine.hasActiveTransaction(sessionId);
         mockPartitionData.clear();
 
-        // Error message should mention cross-partition
-        return result.success === false &&
-               result.error.toLowerCase().includes('cross-partition');
+        return result.success === true && active === true;
       },
     ),
     {numRuns: 10},
   );
 
-  t.pass('Error message property holds');
+  t.pass('Cross-partition transaction active-state property holds');
 });

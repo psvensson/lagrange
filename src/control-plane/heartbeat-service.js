@@ -12,6 +12,7 @@ import {
   COLUMN,
   ENDPOINT_STATUS,
   NUM,
+  SERVICE_STATUS,
   STATE,
   STRING,
   TRANSPORT_TYPE,
@@ -264,7 +265,7 @@ class HeartbeatService extends EventEmitter {
       disk_usage_percent: Number.isFinite(stats?.diskUsagePercent) ?
         stats.diskUsagePercent :
         (existing?.disk_usage_percent || NUM.ZERO),
-      status: existing?.status || STATE.ACTIVE,
+      status: existing?.status || SERVICE_STATUS.ACTIVE,
       connection_state: STATE.READY,
       capabilities: capabilities ? JSON.stringify(capabilities) :
         (existing?.capabilities || STRING.EMPTY_JSON_ARRAY),

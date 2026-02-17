@@ -3,7 +3,7 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
   BOOTSTRAP_REBALANCE_REASON,
 } from '../../src/bootstrap/bootstrap-constants.js';
-import {STATE} from '../../src/constants/index.js';
+import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 
 const NODE_READY_REBALANCE_DELAY_MS = 5;
 const WAIT_FOR_TIMER_FLUSH_MS = 20;
@@ -22,7 +22,7 @@ function createNodeEvent(nodeId, leaseOffsetMs, connectionState = STATE.DISCONNE
   return {
     data: {
       node_id: nodeId,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       connection_state: connectionState,
       ready_lease_expires_at: now + leaseOffsetMs,
     },
@@ -33,7 +33,7 @@ function createPreviousNodeRow(nodeId, leaseOffsetMs) {
   const now = Date.now();
   return {
     node_id: nodeId,
-    status: STATE.ACTIVE,
+    status: SERVICE_STATUS.ACTIVE,
     connection_state: STATE.DISCONNECTED,
     ready_lease_expires_at: now + leaseOffsetMs,
   };
@@ -195,7 +195,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
 
       const eventWithoutNodeId = {
         data: {
-          status: STATE.ACTIVE,
+          status: SERVICE_STATUS.ACTIVE,
           ready_lease_expires_at: Date.now() + LEASE_VALID_MS,
         },
       };
@@ -313,7 +313,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       const nodeId = 'node-ready';
       const nodeRow = {
         node_id: nodeId,
-        status: STATE.ACTIVE,
+        status: SERVICE_STATUS.ACTIVE,
         connection_state: STATE.DISCONNECTED,
         ready_lease_expires_at: Date.now() + LEASE_VALID_MS,
       };

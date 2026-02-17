@@ -5,6 +5,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   COLUMN,
   SERVICE_TYPE,
+  SERVICE_STATUS,
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
@@ -111,7 +112,7 @@ function createMessageGroupServiceRow(serviceId, nodeId, address, raftRole) {
     [COLUMN.SERVICE_ID]: serviceId,
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
     [COLUMN.NODE_ID]: nodeId,
-    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: address,
     [COLUMN.RAFT_ROLE]: raftRole,
   };

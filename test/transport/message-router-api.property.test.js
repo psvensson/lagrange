@@ -54,8 +54,6 @@ const EXPECTED_API_METHODS = Object.freeze([
   'connectToNode',
   'parseAddress',
   'isValidAddress',
-  'setTransportRegistry',
-  'hasTransportRegistry',
   'setServiceNodeResolver',
   'setIdentificationPayload',
   'isRegistered',

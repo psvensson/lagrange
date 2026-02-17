@@ -2,28 +2,28 @@ TAP version 14
 # Subtest: Property 10: Cache Serialization Round-Trip
     ok 1 - Serialization round-trip preserves all cache data
     1..1
-ok 1 - Property 10: Cache Serialization Round-Trip # time=27.382ms
+ok 1 - Property 10: Cache Serialization Round-Trip # time=30.354ms
 
 # Subtest: Property 10: Cache Serialization - lastUpdate preserved
     ok 1 - Serialization round-trip preserves lastUpdate timestamp
     1..1
-ok 2 - Property 10: Cache Serialization - lastUpdate preserved # time=10.596ms
+ok 2 - Property 10: Cache Serialization - lastUpdate preserved # time=10.108ms
 
 # Subtest: Property 10: Cache Serialization - entity counts preserved
     ok 1 - Serialization round-trip preserves entity counts
     1..1
-ok 3 - Property 10: Cache Serialization - entity counts preserved # time=8.091ms
+ok 3 - Property 10: Cache Serialization - entity counts preserved # time=12.027ms
 
 # Subtest: Property 10: Cache Serialization - JSON is valid
     ok 1 - Serialized cache is valid JSON with expected structure
     1..1
-ok 4 - Property 10: Cache Serialization - JSON is valid # time=8.624ms
+ok 4 - Property 10: Cache Serialization - JSON is valid # time=14.345ms
 
 # Subtest: Property 10: Cache Serialization - multiple round-trips
     ok 1 - Multiple serialization round-trips preserve cache data
     1..1
-ok 5 - Property 10: Cache Serialization - multiple round-trips # time=7.318ms
+ok 5 - Property 10: Cache Serialization - multiple round-trips # time=9.892ms
 
 1..5
 # { total: 5, pass: 5 }
-# time=73.073ms
+# time=86.883ms

@@ -16,8 +16,8 @@ import {
   NUM,
   SQL,
   TABLES,
+  SERVICE_STATUS,
   SERVICE_TYPE,
-  STATE,
 } from '../constants/index.js';
 import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
 import {RAFT_ROLE} from '../raft/constants.js';
@@ -1305,7 +1305,7 @@ class QueryExecutor {
       s.partition_id === partitionId &&
       s.service_type === SERVICE_TYPE.PARTITION &&
       s.raft_role === RAFT_ROLE.LEADER &&
-      s.status === STATE.ACTIVE,
+      s.status === SERVICE_STATUS.ACTIVE,
     ) || [];
 
     if (services.length === 0) {

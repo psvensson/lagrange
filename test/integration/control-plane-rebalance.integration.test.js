@@ -20,7 +20,7 @@ import {ReplicaOperationResponseStatus} from
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {NodeStatus} from '../../src/rebalancer/unified-rebalancer.js';
-import {STATE} from '../../src/constants/index.js';
+import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
@@ -211,7 +211,7 @@ test('Control plane dispatch integration', async (t) => {
           node_id: targetNodeId,
           partition_id: partitionId,
           service_type: 'partition',
-          status: STATE.ACTIVE,
+          status: SERVICE_STATUS.ACTIVE,
           address: `${targetNodeId}/partition/replica-${targetNodeId}-${partitionId}`,
           raft_role: 'follower',
           created_at: now,

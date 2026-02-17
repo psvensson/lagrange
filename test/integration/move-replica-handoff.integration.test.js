@@ -16,7 +16,7 @@ import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {STATE, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {SERVICE_STATUS, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   initializeTestEnvironment,
@@ -186,7 +186,7 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 30000}, async (t) =
       t.equal(rowResult.success, true, 'service query should succeed');
       const movedRow = (rowResult.rows || [])[0];
       t.equal(movedRow.node_id, joiningNodeId, 'ownership should commit to joining node');
-      t.equal(movedRow.status, STATE.ACTIVE, 'moved replica should remain active');
+      t.equal(movedRow.status, SERVICE_STATUS.ACTIVE, 'moved replica should remain active');
 
       const movedAddress = `${seedNodeId}/message-group/${movedReplicaId}`;
       t.equal(

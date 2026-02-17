@@ -23,6 +23,7 @@ import {
   COLUMN,
   CDC_OPERATION,
   SERVICE_TYPE,
+  SERVICE_STATUS,
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
@@ -183,7 +184,7 @@ test('MessageGroupService - buildPeerAddress follows cache updates after relocat
       node_id: 'peer-node-a',
       group_id: 'mg-1',
       replica_id: peerId,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       address: initialAddress,
       updated_at: Date.now(),
     });
@@ -277,7 +278,7 @@ test('MessageGroupService - persists raft role updates to services table', async
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: servicesPartitionId,
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
-    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
   });
 
@@ -331,7 +332,7 @@ test('MessageGroupService - persists leader node updates to message groups table
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: messageGroupsPartitionId,
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
-    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/partition/message-groups-leader`,
   });
 

@@ -30,10 +30,3 @@ export {
   RetryStatus,
   DEFAULT_RETRY_CONFIG,
 } from './message-retry-handler.js';
-
-export {
-  MetadataCache,
-  CacheEntry,
-  CacheEntryStatus,
-  DEFAULT_CACHE_CONFIG,
-} from './metadata-cache.js';

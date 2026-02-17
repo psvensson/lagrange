@@ -3,31 +3,31 @@ TAP version 14
     # Subtest: breadcrumb always starts with Home
         ok 1 - breadcrumb always starts with Home
         1..1
-    ok 1 - breadcrumb always starts with Home # time=4.061ms
+    ok 1 - breadcrumb always starts with Home # time=4.168ms
     
     # Subtest: breadcrumb depth matches stack depth
         ok 1 - breadcrumb depth matches stack depth
         1..1
-    ok 2 - breadcrumb depth matches stack depth # time=1.062ms
+    ok 2 - breadcrumb depth matches stack depth # time=1.114ms
     
     # Subtest: breadcrumb reflects current view
         ok 1 - breadcrumb reflects current view
         1..1
-    ok 3 - breadcrumb reflects current view # time=0.528ms
+    ok 3 - breadcrumb reflects current view # time=0.591ms
     
     # Subtest: drillDown adds to breadcrumb
         ok 1 - drillDown adds to breadcrumb
         1..1
-    ok 4 - drillDown adds to breadcrumb # time=0.505ms
+    ok 4 - drillDown adds to breadcrumb # time=0.685ms
     
     # Subtest: goBack reduces breadcrumb
         ok 1 - goBack reduces breadcrumb
         1..1
-    ok 5 - goBack reduces breadcrumb # time=0.435ms
+    ok 5 - goBack reduces breadcrumb # time=0.448ms
     
     1..5
-ok 1 - Property 7: Breadcrumb Accuracy # time=9.496ms
+ok 1 - Property 7: Breadcrumb Accuracy # time=10.292ms
 
 1..1
 # { total: 5, pass: 5 }
-# time=14.891ms
+# time=16.804ms

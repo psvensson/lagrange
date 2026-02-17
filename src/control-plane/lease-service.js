@@ -8,7 +8,7 @@ import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM, STATE, STRING} from '../constants/index.js';
+import {NUM, SERVICE_STATUS, STATE, STRING} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   LEASE_CONFIG_KEY,
@@ -150,7 +150,7 @@ class LeaseService extends EventEmitter {
         cpu_usage_percent: node.cpu_usage_percent || NUM.ZERO,
         memory_usage_percent: node.memory_usage_percent || NUM.ZERO,
         disk_usage_percent: node.disk_usage_percent || NUM.ZERO,
-        status: node.status || STATE.ACTIVE,
+        status: node.status || SERVICE_STATUS.ACTIVE,
         connection_state: STATE.DISCONNECTED,
         capabilities: node.capabilities || STRING.EMPTY_JSON_ARRAY,
         last_heartbeat: node.last_heartbeat || now,

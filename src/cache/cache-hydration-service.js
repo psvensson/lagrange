@@ -36,8 +36,9 @@ class CacheHydrationService {
     this.queryEngine = queryEngine;
     this.systemTableCache = systemTableCache;
     this.logger = options.logger || this.initLogger();
-    // Hydration is explicitly non-CDC: apply rows straight into the cache by default.
-    // Tests and bootstrap can inject a custom applier if they need extra behavior.
+    // Bootstrap hydration exception: apply rows directly before CDC catches up.
+    // Tests/bootstrap can inject a custom applier for specialized behavior.
+    // See architecture.md: Sanctioned direct applySystemTableChange call sites.
     this.cdcEventApplier = options.cdcEventApplier || (async (tableName, op, row) => {
       this.systemTableCache.applySystemTableChange(tableName, op, row);
     });

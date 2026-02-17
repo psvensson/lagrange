@@ -2,703 +2,2243 @@ TAP version 14
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1771161458564-0.9708968506632218'
+  sessionId: 'session-1771310964127-0.44138010708729647'
 }
-BEGIN TRANSACTION { sessionId: 'session-1771161458564-0.9708968506632218' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('x', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458564-0.9708968506632218'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458580-0.3025975606846665'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458580-0.3025975606846665' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('xz', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458580-0.3025975606846665'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458581-0.713203789403269'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458581-0.713203789403269' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ac', 'User1'), ('zx', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458581-0.713203789403269'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458582-0.428343008396157'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458582-0.428343008396157' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ba', 'User1'), ('yx', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458582-0.428343008396157'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458583-0.7002435216857099'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458583-0.7002435216857099' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('x', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458583-0.7002435216857099'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458583-0.28745419878803724'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458583-0.28745419878803724' }
+BEGIN TRANSACTION { sessionId: 'session-1771310964127-0.44138010708729647' }
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('z', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1771161458583-0.28745419878803724'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458584-0.006490943714534847'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458584-0.006490943714534847' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('bc', 'User1'), ('y', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458584-0.006490943714534847'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458584-0.6002131484425446'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458584-0.6002131484425446' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('bc', 'User1'), ('xz', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458584-0.6002131484425446'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458585-0.17887791514714801'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458585-0.17887791514714801' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ba', 'User1'), ('x', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458585-0.17887791514714801'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458585-0.31019747025154487'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458585-0.31019747025154487' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('y', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458585-0.31019747025154487'
-}
-# Subtest: Property 47: Cross-partition INSERT is rejected
-    ok 1 - Cross-partition INSERT rejection property holds
-    1..1
-ok 1 - Property 47: Cross-partition INSERT is rejected # time=28.409ms
-
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458589-0.4201736218443952'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458589-0.4201736218443952' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458589-0.4201736218443952'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458589-0.4201736218443952'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1771161458589-0.4201736218443952'
+  sessionId: 'session-1771310964127-0.44138010708729647'
 }
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458593-0.14660187290779048'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458593-0.14660187290779048' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458593-0.14660187290779048'
-}
 Routing INSERT to partitions {
   tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458593-0.14660187290779048'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1771161458593-0.14660187290779048'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458595-0.03762153150179404'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458595-0.03762153150179404' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('aa', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458595-0.03762153150179404'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458595-0.03762153150179404'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1771161458595-0.03762153150179404'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458596-0.18271088734048968'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458596-0.18271088734048968' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('bc', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458596-0.18271088734048968'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458596-0.18271088734048968'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1771161458596-0.18271088734048968'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458598-0.8854411569407341'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458598-0.8854411569407341' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458598-0.8854411569407341'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458598-0.8854411569407341'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1771161458598-0.8854411569407341'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458599-0.6225030809698291'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458599-0.6225030809698291' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458599-0.6225030809698291'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458599-0.6225030809698291'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1771161458599-0.6225030809698291'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458601-0.7778306877877306'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458601-0.7778306877877306' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458601-0.7778306877877306'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458601-0.7778306877877306'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1771161458601-0.7778306877877306'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458602-0.5351182002306727'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458602-0.5351182002306727' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458602-0.5351182002306727'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458602-0.5351182002306727'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1771161458602-0.5351182002306727'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458603-0.3274521958986101'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458603-0.3274521958986101' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458603-0.3274521958986101'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458603-0.3274521958986101'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1771161458603-0.3274521958986101'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458605-0.6499596225581064'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458605-0.6499596225581064' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458605-0.6499596225581064'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458605-0.6499596225581064'
-}
-Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'session-1771161458605-0.6499596225581064'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-# Subtest: Property 47: Cross-partition UPDATE is rejected
-    ok 1 - Cross-partition UPDATE rejection property holds
-    1..1
-ok 2 - Property 47: Cross-partition UPDATE is rejected # time=17.057ms
-
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458607-0.902051108778253'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458607-0.902051108778253' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458607-0.902051108778253'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458607-0.902051108778253'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1771161458607-0.902051108778253'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458609-0.036919420036806816'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458609-0.036919420036806816' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458609-0.036919420036806816'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458609-0.036919420036806816'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1771161458609-0.036919420036806816'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458610-0.8050623096200469'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458610-0.8050623096200469' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('bc', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458610-0.8050623096200469'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458610-0.8050623096200469'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1771161458610-0.8050623096200469'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458611-0.10335515305272769'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458611-0.10335515305272769' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('bc', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458611-0.10335515305272769'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458611-0.10335515305272769'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1771161458611-0.10335515305272769'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458613-0.482500158207817'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458613-0.482500158207817' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ab', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458613-0.482500158207817'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458613-0.482500158207817'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1771161458613-0.482500158207817'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458614-0.924711889255385'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458614-0.924711889255385' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458614-0.924711889255385'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458614-0.924711889255385'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1771161458614-0.924711889255385'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458615-0.08032447270787824'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458615-0.08032447270787824' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458615-0.08032447270787824'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458615-0.08032447270787824'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1771161458615-0.08032447270787824'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458616-0.8427858575767169'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458616-0.8427858575767169' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458616-0.8427858575767169'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458616-0.8427858575767169'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1771161458616-0.8427858575767169'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458617-0.3448215253132356'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458617-0.3448215253132356' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458617-0.3448215253132356'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458617-0.3448215253132356'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1771161458617-0.3448215253132356'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458618-0.023155753695673242'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458618-0.023155753695673242' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
-  paramCount: 0,
-  sessionId: 'session-1771161458618-0.023155753695673242'
-}
-Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'session-1771161458618-0.023155753695673242'
-}
-Executing SQL query {
-  sql: 'DELETE FROM users WHERE age > 18',
-  paramCount: 0,
-  sessionId: 'session-1771161458618-0.023155753695673242'
-}
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-# Subtest: Property 47: Cross-partition DELETE is rejected
-    ok 1 - Cross-partition DELETE rejection property holds
-    1..1
-ok 3 - Property 47: Cross-partition DELETE is rejected # time=12.717ms
-
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458619-0.6429244218780621'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458619-0.6429244218780621' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('y', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458619-0.6429244218780621'
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964127-0.44138010708729647'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964127-0.44138010708729647',
+  statementType: 'INSERT',
+  parseDurationMs: 5,
+  executionDurationMs: 14,
+  totalDurationMs: 19,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1771161458620-0.7329995989167541'
+  sessionId: 'session-1771310964148-0.5497385187685702'
 }
-BEGIN TRANSACTION { sessionId: 'session-1771161458620-0.7329995989167541' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('y', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458620-0.7329995989167541'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458620-0.2997426183584111'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458620-0.2997426183584111' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('z', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458620-0.2997426183584111'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458621-0.831502811872439'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458621-0.831502811872439' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('x', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458621-0.831502811872439'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458621-0.0634148755871844'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458621-0.0634148755871844' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('ac', 'User1'), ('z', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458621-0.0634148755871844'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458622-0.026777357903772447'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458622-0.026777357903772447' }
+BEGIN TRANSACTION { sessionId: 'session-1771310964148-0.5497385187685702' }
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('z', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1771161458622-0.026777357903772447'
+  sessionId: 'session-1771310964148-0.5497385187685702'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964148-0.5497385187685702'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964148-0.5497385187685702',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 2,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1771161458622-0.9145371899903985'
+  sessionId: 'session-1771310964151-0.8213772987953041'
 }
-BEGIN TRANSACTION { sessionId: 'session-1771161458622-0.9145371899903985' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('yy', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458622-0.9145371899903985'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458623-0.6449820147100147'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458623-0.6449820147100147' }
-Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('aa', 'User1'), ('xx', 'User2')",
-  paramCount: 0,
-  sessionId: 'session-1771161458623-0.6449820147100147'
-}
-Executing SQL query {
-  sql: 'BEGIN TRANSACTION',
-  paramCount: 0,
-  sessionId: 'session-1771161458623-0.5943635511985363'
-}
-BEGIN TRANSACTION { sessionId: 'session-1771161458623-0.5943635511985363' }
+BEGIN TRANSACTION { sessionId: 'session-1771310964151-0.8213772987953041' }
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('c', 'User1'), ('z', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1771161458623-0.5943635511985363'
+  sessionId: 'session-1771310964151-0.8213772987953041'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964151-0.8213772987953041'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964151-0.8213772987953041',
+  statementType: 'INSERT',
+  parseDurationMs: 1,
+  executionDurationMs: 1,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
 }
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
   paramCount: 0,
-  sessionId: 'session-1771161458624-0.4279710430312429'
+  sessionId: 'session-1771310964153-0.6298009156106388'
 }
-BEGIN TRANSACTION { sessionId: 'session-1771161458624-0.4279710430312429' }
+BEGIN TRANSACTION { sessionId: 'session-1771310964153-0.6298009156106388' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('aa', 'User1'), ('z', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964153-0.6298009156106388'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964153-0.6298009156106388'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964153-0.6298009156106388',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964156-0.07474808411985334'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964156-0.07474808411985334' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('x', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964156-0.07474808411985334'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964156-0.07474808411985334'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964156-0.07474808411985334',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964158-0.7496202057215282'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964158-0.7496202057215282' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('ac', 'User1'), ('zx', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964158-0.7496202057215282'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964158-0.7496202057215282'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964158-0.7496202057215282',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 2,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964160-0.5082440594445841'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964160-0.5082440594445841' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('x', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964160-0.5082440594445841'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964160-0.5082440594445841'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964160-0.5082440594445841',
+  statementType: 'INSERT',
+  parseDurationMs: 1,
+  executionDurationMs: 1,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964162-0.9201128289419755'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964162-0.9201128289419755' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('yx', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964162-0.9201128289419755'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964162-0.9201128289419755'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964162-0.9201128289419755',
+  statementType: 'INSERT',
+  parseDurationMs: 1,
+  executionDurationMs: 1,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964164-0.3302853392040921'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964164-0.3302853392040921' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('ba', 'User1'), ('yy', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964164-0.3302853392040921'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964164-0.3302853392040921'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964164-0.3302853392040921',
+  statementType: 'INSERT',
+  parseDurationMs: 1,
+  executionDurationMs: 1,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964166-0.5799336635823242'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964166-0.5799336635823242' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('z', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964166-0.5799336635823242'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964166-0.5799336635823242'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964166-0.5799336635823242',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+# Subtest: Property 47: Cross-partition INSERT enlists all touched partitions
+    ok 1 - Cross-partition INSERT participant tracking property holds
+    1..1
+ok 1 - Property 47: Cross-partition INSERT enlists all touched partitions # time=48.912ms
+
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964174-0.5749736130583354'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964174-0.5749736130583354' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964174-0.5749736130583354'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964174-0.5749736130583354'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964174-0.5749736130583354',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1771310964174-0.5749736130583354'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing UPDATE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964174-0.5749736130583354'
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964181', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964181',
+  partitionCount: 1,
+  totalLatencyMs: 2,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964183', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964183',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964174-0.5749736130583354',
+  statementType: 'UPDATE',
+  parseDurationMs: 4,
+  executionDurationMs: 5,
+  totalDurationMs: 9,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964184-0.1870101670400317'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964184-0.1870101670400317' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964184-0.1870101670400317'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964184-0.1870101670400317'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964184-0.1870101670400317',
+  statementType: 'INSERT',
+  parseDurationMs: 3,
+  executionDurationMs: 1,
+  totalDurationMs: 4,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1771310964184-0.1870101670400317'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing UPDATE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964184-0.1870101670400317'
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964189', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964189',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964190', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964190',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964184-0.1870101670400317',
+  statementType: 'UPDATE',
+  parseDurationMs: 0,
+  executionDurationMs: 2,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964190-0.020783630077520376'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964190-0.020783630077520376' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964190-0.020783630077520376'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964190-0.020783630077520376'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964190-0.020783630077520376',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1771310964190-0.020783630077520376'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing UPDATE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964190-0.020783630077520376'
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964193', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964193',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964193', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964193',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964190-0.020783630077520376',
+  statementType: 'UPDATE',
+  parseDurationMs: 0,
+  executionDurationMs: 2,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964194-0.5085705112365884'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964194-0.5085705112365884' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964194-0.5085705112365884'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964194-0.5085705112365884'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964194-0.5085705112365884',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1771310964194-0.5085705112365884'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing UPDATE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964194-0.5085705112365884'
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964196', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964196',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964197', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964197',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964194-0.5085705112365884',
+  statementType: 'UPDATE',
+  parseDurationMs: 1,
+  executionDurationMs: 1,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964197-0.5646168104890961'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964197-0.5646168104890961' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('cb', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964197-0.5646168104890961'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964197-0.5646168104890961'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964197-0.5646168104890961',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1771310964197-0.5646168104890961'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing UPDATE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964197-0.5646168104890961'
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964200', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964200',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964200', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964200',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964197-0.5646168104890961',
+  statementType: 'UPDATE',
+  parseDurationMs: 0,
+  executionDurationMs: 2,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964201-0.8282891245069062'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964201-0.8282891245069062' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('bb', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964201-0.8282891245069062'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964201-0.8282891245069062'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964201-0.8282891245069062',
+  statementType: 'INSERT',
+  parseDurationMs: 1,
+  executionDurationMs: 0,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1771310964201-0.8282891245069062'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing UPDATE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964201-0.8282891245069062'
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964204', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964204',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964204', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964204',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964201-0.8282891245069062',
+  statementType: 'UPDATE',
+  parseDurationMs: 0,
+  executionDurationMs: 2,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964205-0.30893207135970435'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964205-0.30893207135970435' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964205-0.30893207135970435'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964205-0.30893207135970435'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964205-0.30893207135970435',
+  statementType: 'INSERT',
+  parseDurationMs: 1,
+  executionDurationMs: 0,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1771310964205-0.30893207135970435'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing UPDATE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964205-0.30893207135970435'
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964207', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964207',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964208', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964208',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964205-0.30893207135970435',
+  statementType: 'UPDATE',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964209-0.5300797357630118'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964209-0.5300797357630118' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964209-0.5300797357630118'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964209-0.5300797357630118'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964209-0.5300797357630118',
+  statementType: 'INSERT',
+  parseDurationMs: 1,
+  executionDurationMs: 0,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1771310964209-0.5300797357630118'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing UPDATE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964209-0.5300797357630118'
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964211', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964211',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964212', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964212',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964209-0.5300797357630118',
+  statementType: 'UPDATE',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964213-0.3485815010965714'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964213-0.3485815010965714' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964213-0.3485815010965714'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964213-0.3485815010965714'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964213-0.3485815010965714',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1771310964213-0.3485815010965714'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing UPDATE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964213-0.3485815010965714'
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964215', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964215',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964216', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964216',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964213-0.3485815010965714',
+  statementType: 'UPDATE',
+  parseDurationMs: 1,
+  executionDurationMs: 1,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964216-0.08318803262282759'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964216-0.08318803262282759' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964216-0.08318803262282759'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964216-0.08318803262282759'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964216-0.08318803262282759',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: "UPDATE users SET status = 'active' WHERE age > 18",
+  paramCount: 0,
+  sessionId: 'session-1771310964216-0.08318803262282759'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing UPDATE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964216-0.08318803262282759'
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964219', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964219',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964219', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964219',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964216-0.08318803262282759',
+  statementType: 'UPDATE',
+  parseDurationMs: 0,
+  executionDurationMs: 2,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+# Subtest: Property 47: Cross-partition UPDATE enlists all touched partitions
+    ok 1 - Cross-partition UPDATE participant tracking property holds
+    1..1
+ok 2 - Property 47: Cross-partition UPDATE enlists all touched partitions # time=47.759ms
+
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964222-0.16417751824293458'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964222-0.16417751824293458' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964222-0.16417751824293458'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964222-0.16417751824293458'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964222-0.16417751824293458',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1771310964222-0.16417751824293458'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing DELETE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964222-0.16417751824293458'
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964226', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964226',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964226', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964226',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964222-0.16417751824293458',
+  statementType: 'DELETE',
+  parseDurationMs: 1,
+  executionDurationMs: 2,
+  totalDurationMs: 3,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964227-0.1517330279310185'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964227-0.1517330279310185' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('ac', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964227-0.1517330279310185'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964227-0.1517330279310185'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964227-0.1517330279310185',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 0,
+  totalDurationMs: 0,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1771310964227-0.1517330279310185'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing DELETE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964227-0.1517330279310185'
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964229', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964229',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964230', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964230',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964227-0.1517330279310185',
+  statementType: 'DELETE',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964231-0.628934941170139'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964231-0.628934941170139' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('bc', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964231-0.628934941170139'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964231-0.628934941170139'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964231-0.628934941170139',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1771310964231-0.628934941170139'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing DELETE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964231-0.628934941170139'
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964233', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964233',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964234', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964234',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964231-0.628934941170139',
+  statementType: 'DELETE',
+  parseDurationMs: 0,
+  executionDurationMs: 2,
+  totalDurationMs: 2,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964234-0.6674163551316996'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964234-0.6674163551316996' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('bb', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964234-0.6674163551316996'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964234-0.6674163551316996'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964234-0.6674163551316996',
+  statementType: 'INSERT',
+  parseDurationMs: 1,
+  executionDurationMs: 0,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1771310964234-0.6674163551316996'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing DELETE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964234-0.6674163551316996'
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964236', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964236',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964236', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964236',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964234-0.6674163551316996',
+  statementType: 'DELETE',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964236-0.27177623579524623'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964236-0.27177623579524623' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('bb', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964236-0.27177623579524623'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964236-0.27177623579524623'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964236-0.27177623579524623',
+  statementType: 'INSERT',
+  parseDurationMs: 1,
+  executionDurationMs: 0,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1771310964236-0.27177623579524623'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing DELETE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964236-0.27177623579524623'
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964237', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964237',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964238', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964238',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964236-0.27177623579524623',
+  statementType: 'DELETE',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964238-0.5122259168013532'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964238-0.5122259168013532' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('ac', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964238-0.5122259168013532'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964238-0.5122259168013532'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964238-0.5122259168013532',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1771310964238-0.5122259168013532'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing DELETE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964238-0.5122259168013532'
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964239', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964239',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964240', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964240',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964238-0.5122259168013532',
+  statementType: 'DELETE',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964240-0.858523859399206'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964240-0.858523859399206' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964240-0.858523859399206'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964240-0.858523859399206'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964240-0.858523859399206',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1771310964240-0.858523859399206'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing DELETE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964240-0.858523859399206'
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964241', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964241',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964241', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964241',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964240-0.858523859399206',
+  statementType: 'DELETE',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964242-0.8332199517841425'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964242-0.8332199517841425' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('a', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964242-0.8332199517841425'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964242-0.8332199517841425'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964242-0.8332199517841425',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 0,
+  totalDurationMs: 0,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1771310964242-0.8332199517841425'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing DELETE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964242-0.8332199517841425'
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964243', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964243',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964243', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964243',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964242-0.8332199517841425',
+  statementType: 'DELETE',
+  parseDurationMs: 1,
+  executionDurationMs: 0,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964243-0.7904849969070387'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964243-0.7904849969070387' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('c', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964243-0.7904849969070387'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964243-0.7904849969070387'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964243-0.7904849969070387',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 0,
+  totalDurationMs: 0,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1771310964243-0.7904849969070387'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing DELETE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964243-0.7904849969070387'
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964245', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964245',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964245', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964245',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964243-0.7904849969070387',
+  statementType: 'DELETE',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964246-0.1294719270477125'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964246-0.1294719270477125' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('bb', 'User1')",
+  paramCount: 0,
+  sessionId: 'session-1771310964246-0.1294719270477125'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 1,
+  partitionCount: 1,
+  sessionId: 'session-1771310964246-0.1294719270477125'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964246-0.1294719270477125',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 1,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'DELETE FROM users WHERE age > 18',
+  paramCount: 0,
+  sessionId: 'session-1771310964246-0.1294719270477125'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing DELETE to partitions {
+  tableName: 'users',
+  partitionCount: 2,
+  sessionId: 'session-1771310964246-0.1294719270477125'
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310964247', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310964247',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing DELETE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310964248', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310964248',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964246-0.1294719270477125',
+  statementType: 'DELETE',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+# Subtest: Property 47: Cross-partition DELETE enlists all touched partitions
+    ok 1 - Cross-partition DELETE participant tracking property holds
+    1..1
+ok 3 - Property 47: Cross-partition DELETE enlists all touched partitions # time=26.786ms
+
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964249-0.9717212058257847'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964249-0.9717212058257847' }
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('a', 'User1'), ('z', 'User2')",
   paramCount: 0,
-  sessionId: 'session-1771161458624-0.4279710430312429'
+  sessionId: 'session-1771310964249-0.9717212058257847'
 }
-# Subtest: Property 47: Error message indicates cross-partition not supported
-    ok 1 - Error message property holds
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964249-0.9717212058257847'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964249-0.9717212058257847',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964250-0.035781316403613594'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964250-0.035781316403613594' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('y', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964250-0.035781316403613594'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964250-0.035781316403613594'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964250-0.035781316403613594',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964251-0.007824534512105075'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964251-0.007824534512105075' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('ab', 'User1'), ('yy', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964251-0.007824534512105075'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964251-0.007824534512105075'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964251-0.007824534512105075',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 0,
+  totalDurationMs: 0,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964252-0.00817513896617128'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964252-0.00817513896617128' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('x', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964252-0.00817513896617128'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964252-0.00817513896617128'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964252-0.00817513896617128',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 0,
+  totalDurationMs: 0,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964253-0.5798460936198837'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964253-0.5798460936198837' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('ac', 'User1'), ('zz', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964253-0.5798460936198837'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964253-0.5798460936198837'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964253-0.5798460936198837',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964254-0.5290478547265851'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964254-0.5290478547265851' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('ba', 'User1'), ('zz', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964254-0.5290478547265851'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964254-0.5290478547265851'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964254-0.5290478547265851',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964255-0.348253046265087'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964255-0.348253046265087' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('ab', 'User1'), ('z', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964255-0.348253046265087'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964255-0.348253046265087'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964255-0.348253046265087',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964256-0.2598346009842254'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964256-0.2598346009842254' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('x', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964256-0.2598346009842254'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964256-0.2598346009842254'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964256-0.2598346009842254',
+  statementType: 'INSERT',
+  parseDurationMs: 1,
+  executionDurationMs: 0,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964257-0.6586565613945583'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964257-0.6586565613945583' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('cc', 'User1'), ('y', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964257-0.6586565613945583'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964257-0.6586565613945583'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964257-0.6586565613945583',
+  statementType: 'INSERT',
+  parseDurationMs: 1,
+  executionDurationMs: 0,
+  totalDurationMs: 1,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+Executing SQL query {
+  sql: 'BEGIN TRANSACTION',
+  paramCount: 0,
+  sessionId: 'session-1771310964258-0.8412258910317618'
+}
+BEGIN TRANSACTION { sessionId: 'session-1771310964258-0.8412258910317618' }
+Executing SQL query {
+  sql: "INSERT INTO users (id, name) VALUES ('b', 'User1'), ('x', 'User2')",
+  paramCount: 0,
+  sessionId: 'session-1771310964258-0.8412258910317618'
+}
+No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Routing INSERT to partitions {
+  tableName: 'users',
+  rowCount: 2,
+  partitionCount: 2,
+  sessionId: 'session-1771310964258-0.8412258910317618'
+}
+Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.query.lifecycle {
+  sessionId: 'session-1771310964258-0.8412258910317618',
+  statementType: 'INSERT',
+  parseDurationMs: 0,
+  executionDurationMs: 0,
+  totalDurationMs: 0,
+  partitionCount: 2,
+  rowCount: 0,
+  success: true
+}
+# Subtest: Property 47: Cross-partition writes keep transaction active
+    ok 1 - Cross-partition transaction active-state property holds
     1..1
-ok 4 - Property 47: Error message indicates cross-partition not supported # time=5.18ms
+ok 4 - Property 47: Cross-partition writes keep transaction active # time=11.211ms
 
 1..4
 # { total: 4, pass: 4 }
-# time=147ms
+# time=212.945ms

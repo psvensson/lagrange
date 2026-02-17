@@ -27,8 +27,8 @@ TAP version 14
     ok 25 - main entry version includes 1.0.0 for -v
     ok 26 - Main system responds correctly to help/version flags
     1..26
-ok 1 - Single Executable Completeness - Property Test # time=8485.419ms
+ok 1 - Single Executable Completeness - Property Test # time=7373.235ms
 
 1..1
 # { total: 26, pass: 26 }
-# time=8504.442ms
+# time=7388.46ms

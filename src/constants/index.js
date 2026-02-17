@@ -11,6 +11,7 @@ export {NODE_CAPABILITY} from './node.js';
 export {NODE_STATE} from './node-state.js';
 export {NUM} from './numbers.js';
 export {SQL} from './sql.js';
+export {SERVICE_STATUS} from './service-status.js';
 export {SERVICE_TYPE, SERVICE_PROFILE} from './service.js';
 export {
   UNIFIED_SERVICE_TYPE,

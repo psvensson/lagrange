@@ -11,7 +11,7 @@ import {
 } from '../../src/bootstrap/message-group-assignment.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   BOOTSTRAP_ASSIGNMENT_STRATEGY,
@@ -74,7 +74,7 @@ function buildSeedReplicas() {
       replica_id: 'mg-1-r1',
       address: 'seed-node-1/message-group/mg-1-r1',
       raft_role: RAFT_ROLE.FOLLOWER,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
     },
     {
       service_id: 'mg-1-r2',
@@ -84,7 +84,7 @@ function buildSeedReplicas() {
       replica_id: 'mg-1-r2',
       address: 'seed-node-1/message-group/mg-1-r2',
       raft_role: RAFT_ROLE.FOLLOWER,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
     },
     {
       service_id: 'mg-1-r3',
@@ -94,7 +94,7 @@ function buildSeedReplicas() {
       replica_id: 'mg-1-r3',
       address: 'seed-node-1/message-group/mg-1-r3',
       raft_role: RAFT_ROLE.FOLLOWER,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
     },
   ];
 }
@@ -208,7 +208,7 @@ test('BootstrapAPI and MessageGroupAssignment produce same strategy',
       replica_id: r.replica_id,
       address: r.address,
       raft_role: RAFT_ROLE.FOLLOWER,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
     }));
 
     const api = new BootstrapAPI({

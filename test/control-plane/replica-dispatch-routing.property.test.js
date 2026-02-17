@@ -19,6 +19,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   COLUMN,
   SERVICE_TYPE,
+  SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
@@ -77,7 +78,7 @@ test('Property 16: Replica dispatch forwards to correct leader',
           const nodeStore = new Map();
           nodeStore.set(opRow.target_node_id, {
             node_id: opRow.target_node_id,
-            status: STATE.ACTIVE,
+            status: SERVICE_STATUS.ACTIVE,
             connection_state: STATE.READY,
             ready_lease_expires_at: now + 60000,
           });
@@ -99,7 +100,7 @@ test('Property 16: Replica dispatch forwards to correct leader',
                 return [{
                   [COLUMN.NODE_ID]: opRow.target_node_id,
                   [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-                  [COLUMN.STATUS]: STATE.ACTIVE,
+                  [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
                 }];
               }
               return [];
@@ -133,7 +134,7 @@ test('Property 16: Replica dispatch forwards to correct leader',
                     service_id: 'svc-1',
                     [COLUMN.NODE_ID]: opRow.target_node_id,
                     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-                    [COLUMN.STATUS]: STATE.ACTIVE,
+                    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
                   }],
                 };
               }

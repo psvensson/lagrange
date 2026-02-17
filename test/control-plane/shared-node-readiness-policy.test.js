@@ -2,7 +2,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {ReplicaDispatchService} from '../../src/control-plane/replica-dispatch-service.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
-import {SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
 
 function createSystemCache(nodeRow) {
   return {
@@ -66,7 +66,7 @@ test('dispatch readiness is lease-based while rebalancer keeps transport checks'
   const now = Date.now();
   const nodeRow = {
     node_id: nodeId,
-    status: STATE.ACTIVE,
+    status: SERVICE_STATUS.ACTIVE,
     connection_state: STATE.READY,
     ready_lease_expires_at: now + 1000,
   };

@@ -61,9 +61,6 @@ function createTrackedManager() {
       };
     },
     isValidAddress: () => true,
-    hasTransportRegistry: () => false,
-    getTransportRegistry: () => null,
-    getConnectionPool: () => null,
     outboundQueue: {
       enqueueOutbound: (tgtNodeId, fn) => {
         enqueuedCalls.push({targetNodeId: tgtNodeId});

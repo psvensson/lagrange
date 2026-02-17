@@ -47,7 +47,7 @@ test('Property 1: View Rendering Completeness', async (t) => {
           // Check that all required columns are present
           const expectedColumns = [
             'Node ID', 'Address', 'Status', 'CPU%', 'Mem%', 'Disk%',
-            'Services',
+            'Replicas',
           ];
           const actualColumns = result.headers;
 

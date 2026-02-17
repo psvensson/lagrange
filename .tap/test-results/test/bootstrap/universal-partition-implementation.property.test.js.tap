@@ -69,31 +69,40 @@ TAP version 14
     ok 67 - System table wasm_operations partition initialized
     ok 68 - System table wasm_operations query succeeded
     ok 69 - System table wasm_operations exists in SQLite
-    ok 70 - System table debug_sessions partition initialized
-    ok 71 - System table debug_sessions query succeeded
-    ok 72 - System table debug_sessions exists in SQLite
-    ok 73 - System table debug_breakpoints partition initialized
-    ok 74 - System table debug_breakpoints query succeeded
-    ok 75 - System table debug_breakpoints exists in SQLite
-    ok 76 - System table debug_snapshots partition initialized
-    ok 77 - System table debug_snapshots query succeeded
-    ok 78 - System table debug_snapshots exists in SQLite
-    ok 79 - System table storage_reservations partition initialized
-    ok 80 - System table storage_reservations query succeeded
-    ok 81 - System table storage_reservations exists in SQLite
-    1..81
-ok 1 - Property 32: System tables use same PartitionService as user tables # time=8193.387ms
+    ok 70 - System table sql_transactions partition initialized
+    ok 71 - System table sql_transactions query succeeded
+    ok 72 - System table sql_transactions exists in SQLite
+    ok 73 - System table sql_transaction_participants partition initialized
+    ok 74 - System table sql_transaction_participants query succeeded
+    ok 75 - System table sql_transaction_participants exists in SQLite
+    ok 76 - System table sql_write_operations partition initialized
+    ok 77 - System table sql_write_operations query succeeded
+    ok 78 - System table sql_write_operations exists in SQLite
+    ok 79 - System table debug_sessions partition initialized
+    ok 80 - System table debug_sessions query succeeded
+    ok 81 - System table debug_sessions exists in SQLite
+    ok 82 - System table debug_breakpoints partition initialized
+    ok 83 - System table debug_breakpoints query succeeded
+    ok 84 - System table debug_breakpoints exists in SQLite
+    ok 85 - System table debug_snapshots partition initialized
+    ok 86 - System table debug_snapshots query succeeded
+    ok 87 - System table debug_snapshots exists in SQLite
+    ok 88 - System table storage_reservations partition initialized
+    ok 89 - System table storage_reservations query succeeded
+    ok 90 - System table storage_reservations exists in SQLite
+    1..90
+ok 1 - Property 32: System tables use same PartitionService as user tables # time=9106.846ms
 
 # Subtest: Property 32: User tables use same PartitionService as system tables
     ok 1 - User tables use same PartitionService infrastructure as system tables
     1..1
-ok 2 - Property 32: User tables use same PartitionService as system tables # time=3038.625ms
+ok 2 - Property 32: User tables use same PartitionService as system tables # time=3040.793ms
 
 # Subtest: Property 32: No infrastructure distinction between system and user tables
     ok 1 - No infrastructure distinction between system and user tables
     1..1
-ok 3 - Property 32: No infrastructure distinction between system and user tables # time=3046.416ms
+ok 3 - Property 32: No infrastructure distinction between system and user tables # time=3048.48ms
 
 1..3
-# { total: 83, pass: 83 }
-# time=14383.615ms
+# { total: 92, pass: 92 }
+# time=15282.708ms

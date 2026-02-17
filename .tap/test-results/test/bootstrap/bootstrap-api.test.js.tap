@@ -5,14 +5,14 @@ TAP version 14
     ok 3 - should have fastify instance
     ok 4 - should not be initialized after shutdown
     1..4
-ok 1 - BootstrapAPI - initialization # time=54.157ms
+ok 1 - BootstrapAPI - initialization # time=54.837ms
 
 # Subtest: BootstrapAPI - health endpoint
     ok 1 - should return 200
     ok 2 - should return healthy status
     ok 3 - should return seed node ID
     1..3
-ok 2 - BootstrapAPI - health endpoint # time=29.32ms
+ok 2 - BootstrapAPI - health endpoint # time=28.024ms
 
 # Subtest: BootstrapAPI - bootstrap validation
     ok 1 - should return 400 for missing nodeId
@@ -22,7 +22,7 @@ ok 2 - BootstrapAPI - health endpoint # time=29.32ms
     ok 5 - should return 400 for missing nodeAddress
     ok 6 - error should mention nodeAddress
     1..6
-ok 3 - BootstrapAPI - bootstrap validation # time=19.112ms
+ok 3 - BootstrapAPI - bootstrap validation # time=20.459ms
 
 # Subtest: BootstrapAPI - bootstrap conflict detection
     ok 1 - first bootstrap should succeed
@@ -30,7 +30,7 @@ ok 3 - BootstrapAPI - bootstrap validation # time=19.112ms
     ok 3 - error should mention already registered
     ok 4 - seed node ID should fail validation
     1..4
-ok 4 - BootstrapAPI - bootstrap conflict detection # time=16.771ms
+ok 4 - BootstrapAPI - bootstrap conflict detection # time=16.768ms
 
 # Subtest: BootstrapAPI - blocks bootstrap until raft leaders are ready
     ok 1 - should return 503 when leaders are missing
@@ -38,7 +38,7 @@ ok 4 - BootstrapAPI - bootstrap conflict detection # time=16.771ms
     ok 3 - should report missing leader
     ok 4 - should report missing group leader
     1..4
-ok 5 - BootstrapAPI - blocks bootstrap until raft leaders are ready # time=15.594ms
+ok 5 - BootstrapAPI - blocks bootstrap until raft leaders are ready # time=14.767ms
 
 # Subtest: BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED
     ok 1 - bootstrap should succeed
@@ -50,7 +50,7 @@ ok 5 - BootstrapAPI - blocks bootstrap until raft leaders are ready # time=15.59
     ok 7 - should have cluster config
     ok 8 - should have timestamp
     1..8
-ok 6 - BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED # time=16.133ms
+ok 6 - BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED # time=15.07ms
 
 # Subtest: BootstrapAPI - bootstrap with MOVE_REPLICA strategy
     ok 1 - bootstrap should succeed
@@ -62,7 +62,7 @@ ok 6 - BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED # time=16.133
     ok 7 - should identify replica to move
     ok 8 - should have replica addresses
     1..8
-ok 7 - BootstrapAPI - bootstrap with MOVE_REPLICA strategy # time=14.481ms
+ok 7 - BootstrapAPI - bootstrap with MOVE_REPLICA strategy # time=13.779ms
 
 # Subtest: BootstrapAPI - cluster state endpoint
     ok 1 - should return 200
@@ -72,7 +72,7 @@ ok 7 - BootstrapAPI - bootstrap with MOVE_REPLICA strategy # time=14.481ms
     ok 5 - should have seed node
     ok 6 - should have new node
     1..6
-ok 8 - BootstrapAPI - cluster state endpoint # time=15.976ms
+ok 8 - BootstrapAPI - cluster state endpoint # time=14.48ms
 
 # Subtest: BootstrapAPI - buildSystemTableSnapshots
     ok 1 - should return snapshots object
@@ -88,20 +88,23 @@ ok 8 - BootstrapAPI - cluster state endpoint # time=15.976ms
     ok 11 - replica_operations should be an array
     ok 12 - storage_reservations should be an array
     ok 13 - config should be an array
-    ok 14 - debug_sessions should be an array
-    ok 15 - latency_groups should be an array
-    ok 16 - inter_group_latencies should be an array
-    ok 17 - logs table is excluded from default snapshots
-    ok 18 - should have 2 nodes
-    ok 19 - should have 2 partitions
-    ok 20 - should have 2 services
-    ok 21 - should have 2 tables
-    ok 22 - should have 1 message group
-    ok 23 - should have 1 replica operation
-    ok 24 - should have correct node data
-    ok 25 - should have correct partition data
-    1..25
-ok 9 - BootstrapAPI - buildSystemTableSnapshots # time=15.553ms
+    ok 14 - sql_transactions should be an array
+    ok 15 - sql_transaction_participants should be an array
+    ok 16 - sql_write_operations should be an array
+    ok 17 - debug_sessions should be an array
+    ok 18 - latency_groups should be an array
+    ok 19 - inter_group_latencies should be an array
+    ok 20 - logs table is excluded from default snapshots
+    ok 21 - should have 2 nodes
+    ok 22 - should have 2 partitions
+    ok 23 - should have 2 services
+    ok 24 - should have 2 tables
+    ok 25 - should have 1 message group
+    ok 26 - should have 1 replica operation
+    ok 27 - should have correct node data
+    ok 28 - should have correct partition data
+    1..28
+ok 9 - BootstrapAPI - buildSystemTableSnapshots # time=13.99ms
 
 # Subtest: BootstrapAPI - buildSystemTableSnapshots handles empty cache
     ok 1 - should return snapshots object
@@ -117,31 +120,37 @@ ok 9 - BootstrapAPI - buildSystemTableSnapshots # time=15.553ms
     ok 11 - replica_operations should be an array
     ok 12 - storage_reservations should be an array
     ok 13 - config should be an array
-    ok 14 - debug_sessions should be an array
-    ok 15 - latency_groups should be an array
-    ok 16 - inter_group_latencies should be an array
-    ok 17 - nodes should be empty
-    ok 18 - partitions should be empty
-    ok 19 - services should be empty
-    ok 20 - message_groups should be empty
-    ok 21 - tables should be empty
-    ok 22 - indices should be empty
-    ok 23 - node_endpoints should be empty
-    ok 24 - service_definitions should be empty
-    ok 25 - service_endpoints should be empty
-    ok 26 - replica_operations should be empty
-    ok 27 - storage_reservations should be empty
-    ok 28 - config should be empty
-    ok 29 - debug_sessions should be empty
-    ok 30 - latency_groups should be empty
-    ok 31 - inter_group_latencies should be empty
-    1..31
-ok 10 - BootstrapAPI - buildSystemTableSnapshots handles empty cache # time=14.034ms
+    ok 14 - sql_transactions should be an array
+    ok 15 - sql_transaction_participants should be an array
+    ok 16 - sql_write_operations should be an array
+    ok 17 - debug_sessions should be an array
+    ok 18 - latency_groups should be an array
+    ok 19 - inter_group_latencies should be an array
+    ok 20 - nodes should be empty
+    ok 21 - partitions should be empty
+    ok 22 - services should be empty
+    ok 23 - message_groups should be empty
+    ok 24 - tables should be empty
+    ok 25 - indices should be empty
+    ok 26 - node_endpoints should be empty
+    ok 27 - service_definitions should be empty
+    ok 28 - service_endpoints should be empty
+    ok 29 - replica_operations should be empty
+    ok 30 - storage_reservations should be empty
+    ok 31 - config should be empty
+    ok 32 - sql_transactions should be empty
+    ok 33 - sql_transaction_participants should be empty
+    ok 34 - sql_write_operations should be empty
+    ok 35 - debug_sessions should be empty
+    ok 36 - latency_groups should be empty
+    ok 37 - inter_group_latencies should be empty
+    1..37
+ok 10 - BootstrapAPI - buildSystemTableSnapshots handles empty cache # time=14.39ms
 
 # Subtest: BootstrapAPI - buildSystemTableSnapshots handles missing cache
     ok 1 - should throw error when cache is missing
     1..1
-ok 11 - BootstrapAPI - buildSystemTableSnapshots handles missing cache # time=14.644ms
+ok 11 - BootstrapAPI - buildSystemTableSnapshots handles missing cache # time=13.589ms
 
 # Subtest: BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots
     ok 1 - should return 200
@@ -157,26 +166,26 @@ ok 11 - BootstrapAPI - buildSystemTableSnapshots handles missing cache # time=14
     ok 11 - should have 1 partition in snapshot
     ok 12 - should have 2 services in snapshot
     1..12
-ok 12 - BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots # time=18.359ms
+ok 12 - BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots # time=14.039ms
 
 # Subtest: BootstrapAPI - getReadyNodes includes seed node when lease expired
     ok 1 - should include seed node despite expired lease
     ok 2 - should include other ready nodes
     ok 3 - should have 2 ready nodes
     1..3
-ok 13 - BootstrapAPI - getReadyNodes includes seed node when lease expired # time=19.255ms
+ok 13 - BootstrapAPI - getReadyNodes includes seed node when lease expired # time=12.904ms
 
 # Subtest: BootstrapAPI - getReadyNodes does not duplicate seed node
     ok 1 - should not duplicate seed node
     ok 2 - should have exactly 1 ready node
     1..2
-ok 14 - BootstrapAPI - getReadyNodes does not duplicate seed node # time=18.995ms
+ok 14 - BootstrapAPI - getReadyNodes does not duplicate seed node # time=12.366ms
 
 # Subtest: BootstrapAPI - getReadyNodes handles empty cache
     ok 1 - should include seed node even with empty cache
     ok 2 - should have exactly 1 ready node (seed)
     1..2
-ok 15 - BootstrapAPI - getReadyNodes handles empty cache # time=16.651ms
+ok 15 - BootstrapAPI - getReadyNodes handles empty cache # time=12.604ms
 
 # Subtest: BootstrapAPI - buildSystemTableSnapshots includes node_endpoints
     ok 1 - should return snapshots object
@@ -186,7 +195,7 @@ ok 15 - BootstrapAPI - getReadyNodes handles empty cache # time=16.651ms
     ok 5 - should have correct transport_type
     ok 6 - should have correct transport_type for second endpoint
     1..6
-ok 16 - BootstrapAPI - buildSystemTableSnapshots includes node_endpoints # time=12.672ms
+ok 16 - BootstrapAPI - buildSystemTableSnapshots includes node_endpoints # time=12.7ms
 
 # Subtest: BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots
     ok 1 - should return 200
@@ -197,7 +206,7 @@ ok 16 - BootstrapAPI - buildSystemTableSnapshots includes node_endpoints # time=
     ok 6 - should have correct endpoint_id in bootstrap response
     ok 7 - should have correct transport_type in bootstrap response
     1..7
-ok 17 - BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots # time=14.279ms
+ok 17 - BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots # time=13.023ms
 
 # Subtest: BootstrapAPI - handleBootstrapRequest includes latency topology hints
     ok 1 - should return 200
@@ -208,8 +217,8 @@ ok 17 - BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapsho
     ok 6 - should include configured propagation mode
     ok 7 - should include topology hint timestamp
     1..7
-ok 18 - BootstrapAPI - handleBootstrapRequest includes latency topology hints # time=15.445ms
+ok 18 - BootstrapAPI - handleBootstrapRequest includes latency topology hints # time=13.564ms
 
 1..18
-# { total: 139, pass: 139 }
-# time=347.411ms
+# { total: 148, pass: 148 }
+# time=317.446ms

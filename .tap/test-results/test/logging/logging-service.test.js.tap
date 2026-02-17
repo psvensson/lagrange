@@ -2,19 +2,19 @@ TAP version 14
 # Subtest: setup
     ok 1 - configuration initialized
     1..1
-ok 1 - setup # time=35.631ms
+ok 1 - setup # time=76.155ms
 
 # Subtest: LoggingService singleton
     ok 1 - should return the same instance
     1..1
-ok 2 - LoggingService singleton # time=0.314ms
+ok 2 - LoggingService singleton # time=0.5ms
 
 # Subtest: LoggingService initialization
     ok 1 - should not be initialized before initialize()
     ok 2 - should be initialized after initialize()
     ok 3 - should set node ID
     1..3
-ok 3 - LoggingService initialization # time=1.109ms
+ok 3 - LoggingService initialization # time=2.291ms
 
 # Subtest: LoggingService log levels
     ok 1 - should have trace level
@@ -24,37 +24,37 @@ ok 3 - LoggingService initialization # time=1.109ms
     ok 5 - should have error level
     ok 6 - should have fatal level
     1..6
-ok 4 - LoggingService log levels # time=0.314ms
+ok 4 - LoggingService log levels # time=0.676ms
 
 # Subtest: LoggingService buffering during bootstrap
     ok 1 - logs table should not be ready initially
-{"level":30,"time":"2026-02-16T14:22:59.622Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Test message 1"}
-{"level":30,"time":"2026-02-16T14:22:59.623Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Test message 2"}
-{"level":30,"time":"2026-02-16T14:22:59.623Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Test message 3"}
+{"level":30,"time":"2026-02-17T06:48:24.578Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Test message 1"}
+{"level":30,"time":"2026-02-17T06:48:24.578Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Test message 2"}
+{"level":30,"time":"2026-02-17T06:48:24.578Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Test message 3"}
     ok 2 - should buffer log entries
     1..2
-ok 5 - LoggingService buffering during bootstrap # time=1.078ms
+ok 5 - LoggingService buffering during bootstrap # time=2.291ms
 
-{"level":30,"time":"2026-02-16T14:22:59.624Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Buffered message 1"}
-{"level":30,"time":"2026-02-16T14:22:59.624Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Buffered message 2"}
+{"level":30,"time":"2026-02-17T06:48:24.579Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Buffered message 1"}
+{"level":30,"time":"2026-02-17T06:48:24.579Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Buffered message 2"}
 # Subtest: LoggingService flush on logs table ready
     ok 1 - should have 2 buffered entries
-{"level":30,"time":"2026-02-16T14:22:59.624Z","nodeId":"test-node","pid":2148642,"bufferedEntries":2,"nodeId":"test-node","msg":"Logs table ready, flushing buffer"}
+{"level":30,"time":"2026-02-17T06:48:24.579Z","nodeId":"test-node","pid":2316548,"bufferedEntries":2,"nodeId":"test-node","msg":"Logs table ready, flushing buffer"}
     ok 2 - should return flushed count
     ok 3 - logs table should be ready
     ok 4 - buffer should be empty after flush
     1..4
-ok 6 - LoggingService flush on logs table ready # time=1.35ms
+ok 6 - LoggingService flush on logs table ready # time=1.056ms
 
-{"level":30,"time":"2026-02-16T14:22:59.624Z","nodeId":"test-node","pid":2148642,"serviceId":"partition-1","nodeId":"test-node","msg":"Child message"}
+{"level":30,"time":"2026-02-17T06:48:24.580Z","nodeId":"test-node","pid":2316548,"serviceId":"partition-1","nodeId":"test-node","msg":"Child message"}
 # Subtest: LoggingService child logger
     ok 1 - child logger should use parent buffer
     ok 2 - should include child bindings
     1..2
-ok 7 - LoggingService child logger # time=0.363ms
+ok 7 - LoggingService child logger # time=0.765ms
 
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"subsystem":"hlc","nodeId":"test-node","msg":"HLC message"}
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"subsystem":"raft","nodeId":"test-node","msg":"Raft message"}
+{"level":30,"time":"2026-02-17T06:48:24.581Z","nodeId":"test-node","pid":2316548,"subsystem":"hlc","nodeId":"test-node","msg":"HLC message"}
+{"level":30,"time":"2026-02-17T06:48:24.581Z","nodeId":"test-node","pid":2316548,"subsystem":"raft","nodeId":"test-node","msg":"Raft message"}
 # Subtest: LoggingService forSubsystem creates subsystem logger
     ok 1 - should buffer both messages
     ok 2 - should have hlc subsystem
@@ -62,24 +62,24 @@ ok 7 - LoggingService child logger # time=0.363ms
     ok 4 - should have raft subsystem
     ok 5 - should include subsystem in metadata
     1..5
-ok 8 - LoggingService forSubsystem creates subsystem logger # time=0.442ms
+ok 8 - LoggingService forSubsystem creates subsystem logger # time=0.857ms
 
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Message 0"}
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Message 1"}
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Message 2"}
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Message 3"}
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Message 4"}
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Message 5"}
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Message 6"}
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Message 7"}
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Message 8"}
-{"level":30,"time":"2026-02-16T14:22:59.625Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Message 9"}
+{"level":30,"time":"2026-02-17T06:48:24.582Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Message 0"}
+{"level":30,"time":"2026-02-17T06:48:24.582Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Message 1"}
+{"level":30,"time":"2026-02-17T06:48:24.583Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Message 2"}
+{"level":30,"time":"2026-02-17T06:48:24.583Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Message 3"}
+{"level":30,"time":"2026-02-17T06:48:24.583Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Message 4"}
+{"level":30,"time":"2026-02-17T06:48:24.583Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Message 5"}
+{"level":30,"time":"2026-02-17T06:48:24.583Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Message 6"}
+{"level":30,"time":"2026-02-17T06:48:24.583Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Message 7"}
+{"level":30,"time":"2026-02-17T06:48:24.583Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Message 8"}
+{"level":30,"time":"2026-02-17T06:48:24.583Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Message 9"}
 # Subtest: LoggingService buffer size limit
     ok 1 - should limit buffer size
     1..1
-ok 9 - LoggingService buffer size limit # time=0.317ms
+ok 9 - LoggingService buffer size limit # time=0.745ms
 
-{"level":30,"time":"2026-02-16T14:22:59.626Z","nodeId":"test-node","pid":2148642,"subsystem":"test-subsystem","serviceId":"svc-1","serviceType":"partition","traceId":"trace-123","nodeId":"test-node","msg":"Test message"}
+{"level":30,"time":"2026-02-17T06:48:24.583Z","nodeId":"test-node","pid":2316548,"subsystem":"test-subsystem","serviceId":"svc-1","serviceType":"partition","traceId":"trace-123","nodeId":"test-node","msg":"Test message"}
 # Subtest: LoggingService log entry structure
     ok 1 - should have log ID
     ok 2 - should have timestamp
@@ -92,38 +92,38 @@ ok 9 - LoggingService buffer size limit # time=0.317ms
     ok 9 - should have trace ID
     ok 10 - should have created at
     1..10
-ok 10 - LoggingService log entry structure # time=0.622ms
+ok 10 - LoggingService log entry structure # time=1.191ms
 
-{"level":10,"time":"2026-02-16T14:22:59.627Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Trace message"}
-{"level":20,"time":"2026-02-16T14:22:59.627Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Debug message"}
-{"level":30,"time":"2026-02-16T14:22:59.627Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Info message"}
-{"level":40,"time":"2026-02-16T14:22:59.627Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Warn message"}
-{"level":50,"time":"2026-02-16T14:22:59.627Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Error message"}
-{"level":60,"time":"2026-02-16T14:22:59.627Z","nodeId":"test-node","pid":2148642,"nodeId":"test-node","msg":"Fatal message"}
+{"level":10,"time":"2026-02-17T06:48:24.585Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Trace message"}
+{"level":20,"time":"2026-02-17T06:48:24.585Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Debug message"}
+{"level":30,"time":"2026-02-17T06:48:24.585Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Info message"}
+{"level":40,"time":"2026-02-17T06:48:24.585Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Warn message"}
+{"level":50,"time":"2026-02-17T06:48:24.585Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Error message"}
+{"level":60,"time":"2026-02-17T06:48:24.585Z","nodeId":"test-node","pid":2316548,"nodeId":"test-node","msg":"Fatal message"}
 # Subtest: LoggingService all log methods
     ok 1 - should log all levels
     ok 2 - should have correct levels
     1..2
-ok 11 - LoggingService all log methods # time=1.045ms
+ok 11 - LoggingService all log methods # time=1.932ms
 
 # Subtest: LoggingService suppresses metrics logs from default console sink
     ok 1 - should not write metrics to console sink
     ok 2 - should still buffer the metric entry
     ok 3 - should be equal
     1..3
-ok 12 - LoggingService suppresses metrics logs from default console sink # time=0.358ms
+ok 12 - LoggingService suppresses metrics logs from default console sink # time=0.614ms
 
 # Subtest: LoggingService allows metrics logs when override is enabled
     ok 1 - should write metrics to console sink
     ok 2 - should be equal
     1..2
-ok 13 - LoggingService allows metrics logs when override is enabled # time=0.323ms
+ok 13 - LoggingService allows metrics logs when override is enabled # time=0.59ms
 
 # Subtest: cleanup
     ok 1 - cleanup complete
     1..1
-ok 14 - cleanup # time=0.14ms
+ok 14 - cleanup # time=0.26ms
 
 1..14
 # { total: 43, pass: 43 }
-# time=50.673ms
+# time=115.626ms

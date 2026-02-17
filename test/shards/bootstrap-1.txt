@@ -13,7 +13,6 @@ test/bootstrap/register-node-in-cluster.test.js
 test/bootstrap/message-groups-first-bootstrap-order.property.test.js
 test/bootstrap/join-cleanup.property.test.js
 test/bootstrap/bootstrap-failure-cleanup.test.js
-test/bootstrap/meta-service-bootstrap-seeding.test.js
 test/bootstrap/debug-meta-table-schemas.test.js
 test/bootstrap/latency-topology-table-schemas.test.js
 test/bootstrap/cache-hydration-strictness.test.js

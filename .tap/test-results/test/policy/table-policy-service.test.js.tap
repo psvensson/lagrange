@@ -3,7 +3,7 @@ TablePolicyService initialized
 # Subtest: TablePolicyService - initialization
     ok 1 - Service should be initialized
     1..1
-ok 1 - TablePolicyService - initialization # time=38.825ms
+ok 1 - TablePolicyService - initialization # time=69.103ms
 
 # Subtest: TablePolicyService - getDefaultPolicy returns complete policy
     ok 1 - Default replica count should be 3
@@ -19,13 +19,13 @@ ok 1 - TablePolicyService - initialization # time=38.825ms
     ok 11 - Should default max budget utilization percent
     ok 12 - Should default emergency headroom reservation
     1..12
-ok 2 - TablePolicyService - getDefaultPolicy returns complete policy # time=0.726ms
+ok 2 - TablePolicyService - getDefaultPolicy returns complete policy # time=0.742ms
 
 Table not found, using default policy { tableId: 'non-existent' }
 # Subtest: TablePolicyService - getTablePolicy without engine returns default
     ok 1 - Should return default policy without engine
     1..1
-ok 3 - TablePolicyService - getTablePolicy without engine returns default # time=0.605ms
+ok 3 - TablePolicyService - getTablePolicy without engine returns default # time=0.611ms
 
 # Subtest: TablePolicyService - getTablePolicy merges stored policy
     ok 1 - Should use stored replica count
@@ -33,36 +33,36 @@ ok 3 - TablePolicyService - getTablePolicy without engine returns default # time
     ok 3 - Should use default min replica count
     ok 4 - Should use default merge traffic
     1..4
-ok 4 - TablePolicyService - getTablePolicy merges stored policy # time=0.458ms
+ok 4 - TablePolicyService - getTablePolicy merges stored policy # time=0.451ms
 
 # Subtest: TablePolicyService - getPolicyForPartition looks up table
     ok 1 - Should get policy from partition table
     1..1
-ok 5 - TablePolicyService - getPolicyForPartition looks up table # time=0.258ms
+ok 5 - TablePolicyService - getPolicyForPartition looks up table # time=0.284ms
 
 # Subtest: TablePolicyService - validatePolicy accepts valid policy
     ok 1 - Valid policy should pass validation
     ok 2 - Should have no errors
     1..2
-ok 6 - TablePolicyService - validatePolicy accepts valid policy # time=0.309ms
+ok 6 - TablePolicyService - validatePolicy accepts valid policy # time=0.324ms
 
 # Subtest: TablePolicyService - validatePolicy rejects even replica counts
     ok 1 - Even replica count should fail validation
     ok 2 - Should mention odd requirement
     1..2
-ok 7 - TablePolicyService - validatePolicy rejects even replica counts # time=0.251ms
+ok 7 - TablePolicyService - validatePolicy rejects even replica counts # time=0.255ms
 
 # Subtest: TablePolicyService - validatePolicy rejects min > max
     ok 1 - min > max should fail validation
     ok 2 - Should mention constraint
     1..2
-ok 8 - TablePolicyService - validatePolicy rejects min > max # time=0.217ms
+ok 8 - TablePolicyService - validatePolicy rejects min > max # time=0.198ms
 
 # Subtest: TablePolicyService - validatePolicy rejects negative thresholds
     ok 1 - Negative threshold should fail validation
     ok 2 - Should mention non-negative
     1..2
-ok 9 - TablePolicyService - validatePolicy rejects negative thresholds # time=0.193ms
+ok 9 - TablePolicyService - validatePolicy rejects negative thresholds # time=0.19ms
 
 # Subtest: TablePolicyService - validatePolicy rejects invalid placement constraints
     ok 1 - Invalid placement constraints should fail validation
@@ -70,7 +70,7 @@ ok 9 - TablePolicyService - validatePolicy rejects negative thresholds # time=0.
     ok 3 - Should reject utilization out of range
     ok 4 - Should reject emergency headroom type mismatch
     1..4
-ok 10 - TablePolicyService - validatePolicy rejects invalid placement constraints # time=0.377ms
+ok 10 - TablePolicyService - validatePolicy rejects invalid placement constraints # time=0.378ms
 
 Updating table policy { tableId: 'table-1', updates: { replicaCount: 5 } }
 # Subtest: TablePolicyService - updateTablePolicy writes via CDC
@@ -79,46 +79,46 @@ Updating table policy { tableId: 'table-1', updates: { replicaCount: 5 } }
     ok 3 - Should update correct table
     ok 4 - Should have updated replica count
     1..4
-ok 11 - TablePolicyService - updateTablePolicy writes via CDC # time=0.75ms
+ok 11 - TablePolicyService - updateTablePolicy writes via CDC # time=0.732ms
 
 # Subtest: TablePolicyService - updateTablePolicy rejects invalid updates
     ok 1 - Should throw validation error
     ok 2 - Should not have written to CDC
     1..2
-ok 12 - TablePolicyService - updateTablePolicy rejects invalid updates # time=0.285ms
+ok 12 - TablePolicyService - updateTablePolicy rejects invalid updates # time=0.305ms
 
 # Subtest: TablePolicyService - getSplitThresholds returns correct values
     ok 1 - Should return storage threshold
     ok 2 - Should return traffic threshold
     1..2
-ok 13 - TablePolicyService - getSplitThresholds returns correct values # time=0.267ms
+ok 13 - TablePolicyService - getSplitThresholds returns correct values # time=0.269ms
 
 # Subtest: TablePolicyService - getMergeThresholds returns correct values
     ok 1 - Should return storage threshold
     ok 2 - Should return traffic threshold
     1..2
-ok 14 - TablePolicyService - getMergeThresholds returns correct values # time=0.309ms
+ok 14 - TablePolicyService - getMergeThresholds returns correct values # time=0.239ms
 
 # Subtest: TablePolicyService - getReplicationSettings returns values
     ok 1 - Should return replica count
     ok 2 - Should return min replica count
     ok 3 - Should return max replica count
     1..3
-ok 15 - TablePolicyService - getReplicationSettings returns values # time=0.436ms
+ok 15 - TablePolicyService - getReplicationSettings returns values # time=0.308ms
 
 # Subtest: TablePolicyService - shouldSplitPartition evaluates correctly
     ok 1 - Should not split below thresholds
     ok 2 - Should split above storage threshold
     ok 3 - Should split above traffic threshold
     1..3
-ok 16 - TablePolicyService - shouldSplitPartition evaluates correctly # time=0.571ms
+ok 16 - TablePolicyService - shouldSplitPartition evaluates correctly # time=0.37ms
 
 # Subtest: TablePolicyService - shouldMergePartitions evaluates correctly
     ok 1 - Should merge when both below thresholds
     ok 2 - Should not merge when combined storage exceeds threshold
     ok 3 - Should not merge when combined traffic exceeds threshold
     1..3
-ok 17 - TablePolicyService - shouldMergePartitions evaluates correctly # time=0.694ms
+ok 17 - TablePolicyService - shouldMergePartitions evaluates correctly # time=0.492ms
 
 # Subtest: TablePolicyService - cache invalidation
     ok 1 - First call should query SQL engine
@@ -126,7 +126,7 @@ ok 17 - TablePolicyService - shouldMergePartitions evaluates correctly # time=0.
 Policy cache invalidated { tableId: 'table-1' }
     ok 3 - After invalidation should query SQL engine again
     1..3
-ok 18 - TablePolicyService - cache invalidation # time=0.596ms
+ok 18 - TablePolicyService - cache invalidation # time=0.638ms
 
 # Subtest: TablePolicyService - getDefaultMessageGroupPolicy returns complete policy
     ok 1 - Default target replica count should be 3
@@ -139,14 +139,14 @@ ok 18 - TablePolicyService - cache invalidation # time=0.596ms
     ok 8 - Should default max budget utilization percent
     ok 9 - Should default emergency headroom reservation
     1..9
-ok 19 - TablePolicyService - getDefaultMessageGroupPolicy returns complete policy # time=0.47ms
+ok 19 - TablePolicyService - getDefaultMessageGroupPolicy returns complete policy # time=0.642ms
 
 Message group not found, using default policy { groupId: 'mg-1' }
 # Subtest: TablePolicyService - getMessageGroupPolicy without engine returns default
     ok 1 - Should return default policy without engine
     ok 2 - Should have ensureLocalAccess
     1..2
-ok 20 - TablePolicyService - getMessageGroupPolicy without engine returns default # time=0.485ms
+ok 20 - TablePolicyService - getMessageGroupPolicy without engine returns default # time=0.682ms
 
 # Subtest: TablePolicyService - getMessageGroupPolicy merges stored policy
     ok 1 - Should use stored target replica count
@@ -155,25 +155,25 @@ ok 20 - TablePolicyService - getMessageGroupPolicy without engine returns defaul
     ok 4 - Should use stored min free bytes
     ok 5 - Should use default max utilization for unset keys
     1..5
-ok 21 - TablePolicyService - getMessageGroupPolicy merges stored policy # time=0.496ms
+ok 21 - TablePolicyService - getMessageGroupPolicy merges stored policy # time=0.694ms
 
 # Subtest: TablePolicyService - validateMessageGroupPolicy accepts valid policy
     ok 1 - Valid policy should pass validation
     ok 2 - Should have no errors
     1..2
-ok 22 - TablePolicyService - validateMessageGroupPolicy accepts valid policy # time=0.439ms
+ok 22 - TablePolicyService - validateMessageGroupPolicy accepts valid policy # time=0.344ms
 
 # Subtest: TablePolicyService - validateMessageGroupPolicy rejects even replica count
     ok 1 - Even replica count should fail
     ok 2 - Should mention odd requirement
     1..2
-ok 23 - TablePolicyService - validateMessageGroupPolicy rejects even replica count # time=0.221ms
+ok 23 - TablePolicyService - validateMessageGroupPolicy rejects even replica count # time=0.288ms
 
 # Subtest: TablePolicyService - validateMessageGroupPolicy rejects target > max
     ok 1 - target > max should fail
     ok 2 - Should mention constraint
     1..2
-ok 24 - TablePolicyService - validateMessageGroupPolicy rejects target > max # time=0.194ms
+ok 24 - TablePolicyService - validateMessageGroupPolicy rejects target > max # time=0.264ms
 
 # Subtest: TablePolicyService - validateMessageGroupPolicy rejects invalid placement constraints
     ok 1 - Invalid placement constraints should fail
@@ -186,28 +186,28 @@ ok 25 - TablePolicyService - validateMessageGroupPolicy rejects invalid placemen
     ok 1 - Type mismatches should fail
     ok 2 - Should have at least 2 type errors
     1..2
-ok 26 - TablePolicyService - validateMessageGroupPolicy rejects type mismatches # time=0.282ms
+ok 26 - TablePolicyService - validateMessageGroupPolicy rejects type mismatches # time=0.271ms
 
 # Subtest: TablePolicyService - getEffectiveStorageConstraints for table
     ok 1 - Should return stored min free bytes
     ok 2 - Should return default max utilization
     ok 3 - Should return stored emergency headroom
     1..3
-ok 27 - TablePolicyService - getEffectiveStorageConstraints for table # time=0.415ms
+ok 27 - TablePolicyService - getEffectiveStorageConstraints for table # time=0.456ms
 
 # Subtest: TablePolicyService - getEffectiveMessageGroupStorageConstraints
     ok 1 - Should return stored max utilization
     ok 2 - Should return default min free bytes
     ok 3 - Should return default emergency headroom
     1..3
-ok 28 - TablePolicyService - getEffectiveMessageGroupStorageConstraints # time=0.335ms
+ok 28 - TablePolicyService - getEffectiveMessageGroupStorageConstraints # time=0.443ms
 
 # Subtest: TablePolicyService - message group policy uses same validation path as table
     ok 1 - Table validation should fail
     ok 2 - Message group validation should fail
     ok 3 - Both should produce the same error message
     1..3
-ok 29 - TablePolicyService - message group policy uses same validation path as table # time=0.243ms
+ok 29 - TablePolicyService - message group policy uses same validation path as table # time=0.302ms
 
 # Subtest: TablePolicyService - message group policy cache works
     ok 1 - First call should query SQL engine
@@ -215,8 +215,8 @@ ok 29 - TablePolicyService - message group policy uses same validation path as t
 Policy cache cleared
     ok 3 - After clearCache should query SQL engine again
     1..3
-ok 30 - TablePolicyService - message group policy cache works # time=0.421ms
+ok 30 - TablePolicyService - message group policy cache works # time=0.54ms
 
 1..30
 # { total: 92, pass: 92 }
-# time=71.084ms
+# time=104.077ms

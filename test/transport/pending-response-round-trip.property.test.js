@@ -72,9 +72,6 @@ function createTestManager() {
     sendRaw: () => {},
     parseAddress: () => ({}),
     isValidAddress: () => true,
-    hasTransportRegistry: () => false,
-    getTransportRegistry: () => null,
-    getConnectionPool: () => null,
     outboundQueue: {enqueueOutbound: () => Promise.resolve()},
   });
 }

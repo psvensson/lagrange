@@ -331,7 +331,8 @@ class CDCHandler extends EventEmitter {
     }
 
     try {
-      // Apply to cache
+      // Canonical CDC apply path: all steady-state cache mutations flow here.
+      // See architecture.md: Sanctioned direct applySystemTableChange call sites.
       this.cache.applySystemTableChange(tableName, operation, data);
 
       // Update tracking

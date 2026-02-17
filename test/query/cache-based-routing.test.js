@@ -10,7 +10,7 @@ import assert from 'node:assert';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
-import {TABLES, SERVICE_TYPE, STATE} from '../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 /**
@@ -30,7 +30,7 @@ function createMockSystemCache(partitionIds) {
     partition_id: id,
     service_type: SERVICE_TYPE.PARTITION,
     raft_role: RAFT_ROLE.LEADER,
-    status: STATE.ACTIVE,
+    status: SERVICE_STATUS.ACTIVE,
     address: `node1/partition/${id}`,
     node_id: 'node1',
     service_id: id,
@@ -242,9 +242,9 @@ test('Query returns empty when cache missing partition info', async (_t) => {
   });
 
   const ast = new SQLParser('SELECT * FROM test_table').parse();
-  const result = await executor.executeSelect(ast, ['p1'], []);
+  const result = await executor.executeSelect(ast, [], []);
 
-  // QueryExecutor returns success with empty rows when service not found
+  // QueryExecutor returns success with empty rows when no partitions found
   assert.equal(result.success, true, 'Should return success');
   assert.equal(result.rows.length, 0, 'Should return empty rows');
 });

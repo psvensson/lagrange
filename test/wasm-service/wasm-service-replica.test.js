@@ -6,7 +6,7 @@ import {
   MESSAGE_OP,
 } from '../../src/wasm-service/wasm-service-replica.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
-import {COLUMN, STATE, TABLES} from '../../src/constants/index.js';
+import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {INITIAL_PARTITION_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -82,7 +82,7 @@ function createWriteReadySystemTableCache() {
         [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
         [COLUMN.PARTITION_ID]: servicesPartitionId,
         [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
-        [COLUMN.STATUS]: STATE.ACTIVE,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       },
     ],
   };

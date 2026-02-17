@@ -250,6 +250,20 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
       await this.messageRouter.initialize({startServer: true});
       this.transport = this.messageRouter;
     };
+    service.triggerJoinReconciler = async function() {};
+    service.getLeaderMessageGroupService = function() {
+      const firstService = this.messageGroupServices.values().next().value;
+      return firstService || null;
+    };
+    service.phaseCreateSelfHostedMessageGroup = async function() {
+      const replicaId = 'mg-join-r1';
+      this.messageGroupServices.set(replicaId, {
+        groupId: 'mg-1',
+        unifiedAddress: `${this.nodeId}/message-group/${replicaId}`,
+        isLeaderReplica: () => true,
+        getLeaderId: () => replicaId,
+      });
+    };
 
     // Mock phases that require system tables (not available in this unit test)
     service.phaseQuerySystemState = async function() {
@@ -263,6 +277,9 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
     };
     service.initializeRuntimeServiceHandler = function() {
       // Skip runtime service handler initialization
+    };
+    service.phaseWaitForLeadership = async function() {
+      // Skip raft leadership wait in unit test environment
     };
     service.signalReadyForReplicas = async function() {
       // Skip ready signal
@@ -480,6 +497,7 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
       await this.messageRouter.initialize({startServer: true});
       this.transport = this.messageRouter;
     };
+    service.triggerJoinReconciler = async function() {};
 
     // Mock phaseJoinExistingMessageGroup - it requires SQL engine which isn't available
     service.phaseJoinExistingMessageGroup = async function() {
@@ -624,6 +642,21 @@ test('NodeJoiningService - emits events', async (t) => {
       });
       await this.messageRouter.initialize({startServer: true});
       this.transport = this.messageRouter;
+    };
+    service.triggerJoinReconciler = async function() {};
+    service.phaseCreateSelfHostedMessageGroup = async function() {
+      const replicaId = 'mg-join-r1';
+      this.messageGroupServices.set(replicaId, {
+        groupId: 'mg-1',
+        unifiedAddress: `${this.nodeId}/message-group/${replicaId}`,
+        isLeaderReplica: () => true,
+        getLeaderId: () => replicaId,
+      });
+    };
+    service.phaseWaitForLeadership = async function() {};
+    service.getLeaderMessageGroupService = function() {
+      const firstService = this.messageGroupServices.values().next().value;
+      return firstService || null;
     };
 
     // Mock phases that require system tables (not available in this unit test)

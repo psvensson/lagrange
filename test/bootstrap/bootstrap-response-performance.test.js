@@ -9,7 +9,7 @@ import {performance} from 'perf_hooks';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {TABLES, SERVICE_TYPE, STATE} from '../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -50,7 +50,7 @@ function populateTypicalClusterState(cache) {
     cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
       node_id: nodeId,
       node_address: `http://localhost:${8080 + i}`,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       created_at: Date.now(),
       updated_at: Date.now(),
     });
@@ -88,7 +88,7 @@ function populateTypicalClusterState(cache) {
         node_id: nodeId,
         address: `${nodeId}/partition/${replicaId}`,
         raft_role: r === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
-        status: STATE.ACTIVE,
+        status: SERVICE_STATUS.ACTIVE,
         created_at: Date.now(),
       });
     }
@@ -180,7 +180,7 @@ test('Bootstrap response building performance - large cluster', async (t) => {
     cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
       node_id: nodeId,
       node_address: `http://localhost:${8080 + i}`,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       created_at: Date.now(),
       updated_at: Date.now(),
     });
@@ -216,7 +216,7 @@ test('Bootstrap response building performance - large cluster', async (t) => {
         node_id: nodeId,
         address: `${nodeId}/partition/${replicaId}`,
         raft_role: r === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
-        status: STATE.ACTIVE,
+        status: SERVICE_STATUS.ACTIVE,
         created_at: Date.now(),
       });
     }

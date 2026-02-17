@@ -6,7 +6,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
-import {STATE, TABLES, TRANSPORT_TYPE, ENDPOINT_STATUS} from '../../src/constants/index.js';
+import {ENDPOINT_STATUS, SERVICE_STATUS, STATE, TABLES, TRANSPORT_TYPE} from '../../src/constants/index.js';
 
 test('registerNodeInCluster() - should execute UPSERT writes with correct data', async (t) => {
   const upsertCalls = [];
@@ -40,7 +40,7 @@ test('registerNodeInCluster() - should execute UPSERT writes with correct data',
   t.ok(nodeCall.rowData.cpu_cores > 0, 'should have cpu_cores > 0');
   t.ok(nodeCall.rowData.memory_mb > 0, 'should have memory_mb > 0');
   t.ok(nodeCall.rowData.disk_gb > 0, 'should have disk_gb > 0');
-  t.equal(nodeCall.rowData.status, STATE.ACTIVE, 'should set status to ACTIVE');
+  t.equal(nodeCall.rowData.status, SERVICE_STATUS.ACTIVE, 'should set status to ACTIVE');
   t.equal(nodeCall.rowData.connection_state, STATE.CONNECTED,
     'should set connection_state to CONNECTED');
 

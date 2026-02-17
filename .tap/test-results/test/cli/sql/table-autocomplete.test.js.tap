@@ -3,141 +3,141 @@ TAP version 14
     # Subtest: constructor initializes with cache
         ok 1 - should be equal
         1..1
-    ok 1 - constructor initializes with cache # time=10.131ms
+    ok 1 - constructor initializes with cache # time=6.854ms
     
     # Subtest: getSuggestions returns empty for non-table context
         ok 1 - should be equivalent
         1..1
-    ok 2 - getSuggestions returns empty for non-table context # time=0.855ms
+    ok 2 - getSuggestions returns empty for non-table context # time=0.797ms
     
     # Subtest: getSuggestions returns matches after FROM
         ok 1 - should be equivalent
         1..1
-    ok 3 - getSuggestions returns matches after FROM # time=0.494ms
+    ok 3 - getSuggestions returns matches after FROM # time=0.516ms
     
     # Subtest: getSuggestions returns matches after INTO
         ok 1 - should be equivalent
         1..1
-    ok 4 - getSuggestions returns matches after INTO # time=0.221ms
+    ok 4 - getSuggestions returns matches after INTO # time=0.237ms
     
     # Subtest: getSuggestions returns matches after UPDATE
         ok 1 - should be equivalent
         1..1
-    ok 5 - getSuggestions returns matches after UPDATE # time=0.23ms
+    ok 5 - getSuggestions returns matches after UPDATE # time=0.219ms
     
     # Subtest: getSuggestions returns matches after JOIN
         ok 1 - should be equivalent
         1..1
-    ok 6 - getSuggestions returns matches after JOIN # time=4.364ms
+    ok 6 - getSuggestions returns matches after JOIN # time=4.601ms
     
     # Subtest: getSuggestions is case-insensitive
         ok 1 - should be equivalent
         1..1
-    ok 7 - getSuggestions is case-insensitive # time=0.282ms
+    ok 7 - getSuggestions is case-insensitive # time=0.378ms
     
     # Subtest: getSuggestions returns all tables with empty prefix
         ok 1 - should be equal
         1..1
-    ok 8 - getSuggestions returns all tables with empty prefix # time=0.283ms
+    ok 8 - getSuggestions returns all tables with empty prefix # time=0.412ms
     
     # Subtest: getSuggestions limits results to 10
         ok 1 - should be equal
         1..1
-    ok 9 - getSuggestions limits results to 10 # time=0.239ms
+    ok 9 - getSuggestions limits results to 10 # time=0.334ms
     
     # Subtest: isTableContext returns true for FROM
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 10 - isTableContext returns true for FROM # time=0.225ms
+    ok 10 - isTableContext returns true for FROM # time=0.252ms
     
     # Subtest: isTableContext returns true for INTO
         ok 1 - should be equal
         1..1
-    ok 11 - isTableContext returns true for INTO # time=0.223ms
+    ok 11 - isTableContext returns true for INTO # time=0.183ms
     
     # Subtest: isTableContext returns true for UPDATE
         ok 1 - should be equal
         1..1
-    ok 12 - isTableContext returns true for UPDATE # time=0.187ms
+    ok 12 - isTableContext returns true for UPDATE # time=0.165ms
     
     # Subtest: isTableContext returns true for JOIN
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 13 - isTableContext returns true for JOIN # time=0.249ms
+    ok 13 - isTableContext returns true for JOIN # time=0.231ms
     
     # Subtest: isTableContext returns false for other contexts
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 14 - isTableContext returns false for other contexts # time=0.475ms
+    ok 14 - isTableContext returns false for other contexts # time=0.262ms
     
     # Subtest: getTableNames returns names from cache
         ok 1 - should be equivalent
         1..1
-    ok 15 - getTableNames returns names from cache # time=0.374ms
+    ok 15 - getTableNames returns names from cache # time=0.214ms
     
     # Subtest: getTableNames returns empty without cache
         ok 1 - should be equivalent
         1..1
-    ok 16 - getTableNames returns empty without cache # time=0.344ms
+    ok 16 - getTableNames returns empty without cache # time=0.251ms
     
     # Subtest: getTableNames filters out null/undefined names
         ok 1 - should be equivalent
         1..1
-    ok 17 - getTableNames filters out null/undefined names # time=0.269ms
+    ok 17 - getTableNames filters out null/undefined names # time=0.221ms
     
     # Subtest: isValidTableName returns true for existing table
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 18 - isValidTableName returns true for existing table # time=2.7ms
+    ok 18 - isValidTableName returns true for existing table # time=0.258ms
     
     # Subtest: isValidTableName returns false for non-existing table
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 19 - isValidTableName returns false for non-existing table # time=0.346ms
+    ok 19 - isValidTableName returns false for non-existing table # time=0.334ms
     
     # Subtest: getBestSuggestion returns first match
         ok 1 - should be equal
         1..1
-    ok 20 - getBestSuggestion returns first match # time=0.264ms
+    ok 20 - getBestSuggestion returns first match # time=0.273ms
     
     # Subtest: getBestSuggestion returns null for no matches
         ok 1 - should be equal
         1..1
-    ok 21 - getBestSuggestion returns null for no matches # time=0.24ms
+    ok 21 - getBestSuggestion returns null for no matches # time=0.224ms
     
     # Subtest: getCompletion returns full table name
         ok 1 - should be equal
         1..1
-    ok 22 - getCompletion returns full table name # time=0.252ms
+    ok 22 - getCompletion returns full table name # time=0.265ms
     
     # Subtest: getCompletion returns null for no matches
         ok 1 - should be equal
         1..1
-    ok 23 - getCompletion returns null for no matches # time=0.302ms
+    ok 23 - getCompletion returns null for no matches # time=0.312ms
     
     # Subtest: detectContext returns context info
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 24 - detectContext returns context info # time=0.439ms
+    ok 24 - detectContext returns context info # time=2.114ms
     
     # Subtest: detectContext returns null for non-table context
         ok 1 - should be equal
         1..1
-    ok 25 - detectContext returns null for non-table context # time=0.261ms
+    ok 25 - detectContext returns null for non-table context # time=0.321ms
     
     # Subtest: detectContext handles empty prefix
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 26 - detectContext handles empty prefix # time=0.293ms
+    ok 26 - detectContext handles empty prefix # time=0.288ms
     
     # Subtest: TABLE_CONTEXTS constant has expected values
         ok 1 - should be equal
@@ -146,21 +146,21 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 27 - TABLE_CONTEXTS constant has expected values # time=0.443ms
+    ok 27 - TABLE_CONTEXTS constant has expected values # time=0.403ms
     
     # Subtest: handles cache errors gracefully
         ok 1 - should be equivalent
         1..1
-    ok 28 - handles cache errors gracefully # time=0.297ms
+    ok 28 - handles cache errors gracefully # time=0.224ms
     
     # Subtest: getTableSuggestions sorts alphabetically
         ok 1 - should be equivalent
         1..1
-    ok 29 - getTableSuggestions sorts alphabetically # time=0.262ms
+    ok 29 - getTableSuggestions sorts alphabetically # time=0.217ms
     
     1..29
-ok 1 - TableAutocomplete # time=31.893ms
+ok 1 - TableAutocomplete # time=27.377ms
 
 1..1
 # { total: 42, pass: 42 }
-# time=46.432ms
+# time=39.613ms

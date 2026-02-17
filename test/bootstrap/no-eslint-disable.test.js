@@ -1,7 +1,7 @@
 /**
  * Unit test to verify no eslint-disable comments exist in test files.
  *
- * This test ensures that the service-lifecycle.property.test.js file
+ * This test ensures that the lifecycle-unification.test.js file
  * does not contain any eslint-disable comments, as per the project's
  * code quality requirements.
  *
@@ -12,10 +12,10 @@ import {test} from '../../src/test-helpers/tap.js';
 import {readFileSync} from 'fs';
 import {join} from 'path';
 
-test('service-lifecycle.property.test.js has no eslint-disable comments', async (t) => {
+test('lifecycle-unification.test.js has no eslint-disable comments', async (t) => {
   const filePath = join(
     process.cwd(),
-    'test/bootstrap/service-lifecycle.property.test.js',
+    'test/bootstrap/lifecycle-unification.test.js',
   );
 
   const content = readFileSync(filePath, 'utf8');

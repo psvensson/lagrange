@@ -15,6 +15,7 @@ import {
   LOAD_DEFAULTS,
   DEBUG_TRACE_DEFAULTS,
   LEAK_DEFAULTS,
+  BENCHMARK_DEFAULTS,
 } from './constants.js';
 
 /**
@@ -88,6 +89,22 @@ function mergeWithDefaults(partial = {}) {
       captureHeapArtifacts: LEAK_DEFAULTS.captureHeapArtifacts,
       heapSnapshotNearLimitCount: LEAK_DEFAULTS.heapSnapshotNearLimitCount,
       ...(partial.memoryLeak || {}),
+    },
+    benchmark: {
+      baselineImage: BENCHMARK_DEFAULTS.baselineImage,
+      user: BENCHMARK_DEFAULTS.user,
+      password: BENCHMARK_DEFAULTS.password,
+      database: BENCHMARK_DEFAULTS.database,
+      port: BENCHMARK_DEFAULTS.port,
+      durationSeconds: BENCHMARK_DEFAULTS.durationSeconds,
+      clients: BENCHMARK_DEFAULTS.clients,
+      jobs: BENCHMARK_DEFAULTS.jobs,
+      loadOpsPerSec: BENCHMARK_DEFAULTS.loadOpsPerSec,
+      loadDuration: BENCHMARK_DEFAULTS.loadDuration,
+      readyTimeoutMs: BENCHMARK_DEFAULTS.readyTimeoutMs,
+      readyPollIntervalMs: BENCHMARK_DEFAULTS.readyPollIntervalMs,
+      tableName: BENCHMARK_DEFAULTS.tableName,
+      ...(partial.benchmark || {}),
     },
     ...(partial.outputDir ? {outputDir: partial.outputDir} : {}),
     ...(partial.gcp ? {gcp: partial.gcp} : {}),

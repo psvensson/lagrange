@@ -19,7 +19,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {COLUMN, SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
+import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -272,7 +272,7 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
             partition_id: 'services-p1',
             replica_id: testServiceId,
             raft_role: RAFT_ROLE.FOLLOWER,
-            status: STATE.ACTIVE,
+            status: SERVICE_STATUS.ACTIVE,
             address: `ws://localhost:${seedWsPort}/partition/${testServiceId}`,
           },
         );
@@ -516,7 +516,7 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
               partition_id: 'services-p1',
               replica_id: testServiceId,
               raft_role: RAFT_ROLE.FOLLOWER,
-              status: STATE.ACTIVE,
+              status: SERVICE_STATUS.ACTIVE,
               address: `ws://localhost:${seedWsPort}/partition/${testServiceId}`,
             },
           );

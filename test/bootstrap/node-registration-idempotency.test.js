@@ -14,7 +14,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
-import {STATE, TABLES, TRANSPORT_TYPE, ENDPOINT_STATUS, COLUMN} from
+import {TABLES, TRANSPORT_TYPE, ENDPOINT_STATUS, COLUMN} from
   '../../src/constants/index.js';
 
 test('registerNodeInCluster() - should use INSERT OR REPLACE for idempotent registration',

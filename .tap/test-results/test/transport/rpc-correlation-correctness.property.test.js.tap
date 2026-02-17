@@ -4,51 +4,56 @@ TAP version 14
         ok 1 - Request 0 should get correct response
         ok 2 - Request 0 should get correct response
         ok 3 - Request 1 should get correct response
-        ok 4 - Request 0 should get correct response
-        ok 5 - Request 1 should get correct response
-        ok 6 - Request 2 should get correct response
-        ok 7 - Request 3 should get correct response
-        ok 8 - Request 4 should get correct response
-        ok 9 - Request 0 should get correct response
-        ok 10 - Request 1 should get correct response
-        ok 11 - Request 2 should get correct response
-        ok 12 - Request 3 should get correct response
-        ok 13 - Request 0 should get correct response
-        ok 14 - Request 1 should get correct response
-        ok 15 - Request 0 should get correct response
-        ok 16 - Request 0 should get correct response
-        ok 17 - Request 1 should get correct response
-        ok 18 - Request 2 should get correct response
-        ok 19 - Request 3 should get correct response
-        ok 20 - Request 4 should get correct response
-        ok 21 - Request 0 should get correct response
-        ok 22 - Request 1 should get correct response
-        ok 23 - Request 2 should get correct response
+        ok 4 - Request 2 should get correct response
+        ok 5 - Request 0 should get correct response
+        ok 6 - Request 1 should get correct response
+        ok 7 - Request 2 should get correct response
+        ok 8 - Request 3 should get correct response
+        ok 9 - Request 4 should get correct response
+        ok 10 - Request 0 should get correct response
+        ok 11 - Request 0 should get correct response
+        ok 12 - Request 1 should get correct response
+        ok 13 - Request 2 should get correct response
+        ok 14 - Request 0 should get correct response
+        ok 15 - Request 1 should get correct response
+        ok 16 - Request 2 should get correct response
+        ok 17 - Request 3 should get correct response
+        ok 18 - Request 4 should get correct response
+        ok 19 - Request 0 should get correct response
+        ok 20 - Request 1 should get correct response
+        ok 21 - Request 2 should get correct response
+        ok 22 - Request 3 should get correct response
+        ok 23 - Request 4 should get correct response
         ok 24 - Request 0 should get correct response
         ok 25 - Request 1 should get correct response
         ok 26 - Request 2 should get correct response
-        ok 27 - Request 0 should get correct response
-        1..27
-    ok 1 - responses are matched to correct callers # time=214.103ms
+        ok 27 - Request 3 should get correct response
+        ok 28 - Request 0 should get correct response
+        ok 29 - Request 1 should get correct response
+        ok 30 - Request 2 should get correct response
+        ok 31 - Request 0 should get correct response
+        ok 32 - Request 1 should get correct response
+        1..32
+    ok 1 - responses are matched to correct callers # time=221.55ms
     
     # Subtest: handleResponse returns false for unknown correlation ID
         ok 1 - Unknown correlation IDs are not matched
         1..1
-    ok 2 - handleResponse returns false for unknown correlation ID # time=1.776ms
+    ok 2 - handleResponse returns false for unknown correlation ID # time=3.055ms
     
     # Subtest: each request gets unique correlation ID
-        ok 1 - Should have 3 unique correlation IDs
+        ok 1 - Should have 8 unique correlation IDs
         ok 2 - Should have 7 unique correlation IDs
-        ok 3 - Should have 2 unique correlation IDs
-        ok 4 - Should have 2 unique correlation IDs
-        ok 5 - Should have 2 unique correlation IDs
-        ok 6 - Should have 2 unique correlation IDs
-        ok 7 - Should have 9 unique correlation IDs
-        ok 8 - Should have 2 unique correlation IDs
-        ok 9 - Should have 2 unique correlation IDs
-        ok 10 - Should have 7 unique correlation IDs
+        ok 3 - Should have 4 unique correlation IDs
+        ok 4 - Should have 5 unique correlation IDs
+        ok 5 - Should have 6 unique correlation IDs
+        ok 6 - Should have 5 unique correlation IDs
+        ok 7 - Should have 10 unique correlation IDs
+        ok 8 - Should have 3 unique correlation IDs
+        ok 9 - Should have 7 unique correlation IDs
+        ok 10 - Should have 9 unique correlation IDs
         1..10
-    ok 3 - each request gets unique correlation ID # time=204.715ms
+    ok 3 - each request gets unique correlation ID # time=209.86ms
     
     # Subtest: response only resolves matching request
         ok 1 - Second request should still be pending
@@ -82,7 +87,7 @@ TAP version 14
         ok 29 - First response correct
         ok 30 - Second response correct
         1..30
-    ok 4 - response only resolves matching request # time=208.866ms
+    ok 4 - response only resolves matching request # time=209.92ms
     
     # Subtest: duplicate responses are ignored
         ok 1 - First response should match
@@ -116,11 +121,11 @@ TAP version 14
         ok 29 - Second response should not match
         ok 30 - Result should be first response
         1..30
-    ok 5 - duplicate responses are ignored # time=206.645ms
+    ok 5 - duplicate responses are ignored # time=206.672ms
     
     1..5
-ok 1 - Property 3: RPC Correlation Correctness # time=839.888ms
+ok 1 - Property 3: RPC Correlation Correctness # time=856.81ms
 
 1..1
-# { total: 98, pass: 98 }
-# time=883.437ms
+# { total: 103, pass: 103 }
+# time=930.361ms

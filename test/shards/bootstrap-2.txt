@@ -3,7 +3,7 @@ test/bootstrap/universal-partition-implementation.property.test.js
 test/bootstrap/node-bootstrap-consistency.property.test.js
 test/bootstrap/phase-failure-handling.property.test.js
 test/bootstrap/hydrate-system-cache-from-bootstrap.test.js
-test/bootstrap/phases/phase-class-contract.property.test.js
+test/bootstrap/phase-adapter-removal.test.js
 test/bootstrap/cluster-mesh-connectivity.property.test.js
 test/bootstrap/cache-hydration-correctness.property.test.js
 test/bootstrap/node-joining-service.test.js
@@ -37,5 +37,4 @@ test/bootstrap/system-leader-readiness-address-gate.test.js
 test/bootstrap/bootstrap-endpoint-table.property.test.js
 test/bootstrap/bootstrap-errors.property.test.js
 test/bootstrap/cdc-leader-only-replication.test.js
-test/bootstrap/registration-service-definitions-migration.test.js
 test/bootstrap/query-state-single-owner.test.js

@@ -128,6 +128,7 @@ import {
   RUNTIME_KIND,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
+  SERVICE_STATUS,
   SERVICE_TYPE,
   STATE,
   STRING,
@@ -2270,7 +2271,7 @@ class BootstrapService extends EventEmitter {
         group_id: INITIAL_MESSAGE_GROUP_ID,
         replica_id: replicaId,
         raft_role: raftRole,
-        status: STATE.ACTIVE,
+        status: SERVICE_STATUS.ACTIVE,
         address: unifiedAddress,
         created_at: now,
         updated_at: now,
@@ -2313,7 +2314,7 @@ class BootstrapService extends EventEmitter {
         group_id: null,
         replica_id: replicaId,
         raft_role: raftRole,
-        status: STATE.ACTIVE,
+        status: SERVICE_STATUS.ACTIVE,
         // Use unified address format: ${nodeId}/${entityType}/${entityId}
         address: `${this.nodeId}${ADDRESS.SEPARATOR}` +
           `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}${replicaId}`,
@@ -3054,7 +3055,7 @@ class BootstrapService extends EventEmitter {
           replicaId: replicaId,
           partitionId: partition.partitionId,
           tableName: partition.tableName,
-          status: STATE.ACTIVE,
+          status: SERVICE_STATUS.ACTIVE,
           service: partition,
         });
         registeredCount++;
@@ -3196,7 +3197,7 @@ class BootstrapService extends EventEmitter {
         [COLUMN.DISK_USAGE_PERCENT]:
           Number.isFinite(stats?.diskUsagePercent) ?
             stats.diskUsagePercent : NUM.ZERO,
-        [COLUMN.STATUS]: STATE.ACTIVE,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
         [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
         [COLUMN.CAPABILITIES]: JSON.stringify([]),
         [COLUMN.LAST_HEARTBEAT]: now,

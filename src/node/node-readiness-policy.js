@@ -1,5 +1,5 @@
 import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM, STATE, TYPEOF} from '../constants/index.js';
+import {NUM, SERVICE_STATUS, STATE, TYPEOF} from '../constants/index.js';
 
 /**
  * Check if a node record is ready based on lease and state fields.
@@ -17,7 +17,7 @@ function isNodeRecordReady(nodeRow, options = {}) {
   const now = Number.isFinite(options.now) ? options.now : Date.now();
   const requireActiveStatus = options.requireActiveStatus !== false;
 
-  if (requireActiveStatus && nodeRow.status !== STATE.ACTIVE) {
+  if (requireActiveStatus && nodeRow.status !== SERVICE_STATUS.ACTIVE) {
     return false;
   }
 

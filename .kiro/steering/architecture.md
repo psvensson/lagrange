@@ -549,6 +549,25 @@ AdminWebSocketAPI debug route adapter
 - Provides read-only wrapper for safe access
 - Supports cache change listeners for reactive updates
 
+#### Sanctioned direct applySystemTableChange call sites
+
+Direct `applySystemTableChange` usage is constrained to the following paths:
+
+1. `src/message-group/cdc-handler.js` (`CDCHandler.applyEvent`) -
+   canonical CDC cache-apply owner path.
+2. `src/cache/cache-hydration-service.js`
+   (`CacheHydrationService` default `cdcEventApplier`) -
+   bootstrap hydration exception while seeding cache state.
+3. `src/bootstrap/node-joining-service.js`
+   (`NodeJoiningService.hydrateSystemCacheFromSnapshots`) -
+   join-time bootstrap hydration exception before CDC subscriptions activate.
+4. `src/bootstrap/node-joining-service.js`
+   (`NodeJoiningService.registerMessageGroupService`) -
+   bootstrap timing exception: eagerly seed local services cache after seed
+   registration to avoid join-time cache races before CDC fanout arrives.
+
+No other source file may call `applySystemTableChange` directly.
+
 ### CDCIntegrationService
 - Routes all system table writes through SQL
 - Bootstrap mode for seed node direct writes (temporary, cleared after registration)

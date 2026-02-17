@@ -9,7 +9,7 @@ import {BOOTSTRAP_API_ERROR} from '../../src/bootstrap/bootstrap-api-constants.j
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
-import {SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 // Initialize configuration and logging for tests
@@ -238,7 +238,7 @@ test('BootstrapAPI - blocks bootstrap until raft leaders are ready', async (t) =
           service_type: SERVICE_TYPE.PARTITION,
           partition_id: 'partition-1',
           raft_role: RAFT_ROLE.FOLLOWER,
-          status: STATE.ACTIVE,
+          status: SERVICE_STATUS.ACTIVE,
         }];
       }
       return [];
@@ -337,7 +337,7 @@ test('BootstrapAPI - bootstrap with MOVE_REPLICA strategy', async (t) => {
           replica_id: 'mg-1-r1',
           address: 'seed-node-1/message-group/mg-1-r1',
           raft_role: RAFT_ROLE.FOLLOWER,
-          status: STATE.ACTIVE,
+          status: SERVICE_STATUS.ACTIVE,
         },
         {
           service_id: 'mg-1-r2',
@@ -347,7 +347,7 @@ test('BootstrapAPI - bootstrap with MOVE_REPLICA strategy', async (t) => {
           replica_id: 'mg-1-r2',
           address: 'seed-node-1/message-group/mg-1-r2',
           raft_role: RAFT_ROLE.FOLLOWER,
-          status: STATE.ACTIVE,
+          status: SERVICE_STATUS.ACTIVE,
         },
         {
           service_id: 'mg-1-r3',
@@ -357,7 +357,7 @@ test('BootstrapAPI - bootstrap with MOVE_REPLICA strategy', async (t) => {
           replica_id: 'mg-1-r3',
           address: 'seed-node-1/message-group/mg-1-r3',
           raft_role: RAFT_ROLE.FOLLOWER,
-          status: STATE.ACTIVE,
+          status: SERVICE_STATUS.ACTIVE,
         },
       ],
       nodes: [],
@@ -633,7 +633,7 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
             node_id: 'seed-node-1',
             address: 'seed-node-1/partition/partition-leader',
             raft_role: RAFT_ROLE.LEADER,
-            status: STATE.ACTIVE,
+            status: SERVICE_STATUS.ACTIVE,
           },
           {
             service_id: 'message-group-leader',
@@ -642,7 +642,7 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
             node_id: 'seed-node-1',
             address: 'seed-node-1/message-group/message-group-leader',
             raft_role: RAFT_ROLE.LEADER,
-            status: STATE.ACTIVE,
+            status: SERVICE_STATUS.ACTIVE,
           },
         ];
       }
@@ -978,7 +978,7 @@ test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots
             node_id: 'seed-node-1',
             address: 'seed-node-1/partition/partition-leader',
             raft_role: RAFT_ROLE.LEADER,
-            status: STATE.ACTIVE,
+            status: SERVICE_STATUS.ACTIVE,
           },
           {
             service_id: 'message-group-leader',
@@ -987,7 +987,7 @@ test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots
             node_id: 'seed-node-1',
             address: 'seed-node-1/message-group/message-group-leader',
             raft_role: RAFT_ROLE.LEADER,
-            status: STATE.ACTIVE,
+            status: SERVICE_STATUS.ACTIVE,
           },
         ];
       }
@@ -1089,7 +1089,7 @@ test('BootstrapAPI - handleBootstrapRequest includes latency topology hints',
               node_id: 'seed-node-1',
               address: 'seed-node-1/partition/partition-leader',
               raft_role: RAFT_ROLE.LEADER,
-              status: STATE.ACTIVE,
+              status: SERVICE_STATUS.ACTIVE,
             },
             {
               service_id: 'message-group-leader',
@@ -1098,7 +1098,7 @@ test('BootstrapAPI - handleBootstrapRequest includes latency topology hints',
               node_id: 'seed-node-1',
               address: 'seed-node-1/message-group/message-group-leader',
               raft_role: RAFT_ROLE.LEADER,
-              status: STATE.ACTIVE,
+              status: SERVICE_STATUS.ACTIVE,
             },
           ];
         }

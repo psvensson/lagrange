@@ -12,6 +12,7 @@ import {
   COLUMN,
   SERVICE_TYPE,
   WORKFLOW_STEP,
+  SERVICE_STATUS,
   STATE,
 } from '../../src/constants/index.js';
 import {SystemTableName} from
@@ -75,7 +76,7 @@ test('Message-group operation routing integration', async (t) => {
             if (tableName === 'nodes' && key === 'node-2') {
               return {
                 node_id: 'node-2',
-                status: STATE.ACTIVE,
+                status: SERVICE_STATUS.ACTIVE,
                 connection_state: STATE.READY,
                 ready_lease_expires_at: Date.now() + 30000,
               };
@@ -88,7 +89,7 @@ test('Message-group operation routing integration', async (t) => {
                 [COLUMN.NODE_ID]: 'node-2',
                 [COLUMN.SERVICE_TYPE]:
                   SERVICE_TYPE.MESSAGE_GROUP,
-                [COLUMN.STATUS]: STATE.ACTIVE,
+                [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
               }];
             }
             return [];

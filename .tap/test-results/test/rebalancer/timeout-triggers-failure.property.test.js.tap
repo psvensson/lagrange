@@ -14,7 +14,7 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'fe45f208-1b87-46e4-92e4-4bf915b9cd5a',
+  operationId: '53e069c5-5d47-46bb-b814-5b5c570a8b2c',
   type: 'ADD',
   partitionId: 'test-partition',
   targetNodeId: 'test-node',
@@ -24,12 +24,18 @@ Creating operation {
     # Subtest: operation in PENDING times out and fails
         ok 1 - Initial step is PENDING
         ok 2 - Initial status is pending
+metrics.rebalance.operation {
+  operationId: '53e069c5-5d47-46bb-b814-5b5c570a8b2c',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 2
+}
         ok 3 - Status is failed after timeout
         ok 4 - Workflow step is FAILED
         ok 5 - Error message mentions timeout
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..5
-    ok 1 - operation in PENDING times out and fails # time=66.961ms
+    ok 1 - operation in PENDING times out and fails # time=38.349ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -45,7 +51,7 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'd0d986f2-2d17-49a0-933e-0841b125b839',
+  operationId: '83617976-d0c0-42a6-9e1b-07b70187344e',
   type: 'ADD',
   partitionId: 'test-partition',
   targetNodeId: 'test-node',
@@ -53,7 +59,7 @@ Creating operation {
   entityId: 'test-partition'
 }
 Operation step changed {
-  operationId: 'd0d986f2-2d17-49a0-933e-0841b125b839',
+  operationId: '83617976-d0c0-42a6-9e1b-07b70187344e',
   previousStep: 'PENDING',
   newStep: 'SENDING',
   status: 'pending',
@@ -61,11 +67,17 @@ Operation step changed {
 }
     # Subtest: operation in SENDING times out and fails
         ok 1 - Step is SENDING
+metrics.rebalance.operation {
+  operationId: '83617976-d0c0-42a6-9e1b-07b70187344e',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 1
+}
         ok 2 - Status is failed after timeout
         ok 3 - Error message mentions SENDING step
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..3
-    ok 2 - operation in SENDING times out and fails # time=2.316ms
+    ok 2 - operation in SENDING times out and fails # time=1.241ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -81,7 +93,7 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'b5bbb743-117f-4023-9614-6ff845aa24b7',
+  operationId: 'b040f770-32ed-4626-aae5-32fe94c9f2ac',
   type: 'ADD',
   partitionId: 'test-partition',
   targetNodeId: 'test-node',
@@ -89,7 +101,7 @@ Creating operation {
   entityId: 'test-partition'
 }
 Operation step changed {
-  operationId: 'b5bbb743-117f-4023-9614-6ff845aa24b7',
+  operationId: 'b040f770-32ed-4626-aae5-32fe94c9f2ac',
   previousStep: 'PENDING',
   newStep: 'CREATING',
   status: 'creating',
@@ -97,11 +109,17 @@ Operation step changed {
 }
     # Subtest: operation in CREATING times out and fails
         ok 1 - Step is CREATING
+metrics.rebalance.operation {
+  operationId: 'b040f770-32ed-4626-aae5-32fe94c9f2ac',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 0
+}
         ok 2 - Status is failed after timeout
         ok 3 - Error message mentions CREATING step
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..3
-    ok 3 - operation in CREATING times out and fails # time=1.912ms
+    ok 3 - operation in CREATING times out and fails # time=1.179ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -117,7 +135,7 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '5a6695f4-2ab7-4ac2-8a38-d839e9d2f7a8',
+  operationId: '56132518-7c44-41ce-8a4d-6f471a7d2680',
   type: 'ADD',
   partitionId: 'test-partition',
   targetNodeId: 'test-node',
@@ -125,7 +143,7 @@ Creating operation {
   entityId: 'test-partition'
 }
 Operation step changed {
-  operationId: '5a6695f4-2ab7-4ac2-8a38-d839e9d2f7a8',
+  operationId: '56132518-7c44-41ce-8a4d-6f471a7d2680',
   previousStep: 'PENDING',
   newStep: 'SYNCING',
   status: 'syncing',
@@ -133,11 +151,17 @@ Operation step changed {
 }
     # Subtest: operation in SYNCING times out and fails
         ok 1 - Step is SYNCING
+metrics.rebalance.operation {
+  operationId: '56132518-7c44-41ce-8a4d-6f471a7d2680',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 0
+}
         ok 2 - Status is failed after timeout
         ok 3 - Error message mentions SYNCING step
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..3
-    ok 4 - operation in SYNCING times out and fails # time=2.027ms
+    ok 4 - operation in SYNCING times out and fails # time=1.065ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -153,7 +177,7 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'e6633125-ac5b-47f6-81b4-1ca1ee5972c1',
+  operationId: '26be6fff-0528-42ef-984b-1dcb420b7c44',
   type: 'REMOVE',
   partitionId: 'test-partition',
   targetNodeId: 'test-node',
@@ -161,7 +185,7 @@ Creating operation {
   entityId: 'test-partition'
 }
 Operation step changed {
-  operationId: 'e6633125-ac5b-47f6-81b4-1ca1ee5972c1',
+  operationId: '26be6fff-0528-42ef-984b-1dcb420b7c44',
   previousStep: 'PENDING',
   newStep: 'STOPPING',
   status: 'removing',
@@ -169,11 +193,17 @@ Operation step changed {
 }
     # Subtest: operation in STOPPING times out and fails
         ok 1 - Step is STOPPING
+metrics.rebalance.operation {
+  operationId: '26be6fff-0528-42ef-984b-1dcb420b7c44',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 0
+}
         ok 2 - Status is failed after timeout
         ok 3 - Error message mentions STOPPING step
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..3
-    ok 5 - operation in STOPPING times out and fails # time=2.041ms
+    ok 5 - operation in STOPPING times out and fails # time=1.012ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -189,7 +219,7 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '7a8096e6-4193-4be1-991b-e47e52dfc0ba',
+  operationId: '3c7c31ae-9f70-446b-9987-4119039a6bd0',
   type: 'ADD',
   partitionId: 'test-partition',
   targetNodeId: 'test-node',
@@ -197,10 +227,16 @@ Creating operation {
   entityId: 'test-partition'
 }
 Operation completed {
-  operationId: '7a8096e6-4193-4be1-991b-e47e52dfc0ba',
+  operationId: '3c7c31ae-9f70-446b-9987-4119039a6bd0',
   type: 'ADD',
   partitionId: 'test-partition',
   targetNodeId: 'test-node'
+}
+metrics.rebalance.operation {
+  operationId: '3c7c31ae-9f70-446b-9987-4119039a6bd0',
+  entityType: 'partition',
+  finalState: 'active',
+  totalDurationMs: 0
 }
     # Subtest: completed operation does not timeout
         ok 1 - Step is ACTIVE
@@ -208,7 +244,7 @@ Operation completed {
         ok 3 - Workflow step is still ACTIVE
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..3
-    ok 6 - completed operation does not timeout # time=1.849ms
+    ok 6 - completed operation does not timeout # time=0.899ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -224,18 +260,24 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'c5bae349-c8f5-4081-9fd8-7ab534c57833',
+  operationId: 'd0960cbb-417b-4c5a-8b73-ff478093e152',
   type: 'ADD',
   partitionId: 'test-partition',
   targetNodeId: 'test-node',
   entityType: 'partition',
   entityId: 'test-partition'
 }
+metrics.rebalance.operation {
+  operationId: 'd0960cbb-417b-4c5a-8b73-ff478093e152',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 1
+}
     # Subtest: failed operation does not timeout again
         ok 1 - Error message unchanged after timeout check
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..1
-    ok 7 - failed operation does not timeout again # time=1.596ms
+    ok 7 - failed operation does not timeout again # time=0.739ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -251,7 +293,7 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '7519a4c6-514c-4cf8-9822-ef4ee1bd1e5f',
+  operationId: '37458244-6cb7-4ce5-b97c-aea77b9cb640',
   type: 'ADD',
   partitionId: 'test-partition',
   targetNodeId: 'test-node',
@@ -260,10 +302,16 @@ Creating operation {
 }
     # Subtest: timeout increments statistics
         ok 1 - Initial timeout count is 0
+metrics.rebalance.operation {
+  operationId: '37458244-6cb7-4ce5-b97c-aea77b9cb640',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 0
+}
         ok 2 - Timeout count is 1 after timeout
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..2
-    ok 8 - timeout increments statistics # time=2.13ms
+    ok 8 - timeout increments statistics # time=0.965ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -279,7 +327,7 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '6ad30f1b-a21f-4797-957a-e6c6c21b72b9',
+  operationId: 'ef62edce-9176-4bfe-bfdb-205388453f00',
   type: 'ADD',
   partitionId: 'test-partition-1',
   targetNodeId: 'test-node-1',
@@ -287,7 +335,7 @@ Creating operation {
   entityId: 'test-partition-1'
 }
 Creating operation {
-  operationId: 'd2fd61b1-cd38-418d-bbce-59106b58509d',
+  operationId: '9c4b60d3-29c0-4f7c-91a1-7674e88858b7',
   type: 'ADD',
   partitionId: 'test-partition-2',
   targetNodeId: 'test-node-2',
@@ -296,12 +344,24 @@ Creating operation {
 }
     # Subtest: multiple operations can timeout in same check
         ok 1 - Two operations tracked
+metrics.rebalance.operation {
+  operationId: 'ef62edce-9176-4bfe-bfdb-205388453f00',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 0
+}
+metrics.rebalance.operation {
+  operationId: '9c4b60d3-29c0-4f7c-91a1-7674e88858b7',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 1
+}
         ok 2 - Op1 status is failed
         ok 3 - Op2 status is failed
         ok 4 - Two operations timed out
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..4
-    ok 9 - multiple operations can timeout in same check # time=2.415ms
+    ok 9 - multiple operations can timeout in same check # time=1.575ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -317,12 +377,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'e0a6eefa-ae6d-4e1e-b361-5c5bc8d09f10',
+  operationId: '8e4a4644-fe35-4cf6-9e4f-f676e63fae95',
   type: 'ADD',
-  partitionId: '95e3ba9f-2d15-5cb0-8000-0014df1c49ef',
-  targetNodeId: 'fffffff9-254c-1a8a-8000-001200000009',
+  partitionId: 'd4644cc1-a42e-5cd4-ad48-bcf065029876',
+  targetNodeId: '22e36d5b-001b-1000-ba98-4f011c0b1560',
   entityType: 'partition',
-  entityId: '95e3ba9f-2d15-5cb0-8000-0014df1c49ef'
+  entityId: 'd4644cc1-a42e-5cd4-ad48-bcf065029876'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -339,12 +399,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'f3309068-6d07-4af4-8770-74c0b87ad3dd',
+  operationId: '29bdf6d8-e18d-46f7-847c-4d3442d98598',
   type: 'ADD',
-  partitionId: '00000019-ffff-5fff-8000-001a3ecee21a',
-  targetNodeId: 'ffffffe0-5d5d-1c76-8000-001100000013',
+  partitionId: 'ffffffe4-000a-1000-a86a-5dbed1a83d8f',
+  targetNodeId: '00000014-3abf-5efb-8000-00130000001e',
   entityType: 'partition',
-  entityId: '00000019-ffff-5fff-8000-001a3ecee21a'
+  entityId: 'ffffffe4-000a-1000-a86a-5dbed1a83d8f'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -361,12 +421,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'b124b9e5-09dc-4d41-ac9a-8b136adf81b0',
+  operationId: '3b530c73-8c60-47be-90f2-de81a448255d',
   type: 'ADD',
-  partitionId: '56e062bc-1d54-275b-8000-000196a6436c',
-  targetNodeId: '9618f3bd-291d-5b7b-a897-642900000002',
+  partitionId: '0000000d-6f2c-2087-8000-0002fce1bb24',
+  targetNodeId: '0db92329-000c-1000-863e-a440b7e2d9d2',
   entityType: 'partition',
-  entityId: '56e062bc-1d54-275b-8000-000196a6436c'
+  entityId: '0000000d-6f2c-2087-8000-0002fce1bb24'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -383,12 +443,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'af26c6fa-7073-4108-b155-a786fa99a996',
+  operationId: '0eba71ee-9311-46e5-849c-77223ead37e5',
   type: 'ADD',
-  partitionId: '57acc657-6845-4b79-8000-00136b5d3c94',
-  targetNodeId: '6dcaafad-beef-27c3-8000-00007f2c9271',
+  partitionId: '00000000-0009-1000-8000-0013fffffff7',
+  targetNodeId: '7d90ff81-0002-1000-bd37-4ecc00000011',
   entityType: 'partition',
-  entityId: '57acc657-6845-4b79-8000-00136b5d3c94'
+  entityId: '00000000-0009-1000-8000-0013fffffff7'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -405,12 +465,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'af74440f-d59f-4d23-9970-d473c6b12d4f',
+  operationId: 'a67ac72d-1a9a-4f33-964f-a53090490cd4',
   type: 'ADD',
-  partitionId: 'cf5e034f-001b-1000-8000-000a7b3bf244',
-  targetNodeId: '22caf78d-ffee-5fff-977a-0b6affffffe8',
+  partitionId: '0000000f-201e-3242-bfff-fff27896a0f5',
+  targetNodeId: '9e0be773-5783-43c2-9fcf-f164a12efbe2',
   entityType: 'partition',
-  entityId: 'cf5e034f-001b-1000-8000-000a7b3bf244'
+  entityId: '0000000f-201e-3242-bfff-fff27896a0f5'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -427,12 +487,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: 'b6acc91d-57f6-49df-8ac9-26a3e2507cb4',
+  operationId: 'f6b8c445-e3b1-4279-b57b-e8e6c282772f',
   type: 'ADD',
-  partitionId: '00000016-0009-1000-9b24-91630000001d',
-  targetNodeId: '1aeb6f04-001c-1000-bfff-ffe300000013',
+  partitionId: 'ffffffe0-743e-2f15-b33e-d58c00000014',
+  targetNodeId: '1cd47614-fffc-5fff-bfff-fff9d2770354',
   entityType: 'partition',
-  entityId: '00000016-0009-1000-9b24-91630000001d'
+  entityId: 'ffffffe0-743e-2f15-b33e-d58c00000014'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -449,12 +509,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '948b7415-2984-4ed3-a71a-fe62d28b6559',
+  operationId: 'fb4b6535-79d0-4540-9f1e-c5829d289045',
   type: 'ADD',
-  partitionId: 'b716f042-ee03-4f8b-bfff-fff7b3f6a515',
-  targetNodeId: 'ffffffe3-aa2e-5c45-9ab0-1b8600000000',
+  partitionId: '3efd85b9-b6ba-1230-9863-5fde00000010',
+  targetNodeId: '99162736-4b0f-3320-a403-3d2bc1975e0b',
   entityType: 'partition',
-  entityId: 'b716f042-ee03-4f8b-bfff-fff7b3f6a515'
+  entityId: '3efd85b9-b6ba-1230-9863-5fde00000010'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -471,12 +531,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '95e455bf-8415-47d0-ae90-2bedd4ed6d32',
+  operationId: '237dd503-ce24-4505-87a5-b20a9b856b59',
   type: 'ADD',
-  partitionId: '2fe9869c-001c-1000-b659-bda5bfceaac2',
-  targetNodeId: 'ffffffff-25f8-4b34-a7c3-ec016e705872',
+  partitionId: '00000001-fd50-3ea1-bfff-fffad4bb4023',
+  targetNodeId: '3ac700ee-f493-14b9-bc08-c5c8fffffffc',
   entityType: 'partition',
-  entityId: '2fe9869c-001c-1000-b659-bda5bfceaac2'
+  entityId: '00000001-fd50-3ea1-bfff-fffad4bb4023'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -493,12 +553,12 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '5ce3646f-6d17-423f-8df8-48836fbdbbb0',
+  operationId: '5ced5763-cbd6-452b-823f-fb1cd798b8f8',
   type: 'ADD',
-  partitionId: 'fffffff7-c0fa-165b-9bcc-785aa74b87d3',
-  targetNodeId: 'fffffffd-000e-1000-bfff-ffe48045ccbc',
+  partitionId: '00000004-0000-1000-a66d-3a6149bc9252',
+  targetNodeId: '00000011-ffe8-5fff-8000-000f41f57e79',
   entityType: 'partition',
-  entityId: 'fffffff7-c0fa-165b-9bcc-785aa74b87d3'
+  entityId: '00000004-0000-1000-a66d-3a6149bc9252'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
 RebalanceCoordinator initialized {
@@ -515,18 +575,18 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '558f172c-1299-4f35-b858-3a93e8093522',
+  operationId: '23384dfe-8fa7-4345-a137-18ad7f26f112',
   type: 'ADD',
-  partitionId: 'fe66ad99-9bcb-5e66-9387-d55ab87eb2ee',
-  targetNodeId: 'fef46688-e7e8-5df1-beb5-0d482f5a3df1',
+  partitionId: 'a94f38c5-1513-3548-b3dc-f60b4a305098',
+  targetNodeId: '0000000d-f2d2-3d54-a378-fec651ddce27',
   entityType: 'partition',
-  entityId: 'fe66ad99-9bcb-5e66-9387-d55ab87eb2ee'
+  entityId: 'a94f38c5-1513-3548-b3dc-f60b4a305098'
 }
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
     # Subtest: operation within timeout does not fail
         ok 1 - Operations within timeout do not fail
         1..1
-    ok 10 - operation within timeout does not fail # time=12.625ms
+    ok 10 - operation within timeout does not fail # time=5.827ms
     
 RebalanceCoordinator initialized {
   nodeId: 'test-node-1',
@@ -542,12 +602,18 @@ RebalanceCoordinator initialized {
   }
 }
 Creating operation {
-  operationId: '1be2000c-752d-4f44-b059-ee9deed82d29',
+  operationId: '1cc0ef26-0a82-4400-9167-1c95ed559afb',
   type: 'ADD',
   partitionId: 'test-partition',
   targetNodeId: 'test-node',
   entityType: 'partition',
   entityId: 'test-partition'
+}
+metrics.rebalance.operation {
+  operationId: '1cc0ef26-0a82-4400-9167-1c95ed559afb',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 0
 }
     # Subtest: operationFailed event is emitted on timeout
         ok 1 - operationFailed event was emitted
@@ -555,11 +621,11 @@ Creating operation {
         ok 3 - Event error message mentions timeout
 Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
         1..3
-    ok 11 - operationFailed event is emitted on timeout # time=1.701ms
+    ok 11 - operationFailed event is emitted on timeout # time=1.13ms
     
     1..11
-ok 1 - Property 7: Timeout Triggers Failure # time=107.875ms
+ok 1 - Property 7: Timeout Triggers Failure # time=59.288ms
 
 1..1
 # { total: 31, pass: 31 }
-# time=111.971ms
+# time=62.489ms

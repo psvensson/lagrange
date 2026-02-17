@@ -6,7 +6,7 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
-import {COLUMN, NUM, SERVICE_TYPE, STATE, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, NUM, SERVICE_STATUS, SERVICE_TYPE, TABLES, TYPEOF} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   LATENCY_GROUP_STATE,
@@ -397,7 +397,7 @@ class CDCGroupPropagationService extends EventEmitter {
     const services = this.systemTableCache.filter(TABLES.SERVICES, (serviceRow) => {
       return serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
         serviceRow?.[COLUMN.NODE_ID] === coordinatorNodeId &&
-        serviceRow?.[COLUMN.STATUS] === STATE.ACTIVE &&
+        serviceRow?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
         typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
         serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
     });

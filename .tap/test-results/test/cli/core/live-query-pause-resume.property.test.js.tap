@@ -3,26 +3,26 @@ TAP version 14
     # Subtest: events are not added when subscription is paused
         ok 1 - Events are not added when paused
         1..1
-    ok 1 - events are not added when subscription is paused # time=4.974ms
+    ok 1 - events are not added when subscription is paused # time=4.99ms
     
     # Subtest: events are added after resume
         ok 1 - Events are added after resume
         1..1
-    ok 2 - events are added after resume # time=1.878ms
+    ok 2 - events are added after resume # time=2.005ms
     
     # Subtest: pause/resume cycle preserves existing events
         ok 1 - Pause/resume cycle preserves existing events
         1..1
-    ok 3 - pause/resume cycle preserves existing events # time=1.581ms
+    ok 3 - pause/resume cycle preserves existing events # time=4.23ms
     
     # Subtest: paused status is correctly tracked
         ok 1 - Paused status is correctly tracked
         1..1
-    ok 4 - paused status is correctly tracked # time=0.82ms
+    ok 4 - paused status is correctly tracked # time=0.701ms
     
     1..4
-ok 1 - Property 50: Live Query Pause/Resume Consistency # time=12.651ms
+ok 1 - Property 50: Live Query Pause/Resume Consistency # time=15.061ms
 
 1..1
 # { total: 4, pass: 4 }
-# time=18.436ms
+# time=21.01ms

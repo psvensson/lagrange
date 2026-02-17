@@ -19,6 +19,7 @@ import {
   LOAD_DEFAULTS,
   DEBUG_TRACE_DEFAULTS,
   LEAK_DEFAULTS,
+  BENCHMARK_DEFAULTS,
 } from '../constants.js';
 
 // --- Unit Tests ---
@@ -113,6 +114,18 @@ test('Unit: mergeWithDefaults fills all fields from empty object', async (t) => 
         config.memoryLeak.captureHeapArtifacts,
         LEAK_DEFAULTS.captureHeapArtifacts,
       );
+      assert.strictEqual(
+        config.benchmark.baselineImage,
+        BENCHMARK_DEFAULTS.baselineImage,
+      );
+      assert.strictEqual(
+        config.benchmark.durationSeconds,
+        BENCHMARK_DEFAULTS.durationSeconds,
+      );
+      assert.strictEqual(
+        config.benchmark.clients,
+        BENCHMARK_DEFAULTS.clients,
+      );
     },
   );
 });
@@ -140,6 +153,13 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
         maxPositiveSlopeBytesPerMin: 500000,
         captureHeapArtifacts: true,
         heapSnapshotNearLimitCount: 3,
+      },
+      benchmark: {
+        baselineImage: 'postgres:15',
+        durationSeconds: 45,
+        clients: 10,
+        jobs: 5,
+        tableName: 'bench_custom',
       },
     };
 
@@ -181,6 +201,15 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
     assert.strictEqual(
       config.memoryLeak.minGrowthBytes,
       LEAK_DEFAULTS.minGrowthBytes,
+    );
+    assert.strictEqual(config.benchmark.baselineImage, 'postgres:15');
+    assert.strictEqual(config.benchmark.durationSeconds, 45);
+    assert.strictEqual(config.benchmark.clients, 10);
+    assert.strictEqual(config.benchmark.jobs, 5);
+    assert.strictEqual(config.benchmark.tableName, 'bench_custom');
+    assert.strictEqual(
+      config.benchmark.loadOpsPerSec,
+      BENCHMARK_DEFAULTS.loadOpsPerSec,
     );
   });
 });

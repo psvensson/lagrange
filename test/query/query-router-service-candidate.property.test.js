@@ -15,7 +15,7 @@ import fc from 'fast-check';
 import {QueryRouter} from '../../src/query/query-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 // Initialize configuration and logging for tests (module level)
@@ -66,7 +66,7 @@ function createServiceEntry(partitionId, serviceId, address, raftRole, nodeId) {
     partition_id: partitionId,
     service_id: serviceId,
     service_type: SERVICE_TYPE.PARTITION,
-    status: STATE.ACTIVE,
+    status: SERVICE_STATUS.ACTIVE,
     address,
     raft_role: raftRole,
     node_id: nodeId,
@@ -364,7 +364,7 @@ test('Property 3: QueryRouter Service Candidate Discovery', async (t) => {
               partition_id: partitionId,
               service_id: 'active-partition',
               service_type: SERVICE_TYPE.PARTITION,
-              status: STATE.ACTIVE,
+              status: SERVICE_STATUS.ACTIVE,
               address: 'host1:8080',
               raft_role: RAFT_ROLE.LEADER,
               node_id: 'node-1',
@@ -374,7 +374,7 @@ test('Property 3: QueryRouter Service Candidate Discovery', async (t) => {
               partition_id: partitionId,
               service_id: 'inactive-partition',
               service_type: SERVICE_TYPE.PARTITION,
-              status: STATE.STOPPED,
+              status: SERVICE_STATUS.STOPPED,
               address: 'host2:8080',
               raft_role: RAFT_ROLE.FOLLOWER,
               node_id: 'node-2',
@@ -384,7 +384,7 @@ test('Property 3: QueryRouter Service Candidate Discovery', async (t) => {
               partition_id: partitionId,
               service_id: 'active-message-group',
               service_type: SERVICE_TYPE.MESSAGE_GROUP,
-              status: STATE.ACTIVE,
+              status: SERVICE_STATUS.ACTIVE,
               address: 'host3:8080',
               raft_role: RAFT_ROLE.LEADER,
               node_id: 'node-3',

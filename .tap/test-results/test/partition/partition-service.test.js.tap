@@ -2,17 +2,17 @@ TAP version 14
 # Subtest: PartitionService - constructor requires partitionId
     ok 1 - expected to throw
     1..1
-ok 1 - PartitionService - constructor requires partitionId # time=7.021ms
+ok 1 - PartitionService - constructor requires partitionId # time=7.026ms
 
 # Subtest: PartitionService - constructor requires tableId
     ok 1 - expected to throw
     1..1
-ok 2 - PartitionService - constructor requires tableId # time=0.397ms
+ok 2 - PartitionService - constructor requires tableId # time=0.389ms
 
 # Subtest: PartitionService - constructor requires replicaId
     ok 1 - expected to throw
     1..1
-ok 3 - PartitionService - constructor requires replicaId # time=0.409ms
+ok 3 - PartitionService - constructor requires replicaId # time=0.472ms
 
 # Subtest: PartitionService - initializes with in-memory database
     ok 1 - should be equal
@@ -22,7 +22,7 @@ ok 3 - PartitionService - constructor requires replicaId # time=0.409ms
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 4 - PartitionService - initializes with in-memory database # time=143.223ms
+ok 4 - PartitionService - initializes with in-memory database # time=4.366ms
 
 # Subtest: PartitionService - suppresses lifecycle logs and emits stage callbacks
     ok 1 - should be equal
@@ -35,13 +35,13 @@ ok 4 - PartitionService - initializes with in-memory database # time=143.223ms
     ok 8 - should be equal
     ok 9 - should be equal
     1..9
-ok 5 - PartitionService - suppresses lifecycle logs and emits stage callbacks # time=2.052ms
+ok 5 - PartitionService - suppresses lifecycle logs and emits stage callbacks # time=2.609ms
 
 # Subtest: PartitionService - creates table from schema
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 6 - PartitionService - creates table from schema # time=1.887ms
+ok 6 - PartitionService - creates table from schema # time=2.348ms
 
 # Subtest: PartitionService - executeQuery for SELECT
     ok 1 - should be equal
@@ -49,14 +49,14 @@ ok 6 - PartitionService - creates table from schema # time=1.887ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 7 - PartitionService - executeQuery for SELECT # time=1.2ms
+ok 7 - PartitionService - executeQuery for SELECT # time=1.157ms
 
 # Subtest: PartitionService - updateData modifies records
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 8 - PartitionService - updateData modifies records # time=3.041ms
+ok 8 - PartitionService - updateData modifies records # time=1.255ms
 
 # Subtest: PartitionService - deleteData removes records
     ok 1 - should be equal
@@ -64,7 +64,7 @@ ok 8 - PartitionService - updateData modifies records # time=3.041ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 9 - PartitionService - deleteData removes records # time=1.173ms
+ok 9 - PartitionService - deleteData removes records # time=1.642ms
 
 # Subtest: PartitionService - generates CDC events on insert
     ok 1 - should be equal
@@ -72,44 +72,44 @@ ok 9 - PartitionService - deleteData removes records # time=1.173ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 10 - PartitionService - generates CDC events on insert # time=1.07ms
+ok 10 - PartitionService - generates CDC events on insert # time=1.278ms
 
 # Subtest: PartitionService - generates CDC events on update
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 11 - PartitionService - generates CDC events on update # time=1.002ms
+ok 11 - PartitionService - generates CDC events on update # time=1.048ms
 
 # Subtest: PartitionService - generates CDC events on delete
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - DELETE CDC event should contain primary key
     1..3
-ok 12 - PartitionService - generates CDC events on delete # time=1.206ms
+ok 12 - PartitionService - generates CDC events on delete # time=1.548ms
 
 # Subtest: PartitionService - generates CDC UPSERT events on upsert
     ok 1 - should be equal
     ok 2 - UPSERT operation must produce CDCOperation.UPSERT, not INSERT
     ok 3 - should be equal
     1..3
-ok 13 - PartitionService - generates CDC UPSERT events on upsert # time=1.087ms
+ok 13 - PartitionService - generates CDC UPSERT events on upsert # time=1.663ms
 
 # Subtest: PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT
     ok 1 - should be equal
     ok 2 - INSERT OR REPLACE SQL must produce CDCOperation.UPSERT
     1..2
-ok 14 - PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT # time=1.423ms
+ok 14 - PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT # time=1.426ms
 
 # Subtest: PartitionService - follower applyCommittedEntry must not emit CDC
     ok 1 - Follower must not emit CDC events from applyCommittedEntry
     1..1
-ok 15 - PartitionService - follower applyCommittedEntry must not emit CDC # time=1.073ms
+ok 15 - PartitionService - follower applyCommittedEntry must not emit CDC # time=1.043ms
 
 # Subtest: PartitionService - calculates partition size
     ok 1 - Initial size should be non-negative
     ok 2 - Size should increase after inserts
     1..2
-ok 16 - PartitionService - calculates partition size # time=1.38ms
+ok 16 - PartitionService - calculates partition size # time=1.335ms
 
 # Subtest: PartitionService - key range management
     ok 1 - should be equal
@@ -120,7 +120,7 @@ ok 16 - PartitionService - calculates partition size # time=1.38ms
     ok 6 - should be equal
     ok 7 - should be equal
     1..7
-ok 17 - PartitionService - key range management # time=1.059ms
+ok 17 - PartitionService - key range management # time=1.361ms
 
 # Subtest: PartitionService - full key range (null, null)
     ok 1 - should be equal
@@ -128,7 +128,7 @@ ok 17 - PartitionService - key range management # time=1.059ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 18 - PartitionService - full key range (null, null) # time=0.795ms
+ok 18 - PartitionService - full key range (null, null) # time=0.854ms
 
 # Subtest: PartitionService - getStatus returns complete status
     ok 1 - should be equal
@@ -140,20 +140,20 @@ ok 18 - PartitionService - full key range (null, null) # time=0.795ms
     ok 7 - should be equal
     ok 8 - should be equal
     1..8
-ok 19 - PartitionService - getStatus returns complete status # time=1.198ms
+ok 19 - PartitionService - getStatus returns complete status # time=1.31ms
 
 # Subtest: PartitionService - single replica becomes leader
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 20 - PartitionService - single replica becomes leader # time=0.906ms
+ok 20 - PartitionService - single replica becomes leader # time=0.882ms
 
 # Subtest: PartitionService - unsubscribe from CDC
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 21 - PartitionService - unsubscribe from CDC # time=1.105ms
+ok 21 - PartitionService - unsubscribe from CDC # time=1.299ms
 
 # Subtest: PartitionService - handleTransportMessage routes Raft packets to liferaft
     ok 1 - Raft packet should be acknowledged
@@ -162,7 +162,7 @@ ok 21 - PartitionService - unsubscribe from CDC # time=1.105ms
     ok 4 - Packet type should be preserved
     ok 5 - Packet term should be preserved
     1..5
-ok 22 - PartitionService - handleTransportMessage routes Raft packets to liferaft # time=1.158ms
+ok 22 - PartitionService - handleTransportMessage routes Raft packets to liferaft # time=1.168ms
 
 # Subtest: PartitionService - handleTransportMessage handles application messages
     ok 1 - FORWARD_WRITE should succeed
@@ -170,43 +170,43 @@ ok 22 - PartitionService - handleTransportMessage routes Raft packets to liferaf
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 23 - PartitionService - handleTransportMessage handles application messages # time=1.196ms
+ok 23 - PartitionService - handleTransportMessage handles application messages # time=1.174ms
 
 # Subtest: PartitionService - handleTransportMessage rejects unknown message types
     ok 1 - Unknown message should not be acknowledged
     ok 2 - Error message should be present
     ok 3 - Error should mention unknown type
     1..3
-ok 24 - PartitionService - handleTransportMessage rejects unknown message types # time=1.162ms
+ok 24 - PartitionService - handleTransportMessage rejects unknown message types # time=0.901ms
 
 # Subtest: PartitionService - liferaft instance is created with correct configuration
     ok 1 - Liferaft instance should exist
     ok 2 - should be equal
     1..2
-ok 25 - PartitionService - liferaft instance is created with correct configuration # time=0.787ms
+ok 25 - PartitionService - liferaft instance is created with correct configuration # time=0.817ms
 
 # Subtest: PartitionService - buildPeerAddress returns correct format
     ok 1 - Should resolve correct address
     ok 2 - Should return formatted address as-is
     1..2
-ok 26 - PartitionService - buildPeerAddress returns correct format # time=0.854ms
+ok 26 - PartitionService - buildPeerAddress returns correct format # time=0.943ms
 
 # Subtest: PartitionService - emits leaderElected event for single replica
     ok 1 - leaderElected event should be emitted
     ok 2 - Leader should be this replica
     ok 3 - Partition ID should match
     1..3
-ok 27 - PartitionService - emits leaderElected event for single replica # time=0.81ms
+ok 27 - PartitionService - emits leaderElected event for single replica # time=1.208ms
 
 # Subtest: PartitionService - persists raft role updates to services table
     ok 1 - raft role update should be persisted via CDC
     1..1
-ok 28 - PartitionService - persists raft role updates to services table # time=1.813ms
+ok 28 - PartitionService - persists raft role updates to services table # time=1.961ms
 
 # Subtest: PartitionService - persists leader node updates to partitions table
     ok 1 - leader node update should be persisted via CDC
     1..1
-ok 29 - PartitionService - persists leader node updates to partitions table # time=2.948ms
+ok 29 - PartitionService - persists leader node updates to partitions table # time=1.092ms
 
 # Subtest: PartitionService - setCdcIntegrationService sets service on partition and rebalancer
     ok 1 - Initially null
@@ -214,7 +214,7 @@ ok 29 - PartitionService - persists leader node updates to partitions table # ti
     ok 3 - Should be set on rebalancer
     ok 4 - Should be set on coordinator
     1..4
-ok 30 - PartitionService - setCdcIntegrationService sets service on partition and rebalancer # time=1.475ms
+ok 30 - PartitionService - setCdcIntegrationService sets service on partition and rebalancer # time=0.954ms
 
 # Subtest: PartitionService - setRebalanceCoordinator replaces local coordinator
     ok 1 - Should use shared coordinator
@@ -222,51 +222,51 @@ ok 30 - PartitionService - setCdcIntegrationService sets service on partition an
     ok 3 - Rebalancer should receive shared coordinator
     ok 4 - Owned coordinator should be shutdown when replaced
     1..4
-ok 31 - PartitionService - setRebalanceCoordinator replaces local coordinator # time=1.137ms
+ok 31 - PartitionService - setRebalanceCoordinator replaces local coordinator # time=1.238ms
 
 # Subtest: PartitionService - learner promotion deferred for even voter count
     ok 1 - Should remain learner to avoid even voter count
     ok 2 - Should reschedule promotion check
     1..2
-ok 32 - PartitionService - learner promotion deferred for even voter count # time=0.807ms
+ok 32 - PartitionService - learner promotion deferred for even voter count # time=0.797ms
 
 # Subtest: PartitionService - learner promotes when voter count would be odd
     ok 1 - Should promote to follower for odd voter count
     1..1
-ok 33 - PartitionService - learner promotes when voter count would be odd # time=0.431ms
+ok 33 - PartitionService - learner promotes when voter count would be odd # time=0.536ms
 
 # Subtest: PartitionService - learner promotion deferred until leader is known
     ok 1 - Should remain learner until a leader is discovered
     ok 2 - Should reschedule promotion check
     1..2
-ok 34 - PartitionService - learner promotion deferred until leader is known # time=0.486ms
+ok 34 - PartitionService - learner promotion deferred until leader is known # time=0.469ms
 
 # Subtest: PartitionService - critical partition defers learner on even voter count
     ok 1 - Critical partitions should also defer promotion that creates even voters
     ok 2 - Should reschedule promotion check
     1..2
-ok 35 - PartitionService - critical partition defers learner on even voter count # time=0.661ms
+ok 35 - PartitionService - critical partition defers learner on even voter count # time=0.716ms
 
 # Subtest: PartitionService - learner promotes when multiple learners reach odd count
     ok 1 - Should promote when all learners would reach odd count
     1..1
-ok 36 - PartitionService - learner promotes when multiple learners reach odd count # time=0.442ms
+ok 36 - PartitionService - learner promotes when multiple learners reach odd count # time=0.431ms
 
 # Subtest: PartitionService - learner deferred when all learners would still be even
     ok 1 - Should remain learner when all learners would still be even
     ok 2 - Should reschedule promotion check
     1..2
-ok 37 - PartitionService - learner deferred when all learners would still be even # time=0.406ms
+ok 37 - PartitionService - learner deferred when all learners would still be even # time=0.445ms
 
 # Subtest: PartitionService - countPendingLearners counts learner replicas
     ok 1 - Should count only active learner replicas
     1..1
-ok 38 - PartitionService - countPendingLearners counts learner replicas # time=0.37ms
+ok 38 - PartitionService - countPendingLearners counts learner replicas # time=0.669ms
 
 # Subtest: PartitionService - countActiveVoters excludes learners and failed replicas
     ok 1 - Should count only active non-learner replicas
     1..1
-ok 39 - PartitionService - countActiveVoters excludes learners and failed replicas # time=0.374ms
+ok 39 - PartitionService - countActiveVoters excludes learners and failed replicas # time=0.527ms
 
 # Subtest: PartitionService - handleRemoteQuery returns redirect for writes on follower
     ok 1 - should acknowledge the request
@@ -274,7 +274,7 @@ ok 39 - PartitionService - countActiveVoters excludes learners and failed replic
     ok 3 - should return redirect type
     ok 4 - should include leader address
     1..4
-ok 40 - PartitionService - handleRemoteQuery returns redirect for writes on follower # time=1.027ms
+ok 40 - PartitionService - handleRemoteQuery returns redirect for writes on follower # time=1.162ms
 
 # Subtest: PartitionService - handleRemoteQuery executes reads on follower
     ok 1 - should acknowledge the request
@@ -282,7 +282,7 @@ ok 40 - PartitionService - handleRemoteQuery returns redirect for writes on foll
     ok 3 - should return data
     ok 4 - should return correct data
     1..4
-ok 41 - PartitionService - handleRemoteQuery executes reads on follower # time=0.957ms
+ok 41 - PartitionService - handleRemoteQuery executes reads on follower # time=0.975ms
 
 # Subtest: PartitionService - isWriteQuery detects write operations
     ok 1 - INSERT is write
@@ -296,13 +296,13 @@ ok 41 - PartitionService - handleRemoteQuery executes reads on follower # time=0
     ok 9 - null is not write
     ok 10 - empty string is not write
     1..10
-ok 42 - PartitionService - isWriteQuery detects write operations # time=0.837ms
+ok 42 - PartitionService - isWriteQuery detects write operations # time=0.984ms
 
 # Subtest: PartitionService - election jitter prevents timeout overlap
     ok 1 - Jitter (2500ms) must be >= election range width (2000ms) to prevent timeout overlap between replicas
     1..1
-ok 43 - PartitionService - election jitter prevents timeout overlap # time=104.537ms
+ok 43 - PartitionService - election jitter prevents timeout overlap # time=0.627ms
 
 1..43
 # { total: 132, pass: 132 }
-# time=893.529ms
+# time=669.05ms

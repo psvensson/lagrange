@@ -81,6 +81,25 @@ function createMockSystemCache(tables, partitions) {
   };
 }
 
+/**
+ * Normalize participant IDs from transaction state.
+ * @param {Object} txState - Transaction state.
+ * @return {Array<string>} Participant partition IDs.
+ */
+function getParticipantIds(txState) {
+  const participants = txState?.participants;
+  if (participants instanceof Map) {
+    return Array.from(participants.keys());
+  }
+  if (participants instanceof Set) {
+    return Array.from(participants);
+  }
+  if (Array.isArray(participants)) {
+    return participants;
+  }
+  return [];
+}
+
 test('Transaction - BEGIN TRANSACTION starts a transaction', async (t) => {
   const engine = new SQLQueryEngine({
     messageRouter: createMockMessageRouter(),
@@ -139,7 +158,7 @@ test('Transaction - double BEGIN returns error', async (t) => {
   t.equal(result.errorCode, 'TRANSACTION_ACTIVE');
 });
 
-test('Transaction - cross-partition INSERT is rejected', async (t) => {
+test('Transaction - cross-partition INSERT enlists all touched participants', async (t) => {
   mockPartitionData.set('p1', []);
   mockPartitionData.set('p2', []);
 
@@ -159,21 +178,23 @@ test('Transaction - cross-partition INSERT is rejected', async (t) => {
   // Start transaction
   await engine.executeQuery('BEGIN TRANSACTION', [], {sessionId: 'cross-tx-1'});
 
-  // Try to insert into multiple partitions - should be rejected
+  // Insert into multiple partitions within one transaction.
   const result = await engine.executeQuery(
     'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\'), (\'zack\', \'Zack\')',
     [],
     {sessionId: 'cross-tx-1'},
   );
 
-  t.equal(result.success, false);
-  t.equal(result.errorCode, 'CROSS_PARTITION_TRANSACTION');
-  t.ok(result.error.includes('Cross-partition'));
+  const txState = engine.activeTransactions.get('cross-tx-1');
+  const participants = getParticipantIds(txState);
+  t.equal(result.success, true);
+  t.ok(participants.includes('p1'));
+  t.ok(participants.includes('p2'));
 
   mockPartitionData.clear();
 });
 
-test('Transaction - cross-partition UPDATE is rejected', async (t) => {
+test('Transaction - cross-partition UPDATE enlists all touched participants', async (t) => {
   mockPartitionData.set('p1', [{id: 'alice'}]);
   mockPartitionData.set('p2', [{id: 'bob'}]);
 
@@ -198,15 +219,18 @@ test('Transaction - cross-partition UPDATE is rejected', async (t) => {
     {sessionId: 'cross-tx-2'},
   );
 
-  // Try to update all partitions (no key filter) - should be rejected
+  // Update across all partitions (no key filter).
   const result = await engine.executeQuery(
     'UPDATE users SET status = \'active\' WHERE age > 18',
     [],
     {sessionId: 'cross-tx-2'},
   );
 
-  t.equal(result.success, false);
-  t.equal(result.errorCode, 'CROSS_PARTITION_TRANSACTION');
+  const txState = engine.activeTransactions.get('cross-tx-2');
+  const participants = getParticipantIds(txState);
+  t.equal(result.success, true);
+  t.ok(participants.includes('p1'));
+  t.ok(participants.includes('p2'));
 
   mockPartitionData.clear();
 });

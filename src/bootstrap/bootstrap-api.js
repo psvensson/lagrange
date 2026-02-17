@@ -25,8 +25,8 @@ import {
   HOST,
   NUM,
   PROTOCOL,
+  SERVICE_STATUS,
   SERVICE_TYPE,
-  STATE,
   STRING,
   TABLES,
   TYPEOF,
@@ -448,7 +448,7 @@ class BootstrapAPI {
         serviceData[COLUMN.GROUP_ID] || null,
         serviceData[COLUMN.REPLICA_ID] || serviceData[COLUMN.SERVICE_ID],
         serviceData[COLUMN.RAFT_ROLE] || RAFT_ROLE.FOLLOWER,
-        serviceData[COLUMN.STATUS] || STATE.ACTIVE,
+        serviceData[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
         serviceData[COLUMN.ADDRESS] || null,
         serviceData[COLUMN.CREATED_AT] || Date.now(),
         serviceData[COLUMN.UPDATED_AT] || Date.now(),
@@ -868,7 +868,7 @@ class BootstrapAPI {
       service[COLUMN.PARTITION_ID] === partition[COLUMN.PARTITION_ID] &&
       service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
       service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      service[COLUMN.STATUS] === STATE.ACTIVE,
+      service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
     ) || [];
 
     if (services.length === NUM.ZERO) {
@@ -1206,7 +1206,7 @@ class BootstrapAPI {
     const leaders = serviceSnapshot.filter((service) =>
       service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
       service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      service[COLUMN.STATUS] === STATE.ACTIVE,
+      service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
     );
 
     if (leaders.length === NUM.ZERO) {
@@ -1667,7 +1667,7 @@ class BootstrapAPI {
         service[COLUMN.PARTITION_ID] === partition[COLUMN.PARTITION_ID] &&
         service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
         service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-        service[COLUMN.STATUS] === STATE.ACTIVE,
+        service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
       );
 
       if (leaderService) {
@@ -1785,7 +1785,7 @@ class BootstrapAPI {
     nodes.push({
       nodeId: this.seedNodeId,
       nodeAddress: this.seedNodeAddress,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       isSeed: true,
     });
 

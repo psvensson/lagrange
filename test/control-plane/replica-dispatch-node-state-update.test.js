@@ -12,7 +12,7 @@ import {
   ControlPlaneField,
   ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
-import {STATE} from '../../src/constants/index.js';
+import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -41,7 +41,7 @@ test('ReplicaDispatchService persists NODE_STATE_UPDATE ready heartbeats', async
     cpu_usage_percent: 10,
     memory_usage_percent: 20,
     disk_usage_percent: 30,
-    status: STATE.ACTIVE,
+    status: SERVICE_STATUS.ACTIVE,
     connection_state: STATE.CONNECTED,
     capabilities: '[]',
     last_heartbeat: now - 1000,

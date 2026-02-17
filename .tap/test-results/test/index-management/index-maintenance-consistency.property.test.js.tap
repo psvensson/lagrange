@@ -2,28 +2,28 @@ TAP version 14
 # Subtest: Property 15: Index consistency after INSERT operations
     ok 1 - Index consistency maintained after INSERT operations
     1..1
-ok 1 - Property 15: Index consistency after INSERT operations # time=13.69ms
+ok 1 - Property 15: Index consistency after INSERT operations # time=16.105ms
 
 # Subtest: Property 15: Index consistency after UPDATE operations
     ok 1 - Index consistency maintained after UPDATE operations
     1..1
-ok 2 - Property 15: Index consistency after UPDATE operations # time=6.561ms
+ok 2 - Property 15: Index consistency after UPDATE operations # time=7.11ms
 
 # Subtest: Property 15: Index consistency after DELETE operations
     ok 1 - Index consistency maintained after DELETE operations
     1..1
-ok 3 - Property 15: Index consistency after DELETE operations # time=7.641ms
+ok 3 - Property 15: Index consistency after DELETE operations # time=6.999ms
 
 # Subtest: Property 15: Multiple indices remain consistent
     ok 1 - Multiple indices remain consistent after data changes
     1..1
-ok 4 - Property 15: Multiple indices remain consistent # time=6.269ms
+ok 4 - Property 15: Multiple indices remain consistent # time=6.309ms
 
 # Subtest: Property 15: Index metadata tracking
     ok 1 - Index metadata is properly tracked
     1..1
-ok 5 - Property 15: Index metadata tracking # time=2.367ms
+ok 5 - Property 15: Index metadata tracking # time=2.214ms
 
 1..5
 # { total: 5, pass: 5 }
-# time=152.567ms
+# time=146.634ms

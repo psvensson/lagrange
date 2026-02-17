@@ -2,23 +2,23 @@ TAP version 14
 # Subtest: Property 21: CDC events produce identical caches across replicas
     ok 1 - All replicas maintain identical caches via CDC
     1..1
-ok 1 - Property 21: CDC events produce identical caches across replicas # time=13.273ms
+ok 1 - Property 21: CDC events produce identical caches across replicas # time=13.502ms
 
 # Subtest: Property 21: CDC event ordering produces deterministic cache state
     ok 1 - CDC events produce deterministic cache state
     1..1
-ok 2 - Property 21: CDC event ordering produces deterministic cache state # time=3.308ms
+ok 2 - Property 21: CDC event ordering produces deterministic cache state # time=3.495ms
 
 # Subtest: Property 21: Caches provide queryable system information
     ok 1 - Caches provide queryable system information
     1..1
-ok 3 - Property 21: Caches provide queryable system information # time=2.21ms
+ok 3 - Property 21: Caches provide queryable system information # time=1.784ms
 
 # Subtest: Property 21: Cache updates via CDC maintain data integrity
     ok 1 - Cache updates via CDC maintain data integrity
     1..1
-ok 4 - Property 21: Cache updates via CDC maintain data integrity # time=2.484ms
+ok 4 - Property 21: Cache updates via CDC maintain data integrity # time=2.754ms
 
 1..4
 # { total: 4, pass: 4 }
-# time=159.873ms
+# time=134.868ms

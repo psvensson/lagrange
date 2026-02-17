@@ -3,36 +3,36 @@ TAP version 14
     # Subtest: no duplicate ADD moves for same node
         ok 1 - no duplicate ADD moves for same node
         1..1
-    ok 1 - no duplicate ADD moves for same node # time=7.498ms
+    ok 1 - no duplicate ADD moves for same node # time=12.216ms
     
     # Subtest: no duplicate REMOVE moves for same replica
         ok 1 - no duplicate REMOVE moves for same replica
         1..1
-    ok 2 - no duplicate REMOVE moves for same replica # time=2.817ms
+    ok 2 - no duplicate REMOVE moves for same replica # time=3.399ms
     
     # Subtest: pending operations block new move generation
         ok 1 - pending operations block new move generation
         1..1
-    ok 3 - pending operations block new move generation # time=1.507ms
+    ok 3 - pending operations block new move generation # time=2.624ms
     
     # Subtest: service-row transitioning replicas do not block move generation
         ok 1 - service-row transitioning replicas do not block move generation
         1..1
-    ok 4 - service-row transitioning replicas do not block move generation # time=1.577ms
+    ok 4 - service-row transitioning replicas do not block move generation # time=1.724ms
     
     # Subtest: completed operations do not block new moves
         ok 1 - completed operations do not block new moves
         1..1
-    ok 5 - completed operations do not block new moves # time=1.816ms
+    ok 5 - completed operations do not block new moves # time=1.672ms
     
     # Subtest: hasPendingAddForNode identifies pending ADD moves
         ok 1 - hasPendingAddForNode identifies pending ADD moves
         1..1
-    ok 6 - hasPendingAddForNode identifies pending ADD moves # time=1.205ms
+    ok 6 - hasPendingAddForNode identifies pending ADD moves # time=2.071ms
     
     1..6
-ok 1 - Property 81: Duplicate Move Prevention # time=156.677ms
+ok 1 - Property 81: Duplicate Move Prevention # time=235.454ms
 
 1..1
 # { total: 6, pass: 6 }
-# time=162.745ms
+# time=252.889ms

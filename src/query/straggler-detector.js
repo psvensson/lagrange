@@ -6,7 +6,7 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {STATE, STRING} from '../constants/index.js';
+import {SERVICE_STATUS, STRING} from '../constants/index.js';
 import {
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
@@ -258,7 +258,7 @@ class SpeculativeExecutor {
       replicas = this.replicaRegistry[partitionId];
     }
     return (replicas || []).filter((r) =>
-      r.status === STATE.ACTIVE || r.status === undefined,
+      r.status === SERVICE_STATUS.ACTIVE || r.status === undefined,
     );
   }
 

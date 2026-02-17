@@ -10,7 +10,7 @@ import {
 } from '../../src/cache/leader-readiness-gate.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {COLUMN, SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
+import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 
@@ -103,7 +103,7 @@ function createPartitionLeaderService(partitionId, overrides = {}) {
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: partitionId,
     [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
-    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.NODE_ID]: hasNodeId ? overrides.nodeId : 'node-1',
     [COLUMN.ADDRESS]: hasAddress ? overrides.address : 'ws://127.0.0.1:8080',
   };
@@ -123,7 +123,7 @@ function createMessageGroupLeaderService(groupId, overrides = {}) {
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
     [COLUMN.GROUP_ID]: groupId,
     [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
-    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.NODE_ID]: hasNodeId ? overrides.nodeId : 'node-1',
     [COLUMN.ADDRESS]: hasAddress ? overrides.address : 'ws://127.0.0.1:8080',
   };
@@ -289,7 +289,7 @@ test('getMissingSystemServiceLeaders - does not count follower as leader', async
         [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
         [COLUMN.PARTITION_ID]: 'p1',
         [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER, // Not a leader
-        [COLUMN.STATUS]: STATE.ACTIVE,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
         [COLUMN.NODE_ID]: 'node-1',
         [COLUMN.ADDRESS]: 'ws://127.0.0.1:8080',
       },
@@ -313,7 +313,7 @@ test('getMissingSystemServiceLeaders - does not count inactive leader', async (t
         [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
         [COLUMN.PARTITION_ID]: 'p1',
         [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
-        [COLUMN.STATUS]: STATE.STOPPED, // Not active
+        [COLUMN.STATUS]: SERVICE_STATUS.STOPPED, // Not active
         [COLUMN.NODE_ID]: 'node-1',
         [COLUMN.ADDRESS]: 'ws://127.0.0.1:8080',
       },

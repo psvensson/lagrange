@@ -28,6 +28,24 @@ afterEach(() => {
 });
 
 /**
+ * Wait for CDC event fan-out to reach all subscribers.
+ * @param {Array<Array<Object>>} subscriberEvents - Per-subscriber event buffers.
+ * @param {number} expectedCount - Expected events per subscriber.
+ * @return {Promise<boolean>} True when all subscribers have the expected events.
+ */
+async function waitForSubscriberDelivery(subscriberEvents, expectedCount) {
+  for (let i = 0; i < 20; i++) {
+    const delivered = subscriberEvents
+      .every((events) => events.length >= expectedCount);
+    if (delivered) {
+      return true;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  return subscriberEvents.every((events) => events.length >= expectedCount);
+}
+
+/**
  * Generate a random partition ID.
  */
 const partitionIdArbitrary = fc.string({minLength: 1, maxLength: 20})
@@ -346,6 +364,11 @@ test('Property 6: CDC events delivered to multiple subscribers', async (t) => {
 
           // Perform INSERT
           await partition.insertData(tableName, data);
+
+          const delivered = await waitForSubscriberDelivery(subscriberEvents, 1);
+          if (!delivered) {
+            return false;
+          }
 
           // Verify all subscribers received the event
           for (let i = 0; i < subscriberCount; i++) {

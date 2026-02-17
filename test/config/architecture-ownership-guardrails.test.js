@@ -96,7 +96,6 @@ test('Ownership guardrails: setup creation sites are constrained', async (t) => 
       name: 'MessageRouter constructor',
       regex: /new\s+MessageRouter\s*\(/,
       allowedFiles: new Set([
-        'bootstrap/phases/infrastructure-phase.js',
         'bootstrap/shared/message-router-setup.js',
       ]),
     },
@@ -168,8 +167,12 @@ test('Ownership guardrails: setup creation sites are constrained', async (t) => 
 });
 
 test('Ownership guardrails: primary-key map definitions are constrained', async (t) => {
+  const keyMapDefinitionPattern = new RegExp(
+    'const\\s+((?:CACHE_PRIMARY_KEY_FIELDS|PRIMARY_KEY_COLUMNS|' +
+      'SYSTEM_CACHE_KEY_DESCRIPTOR))\\s*=\\s*Object\\.freeze\\(\\{',
+  );
   const keyMapDefinitions = findMatches(
-    /const\s+((?:CACHE_PRIMARY_KEY_FIELDS|PRIMARY_KEY_COLUMNS|SYSTEM_CACHE_KEY_DESCRIPTOR))\s*=\s*Object\.freeze\(\{/,
+    keyMapDefinitionPattern,
     (file) => {
       return file.startsWith('cache/') ||
         file.startsWith('worker/') ||

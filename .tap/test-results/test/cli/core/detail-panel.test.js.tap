@@ -7,7 +7,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equivalent
         1..5
-    ok 1 - constructor initializes with defaults # time=14.248ms
+    ok 1 - constructor initializes with defaults # time=13.068ms
     
     # Subtest: constructor accepts options
         ok 1 - should be equal
@@ -15,28 +15,28 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 2 - constructor accepts options # time=0.887ms
+    ok 2 - constructor accepts options # time=0.448ms
     
     # Subtest: show and hide toggle visibility
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 3 - show and hide toggle visibility # time=0.623ms
+    ok 3 - show and hide toggle visibility # time=0.326ms
     
     # Subtest: toggle switches visibility
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 4 - toggle switches visibility # time=0.535ms
+    ok 4 - toggle switches visibility # time=0.285ms
     
     # Subtest: setDetailData stores data and renders content
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 5 - setDetailData stores data and renders content # time=0.798ms
+    ok 5 - setDetailData stores data and renders content # time=0.464ms
     
     # Subtest: clearDetailData clears data and lines
         ok 1 - should be equal
@@ -45,47 +45,47 @@ TAP version 14
         ok 4 - should be equivalent
         ok 5 - should be equal
         1..5
-    ok 6 - clearDetailData clears data and lines # time=0.786ms
+    ok 6 - clearDetailData clears data and lines # time=0.445ms
     
     # Subtest: scrollUp decreases scroll offset
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 7 - scrollUp decreases scroll offset # time=2.157ms
+    ok 7 - scrollUp decreases scroll offset # time=0.51ms
     
     # Subtest: scrollUp does not go below 0
         ok 1 - should be equal
         1..1
-    ok 8 - scrollUp does not go below 0 # time=0.381ms
+    ok 8 - scrollUp does not go below 0 # time=0.214ms
     
     # Subtest: scrollDown increases scroll offset
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 9 - scrollDown increases scroll offset # time=0.483ms
+    ok 9 - scrollDown increases scroll offset # time=0.281ms
     
     # Subtest: scrollDown does not exceed max scroll
         ok 1 - should be equal
         1..1
-    ok 10 - scrollDown does not exceed max scroll # time=0.409ms
+    ok 10 - scrollDown does not exceed max scroll # time=0.215ms
     
     # Subtest: scrollToTop sets offset to 0
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 11 - scrollToTop sets offset to 0 # time=0.523ms
+    ok 11 - scrollToTop sets offset to 0 # time=0.287ms
     
     # Subtest: scrollToBottom sets offset to max
         ok 1 - should be equal
         1..1
-    ok 12 - scrollToBottom sets offset to max # time=0.4ms
+    ok 12 - scrollToBottom sets offset to max # time=0.218ms
     
     # Subtest: getVisibleLines returns correct slice
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should not be equal
         1..3
-    ok 13 - getVisibleLines returns correct slice # time=0.678ms
+    ok 13 - getVisibleLines returns correct slice # time=0.376ms
     
     # Subtest: render returns formatted output
         ok 1 - should be equal
@@ -96,7 +96,7 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 14 - render returns formatted output # time=1.208ms
+    ok 14 - render returns formatted output # time=0.706ms
     
     # Subtest: render with monochrome option
         ok 1 - should be equal
@@ -105,7 +105,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 15 - render with monochrome option # time=0.791ms
+    ok 15 - render with monochrome option # time=0.456ms
     
     # Subtest: handleKey scrolls when visible
         ok 1 - should be equal
@@ -115,29 +115,29 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 16 - handleKey scrolls when visible # time=1.035ms
+    ok 16 - handleKey scrolls when visible # time=0.638ms
     
     # Subtest: handleKey returns false when not visible
         ok 1 - should be equal
         1..1
-    ok 17 - handleKey returns false when not visible # time=0.335ms
+    ok 17 - handleKey returns false when not visible # time=0.228ms
     
     # Subtest: handleKey returns false for unhandled keys
         ok 1 - should be equal
         1..1
-    ok 18 - handleKey returns false for unhandled keys # time=0.32ms
+    ok 18 - handleKey returns false for unhandled keys # time=0.195ms
     
     # Subtest: setPosition changes position
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 19 - setPosition changes position # time=0.525ms
+    ok 19 - setPosition changes position # time=0.339ms
     
     # Subtest: setPosition ignores invalid positions
         ok 1 - should be equal
         1..1
-    ok 20 - setPosition ignores invalid positions # time=0.298ms
+    ok 20 - setPosition ignores invalid positions # time=0.307ms
     
     # Subtest: getScrollInfo returns scroll information
         ok 1 - should be equal
@@ -145,37 +145,37 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 21 - getScrollInfo returns scroll information # time=0.685ms
+    ok 21 - getScrollInfo returns scroll information # time=0.432ms
     
     # Subtest: handles multi-line field values
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 22 - handles multi-line field values # time=0.459ms
+    ok 22 - handles multi-line field values # time=0.273ms
     
     # Subtest: handles related counts
         ok 1 - should be equal
         1..1
-    ok 23 - handles related counts # time=0.375ms
+    ok 23 - handles related counts # time=0.221ms
     
     # Subtest: handles navigation links
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 24 - handles navigation links # time=0.501ms
+    ok 24 - handles navigation links # time=0.467ms
     
     # Subtest: truncates long values
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 25 - truncates long values # time=0.467ms
+    ok 25 - truncates long values # time=0.295ms
     
     # Subtest: destroy cleans up state
         ok 1 - should be equal
         ok 2 - should be equivalent
         ok 3 - should be equal
         1..3
-    ok 26 - destroy cleans up state # time=0.537ms
+    ok 26 - destroy cleans up state # time=0.312ms
     
     # Subtest: responds to event bus events
         ok 1 - should be equal
@@ -183,11 +183,11 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 27 - responds to event bus events # time=0.989ms
+    ok 27 - responds to event bus events # time=0.635ms
     
     1..27
-ok 1 - DetailPanel # time=40.344ms
+ok 1 - DetailPanel # time=28.674ms
 
 1..1
 # { total: 77, pass: 77 }
-# time=57.033ms
+# time=43.57ms

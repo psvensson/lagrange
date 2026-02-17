@@ -1,14 +1,14 @@
 TAP version 14
 # Subtest: Multi-node cluster integration tests
-{"level":50,"time":"2026-02-15T13:14:24.594Z","nodeId":"test-node","pid":1882893,"subsystem":"node-joining","nodeId":"test-node","bootstrapUrl":"http://localhost:0/bootstrap","error":"HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","msg":"Failed to contact seed node"}
-{"level":50,"time":"2026-02-15T13:14:24.595Z","nodeId":"test-node","pid":1882893,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":7,"error":"Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","stack":"Error: Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:607:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:459:7)\n    at async NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:276:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/multi-node-cluster.integration.test.js:83:20)","msg":"Joining phase failed"}
-{"level":50,"time":"2026-02-15T13:14:24.595Z","nodeId":"test-node","pid":1882893,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":8,"error":"Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","stack":"Error: Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:607:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:459:7)\n    at async NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:276:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/multi-node-cluster.integration.test.js:83:20)","msg":"Node joining failed"}
+{"level":50,"time":"2026-02-17T06:46:18.812Z","nodeId":"test-node","pid":2315936,"subsystem":"node-joining","nodeId":"test-node","bootstrapUrl":"http://localhost:0/bootstrap","error":"HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","msg":"Failed to contact seed node"}
+{"level":50,"time":"2026-02-17T06:46:18.812Z","nodeId":"test-node","pid":2315936,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":8,"error":"Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","stack":"Error: Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:644:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:496:7)\n    at async NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:309:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/multi-node-cluster.integration.test.js:83:20)","msg":"Joining phase failed"}
+{"level":50,"time":"2026-02-17T06:46:18.812Z","nodeId":"test-node","pid":2315936,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":8,"error":"Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","stack":"Error: Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:644:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:496:7)\n    at async NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:309:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/multi-node-cluster.integration.test.js:83:20)","msg":"Node joining failed"}
     # Subtest: node joining - rejects duplicate node ID from cache
         ok 1 - join should fail for duplicate node ID
         ok 2 - phase should be failed
         ok 3 - error should mention already registered
         1..3
-    ok 1 - node joining - rejects duplicate node ID from cache # time=26.338ms
+    ok 1 - node joining - rejects duplicate node ID from cache # time=26.771ms
     
     # Subtest: node leaving - services are stopped and cleaned up
         ok 1 - should have 2 services
@@ -16,26 +16,29 @@ TAP version 14
         ok 3 - should not be initialized
         ok 4 - should be stopped
         1..4
-    ok 2 - node leaving - services are stopped and cleaned up # time=536.443ms
+    ok 2 - node leaving - services are stopped and cleaned up # time=507.423ms
     
     # Subtest: replica rebalancing - triggers on node join
         ok 1 - bootstrap should succeed
         ok 2 - rebalance should succeed
         ok 3 - should have moves array
+{"level":50,"time":"2026-02-17T06:46:21.257Z","nodeId":"test-node","pid":2315936,"subsystem":"query-executor","partitionId":"nodes-p1","address":"550e8400-e29b-41d4-a716-446655440020/partition/nodes-p1-r1","error":"Connection to node 550e8400-e29b-41d4-a716-446655440020 closed","nodeId":"test-node","msg":"Query routing failed"}
+{"level":50,"time":"2026-02-17T06:46:21.257Z","nodeId":"test-node","pid":2315936,"subsystem":"cdc-integration","tableName":"nodes","id":"550e8400-e29b-41d4-a716-446655440020","error":"Distributed operation failed due to participant failures","nodeId":"test-node","msg":"Failed to update system table row"}
+{"level":50,"time":"2026-02-17T06:46:21.258Z","nodeId":"test-node","pid":2315936,"subsystem":"latency-group-manager","nodeId":"test-node","trigger":"initial","error":"Distributed operation failed due to participant failures","msg":"Latency assignment cycle failed"}
         1..3
-    ok 3 - replica rebalancing - triggers on node join # time=3146.783ms
+    ok 3 - replica rebalancing - triggers on node join # time=1908.865ms
     
     # Subtest: message routing - local message delivery
         ok 1 - should have elected a leader
         ok 2 - should have message ID
         ok 3 - should have delivery status
         1..3
-    ok 4 - message routing - local message delivery # time=155.316ms
+    ok 4 - message routing - local message delivery # time=159.184ms
     
     # Subtest: message routing - cross-replica communication
         ok 1 - 3-replica group should elect a leader
         1..1
-    ok 5 - message routing - cross-replica communication # time=155.048ms
+    ok 5 - message routing - cross-replica communication # time=156.067ms
     
     # Subtest: rebalancer - maintains odd replica count
         ok 1 - bootstrap should succeed
@@ -44,7 +47,7 @@ TAP version 14
         ok 4 - should adjust 4 to odd
         ok 5 - should keep 5 as is
         1..5
-    ok 6 - rebalancer - maintains odd replica count # time=3042.237ms
+    ok 6 - rebalancer - maintains odd replica count # time=1754.211ms
     
     # Subtest: node service - tracks message group replicas
         ok 1 - should be equal
@@ -54,17 +57,17 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should still get MG replica
         1..6
-    ok 7 - node service - tracks message group replicas # time=474.925ms
+    ok 7 - node service - tracks message group replicas # time=471.14ms
     
     # Subtest: bootstrap API - validates node registration
         ok 1 - valid registration should succeed
         ok 2 - should have message group assignment
         1..2
-    ok 8 - bootstrap API - validates node registration # time=3.739ms
+    ok 8 - bootstrap API - validates node registration # time=3.854ms
     
     1..8
-ok 1 - Multi-node cluster integration tests # time=7720.17ms
+ok 1 - Multi-node cluster integration tests # time=5182.337ms
 
 1..1
 # { total: 27, pass: 27 }
-# time=7723.26ms
+# time=5186.932ms

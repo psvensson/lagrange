@@ -11,7 +11,7 @@ import {
   QUERY_ROUTER_ERROR_MSG,
   QUERY_RESPONSE_TYPE,
 } from '../../src/query/query-constants.js';
-import {SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 /**
@@ -60,7 +60,7 @@ function createService(overrides = {}) {
   return {
     partition_id: 'partition-1',
     service_type: SERVICE_TYPE.PARTITION,
-    status: STATE.ACTIVE,
+    status: SERVICE_STATUS.ACTIVE,
     raft_role: RAFT_ROLE.FOLLOWER,
     address: 'ws://localhost:8080',
     node_id: 'node-1',
@@ -182,7 +182,7 @@ describe('QueryRouter', () => {
 
     it('should filter out inactive services', () => {
       const services = [
-        createService({status: STATE.ACTIVE, address: 'ws://active:8080'}),
+        createService({status: SERVICE_STATUS.ACTIVE, address: 'ws://active:8080'}),
         createService({
           service_id: 'inactive',
           status: 'inactive',

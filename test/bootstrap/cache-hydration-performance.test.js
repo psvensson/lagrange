@@ -8,7 +8,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {TABLES, SERVICE_TYPE, STATE} from '../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -59,7 +59,7 @@ function createTypicalBootstrapResponse() {
     snapshots.nodes.push({
       node_id: nodeId,
       node_address: `http://localhost:${8080 + i}`,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       created_at: Date.now(),
       updated_at: Date.now(),
     });
@@ -97,7 +97,7 @@ function createTypicalBootstrapResponse() {
         node_id: nodeId,
         address: `${nodeId}/partition/${replicaId}`,
         raft_role: r === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
-        status: STATE.ACTIVE,
+        status: SERVICE_STATUS.ACTIVE,
         created_at: Date.now(),
       });
     }
@@ -146,7 +146,7 @@ function createLargeBootstrapResponse() {
     snapshots.nodes.push({
       node_id: nodeId,
       node_address: `http://localhost:${8080 + i}`,
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       created_at: Date.now(),
       updated_at: Date.now(),
     });
@@ -182,7 +182,7 @@ function createLargeBootstrapResponse() {
         node_id: nodeId,
         address: `${nodeId}/partition/${replicaId}`,
         raft_role: r === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
-        status: STATE.ACTIVE,
+        status: SERVICE_STATUS.ACTIVE,
         created_at: Date.now(),
       });
     }

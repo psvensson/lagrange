@@ -1,8 +1,8 @@
 import {
   COLUMN,
   NUM,
+  SERVICE_STATUS,
   SERVICE_TYPE,
-  STATE,
   TABLES,
   TYPEOF,
 } from '../constants/index.js';
@@ -54,7 +54,7 @@ const hasPartitionLeaderService = (cache, partitionId) => {
     service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
     service[COLUMN.PARTITION_ID] === partitionId &&
     service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-    service[COLUMN.STATUS] === STATE.ACTIVE &&
+    service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
     Boolean(service[COLUMN.ADDRESS]),
   );
   return leaders.length > NUM.ZERO;
@@ -73,7 +73,7 @@ const hasPartitionLeaderServiceWithoutAddress = (cache, partitionId) => {
     service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
     service[COLUMN.PARTITION_ID] === partitionId &&
     service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-    service[COLUMN.STATUS] === STATE.ACTIVE,
+    service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
   );
   return leaders.length > NUM.ZERO;
 };
@@ -134,7 +134,7 @@ const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
       service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
       service[COLUMN.PARTITION_ID] === partitionId &&
       service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      service[COLUMN.STATUS] === STATE.ACTIVE,
+      service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
     );
 
     if (!leaderService) {
@@ -169,7 +169,7 @@ const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
       service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
       service[COLUMN.GROUP_ID] === groupId &&
       service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      service[COLUMN.STATUS] === STATE.ACTIVE,
+      service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
     );
 
     if (!leaderService) {

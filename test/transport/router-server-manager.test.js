@@ -173,27 +173,41 @@ t.test('RouterServerManager unit tests', async (t) => {
   });
 
   t.test('should start and shutdown real WebSocket server', async (t) => {
-    const port = ports.getPort();
-    const serverManager = new RouterServerManager({
-      nodeId: 'node-1',
-      logger: createMockLogger(),
-      routerId: 'router-1',
-      wsPort: port,
-      wsHost: 'localhost',
-      nodeConnections: new Map(),
-      onMessage: () => {},
-      onConnectionClose: () => {},
-      emit: () => {},
-    });
+    let serverManager = null;
+    let lastBindError = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const port = await ports.getAvailable();
+      const candidate = new RouterServerManager({
+        nodeId: 'node-1',
+        logger: createMockLogger(),
+        routerId: 'router-1',
+        wsPort: port,
+        wsHost: 'localhost',
+        nodeConnections: new Map(),
+        onMessage: () => {},
+        onConnectionClose: () => {},
+        emit: () => {},
+      });
 
-    try {
-      await serverManager.startServer();
-    } catch (error) {
-      if (error?.code === 'EPERM' || error?.code === 'EACCES') {
-        t.pass(`socket listen not permitted in this environment: ${error.message}`);
-        return;
+      try {
+        await candidate.startServer();
+        serverManager = candidate;
+        break;
+      } catch (error) {
+        await candidate.shutdown().catch(() => {});
+        if (error?.code === 'EPERM' || error?.code === 'EACCES') {
+          t.pass(`socket listen not permitted in this environment: ${error.message}`);
+          return;
+        }
+        if (error?.code === 'EADDRINUSE') {
+          lastBindError = error;
+          continue;
+        }
+        throw error;
       }
-      throw error;
+    }
+    if (!serverManager && lastBindError) {
+      throw lastBindError;
     }
 
     t.equal(serverManager.isRunning(), true, 'should be running after start');

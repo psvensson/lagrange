@@ -24,6 +24,7 @@ import {
   COLUMN,
   NUM,
   SERVICE_TYPE,
+  SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
@@ -71,7 +72,7 @@ const removeOperationRowArb = fc.record({
   replica_id: fc.uuid(),
   source_node_id: fc.uuid(),
   target_node_id: fc.uuid(),
-  status: fc.constant(STATE.ACTIVE),
+  status: fc.constant(SERVICE_STATUS.ACTIVE),
   workflow_step: fc.constant(WORKFLOW_STEP.PENDING),
   created_at: fc.integer({min: 1, max: 9999999999}),
   updated_at: fc.integer({min: 1, max: 9999999999}),
@@ -92,7 +93,7 @@ const addOperationRowArb = fc.record({
   replica_id: fc.uuid(),
   source_node_id: fc.uuid(),
   target_node_id: fc.uuid(),
-  status: fc.constant(STATE.ACTIVE),
+  status: fc.constant(SERVICE_STATUS.ACTIVE),
   workflow_step: fc.constant(WORKFLOW_STEP.PENDING),
   created_at: fc.integer({min: 1, max: 9999999999}),
   updated_at: fc.integer({min: 1, max: 9999999999}),
@@ -110,7 +111,7 @@ function buildReadyNodeRow(nodeId) {
   const now = Date.now();
   return {
     [COLUMN.NODE_ID]: nodeId,
-    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.CONNECTION_STATE]: STATE.READY,
     [COLUMN.READY_LEASE_EXPIRES_AT]: now + NUM.THOUSAND * NUM.TEN,
   };
@@ -127,7 +128,7 @@ function buildServiceEntry(nodeId, entityType) {
     [COLUMN.SERVICE_ID]: `svc-${nodeId}-${entityType}`,
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.SERVICE_TYPE]: entityType,
-    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
   };
 }
 

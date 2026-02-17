@@ -22,7 +22,7 @@ import fc from 'fast-check';
 import {CacheHydrationGate} from '../../src/bootstrap/cache-hydration-gate.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {COLUMN, SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
+import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 // ============================================================================
@@ -123,7 +123,7 @@ function createPartitionLeaderService(partitionId, options = {}) {
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: partitionId,
     [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
-    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.NODE_ID]: hasNodeId ? options.nodeId : 'node-1',
     [COLUMN.ADDRESS]: hasAddress ? options.address : 'ws://127.0.0.1:8080',
   };
@@ -145,7 +145,7 @@ function createMessageGroupLeaderService(groupId, options = {}) {
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
     [COLUMN.GROUP_ID]: groupId,
     [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
-    [COLUMN.STATUS]: STATE.ACTIVE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.NODE_ID]: hasNodeId ? options.nodeId : 'node-1',
     [COLUMN.ADDRESS]: hasAddress ? options.address : 'ws://127.0.0.1:8080',
   };

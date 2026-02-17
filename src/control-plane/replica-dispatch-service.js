@@ -14,6 +14,7 @@ import {REBALANCE_COORDINATOR_EVENT} from '../rebalancer/rebalancer-constants.js
 import {
   COLUMN,
   NUM,
+  SERVICE_STATUS,
   SERVICE_TYPE,
   STATE,
   STRING,
@@ -331,7 +332,7 @@ class ReplicaDispatchService extends EventEmitter {
       [COLUMN.MEMORY_USAGE_PERCENT]: existing[COLUMN.MEMORY_USAGE_PERCENT] ||
         NUM.ZERO,
       [COLUMN.DISK_USAGE_PERCENT]: existing[COLUMN.DISK_USAGE_PERCENT] || NUM.ZERO,
-      [COLUMN.STATUS]: existing[COLUMN.STATUS] || STATE.ACTIVE,
+      [COLUMN.STATUS]: existing[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
       [COLUMN.CONNECTION_STATE]: state,
       [COLUMN.CAPABILITIES]: capabilities,
       [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
@@ -638,7 +639,7 @@ class ReplicaDispatchService extends EventEmitter {
       const result = await this.sqlQueryEngine.executeQuery(
         'SELECT service_id FROM services WHERE node_id = ?' +
         ' AND service_type = ? AND status = ?',
-        [nodeId, entityType, STATE.ACTIVE],
+        [nodeId, entityType, SERVICE_STATUS.ACTIVE],
       );
       return (result.rows?.length || NUM.ZERO) > NUM.ZERO;
     }

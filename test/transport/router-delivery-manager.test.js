@@ -47,9 +47,6 @@ function createTestManager(overrides = {}) {
       return {nodeId: parts[0], entityType: parts[1], entityId: parts[2]};
     },
     isValidAddress: () => true,
-    hasTransportRegistry: () => false,
-    getTransportRegistry: () => null,
-    getConnectionPool: () => null,
     outboundQueue: {
       enqueueOutbound: (targetNodeId, fn) => {
         enqueuedCalls.push({targetNodeId});

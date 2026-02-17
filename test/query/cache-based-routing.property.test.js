@@ -20,7 +20,7 @@ import fc from 'fast-check';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
-import {TABLES, SERVICE_TYPE, STATE} from '../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 /**
@@ -120,7 +120,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
             partition_id: partitionId,
             service_type: SERVICE_TYPE.PARTITION,
             raft_role: RAFT_ROLE.LEADER,
-            status: STATE.ACTIVE,
+            status: SERVICE_STATUS.ACTIVE,
             address: `${nodeAddress}/partition/${partitionId}`,
             node_id: nodeAddress,
             service_id: partitionId,
@@ -185,7 +185,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
             partition_id: id,
             service_type: SERVICE_TYPE.PARTITION,
             raft_role: RAFT_ROLE.LEADER,
-            status: STATE.ACTIVE,
+            status: SERVICE_STATUS.ACTIVE,
             address: `${nodeAddress}/partition/${id}`,
             node_id: nodeAddress,
             service_id: id,
@@ -258,7 +258,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
               partition_id: partitionId,
               service_type: SERVICE_TYPE.PARTITION,
               raft_role: RAFT_ROLE.LEADER,
-              status: STATE.ACTIVE,
+              status: SERVICE_STATUS.ACTIVE,
               address: `${nodeAddress}/partition/${partitionId}`,
               node_id: nodeAddress,
               service_id: partitionId,
@@ -267,7 +267,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
               partition_id: partitionId,
               service_type: SERVICE_TYPE.PARTITION,
               raft_role: RAFT_ROLE.FOLLOWER,
-              status: STATE.ACTIVE,
+              status: SERVICE_STATUS.ACTIVE,
               address: `node2/partition/${partitionId}`,
               node_id: 'node2',
               service_id: `${partitionId}-follower`,
@@ -333,7 +333,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
             partition_id: id,
             service_type: SERVICE_TYPE.PARTITION,
             raft_role: RAFT_ROLE.LEADER,
-            status: STATE.ACTIVE,
+            status: SERVICE_STATUS.ACTIVE,
             address: `${nodeAddresses[index % nodeAddresses.length]}/partition/${id}`,
             node_id: nodeAddresses[index % nodeAddresses.length],
             service_id: id,
@@ -445,7 +445,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
             partition_id: partitionId,
             service_type: SERVICE_TYPE.PARTITION,
             raft_role: RAFT_ROLE.LEADER,
-            status: STATE.ACTIVE,
+            status: SERVICE_STATUS.ACTIVE,
             address: `${nodeAddress}/partition/${partitionId}`,
             node_id: nodeAddress,
             service_id: partitionId,

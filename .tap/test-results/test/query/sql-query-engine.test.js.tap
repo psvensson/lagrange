@@ -9,19 +9,39 @@ Resolved partitions for SELECT {
 }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771226418342-0-sql-query-engine',
+  timestamp: '1771310940286-0-sql-query-engine',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771226418343', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1771310940286', partitionCount: 2, originalCount: 2 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310940286',
+  partitionCount: 2,
+  totalLatencyMs: 7,
+  medianLatencyMs: 4.5,
+  maxPartitionLatencyMs: 5,
+  totalRows: 2,
+  totalBytes: 96,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 2,
+  fanoutTotalLatencyMs: 7,
+  fanoutMedianLatencyMs: 4.5,
+  mergeDurationMs: 0,
+  totalRows: 2,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'SELECT',
-  parseDurationMs: 2,
-  executionDurationMs: 5,
-  totalDurationMs: 7,
+  parseDurationMs: 4,
+  executionDurationMs: 11,
+  totalDurationMs: 15,
   partitionCount: 2,
   rowCount: 2,
   success: true
@@ -30,7 +50,7 @@ metrics.query.lifecycle {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 1 - SQLQueryEngine - executes SELECT query # time=10.498ms
+ok 1 - SQLQueryEngine - executes SELECT query # time=20.425ms
 
 Executing SQL query {
   sql: "SELECT * FROM users WHERE id = 'alice'",
@@ -60,18 +80,38 @@ Resolved partitions for SELECT {
 }
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1771226418356-0-sql-query-engine',
+  timestamp: '1771310940311-0-sql-query-engine',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771226418356', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310940312', partitionCount: 1, originalCount: 1 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310940312',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 1,
+  totalBytes: 62,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 1,
+  fanoutTotalLatencyMs: 0,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 1,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'SELECT',
-  parseDurationMs: 2,
-  executionDurationMs: 5,
-  totalDurationMs: 7,
+  parseDurationMs: 3,
+  executionDurationMs: 11,
+  totalDurationMs: 14,
   partitionCount: 1,
   rowCount: 1,
   success: true
@@ -81,7 +121,7 @@ metrics.query.lifecycle {
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 2 - SQLQueryEngine - routes SELECT with key filter to single partition # time=7.896ms
+ok 2 - SQLQueryEngine - routes SELECT with key filter to single partition # time=15.196ms
 
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice')",
@@ -100,9 +140,9 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'INSERT',
-  parseDurationMs: 1,
-  executionDurationMs: 1,
-  totalDurationMs: 2,
+  parseDurationMs: 2,
+  executionDurationMs: 3,
+  totalDurationMs: 5,
   partitionCount: 1,
   rowCount: 0,
   success: true
@@ -113,7 +153,7 @@ metrics.query.lifecycle {
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 3 - SQLQueryEngine - executes INSERT and routes to correct partition # time=2.948ms
+ok 3 - SQLQueryEngine - executes INSERT and routes to correct partition # time=5.949ms
 
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice'), ('zack', 'Zack')",
@@ -135,8 +175,8 @@ metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'INSERT',
   parseDurationMs: 0,
-  executionDurationMs: 1,
-  totalDurationMs: 1,
+  executionDurationMs: 2,
+  totalDurationMs: 2,
   partitionCount: 2,
   rowCount: 0,
   success: true
@@ -145,7 +185,7 @@ metrics.query.lifecycle {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 4 - SQLQueryEngine - routes INSERT to multiple partitions # time=1.269ms
+ok 4 - SQLQueryEngine - routes INSERT to multiple partitions # time=2.26ms
 
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice'), ('zack', 'Zack') RETURNING id",
@@ -178,7 +218,7 @@ metrics.query.lifecycle {
     ok 2 - should be equal
     ok 3 - should be equivalent
     1..3
-ok 5 - SQLQueryEngine - merges RETURNING rows for distributed INSERT # time=3.696ms
+ok 5 - SQLQueryEngine - merges RETURNING rows for distributed INSERT # time=4.257ms
 
 Executing SQL query {
   sql: "UPDATE users SET status = 'active' WHERE age > 18 RETURNING id",
@@ -188,20 +228,53 @@ Executing SQL query {
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 Routing UPDATE to partitions { tableName: 'users', partitionCount: 2, sessionId: 'default' }
 Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1771226418367', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310940330', partitionCount: 1, originalCount: 1 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310940330',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 1,
+  totalBytes: 32,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-2-1771226418367', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310940330', partitionCount: 1, originalCount: 1 }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310940330',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-3-1771226418368', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-3-1771310940331', partitionCount: 1, originalCount: 1 }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-3-1771310940331',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 1,
+  totalRows: 0,
+  totalBytes: 0,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'UPDATE',
-  parseDurationMs: 1,
-  executionDurationMs: 2,
-  totalDurationMs: 3,
+  parseDurationMs: 2,
+  executionDurationMs: 3,
+  totalDurationMs: 5,
   partitionCount: 2,
   rowCount: 0,
   success: false
@@ -213,7 +286,7 @@ metrics.query.lifecycle {
     ok 4 - should be equal
     ok 5 - should be equivalent
     1..5
-ok 6 - SQLQueryEngine - surfaces partial failure for distributed UPDATE # time=3.789ms
+ok 6 - SQLQueryEngine - surfaces partial failure for distributed UPDATE # time=6.605ms
 
 Executing SQL query {
   sql: "UPDATE users SET status = 'active' WHERE id = 'alice'",
@@ -237,14 +310,25 @@ Resolved partitions for query {
 }
 Routing UPDATE to partitions { tableName: 'users', partitionCount: 1, sessionId: 'default' }
 Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1771226418370', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310940335', partitionCount: 1, originalCount: 1 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310940335',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 1,
+  totalBytes: 32,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'UPDATE',
   parseDurationMs: 1,
-  executionDurationMs: 0,
-  totalDurationMs: 1,
+  executionDurationMs: 1,
+  totalDurationMs: 2,
   partitionCount: 1,
   rowCount: 0,
   success: true
@@ -255,7 +339,7 @@ metrics.query.lifecycle {
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 7 - SQLQueryEngine - executes UPDATE with key filter # time=1.467ms
+ok 7 - SQLQueryEngine - executes UPDATE with key filter # time=2.894ms
 
 Executing SQL query {
   sql: "UPDATE users SET status = 'active' WHERE age > 18",
@@ -265,17 +349,39 @@ Executing SQL query {
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 Routing UPDATE to partitions { tableName: 'users', partitionCount: 2, sessionId: 'default' }
 Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1771226418371', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310940338', partitionCount: 1, originalCount: 1 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310940338',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
+  totalRows: 1,
+  totalBytes: 32,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-2-1771226418372', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771310940339', partitionCount: 1, originalCount: 1 }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310940339',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 1,
+  totalBytes: 28,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'UPDATE',
-  parseDurationMs: 0,
+  parseDurationMs: 1,
   executionDurationMs: 1,
-  totalDurationMs: 1,
+  totalDurationMs: 2,
   partitionCount: 2,
   rowCount: 0,
   success: true
@@ -284,7 +390,7 @@ metrics.query.lifecycle {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 8 - SQLQueryEngine - executes UPDATE on all partitions without key filter # time=1.403ms
+ok 8 - SQLQueryEngine - executes UPDATE on all partitions without key filter # time=2.928ms
 
 Executing SQL query {
   sql: "DELETE FROM users WHERE id = 'alice'",
@@ -308,14 +414,25 @@ Resolved partitions for query {
 }
 Routing DELETE to partitions { tableName: 'users', partitionCount: 1, sessionId: 'default' }
 Executing DELETE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1771226418374', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310940342', partitionCount: 1, originalCount: 1 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310940342',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 1,
+  totalBytes: 32,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'DELETE',
   parseDurationMs: 1,
-  executionDurationMs: 1,
-  totalDurationMs: 2,
+  executionDurationMs: 2,
+  totalDurationMs: 3,
   partitionCount: 1,
   rowCount: 0,
   success: true
@@ -325,7 +442,7 @@ metrics.query.lifecycle {
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 9 - SQLQueryEngine - executes DELETE with key filter # time=1.959ms
+ok 9 - SQLQueryEngine - executes DELETE with key filter # time=3.548ms
 
 Executing SQL query {
   sql: 'SELECT * FROM nonexistent',
@@ -335,8 +452,8 @@ Executing SQL query {
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'SELECT',
-  parseDurationMs: 1,
-  executionDurationMs: 0,
+  parseDurationMs: 0,
+  executionDurationMs: 1,
   totalDurationMs: 1,
   partitionCount: 0,
   rowCount: 0,
@@ -346,7 +463,7 @@ metrics.query.lifecycle {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 10 - SQLQueryEngine - returns error for non-existent table # time=0.797ms
+ok 10 - SQLQueryEngine - returns error for non-existent table # time=1.386ms
 
 Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'default' }
 BEGIN TRANSACTION { sessionId: 'default' }
@@ -366,14 +483,14 @@ ROLLBACK { sessionId: 'default', participants: [] }
     ok 7 - should be equal
     ok 8 - should be equal
     1..8
-ok 11 - SQLQueryEngine - handles transaction statements # time=1.873ms
+ok 11 - SQLQueryEngine - handles transaction statements # time=3.135ms
 
 Executing SQL query { sql: 'INVALID SQL STATEMENT', paramCount: 0, sessionId: 'default' }
 # Subtest: SQLQueryEngine - returns syntax error for invalid SQL
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 12 - SQLQueryEngine - returns syntax error for invalid SQL # time=2.044ms
+ok 12 - SQLQueryEngine - returns syntax error for invalid SQL # time=3.669ms
 
 # Subtest: SQLQueryEngine - parse method returns AST
     ok 1 - should be equal
@@ -381,13 +498,13 @@ ok 12 - SQLQueryEngine - returns syntax error for invalid SQL # time=2.044ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 13 - SQLQueryEngine - parse method returns AST # time=0.842ms
+ok 13 - SQLQueryEngine - parse method returns AST # time=1.672ms
 
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 # Subtest: SQLQueryEngine - resolvePartitions method works
     ok 1 - should be equal
     1..1
-ok 14 - SQLQueryEngine - resolvePartitions method works # time=0.697ms
+ok 14 - SQLQueryEngine - resolvePartitions method works # time=0.631ms
 
 Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
 metrics.query.lifecycle {
@@ -404,15 +521,15 @@ metrics.query.lifecycle {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 15 - SQLQueryEngine - throws error when system cache not available # time=1.149ms
+ok 15 - SQLQueryEngine - throws error when system cache not available # time=1.228ms
 
 Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'SELECT',
   parseDurationMs: 0,
-  executionDurationMs: 0,
-  totalDurationMs: 0,
+  executionDurationMs: 1,
+  totalDurationMs: 1,
   partitionCount: 0,
   rowCount: 0,
   success: false
@@ -421,7 +538,7 @@ metrics.query.lifecycle {
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 16 - SQLQueryEngine - returns empty array when no partitions found in cache # time=1.148ms
+ok 16 - SQLQueryEngine - returns empty array when no partitions found in cache # time=1.077ms
 
 Executing SQL query {
   sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice')",
@@ -453,13 +570,13 @@ metrics.query.lifecycle {
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 17 - SQLQueryEngine - persists non-transactional distributed write operations # time=1.341ms
+ok 17 - SQLQueryEngine - persists non-transactional distributed write operations # time=2.082ms
 
 # Subtest: SQLQueryEngine - recovers distributed transactions from system cache snapshots
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 18 - SQLQueryEngine - recovers distributed transactions from system cache snapshots # time=0.519ms
+ok 18 - SQLQueryEngine - recovers distributed transactions from system cache snapshots # time=0.876ms
 
 Resolved partitions for query {
   tableName: 'users',
@@ -483,7 +600,7 @@ Resolved partitions for query {
     ok 4 - should be equal
     ok 5 - should be equivalent
     1..5
-ok 19 - SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output # time=1.09ms
+ok 19 - SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output # time=2.085ms
 
 Executing SQL query {
   sql: 'SELECT id FROM users WHERE id = ?',
@@ -513,18 +630,38 @@ Resolved partitions for SELECT {
 }
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1771226418390-0-sql-query-engine',
+  timestamp: '1771310940365-0-sql-query-engine',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771226418390', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310940365', partitionCount: 1, originalCount: 1 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310940365',
+  partitionCount: 1,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 1,
+  totalBytes: 62,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 1,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 1,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'SELECT',
   parseDurationMs: 1,
-  executionDurationMs: 0,
-  totalDurationMs: 1,
+  executionDurationMs: 1,
+  totalDurationMs: 2,
   partitionCount: 1,
   rowCount: 1,
   success: true
@@ -534,7 +671,7 @@ metrics.query.lifecycle {
     ok 2 - should be equivalent
     ok 3 - should be equivalent
     1..3
-ok 20 - SQLQueryEngine - distributed diagnostics schema is stable for SELECT # time=1.389ms
+ok 20 - SQLQueryEngine - distributed diagnostics schema is stable for SELECT # time=2.913ms
 
 Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 1 }
@@ -546,18 +683,38 @@ Resolved partitions for SELECT {
 }
 Executing distributed SELECT {
   partitionCount: 1,
-  timestamp: '1771226418391-1-sql-query-engine',
+  timestamp: '1771310940369-0-sql-query-engine',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771226418391', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771310940369', partitionCount: 1, originalCount: 1 }
 Routing query to partition service { partitionId: 'users-p1', address: 'test-node/partition/users-p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771310940369',
+  partitionCount: 1,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 1,
+  totalBytes: 32,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 1,
+  fanoutTotalLatencyMs: 0,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 1,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'SELECT',
   parseDurationMs: 0,
-  executionDurationMs: 1,
-  totalDurationMs: 1,
+  executionDurationMs: 2,
+  totalDurationMs: 2,
   partitionCount: 1,
   rowCount: 1,
   success: true
@@ -575,13 +732,33 @@ Resolved partitions for SELECT {
 }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771226418392-0-sql-query-engine',
+  timestamp: '1771310940371-0-sql-query-engine',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-2-1771226418392', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-2-1771310940371', partitionCount: 2, originalCount: 2 }
 Routing query to partition service { partitionId: 'users-p1a', address: 'test-node/partition/users-p1a' }
 Routing query to partition service { partitionId: 'users-p1b', address: 'test-node/partition/users-p1b' }
+metrics.fanout.complete {
+  queryId: 'q-2-1771310940371',
+  partitionCount: 2,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 2,
+  totalBytes: 62,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 2,
+  fanoutTotalLatencyMs: 0,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 2,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
 metrics.query.lifecycle {
   sessionId: 'default',
   statementType: 'SELECT',
@@ -596,8 +773,8 @@ metrics.query.lifecycle {
     ok 4 - should be equal
     ok 5 - should be equivalent
     1..5
-ok 21 - SQLQueryEngine - remains correct before and after partition split updates # time=2.083ms
+ok 21 - SQLQueryEngine - remains correct before and after partition split updates # time=4.736ms
 
 1..21
 # { total: 68, pass: 68 }
-# time=93.318ms
+# time=172.152ms

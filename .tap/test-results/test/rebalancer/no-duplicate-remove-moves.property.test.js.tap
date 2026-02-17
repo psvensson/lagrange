@@ -3,26 +3,26 @@ TAP version 14
     # Subtest: no REMOVE moves for replicas in removing state
         ok 1 - no REMOVE moves for replicas in removing state
         1..1
-    ok 1 - no REMOVE moves for replicas in removing state # time=5.73ms
+    ok 1 - no REMOVE moves for replicas in removing state # time=7.456ms
     
     # Subtest: cache correctly tracks in-flight REMOVE operations
         ok 1 - cache correctly tracks in-flight REMOVE operations
         1..1
-    ok 2 - cache correctly tracks in-flight REMOVE operations # time=1.941ms
+    ok 2 - cache correctly tracks in-flight REMOVE operations # time=2.143ms
     
     # Subtest: REMOVE moves allowed for active replicas without in-flight ops
         ok 1 - REMOVE moves allowed for active replicas without in-flight ops
         1..1
-    ok 3 - REMOVE moves allowed for active replicas without in-flight ops # time=1.882ms
+    ok 3 - REMOVE moves allowed for active replicas without in-flight ops # time=1.739ms
     
     # Subtest: completed REMOVE operations do not block new moves
         ok 1 - completed REMOVE operations do not block new moves
         1..1
-    ok 4 - completed REMOVE operations do not block new moves # time=1.489ms
+    ok 4 - completed REMOVE operations do not block new moves # time=1.645ms
     
     1..4
-ok 1 - Property 4: No Duplicate REMOVE Moves for Removing Replicas # time=110.565ms
+ok 1 - Property 4: No Duplicate REMOVE Moves for Removing Replicas # time=147.183ms
 
 1..1
 # { total: 4, pass: 4 }
-# time=126.856ms
+# time=165.003ms

@@ -2,7 +2,7 @@ TAP version 14
 # Subtest: setup
     ok 1 - configuration initialized
     1..1
-ok 1 - setup # time=43.472ms
+ok 1 - setup # time=40.83ms
 
 # Subtest: HLCTimestamp creation and serialization
     ok 1 - should store physical time
@@ -10,21 +10,21 @@ ok 1 - setup # time=43.472ms
     ok 3 - should store node ID
     ok 4 - should serialize correctly
     1..4
-ok 2 - HLCTimestamp creation and serialization # time=0.411ms
+ok 2 - HLCTimestamp creation and serialization # time=0.461ms
 
 # Subtest: HLCTimestamp parsing
     ok 1 - should parse physical time
     ok 2 - should parse logical counter
     ok 3 - should parse node ID
     1..3
-ok 3 - HLCTimestamp parsing # time=0.269ms
+ok 3 - HLCTimestamp parsing # time=0.287ms
 
 # Subtest: HLCTimestamp parsing with dashes in nodeId
     ok 1 - should parse physical time
     ok 2 - should parse logical counter
     ok 3 - should parse node ID with dashes
     1..3
-ok 4 - HLCTimestamp parsing with dashes in nodeId # time=0.214ms
+ok 4 - HLCTimestamp parsing with dashes in nodeId # time=0.241ms
 
 # Subtest: HLCTimestamp comparison
     ok 1 - should compare by logical when physical equal
@@ -32,25 +32,25 @@ ok 4 - HLCTimestamp parsing with dashes in nodeId # time=0.214ms
     ok 3 - should compare by nodeId when physical and logical equal
     ok 4 - should equal clone
     1..4
-ok 5 - HLCTimestamp comparison # time=4.776ms
+ok 5 - HLCTimestamp comparison # time=4.522ms
 
 # Subtest: HLCClockService now() generates monotonic timestamps
     ok 1 - second timestamp should be after first
     ok 2 - third timestamp should be after second
     1..2
-ok 6 - HLCClockService now() generates monotonic timestamps # time=0.368ms
+ok 6 - HLCClockService now() generates monotonic timestamps # time=0.367ms
 
 # Subtest: HLCClockService update() handles remote timestamps
     ok 1 - should update physical to at least remote time
     ok 2 - should advance past remote timestamp
     1..2
-ok 7 - HLCClockService update() handles remote timestamps # time=0.261ms
+ok 7 - HLCClockService update() handles remote timestamps # time=0.28ms
 
 # Subtest: HLCClockService detects clock drift
     ok 1 - should trigger drift warning
     ok 2 - should report drift amount
     1..2
-ok 8 - HLCClockService detects clock drift # time=0.247ms
+ok 8 - HLCClockService detects clock drift # time=0.244ms
 
 # Subtest: HLCClockService handles logical overflow
     ok 1 - should handle logical overflow
@@ -65,8 +65,8 @@ ok 10 - HLCClockService current() returns current state # time=0.167ms
 # Subtest: cleanup
     ok 1 - cleanup complete
     1..1
-ok 11 - cleanup # time=0.147ms
+ok 11 - cleanup # time=0.135ms
 
 1..11
 # { total: 24, pass: 24 }
-# time=70.589ms
+# time=64.9ms

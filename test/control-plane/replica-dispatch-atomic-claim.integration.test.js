@@ -17,6 +17,7 @@ import {ControlPlaneField} from
 import {
   COLUMN,
   SERVICE_TYPE,
+  SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
@@ -94,7 +95,7 @@ test(
           if (tableName === SystemTableName.NODES && key === 'node-2') {
             return {
               node_id: 'node-2',
-              status: STATE.ACTIVE,
+              status: SERVICE_STATUS.ACTIVE,
               connection_state: STATE.READY,
               ready_lease_expires_at: Date.now() + 30000,
             };
@@ -110,7 +111,7 @@ test(
             return [{
               [COLUMN.NODE_ID]: 'node-2',
               [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-              [COLUMN.STATUS]: STATE.ACTIVE,
+              [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
             }];
           }
           return [];
@@ -217,7 +218,7 @@ test(
           if (tableName === SystemTableName.NODES && key === 'node-2') {
             return {
               node_id: 'node-2',
-              status: STATE.ACTIVE,
+              status: SERVICE_STATUS.ACTIVE,
               connection_state: STATE.READY,
               ready_lease_expires_at: Date.now() + 30000,
             };
@@ -311,7 +312,7 @@ test(
           if (tableName === SystemTableName.NODES && key === 'node-2') {
             return {
               node_id: 'node-2',
-              status: STATE.ACTIVE,
+              status: SERVICE_STATUS.ACTIVE,
               connection_state: STATE.READY,
               ready_lease_expires_at: Date.now() + 30000,
             };
@@ -327,7 +328,7 @@ test(
             return [{
               [COLUMN.NODE_ID]: 'node-2',
               [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-              [COLUMN.STATUS]: STATE.ACTIVE,
+              [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
             }];
           }
           return [];
@@ -391,7 +392,7 @@ test(
     const nodeStore = new Map();
     nodeStore.set('node-2', {
       node_id: 'node-2',
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       connection_state: STATE.DISCONNECTED,
       ready_lease_expires_at: null,
     });
@@ -466,7 +467,7 @@ test(
                 service_id: 'svc-partition-handler',
                 [COLUMN.NODE_ID]: 'node-2',
                 [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-                [COLUMN.STATUS]: STATE.ACTIVE,
+                [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
               }],
             };
           }
@@ -577,7 +578,7 @@ test(
           if (tableName === SystemTableName.NODES && key === 'node-2') {
             return {
               node_id: 'node-2',
-              status: STATE.ACTIVE,
+              status: SERVICE_STATUS.ACTIVE,
               connection_state: STATE.READY,
               ready_lease_expires_at: Date.now() + 30000,
             };
@@ -593,7 +594,7 @@ test(
             return [{
               [COLUMN.NODE_ID]: 'node-2',
               [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-              [COLUMN.STATUS]: STATE.ACTIVE,
+              [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
             }];
           }
           return [];
@@ -614,7 +615,7 @@ test(
                 service_id: 'svc-partition-handler',
                 [COLUMN.NODE_ID]: 'node-2',
                 [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-                [COLUMN.STATUS]: STATE.ACTIVE,
+                [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
               }],
             };
           }
@@ -666,7 +667,7 @@ test(
     const nodeStore = new Map();
     nodeStore.set('node-2', {
       node_id: 'node-2',
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       connection_state: STATE.CONNECTED,
       ready_lease_expires_at: null,
     });
@@ -805,7 +806,7 @@ test(
     const nodeStore = new Map();
     nodeStore.set('node-2', {
       node_id: 'node-2',
-      status: STATE.ACTIVE,
+      status: SERVICE_STATUS.ACTIVE,
       connection_state: STATE.CONNECTED,
       ready_lease_expires_at: null,
     });

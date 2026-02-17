@@ -1,4 +1,4 @@
-import {NUM, STATE, UNIFIED_SERVICE_TYPE} from '../constants/index.js';
+import {NUM, SERVICE_STATUS, UNIFIED_SERVICE_TYPE} from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {
   STORAGE_PLACEMENT_CONSTRAINT,
@@ -36,7 +36,7 @@ const REBALANCER_MOVE_TYPE = Object.freeze({
 });
 
 const REBALANCER_NODE_STATUS = Object.freeze({
-  ACTIVE: STATE.ACTIVE,
+  ACTIVE: SERVICE_STATUS.ACTIVE,
   SUSPECTED: 'suspected',
   FAILED: 'failed',
 });

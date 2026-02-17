@@ -2,23 +2,23 @@ TAP version 14
 # Subtest: Property 3: Hydration does not execute CDC-generating queries
     ok 1 - Hydration does not execute CDC-generating queries
     1..1
-ok 1 - Property 3: Hydration does not execute CDC-generating queries # time=24.819ms
+ok 1 - Property 3: Hydration does not execute CDC-generating queries # time=25.866ms
 
 # Subtest: Property 3: Hydration only uses SELECT queries
     ok 1 - Hydration only uses SELECT queries
     1..1
-ok 2 - Property 3: Hydration only uses SELECT queries # time=12.313ms
+ok 2 - Property 3: Hydration only uses SELECT queries # time=10.518ms
 
 # Subtest: Property 3: Hydration uses direct cache population
     ok 1 - Hydration uses direct cache population
     1..1
-ok 3 - Property 3: Hydration uses direct cache population # time=10.243ms
+ok 3 - Property 3: Hydration uses direct cache population # time=5.336ms
 
 # Subtest: Property 3: Cache listeners notified without CDC pipeline
     ok 1 - Cache listeners notified without CDC pipeline
     1..1
-ok 4 - Property 3: Cache listeners notified without CDC pipeline # time=18.701ms
+ok 4 - Property 3: Cache listeners notified without CDC pipeline # time=7.94ms
 
 1..4
 # { total: 4, pass: 4 }
-# time=235.261ms
+# time=216.867ms
