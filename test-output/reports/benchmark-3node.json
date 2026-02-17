@@ -1,0 +1,318 @@
+{
+  "timestamp": "2026-02-17T18:35:05.247Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 97329
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 3,
+    "scenariosWithPriorities": 1,
+    "topComponents": [
+      {
+        "component": "tail_latency_path",
+        "count": 2,
+        "highestPriority": "high",
+        "highestScore": 80
+      },
+      {
+        "component": "replication_write_path",
+        "count": 1,
+        "highestPriority": "high",
+        "highestScore": 80
+      }
+    ],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 0,
+    "scenariosComparedToPrevious": 0,
+    "scenariosComparedToPostgresBaseline": 1,
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 1,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|{\"workload\":\"custom-mixed-insert-select\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+        "current": {
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 97329,
+          "opsPerSec": 49.21949144222273,
+          "p99LatencyMs": 903,
+          "opsPerSecPerNode": 16.406497147407578
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": {
+          "engine": "postgres",
+          "throughputRatioSutToBaseline": 0.011661183929914496,
+          "p99LatencyRatioSutToBaselineAvg": 476.51715039577834,
+          "sutOpsPerSec": 49.21949144222273,
+          "baselineTps": 4220.797111,
+          "sutP99LatencyMs": 903,
+          "baselineLatencyAvgMs": 1.895,
+          "cache": {
+            "enabled": true,
+            "hit": false,
+            "key": "v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638",
+            "path": "test-output/reports/.playback/benchmark-3node/postgres-baseline-cache/v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638.json",
+            "cachedAt": "2026-02-17T18:34:52.203Z",
+            "reason": "cache-stored"
+          }
+        },
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": true,
+      "duration": 97329,
+      "clusterSize": 3,
+      "startedAt": "2026-02-17T18:33:15.877Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1771353195878,
+        "endedAt": 1771353305245,
+        "durationMs": 109367,
+        "files": {
+          "events": "test-output/reports/.playback/benchmark-3node/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/benchmark-3node/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/benchmark-3node/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/benchmark-3node/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/benchmark-3node/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 126,
+          "samples": 273,
+          "snapshots": 76
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": true,
+        "leakDetected": false,
+        "sampleCount": 273,
+        "nodeCount": 3,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "4517e58d-f94d-42cf-93f3-af42f81e98bd",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "analysis-window-too-short",
+            "sampleCount": 88,
+            "postWarmupSampleCount": 58,
+            "analysisWindowMs": 56179
+          },
+          {
+            "nodeId": "9c52dbac-1b23-4ffc-8565-de4a214b1693",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "analysis-window-too-short",
+            "sampleCount": 88,
+            "postWarmupSampleCount": 58,
+            "analysisWindowMs": 57182
+          },
+          {
+            "nodeId": "d1af9b90-75e8-4e73-b6d4-254327015522",
+            "analyzed": true,
+            "leakDetected": false,
+            "reason": "within-thresholds",
+            "sampleCount": 97,
+            "postWarmupSampleCount": 67,
+            "analysisWindowMs": 66027,
+            "slopeBytesPerMin": 32998113.512753025,
+            "growthBytes": 6127616,
+            "growthPercent": 2.719505544446464,
+            "positiveDeltaRatio": 0.7424242424242424,
+            "maxMemoryUsageBytes": 263864320,
+            "maxMemoryUsagePercent": 24.57427978515625
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/.playback/benchmark-3node/postgres-baseline-comparison/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": true,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": {
+        "loadMetrics": {
+          "total": 1504,
+          "success": 1504,
+          "failed": 0,
+          "errors": 0,
+          "latency": {
+            "p50": 7,
+            "p95": 615,
+            "p99": 903
+          },
+          "opsPerSec": 49.21949144222273
+        },
+        "details": {
+          "benchmark": {
+            "tool": "pgbench",
+            "workload": "custom-mixed-insert-select",
+            "durationSeconds": 30,
+            "clients": 8,
+            "jobs": 4
+          },
+          "baseline": {
+            "engine": "postgres",
+            "image": "postgres:16",
+            "containerIp": "172.19.0.5",
+            "replicaContainerIps": [
+              "172.19.0.6",
+              "172.19.0.7"
+            ],
+            "replicationFactor": 3,
+            "syncReplicaAcks": 1,
+            "cache": {
+              "enabled": true,
+              "hit": false,
+              "key": "v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638",
+              "path": "test-output/reports/.playback/benchmark-3node/postgres-baseline-cache/v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638.json",
+              "cachedAt": "2026-02-17T18:34:52.203Z",
+              "reason": "cache-stored"
+            },
+            "metrics": {
+              "tps": 4220.797111,
+              "latencyAverageMs": 1.895,
+              "latencyStddevMs": 0.727,
+              "transactionsProcessed": 126618,
+              "failedTransactions": 0,
+              "raw": "pgbench (16.9 (Debian 16.9-1.pgdg120+1))\ntransaction type: /tmp/ddb-pgbench-workload.sql\nscaling factor: 1\nquery mode: simple\nnumber of clients: 8\nnumber of threads: 4\nmaximum number of tries: 1\nduration: 30 s\nnumber of transactions actually processed: 126618\nnumber of failed transactions: 0 (0.000%)\nlatency average = 1.895 ms\nlatency stddev = 0.727 ms\ninitial connection time = 3.400 ms\ntps = 4220.797111 (without initial connection time)\n",
+              "durationSeconds": 30,
+              "clients": 8,
+              "jobs": 4,
+              "host": "127.0.0.1",
+              "port": 5432
+            }
+          },
+          "systemUnderTest": {
+            "seedNodeId": "d1af9b90-75e8-4e73-b6d4-254327015522",
+            "metrics": {
+              "opsPerSec": 49.21949144222273,
+              "latency": {
+                "p50": 7,
+                "p95": 615,
+                "p99": 903
+              },
+              "total": 1504,
+              "success": 1504,
+              "failed": 0,
+              "errors": 0
+            }
+          },
+          "comparison": {
+            "sutOpsPerSec": 49.21949144222273,
+            "sutP99LatencyMs": 903,
+            "baselineTps": 4220.797111,
+            "baselineLatencyAvgMs": 1.895,
+            "throughputRatioSutToBaseline": 0.011661183929914496,
+            "p99LatencyRatioSutToBaselineAvg": 476.51715039577834
+          },
+          "convergence": {
+            "settledAfterMs": 5019,
+            "leaderChanges": 0,
+            "maxOverTargetMs": 0
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": {
+        "total": 1504,
+        "success": 1504,
+        "failed": 0,
+        "errors": 0,
+        "latency": {
+          "p50": 7,
+          "p95": 615,
+          "p99": 903
+        },
+        "opsPerSec": 49.21949144222273
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": [
+        {
+          "component": "replication_write_path",
+          "signal": "baseline_throughput_gap",
+          "priority": "high",
+          "score": 80,
+          "reason": "System throughput is significantly below baseline under identical workload.",
+          "evidence": {
+            "throughputRatioSutToBaseline": 0.011661183929914496,
+            "sutOpsPerSec": 49.21949144222273,
+            "baselineTps": 4220.797111
+          }
+        },
+        {
+          "component": "tail_latency_path",
+          "signal": "baseline_latency_gap",
+          "priority": "high",
+          "score": 80,
+          "reason": "Tail latency is significantly higher than baseline and dominates user-visible delays.",
+          "evidence": {
+            "p99LatencyRatioSutToBaselineAvg": 476.51715039577834,
+            "sutP99LatencyMs": 903,
+            "baselineLatencyAvgMs": 1.895
+          }
+        },
+        {
+          "component": "tail_latency_path",
+          "signal": "internal_tail_latency",
+          "priority": "high",
+          "score": 80,
+          "reason": "Large p99/p50 spread indicates queueing or lock contention on slow-path operations.",
+          "evidence": {
+            "p50LatencyMs": 7,
+            "p99LatencyMs": 903,
+            "p99ToP50Ratio": 129
+          }
+        }
+      ]
+    }
+  ]
+}

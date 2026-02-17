@@ -112,6 +112,8 @@ describe('runScenarios', () => {
     assert.equal(report.scenarios[0].passed, false);
     assert.ok(report.scenarios[0].error);
     assert.ok(report.scenarios[0].duration >= 0);
+    assert.equal(report.scenarios[0].clusterSize, 3);
+    assert.equal(report.scenarios[0].performanceDiagnostics, null);
   });
 
   it('continues to next scenario after failure', async () => {

@@ -46,11 +46,18 @@ describe('ReportWriter', () => {
       writer.addResult('test-scenario', {
         passed: true,
         duration: 5000,
+        clusterSize: 5,
         startedAt: '2024-01-15T10:30:00Z',
         convergenceTiming: {
           settledAfterMs: 8500,
           leaderChanges: 4,
           maxOverTargetMs: 1200,
+        },
+        performanceDiagnostics: {
+          writePath: {
+            sampleCount: 2,
+            phaseBreakdown: [],
+          },
         },
         error: null,
         stackTrace: null,
@@ -60,6 +67,7 @@ describe('ReportWriter', () => {
       assert.equal(entry.scenario, 'test-scenario');
       assert.equal(entry.passed, true);
       assert.equal(entry.duration, 5000);
+      assert.equal(entry.clusterSize, 5);
       assert.equal(entry.startedAt, '2024-01-15T10:30:00Z');
       assert.deepEqual(entry.convergenceTiming, {
         settledAfterMs: 8500,
@@ -68,6 +76,12 @@ describe('ReportWriter', () => {
       });
       assert.equal(entry.error, null);
       assert.equal(entry.stackTrace, null);
+      assert.deepEqual(entry.performanceDiagnostics, {
+        writePath: {
+          sampleCount: 2,
+          phaseBreakdown: [],
+        },
+      });
       assert.equal(entry.trace, null);
       assert.equal(entry.traceAssertion, null);
       assert.equal(entry.memoryLeak, null);
@@ -193,6 +207,14 @@ describe('ReportWriter', () => {
           report.standardSummary.scenariosComparedToPostgresBaseline,
           0,
         );
+        assert.deepEqual(
+          report.standardSummary.writePathAttributionSummary.topPhases,
+          [],
+        );
+        assert.deepEqual(
+          report.standardSummary.scaleEfficiencySummary.groups,
+          [],
+        );
         assert.deepEqual(report.standardSummary.scenarios, []);
         assert.deepEqual(report.scenarios, []);
       });
@@ -216,10 +238,12 @@ describe('ReportWriter', () => {
       assert.equal(entry.scenario, 'minimal');
       assert.equal(entry.passed, false);
       assert.equal(entry.duration, 0);
+      assert.equal(entry.clusterSize, null);
       assert.equal(entry.startedAt, null);
       assert.equal(entry.convergenceTiming, null);
       assert.equal(entry.error, null);
       assert.equal(entry.stackTrace, null);
+      assert.equal(entry.performanceDiagnostics, null);
       assert.equal(entry.details, null);
       assert.equal(entry.exampleResults, null);
       assert.equal(entry.loadMetrics, null);
@@ -490,9 +514,24 @@ describe('ReportWriter', () => {
                 scenario: 'postgres-baseline-comparison',
                 passed: true,
                 duration: 1000,
+                clusterSize: 3,
                 loadMetrics: {
                   opsPerSec: 40,
                   latency: {p99: 20},
+                },
+                performanceDiagnostics: {
+                  writePath: {
+                    phaseBreakdown: [
+                      {
+                        phase: 'applyWriteMs',
+                        total: 120,
+                        avg: 12,
+                        p95: 20,
+                        shareOfTotalMs: 0.4,
+                        count: 10,
+                      },
+                    ],
+                  },
                 },
                 details: {
                   details: {
@@ -520,9 +559,32 @@ describe('ReportWriter', () => {
       writer.addResult('postgres-baseline-comparison', {
         passed: true,
         duration: 1200,
+        clusterSize: 5,
         loadMetrics: {
           opsPerSec: 50,
           latency: {p99: 25},
+        },
+        performanceDiagnostics: {
+          writePath: {
+            phaseBreakdown: [
+              {
+                phase: 'applyWriteMs',
+                total: 220,
+                avg: 22,
+                p95: 30,
+                shareOfTotalMs: 0.55,
+                count: 10,
+              },
+              {
+                phase: 'forwardDeliverMs',
+                total: 60,
+                avg: 6,
+                p95: 12,
+                shareOfTotalMs: 0.15,
+                count: 10,
+              },
+            ],
+          },
         },
         details: {
           details: {
@@ -558,7 +620,9 @@ describe('ReportWriter', () => {
 
       const entry = summary.scenarios[0];
       assert.equal(entry.scenario, 'postgres-baseline-comparison');
+      assert.equal(entry.current.clusterSize, 5);
       assert.equal(entry.previousSimilarRun.reportPath, '/tmp/previous.report.json');
+      assert.equal(entry.previousSimilarRun.clusterSize, 3);
       assert.equal(entry.previousSimilarRun.durationMs, 1000);
       assert.equal(entry.deltaVsPrevious.durationMs, 200);
       assert.equal(entry.deltaVsPrevious.opsPerSec, 10);
@@ -566,6 +630,14 @@ describe('ReportWriter', () => {
       assert.equal(entry.postgresBaseline.engine, 'postgres');
       assert.equal(entry.postgresBaseline.throughputRatioSutToBaseline, 0.025);
       assert.deepEqual(entry.postgresBaseline.cache, {hit: true});
+      assert.equal(entry.writePathTopPhases.length, 2);
+      assert.equal(entry.writePathTopPhases[0].phase, 'applyWriteMs');
+
+      assert.equal(summary.writePathAttributionSummary.scenariosWithDiagnostics, 1);
+      assert.equal(summary.writePathAttributionSummary.topPhases[0].phase, 'applyWriteMs');
+      assert.equal(summary.scaleEfficiencySummary.comparableGroupCount, 1);
+      assert.equal(summary.scaleEfficiencySummary.groups[0].baselineClusterSize, 3);
+      assert.equal(summary.scaleEfficiencySummary.groups[0].targetClusterSize, 5);
     });
   });
 
@@ -598,6 +670,8 @@ describe('ReportWriter', () => {
       assert.equal(summary.historicalReportsConsidered, 0);
       assert.equal(summary.scenariosComparedToPrevious, 0);
       assert.equal(summary.scenariosComparedToPostgresBaseline, 0);
+      assert.equal(summary.writePathAttributionSummary.scenariosWithDiagnostics, 0);
+      assert.equal(summary.scaleEfficiencySummary.comparableGroupCount, 0);
       assert.deepEqual(summary.scenarios, []);
     });
   });

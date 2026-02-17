@@ -23,6 +23,7 @@ import {DockerProvider} from './harness/docker-provider.js';
 import {ReportWriter} from './harness/report-writer.js';
 import {formatLogEntry} from './harness/log-collector.js';
 import {analyzeMemoryLeakFromPlayback} from './harness/memory-leak-analyzer.js';
+import {buildPerformanceDiagnostics} from './harness/performance-diagnostics.js';
 import {CLI, EXIT_CODES} from './harness/constants.js';
 
 const LIVE_LOG_PREFIX = '[live-log] ';
@@ -95,6 +96,12 @@ const MEMORY_ASSERTION_ERROR_PREFIX = 'Memory leak assertion failed: ';
 const MEMORY_ASSERTION_SAMPLES_MISSING = 'memory samples unavailable';
 const MEMORY_ASSERTION_LEAK_DETECTED_PREFIX =
   'memory leak detected on nodes: ';
+
+function resolveClusterSize(config) {
+  return Number.isInteger(config?.size) && config.size > 0 ?
+    config.size :
+    null;
+}
 
 /**
  * Parse CLI arguments from argv.
@@ -516,11 +523,13 @@ async function runScenarios(config, scenarios, options) {
       const analyzer = cluster.getLogAnalyzer();
       const collector = cluster.getLogCollector();
       let analysisSummary = null;
+      let performanceDiagnostics = null;
       try {
         const seedNode = cluster.getNodes()[0];
+        const logEntries = collector.getBuffer();
+        performanceDiagnostics = buildPerformanceDiagnostics(logEntries);
         const queryResults =
           await analyzer.runAnalyticalQueries(seedNode);
-        const logEntries = collector.getBuffer();
         const analysis = analyzer.analyze(
           logEntries,
           queryResults,
@@ -545,6 +554,8 @@ async function runScenarios(config, scenarios, options) {
         duration,
         startedAt,
         analysisSummary,
+        clusterSize: resolveClusterSize(config),
+        performanceDiagnostics,
       };
       if (scenarioPayload) {
         scenarioResult.details = scenarioPayload;
@@ -565,6 +576,7 @@ async function runScenarios(config, scenarios, options) {
         typeof err.diagnostics === 'object' ?
         err.diagnostics :
         null;
+      let performanceDiagnostics = null;
 
       // Attempt fallback log collection on failure
       const analysisSummary = null;
@@ -583,6 +595,9 @@ async function runScenarios(config, scenarios, options) {
             collector.getBuffer(),
             nodeIds,
           );
+          performanceDiagnostics = buildPerformanceDiagnostics(
+            collector.getBuffer(),
+          );
         } catch (_fallbackErr) {
           // Best-effort fallback
         }
@@ -596,6 +611,8 @@ async function runScenarios(config, scenarios, options) {
         stackTrace: err.stack || null,
         analysisSummary,
         details: errorDiagnostics ? {diagnostics: errorDiagnostics} : null,
+        clusterSize: resolveClusterSize(config),
+        performanceDiagnostics,
       };
 
       if (options.verbose) {
@@ -638,6 +655,8 @@ async function runScenarios(config, scenarios, options) {
           error: 'Scenario result missing',
           stackTrace: null,
           analysisSummary: null,
+          clusterSize: resolveClusterSize(config),
+          performanceDiagnostics: null,
         };
       }
 
