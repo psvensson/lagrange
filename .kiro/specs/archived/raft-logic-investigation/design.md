@@ -111,7 +111,7 @@ Correctness set:
 - failover and re-election
 
 Resource/perf set:
-- 15-minute idle soak
+- 2-minute idle soak
 - small write workload
 - failover scenario
 

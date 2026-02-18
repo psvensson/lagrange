@@ -52,6 +52,7 @@ import {
   BOOTSTRAP_API_CLOSE_ERROR_CODE,
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_HEALTH_STATUS,
+  BOOTSTRAP_API_HEALTH_STATUS_INITIALIZING,
   BOOTSTRAP_API_HANDOFF_OPERATION,
   BOOTSTRAP_API_HANDOFF_PHASE,
   BOOTSTRAP_API_HANDOFF_STATUS,
@@ -187,7 +188,14 @@ class BootstrapAPI {
    */
   registerRoutes() {
     // Health check endpoint
-    this.fastify.get(BOOTSTRAP_API_ROUTE.HEALTH, async (_request, _reply) => {
+    this.fastify.get(BOOTSTRAP_API_ROUTE.HEALTH, async (_request, reply) => {
+      if (!this.sqlQueryEngine) {
+        reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
+        return {
+          status: BOOTSTRAP_API_HEALTH_STATUS_INITIALIZING,
+          nodeId: this.seedNodeId,
+        };
+      }
       return {status: BOOTSTRAP_API_HEALTH_STATUS, nodeId: this.seedNodeId};
     });
 

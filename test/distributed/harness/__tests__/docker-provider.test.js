@@ -239,6 +239,49 @@ test('Unit: createContainer forwards optional command and entrypoint', async (t)
   );
 });
 
+test('Unit: createContainer forwards hostConfig extras', async (t) => {
+  await t.test(
+    'createContainer includes custom host config fields like Binds',
+    async () => {
+      const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+
+      let capturedOpts = null;
+      const fakeContainer = {
+        id: 'fake-container-bind-123',
+        start: async () => {},
+      };
+
+      provider._docker.createContainer = async (opts) => {
+        capturedOpts = opts;
+        return fakeContainer;
+      };
+      provider._waitForRunning = async () => {};
+      provider.inspectContainer = async () => ({
+        NetworkSettings: {
+          Networks: {'test-net': {IPAddress: '172.18.0.4'}},
+        },
+      });
+
+      await provider.createContainer({
+        name: 'test-node-bind',
+        image: 'distributed-db:test',
+        network: 'test-net',
+        hostConfigExtras: {
+          Binds: ['/tmp/project/src:/app/src:ro'],
+        },
+      });
+
+      assert.ok(capturedOpts, 'createContainer was called');
+      assert.ok(capturedOpts.HostConfig, 'HostConfig should be present');
+      assert.deepStrictEqual(
+        capturedOpts.HostConfig.Binds,
+        ['/tmp/project/src:/app/src:ro'],
+        'bind mounts should be forwarded into HostConfig',
+      );
+    },
+  );
+});
+
 test('Unit: container start timeout error and cleanup', async (t) => {
   await t.test(
     'throws error and cleans up when container never reaches running state',
@@ -333,6 +376,74 @@ test('Unit: removeContainer calls remove with force and volumes', async (t) => {
         true,
         'v (volumes) option should be true',
       );
+    },
+  );
+});
+
+test('Unit: ensureNetwork reuses existing network on already-exists error', async (t) => {
+  await t.test(
+    'ensureNetwork returns existing network id when createNetwork conflicts',
+    async () => {
+      const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+
+      provider._docker.createNetwork = async () => {
+        throw new Error('network with name ddb-reuse already exists');
+      };
+      provider._docker.listNetworks = async () => ([
+        {
+          Id: 'existing-network-id',
+          Name: 'ddb-reuse',
+        },
+      ]);
+
+      const network = await provider.ensureNetwork('ddb-reuse');
+      assert.strictEqual(network.id, 'existing-network-id');
+      assert.strictEqual(network.name, 'ddb-reuse');
+      assert.strictEqual(network.reused, true);
+    },
+  );
+});
+
+test('Unit: startContainer starts and waits for running state', async (t) => {
+  await t.test(
+    'startContainer delegates to docker start then waitForRunning',
+    async () => {
+      const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+      let startedContainerId = null;
+      let waitedForContainerId = null;
+      let waitedForTimeout = null;
+
+      provider._docker.getContainer = (containerId) => ({
+        start: async () => {
+          startedContainerId = containerId;
+        },
+      });
+      provider._waitForRunning = async (containerId, timeout) => {
+        waitedForContainerId = containerId;
+        waitedForTimeout = timeout;
+      };
+
+      await provider.startContainer('container-start-1', 1234);
+      assert.strictEqual(startedContainerId, 'container-start-1');
+      assert.strictEqual(waitedForContainerId, 'container-start-1');
+      assert.strictEqual(waitedForTimeout, 1234);
+    },
+  );
+});
+
+test('Unit: inspectContainerIfExists returns null for missing containers', async (t) => {
+  await t.test(
+    'inspectContainerIfExists suppresses inspect errors',
+    async () => {
+      const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+      provider._docker.getContainer = () => ({
+        inspect: async () => {
+          throw new Error('No such container');
+        },
+      });
+
+      const result = await provider.inspectContainerIfExists('missing');
+      assert.strictEqual(result, null);
     },
   );
 });

@@ -18,6 +18,10 @@ import {
   normalizeScenarioPayload,
   evaluateTraceAssertions,
   evaluateMemoryLeakAssertions,
+  evaluateBenchmarkRegressionGate,
+  resolveBenchmarkGateConfig,
+  resolveRunRaftProvider,
+  resolveFastLocalMode,
   buildImage,
   deriveRunOutputDir,
   loadHistoricalReports,
@@ -34,6 +38,7 @@ describe('parseArgs', () => {
     assert.equal(result.scenario, null);
     assert.equal(result.output, CLI.DEFAULT_OUTPUT);
     assert.equal(result.verbose, false);
+    assert.equal(result.fastLocal, null);
   });
 
   it('parses --config flag', () => {
@@ -56,17 +61,29 @@ describe('parseArgs', () => {
     assert.equal(result.verbose, true);
   });
 
+  it('parses --fast-local flag', () => {
+    const result = parseArgs(['--fast-local']);
+    assert.equal(result.fastLocal, true);
+  });
+
+  it('parses --no-fast-local flag', () => {
+    const result = parseArgs(['--no-fast-local']);
+    assert.equal(result.fastLocal, false);
+  });
+
   it('parses all flags together', () => {
     const result = parseArgs([
       '--config', 'local.json',
       '--scenario', 'rolling-restart',
       '--output', 'out.json',
       '--verbose',
+      '--fast-local',
     ]);
     assert.equal(result.config, 'local.json');
     assert.equal(result.scenario, 'rolling-restart');
     assert.equal(result.output, 'out.json');
     assert.equal(result.verbose, true);
+    assert.equal(result.fastLocal, true);
   });
 
   it('ignores unknown flags', () => {
@@ -309,6 +326,125 @@ describe('evaluateMemoryLeakAssertions', () => {
   });
 });
 
+describe('benchmark regression gate helpers', () => {
+  it('resolveBenchmarkGateConfig applies defaults when unset', () => {
+    const resolved = resolveBenchmarkGateConfig({});
+    assert.equal(resolved.enabled, false);
+    assert.equal(resolved.maxThroughputRegressionRatio, 0.1);
+    assert.equal(resolved.baselineProvider, 'liferaft');
+    assert.equal(resolved.failIfBaselineMissing, false);
+    assert.equal(resolved.approvedMitigationId, null);
+  });
+
+  it('resolveFastLocalMode defaults to true for local docker configs', () => {
+    const enabled = resolveFastLocalMode(
+      {fastLocal: null},
+      {docker: {socketPath: '/var/run/docker.sock'}},
+    );
+    assert.equal(enabled, true);
+  });
+
+  it('resolveFastLocalMode defaults to false for remote docker configs', () => {
+    const enabled = resolveFastLocalMode(
+      {fastLocal: null},
+      {docker: {hosts: ['tcp://vm-1:2376']}},
+    );
+    assert.equal(enabled, false);
+  });
+
+  it('resolveFastLocalMode honors explicit opt-out on local configs', () => {
+    const enabled = resolveFastLocalMode(
+      {fastLocal: false},
+      {docker: {socketPath: '/var/run/docker.sock'}},
+    );
+    assert.equal(enabled, false);
+  });
+
+  it('resolveRunRaftProvider prefers config over environment', () => {
+    const fromConfig = resolveRunRaftProvider(
+      {raftProvider: 'raft_logic'},
+      {RAFT_PROVIDER: 'liferaft'},
+    );
+    assert.equal(fromConfig, 'raft_logic');
+
+    const fromEnv = resolveRunRaftProvider(
+      {},
+      {RAFT_PROVIDER: 'raft_logic'},
+    );
+    assert.equal(fromEnv, 'raft_logic');
+
+    const fallback = resolveRunRaftProvider({}, {});
+    assert.equal(fallback, 'liferaft');
+  });
+
+  it('evaluateBenchmarkRegressionGate skips when gate is disabled', () => {
+    const result = evaluateBenchmarkRegressionGate(
+      {
+        standardSummary: {
+          scenarios: [],
+        },
+      },
+      [],
+      {
+        benchmarkGate: {enabled: false},
+      },
+    );
+    assert.equal(result.status, 'skipped');
+    assert.equal(result.reason, 'disabled');
+  });
+
+  it('evaluateBenchmarkRegressionGate fails when throughput regression exceeds threshold',
+    () => {
+      const result = evaluateBenchmarkRegressionGate(
+        {
+          standardSummary: {
+            scenarios: [
+              {
+                scenario: 'postgres-baseline-comparison',
+                similarityKey: 'postgres-baseline-comparison|workload-a',
+                current: {
+                  opsPerSec: 90,
+                },
+              },
+            ],
+          },
+        },
+        [
+          {
+            metadata: {raftProvider: 'liferaft'},
+            standardSummary: {
+              scenarios: [
+                {
+                  scenario: 'postgres-baseline-comparison',
+                  similarityKey: 'postgres-baseline-comparison|workload-a',
+                  current: {
+                    opsPerSec: 120,
+                  },
+                },
+              ],
+            },
+            path: '/tmp/liferaft-baseline.report.json',
+            timestamp: '2026-02-17T12:00:00.000Z',
+          },
+        ],
+        {
+          raftProvider: 'raft_logic',
+          benchmarkGate: {
+            enabled: true,
+            maxThroughputRegressionRatio: 0.1,
+            baselineProvider: 'liferaft',
+          },
+        },
+      );
+
+      assert.equal(result.status, 'failed');
+      assert.equal(result.reason, 'throughput-regression');
+      assert.equal(result.comparedScenarioCount, 1);
+      assert.equal(result.failedScenarioCount, 1);
+      assert.equal(result.comparisons[0].regressedBeyondThreshold, true);
+    });
+});
+
 describe('buildImage', () => {
   it('passes positional DockerProvider arguments and commit label', async () => {
     const originalBuildImage = DockerProvider.prototype.buildImage;
@@ -396,6 +532,43 @@ describe('buildImage', () => {
     assert.equal(buildCallCount, 1);
     assert.equal(result.reused, false);
   });
+
+  it('reuses existing image when workspace is dirty and skipBuildOnDirty is enabled',
+    async () => {
+      const originalBuildImage = DockerProvider.prototype.buildImage;
+      const originalGetImageLabel = DockerProvider.prototype.getImageLabel;
+      const originalImageExists = DockerProvider.prototype.imageExists;
+      let buildCallCount = 0;
+
+      DockerProvider.prototype.buildImage = async function() {
+        buildCallCount++;
+      };
+      DockerProvider.prototype.getImageLabel = async function() {
+        return null;
+      };
+      DockerProvider.prototype.imageExists = async function() {
+        return true;
+      };
+
+      let result;
+      try {
+        result = await buildImage({
+          docker: {
+            socketPath: '/var/run/docker.sock',
+            skipBuildOnDirty: true,
+          },
+          image: 'distributed-db:test',
+          dockerfile: 'Dockerfile',
+        }, false, null, {gitHash: 'abc1234', gitDirty: true});
+      } finally {
+        DockerProvider.prototype.buildImage = originalBuildImage;
+        DockerProvider.prototype.getImageLabel = originalGetImageLabel;
+        DockerProvider.prototype.imageExists = originalImageExists;
+      }
+
+      assert.equal(buildCallCount, 0);
+      assert.equal(result.reused, true);
+    });
 });
 
 describe('deriveRunOutputDir', () => {

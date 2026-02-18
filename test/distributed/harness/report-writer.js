@@ -863,6 +863,7 @@ function normalizeHistoryReports(historyReports) {
     normalized.push({
       timestamp: report.timestamp || null,
       path: report.path || null,
+      metadata: normalizeMetadata(report.metadata),
       scenarios: report.scenarios,
     });
   }
@@ -1275,6 +1276,13 @@ function computeSummary(scenarios) {
   };
 }
 
+function normalizeMetadata(metadata) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
+  return {...metadata};
+}
+
 class ReportWriter {
   /**
    * @param {string} outputPath - File path for the JSON report
@@ -1283,6 +1291,7 @@ class ReportWriter {
     this.outputPath = outputPath;
     this.scenarios = [];
     this.historyReports = normalizeHistoryReports(options.historyReports);
+    this.metadata = normalizeMetadata(options.metadata);
   }
 
   /**
@@ -1301,7 +1310,7 @@ class ReportWriter {
    * Write the final JSON report to disk.
    * Creates parent directories if they do not exist.
    */
-  async write() {
+  async write(extraFields = {}) {
     const report = {
       timestamp: new Date().toISOString(),
       summary: computeSummary(this.scenarios),
@@ -1312,6 +1321,23 @@ class ReportWriter {
       ),
       scenarios: this.scenarios,
     };
+    const normalizedExtra = normalizeMetadata(extraFields) || {};
+    const extraMetadata = normalizeMetadata(normalizedExtra.metadata);
+    const reportMetadata = {
+      ...(this.metadata || {}),
+      ...(extraMetadata || {}),
+    };
+
+    for (const [key, value] of Object.entries(normalizedExtra)) {
+      if (key === 'metadata') {
+        continue;
+      }
+      report[key] = value;
+    }
+
+    if (Object.keys(reportMetadata).length > ZERO) {
+      report.metadata = reportMetadata;
+    }
 
     const dir = dirname(this.outputPath);
     await mkdir(dir, {recursive: true});
@@ -1320,6 +1346,7 @@ class ReportWriter {
       JSON.stringify(report, null, JSON_INDENT),
       'utf8',
     );
+    return report;
   }
 }
 

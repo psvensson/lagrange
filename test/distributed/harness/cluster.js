@@ -5,7 +5,7 @@
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4
  */
 
-import {v4 as uuidv4} from 'uuid';
+import {v4 as uuidv4, v5 as uuidv5} from 'uuid';
 import http from 'node:http';
 import {DockerProvider} from './docker-provider.js';
 import {ChaosPrimitives} from './chaos.js';
@@ -28,6 +28,7 @@ import {
   NODE_ROLES,
   PLAYBACK_EVENT_TYPE,
   LOG_SUBSCRIPTION_CAPABILITY,
+  RAFT_PROVIDER_DEFAULTS,
 } from './constants.js';
 
 const BOOTSTRAP_POLL_INTERVAL_MS = 500;
@@ -44,6 +45,7 @@ const ADMIN_HEALTH_PATH = '/health';
 const ADMIN_STREAM_PATH = '/api/admin/stream';
 const WS_HOST_ENV_KEY = 'TRANSPORT_WS_HOST';
 const WS_BIND_ALL_HOST = '0.0.0.0';
+const RAFT_PROVIDER_ENV_KEY = RAFT_PROVIDER_DEFAULTS.envKey;
 const NODE_OPTIONS_ENV_KEY = 'NODE_OPTIONS';
 const NODE_OPTION_HEAP_PROF = '--heap-prof';
 const NODE_OPTION_HEAP_SNAPSHOT_NEAR_LIMIT_PREFIX =
@@ -105,6 +107,16 @@ const PROCESS_SIGNAL_EVENTS = Object.freeze([
 ]);
 const PROCESS_CLEANUP_REGISTRY = new Map();
 let processCleanupHandlersRegistered = false;
+const DOCKER_HOST_CONFIG_BINDS_KEY = 'Binds';
+const CONTAINER_RUNNING_STATUS = 'running';
+const REUSE_NETWORK_NAME_SUFFIX = 'reuse-local';
+const REUSE_NODE_ID_PREFIX = 'reuse-node-';
+const REUSE_NODE_ID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+const REUSE_CONTAINER_NAME_PREFIX = 'ddb-test-reuse';
+const REUSE_ENTRYPOINT = Object.freeze(['sh', '-lc']);
+const REUSE_START_COMMAND =
+  'rm -rf /data/* && exec node /app/src/index.js';
+const REUSE_START_COMMAND_ARGS = Object.freeze([REUSE_START_COMMAND]);
 
 /**
  * Simple HTTP GET with timeout using node:http.
@@ -167,6 +179,25 @@ function normalizeProbeError(error) {
     return error;
   }
   return REACHABILITY_ERROR_UNKNOWN;
+}
+
+/**
+ * Read one environment value from docker inspect payload.
+ * @param {Object} inspect
+ * @param {string} key
+ * @returns {string|null}
+ */
+function readContainerInspectEnvValue(inspect, key) {
+  const envList = Array.isArray(inspect?.Config?.Env) ?
+    inspect.Config.Env :
+    [];
+  const prefix = String(key || '') + '=';
+  for (const entry of envList) {
+    if (typeof entry === 'string' && entry.startsWith(prefix)) {
+      return entry.slice(prefix.length);
+    }
+  }
+  return null;
 }
 
 /**
@@ -765,6 +796,91 @@ class Cluster {
     this._cleanupUnregister = null;
   }
 
+  _isContainerReuseEnabled() {
+    const dockerConfig =
+      this._config && typeof this._config.docker === 'object' ?
+        this._config.docker :
+        {};
+    const hasRemoteHosts = Array.isArray(dockerConfig.hosts) &&
+      dockerConfig.hosts.length > 0;
+    return !hasRemoteHosts && dockerConfig.reuseContainers === true;
+  }
+
+  _shouldKeepReuseContainersRunning() {
+    if (!this._isContainerReuseEnabled()) {
+      return false;
+    }
+    return this._config?.docker?.keepRunningContainers !== false;
+  }
+
+  _buildReusableNetworkName() {
+    return NETWORK.NAME_PREFIX +
+      '-' +
+      REUSE_NETWORK_NAME_SUFFIX +
+      '-' +
+      String(this._config.size);
+  }
+
+  _buildNodeId(nodeIndex) {
+    if (this._isContainerReuseEnabled()) {
+      return uuidv5(
+        REUSE_NODE_ID_PREFIX + String(nodeIndex + 1),
+        REUSE_NODE_ID_NAMESPACE,
+      );
+    }
+    return uuidv4();
+  }
+
+  _buildContainerName(nodeId, nodeIndex) {
+    if (this._isContainerReuseEnabled()) {
+      return REUSE_CONTAINER_NAME_PREFIX +
+        '-' +
+        String(this._config.size) +
+        '-' +
+        String(nodeIndex + 1);
+    }
+    return 'ddb-test-' + this._clusterId.slice(0, 8) + '-' + nodeId;
+  }
+
+  _shouldRecreateReusableContainer(inspect, expectedNodeId, expectedProvider) {
+    if (!inspect || typeof inspect !== 'object') {
+      return true;
+    }
+    const currentNodeId = readContainerInspectEnvValue(
+      inspect,
+      CONTAINER_ENV_KEYS.NODE_ID,
+    );
+    if (currentNodeId !== expectedNodeId) {
+      return true;
+    }
+    const currentProvider = readContainerInspectEnvValue(
+      inspect,
+      RAFT_PROVIDER_ENV_KEY,
+    );
+    if (currentProvider !== expectedProvider) {
+      return true;
+    }
+
+    const entrypoint = Array.isArray(inspect?.Config?.Entrypoint) ?
+      inspect.Config.Entrypoint :
+      [];
+    if (entrypoint.length !== REUSE_ENTRYPOINT.length ||
+        entrypoint[0] !== REUSE_ENTRYPOINT[0] ||
+        entrypoint[1] !== REUSE_ENTRYPOINT[1]) {
+      return true;
+    }
+
+    const cmd = Array.isArray(inspect?.Config?.Cmd) ?
+      inspect.Config.Cmd :
+      [];
+    if (cmd.length !== REUSE_START_COMMAND_ARGS.length ||
+        cmd[0] !== REUSE_START_COMMAND_ARGS[0]) {
+      return true;
+    }
+
+    return false;
+  }
+
   /**
    * Start the cluster: create network, start seed, wait for
    * bootstrap API, start joiners sequentially, wait for ACTIVE.
@@ -790,7 +906,9 @@ class Cluster {
     }
 
     const provider = this._providers[this._hostAssignment[0]];
-    this._networkName =
+    const reuseContainers = this._isContainerReuseEnabled();
+    this._networkName = reuseContainers ?
+      this._buildReusableNetworkName() :
       NETWORK.NAME_PREFIX + '-' + this._clusterId.slice(0, 8);
     this._recordClusterStage(
       CLUSTER_STAGE_SETUP_NETWORK_CREATING,
@@ -801,10 +919,15 @@ class Cluster {
     const networkLabels = {
       [LABELS.CLUSTER]: this._clusterId,
     };
-    const net = await provider.createNetwork(
-      this._networkName,
-      networkLabels,
-    );
+    const net = reuseContainers ?
+      await provider.ensureNetwork(
+        this._networkName,
+        networkLabels,
+      ) :
+      await provider.createNetwork(
+        this._networkName,
+        networkLabels,
+      );
     this._networkId = net.id;
     this._recordClusterStage(
       CLUSTER_STAGE_SETUP_NETWORK_CREATED,
@@ -814,7 +937,7 @@ class Cluster {
       },
     );
 
-    const seedId = uuidv4();
+    const seedId = this._buildNodeId(0);
     this._recordClusterStage(
       CLUSTER_STAGE_SETUP_SEED_STARTING,
       {
@@ -862,7 +985,7 @@ class Cluster {
     );
 
     for (let i = 1; i < this._config.size; i++) {
-      const joinerId = uuidv4();
+      const joinerId = this._buildNodeId(i);
       this._recordClusterStage(
         CLUSTER_STAGE_SETUP_JOINER_STARTING,
         {
@@ -986,6 +1109,8 @@ class Cluster {
   /** Stop and remove all containers, networks, volumes. */
   async stop() {
     const errors = [];
+    const reuseContainers = this._isContainerReuseEnabled();
+    const keepRunning = this._shouldKeepReuseContainersRunning();
     this._playbackRecorder.suspendPolling();
     this._recordClusterStage(
       CLUSTER_STAGE_TEARDOWN_STARTING,
@@ -1026,42 +1151,46 @@ class Cluster {
       } catch (_err) {
         // Best-effort stop
       }
-      try {
-        await node._dockerProvider.stopContainer(
-          node.containerId,
-        );
-        this._recordPlaybackEvent(
-          PLAYBACK_EVENT_TYPE.NODE_STOPPED,
-          PLAYBACK_SCOPE_NODE,
-          nodeId,
-          {
-            containerId: node.containerId,
-          },
-        );
-      } catch (_err) {
-        // Best-effort stop
+      if (!reuseContainers || !keepRunning) {
+        try {
+          await node._dockerProvider.stopContainer(
+            node.containerId,
+          );
+          this._recordPlaybackEvent(
+            PLAYBACK_EVENT_TYPE.NODE_STOPPED,
+            PLAYBACK_SCOPE_NODE,
+            nodeId,
+            {
+              containerId: node.containerId,
+            },
+          );
+        } catch (_err) {
+          // Best-effort stop
+        }
       }
-      try {
-        await node._dockerProvider.removeContainer(
-          node.containerId,
-        );
-        this._recordPlaybackEvent(
-          PLAYBACK_EVENT_TYPE.NODE_REMOVED,
-          PLAYBACK_SCOPE_NODE,
-          nodeId,
-          {
-            containerId: node.containerId,
-          },
-        );
-      } catch (err) {
-        errors.push(
-          'Failed to remove container for ' +
-          nodeId + ': ' + err.message,
-        );
+      if (!reuseContainers) {
+        try {
+          await node._dockerProvider.removeContainer(
+            node.containerId,
+          );
+          this._recordPlaybackEvent(
+            PLAYBACK_EVENT_TYPE.NODE_REMOVED,
+            PLAYBACK_SCOPE_NODE,
+            nodeId,
+            {
+              containerId: node.containerId,
+            },
+          );
+        } catch (err) {
+          errors.push(
+            'Failed to remove container for ' +
+            nodeId + ': ' + err.message,
+          );
+        }
       }
     }
 
-    if (this._networkId) {
+    if (this._networkId && !reuseContainers) {
       try {
         const provider =
           this._providers[this._hostAssignment[0]];
@@ -1085,6 +1214,8 @@ class Cluster {
           'Failed to remove network: ' + err.message,
         );
       }
+      this._networkId = null;
+    } else if (this._networkId && reuseContainers) {
       this._networkId = null;
     }
 
@@ -1442,8 +1573,8 @@ class Cluster {
   async _startNode(nodeId, role, seedIp, nodeIndex) {
     const providerIdx = this._hostAssignment[nodeIndex];
     const provider = this._providers[providerIdx];
-    const containerName =
-      'ddb-test-' + this._clusterId.slice(0, 8) + '-' + nodeId;
+    const reuseContainers = this._isContainerReuseEnabled();
+    const containerName = this._buildContainerName(nodeId, nodeIndex);
 
     const env = {};
     env[CONTAINER_ENV_KEYS.NODE_ID] = nodeId;
@@ -1451,6 +1582,8 @@ class Cluster {
     env[CONTAINER_ENV_KEYS.NODE_ADDRESS] =
       containerName + ':' + PORTS.REST;
     env[WS_HOST_ENV_KEY] = WS_BIND_ALL_HOST;
+    env[RAFT_PROVIDER_ENV_KEY] =
+      String(this._config.raftProvider || RAFT_PROVIDER_DEFAULTS.provider);
     if (this._config?.memoryLeak?.captureHeapArtifacts === true) {
       const nearLimitCount = Number.isInteger(
         this._config?.memoryLeak?.heapSnapshotNearLimitCount,
@@ -1479,6 +1612,83 @@ class Cluster {
       [LABELS.NODE_ID]: nodeId,
       [LABELS.ROLE]: role,
     };
+    const dockerBinds = Array.isArray(this._config?.docker?.binds) ?
+      this._config.docker.binds.filter((entry) =>
+        typeof entry === 'string' && entry.length > 0) :
+      [];
+    const hostConfigExtras = dockerBinds.length > 0 ?
+      {[DOCKER_HOST_CONFIG_BINDS_KEY]: dockerBinds} :
+      null;
+    const startTimeout = this._config.timeouts?.nodeStartup ||
+      TIMEOUTS.NODE_STARTUP;
+
+    if (reuseContainers) {
+      let existing = null;
+      try {
+        existing = await provider.inspectContainerIfExists(containerName);
+      } catch (_inspectErr) {
+        existing = null;
+      }
+      if (existing &&
+          this._shouldRecreateReusableContainer(
+            existing,
+            nodeId,
+            env[RAFT_PROVIDER_ENV_KEY],
+          )) {
+        const existingContainerId = existing.Id || existing.id || containerName;
+        try {
+          await provider.removeContainer(existingContainerId);
+          existing = null;
+        } catch (err) {
+          await this._collectFailureLogs();
+          throw new Error(
+            'Node "' + nodeId + '" (' + role +
+            ') failed to reset reusable container: ' + err.message,
+          );
+        }
+      }
+
+      if (existing) {
+        const containerId = existing.Id || existing.id || containerName;
+        try {
+          const status = String(existing?.State?.Status || '').toLowerCase();
+          if (status === CONTAINER_RUNNING_STATUS) {
+            await provider.restartContainer(containerId);
+          } else {
+            await provider.startContainer(containerId, startTimeout);
+          }
+
+          let refreshed = await provider.inspectContainer(containerId);
+          const networks = refreshed?.NetworkSettings?.Networks;
+          const connectedToRunNetwork = networks &&
+            Object.prototype.hasOwnProperty.call(
+              networks,
+              this._networkName,
+            );
+          if (!connectedToRunNetwork && this._networkId) {
+            await provider.connectToNetwork(this._networkId, containerId);
+            refreshed = await provider.inspectContainer(containerId);
+          }
+
+          const ip = refreshed?.NetworkSettings?.Networks?.[
+            this._networkName
+          ]?.IPAddress || '';
+          return new NodeHandle(
+            nodeId,
+            containerId,
+            ip,
+            role,
+            provider,
+          );
+        } catch (err) {
+          await this._collectFailureLogs();
+          throw new Error(
+            'Node "' + nodeId + '" (' + role +
+            ') failed to reuse container: ' + err.message,
+          );
+        }
+      }
+    }
 
     let result;
     try {
@@ -1489,8 +1699,14 @@ class Cluster {
         env,
         labels,
         resourceLimits: this._config.resourceLimits || {},
-        startTimeout: this._config.timeouts?.nodeStartup ||
-          TIMEOUTS.NODE_STARTUP,
+        startTimeout,
+        hostConfigExtras,
+        ...(reuseContainers ?
+          {
+            entrypoint: REUSE_ENTRYPOINT,
+            command: REUSE_START_COMMAND_ARGS,
+          } :
+          {}),
       });
     } catch (err) {
       await this._collectFailureLogs();

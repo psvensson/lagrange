@@ -7,9 +7,10 @@
  */
 
 import {EventEmitter} from 'events';
-import LifeRaft from '@markwylde/liferaft';
 import {isRaftPacket} from './raft-packet-utils.js';
 import {ADDRESS, NUM, STRING, TYPEOF} from '../constants/index.js';
+import {assertRaftProviderContract} from './raft-provider-contract.js';
+import {LiferaftProvider} from './liferaft-provider.js';
 import {
   RAFT_GROUP_ADDRESS,
   RAFT_GROUP_DEFAULT,
@@ -60,11 +61,15 @@ class RaftGroup extends EventEmitter {
    * @param {number} [options.electionMinMs] - Min election timeout.
    * @param {number} [options.electionMaxMs] - Max election timeout.
    * @param {number} [options.electionJitterPerReplicaMs] - Jitter per replica.
+   * @param {Object} [options.raftProvider] - Provider implementing raft node contract.
    * @param {Object} [options.logger] - Logger instance.
    */
   constructor(options = {}) {
     super();
     this.validateOptions(options);
+
+    this.raftProvider = options.raftProvider || new LiferaftProvider();
+    assertRaftProviderContract(this.raftProvider);
 
     this.replicaId = options.replicaId;
     this.replicaIds = options.replicaIds || [this.replicaId];
@@ -136,8 +141,8 @@ class RaftGroup extends EventEmitter {
     this.createRaftInstance();
     this.wireRaftEvents();
 
-    if (this.deferElection && this.raft.timers) {
-      this.raft.timers.clear(HEARTBEAT_ELECTION_TIMER);
+    if (this.deferElection && this.raft) {
+      this.raftProvider.clearTimers(this.raft, HEARTBEAT_ELECTION_TIMER);
       this.logger.debug(RAFT_GROUP_LOG_MSG.CLEARED_LIFERAFT_TIMERS, {
         replicaId: this.replicaId,
       });
@@ -157,37 +162,19 @@ class RaftGroup extends EventEmitter {
   createRaftInstance() {
     const {electionMinMs, electionMaxMs} =
       this.computeElectionTimeouts();
-
-    const self = this;
-    const deferElection = this.deferElection;
     const logAdapter = this.logAdapter;
-    const logger = this.logger;
-    const replicaId = this.replicaId;
 
-    /**
-     * Custom Raft node extending LifeRaft with injected transport.
-     */
-    class RaftNode extends LifeRaft {
-      /** @param {Object} _options @param {Function} cb */
-      initialize(_options, cb) {
-        if (deferElection) {
-          logger.debug(RAFT_GROUP_LOG_MSG.DEFERRING_ELECTION_START, {
-            replicaId,
-          });
-        }
-        if (cb) cb();
-      }
-
-      /** @param {Object} packet @param {Function} cb */
-      write(packet, cb) {
-        const peerAddress = self.peerAddressResolver.resolve(
-          this.address, self.peerAddresses,
-        );
-        self.transport.deliver(peerAddress, packet)
-          .then(() => cb(null))
-          .catch((err) => cb(err));
-      }
-    }
+    const RaftNode = this.raftProvider.createNodeClass({
+      deferElection: this.deferElection,
+      logger: this.logger,
+      replicaId: this.replicaId,
+      resolvePeerAddress: (peerId) => this.peerAddressResolver.resolve(
+        peerId,
+        this.peerAddresses,
+      ),
+      deliverPacket: (peerAddress, packet) =>
+        this.transport.deliver(peerAddress, packet),
+    });
 
     const raftOptions = {
       [RAFT_GROUP_LIFERAFT_TIMER.HEARTBEAT]: this.heartbeatMs,
@@ -236,15 +223,16 @@ class RaftGroup extends EventEmitter {
       this.role = RAFT_GROUP_ROLE.LEADER;
       this.isLeader = true;
       this.leaderId = this.replicaId;
+      const term = this.raftProvider.getCurrentTerm(this.raft);
 
       this.logger.info(RAFT_GROUP_LOG_MSG.BECAME_LEADER, {
-        term: this.raft.term,
+        term,
         replicaId: this.replicaId,
       });
 
       this.emit(RAFT_GROUP_EVENT.LEADER, {
         leaderId: this.replicaId,
-        term: this.raft.term,
+        term,
       });
     });
 
@@ -299,7 +287,7 @@ class RaftGroup extends EventEmitter {
           peerAddress,
           replicaId: this.replicaId,
         });
-        this.raft.join(peerAddress);
+        this.raftProvider.joinPeer(this.raft, peerAddress);
       }
     }
   }
@@ -328,7 +316,7 @@ class RaftGroup extends EventEmitter {
         replicaId: this.replicaId,
         peerCount: this.replicaIds.length - NUM.ONE,
       });
-      this.raft.heartbeat(this.raft.timeout());
+      this.raftProvider.startElectionTimer(this.raft);
     }
   }
 
@@ -347,7 +335,7 @@ class RaftGroup extends EventEmitter {
 
     this.emit(RAFT_GROUP_EVENT.LEADER, {
       leaderId: this.replicaId,
-      term: this.raft ? this.raft.term : NUM.ZERO,
+      term: this.raftProvider.getCurrentTerm(this.raft),
     });
   }
 
@@ -439,10 +427,7 @@ class RaftGroup extends EventEmitter {
     });
 
     if (this.raft) {
-      if (this.raft.timers) {
-        this.raft.timers.clear();
-      }
-      this.raft.end();
+      this.raftProvider.shutdownNode(this.raft);
       this.raft = null;
     }
 
@@ -487,12 +472,12 @@ class RaftGroup extends EventEmitter {
    * @return {number} Current term.
    */
   getCurrentTerm() {
-    return this.raft ? this.raft.term : NUM.ZERO;
+    return this.raftProvider.getCurrentTerm(this.raft);
   }
 
   /**
-   * Get the raw liferaft instance.
-   * @return {LifeRaft|null} The liferaft instance.
+   * Get the raw raft provider node instance.
+   * @return {Object|null} The raft node instance.
    */
   getRaftInstance() {
     return this.raft;

@@ -20,6 +20,8 @@ import {
   DEBUG_TRACE_DEFAULTS,
   LEAK_DEFAULTS,
   BENCHMARK_DEFAULTS,
+  BENCHMARK_GATE_DEFAULTS,
+  RAFT_PROVIDER_DEFAULTS,
 } from '../constants.js';
 
 // --- Unit Tests ---
@@ -146,6 +148,30 @@ test('Unit: mergeWithDefaults fills all fields from empty object', async (t) => 
         config.benchmark.baselineCacheTtlMs,
         BENCHMARK_DEFAULTS.baselineCacheTtlMs,
       );
+      assert.strictEqual(
+        config.benchmarkGate.enabled,
+        BENCHMARK_GATE_DEFAULTS.enabled,
+      );
+      assert.strictEqual(
+        config.benchmarkGate.maxThroughputRegressionRatio,
+        BENCHMARK_GATE_DEFAULTS.maxThroughputRegressionRatio,
+      );
+      assert.strictEqual(
+        config.benchmarkGate.baselineProvider,
+        BENCHMARK_GATE_DEFAULTS.baselineProvider,
+      );
+      assert.strictEqual(
+        config.benchmarkGate.failIfBaselineMissing,
+        BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing,
+      );
+      assert.strictEqual(
+        config.benchmarkGate.approvedMitigationId,
+        BENCHMARK_GATE_DEFAULTS.approvedMitigationId,
+      );
+      assert.strictEqual(
+        config.raftProvider,
+        RAFT_PROVIDER_DEFAULTS.provider,
+      );
     },
   );
 });
@@ -186,6 +212,14 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
         refreshBaselineMetrics: true,
         baselineCacheTtlMs: 60000,
       },
+      benchmarkGate: {
+        enabled: true,
+        maxThroughputRegressionRatio: 0.2,
+        baselineProvider: 'liferaft',
+        failIfBaselineMissing: true,
+        approvedMitigationId: 'MIT-42',
+      },
+      raftProvider: 'raft_logic',
     };
 
     const config = mergeWithDefaults(partial);
@@ -237,6 +271,12 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
     assert.strictEqual(config.benchmark.cacheBaselineMetrics, false);
     assert.strictEqual(config.benchmark.refreshBaselineMetrics, true);
     assert.strictEqual(config.benchmark.baselineCacheTtlMs, 60000);
+    assert.strictEqual(config.benchmarkGate.enabled, true);
+    assert.strictEqual(config.benchmarkGate.maxThroughputRegressionRatio, 0.2);
+    assert.strictEqual(config.benchmarkGate.baselineProvider, 'liferaft');
+    assert.strictEqual(config.benchmarkGate.failIfBaselineMissing, true);
+    assert.strictEqual(config.benchmarkGate.approvedMitigationId, 'MIT-42');
+    assert.strictEqual(config.raftProvider, 'raft_logic');
     assert.strictEqual(
       config.benchmark.loadOpsPerSec,
       BENCHMARK_DEFAULTS.loadOpsPerSec,
@@ -258,6 +298,34 @@ test('Unit: mergeWithDefaults handles docker.hosts for remote', async (t) => {
     );
     assert.strictEqual(config.docker.socketPath, undefined);
   });
+});
+
+test('Unit: mergeWithDefaults preserves optional docker fast-local fields', async (t) => {
+  await t.test('passes through docker binds and skipBuildOnDirty when set',
+    async () => {
+      const partial = {
+        docker: {
+          socketPath: '/var/run/docker.sock',
+          skipBuildOnDirty: true,
+          reuseContainers: true,
+          keepRunningContainers: true,
+          binds: [
+            '/tmp/project/src:/app/src:ro',
+            '',
+            42,
+          ],
+        },
+      };
+
+      const config = mergeWithDefaults(partial);
+
+      assert.strictEqual(config.docker.skipBuildOnDirty, true);
+      assert.strictEqual(config.docker.reuseContainers, true);
+      assert.strictEqual(config.docker.keepRunningContainers, true);
+      assert.deepStrictEqual(config.docker.binds, [
+        '/tmp/project/src:/app/src:ro',
+      ]);
+    });
 });
 
 test('Unit: mergeWithDefaults passes through gcp config', async (t) => {

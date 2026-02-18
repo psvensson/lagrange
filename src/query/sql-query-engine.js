@@ -1294,7 +1294,7 @@ class SQLQueryEngine {
         payloadHash,
       });
     } else {
-      await this.persistNonTransactionalWriteStart(
+      this.fireNonTransactionalWriteStart(
         writePlan,
         QUERY_AST_TYPE.INSERT,
       );
@@ -1326,7 +1326,7 @@ class SQLQueryEngine {
           },
         );
       } else {
-        await this.persistNonTransactionalWriteResult(
+        this.fireNonTransactionalWriteResult(
           writePlan,
           QUERY_AST_TYPE.INSERT,
           {
@@ -1347,7 +1347,7 @@ class SQLQueryEngine {
         result,
       );
     } else {
-      await this.persistNonTransactionalWriteResult(
+      this.fireNonTransactionalWriteResult(
         writePlan,
         QUERY_AST_TYPE.INSERT,
         result,
@@ -1427,7 +1427,7 @@ class SQLQueryEngine {
         payloadHash,
       });
     } else {
-      await this.persistNonTransactionalWriteStart(
+      this.fireNonTransactionalWriteStart(
         writePlan,
         QUERY_AST_TYPE.UPDATE,
       );
@@ -1459,7 +1459,7 @@ class SQLQueryEngine {
           },
         );
       } else {
-        await this.persistNonTransactionalWriteResult(
+        this.fireNonTransactionalWriteResult(
           writePlan,
           QUERY_AST_TYPE.UPDATE,
           {
@@ -1480,7 +1480,7 @@ class SQLQueryEngine {
         result,
       );
     } else {
-      await this.persistNonTransactionalWriteResult(
+      this.fireNonTransactionalWriteResult(
         writePlan,
         QUERY_AST_TYPE.UPDATE,
         result,
@@ -1559,7 +1559,7 @@ class SQLQueryEngine {
         payloadHash,
       });
     } else {
-      await this.persistNonTransactionalWriteStart(
+      this.fireNonTransactionalWriteStart(
         writePlan,
         QUERY_AST_TYPE.DELETE,
       );
@@ -1591,7 +1591,7 @@ class SQLQueryEngine {
           },
         );
       } else {
-        await this.persistNonTransactionalWriteResult(
+        this.fireNonTransactionalWriteResult(
           writePlan,
           QUERY_AST_TYPE.DELETE,
           {
@@ -1612,7 +1612,7 @@ class SQLQueryEngine {
         result,
       );
     } else {
-      await this.persistNonTransactionalWriteResult(
+      this.fireNonTransactionalWriteResult(
         writePlan,
         QUERY_AST_TYPE.DELETE,
         result,
@@ -1768,9 +1768,20 @@ class SQLQueryEngine {
    * @return {Promise<void>}
    * @private
    */
-  async persistNonTransactionalWriteStart(writePlan, statementType) {
+  /**
+   * Fire-and-forget: persist a non-transactional write operation row.
+   * Non-transactional write tracking is observability-only and is not
+   * required for correctness (recovery only reads sql_write_operations
+   * when active sql_transactions exist). Blocking the write critical
+   * path on this persistence triples write latency because each
+   * upsert routes through full SQL + Raft + CDC cache wait.
+   * @param {Object} writePlan - DistributedWritePlan.
+   * @param {string} statementType - SQL AST statement type.
+   * @private
+   */
+  fireNonTransactionalWriteStart(writePlan, statementType) {
     const now = Date.now();
-    await this.persistDistributedWriteOperationRow({
+    this.persistDistributedWriteOperationRow({
       operationId: writePlan.operationId,
       transactionId: null,
       statementType,
@@ -1785,20 +1796,27 @@ class SQLQueryEngine {
       lastError: null,
       createdAt: now,
       updatedAt: now,
+    }).catch((error) => {
+      this.logger.warn(QUERY_LOG_MSG.WRITE_OP_PERSIST_FAILED, {
+        operationId: writePlan.operationId,
+        statementType,
+        status: WRITE_OPERATION_STATUS.PENDING,
+        error: error.message,
+      });
     });
   }
 
   /**
-   * Persist the final state for a non-transactional distributed write.
+   * Fire-and-forget: persist the final state for a non-transactional
+   * distributed write. See fireNonTransactionalWriteStart for rationale.
    * @param {Object} writePlan - DistributedWritePlan.
    * @param {string} statementType - SQL AST statement type.
    * @param {Object} result - Write result.
-   * @return {Promise<void>}
    * @private
    */
-  async persistNonTransactionalWriteResult(writePlan, statementType, result) {
+  fireNonTransactionalWriteResult(writePlan, statementType, result) {
     const now = Date.now();
-    await this.persistDistributedWriteOperationRow({
+    this.persistDistributedWriteOperationRow({
       operationId: writePlan.operationId,
       transactionId: null,
       statementType,
@@ -1815,6 +1833,15 @@ class SQLQueryEngine {
       lastError: result.success === true ? null : result.error,
       createdAt: now,
       updatedAt: now,
+    }).catch((error) => {
+      this.logger.warn(QUERY_LOG_MSG.WRITE_OP_PERSIST_FAILED, {
+        operationId: writePlan.operationId,
+        statementType,
+        status: result.success === true ?
+          WRITE_OPERATION_STATUS.SUCCEEDED :
+          WRITE_OPERATION_STATUS.FAILED,
+        error: error.message,
+      });
     });
   }
 

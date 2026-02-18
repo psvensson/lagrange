@@ -9,6 +9,12 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {ENTITY_TYPE} from '../../src/constants/index.js';
+import {
+  resetProcessRaftProviderForTests,
+} from '../../src/raft/raft-provider-control.js';
+import {
+  RAFT_PROVIDER_CONTROL,
+} from '../../src/raft/raft-provider-control-constants.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -59,9 +65,11 @@ class TestRaftReplica extends RaftReplicaBase {
 test('RaftReplicaBase', async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
+    resetProcessRaftProviderForTests();
   });
 
   t.afterEach(() => {
+    resetProcessRaftProviderForTests();
     cleanupTestEnvironment();
   });
 
@@ -258,5 +266,27 @@ test('RaftReplicaBase', async (t) => {
     replica.startElection();
 
     t.equal(replica.electionStarted, true);
+  });
+
+  await t.test('createRaftInstance fails fast when provider is non-liferaft', async (t) => {
+    const previousProvider = process.env[RAFT_PROVIDER_CONTROL.ENV_KEY];
+    process.env[RAFT_PROVIDER_CONTROL.ENV_KEY] = RAFT_PROVIDER_CONTROL.RAFT_LOGIC;
+    t.teardown(() => {
+      if (previousProvider === undefined) {
+        delete process.env[RAFT_PROVIDER_CONTROL.ENV_KEY];
+      } else {
+        process.env[RAFT_PROVIDER_CONTROL.ENV_KEY] = previousProvider;
+      }
+    });
+
+    const replica = new TestRaftReplica({
+      replicaId: 'replica-1',
+      nodeId: 'node-1',
+      replicaIds: ['replica-1'],
+    });
+
+    t.throws(() => {
+      replica.createRaftInstance();
+    }, /not available in this runtime path/);
   });
 });

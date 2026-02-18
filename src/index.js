@@ -24,6 +24,11 @@ import {assertCritical} from './utils/assert.js';
 import {ModuleMirror} from './wasm-service/module-mirror.js';
 import {WasmExecutor} from './wasm-service/wasm-executor.js';
 import {
+  ensureLiferaftProviderForRuntime,
+  getProcessRaftProvider,
+} from './raft/raft-provider-control.js';
+import {RAFT_PROVIDER_LOG_MSG} from './raft/raft-provider-control-constants.js';
+import {
   ENTRYPOINT_DEFAULT,
   ENTRYPOINT_ENV,
   ENTRYPOINT_FLAG,
@@ -335,6 +340,12 @@ async function main() {
   // Create subsystem-specific loggers
   const mainLogger = loggingService.forSubsystem(ENTRYPOINT_SUBSYSTEM.MAIN);
   const configLogger = loggingService.forSubsystem(ENTRYPOINT_SUBSYSTEM.CONFIG);
+
+  const selectedRaftProvider = getProcessRaftProvider(process.env);
+  mainLogger.info(RAFT_PROVIDER_LOG_MSG.SELECTED, {
+    provider: selectedRaftProvider,
+  });
+  ensureLiferaftProviderForRuntime(process.env);
 
   configLogger.debug('Configuration loaded', {
     categories: config.getCategories(),

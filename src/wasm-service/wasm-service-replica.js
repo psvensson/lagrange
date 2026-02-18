@@ -296,7 +296,7 @@ class WasmServiceReplica extends RaftReplicaBase {
       );
     }
     return new Promise((resolve, reject) => {
-      this.raft.command(entry, (err) => {
+      this.raftProvider.propose(this.raft, entry, (err) => {
         if (err) {
           reject(err);
         } else {
@@ -561,9 +561,7 @@ class WasmServiceReplica extends RaftReplicaBase {
     this._stopSafetyBroadcasts();
     const intervalMs = this.safetyInterval.intervalMs;
     this._safetyBroadcastTimer = setInterval(() => {
-      const committedIndex = this.raft ?
-        (this.raft.log ? this.raft.log.committedIndex : 0) :
-        0;
+      const committedIndex = this.raftProvider.getCommittedIndex(this.raft);
       this.safetyInterval.broadcastState(
         committedIndex, Date.now(),
       );

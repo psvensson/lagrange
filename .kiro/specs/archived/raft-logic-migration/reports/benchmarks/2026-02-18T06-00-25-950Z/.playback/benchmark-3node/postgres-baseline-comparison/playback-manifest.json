@@ -1,0 +1,19 @@
+{
+  "scenarioName": "postgres-baseline-comparison",
+  "startedAt": 1771394516526,
+  "endedAt": 1771394625633,
+  "durationMs": 109107,
+  "files": {
+    "events": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-comparison/events.ndjson",
+    "samples": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-comparison/samples.ndjson",
+    "snapshots": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-comparison/snapshots.ndjson",
+    "manifest": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-comparison/playback-manifest.json",
+    "viewer": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-comparison/playback-viewer.html"
+  },
+  "counts": {
+    "events": 127,
+    "samples": 270,
+    "snapshots": 75
+  },
+  "warnings": []
+}

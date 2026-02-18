@@ -41,7 +41,13 @@
     "lint:fix": "eslint src/ test/ --fix --ignore-pattern 'test/.gitkeep'",
     "build:bundle": "node scripts/build-sea.js",
     "build:sea": "bash scripts/build-executables.sh",
-    "build:all": "npm run build:bundle && npm run build:sea"
+    "build:all": "npm run build:bundle && npm run build:sea",
+    "spike:raft-logic": "node scripts/run-raft-logic-investigation-spike.js",
+    "migration:raft:benchmarks": "node scripts/run-raft-migration-benchmarks.js",
+    "migration:raft:stage:dev": "node scripts/run-raft-migration-stage-gate.js --stage dev",
+    "migration:raft:stage:canary": "node scripts/run-raft-migration-stage-gate.js --stage canary",
+    "migration:raft:stage:limited": "node scripts/run-raft-migration-stage-gate.js --stage limited-production",
+    "migration:raft:rollback-drill": "node scripts/run-raft-migration-rollback-drill.js"
   },
   "keywords": [
     "distributed",

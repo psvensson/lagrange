@@ -159,6 +159,27 @@ describe('ReportWriter', () => {
         assert.equal(report.scenarios.length, 2);
       });
 
+    it('persists metadata and extra top-level fields', async () => {
+      const writer = new ReportWriter(outputPath, {
+        metadata: {raftProvider: 'liferaft'},
+      });
+      writer.addResult('s1', {passed: true, duration: 10});
+
+      await writer.write({
+        benchmarkRegressionGate: {status: 'passed'},
+        metadata: {scenarioFilter: 'postgres-baseline-comparison'},
+      });
+
+      const content = await readFile(outputPath, 'utf8');
+      const report = JSON.parse(content);
+
+      assert.deepEqual(report.metadata, {
+        raftProvider: 'liferaft',
+        scenarioFilter: 'postgres-baseline-comparison',
+      });
+      assert.deepEqual(report.benchmarkRegressionGate, {status: 'passed'});
+    });
+
     it('computes correct summary totals', async () => {
       const writer = new ReportWriter(outputPath);
       writer.addResult('pass-1', {passed: true, duration: 1000});

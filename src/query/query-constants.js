@@ -167,6 +167,8 @@ const QUERY_LOG_MSG = Object.freeze({
   TABLE_SPLIT_MERGE_EVAL_FAILED:
     'Split/merge evaluation after table create failed',
   FOLLOWING_LEADER_REDIRECT: 'Following leader redirect',
+  WRITE_OP_PERSIST_FAILED:
+    'Non-transactional write operation persistence failed',
 });
 
 const QUERY_ROUTER_LOG_MSG = Object.freeze({

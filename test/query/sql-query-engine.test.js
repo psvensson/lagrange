@@ -515,6 +515,11 @@ test('SQLQueryEngine - persists non-transactional distributed write operations',
     );
 
     t.equal(result.success, true);
+
+    // Write operation persistence is fire-and-forget for non-transactional
+    // writes. Allow microtasks to flush before checking upserts.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
     const writeOpRows = upserts.filter((entry) =>
       entry.tableName === TABLES.SQL_WRITE_OPERATIONS);
     t.equal(writeOpRows.length, 2);
@@ -710,3 +715,180 @@ test('SQLQueryEngine - remains correct before and after partition split updates'
 
     mockPartitionData.clear();
   });
+
+test('SQLQueryEngine - non-transactional write persistence does not block ' +
+  'INSERT critical path', async (t) => {
+  // Bug: persistNonTransactionalWriteStart and persistNonTransactionalWriteResult
+  // are awaited in the INSERT path, adding 2 full SQL round-trips per write.
+  // For non-transactional single-partition writes, this tracking is not needed
+  // for correctness (only used in distributed transaction recovery).
+  // The persistence should be fire-and-forget to avoid tripling write latency.
+  const SLOW_PERSIST_MS = 50;
+  const upserts = [];
+  let upsertResolvers = [];
+
+  const cache = createMockSystemCache(
+    [{table_name: 'users', primaryKey: 'id'}],
+    [{
+      partition_id: 'p1',
+      table_name: 'users',
+      partition_key_start: null,
+      partition_key_end: null,
+    }],
+  );
+
+  // CDC service that takes SLOW_PERSIST_MS per upsert to simulate real
+  // Raft consensus + CDC cache wait overhead on sql_write_operations.
+  const cdcIntegrationService = {
+    async upsertSystemTableRow(tableName, row) {
+      upserts.push({tableName, row, timestamp: Date.now()});
+      await new Promise((resolve) => {
+        upsertResolvers.push(resolve);
+        setTimeout(resolve, SLOW_PERSIST_MS);
+      });
+      return {success: true};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    cdcIntegrationService,
+  });
+
+  const startMs = Date.now();
+  const result = await engine.executeQuery(
+    'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\')',
+  );
+  const durationMs = Date.now() - startMs;
+
+  t.equal(result.success, true);
+  t.equal(result.operation, 'INSERT');
+
+  // If persistence is fire-and-forget, the INSERT should complete well
+  // under the combined persistence delay (2 * SLOW_PERSIST_MS = 100ms).
+  // Allow generous margin but the key assertion is that we don't wait
+  // for both persist calls sequentially.
+  const maxAcceptableMs = SLOW_PERSIST_MS;
+  t.ok(
+    durationMs < maxAcceptableMs,
+    `INSERT took ${durationMs}ms, expected < ${maxAcceptableMs}ms ` +
+    '(write persistence should not block critical path)',
+  );
+
+  // Allow fire-and-forget upserts to complete before test cleanup.
+  await Promise.resolve();
+  for (const resolver of upsertResolvers) {
+    resolver();
+  }
+  upsertResolvers = [];
+  await new Promise((resolve) => setTimeout(resolve, SLOW_PERSIST_MS + 10));
+});
+
+test('SQLQueryEngine - non-transactional write persistence does not block ' +
+  'UPDATE critical path', async (t) => {
+  const SLOW_PERSIST_MS = 50;
+  let upsertResolvers = [];
+
+  const cache = createMockSystemCache(
+    [{table_name: 'users', primaryKey: 'id'}],
+    [{
+      partition_id: 'p1',
+      table_name: 'users',
+      partition_key_start: null,
+      partition_key_end: null,
+    }],
+  );
+
+  const cdcIntegrationService = {
+    async upsertSystemTableRow(_tableName, _row) {
+      await new Promise((resolve) => {
+        upsertResolvers.push(resolve);
+        setTimeout(resolve, SLOW_PERSIST_MS);
+      });
+      return {success: true};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    cdcIntegrationService,
+  });
+
+  const startMs = Date.now();
+  const result = await engine.executeQuery(
+    'UPDATE users SET name = \'Bob\' WHERE id = \'alice\'',
+  );
+  const durationMs = Date.now() - startMs;
+
+  t.equal(result.success, true);
+
+  const maxAcceptableMs = SLOW_PERSIST_MS;
+  t.ok(
+    durationMs < maxAcceptableMs,
+    `UPDATE took ${durationMs}ms, expected < ${maxAcceptableMs}ms ` +
+    '(write persistence should not block critical path)',
+  );
+
+  await Promise.resolve();
+  for (const resolver of upsertResolvers) {
+    resolver();
+  }
+  upsertResolvers = [];
+  await new Promise((resolve) => setTimeout(resolve, SLOW_PERSIST_MS + 10));
+});
+
+test('SQLQueryEngine - non-transactional write persistence does not block ' +
+  'DELETE critical path', async (t) => {
+  const SLOW_PERSIST_MS = 50;
+  let upsertResolvers = [];
+
+  const cache = createMockSystemCache(
+    [{table_name: 'users', primaryKey: 'id'}],
+    [{
+      partition_id: 'p1',
+      table_name: 'users',
+      partition_key_start: null,
+      partition_key_end: null,
+    }],
+  );
+
+  const cdcIntegrationService = {
+    async upsertSystemTableRow(_tableName, _row) {
+      await new Promise((resolve) => {
+        upsertResolvers.push(resolve);
+        setTimeout(resolve, SLOW_PERSIST_MS);
+      });
+      return {success: true};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    cdcIntegrationService,
+  });
+
+  const startMs = Date.now();
+  const result = await engine.executeQuery(
+    'DELETE FROM users WHERE id = \'alice\'',
+  );
+  const durationMs = Date.now() - startMs;
+
+  t.equal(result.success, true);
+
+  const maxAcceptableMs = SLOW_PERSIST_MS;
+  t.ok(
+    durationMs < maxAcceptableMs,
+    `DELETE took ${durationMs}ms, expected < ${maxAcceptableMs}ms ` +
+    '(write persistence should not block critical path)',
+  );
+
+  await Promise.resolve();
+  for (const resolver of upsertResolvers) {
+    resolver();
+  }
+  upsertResolvers = [];
+  await new Promise((resolve) => setTimeout(resolve, SLOW_PERSIST_MS + 10));
+});

@@ -5,6 +5,8 @@
  *   node test/distributed/run.js --config local.json
  *   node test/distributed/run.js --config local.json --scenario node-failure
  *   node test/distributed/run.js --config gcp-small.json --output results.json
+ *   node test/distributed/run.js --config local.json --fast-local --verbose
+ *   node test/distributed/run.js --config local.json --no-fast-local
  *
  * Requirements: 9.3, 9.4, 9.5, 9.6, 12.1
  */
@@ -20,11 +22,16 @@ import {
 } from './harness/scenario-discovery.js';
 import {createCluster} from './harness/cluster.js';
 import {DockerProvider} from './harness/docker-provider.js';
-import {ReportWriter} from './harness/report-writer.js';
+import {ReportWriter, computeStandardSummary} from './harness/report-writer.js';
 import {formatLogEntry} from './harness/log-collector.js';
 import {analyzeMemoryLeakFromPlayback} from './harness/memory-leak-analyzer.js';
 import {buildPerformanceDiagnostics} from './harness/performance-diagnostics.js';
-import {CLI, EXIT_CODES} from './harness/constants.js';
+import {
+  CLI,
+  EXIT_CODES,
+  BENCHMARK_GATE_DEFAULTS,
+  RAFT_PROVIDER_DEFAULTS,
+} from './harness/constants.js';
 
 const LIVE_LOG_PREFIX = '[live-log] ';
 const LIVE_LOG_NODE_EXCLUDED = 'load-generator';
@@ -82,6 +89,10 @@ const IMAGE_REBUILD_DIRTY_PREFIX =
 const IMAGE_BUILD_LOG_PREFIX = 'Building Docker image';
 const IMAGE_BUILD_LOG_SUFFIX = '...';
 const IMAGE_BUILD_WITH_COMMIT_PREFIX = ' for commit ';
+const IMAGE_SKIP_DIRTY_REBUILD_PREFIX =
+  'Skipping dirty-workspace rebuild in fast-local mode: ';
+const IMAGE_SKIP_DIRTY_REBUILD_MISSING_SUFFIX =
+  ' (image missing, rebuilding once)';
 const RUN_OUTPUT_DIRNAME = '.playback';
 const REPORT_JSON_EXTENSION = '.report.json';
 const FALLBACK_OUTPUT_BASENAME = 'report';
@@ -96,6 +107,27 @@ const MEMORY_ASSERTION_ERROR_PREFIX = 'Memory leak assertion failed: ';
 const MEMORY_ASSERTION_SAMPLES_MISSING = 'memory samples unavailable';
 const MEMORY_ASSERTION_LEAK_DETECTED_PREFIX =
   'memory leak detected on nodes: ';
+const SCENARIO_FILTER_ALL = 'all';
+const BENCHMARK_GATE_STATUS = Object.freeze({
+  PASSED: 'passed',
+  FAILED: 'failed',
+  SKIPPED: 'skipped',
+});
+const BENCHMARK_GATE_SKIP_REASON = Object.freeze({
+  DISABLED: 'disabled',
+  NO_BENCHMARK_SCENARIOS: 'no-benchmark-scenarios',
+  BASELINE_MISSING: 'baseline-missing',
+});
+const BENCHMARK_GATE_FAIL_REASON = Object.freeze({
+  THROUGHPUT_REGRESSION: 'throughput-regression',
+  BASELINE_REQUIRED_MISSING: 'baseline-required-missing',
+});
+const FAST_LOCAL_SOURCE_RELATIVE_PATH = 'src';
+const FAST_LOCAL_SOURCE_CONTAINER_PATH = '/app/src';
+const FAST_LOCAL_BIND_READ_ONLY_SUFFIX = ':ro';
+const FAST_LOCAL_LOG_PREFIX =
+  'Fast local mode enabled: mounted host source, container reuse, ' +
+  'and relaxed dirty rebuild policy\n';
 
 function resolveClusterSize(config) {
   return Number.isInteger(config?.size) && config.size > 0 ?
@@ -107,13 +139,14 @@ function resolveClusterSize(config) {
  * Parse CLI arguments from argv.
  * @param {Array<string>} argv - process.argv.slice(2)
  * @returns {{config: string, scenario: string|null,
- *   output: string, verbose: boolean}}
+ *   output: string, verbose: boolean, fastLocal: boolean|null}}
  */
 function parseArgs(argv) {
   let config = CLI.DEFAULT_CONFIG;
   let scenario = null;
   let output = CLI.DEFAULT_OUTPUT;
   let verbose = false;
+  let fastLocal = null;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -125,10 +158,65 @@ function parseArgs(argv) {
       output = argv[++i];
     } else if (arg === CLI.ARG_VERBOSE) {
       verbose = true;
+    } else if (arg === CLI.ARG_FAST_LOCAL) {
+      fastLocal = true;
+    } else if (arg === CLI.ARG_NO_FAST_LOCAL) {
+      fastLocal = false;
     }
   }
 
-  return {config, scenario, output, verbose};
+  return {config, scenario, output, verbose, fastLocal};
+}
+
+function buildFastLocalSourceBind(cwd = process.cwd()) {
+  const hostSourcePath = resolve(cwd, FAST_LOCAL_SOURCE_RELATIVE_PATH);
+  return hostSourcePath +
+    ':' +
+    FAST_LOCAL_SOURCE_CONTAINER_PATH +
+    FAST_LOCAL_BIND_READ_ONLY_SUFFIX;
+}
+
+function applyFastLocalConfig(config, cwd = process.cwd()) {
+  const dockerConfig = (config && typeof config.docker === 'object') ?
+    config.docker :
+    {};
+  const sourceBind = buildFastLocalSourceBind(cwd);
+  const existingBinds = Array.isArray(dockerConfig.binds) ?
+    dockerConfig.binds.filter((entry) => typeof entry === 'string' &&
+      entry.length > 0) :
+    [];
+  const mergedBinds = existingBinds.includes(sourceBind) ?
+    existingBinds :
+    [...existingBinds, sourceBind];
+
+  return {
+    ...config,
+    docker: {
+      ...dockerConfig,
+      skipBuildOnDirty: true,
+      reuseContainers: true,
+      keepRunningContainers: true,
+      binds: mergedBinds,
+    },
+  };
+}
+
+function isLocalDockerConfig(config) {
+  return !Array.isArray(config?.docker?.hosts) ||
+    config.docker.hosts.length === 0;
+}
+
+function resolveFastLocalMode(args, config) {
+  if (!isLocalDockerConfig(config)) {
+    return false;
+  }
+  if (args?.fastLocal === true) {
+    return true;
+  }
+  if (args?.fastLocal === false) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -155,10 +243,38 @@ async function buildImage(
   const gitDirty = typeof options.gitDirty === 'boolean' ?
     options.gitDirty :
     await resolveGitDirty();
+  const skipBuildOnDirty = config?.docker?.skipBuildOnDirty === true;
   const existingHash = await provider.getImageLabel(
     config.image,
     IMAGE_LABEL_GIT_HASH,
   );
+
+  if (gitDirty && skipBuildOnDirty) {
+    const imageExists = await provider.imageExists(config.image);
+    if (imageExists) {
+      if (verbose) {
+        process.stdout.write(
+          IMAGE_SKIP_DIRTY_REBUILD_PREFIX +
+          config.image +
+          '\n',
+        );
+      }
+      return {
+        image: config.image,
+        gitHash,
+        gitDirty,
+        reused: true,
+      };
+    }
+    if (verbose) {
+      process.stdout.write(
+        IMAGE_SKIP_DIRTY_REBUILD_PREFIX +
+        config.image +
+        IMAGE_SKIP_DIRTY_REBUILD_MISSING_SUFFIX +
+        '\n',
+      );
+    }
+  }
 
   if (!gitDirty &&
       existingHash === gitHash &&
@@ -343,6 +459,14 @@ async function loadHistoricalReports(reportOutputPath) {
         path: candidatePath,
         timestamp: parsed.timestamp || null,
         summary: parsed.summary || null,
+        standardSummary:
+          parsed.standardSummary && typeof parsed.standardSummary === 'object' ?
+            parsed.standardSummary :
+            null,
+        metadata:
+          parsed.metadata && typeof parsed.metadata === 'object' ?
+            parsed.metadata :
+            null,
         scenarios: parsed.scenarios,
       });
     } catch (_readErr) {
@@ -353,6 +477,254 @@ async function loadHistoricalReports(reportOutputPath) {
   historicalReports.sort((left, right) =>
     parseTimestampMs(right.timestamp) - parseTimestampMs(left.timestamp));
   return historicalReports.slice(0, HISTORICAL_REPORT_SCAN_LIMIT);
+}
+
+function normalizeFiniteNumber(value) {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized : null;
+}
+
+function resolveRunRaftProvider(config, env = process.env) {
+  const configuredProvider = config?.raftProvider;
+  if (typeof configuredProvider === 'string' &&
+    configuredProvider.trim().length > 0) {
+    return configuredProvider.trim().toLowerCase();
+  }
+
+  const envValue = env?.[RAFT_PROVIDER_DEFAULTS.envKey];
+  if (typeof envValue === 'string' && envValue.trim().length > 0) {
+    return envValue.trim().toLowerCase();
+  }
+
+  return RAFT_PROVIDER_DEFAULTS.provider;
+}
+
+function resolveBenchmarkGateConfig(config) {
+  const configuredGate = config?.benchmarkGate &&
+    typeof config.benchmarkGate === 'object' ?
+    config.benchmarkGate :
+    {};
+  const configuredMaxRegression = normalizeFiniteNumber(
+    configuredGate.maxThroughputRegressionRatio,
+  );
+  const configuredBaselineProvider = String(
+    configuredGate.baselineProvider || '',
+  ).trim().toLowerCase();
+  const configuredMitigationId = String(
+    configuredGate.approvedMitigationId || '',
+  ).trim();
+
+  return {
+    enabled: configuredGate.enabled === true,
+    maxThroughputRegressionRatio:
+      configuredMaxRegression !== null &&
+      configuredMaxRegression >= 0 ?
+        configuredMaxRegression :
+        BENCHMARK_GATE_DEFAULTS.maxThroughputRegressionRatio,
+    baselineProvider: configuredBaselineProvider ||
+      BENCHMARK_GATE_DEFAULTS.baselineProvider,
+    failIfBaselineMissing: configuredGate.failIfBaselineMissing === true ||
+      BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing === true,
+    approvedMitigationId: configuredMitigationId || null,
+  };
+}
+
+function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
+  const bySimilarityKey = new Map();
+
+  for (const historicalReport of historyReports) {
+    const reportProvider = String(
+      historicalReport?.metadata?.raftProvider || '',
+    ).trim().toLowerCase();
+    if (reportProvider !== baselineProvider) {
+      continue;
+    }
+
+    const scenarioSummaries = Array.isArray(
+      historicalReport?.standardSummary?.scenarios,
+    ) ?
+      historicalReport.standardSummary.scenarios :
+      [];
+
+    for (const scenarioSummary of scenarioSummaries) {
+      const similarityKey = String(
+        scenarioSummary?.similarityKey || '',
+      ).trim();
+      if (!similarityKey || bySimilarityKey.has(similarityKey)) {
+        continue;
+      }
+
+      const baselineOpsPerSec = normalizeFiniteNumber(
+        scenarioSummary?.current?.opsPerSec,
+      );
+      if (baselineOpsPerSec === null || baselineOpsPerSec <= 0) {
+        continue;
+      }
+
+      bySimilarityKey.set(similarityKey, {
+        provider: reportProvider,
+        reportPath: historicalReport?.path || null,
+        reportTimestamp: historicalReport?.timestamp || null,
+        scenario: scenarioSummary?.scenario || null,
+        opsPerSec: baselineOpsPerSec,
+      });
+    }
+  }
+
+  return bySimilarityKey;
+}
+
+function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) {
+  const gateConfig = resolveBenchmarkGateConfig(config);
+  const currentProvider = resolveRunRaftProvider(config);
+  const baseResult = {
+    enabled: gateConfig.enabled,
+    status: BENCHMARK_GATE_STATUS.SKIPPED,
+    reason: BENCHMARK_GATE_SKIP_REASON.DISABLED,
+    settings: gateConfig,
+    currentProvider,
+    baselineProvider: gateConfig.baselineProvider,
+    comparedScenarioCount: 0,
+    failedScenarioCount: 0,
+    mitigatedScenarioCount: 0,
+    missingBaselineScenarios: [],
+    comparisons: [],
+  };
+
+  if (!gateConfig.enabled) {
+    return baseResult;
+  }
+
+  const currentScenarios = Array.isArray(
+    reportPayload?.standardSummary?.scenarios,
+  ) ?
+    reportPayload.standardSummary.scenarios :
+    [];
+  const currentBenchmarkScenarios = currentScenarios.filter((entry) => {
+    const similarityKey = String(entry?.similarityKey || '').trim();
+    const currentOpsPerSec = normalizeFiniteNumber(entry?.current?.opsPerSec);
+    return similarityKey.length > 0 &&
+      currentOpsPerSec !== null &&
+      currentOpsPerSec >= 0;
+  });
+
+  if (currentBenchmarkScenarios.length === 0) {
+    return {
+      ...baseResult,
+      reason: BENCHMARK_GATE_SKIP_REASON.NO_BENCHMARK_SCENARIOS,
+    };
+  }
+
+  const baselineIndex = buildHistoricalBaselineIndex(
+    historyReports,
+    gateConfig.baselineProvider,
+  );
+
+  let failedScenarioCount = 0;
+  let mitigatedScenarioCount = 0;
+  const missingBaselineScenarios = [];
+  const comparisons = [];
+
+  for (const scenarioEntry of currentBenchmarkScenarios) {
+    const similarityKey = String(scenarioEntry?.similarityKey || '').trim();
+    const currentOpsPerSec = normalizeFiniteNumber(
+      scenarioEntry?.current?.opsPerSec,
+    );
+    if (!similarityKey || currentOpsPerSec === null) {
+      continue;
+    }
+
+    const baseline = baselineIndex.get(similarityKey);
+    if (!baseline) {
+      missingBaselineScenarios.push({
+        scenario: scenarioEntry?.scenario || null,
+        similarityKey,
+      });
+      continue;
+    }
+
+    const baselineOpsPerSec = normalizeFiniteNumber(baseline.opsPerSec);
+    if (baselineOpsPerSec === null || baselineOpsPerSec <= 0) {
+      missingBaselineScenarios.push({
+        scenario: scenarioEntry?.scenario || null,
+        similarityKey,
+      });
+      continue;
+    }
+
+    const throughputRegressionRatio =
+      (baselineOpsPerSec - currentOpsPerSec) / baselineOpsPerSec;
+    const regressedBeyondThreshold =
+      throughputRegressionRatio > gateConfig.maxThroughputRegressionRatio;
+    const mitigationApplied = regressedBeyondThreshold &&
+      Boolean(gateConfig.approvedMitigationId);
+    if (regressedBeyondThreshold && !mitigationApplied) {
+      failedScenarioCount += 1;
+    } else if (regressedBeyondThreshold && mitigationApplied) {
+      mitigatedScenarioCount += 1;
+    }
+
+    comparisons.push({
+      scenario: scenarioEntry?.scenario || null,
+      similarityKey,
+      currentOpsPerSec,
+      baselineOpsPerSec,
+      throughputRegressionRatio,
+      threshold: gateConfig.maxThroughputRegressionRatio,
+      regressedBeyondThreshold,
+      mitigationApplied,
+      approvedMitigationId: gateConfig.approvedMitigationId,
+      baselineReportPath: baseline.reportPath,
+      baselineReportTimestamp: baseline.reportTimestamp,
+    });
+  }
+
+  const baselineMissingFailure = gateConfig.failIfBaselineMissing &&
+    comparisons.length === 0 &&
+    missingBaselineScenarios.length > 0;
+  if (baselineMissingFailure) {
+    return {
+      ...baseResult,
+      status: BENCHMARK_GATE_STATUS.FAILED,
+      reason: BENCHMARK_GATE_FAIL_REASON.BASELINE_REQUIRED_MISSING,
+      comparedScenarioCount: comparisons.length,
+      missingBaselineScenarios,
+      comparisons,
+      failedScenarioCount: 1,
+      mitigatedScenarioCount,
+    };
+  }
+
+  if (failedScenarioCount > 0) {
+    return {
+      ...baseResult,
+      status: BENCHMARK_GATE_STATUS.FAILED,
+      reason: BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_REGRESSION,
+      comparedScenarioCount: comparisons.length,
+      missingBaselineScenarios,
+      comparisons,
+      failedScenarioCount,
+      mitigatedScenarioCount,
+    };
+  }
+
+  const status = comparisons.length > 0 ?
+    BENCHMARK_GATE_STATUS.PASSED :
+    BENCHMARK_GATE_STATUS.SKIPPED;
+  const reason = comparisons.length > 0 ?
+    null :
+    BENCHMARK_GATE_SKIP_REASON.BASELINE_MISSING;
+
+  return {
+    ...baseResult,
+    status,
+    reason,
+    comparedScenarioCount: comparisons.length,
+    missingBaselineScenarios,
+    comparisons,
+    failedScenarioCount: 0,
+    mitigatedScenarioCount,
+  };
 }
 
 function dockerActionLine(action, details) {
@@ -468,12 +840,17 @@ function extractBuildProgressLine(event) {
  *   verbose: boolean,
  *   historyReports?: Array<Object>,
  *   dockerOperationSink?: Function|null,
+ *   reportMetadata?: Object|null,
  * }} options
  * @returns {Promise<{report: ReportWriter, hasFailures: boolean}>}
  */
 async function runScenarios(config, scenarios, options) {
   const report = new ReportWriter(options.output, {
     historyReports: options?.historyReports,
+    metadata:
+      options?.reportMetadata && typeof options.reportMetadata === 'object' ?
+        options.reportMetadata :
+        null,
   });
   let hasFailures = false;
   const dockerOperationSink = typeof options?.dockerOperationSink === 'function' ?
@@ -969,10 +1346,16 @@ async function main() {
   }
   const config = await parseConfig(args.config);
   const outputDir = config.outputDir || deriveRunOutputDir(args.output);
-  const runConfig = {
+  let runConfig = {
     ...config,
     outputDir,
   };
+  if (resolveFastLocalMode(args, runConfig)) {
+    runConfig = applyFastLocalConfig(runConfig);
+    if (args.verbose) {
+      process.stdout.write(FAST_LOCAL_LOG_PREFIX);
+    }
+  }
   if (args.verbose) {
     const hasRemoteHosts = Array.isArray(runConfig?.docker?.hosts) &&
       runConfig.docker.hosts.length > 0;
@@ -1026,18 +1409,39 @@ async function main() {
     );
   }
 
+  const historicalReports = await loadHistoricalReports(args.output);
+  const reportMetadata = {
+    raftProvider: resolveRunRaftProvider(runConfig),
+    configPath: String(args.config),
+    scenarioFilter: String(args.scenario || SCENARIO_FILTER_ALL),
+  };
+
   const {report, hasFailures} = await runScenarios(
     runConfig,
     scenarios,
     {
       output: args.output,
       verbose: args.verbose,
-      historyReports: await loadHistoricalReports(args.output),
+      historyReports: historicalReports,
       dockerOperationSink,
+      reportMetadata,
     },
   );
 
-  await report.write();
+  const reportPreview = {
+    standardSummary: computeStandardSummary(
+      report.scenarios,
+      historicalReports,
+    ),
+  };
+  const benchmarkRegressionGate = evaluateBenchmarkRegressionGate(
+    reportPreview,
+    historicalReports,
+    runConfig,
+  );
+  await report.write({
+    benchmarkRegressionGate,
+  });
 
   if (args.verbose) {
     process.stdout.write(
@@ -1045,8 +1449,18 @@ async function main() {
     );
   }
 
+  const gateFailed = benchmarkRegressionGate.status === BENCHMARK_GATE_STATUS.FAILED;
+  const hasRunFailures = hasFailures || gateFailed;
+  if (args.verbose && gateFailed) {
+    process.stderr.write(
+      'Benchmark regression gate failed: ' +
+      String(benchmarkRegressionGate.reason || BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_REGRESSION) +
+      '\n',
+    );
+  }
+
   process.exit(
-    hasFailures ? EXIT_CODES.FAILURE : EXIT_CODES.SUCCESS,
+    hasRunFailures ? EXIT_CODES.FAILURE : EXIT_CODES.SUCCESS,
   );
 }
 
@@ -1068,9 +1482,13 @@ export {
   normalizeScenarioPayload,
   evaluateTraceAssertions,
   evaluateMemoryLeakAssertions,
+  evaluateBenchmarkRegressionGate,
+  resolveBenchmarkGateConfig,
+  resolveRunRaftProvider,
   buildImage,
   loadScenarioModule,
   shouldPrintLiveLogEntry,
+  resolveFastLocalMode,
   resolveGitDirty,
   deriveRunOutputDir,
   loadHistoricalReports,

@@ -130,6 +130,7 @@ const CONFIG_KEY = Object.freeze({
   RAFT_ELECTION_TIMEOUT_MIN_MS: 'raft.electionTimeoutMinMs',
   RAFT_ELECTION_TIMEOUT_MAX_MS: 'raft.electionTimeoutMaxMs',
   RAFT_HEARTBEAT_INTERVAL_MS: 'raft.heartbeatIntervalMs',
+  RAFT_TICK_INTERVAL_MS: 'raft.tickIntervalMs',
   RAFT_ADAPTIVE_TIMING_ENABLED: 'raft.adaptiveTimingEnabled',
   RAFT_ADAPTIVE_TIMING_SAMPLE_INTERVAL_MS:
     'raft.adaptiveTimingSampleIntervalMs',
@@ -341,6 +342,7 @@ const CONFIG_SCHEMA = {
         electionTimeoutMinMs: {type: 'number', minimum: 100},
         electionTimeoutMaxMs: {type: 'number', minimum: 200},
         heartbeatIntervalMs: {type: 'number', minimum: 10},
+        tickIntervalMs: {type: 'number', minimum: 1},
         adaptiveTimingEnabled: {type: 'boolean'},
         adaptiveTimingSampleIntervalMs: {type: 'number', minimum: 1},
         adaptiveTimingPromoteSamples: {type: 'number', minimum: 1},
@@ -570,6 +572,7 @@ const DEFAULT_CONFIG = {
     electionTimeoutMinMs: 1000,
     electionTimeoutMaxMs: 3000,
     heartbeatIntervalMs: 50,
+    tickIntervalMs: 20,
     adaptiveTimingEnabled: false,
     adaptiveTimingSampleIntervalMs: 5000,
     adaptiveTimingPromoteSamples: 2,
@@ -633,7 +636,7 @@ const DEFAULT_CONFIG = {
     reconnectMaxAttempts: 10,
     pingIntervalMs: 30000,
     reconnectBackoffMultiplier: 1.5,
-    outboundQueueMaxConcurrent: 2,
+    outboundQueueMaxConcurrent: 32,
     connectionPoolTtlMs: 300000, // 5 minutes
     connectionPoolCleanupIntervalMs: 60000, // 1 minute
   },
@@ -734,6 +737,7 @@ const ENV_MAPPINGS = {
   RAFT_ELECTION_TIMEOUT_MIN_MS: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS,
   RAFT_ELECTION_TIMEOUT_MAX_MS: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS,
   RAFT_HEARTBEAT_INTERVAL_MS: CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS,
+  RAFT_TICK_INTERVAL_MS: CONFIG_KEY.RAFT_TICK_INTERVAL_MS,
   REBALANCER_PERIODIC_CHECK_INTERVAL_MS: CONFIG_KEY.REBALANCER_PERIODIC_CHECK_INTERVAL_MS,
   REBALANCER_MAX_CONCURRENT_MOVES: CONFIG_KEY.REBALANCER_MAX_CONCURRENT_MOVES,
   MESSAGE_GROUP_REPLICA_COUNT: CONFIG_KEY.MESSAGE_GROUP_REPLICA_COUNT,
@@ -798,6 +802,12 @@ const CONFIG_DEFINITIONS = {
     type: CONFIG_VALUE_TYPE.NUMBER,
     requiresRestart: false,
     description: 'Raft heartbeat interval in milliseconds',
+  },
+  [CONFIG_KEY.RAFT_TICK_INTERVAL_MS]: {
+    defaultValue: DEFAULT_CONFIG.raft.tickIntervalMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description: 'Raft provider tick interval in milliseconds',
   },
   [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_ENABLED]: {
     defaultValue: DEFAULT_CONFIG.raft.adaptiveTimingEnabled,

@@ -91,6 +91,7 @@ import {
   NODE_ROLES,
   CONTAINER_ENV_KEYS,
   PORTS,
+  RAFT_PROVIDER_DEFAULTS,
 } from '../constants.js';
 
 /**
@@ -895,6 +896,11 @@ test('Unit: _startNode sets NODE_ADDRESS to routable host:port', async () => {
     '0.0.0.0',
     'transport ws host should bind on all interfaces in containers',
   );
+  assert.strictEqual(
+    env[RAFT_PROVIDER_DEFAULTS.envKey],
+    RAFT_PROVIDER_DEFAULTS.provider,
+    'raft provider env should default to liferaft',
+  );
 });
 
 test('Unit: _startNode sets leak capture NODE_OPTIONS when enabled', async () => {
@@ -933,6 +939,156 @@ test('Unit: _startNode sets leak capture NODE_OPTIONS when enabled', async () =>
   assert.ok(
     env.NODE_OPTIONS.includes('--heapsnapshot-near-heap-limit=4'),
     'NODE_OPTIONS should use configured near-limit snapshot count',
+  );
+});
+
+test('Unit: _startNode forwards docker bind mounts as hostConfig extras', async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {
+      socketPath: '/var/run/docker.sock',
+      binds: ['/tmp/project/src:/app/src:ro'],
+    },
+    image: 'distributed-db:test',
+  });
+
+  cluster._networkName = 'test-net';
+
+  let capturedCreateOptions = null;
+  const provider = cluster._providers[0];
+  provider.createContainer = async (options) => {
+    capturedCreateOptions = options;
+    return {
+      containerId: 'container-bind-test',
+      ip: '10.0.0.25',
+      name: options.name,
+    };
+  };
+
+  await cluster._startNode('bind-node', NODE_ROLES.SEED, null, 0);
+
+  assert.deepStrictEqual(
+    capturedCreateOptions.hostConfigExtras,
+    {Binds: ['/tmp/project/src:/app/src:ro']},
+    'bind mounts should be forwarded into host config extras',
+  );
+});
+
+test('Unit: _startNode reuses existing local container when reuse is enabled', async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {
+      socketPath: '/var/run/docker.sock',
+      reuseContainers: true,
+      keepRunningContainers: true,
+    },
+    image: 'distributed-db:test',
+  });
+
+  cluster._networkName = 'ddb-test-net-reuse-local-1';
+  cluster._networkId = 'net-reuse-1';
+
+  // _buildNodeId now returns a deterministic UUID for reuse mode
+  const reuseNodeId = cluster._buildNodeId(0);
+
+  const provider = cluster._providers[0];
+  let inspectedContainerName = null;
+  let restartContainerId = null;
+  let startContainerCalls = 0;
+  let createContainerCalls = 0;
+  provider.inspectContainerIfExists = async (name) => {
+    inspectedContainerName = name;
+    return {
+      Id: 'existing-container-id',
+      State: {Status: 'running'},
+      Config: {
+        Env: [
+          `NODE_ID=${reuseNodeId}`,
+          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
+        ],
+        Entrypoint: ['sh', '-lc'],
+        Cmd: ['rm -rf /data/* && exec node /app/src/index.js'],
+      },
+      NetworkSettings: {
+        Networks: {
+          [cluster._networkName]: {
+            IPAddress: '10.0.0.44',
+          },
+        },
+      },
+    };
+  };
+  provider.restartContainer = async (containerId) => {
+    restartContainerId = containerId;
+  };
+  provider.startContainer = async () => {
+    startContainerCalls++;
+  };
+  provider.inspectContainer = async () => ({
+    NetworkSettings: {
+      Networks: {
+        [cluster._networkName]: {
+          IPAddress: '10.0.0.44',
+        },
+      },
+    },
+  });
+  provider.createContainer = async () => {
+    createContainerCalls++;
+    throw new Error('createContainer should not be called for reused node');
+  };
+
+  const node = await cluster._startNode(
+    reuseNodeId,
+    NODE_ROLES.SEED,
+    null,
+    0,
+  );
+
+  assert.strictEqual(
+    inspectedContainerName,
+    'ddb-test-reuse-1-1',
+    'reuse mode should use deterministic container naming',
+  );
+  assert.strictEqual(
+    restartContainerId,
+    'existing-container-id',
+    'running reusable container should be restarted',
+  );
+  assert.strictEqual(startContainerCalls, 0);
+  assert.strictEqual(createContainerCalls, 0);
+  assert.strictEqual(node.containerId, 'existing-container-id');
+  assert.strictEqual(node.ip, '10.0.0.44');
+});
+
+test('Unit: _startNode propagates configured raft provider env', async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+    raftProvider: 'raft_logic',
+  });
+
+  cluster._networkName = 'test-net';
+
+  let capturedCreateOptions = null;
+  const provider = cluster._providers[0];
+  provider.createContainer = async (options) => {
+    capturedCreateOptions = options;
+    return {
+      containerId: 'container-raft-provider',
+      ip: '10.0.0.30',
+      name: options.name,
+    };
+  };
+
+  await cluster._startNode('provider-node', NODE_ROLES.SEED, null, 0);
+
+  const env = capturedCreateOptions.env;
+  assert.strictEqual(
+    env[RAFT_PROVIDER_DEFAULTS.envKey],
+    'raft_logic',
+    'configured raft provider should be passed to node container',
   );
 });
 
@@ -1105,4 +1261,50 @@ test('Unit: cluster uses label constants for identification', async () => {
     LABELS.CLUSTER,
     'LABELS.CLUSTER constant should exist for cleanup identification',
   );
+});
+
+test('Unit: _buildNodeId returns valid UUIDs in reuse mode', async () => {
+  // Bug: _buildNodeId in reuse mode returns 'reuse-node-1' etc. which are
+  // not valid UUIDs. The bootstrap API requires UUID node IDs, causing
+  // joining nodes to fail with "nodeId must be a valid UUID".
+  const cluster = createCluster({
+    size: 3,
+    docker: {
+      socketPath: '/var/run/docker.sock',
+      reuseContainers: true,
+    },
+    image: 'distributed-db:test',
+  });
+
+  assert.ok(
+    cluster._isContainerReuseEnabled(),
+    'reuse mode should be enabled for this config',
+  );
+
+  const nodeId0 = cluster._buildNodeId(0);
+  const nodeId1 = cluster._buildNodeId(1);
+  const nodeId2 = cluster._buildNodeId(2);
+
+  assert.ok(
+    uuidValidate(nodeId0),
+    'reuse-mode node ID for index 0 must be a valid UUID, got: ' + nodeId0,
+  );
+  assert.ok(
+    uuidValidate(nodeId1),
+    'reuse-mode node ID for index 1 must be a valid UUID, got: ' + nodeId1,
+  );
+  assert.ok(
+    uuidValidate(nodeId2),
+    'reuse-mode node ID for index 2 must be a valid UUID, got: ' + nodeId2,
+  );
+
+  // IDs must be distinct
+  assert.notStrictEqual(nodeId0, nodeId1);
+  assert.notStrictEqual(nodeId1, nodeId2);
+  assert.notStrictEqual(nodeId0, nodeId2);
+
+  // IDs must be deterministic (same index → same UUID across calls)
+  assert.strictEqual(cluster._buildNodeId(0), nodeId0);
+  assert.strictEqual(cluster._buildNodeId(1), nodeId1);
+  assert.strictEqual(cluster._buildNodeId(2), nodeId2);
 });

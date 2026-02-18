@@ -135,7 +135,7 @@ worse.
 #### Acceptance Criteria
 
 1. The spike SHALL run and report:
-   - 15-minute idle soak
+   - 2-minute idle soak
    - small write workload
    - failover scenario
 2. The spike SHALL collect CPU percent trends, RSS trends, write-bytes/sec,

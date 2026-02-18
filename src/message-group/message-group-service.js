@@ -33,6 +33,8 @@ import {
   applyRuntimeRaftTiming,
   computeReplicaElectionTimeouts,
 } from '../raft/raft-timing-utils.js';
+import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
+import {LiferaftProvider} from '../raft/liferaft-provider.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
   UnifiedRebalancer,
@@ -192,6 +194,8 @@ class MessageGroupService extends EventEmitter {
     this.nodeId = options.nodeId || STRING.UNKNOWN;
     this.replicaIds = options.replicaIds || [this.replicaId];
     this.transport = options.transport;
+    this.raftProvider = options.raftProvider || new LiferaftProvider();
+    assertRaftProviderContract(this.raftProvider);
 
     // Peer addresses for cross-node communication
     // Map of replicaId -> unified address (e.g., 'nodeId/message-group/replicaId')
@@ -463,6 +467,7 @@ class MessageGroupService extends EventEmitter {
     const baseElectionMaxMs =
       config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS) ||
       RAFT_ELECTION_TIMING.ELECTION_MAX_DEFAULT_MS;
+    const tickIntervalMs = config.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS);
     const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
       replicaId: this.replicaId,
       replicaIds: this.replicaIds,
@@ -476,6 +481,7 @@ class MessageGroupService extends EventEmitter {
       baseElectionMaxMs,
       electionMinMs,
       electionMaxMs,
+      tickIntervalMs: Number.isFinite(tickIntervalMs) ? tickIntervalMs : null,
     };
 
     // Create extended LifeRaft class with our transport using ES6 class inheritance
@@ -551,8 +557,8 @@ class MessageGroupService extends EventEmitter {
     // If deferElection is true, clear all timers that liferaft started automatically
     // This prevents elections from starting until startElection() is called
     // Liferaft's _initialize() sets up a 'state change' handler that starts timers
-    if (this.deferElection && this.raft.timers) {
-      this.raft.timers.clear('heartbeat, election');
+    if (this.deferElection && this.raft) {
+      this.raftProvider.clearTimers(this.raft, 'heartbeat, election');
       this.logger.debug('Cleared liferaft timers for deferred election', {
         replicaId: this.replicaId,
         groupId: this.groupId,
@@ -574,10 +580,7 @@ class MessageGroupService extends EventEmitter {
         error: error.message,
       });
       if (this.raft) {
-        if (this.raft.timers) {
-          this.raft.timers.clear();
-        }
-        this.raft.end();
+        this.raftProvider.shutdownNode(this.raft);
         this.raft = null;
       }
       throw error;
@@ -610,17 +613,18 @@ class MessageGroupService extends EventEmitter {
       this.queueRoleUpdate(this.role);
       this.queueLeaderNodeUpdate(this.nodeId);
       this.updateRebalancerLeadership();
-      this.storage.currentTerm = this.raft.term;
+      this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
+      const term = this.raftProvider.getCurrentTerm(this.raft);
 
       this.logger.info('Became leader', {
-        term: this.raft.term,
+        term,
         replicaId: this.replicaId,
         groupId: this.groupId,
       });
 
       this.emit('leaderElected', {
         leaderId: this.replicaId,
-        term: this.raft.term,
+        term,
         groupId: this.groupId,
       });
     });
@@ -636,7 +640,7 @@ class MessageGroupService extends EventEmitter {
         clearTimeout(this.leaderNodeUpdateRetryTimer);
         this.leaderNodeUpdateRetryTimer = null;
       }
-      this.storage.currentTerm = this.raft.term;
+      this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
     });
 
     this.raft.on(RAFT_EVENT.CANDIDATE, () => {
@@ -650,7 +654,7 @@ class MessageGroupService extends EventEmitter {
         clearTimeout(this.leaderNodeUpdateRetryTimer);
         this.leaderNodeUpdateRetryTimer = null;
       }
-      this.storage.currentTerm = this.raft.term;
+      this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
     });
 
     // Handle committed entries
@@ -681,7 +685,7 @@ class MessageGroupService extends EventEmitter {
     for (const peerId of this.replicaIds) {
       if (peerId !== this.replicaId) {
         const peerAddress = this.buildPeerAddress(peerId);
-        this.raft.join(peerAddress);
+        this.raftProvider.joinPeer(this.raft, peerAddress);
       }
     }
   }
@@ -707,7 +711,7 @@ class MessageGroupService extends EventEmitter {
 
       this.emit('leaderElected', {
         leaderId: this.replicaId,
-        term: this.raft.term || 0,
+        term: this.raftProvider.getCurrentTerm(this.raft),
         groupId: this.groupId,
       });
     }
@@ -739,9 +743,7 @@ class MessageGroupService extends EventEmitter {
         peerCount: this.replicaIds.length - 1,
       });
 
-      // Start the heartbeat timer which will trigger election on timeout
-      // Use a random timeout to stagger elections across replicas
-      this.raft.heartbeat(this.raft.timeout());
+      this.raftProvider.startElectionTimer(this.raft);
     }
   }
 
@@ -751,15 +753,24 @@ class MessageGroupService extends EventEmitter {
    * @param {number} timingConfig.heartbeatIntervalMs
    * @param {number} timingConfig.electionTimeoutMinMs
    * @param {number} timingConfig.electionTimeoutMaxMs
+   * @param {number} [timingConfig.tickIntervalMs]
    * @return {boolean} True when applied to an initialized raft instance.
    */
   applyRaftTimingConfig(timingConfig = {}) {
     const heartbeatMs = timingConfig.heartbeatIntervalMs;
     const baseElectionMinMs = timingConfig.electionTimeoutMinMs;
     const baseElectionMaxMs = timingConfig.electionTimeoutMaxMs;
+    const previousTickIntervalMs =
+      this.raftTimingConfig?.tickIntervalMs || null;
+    const hasTickInterval = Object.prototype.hasOwnProperty.call(
+      timingConfig,
+      'tickIntervalMs',
+    );
+    const tickIntervalMs = timingConfig.tickIntervalMs;
     if (!Number.isFinite(heartbeatMs) ||
       !Number.isFinite(baseElectionMinMs) ||
       !Number.isFinite(baseElectionMaxMs) ||
+      (hasTickInterval && (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= 0)) ||
       baseElectionMinMs > baseElectionMaxMs) {
       return false;
     }
@@ -779,6 +790,9 @@ class MessageGroupService extends EventEmitter {
       baseElectionMaxMs,
       electionMinMs,
       electionMaxMs,
+      tickIntervalMs: hasTickInterval ?
+        tickIntervalMs :
+        this.raftTimingConfig?.tickIntervalMs || null,
     };
 
     const shouldRearmTimer = this.replicaIds.length > NUM.ONE &&
@@ -794,16 +808,53 @@ class MessageGroupService extends EventEmitter {
       return false;
     }
 
+    const tickChanged = hasTickInterval &&
+      tickIntervalMs !== previousTickIntervalMs;
+    const tickRuntimeApplied = !tickChanged ||
+      this.applyRuntimeTickInterval(tickIntervalMs);
+
     this.logger.info('Applied runtime raft timing configuration', {
       groupId: this.groupId,
       replicaId: this.replicaId,
       heartbeatMs,
       electionMinMs,
       electionMaxMs,
+      tickIntervalMs: hasTickInterval ? tickIntervalMs : null,
+      tickRuntimeApplied,
       jitterMs,
       rearmTimer: shouldRearmTimer,
     });
-    return true;
+    return tickRuntimeApplied;
+  }
+
+  /**
+   * Apply raft provider tick interval when supported by the active provider.
+   * @param {number} tickIntervalMs
+   * @return {boolean} True when applied to a live raft instance.
+   */
+  applyRuntimeTickInterval(tickIntervalMs) {
+    if (!this.raft ||
+      !Number.isFinite(tickIntervalMs) ||
+      tickIntervalMs <= 0) {
+      return false;
+    }
+
+    if (typeof this.raft.setTickInterval === TYPEOF.FUNCTION) {
+      this.raft.setTickInterval(tickIntervalMs);
+      return true;
+    }
+
+    if (typeof this.raft.configureTickInterval === TYPEOF.FUNCTION) {
+      this.raft.configureTickInterval(tickIntervalMs);
+      return true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(this.raft, 'tickIntervalMs')) {
+      this.raft.tickIntervalMs = tickIntervalMs;
+      return true;
+    }
+
+    return false;
   }
 
 
@@ -1015,7 +1066,7 @@ class MessageGroupService extends EventEmitter {
     if (isLiferaftLeader) {
       // Fire and forget - don't wait for commit
       // The command will be replicated via heartbeats
-      this.raft.command({
+      this.raftProvider.propose(this.raft, {
         type: 'MESSAGE',
         message: messageEnvelope,
       }, (err) => {
@@ -1307,7 +1358,7 @@ class MessageGroupService extends EventEmitter {
         this.raft && this.raft.state === LifeRaft.LEADER;
       if (isLiferaftLeader) {
         // Fire and forget - don't wait for commit
-        this.raft.command({
+        this.raftProvider.propose(this.raft, {
           type: 'CDC',
           tableName,
           operation,
@@ -1759,7 +1810,9 @@ class MessageGroupService extends EventEmitter {
    * @return {number} Current term.
    */
   getCurrentTerm() {
-    return this.raft ? this.raft.term : this.storage.currentTerm;
+    return this.raft ?
+      this.raftProvider.getCurrentTerm(this.raft) :
+      this.storage.currentTerm;
   }
 
   /**
@@ -1783,7 +1836,9 @@ class MessageGroupService extends EventEmitter {
       role: this.role,
       isLeader: this.isLeader,
       leaderId: this.leaderId,
-      term: this.raft ? this.raft.term : this.storage.currentTerm,
+      term: this.raft ?
+        this.raftProvider.getCurrentTerm(this.raft) :
+        this.storage.currentTerm,
       logLength: this.storage.getLogLength(),
       pendingMessages: this.pendingMessages.size,
       acknowledgedMessages: this.acknowledgedMessages.size,
@@ -1826,10 +1881,7 @@ class MessageGroupService extends EventEmitter {
 
     // End liferaft instance - clear all timers first
     if (this.raft) {
-      if (this.raft.timers) {
-        this.raft.timers.clear();
-      }
-      this.raft.end();
+      this.raftProvider.shutdownNode(this.raft);
       this.raft = null;
     }
 

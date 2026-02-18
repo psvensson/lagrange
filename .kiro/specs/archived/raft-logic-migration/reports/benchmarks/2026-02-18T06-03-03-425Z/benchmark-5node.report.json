@@ -1,0 +1,372 @@
+{
+  "timestamp": "2026-02-18T06:07:47.493Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 101960
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 3,
+    "scenariosWithPriorities": 1,
+    "topComponents": [
+      {
+        "component": "tail_latency_path",
+        "count": 2,
+        "highestPriority": "critical",
+        "highestScore": 95
+      },
+      {
+        "component": "replication_write_path",
+        "count": 1,
+        "highestPriority": "critical",
+        "highestScore": 95
+      }
+    ],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 1,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 1,
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 2,
+      "comparableGroupCount": 1,
+      "groups": [
+        {
+          "similarityKey": "postgres-baseline-comparison|{\"workload\":\"custom-mixed-insert-select\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+          "scenario": "postgres-baseline-comparison",
+          "observationCount": 2,
+          "baselineClusterSize": 3,
+          "targetClusterSize": 5,
+          "baselineOpsPerSec": 36.73297206087549,
+          "targetOpsPerSec": 17.457832392993236,
+          "baselineOpsPerSecPerNode": 12.24432402029183,
+          "targetOpsPerSecPerNode": 3.491566478598647,
+          "observedThroughputScale": 0.47526326930642454,
+          "expectedThroughputScale": 1.6666666666666667,
+          "throughputScaleEfficiency": 0.2851579615838547,
+          "p99LatencyScale": 4.393721973094171,
+          "baselineReportTimestamp": "2026-02-18T06:05:31.469Z",
+          "baselineReportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-03-03-425Z/benchmark-3node.report.json",
+          "targetReportTimestamp": null,
+          "targetReportPath": null
+        }
+      ],
+      "topOpportunities": [
+        {
+          "similarityKey": "postgres-baseline-comparison|{\"workload\":\"custom-mixed-insert-select\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+          "scenario": "postgres-baseline-comparison",
+          "observationCount": 2,
+          "baselineClusterSize": 3,
+          "targetClusterSize": 5,
+          "baselineOpsPerSec": 36.73297206087549,
+          "targetOpsPerSec": 17.457832392993236,
+          "baselineOpsPerSecPerNode": 12.24432402029183,
+          "targetOpsPerSecPerNode": 3.491566478598647,
+          "observedThroughputScale": 0.47526326930642454,
+          "expectedThroughputScale": 1.6666666666666667,
+          "throughputScaleEfficiency": 0.2851579615838547,
+          "p99LatencyScale": 4.393721973094171,
+          "baselineReportTimestamp": "2026-02-18T06:05:31.469Z",
+          "baselineReportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-03-03-425Z/benchmark-3node.report.json",
+          "targetReportTimestamp": null,
+          "targetReportPath": null
+        }
+      ]
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|{\"workload\":\"custom-mixed-insert-select\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+        "current": {
+          "passed": true,
+          "clusterSize": 5,
+          "durationMs": 101960,
+          "opsPerSec": 17.457832392993236,
+          "p99LatencyMs": 4899,
+          "opsPerSecPerNode": 3.491566478598647
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-18T06:05:31.469Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-03-03-425Z/benchmark-3node.report.json",
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 95708,
+          "opsPerSec": 36.73297206087549,
+          "p99LatencyMs": 1115,
+          "opsPerSecPerNode": 12.24432402029183
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": true,
+          "durationMs": 6252,
+          "durationRatio": 0.06532369289923518,
+          "opsPerSec": -19.275139667882254,
+          "opsPerSecRatio": -0.5247367306935755,
+          "opsPerSecPerNode": -8.752757541693182,
+          "opsPerSecPerNodeRatio": -0.7148420384161452,
+          "p99LatencyMs": 3784,
+          "p99LatencyMsRatio": 3.3937219730941703
+        },
+        "postgresBaseline": {
+          "engine": "postgres",
+          "throughputRatioSutToBaseline": 0.004396352916556963,
+          "p99LatencyRatioSutToBaselineAvg": 2432.4726911618673,
+          "sutOpsPerSec": 17.457832392993236,
+          "baselineTps": 3970.980657,
+          "sutP99LatencyMs": 4899,
+          "baselineLatencyAvgMs": 2.014,
+          "cache": {
+            "enabled": true,
+            "hit": false,
+            "key": "v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638",
+            "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-03-03-425Z/.playback/benchmark-5node/postgres-baseline-cache/v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638.json",
+            "cachedAt": "2026-02-18T06:07:33.882Z",
+            "reason": "cache-stored"
+          }
+        },
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": true,
+      "duration": 101960,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T06:05:53.157Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1771394753158,
+        "endedAt": 1771394867490,
+        "durationMs": 114332,
+        "files": {
+          "events": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-03-03-425Z/.playback/benchmark-5node/postgres-baseline-comparison/events.ndjson",
+          "samples": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-03-03-425Z/.playback/benchmark-5node/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-03-03-425Z/.playback/benchmark-5node/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-03-03-425Z/.playback/benchmark-5node/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-03-03-425Z/.playback/benchmark-5node/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 224,
+          "samples": 471,
+          "snapshots": 81
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "loadMetrics": {
+          "total": 591,
+          "success": 591,
+          "failed": 0,
+          "errors": 3,
+          "latency": {
+            "p50": 8,
+            "p95": 2869,
+            "p99": 4899
+          },
+          "opsPerSec": 17.457832392993236
+        },
+        "details": {
+          "benchmark": {
+            "tool": "pgbench",
+            "workload": "custom-mixed-insert-select",
+            "durationSeconds": 30,
+            "clients": 8,
+            "jobs": 4
+          },
+          "baseline": {
+            "engine": "postgres",
+            "image": "postgres:16",
+            "containerIp": "172.20.0.7",
+            "replicaContainerIps": [
+              "172.20.0.8",
+              "172.20.0.9"
+            ],
+            "replicationFactor": 3,
+            "syncReplicaAcks": 1,
+            "cache": {
+              "enabled": true,
+              "hit": false,
+              "key": "v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638",
+              "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-03-03-425Z/.playback/benchmark-5node/postgres-baseline-cache/v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638.json",
+              "cachedAt": "2026-02-18T06:07:33.882Z",
+              "reason": "cache-stored"
+            },
+            "metrics": {
+              "tps": 3970.980657,
+              "latencyAverageMs": 2.014,
+              "latencyStddevMs": 2.032,
+              "transactionsProcessed": 119125,
+              "failedTransactions": 0,
+              "raw": "pgbench (16.9 (Debian 16.9-1.pgdg120+1))\ntransaction type: /tmp/ddb-pgbench-workload.sql\nscaling factor: 1\nquery mode: simple\nnumber of clients: 8\nnumber of threads: 4\nmaximum number of tries: 1\nduration: 30 s\nnumber of transactions actually processed: 119125\nnumber of failed transactions: 0 (0.000%)\nlatency average = 2.014 ms\nlatency stddev = 2.032 ms\ninitial connection time = 3.156 ms\ntps = 3970.980657 (without initial connection time)\n",
+              "durationSeconds": 30,
+              "clients": 8,
+              "jobs": 4,
+              "host": "127.0.0.1",
+              "port": 5432
+            }
+          },
+          "systemUnderTest": {
+            "seedNodeId": "67f18b35-cb92-49f7-8881-d06f948efacb",
+            "metrics": {
+              "opsPerSec": 17.457832392993236,
+              "latency": {
+                "p50": 8,
+                "p95": 2869,
+                "p99": 4899
+              },
+              "total": 591,
+              "success": 591,
+              "failed": 0,
+              "errors": 3
+            }
+          },
+          "comparison": {
+            "sutOpsPerSec": 17.457832392993236,
+            "sutP99LatencyMs": 4899,
+            "baselineTps": 3970.980657,
+            "baselineLatencyAvgMs": 2.014,
+            "throughputRatioSutToBaseline": 0.004396352916556963,
+            "p99LatencyRatioSutToBaselineAvg": 2432.4726911618673
+          },
+          "convergence": {
+            "settledAfterMs": 6894,
+            "leaderChanges": 0,
+            "maxOverTargetMs": 0
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": {
+        "total": 591,
+        "success": 591,
+        "failed": 0,
+        "errors": 3,
+        "latency": {
+          "p50": 8,
+          "p95": 2869,
+          "p99": 4899
+        },
+        "opsPerSec": 17.457832392993236
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": [
+        {
+          "component": "replication_write_path",
+          "signal": "baseline_throughput_gap",
+          "priority": "critical",
+          "score": 95,
+          "reason": "System throughput is significantly below baseline under identical workload.",
+          "evidence": {
+            "throughputRatioSutToBaseline": 0.004396352916556963,
+            "sutOpsPerSec": 17.457832392993236,
+            "baselineTps": 3970.980657
+          }
+        },
+        {
+          "component": "tail_latency_path",
+          "signal": "baseline_latency_gap",
+          "priority": "critical",
+          "score": 95,
+          "reason": "Tail latency is significantly higher than baseline and dominates user-visible delays.",
+          "evidence": {
+            "p99LatencyRatioSutToBaselineAvg": 2432.4726911618673,
+            "sutP99LatencyMs": 4899,
+            "baselineLatencyAvgMs": 2.014
+          }
+        },
+        {
+          "component": "tail_latency_path",
+          "signal": "internal_tail_latency",
+          "priority": "high",
+          "score": 80,
+          "reason": "Large p99/p50 spread indicates queueing or lock contention on slow-path operations.",
+          "evidence": {
+            "p50LatencyMs": 8,
+            "p99LatencyMs": 4899,
+            "p99ToP50Ratio": 612.375
+          }
+        }
+      ]
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": true,
+    "status": "failed",
+    "reason": "throughput-regression",
+    "settings": {
+      "enabled": true,
+      "maxThroughputRegressionRatio": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 1,
+    "failedScenarioCount": 1,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|{\"workload\":\"custom-mixed-insert-select\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+        "currentOpsPerSec": 17.457832392993236,
+        "baselineOpsPerSec": 36.73297206087549,
+        "throughputRegressionRatio": 0.5247367306935755,
+        "threshold": 0.1,
+        "regressedBeyondThreshold": true,
+        "mitigationApplied": false,
+        "approvedMitigationId": null,
+        "baselineReportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-03-03-425Z/benchmark-3node.report.json",
+        "baselineReportTimestamp": "2026-02-18T06:05:31.469Z"
+      }
+    ]
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-5node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

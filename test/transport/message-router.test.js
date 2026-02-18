@@ -650,4 +650,46 @@ t.test('MessageRouter unit tests', async (t) => {
 
     await router.shutdown();
   });
+
+  t.test('default outbound concurrency allows parallel writes', async (t) => {
+    const router = new MessageRouter({nodeId: 'test-node'});
+    await router.initialize({startServer: false});
+
+    const parallelCount = 8;
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const arrivedResolvers = [];
+    let gateResolve;
+    const gate = new Promise((resolve) => {
+      gateResolve = resolve;
+    });
+    const deliveries = [];
+
+    for (let i = 0; i < parallelCount; i++) {
+      deliveries.push(router.enqueueOutbound('node-1', () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        return new Promise((resolve) => {
+          arrivedResolvers.push(resolve);
+          if (arrivedResolvers.length >= parallelCount) {
+            gateResolve();
+          }
+        });
+      }));
+    }
+
+    await gate;
+    t.equal(
+      maxInFlight, parallelCount,
+      `default concurrency should allow ${parallelCount} parallel ` +
+      `deliveries but only ${maxInFlight} were in-flight`,
+    );
+
+    for (const resolve of arrivedResolvers) {
+      resolve({acknowledged: true});
+    }
+    await Promise.all(deliveries);
+
+    await router.shutdown();
+  });
 });

@@ -38,16 +38,24 @@ function flushAsync() {
 
 /**
  * Create a raft-capable service test double.
+ * @param {Object} [options]
+ * @param {boolean|Function} [options.runtimeResult]
  * @return {{calls: Array<Object>, service: Object}}
  */
-function createMockRaftService() {
+function createMockRaftService(options = {}) {
   const calls = [];
+  const runtimeResult = options.runtimeResult === undefined ?
+    true :
+    options.runtimeResult;
   return {
     calls,
     service: {
       applyRaftTimingConfig(timingConfig) {
         calls.push({...timingConfig});
-        return true;
+        if (typeof runtimeResult === 'function') {
+          return runtimeResult(timingConfig);
+        }
+        return runtimeResult;
       },
     },
   };
@@ -315,6 +323,11 @@ test('Dynamic config startup wiring applies initial raft timing settings', async
       config_value: '5400',
       value_type: ConfigValueType.NUMBER,
     },
+    [CONFIG_KEY.RAFT_TICK_INTERVAL_MS]: {
+      config_key: CONFIG_KEY.RAFT_TICK_INTERVAL_MS,
+      config_value: '25',
+      value_type: ConfigValueType.NUMBER,
+    },
   });
 
   const wiring = await createDynamicConfigStartupWiring({
@@ -334,6 +347,7 @@ test('Dynamic config startup wiring applies initial raft timing settings', async
       heartbeatIntervalMs: 120,
       electionTimeoutMinMs: 1800,
       electionTimeoutMaxMs: 5400,
+      tickIntervalMs: 25,
     },
     'startup should apply persisted raft timing to message group replicas',
   );
@@ -343,6 +357,7 @@ test('Dynamic config startup wiring applies initial raft timing settings', async
       heartbeatIntervalMs: 120,
       electionTimeoutMinMs: 1800,
       electionTimeoutMaxMs: 5400,
+      tickIntervalMs: 25,
     },
     'startup should apply persisted raft timing to partition replicas',
   );
@@ -360,6 +375,11 @@ test('Dynamic config startup wiring applies initial raft timing settings', async
     config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS),
     5400,
     'configuration manager should keep latest election max timing',
+  );
+  t.equal(
+    config.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS),
+    25,
+    'configuration manager should keep latest raft tick interval',
   );
 
   wiring.shutdown();
@@ -432,6 +452,7 @@ test('Dynamic config startup wiring applies raft timing CDC updates', async (t) 
       heartbeatIntervalMs: 220,
       electionTimeoutMinMs: 3000,
       electionTimeoutMaxMs: 6000,
+      tickIntervalMs: 20,
     },
     'cdc raft updates should apply to message group replicas',
   );
@@ -441,12 +462,65 @@ test('Dynamic config startup wiring applies raft timing CDC updates', async (t) 
       heartbeatIntervalMs: 220,
       electionTimeoutMinMs: 3000,
       electionTimeoutMaxMs: 6000,
+      tickIntervalMs: 20,
     },
     'cdc raft updates should apply to partition replicas',
   );
 
   wiring.shutdown();
 });
+
+test(
+  'Dynamic config startup wiring keeps raft timing updates for future replicas ' +
+  'when runtime apply is unsupported',
+  async (t) => {
+    const config = ConfigurationManager.getInstance();
+    const messageGroupService = new EventEmitter();
+    const deferredRaft = createMockRaftService({runtimeResult: false});
+    messageGroupService.applyRaftTimingConfig =
+      deferredRaft.service.applyRaftTimingConfig;
+    const runtimeRaft = createMockRaftService();
+    const sqlQueryEngine = createMockSqlQueryEngine();
+
+    const wiring = await createDynamicConfigStartupWiring({
+      nodeId: 'test-node',
+      sqlQueryEngine,
+      messageGroupServices: new Map([['group-1', messageGroupService]]),
+      partitionServices: new Map([['partition-1', runtimeRaft.service]]),
+    });
+
+    messageGroupService.emit('cdcApplied', {
+      tableName: TABLES.CONFIG,
+      operation: 'UPDATE',
+      data: {
+        config_key: CONFIG_KEY.RAFT_TICK_INTERVAL_MS,
+        config_value: '42',
+      },
+    });
+    await flushAsync();
+
+    const lastDeferredApply = deferredRaft.calls[deferredRaft.calls.length - 1];
+    const lastRuntimeApply = runtimeRaft.calls[runtimeRaft.calls.length - 1];
+
+    t.equal(
+      lastDeferredApply.tickIntervalMs,
+      42,
+      'runtime-unsupported service should still receive canonical timing update',
+    );
+    t.equal(
+      lastRuntimeApply.tickIntervalMs,
+      42,
+      'runtime-capable service should receive canonical timing update',
+    );
+    t.equal(
+      config.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS),
+      42,
+      'timing update should persist in config manager for new/restarted replicas',
+    );
+
+    wiring.shutdown();
+  },
+);
 
 test('cleanup dynamic config startup wiring tests', async (t) => {
   LoggingService.resetInstance();

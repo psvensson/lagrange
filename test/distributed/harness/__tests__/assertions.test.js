@@ -53,6 +53,46 @@ function buildNonConvergingMockNode() {
   };
 }
 
+function buildPartitionReplicaRow(partitionId, replicaSuffix, raftRole) {
+  return {
+    service_type: 'partition',
+    status: 'ACTIVE',
+    raft_role: raftRole,
+    address: 'node-' + replicaSuffix + '/' + partitionId + '/r-' + replicaSuffix,
+    node_id: 'node-' + replicaSuffix,
+    partition_id: partitionId,
+  };
+}
+
+function buildSequencedConvergenceNode(options = {}) {
+  const snapshots = Array.isArray(options.snapshots) ? options.snapshots : [];
+  const partitionIds = Array.isArray(options.partitionIds) ?
+    options.partitionIds :
+    ['p1'];
+  let snapshotIndex = 0;
+
+  return {
+    id: options.id || 'mock-sequence-node',
+    isReachable: async () => true,
+    query: async (sql) => {
+      if (sql.includes('FROM partitions')) {
+        return {
+          rows: partitionIds.map((partitionId) => ({partition_id: partitionId})),
+        };
+      }
+      if (sql.includes('FROM services')) {
+        const boundedIndex = Math.min(
+          snapshotIndex,
+          Math.max(snapshots.length - 1, 0),
+        );
+        snapshotIndex += 1;
+        return {rows: snapshots[boundedIndex] || []};
+      }
+      return {rows: []};
+    },
+  };
+}
+
 /**
  * Feature: distributed-testing-framework
  * Property 9: Convergence Threshold Configuration
@@ -701,3 +741,77 @@ test('waitForConvergence — 5 voters fails with default targetVoterCount of 3',
     assert.strictEqual(err.diagnostics.voterCounts.p1, 5);
   }
 });
+
+test('waitForConvergence — transient join/replace over-target converges back to target',
+  async () => {
+    const partitionId = 'p1';
+    const baseline = [
+      buildPartitionReplicaRow(partitionId, 'a', 'leader'),
+      buildPartitionReplicaRow(partitionId, 'b', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'c', 'follower'),
+    ];
+    const joinOverTarget = [
+      ...baseline,
+      buildPartitionReplicaRow(partitionId, 'd', 'follower'),
+    ];
+    const replacedStable = [
+      buildPartitionReplicaRow(partitionId, 'a', 'leader'),
+      buildPartitionReplicaRow(partitionId, 'b', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'd', 'follower'),
+    ];
+
+    const node = buildSequencedConvergenceNode({
+      id: 'mock-join-replace-node',
+      partitionIds: [partitionId],
+      snapshots: [baseline, joinOverTarget, replacedStable, replacedStable],
+    });
+
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 200,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 100,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+    });
+
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+    assert.strictEqual(typeof result.maxOverTargetMs, 'number');
+    assert.ok(result.maxOverTargetMs <= 100);
+  });
+
+test('waitForConvergence — transient remove with leader gap recovers to stable quorum',
+  async () => {
+    const partitionId = 'p1';
+    const baseline = [
+      buildPartitionReplicaRow(partitionId, 'a', 'leader'),
+      buildPartitionReplicaRow(partitionId, 'b', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'c', 'follower'),
+    ];
+    const removalGap = [
+      buildPartitionReplicaRow(partitionId, 'a', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'b', 'follower'),
+    ];
+    const recovered = [
+      buildPartitionReplicaRow(partitionId, 'a', 'leader'),
+      buildPartitionReplicaRow(partitionId, 'b', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'd', 'follower'),
+    ];
+
+    const node = buildSequencedConvergenceNode({
+      id: 'mock-remove-recover-node',
+      partitionIds: [partitionId],
+      snapshots: [baseline, removalGap, recovered, recovered],
+    });
+
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 200,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 100,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+    });
+
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+  });

@@ -5,7 +5,6 @@
  */
 
 import {EventEmitter} from 'events';
-import LifeRaft from '@markwylde/liferaft';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
@@ -13,6 +12,9 @@ import {NodeService} from '../node/node-service.js';
 import {AddressManager} from '../address/address-manager.js';
 import {isRaftPacket} from './raft-packet-utils.js';
 import {NUM, STRING, TABLES} from '../constants/index.js';
+import {ensureLiferaftProviderForRuntime} from './raft-provider-control.js';
+import {assertRaftProviderContract} from './raft-provider-contract.js';
+import {LiferaftProvider} from './liferaft-provider.js';
 import {
   RAFT_REPLICA_BASE_ADDRESS,
   RAFT_REPLICA_BASE_DEFAULT,
@@ -45,6 +47,7 @@ class RaftReplicaBase extends EventEmitter {
    * @param {Array<string>} [options.peerAddresses] - Peer addresses for cross-node joining.
    * @param {boolean} [options.deferElection] - Defer election start until startElection().
    * @param {boolean} [options.isJoiningExistingGroup] - True if joining existing group.
+   * @param {Object} [options.raftProvider] - Provider implementing raft node contract.
    */
   constructor(options = {}) {
     super();
@@ -62,6 +65,8 @@ class RaftReplicaBase extends EventEmitter {
     this.transport = options.transport || null;
     this.entityType = options.entityType;
     this.subsystemName = options.subsystemName || STRING.UNKNOWN;
+    this.raftProvider = options.raftProvider || new LiferaftProvider();
+    assertRaftProviderContract(this.raftProvider);
 
     // Unified address format: {nodeId}/{entityType}/{replicaId}
     this.addressManager = AddressManager.getInstance();
@@ -196,10 +201,12 @@ class RaftReplicaBase extends EventEmitter {
    * Create the liferaft instance with common configuration.
    * Subclasses should call this during initialization.
    * @param {Object} logAdapter - Log adapter for liferaft.
-   * @return {LifeRaft} The liferaft instance.
+   * @return {Object} The raft provider node instance.
    * @protected
    */
   createRaftInstance(logAdapter) {
+    ensureLiferaftProviderForRuntime();
+
     const config = ConfigurationManager.getInstance();
     const heartbeatMs = config.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS) ||
       RAFT_REPLICA_BASE_DEFAULT.HEARTBEAT_DEFAULT_MS;
@@ -221,41 +228,14 @@ class RaftReplicaBase extends EventEmitter {
     const electionMinMs = baseElectionMinMs + jitterMs;
     const electionMaxMs = baseElectionMaxMs + jitterMs;
 
-    const self = this;
-    const deferElection = this.deferElection;
-
-    /**
-     * Custom Raft node class that extends LifeRaft with our transport.
-     */
-    class RaftNode extends LifeRaft {
-      /**
-       * Override initialize to support deferred election start.
-       * @param {Object} _options - Initialization options.
-       * @param {Function} callback - Completion callback.
-       */
-      initialize(_options, callback) {
-        if (deferElection) {
-          self.logger.debug(RAFT_REPLICA_BASE_LOG_MSG.DEFERRING_ELECTION_START, {
-            replicaId: self.replicaId,
-          });
-          if (callback) callback();
-        } else {
-          if (callback) callback();
-        }
-      }
-
-      /**
-       * Write method for sending Raft messages to peers.
-       * @param {Object} packet - Raft protocol packet.
-       * @param {Function} callback - Completion callback.
-       */
-      write(packet, callback) {
-        const peerAddress = self.buildPeerAddress(this.address);
-        self.transport.deliver(peerAddress, packet)
-          .then((result) => callback(null, result))
-          .catch((err) => callback(err));
-      }
-    }
+    const RaftNode = this.raftProvider.createNodeClass({
+      deferElection: this.deferElection,
+      logger: this.logger,
+      replicaId: this.replicaId,
+      resolvePeerAddress: (peerId) => this.buildPeerAddress(peerId),
+      deliverPacket: (peerAddress, packet) =>
+        this.transport.deliver(peerAddress, packet),
+    });
 
     const raftOptions = {
       [RAFT_REPLICA_BASE_LIFERAFT_TIMER.HEARTBEAT]: heartbeatMs,
@@ -272,8 +252,11 @@ class RaftReplicaBase extends EventEmitter {
     this.raft = new RaftNode(this.unifiedAddress, raftOptions);
 
     // Clear timers if deferring election
-    if (this.deferElection && this.raft.timers) {
-      this.raft.timers.clear(RAFT_REPLICA_BASE_LIFERAFT_TIMER.HEARTBEAT_ELECTION);
+    if (this.deferElection && this.raft) {
+      this.raftProvider.clearTimers(
+        this.raft,
+        RAFT_REPLICA_BASE_LIFERAFT_TIMER.HEARTBEAT_ELECTION,
+      );
       this.logger.debug(RAFT_REPLICA_BASE_LOG_MSG.CLEARED_LIFERAFT_TIMERS, {
         replicaId: this.replicaId,
       });
@@ -296,16 +279,17 @@ class RaftReplicaBase extends EventEmitter {
       this.leaderId = this.replicaId;
       this.queueRoleUpdate(this.role);
       this.queueLeaderNodeUpdate(this.nodeId);
+      const term = this.raftProvider.getCurrentTerm(this.raft);
 
       this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.BECAME_LEADER, {
-        term: this.raft.term,
+        term,
         replicaId: this.replicaId,
       });
 
       this.onBecameLeader();
       this.emit(RAFT_REPLICA_BASE_EVENT.LEADER_ELECTED, {
         leaderId: this.replicaId,
-        term: this.raft.term,
+        term,
       });
     });
 
@@ -361,7 +345,7 @@ class RaftReplicaBase extends EventEmitter {
           peerAddress,
           replicaId: this.replicaId,
         });
-        this.raft.join(peerAddress);
+        this.raftProvider.joinPeer(this.raft, peerAddress);
       }
     }
   }
@@ -386,7 +370,7 @@ class RaftReplicaBase extends EventEmitter {
       this.onBecameLeader();
       this.emit(RAFT_REPLICA_BASE_EVENT.LEADER_ELECTED, {
         leaderId: this.replicaId,
-        term: this.raft ? this.raft.term : NUM.ZERO,
+        term: this.raftProvider.getCurrentTerm(this.raft),
       });
     }
   }
@@ -412,7 +396,7 @@ class RaftReplicaBase extends EventEmitter {
         replicaId: this.replicaId,
         peerCount: this.replicaIds.length - NUM.ONE,
       });
-      this.raft.heartbeat(this.raft.timeout());
+      this.raftProvider.startElectionTimer(this.raft);
     }
   }
 
@@ -642,7 +626,7 @@ class RaftReplicaBase extends EventEmitter {
    * @return {number} Current term.
    */
   getCurrentTerm() {
-    return this.raft ? this.raft.term : NUM.ZERO;
+    return this.raftProvider.getCurrentTerm(this.raft);
   }
 
   /**
@@ -710,10 +694,7 @@ class RaftReplicaBase extends EventEmitter {
 
     // End liferaft instance - clear all timers first
     if (this.raft) {
-      if (this.raft.timers) {
-        this.raft.timers.clear();
-      }
-      this.raft.end();
+      this.raftProvider.shutdownNode(this.raft);
       this.raft = null;
     }
 

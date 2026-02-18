@@ -31,3 +31,18 @@ path, set:
 
 This keeps normal logs but suppresses `metrics.*` entries from logs-table
 persistence while still counting them in logging diagnostics.
+
+## Default Observability Policy
+
+Default logging/metrics policy is tuned for low idle overhead:
+
+- `logging.persistMetricsLogs = false`
+- `logging.metricsDefaultResolutionMs = 30000`
+- `logging.metricsDetailedWindowEnabled = false`
+
+Detailed instrumentation remains opt-in. Use dynamic config toggles only for a
+bounded diagnostics window.
+
+The logging pipeline also drops self-referential logging metrics namespaces
+(`metrics.logging.*`, `metrics.logs_table.*`, `metrics.log_retention.*`,
+`metrics.log_query.*`) to prevent recursive log-generation loops.

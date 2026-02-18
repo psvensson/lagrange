@@ -16,6 +16,8 @@ import {
   DEBUG_TRACE_DEFAULTS,
   LEAK_DEFAULTS,
   BENCHMARK_DEFAULTS,
+  BENCHMARK_GATE_DEFAULTS,
+  RAFT_PROVIDER_DEFAULTS,
 } from './constants.js';
 
 /**
@@ -27,9 +29,28 @@ import {
  */
 function mergeWithDefaults(partial = {}) {
   const docker = partial.docker || {};
-  const mergedDocker = docker.hosts ?
+  const parsedDockerBinds = Array.isArray(docker.binds) ?
+    docker.binds.filter((entry) =>
+      typeof entry === 'string' && entry.length > 0) :
+    [];
+  const mergedDockerBase = docker.hosts ?
     {hosts: docker.hosts} :
     {socketPath: docker.socketPath || DOCKER_DEFAULTS.socketPath};
+  const mergedDocker = {
+    ...mergedDockerBase,
+    ...(parsedDockerBinds.length > 0 ?
+      {binds: parsedDockerBinds} :
+      {}),
+    ...(docker.skipBuildOnDirty === true ?
+      {skipBuildOnDirty: true} :
+      {}),
+    ...(docker.reuseContainers === true ?
+      {reuseContainers: true} :
+      {}),
+    ...(docker.keepRunningContainers === true ?
+      {keepRunningContainers: true} :
+      {}),
+  };
 
   return {
     size: partial.size || DEFAULT_CLUSTER_SIZE,
@@ -111,6 +132,17 @@ function mergeWithDefaults(partial = {}) {
       baselineCacheTtlMs: BENCHMARK_DEFAULTS.baselineCacheTtlMs,
       ...(partial.benchmark || {}),
     },
+    benchmarkGate: {
+      enabled: BENCHMARK_GATE_DEFAULTS.enabled,
+      maxThroughputRegressionRatio:
+        BENCHMARK_GATE_DEFAULTS.maxThroughputRegressionRatio,
+      baselineProvider: BENCHMARK_GATE_DEFAULTS.baselineProvider,
+      failIfBaselineMissing: BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing,
+      approvedMitigationId: BENCHMARK_GATE_DEFAULTS.approvedMitigationId,
+      ...(partial.benchmarkGate || {}),
+    },
+    raftProvider:
+      partial.raftProvider || RAFT_PROVIDER_DEFAULTS.provider,
     ...(partial.outputDir ? {outputDir: partial.outputDir} : {}),
     ...(partial.gcp ? {gcp: partial.gcp} : {}),
   };

@@ -392,6 +392,44 @@ test('LogsTableService handles null entry', async (t) => {
   LogsTableService.resetInstance();
 });
 
+test('LogsTableService drops logging-pipeline metrics to prevent recursion',
+  async (t) => {
+    LogsTableService.resetInstance();
+    const writtenRows = [];
+    const mockCdcService = {
+      insertSystemTableRow: async (tableName, row) => {
+        writtenRows.push({tableName, row});
+      },
+    };
+
+    const service = LogsTableService.getInstance();
+    service.initialize({cdcIntegrationService: mockCdcService});
+
+    await service.writeLogEntry({
+      logId: 'log-loop-1',
+      timestamp: Date.now(),
+      level: 'INFO',
+      nodeId: 'test-node',
+      message: 'metrics.logs_table.flush',
+      createdAt: Date.now(),
+    });
+    await service.flush();
+
+    t.equal(
+      service.getStats().selfLoopPreventedWrites,
+      1,
+      'should count dropped recursive pipeline metrics',
+    );
+    t.equal(
+      writtenRows.length,
+      0,
+      'should not persist recursive pipeline metrics',
+    );
+
+    await service.shutdown();
+    LogsTableService.resetInstance();
+  });
+
 test('cleanup', async (t) => {
   LogsTableService.resetInstance();
   LoggingService.resetInstance();

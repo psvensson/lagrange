@@ -252,6 +252,32 @@ test('LoggingService suppresses metrics logs from default console sink',
     LoggingService.resetInstance();
   });
 
+test('LoggingService default metrics policy is low-overhead and non-persistent',
+  async (t) => {
+    LoggingService.resetInstance();
+    const logger = LoggingService.getInstance();
+    logger.initialize({nodeId: 'test-node', level: 'info'});
+
+    const diagnostics = logger.getDiagnosticsStats();
+    t.equal(
+      diagnostics.persistMetricsLogs,
+      false,
+      'metrics persistence should be disabled by default',
+    );
+    t.equal(
+      diagnostics.metricsDetailedWindowEnabled,
+      false,
+      'detailed metrics window should be disabled by default',
+    );
+    t.equal(
+      diagnostics.metricsDefaultResolutionMs,
+      30000,
+      'default metrics resolution should be 30s',
+    );
+
+    LoggingService.resetInstance();
+  });
+
 test('LoggingService allows metrics logs when override is enabled',
   async (t) => {
     LoggingService.resetInstance();

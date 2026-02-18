@@ -77,6 +77,7 @@ test('BootstrapAPI - health endpoint', async (t) => {
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache: createEmptySystemTableCache(),
+    sqlQueryEngine: {executeQuery: async () => ({success: true})},
   });
 
   await api.initialize(0, {listen: false});
@@ -90,6 +91,46 @@ test('BootstrapAPI - health endpoint', async (t) => {
   const body = JSON.parse(response.body);
   t.equal(body.status, 'healthy', 'should return healthy status');
   t.equal(body.nodeId, 'seed-node-1', 'should return seed node ID');
+
+  await api.shutdown();
+});
+
+test('BootstrapAPI - health returns 503 without SQL engine', async (t) => {
+  initializeTestEnvironment();
+
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: createEmptySystemTableCache(),
+  });
+
+  await api.initialize(0, {listen: false});
+
+  // No sqlQueryEngine set — health should report not ready
+  const before = await api.getFastify().inject({
+    method: 'GET',
+    url: '/health',
+  });
+
+  t.equal(before.statusCode, 503,
+    'should return 503 when SQL engine is not available');
+  const beforeBody = JSON.parse(before.body);
+  t.equal(beforeBody.status, 'initializing',
+    'should report initializing status');
+
+  // After setting the SQL engine, health should be 200
+  api.setSqlQueryEngine({executeQuery: async () => ({success: true})});
+
+  const after = await api.getFastify().inject({
+    method: 'GET',
+    url: '/health',
+  });
+
+  t.equal(after.statusCode, 200,
+    'should return 200 after SQL engine is set');
+  const afterBody = JSON.parse(after.body);
+  t.equal(afterBody.status, 'healthy',
+    'should report healthy status');
 
   await api.shutdown();
 });

@@ -1,0 +1,26 @@
+{
+  "generatedAt": "2026-02-17T19:32:30.124Z",
+  "checks": [
+    {
+      "check": "transport_message_flow",
+      "status": "pass",
+      "evidence": {
+        "stableLeader": "replica-2"
+      }
+    },
+    {
+      "check": "sqlite_restart_recovery",
+      "status": "pass",
+      "evidence": {
+        "restartTarget": "replica-2",
+        "restartedStatus": {
+          "replicaId": "replica-2",
+          "role": "follower",
+          "leaderId": "replica-1",
+          "term": 5
+        }
+      }
+    }
+  ],
+  "passed": true
+}

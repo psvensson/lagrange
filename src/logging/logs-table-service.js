@@ -16,6 +16,16 @@ import {
   LOGS_TABLE_DEFAULT,
 } from './logging-constants.js';
 
+const LOGGING_PIPELINE_METRIC_PREFIX = Object.freeze({
+  LOGGING: 'metrics.logging.',
+  LOGS_TABLE: 'metrics.logs_table.',
+  LOG_RETENTION: 'metrics.log_retention.',
+  LOG_QUERY: 'metrics.log_query.',
+});
+const LOGGING_PIPELINE_METRIC_PREFIXES = Object.freeze(
+  Object.values(LOGGING_PIPELINE_METRIC_PREFIX),
+);
+
 /**
  * LogsTableService manages writing log entries to the logs system table.
  * It integrates with LoggingService to flush buffered entries after bootstrap.
@@ -58,6 +68,7 @@ class LogsTableService extends EventEmitter {
     this.writeCount = 0;
     this.errorCount = 0;
     this.droppedWrites = 0;
+    this.selfLoopPreventedWrites = 0;
 
     // Logging (use console until we're fully initialized to avoid recursion)
     this.logger = console;
@@ -140,6 +151,11 @@ class LogsTableService extends EventEmitter {
    */
   async writeLogEntry(entry) {
     if (!entry) {
+      return;
+    }
+
+    if (this.isLoggingPipelineMetricsEntry(entry)) {
+      this.selfLoopPreventedWrites += 1;
       return;
     }
 
@@ -313,6 +329,7 @@ class LogsTableService extends EventEmitter {
       isWriting: this.isWriting,
       maxPendingWrites: this.maxPendingWrites,
       droppedWrites: this.droppedWrites,
+      selfLoopPreventedWrites: this.selfLoopPreventedWrites,
     };
   }
 
@@ -325,6 +342,28 @@ class LogsTableService extends EventEmitter {
   isMetricsLogEntry(entry) {
     return typeof entry?.message === 'string' &&
       entry.message.startsWith(METRICS_LOG_PREFIX);
+  }
+
+  /**
+   * Check whether an entry is a logging-pipeline metrics event.
+   * These entries are dropped to prevent metrics->logging recursion.
+   * @param {Object} entry - Log entry.
+   * @return {boolean}
+   * @private
+   */
+  isLoggingPipelineMetricsEntry(entry) {
+    const message = typeof entry?.message === 'string' ?
+      entry.message :
+      '';
+    if (!message) {
+      return false;
+    }
+    for (const prefix of LOGGING_PIPELINE_METRIC_PREFIXES) {
+      if (message.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

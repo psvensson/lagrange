@@ -33,6 +33,8 @@ const DOCKER_OP_DISCONNECT_NETWORK = 'network.disconnect';
 const DEFAULT_BUILD_LABELS = Object.freeze({});
 const CONTAINER_LOG_OPTION_RAW_BUFFER = 'rawBuffer';
 const UTF8_ENCODING = 'utf8';
+const NETWORK_EXISTS_ERROR_PATTERN = 'already exists';
+const NETWORK_LIST_FILTER_NAME = 'name';
 
 class DockerProvider {
   /**
@@ -81,6 +83,62 @@ class DockerProvider {
       networkId: network.id,
     });
     return {id: network.id, name};
+  }
+
+  /**
+   * Ensure a Docker bridge network exists, reusing by name when present.
+   * @param {string} name
+   * @param {Object} [labels]
+   * @returns {Promise<{id: string, name: string, reused?: boolean}>}
+   */
+  async ensureNetwork(name, labels = {}) {
+    try {
+      return await this.createNetwork(name, labels);
+    } catch (err) {
+      const message = String(err?.message || '').toLowerCase();
+      if (!message.includes(NETWORK_EXISTS_ERROR_PATTERN)) {
+        throw err;
+      }
+      const existing = await this.getNetworkByName(name);
+      if (!existing) {
+        throw err;
+      }
+      this._emitOperation(DOCKER_OP_CREATE_NETWORK, {
+        stage: 'reused',
+        name,
+        networkId: existing.id,
+      });
+      return {
+        id: existing.id,
+        name: existing.name,
+        reused: true,
+      };
+    }
+  }
+
+  /**
+   * Resolve an existing Docker network by name.
+   * @param {string} name
+   * @returns {Promise<{id: string, name: string}|null>}
+   */
+  async getNetworkByName(name) {
+    const networks = await this._docker.listNetworks({
+      filters: JSON.stringify({
+        [NETWORK_LIST_FILTER_NAME]: [name],
+      }),
+    });
+    if (!Array.isArray(networks) || networks.length === ZERO) {
+      return null;
+    }
+    const match = networks.find((network) => network.Name === name) ||
+      networks[0];
+    if (!match) {
+      return null;
+    }
+    return {
+      id: match.Id,
+      name: match.Name || name,
+    };
   }
 
   /**
@@ -237,6 +295,7 @@ class DockerProvider {
    * @param {Object} [options.env] - Environment variables
    * @param {Object} [options.labels] - Container labels
    * @param {Object} [options.resourceLimits] - {memory, cpus}
+   * @param {Object} [options.hostConfigExtras] - Extra HostConfig fields
    * @param {number} [options.startTimeout] - Start timeout in ms
    * @returns {Promise<{containerId: string, ip: string, name: string}>}
    */
@@ -251,6 +310,7 @@ class DockerProvider {
       startTimeout = TIMEOUTS.NODE_STARTUP,
       command = null,
       entrypoint = null,
+      hostConfigExtras = null,
     } = options;
 
     this._emitOperation(DOCKER_OP_CREATE_CONTAINER, {
@@ -261,7 +321,11 @@ class DockerProvider {
       startTimeout,
     });
     const envArray = this._buildEnvArray(env);
-    const hostConfig = this._buildHostConfig(resourceLimits, network);
+    const hostConfig = this._buildHostConfig(
+      resourceLimits,
+      network,
+      hostConfigExtras,
+    );
 
     const container = await this._docker.createContainer({
       name,
@@ -343,9 +407,10 @@ class DockerProvider {
    * Build HostConfig for container creation.
    * @param {Object} resourceLimits
    * @param {string} network
+   * @param {Object|null} hostConfigExtras
    * @returns {Object}
    */
-  _buildHostConfig(resourceLimits, _network) {
+  _buildHostConfig(resourceLimits, _network, hostConfigExtras = null) {
     const config = {};
     const memory = resourceLimits.memory || RESOURCE_DEFAULTS.memory;
     const cpus = resourceLimits.cpus || RESOURCE_DEFAULTS.cpus;
@@ -358,6 +423,10 @@ class DockerProvider {
     const nanoCpus = Math.floor(parseFloat(cpus) * 1e9);
     if (nanoCpus > 0) {
       config.NanoCpus = nanoCpus;
+    }
+
+    if (hostConfigExtras && typeof hostConfigExtras === 'object') {
+      Object.assign(config, hostConfigExtras);
     }
 
     return config;
@@ -471,6 +540,26 @@ class DockerProvider {
   async restartContainer(containerId) {
     const container = this._docker.getContainer(containerId);
     await container.restart({t: STOP_TIMEOUT_SECONDS});
+  }
+
+  /**
+   * Start an existing container and wait for running state.
+   * @param {string} containerId
+   * @param {number} [startTimeout]
+   */
+  async startContainer(containerId, startTimeout = TIMEOUTS.NODE_STARTUP) {
+    this._emitOperation(DOCKER_OP_START_CONTAINER, {
+      stage: 'starting',
+      containerId,
+      startTimeout,
+    });
+    const container = this._docker.getContainer(containerId);
+    await container.start();
+    await this._waitForRunning(containerId, startTimeout);
+    this._emitOperation(DOCKER_OP_START_CONTAINER, {
+      stage: 'completed',
+      containerId,
+    });
   }
 
   /**
@@ -706,6 +795,19 @@ class DockerProvider {
   async inspectContainer(containerId) {
     const container = this._docker.getContainer(containerId);
     return container.inspect();
+  }
+
+  /**
+   * Inspect a container by ID or name, returning null if missing.
+   * @param {string} containerId
+   * @returns {Promise<Object|null>}
+   */
+  async inspectContainerIfExists(containerId) {
+    try {
+      return await this.inspectContainer(containerId);
+    } catch (_err) {
+      return null;
+    }
   }
 
   /**

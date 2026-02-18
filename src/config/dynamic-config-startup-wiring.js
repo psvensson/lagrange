@@ -55,6 +55,7 @@ const DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD = Object.freeze({
   HEARTBEAT_INTERVAL_MS: 'heartbeatIntervalMs',
   ELECTION_TIMEOUT_MIN_MS: 'electionTimeoutMinMs',
   ELECTION_TIMEOUT_MAX_MS: 'electionTimeoutMaxMs',
+  TICK_INTERVAL_MS: 'tickIntervalMs',
 });
 
 const DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD = Object.freeze({
@@ -64,6 +65,8 @@ const DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD = Object.freeze({
     DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.ELECTION_TIMEOUT_MIN_MS,
   [CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS]:
     DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.ELECTION_TIMEOUT_MAX_MS,
+  [CONFIG_KEY.RAFT_TICK_INTERVAL_MS]:
+    DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.TICK_INTERVAL_MS,
 });
 
 const DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEYS = Object.freeze(
@@ -83,6 +86,8 @@ function getRaftTimingConfig(configManager) {
       configManager.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS),
     [DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.ELECTION_TIMEOUT_MAX_MS]:
       configManager.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS),
+    [DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.TICK_INTERVAL_MS]:
+      configManager.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS),
   };
 }
 
@@ -98,10 +103,14 @@ function isValidRaftTimingConfig(raftTimingConfig) {
     raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.ELECTION_TIMEOUT_MIN_MS];
   const electionTimeoutMaxMs =
     raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.ELECTION_TIMEOUT_MAX_MS];
+  const tickIntervalMs =
+    raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.TICK_INTERVAL_MS];
 
   return Number.isFinite(heartbeatMs) &&
     Number.isFinite(electionTimeoutMinMs) &&
     Number.isFinite(electionTimeoutMaxMs) &&
+    Number.isFinite(tickIntervalMs) &&
+    tickIntervalMs > 0 &&
     electionTimeoutMinMs <= electionTimeoutMaxMs;
 }
 
@@ -122,6 +131,10 @@ function writeRaftTimingConfig(configManager, raftTimingConfig) {
   configManager.setByPath(
     CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS,
     raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.ELECTION_TIMEOUT_MAX_MS],
+  );
+  configManager.setByPath(
+    CONFIG_KEY.RAFT_TICK_INTERVAL_MS,
+    raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.TICK_INTERVAL_MS],
   );
 }
 
@@ -160,25 +173,50 @@ async function createDynamicConfigStartupWiring(options = {}) {
 
   const raftTimingConfig = getRaftTimingConfig(configManager);
 
+  // Runtime timing updates are best-effort per live service:
+  // - `true` return value means applied immediately.
+  // - `false`/missing method means deferred (restart/new replica path only).
+  // ConfigManager is always updated so future replicas see canonical values.
   const applyRaftTimingConfig = (nextRaftTimingConfig) => {
     if (!isValidRaftTimingConfig(nextRaftTimingConfig)) {
-      return;
+      return {
+        applied: false,
+        runtimeAppliedCount: 0,
+        deferredCount: raftServices.length,
+      };
     }
 
     writeRaftTimingConfig(configManager, nextRaftTimingConfig);
+    let runtimeAppliedCount = 0;
+    let deferredCount = 0;
     for (const service of raftServices) {
       if (!service ||
         typeof service.applyRaftTimingConfig !== TYPEOF.FUNCTION) {
+        deferredCount += 1;
         continue;
       }
       try {
-        service.applyRaftTimingConfig({...nextRaftTimingConfig});
+        const runtimeApplied = service.applyRaftTimingConfig(
+          {...nextRaftTimingConfig},
+        );
+        if (runtimeApplied) {
+          runtimeAppliedCount += 1;
+        } else {
+          deferredCount += 1;
+        }
       } catch (error) {
+        deferredCount += 1;
         logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.RAFT_TIMING_APPLY_FAILED, {
           error: error.message,
         });
       }
     }
+
+    return {
+      applied: true,
+      runtimeAppliedCount,
+      deferredCount,
+    };
   };
 
   const loggingDynamicAppliers = [

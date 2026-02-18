@@ -281,3 +281,48 @@ test('RaftAdaptiveTimingController stops loop when disabled by config watcher',
 
     controller.shutdown();
   });
+
+test('RaftAdaptiveTimingController clamps low thresholds above high thresholds',
+  async (t) => {
+    const config = createMockDynamicConfigService({
+      [CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS]: 50,
+      [CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS]: 1000,
+      [CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS]: 3000,
+      [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_ENABLED]: false,
+      [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_HIGH_CPU_PERCENT]: 2,
+      [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_LOW_CPU_PERCENT]: 5,
+      [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_HIGH_WRITE_BYTES_PER_SEC]: 1000,
+      [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_LOW_WRITE_BYTES_PER_SEC]: 2000,
+      [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_HIGH_RSS_GROWTH_BYTES_PER_MIN]: 3000,
+      [CONFIG_KEY.RAFT_ADAPTIVE_TIMING_LOW_RSS_GROWTH_BYTES_PER_MIN]: 4000,
+    });
+
+    const controller = new RaftAdaptiveTimingController({
+      dynamicConfigService: config,
+      intervalFactory: () => ({mocked: true}),
+      clearIntervalFn: () => {},
+      samplerFactory: () => createSequentialSampler([]),
+      evaluateOnStart: false,
+    });
+
+    await controller.initialize();
+    const state = controller.getState();
+
+    t.equal(
+      state.settings.lowCpuPercent,
+      state.settings.highCpuPercent,
+      'low cpu threshold should be clamped to high cpu threshold',
+    );
+    t.equal(
+      state.settings.lowWriteBytesPerSec,
+      state.settings.highWriteBytesPerSec,
+      'low write threshold should be clamped to high write threshold',
+    );
+    t.equal(
+      state.settings.lowRssGrowthBytesPerMin,
+      state.settings.highRssGrowthBytesPerMin,
+      'low rss threshold should be clamped to high rss threshold',
+    );
+
+    controller.shutdown();
+  });

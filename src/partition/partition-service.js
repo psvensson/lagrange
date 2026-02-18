@@ -21,6 +21,8 @@ import {assertCritical} from '../utils/assert.js';
 import {PendingRequestTracker} from './pending-request-tracker.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
+import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
+import {LiferaftProvider} from '../raft/liferaft-provider.js';
 import {
   applyRuntimeRaftTiming,
   computeReplicaElectionTimeouts,
@@ -329,6 +331,8 @@ class PartitionService extends EventEmitter {
     this.replicaIds = options.replicaIds || [this.replicaId];
     this.nodeId = options.nodeId || PARTITION_SERVICE_DEFAULT.NODE_ID;
     this.transport = options.transport || null;
+    this.raftProvider = options.raftProvider || new LiferaftProvider();
+    assertRaftProviderContract(this.raftProvider);
     this.dbPath = options.dbPath || PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH;
 
     // Unified address format: {nodeId}/partition/{replicaId}
@@ -653,6 +657,7 @@ class PartitionService extends EventEmitter {
       PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MIN_DEFAULT_MS;
     const baseElectionMaxMs = config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS) ||
       PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MAX_DEFAULT_MS;
+    const tickIntervalMs = config.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS);
     const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
       replicaId: this.replicaId,
       replicaIds: this.replicaIds,
@@ -667,6 +672,7 @@ class PartitionService extends EventEmitter {
       baseElectionMaxMs,
       electionMinMs,
       electionMaxMs,
+      tickIntervalMs: Number.isFinite(tickIntervalMs) ? tickIntervalMs : null,
     };
 
     // Create extended LifeRaft class with our transport using ES6 class inheritance
@@ -748,8 +754,11 @@ class PartitionService extends EventEmitter {
     // If deferElection is true, clear all timers that liferaft started automatically
     // This prevents elections from starting until startElection() is called
     // Liferaft's _initialize() sets up a 'state change' handler that starts timers
-    if (this.deferElection && this.raft.timers) {
-      this.raft.timers.clear(PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT_ELECTION);
+    if (this.deferElection && this.raft) {
+      this.raftProvider.clearTimers(
+        this.raft,
+        PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT_ELECTION,
+      );
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.CLEARED_LIFERAFT_TIMERS, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
@@ -782,9 +791,10 @@ class PartitionService extends EventEmitter {
       this.role = RaftRole.LEADER;
       this.isLeader = true;
       this.leaderId = this.replicaId;
-      this.storage.currentTerm = this.raft.term;
+      this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
       this.queueRoleUpdate(this.role);
       this.queueLeaderNodeUpdate(this.nodeId);
+      const term = this.raftProvider.getCurrentTerm(this.raft);
 
       // Activate rebalancer when becoming leader
       // CRITICAL: Don't activate rebalancer if still in learner phase
@@ -794,7 +804,7 @@ class PartitionService extends EventEmitter {
       }
 
       this.logger.info(PARTITION_SERVICE_LOG_MSG.BECAME_LEADER, {
-        term: this.raft.term,
+        term,
         replicaId: this.replicaId,
         partitionId: this.partitionId,
         rebalancerActive: !this.isJoiningExistingGroup,
@@ -802,7 +812,7 @@ class PartitionService extends EventEmitter {
 
       this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
         leaderId: this.replicaId,
-        term: this.raft.term,
+        term,
         partitionId: this.partitionId,
       });
     });
@@ -815,7 +825,7 @@ class PartitionService extends EventEmitter {
       }
       this.role = RaftRole.FOLLOWER;
       this.isLeader = false;
-      this.storage.currentTerm = this.raft.term;
+      this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
       this.queueRoleUpdate(this.role);
       this.pendingLeaderNodeUpdate = null;
       this.persistedLeaderNodeId = null;
@@ -838,7 +848,7 @@ class PartitionService extends EventEmitter {
       }
       this.role = RaftRole.CANDIDATE;
       this.isLeader = false;
-      this.storage.currentTerm = this.raft.term;
+      this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
       this.queueRoleUpdate(this.role);
       this.pendingLeaderNodeUpdate = null;
       this.persistedLeaderNodeId = null;
@@ -888,7 +898,7 @@ class PartitionService extends EventEmitter {
               PARTITION_SERVICE_ADDRESS.FORMAT_SIMPLE,
           });
         }
-        this.raft.join(peerAddress);
+        this.raftProvider.joinPeer(this.raft, peerAddress);
         joinedPeerCount += NUM.ONE;
         this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.JOINED_PEER, {
           peerId,
@@ -928,7 +938,7 @@ class PartitionService extends EventEmitter {
 
       this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
         leaderId: this.replicaId,
-        term: this.raft ? this.raft.term : NUM.ZERO,
+        term: this.raftProvider.getCurrentTerm(this.raft),
         partitionId: this.partitionId,
       });
     }
@@ -986,9 +996,7 @@ class PartitionService extends EventEmitter {
         peerCount: this.replicaIds.length - NUM.ONE,
       });
 
-      // Start the heartbeat timer which will trigger election on timeout
-      // Use a random timeout to stagger elections across replicas
-      this.raft.heartbeat(this.raft.timeout());
+      this.raftProvider.startElectionTimer(this.raft);
     }
   }
 
@@ -998,15 +1006,24 @@ class PartitionService extends EventEmitter {
    * @param {number} timingConfig.heartbeatIntervalMs
    * @param {number} timingConfig.electionTimeoutMinMs
    * @param {number} timingConfig.electionTimeoutMaxMs
+   * @param {number} [timingConfig.tickIntervalMs]
    * @return {boolean} True when applied to an initialized raft instance.
    */
   applyRaftTimingConfig(timingConfig = {}) {
     const heartbeatMs = timingConfig.heartbeatIntervalMs;
     const baseElectionMinMs = timingConfig.electionTimeoutMinMs;
     const baseElectionMaxMs = timingConfig.electionTimeoutMaxMs;
+    const previousTickIntervalMs =
+      this.raftTimingConfig?.tickIntervalMs || null;
+    const hasTickInterval = Object.prototype.hasOwnProperty.call(
+      timingConfig,
+      'tickIntervalMs',
+    );
+    const tickIntervalMs = timingConfig.tickIntervalMs;
     if (!Number.isFinite(heartbeatMs) ||
       !Number.isFinite(baseElectionMinMs) ||
       !Number.isFinite(baseElectionMaxMs) ||
+      (hasTickInterval && (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= 0)) ||
       baseElectionMinMs > baseElectionMaxMs) {
       return false;
     }
@@ -1026,6 +1043,9 @@ class PartitionService extends EventEmitter {
       baseElectionMaxMs,
       electionMinMs,
       electionMaxMs,
+      tickIntervalMs: hasTickInterval ?
+        tickIntervalMs :
+        this.raftTimingConfig?.tickIntervalMs || null,
     };
 
     const shouldRearmTimer = this.replicaIds.length > NUM.ONE &&
@@ -1041,16 +1061,53 @@ class PartitionService extends EventEmitter {
       return false;
     }
 
+    const tickChanged = hasTickInterval &&
+      tickIntervalMs !== previousTickIntervalMs;
+    const tickRuntimeApplied = !tickChanged ||
+      this.applyRuntimeTickInterval(tickIntervalMs);
+
     this.logger.info(PARTITION_SERVICE_LOG_MSG.APPLIED_RUNTIME_RAFT_TIMING, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
       heartbeatMs,
       electionMinMs,
       electionMaxMs,
+      tickIntervalMs: hasTickInterval ? tickIntervalMs : null,
+      tickRuntimeApplied,
       jitterMs,
       rearmTimer: shouldRearmTimer,
     });
-    return true;
+    return tickRuntimeApplied;
+  }
+
+  /**
+   * Apply raft provider tick interval when supported by the active provider.
+   * @param {number} tickIntervalMs
+   * @return {boolean} True when applied to a live raft instance.
+   */
+  applyRuntimeTickInterval(tickIntervalMs) {
+    if (!this.raft ||
+      !Number.isFinite(tickIntervalMs) ||
+      tickIntervalMs <= 0) {
+      return false;
+    }
+
+    if (typeof this.raft.setTickInterval === PARTITION_SERVICE_TYPE.FUNCTION) {
+      this.raft.setTickInterval(tickIntervalMs);
+      return true;
+    }
+
+    if (typeof this.raft.configureTickInterval === PARTITION_SERVICE_TYPE.FUNCTION) {
+      this.raft.configureTickInterval(tickIntervalMs);
+      return true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(this.raft, 'tickIntervalMs')) {
+      this.raft.tickIntervalMs = tickIntervalMs;
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -1756,7 +1813,7 @@ class PartitionService extends EventEmitter {
     // Requirements: 11.9
     const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
     if (isLiferaftLeader) {
-      this.raft.command(entry, (err) => {
+      this.raftProvider.propose(this.raft, entry, (err) => {
         if (err) {
           this.logger.debug(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_COMMIT_RAFT_FAILED, {
             partitionId: this.partitionId,
@@ -2337,7 +2394,7 @@ class PartitionService extends EventEmitter {
       const raftCommandDispatchStartMs = Date.now();
       const entryKey = this.getCommittedEntryKey(entry);
       this.trackAppliedEntryKey(entryKey);
-      this.raft.command(entry, (err) => {
+      this.raftProvider.propose(this.raft, entry, (err) => {
         if (err) {
           this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
             partitionId: this.partitionId,
@@ -4093,10 +4150,7 @@ class PartitionService extends EventEmitter {
 
     // Stop liferaft instance - clear all timers first
     if (this.raft) {
-      if (this.raft.timers) {
-        this.raft.timers.clear();
-      }
-      this.raft.end();
+      this.raftProvider.shutdownNode(this.raft);
       this.raft = null;
     }
 
