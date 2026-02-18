@@ -1,0 +1,19 @@
+{
+  "scenarioName": "wasm-service-failover",
+  "startedAt": 1771431609101,
+  "endedAt": 1771431642008,
+  "durationMs": 32907,
+  "files": {
+    "events": "test-output/.playback/report/wasm-service-failover/events.ndjson",
+    "samples": "test-output/.playback/report/wasm-service-failover/samples.ndjson",
+    "snapshots": "test-output/.playback/report/wasm-service-failover/snapshots.ndjson",
+    "manifest": "test-output/.playback/report/wasm-service-failover/playback-manifest.json",
+    "viewer": "test-output/.playback/report/wasm-service-failover/playback-viewer.html"
+  },
+  "counts": {
+    "events": 11,
+    "samples": 29,
+    "snapshots": 0
+  },
+  "warnings": []
+}

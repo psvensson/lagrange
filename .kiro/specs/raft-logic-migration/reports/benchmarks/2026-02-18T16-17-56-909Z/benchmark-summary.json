@@ -1,0 +1,173 @@
+{
+  "generatedAt": "2026-02-18T16:19:39.141Z",
+  "scenario": "postgres-baseline-comparison",
+  "raftProvider": "liferaft",
+  "mitigationId": null,
+  "reportDir": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-17-56-909Z",
+  "profiles": [
+    {
+      "profile": "benchmark-3node",
+      "configPath": "test/distributed/config/local-benchmark-3node.json",
+      "outputPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-17-56-909Z/benchmark-3node.report.json",
+      "exitCode": 1,
+      "summary": {
+        "total": 1,
+        "passed": 0,
+        "failed": 1,
+        "duration": 58782
+      },
+      "standardSummary": {
+        "historicalReportsConsidered": 0,
+        "scenariosComparedToPrevious": 0,
+        "scenariosComparedToPostgresBaseline": 0,
+        "writePathAttributionSummary": {
+          "scenariosWithDiagnostics": 0,
+          "topPhases": []
+        },
+        "scaleEfficiencySummary": {
+          "observationCount": 0,
+          "comparableGroupCount": 0,
+          "groups": [],
+          "topOpportunities": []
+        },
+        "scenarios": [
+          {
+            "scenario": "postgres-baseline-comparison",
+            "similarityKey": "postgres-baseline-comparison|default",
+            "current": {
+              "passed": false,
+              "clusterSize": 3,
+              "durationMs": 58782,
+              "opsPerSec": null,
+              "p99LatencyMs": null,
+              "opsPerSecPerNode": null
+            },
+            "previousSimilarRun": null,
+            "deltaVsPrevious": null,
+            "postgresBaseline": null,
+            "writePathTopPhases": []
+          }
+        ]
+      },
+      "benchmarkRegressionGate": {
+        "enabled": true,
+        "status": "skipped",
+        "reason": "baseline-missing",
+        "settings": {
+          "enabled": true,
+          "maxThroughputRegressionRatio": 0.1,
+          "baselineProvider": "liferaft",
+          "failIfBaselineMissing": false,
+          "approvedMitigationId": null
+        },
+        "currentProvider": "liferaft",
+        "baselineProvider": "liferaft",
+        "comparedScenarioCount": 0,
+        "failedScenarioCount": 0,
+        "mitigatedScenarioCount": 0,
+        "missingBaselineScenarios": [
+          {
+            "scenario": "postgres-baseline-comparison",
+            "similarityKey": "postgres-baseline-comparison|default"
+          }
+        ],
+        "comparisons": []
+      }
+    },
+    {
+      "profile": "benchmark-5node",
+      "configPath": "test/distributed/config/local-benchmark-5node.json",
+      "outputPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-17-56-909Z/benchmark-5node.report.json",
+      "exitCode": 1,
+      "summary": {
+        "total": 1,
+        "passed": 0,
+        "failed": 1,
+        "duration": 42601
+      },
+      "standardSummary": {
+        "historicalReportsConsidered": 1,
+        "scenariosComparedToPrevious": 1,
+        "scenariosComparedToPostgresBaseline": 0,
+        "writePathAttributionSummary": {
+          "scenariosWithDiagnostics": 0,
+          "topPhases": []
+        },
+        "scaleEfficiencySummary": {
+          "observationCount": 0,
+          "comparableGroupCount": 0,
+          "groups": [],
+          "topOpportunities": []
+        },
+        "scenarios": [
+          {
+            "scenario": "postgres-baseline-comparison",
+            "similarityKey": "postgres-baseline-comparison|default",
+            "current": {
+              "passed": false,
+              "clusterSize": 5,
+              "durationMs": 42601,
+              "opsPerSec": null,
+              "p99LatencyMs": null,
+              "opsPerSecPerNode": null
+            },
+            "previousSimilarRun": {
+              "reportTimestamp": "2026-02-18T16:18:56.303Z",
+              "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-17-56-909Z/benchmark-3node.report.json",
+              "passed": false,
+              "clusterSize": 3,
+              "durationMs": 58782,
+              "opsPerSec": null,
+              "p99LatencyMs": null,
+              "opsPerSecPerNode": null
+            },
+            "deltaVsPrevious": {
+              "passedChanged": false,
+              "clusterSizeChanged": true,
+              "durationMs": -16181,
+              "durationRatio": -0.2752713415671464,
+              "opsPerSec": 0,
+              "opsPerSecRatio": null,
+              "opsPerSecPerNode": 0,
+              "opsPerSecPerNodeRatio": null,
+              "p99LatencyMs": 0,
+              "p99LatencyMsRatio": null
+            },
+            "postgresBaseline": null,
+            "writePathTopPhases": []
+          }
+        ]
+      },
+      "benchmarkRegressionGate": {
+        "enabled": true,
+        "status": "skipped",
+        "reason": "baseline-missing",
+        "settings": {
+          "enabled": true,
+          "maxThroughputRegressionRatio": 0.1,
+          "baselineProvider": "liferaft",
+          "failIfBaselineMissing": false,
+          "approvedMitigationId": null
+        },
+        "currentProvider": "liferaft",
+        "baselineProvider": "liferaft",
+        "comparedScenarioCount": 0,
+        "failedScenarioCount": 0,
+        "mitigatedScenarioCount": 0,
+        "missingBaselineScenarios": [
+          {
+            "scenario": "postgres-baseline-comparison",
+            "similarityKey": "postgres-baseline-comparison|default"
+          }
+        ],
+        "comparisons": []
+      }
+    }
+  ],
+  "overall": {
+    "profileCount": 2,
+    "commandFailureCount": 2,
+    "gateFailureCount": 0,
+    "passed": false
+  }
+}

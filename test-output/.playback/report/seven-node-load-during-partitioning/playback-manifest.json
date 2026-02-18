@@ -1,0 +1,19 @@
+{
+  "scenarioName": "seven-node-load-during-partitioning",
+  "startedAt": 1771431332230,
+  "endedAt": 1771431372654,
+  "durationMs": 40424,
+  "files": {
+    "events": "test-output/.playback/report/seven-node-load-during-partitioning/events.ndjson",
+    "samples": "test-output/.playback/report/seven-node-load-during-partitioning/samples.ndjson",
+    "snapshots": "test-output/.playback/report/seven-node-load-during-partitioning/snapshots.ndjson",
+    "manifest": "test-output/.playback/report/seven-node-load-during-partitioning/playback-manifest.json",
+    "viewer": "test-output/.playback/report/seven-node-load-during-partitioning/playback-viewer.html"
+  },
+  "counts": {
+    "events": 11,
+    "samples": 29,
+    "snapshots": 0
+  },
+  "warnings": []
+}

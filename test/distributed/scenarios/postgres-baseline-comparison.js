@@ -1,14 +1,15 @@
 /**
  * Scenario: postgres-baseline-comparison
  *
- * Runs harness load against the system under test, then runs a standardized
- * pgbench workload against a baseline Postgres container on the same Docker
- * network and reports comparative metrics.
+ * Runs shared harness load against both the system under test and a baseline
+ * Postgres cluster on the same Docker network, then reports comparative
+ * throughput and latency metrics.
  */
 
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
+import {Pool} from 'pg';
 import {
   arch as osArch,
   cpus as osCpus,
@@ -17,14 +18,11 @@ import {
 } from 'node:os';
 import {dirname, join} from 'node:path';
 import {BENCHMARK_DEFAULTS} from '../harness/constants.js';
+import {LoadGenerator} from '../harness/load-generator.js';
 import {
-  buildPgbenchScript,
   execShell,
   shellQuote,
-  writePgbenchScript,
   waitForPostgresReady,
-  ensureBenchmarkTable,
-  runPgbench,
 } from '../harness/pgbench-runner.js';
 
 const ZERO = 0;
@@ -54,7 +52,7 @@ const POSTGRES_ENTRYPOINT_COMMAND = 'docker-entrypoint.sh postgres';
 const POSTGRES_BINARY_PATH_EXPORT =
   'export PATH="$PATH:/usr/lib/postgresql/$PG_MAJOR/bin"';
 const SYNCHRONOUS_COMMIT_ON = 'on';
-const BASELINE_CACHE_SCHEMA_VERSION = 1;
+const BASELINE_CACHE_SCHEMA_VERSION = 3;
 const BASELINE_CACHE_DIRNAME = 'postgres-baseline-cache';
 const BASELINE_CACHE_FILE_EXTENSION = '.json';
 const BASELINE_CACHE_HASH_ALGORITHM = 'sha256';
@@ -65,9 +63,218 @@ const BASELINE_CACHE_MISS_REASON = 'cache-miss';
 const BASELINE_CACHE_STALE_REASON = 'cache-stale';
 const BASELINE_CACHE_INVALID_REASON = 'cache-invalid';
 const BASELINE_CACHE_STORE_REASON = 'cache-stored';
+const BENCHMARK_WORKLOAD_PROFILE = 'benchmark_events_mixed';
+const BENCHMARK_WORKLOAD_OPERATIONS = Object.freeze([
+  'INSERT',
+  'SELECT',
+]);
+const BASELINE_LOAD_NODE_PREFIX = 'postgres-baseline-load-node-';
+const BENCHMARK_EVENT_TABLE_FALLBACK = 'benchmark_events';
+const BENCHMARK_DDL_BIGINT_TYPE = 'BIGINT';
+const BENCHMARK_DDL_TEXT_TYPE = 'TEXT';
+const BENCHMARK_DDL_NOT_NULL = 'NOT NULL';
+const BENCHMARK_DDL_PRIMARY_KEY = 'PRIMARY KEY';
+const BENCHMARK_POOL_IDLE_TIMEOUT_MS = 30000;
+const BENCHMARK_POOL_CONNECTION_TIMEOUT_MS = 10000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseDurationToMs(duration) {
+  if (typeof duration === 'number' && Number.isFinite(duration)) {
+    return Math.max(ZERO, Math.floor(duration));
+  }
+  const value = String(duration || '').trim().toLowerCase();
+  if (value.endsWith('ms')) {
+    return Math.max(ZERO, Math.floor(Number.parseInt(value.slice(0, -2), 10)));
+  }
+  if (value.endsWith('s')) {
+    return Math.max(
+      ZERO,
+      Math.floor(Number.parseInt(value.slice(0, -1), 10) * 1000),
+    );
+  }
+  if (value.endsWith('m')) {
+    return Math.max(
+      ZERO,
+      Math.floor(Number.parseInt(value.slice(0, -1), 10) * 60 * 1000),
+    );
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? Math.max(ZERO, parsed) : ZERO;
+}
+
+function normalizeTableName(tableName, fallback = BENCHMARK_EVENT_TABLE_FALLBACK) {
+  const candidate = String(tableName || fallback).trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(candidate)) {
+    return fallback;
+  }
+  return candidate;
+}
+
+function buildBenchmarkTableDdl(tableName) {
+  return `CREATE TABLE IF NOT EXISTS ${tableName} (` +
+    `event_id ${BENCHMARK_DDL_TEXT_TYPE} ` +
+    `${BENCHMARK_DDL_NOT_NULL} ${BENCHMARK_DDL_PRIMARY_KEY}, ` +
+    `payload ${BENCHMARK_DDL_BIGINT_TYPE} ` +
+    `${BENCHMARK_DDL_NOT_NULL}, ` +
+    `created_at ${BENCHMARK_DDL_BIGINT_TYPE} ${BENCHMARK_DDL_NOT_NULL}` +
+    ')';
+}
+
+function escapeSqlLiteral(value) {
+  return String(value).replace(/'/g, '\'\'');
+}
+
+function buildBenchmarkPartitionLookupSql(tableName) {
+  return 'SELECT partition_id FROM partitions WHERE table_name = \'' +
+    escapeSqlLiteral(tableName) +
+    '\'';
+}
+
+function resolveScenarioOverrides(cluster) {
+  const overrides = cluster?._scenarioOverrides?.postgresBaselineComparison;
+  const createPostgresPool =
+    typeof overrides?.createPostgresPool === 'function' ?
+      overrides.createPostgresPool :
+      (options) => new Pool(options);
+  const createLoadGenerator =
+    typeof overrides?.createLoadGenerator === 'function' ?
+      overrides.createLoadGenerator :
+      (nodes, options) => new LoadGenerator(nodes, options);
+  return {
+    createPostgresPool,
+    createLoadGenerator,
+  };
+}
+
+async function ensureSutBenchmarkTable(seedNode, tableName) {
+  await seedNode.query(buildBenchmarkTableDdl(tableName));
+}
+
+async function ensurePostgresBenchmarkTable(pool, tableName) {
+  await pool.query(buildBenchmarkTableDdl(tableName));
+}
+
+function isRetriableTableReadyError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  if (!message) {
+    return false;
+  }
+  return message.includes('no partitions available for table') ||
+    message.includes('table') && message.includes('not found') ||
+    message.includes('connect econnrefused') ||
+    message.includes('timed out');
+}
+
+function rowsFromQueryResult(result) {
+  if (Array.isArray(result?.rows)) {
+    return result.rows;
+  }
+  if (Array.isArray(result)) {
+    return result;
+  }
+  return [];
+}
+
+async function waitForSutBenchmarkTableReady(seedNode, tableName, options = {}) {
+  const timeoutMs = Number.isInteger(options.timeoutMs) ?
+    options.timeoutMs :
+    BENCHMARK_DEFAULTS.readyTimeoutMs;
+  const pollIntervalMs = Number.isInteger(options.pollIntervalMs) ?
+    options.pollIntervalMs :
+    BENCHMARK_DEFAULTS.readyPollIntervalMs;
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+
+  while (Date.now() < deadline) {
+    try {
+      const result = await seedNode.query(
+        buildBenchmarkPartitionLookupSql(tableName),
+      );
+      const rows = rowsFromQueryResult(result);
+      if (rows.length > ZERO) {
+        return;
+      }
+      lastError = new Error(
+        'partition metadata for table "' + tableName + '" not visible yet',
+      );
+    } catch (error) {
+      if (!isRetriableTableReadyError(error)) {
+        throw error;
+      }
+      lastError = error;
+    }
+    await sleep(pollIntervalMs);
+  }
+
+  if (lastError) {
+    throw new Error(
+      'Benchmark table "' + tableName + '" was not ready within ' +
+      timeoutMs + 'ms: ' + String(lastError.message || lastError),
+    );
+  }
+  throw new Error(
+    'Benchmark table "' + tableName + '" was not ready within ' +
+    timeoutMs + 'ms',
+  );
+}
+
+function buildBaselineLoadNodes(pool, nodeCount) {
+  const count = Number.isInteger(nodeCount) && nodeCount > ZERO ?
+    nodeCount :
+    ONE;
+  const nodes = [];
+  for (let index = ZERO; index < count; index += ONE) {
+    nodes.push({
+      id: BASELINE_LOAD_NODE_PREFIX + String(index + ONE),
+      query: (sql) => pool.query(sql),
+    });
+  }
+  return nodes;
+}
+
+async function runBaselineSharedLoad({
+  pool,
+  createLoadGenerator,
+  loadNodeCount,
+  loadOpsPerSec,
+  loadDuration,
+  loadMaxInFlight,
+  tableName,
+}) {
+  const loadNodes = buildBaselineLoadNodes(pool, loadNodeCount);
+  const loadGenerator = createLoadGenerator(loadNodes, {
+    opsPerSec: loadOpsPerSec,
+    duration: loadDuration,
+    maxInFlight: loadMaxInFlight,
+    tableName,
+    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
+    operations: BENCHMARK_WORKLOAD_OPERATIONS,
+  });
+  const baselineRun = loadGenerator.start();
+  return baselineRun.waitComplete();
+}
+
+async function runSutSharedLoad({
+  seedNode,
+  createLoadGenerator,
+  loadOpsPerSec,
+  loadDuration,
+  loadMaxInFlight,
+  tableName,
+}) {
+  const loadGenerator = createLoadGenerator([seedNode], {
+    opsPerSec: loadOpsPerSec,
+    duration: loadDuration,
+    maxInFlight: loadMaxInFlight,
+    tableName,
+    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
+    operations: BENCHMARK_WORKLOAD_OPERATIONS,
+  });
+  const loadRun = loadGenerator.start();
+  return loadRun.waitComplete();
 }
 
 function buildPsqlCommand(options = {}) {
@@ -213,6 +420,14 @@ async function waitForStreamingReplicas(provider, primaryContainerId, benchmarkC
 
 function resolveBenchmarkConfig(cluster) {
   const configured = cluster?._config?.benchmark || {};
+  const tableName = normalizeTableName(
+    configured.tableName || BENCHMARK_DEFAULTS.tableName,
+    BENCHMARK_EVENT_TABLE_FALLBACK,
+  );
+  const baselineLoadNodeCount =
+    Number.isInteger(configured.clients) && configured.clients > ZERO ?
+      configured.clients :
+      BENCHMARK_DEFAULTS.clients;
   const replicationFactor = Number.isInteger(configured.replicationFactor) &&
     configured.replicationFactor >= MIN_REPLICATION_FACTOR ?
     configured.replicationFactor :
@@ -255,15 +470,21 @@ function resolveBenchmarkConfig(cluster) {
       configured.loadOpsPerSec :
       BENCHMARK_DEFAULTS.loadOpsPerSec,
     loadDuration: configured.loadDuration || BENCHMARK_DEFAULTS.loadDuration,
+    loadMaxInFlight:
+      Number.isInteger(configured.loadMaxInFlight) &&
+        configured.loadMaxInFlight > ZERO ?
+        configured.loadMaxInFlight :
+        BENCHMARK_DEFAULTS.loadMaxInFlight,
     readyTimeoutMs: Number.isInteger(configured.readyTimeoutMs) ?
       configured.readyTimeoutMs :
       BENCHMARK_DEFAULTS.readyTimeoutMs,
     readyPollIntervalMs: Number.isInteger(configured.readyPollIntervalMs) ?
       configured.readyPollIntervalMs :
       BENCHMARK_DEFAULTS.readyPollIntervalMs,
-    tableName: configured.tableName || BENCHMARK_DEFAULTS.tableName,
+    tableName,
     replicationFactor,
     syncReplicaAcks,
+    baselineLoadNodeCount,
     cacheBaselineMetrics: configured.cacheBaselineMetrics !== false,
     refreshBaselineMetrics: configured.refreshBaselineMetrics === true,
     baselineCacheTtlMs,
@@ -315,10 +536,13 @@ function buildBaselineCacheIdentity(benchmarkConfig, cacheBaseDir) {
       user: benchmarkConfig.user,
       database: benchmarkConfig.database,
       port: benchmarkConfig.port,
-      durationSeconds: benchmarkConfig.durationSeconds,
-      clients: benchmarkConfig.clients,
-      jobs: benchmarkConfig.jobs,
+      loadOpsPerSec: benchmarkConfig.loadOpsPerSec,
+      loadDurationMs: parseDurationToMs(benchmarkConfig.loadDuration),
+      loadMaxInFlight: benchmarkConfig.loadMaxInFlight,
+      loadNodeCount: benchmarkConfig.baselineLoadNodeCount,
       tableName: benchmarkConfig.tableName,
+      workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
+      operations: BENCHMARK_WORKLOAD_OPERATIONS,
       replicationFactor: benchmarkConfig.replicationFactor,
       syncReplicaAcks: benchmarkConfig.syncReplicaAcks,
     },
@@ -349,8 +573,10 @@ function isValidBaselineMetrics(metrics) {
   if (!metrics || typeof metrics !== 'object') {
     return false;
   }
-  const tps = Number(metrics.tps);
-  return Number.isFinite(tps) && tps > ZERO;
+  const baselineOpsPerSec = Number(
+    metrics.opsPerSec ?? metrics.tps,
+  );
+  return Number.isFinite(baselineOpsPerSec) && baselineOpsPerSec > ZERO;
 }
 
 function isCacheEntryFresh(cachedAt, ttlMs) {
@@ -445,8 +671,14 @@ async function storeBaselineMetricsInCache(
 function buildComparison(loadMetrics, baselineMetrics) {
   const sutOpsPerSec = Number(loadMetrics?.opsPerSec || ZERO);
   const sutP99LatencyMs = Number(loadMetrics?.latency?.p99 || ZERO);
-  const baselineTps = Number(baselineMetrics?.tps || ZERO);
-  const baselineLatencyAvgMs = Number(baselineMetrics?.latencyAverageMs || ZERO);
+  const baselineTps = Number(
+    baselineMetrics?.opsPerSec ?? baselineMetrics?.tps ?? ZERO,
+  );
+  const baselineLatencyAvgMs = Number(
+    baselineMetrics?.latency?.avg ??
+      baselineMetrics?.latencyAverageMs ??
+      ZERO,
+  );
 
   return {
     sutOpsPerSec,
@@ -467,7 +699,12 @@ async function run(cluster) {
   assert.ok(nodes.length >= ONE, 'Scenario requires at least one node');
 
   const benchmarkConfig = resolveBenchmarkConfig(cluster);
+  const scenarioOverrides = resolveScenarioOverrides(cluster);
   const seedNode = nodes.find((node) => node.role === 'seed') || nodes[ZERO];
+  const benchmarkTableName = normalizeTableName(
+    benchmarkConfig.tableName,
+    BENCHMARK_EVENT_TABLE_FALLBACK,
+  );
   const provider = resolvePrimaryProvider(cluster);
   const networkName = String(cluster?._networkName || '');
   assert.ok(networkName, 'Cluster network name is not available');
@@ -478,11 +715,19 @@ async function run(cluster) {
     targetVoterCount: cluster?._config?.convergence?.targetVoterCount,
   });
 
-  const sutLoadRun = cluster.startLoad({
-    opsPerSec: benchmarkConfig.loadOpsPerSec,
-    duration: benchmarkConfig.loadDuration,
+  await ensureSutBenchmarkTable(seedNode, benchmarkTableName);
+  await waitForSutBenchmarkTableReady(seedNode, benchmarkTableName, {
+    timeoutMs: benchmarkConfig.readyTimeoutMs,
+    pollIntervalMs: benchmarkConfig.readyPollIntervalMs,
   });
-  const loadMetrics = await sutLoadRun.waitComplete();
+  const loadMetrics = await runSutSharedLoad({
+    seedNode,
+    createLoadGenerator: scenarioOverrides.createLoadGenerator,
+    loadOpsPerSec: benchmarkConfig.loadOpsPerSec,
+    loadDuration: benchmarkConfig.loadDuration,
+    loadMaxInFlight: benchmarkConfig.loadMaxInFlight,
+    tableName: benchmarkTableName,
+  });
 
   const cacheBaseDir = resolveCacheBaseDir(cluster);
   const baselineCacheIdentity = buildBaselineCacheIdentity(
@@ -504,8 +749,11 @@ async function run(cluster) {
   let baselinePrimaryContainerIp = null;
   const baselineReplicaContainerIps = [];
   let baselineMetrics = cachedBaseline.metrics || null;
+  let baselineLoadNodeCount = benchmarkConfig.baselineLoadNodeCount;
+  let baselinePoolMaxConnections = benchmarkConfig.loadMaxInFlight;
 
   if (!baselineMetrics) {
+    let baselinePool = null;
     try {
       const benchmarkRunId = Date.now();
       const primaryContainerName =
@@ -588,28 +836,33 @@ async function run(cluster) {
         baselinePrimaryContainerId,
         benchmarkConfig,
       );
-
-      const script = buildPgbenchScript();
-      await writePgbenchScript(provider, baselinePrimaryContainerId, script);
-
-      await ensureBenchmarkTable(provider, baselinePrimaryContainerId, {
-        host: LOCALHOST,
+      const loadNodeCount = Math.max(ONE, benchmarkConfig.baselineLoadNodeCount);
+      const poolMaxConnections = Math.max(
+        ONE,
+        benchmarkConfig.loadMaxInFlight,
+      );
+      baselineLoadNodeCount = loadNodeCount;
+      baselinePoolMaxConnections = poolMaxConnections;
+      baselinePool = scenarioOverrides.createPostgresPool({
+        host: baselinePrimaryContainerIp,
         port: benchmarkConfig.port,
         user: benchmarkConfig.user,
         password: benchmarkConfig.password,
         database: benchmarkConfig.database,
-        tableName: benchmarkConfig.tableName,
+        max: poolMaxConnections,
+        idleTimeoutMillis: BENCHMARK_POOL_IDLE_TIMEOUT_MS,
+        connectionTimeoutMillis: BENCHMARK_POOL_CONNECTION_TIMEOUT_MS,
       });
 
-      baselineMetrics = await runPgbench(provider, baselinePrimaryContainerId, {
-        host: LOCALHOST,
-        port: benchmarkConfig.port,
-        user: benchmarkConfig.user,
-        password: benchmarkConfig.password,
-        database: benchmarkConfig.database,
-        durationSeconds: benchmarkConfig.durationSeconds,
-        clients: benchmarkConfig.clients,
-        jobs: benchmarkConfig.jobs,
+      await ensurePostgresBenchmarkTable(baselinePool, benchmarkTableName);
+      baselineMetrics = await runBaselineSharedLoad({
+        pool: baselinePool,
+        createLoadGenerator: scenarioOverrides.createLoadGenerator,
+        loadNodeCount,
+        loadOpsPerSec: benchmarkConfig.loadOpsPerSec,
+        loadDuration: benchmarkConfig.loadDuration,
+        loadMaxInFlight: benchmarkConfig.loadMaxInFlight,
+        tableName: benchmarkTableName,
       });
       try {
         baselineCacheMetadata = await storeBaselineMetricsInCache(
@@ -621,6 +874,13 @@ async function run(cluster) {
         baselineCacheMetadata.reason = BASELINE_CACHE_INVALID_REASON;
       }
     } finally {
+      if (baselinePool && typeof baselinePool.end === 'function') {
+        try {
+          await baselinePool.end();
+        } catch (_poolEndErr) {
+          // Best-effort cleanup.
+        }
+      }
       for (let i = baselineContainers.length - ONE; i >= ZERO; i -= ONE) {
         const containerId = baselineContainers[i]?.containerId;
         if (!containerId) {
@@ -642,8 +902,8 @@ async function run(cluster) {
 
   assert.ok(loadMetrics.total > ZERO,
     'System-under-test load run produced no operations');
-  assert.ok(baselineMetrics.tps > ZERO,
-    'Postgres baseline pgbench run produced zero TPS');
+  assert.ok(Number(baselineMetrics?.opsPerSec || ZERO) > ZERO,
+    'Postgres baseline load run produced zero throughput');
 
   const comparison = buildComparison(loadMetrics, baselineMetrics);
 
@@ -653,11 +913,16 @@ async function run(cluster) {
     loadMetrics,
     details: {
       benchmark: {
-        tool: 'pgbench',
-        workload: 'custom-mixed-insert-select',
-        durationSeconds: benchmarkConfig.durationSeconds,
-        clients: benchmarkConfig.clients,
+        tool: 'shared-load-generator',
+        workload: BENCHMARK_WORKLOAD_PROFILE,
+        durationSeconds: parseDurationToMs(benchmarkConfig.loadDuration) / 1000,
+        clients: benchmarkConfig.baselineLoadNodeCount,
         jobs: benchmarkConfig.jobs,
+        loadTargetOpsPerSec: benchmarkConfig.loadOpsPerSec,
+        loadDuration: benchmarkConfig.loadDuration,
+        loadMaxInFlight: benchmarkConfig.loadMaxInFlight,
+        operations: BENCHMARK_WORKLOAD_OPERATIONS,
+        tableName: benchmarkTableName,
       },
       baseline: {
         engine: 'postgres',
@@ -666,6 +931,8 @@ async function run(cluster) {
         replicaContainerIps: baselineReplicaContainerIps,
         replicationFactor: benchmarkConfig.replicationFactor,
         syncReplicaAcks: benchmarkConfig.syncReplicaAcks,
+        loadNodeCount: baselineLoadNodeCount,
+        poolMaxConnections: baselinePoolMaxConnections,
         cache: baselineCacheMetadata,
         metrics: baselineMetrics,
       },
@@ -678,6 +945,8 @@ async function run(cluster) {
           success: loadMetrics.success,
           failed: loadMetrics.failed,
           errors: loadMetrics.errors,
+          loadTargetOpsPerSec: benchmarkConfig.loadOpsPerSec,
+          loadMaxInFlight: benchmarkConfig.loadMaxInFlight,
         },
       },
       comparison,

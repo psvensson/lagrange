@@ -1,0 +1,26 @@
+{
+  "scenarioName": "partition-kill-heal-under-load",
+  "startedAt": 1771430952005,
+  "endedAt": 1771431104902,
+  "durationMs": 152897,
+  "files": {
+    "events": "test-output/.playback/report/partition-kill-heal-under-load/events.ndjson",
+    "samples": "test-output/.playback/report/partition-kill-heal-under-load/samples.ndjson",
+    "snapshots": "test-output/.playback/report/partition-kill-heal-under-load/snapshots.ndjson",
+    "manifest": "test-output/.playback/report/partition-kill-heal-under-load/playback-manifest.json",
+    "viewer": "test-output/.playback/report/partition-kill-heal-under-load/playback-viewer.html"
+  },
+  "counts": {
+    "events": 12,
+    "samples": 30,
+    "snapshots": 0
+  },
+  "warnings": [
+    {
+      "code": "stats-capture-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+      "message": "Failed to capture container stats for node 7493b0ab-a054-5fad-a91b-5e331db29304: (HTTP code 404) no such container - No such container: e45199f674839e63a13fa59b4c66bbbd96338b57d32ce9ba300edcce7fd3b82f ",
+      "timestamp": 1771430974010,
+      "details": null
+    }
+  ]
+}

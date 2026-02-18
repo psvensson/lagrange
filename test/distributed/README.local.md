@@ -97,6 +97,12 @@ Reports are written under:
 
 `.kiro/specs/raft-logic-migration/reports/`
 
+Benchmark tuning notes (in `benchmark` config block):
+
+1. `loadOpsPerSec`: target request rate for system-under-test load.
+2. `loadMaxInFlight`: in-flight cap for harness load generation. Keep this
+   high enough to avoid client-side throttling when latency increases.
+
 ## Artifacts
 
 By default, harness artifacts go under:

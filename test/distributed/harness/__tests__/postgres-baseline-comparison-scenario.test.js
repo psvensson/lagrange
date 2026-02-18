@@ -16,6 +16,9 @@ describe('postgres-baseline-comparison scenario', () => {
     const createdContainers = [];
     const stoppedContainers = [];
     const removedContainers = [];
+    const baselineSql = [];
+    const baselineLoadCalls = [];
+    let loadGeneratorCalls = 0;
 
     const provider = {
       createContainer: async (options) => {
@@ -37,19 +40,6 @@ describe('postgres-baseline-comparison scenario', () => {
           return {
             exitCode: 0,
             stdout: 'accepting connections',
-            stderr: '',
-          };
-        }
-        if (command.includes('pgbench -n')) {
-          return {
-            exitCode: 0,
-            stdout: [
-              'number of transactions actually processed: 600',
-              'number of failed transactions: 1',
-              'latency average = 12.500 ms',
-              'latency stddev = 2.000 ms',
-              'tps = 100.000000 (without initial connection time)',
-            ].join('\n'),
             stderr: '',
           };
         }
@@ -86,6 +76,7 @@ describe('postgres-baseline-comparison scenario', () => {
           jobs: 2,
           loadOpsPerSec: 80,
           loadDuration: '10s',
+          loadMaxInFlight: 96,
           tableName: 'benchmark_events',
           replicationFactor: 3,
           syncReplicaAcks: 1,
@@ -103,29 +94,67 @@ describe('postgres-baseline-comparison scenario', () => {
           nodeStartup: 1000,
         },
       },
+      _scenarioOverrides: {
+        postgresBaselineComparison: {
+          createPostgresPool: () => ({
+            query: async (sql) => {
+              baselineSql.push(String(sql));
+              return {rows: []};
+            },
+            end: async () => {},
+          }),
+          createLoadGenerator: (nodes, options) => {
+            const callIndex = loadGeneratorCalls++;
+            baselineLoadCalls.push({nodes, options, callIndex});
+            return {
+              start: () => ({
+                waitComplete: async () => (
+                  callIndex === 0 ?
+                    {
+                      total: 120,
+                      success: 118,
+                      failed: 2,
+                      errors: 2,
+                      opsPerSec: 84,
+                      latency: {
+                        p50: 3,
+                        p95: 7,
+                        p99: 15,
+                      },
+                    } :
+                    {
+                      total: 118,
+                      success: 118,
+                      failed: 0,
+                      errors: 0,
+                      opsPerSec: 100,
+                      latency: {
+                        avg: 12.5,
+                        p50: 6,
+                        p95: 11,
+                        p99: 14,
+                      },
+                    }
+                ),
+              }),
+            };
+          },
+        },
+      },
       _providers: [provider],
       _hostAssignment: [0],
       _networkName: 'test-net',
-      getNodes: () => [{id: 'seed-1', role: 'seed'}],
+      getNodes: () => [{
+        id: 'seed-1',
+        role: 'seed',
+        query: async (sql) => {
+          if (String(sql).includes('FROM partitions')) {
+            return {rows: [{partition_id: 'p1'}]};
+          }
+          return {rows: []};
+        },
+      }],
       waitForConvergence: async () => ({settledAfterMs: 1}),
-      startLoad: (options) => {
-        assert.equal(options.opsPerSec, 80);
-        assert.equal(options.duration, '10s');
-        return {
-          waitComplete: async () => ({
-            total: 120,
-            success: 118,
-            failed: 2,
-            errors: 2,
-            opsPerSec: 84,
-            latency: {
-              p50: 3,
-              p95: 7,
-              p99: 15,
-            },
-          }),
-        };
-      },
       assertConsistency: async () => {
         providerCalls.push('assertConsistency');
       },
@@ -136,7 +165,7 @@ describe('postgres-baseline-comparison scenario', () => {
     assert.ok(result.loadMetrics, 'scenario should return loadMetrics');
     assert.ok(result.details, 'scenario should return details payload');
     assert.equal(result.details.baseline.engine, 'postgres');
-    assert.equal(result.details.baseline.metrics.tps, 100);
+    assert.equal(result.details.baseline.metrics.opsPerSec, 100);
     assert.equal(result.details.comparison.sutOpsPerSec, 84);
     assert.equal(
       result.details.comparison.throughputRatioSutToBaseline,
@@ -173,8 +202,27 @@ describe('postgres-baseline-comparison scenario', () => {
       'scenario should export postgres binary path before invoking entrypoint',
     );
     assert.ok(
-      commandLog.some((command) => command.includes('pgbench -n')),
-      'scenario should run pgbench against baseline postgres',
+      baselineSql.some((sql) => sql.includes('CREATE TABLE IF NOT EXISTS')),
+      'scenario should prepare benchmark_events table on baseline',
+    );
+    assert.ok(
+      baselineLoadCalls.length === 2,
+      'scenario should run shared load generator for both sut and postgres baseline',
+    );
+    assert.equal(
+      baselineLoadCalls[0]?.options?.tableName,
+      'benchmark_events',
+      'sut shared load should target benchmark_events table',
+    );
+    assert.equal(
+      baselineLoadCalls[1]?.options?.tableName,
+      'benchmark_events',
+      'baseline shared load should target benchmark_events table',
+    );
+    assert.equal(
+      baselineLoadCalls[0]?.nodes?.[0]?.id,
+      'seed-1',
+      'sut load should run from seed node for stable routing',
     );
     assert.equal(
       createdContainers.length,
@@ -220,6 +268,7 @@ describe('postgres-baseline-comparison scenario', () => {
           clients: 16,
           jobs: 8,
           loadDuration: '45s',
+          loadMaxInFlight: 240,
           replicationFactor: 5,
           syncReplicaAcks: 2,
           cacheBaselineMetrics: false,
@@ -235,6 +284,8 @@ describe('postgres-baseline-comparison scenario', () => {
     assert.equal(resolved.clients, 16);
     assert.equal(resolved.jobs, 8);
     assert.equal(resolved.loadDuration, '45s');
+    assert.equal(resolved.loadMaxInFlight, 240);
+    assert.equal(resolved.baselineLoadNodeCount, 16);
     assert.equal(resolved.replicationFactor, 5);
     assert.equal(resolved.syncReplicaAcks, 2);
     assert.equal(resolved.cacheBaselineMetrics, false);
@@ -268,7 +319,9 @@ describe('postgres-baseline-comparison scenario', () => {
         join(tmpdir(), 'postgres-baseline-cache-test-'),
       );
       const createdContainers = [];
-      let pgbenchCalls = 0;
+      let baselineLoadCalls = 0;
+      let sutLoadCalls = 0;
+      const baselineSql = [];
       const provider = {
         createContainer: async (options) => {
           createdContainers.push(options);
@@ -286,20 +339,6 @@ describe('postgres-baseline-comparison scenario', () => {
           }
           if (command.includes('pg_stat_replication')) {
             return {exitCode: 0, stdout: '2\n', stderr: ''};
-          }
-          if (command.includes('pgbench -n')) {
-            pgbenchCalls++;
-            return {
-              exitCode: 0,
-              stdout: [
-                'number of transactions actually processed: 600',
-                'number of failed transactions: 1',
-                'latency average = 12.500 ms',
-                'latency stddev = 2.000 ms',
-                'tps = 100.000000 (without initial connection time)',
-              ].join('\n'),
-              stderr: '',
-            };
           }
           return {exitCode: 0, stdout: '', stderr: ''};
         },
@@ -336,21 +375,65 @@ describe('postgres-baseline-comparison scenario', () => {
             nodeStartup: 1000,
           },
         },
+        _scenarioOverrides: {
+          postgresBaselineComparison: {
+            createPostgresPool: () => ({
+              query: async (sql) => {
+                baselineSql.push(String(sql));
+                return {rows: []};
+              },
+              end: async () => {},
+            }),
+            createLoadGenerator: (nodes) => {
+              const firstNodeId = String(nodes?.[0]?.id || '');
+              const isBaselineLoad = firstNodeId.startsWith(
+                'postgres-baseline-load-node-',
+              );
+              if (isBaselineLoad) {
+                baselineLoadCalls++;
+              } else {
+                sutLoadCalls++;
+              }
+              return {
+                start: () => ({
+                  waitComplete: async () => (
+                    isBaselineLoad ?
+                      {
+                        total: 118,
+                        success: 118,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 100,
+                        latency: {avg: 12.5, p50: 6, p95: 11, p99: 14},
+                      } :
+                      {
+                        total: 120,
+                        success: 118,
+                        failed: 2,
+                        errors: 2,
+                        opsPerSec: 84,
+                        latency: {p50: 3, p95: 7, p99: 15},
+                      }
+                  ),
+                }),
+              };
+            },
+          },
+        },
         _providers: [provider],
         _hostAssignment: [0],
         _networkName: 'test-net',
-        getNodes: () => [{id: 'seed-1', role: 'seed'}],
+        getNodes: () => [{
+          id: 'seed-1',
+          role: 'seed',
+          query: async (sql) => {
+            if (String(sql).includes('FROM partitions')) {
+              return {rows: [{partition_id: 'p1'}]};
+            }
+            return {rows: []};
+          },
+        }],
         waitForConvergence: async () => ({settledAfterMs: 1}),
-        startLoad: () => ({
-          waitComplete: async () => ({
-            total: 120,
-            success: 118,
-            failed: 2,
-            errors: 2,
-            opsPerSec: 84,
-            latency: {p50: 3, p95: 7, p99: 15},
-          }),
-        }),
         assertConsistency: async () => {},
       };
 
@@ -359,13 +442,19 @@ describe('postgres-baseline-comparison scenario', () => {
         assert.equal(first.details.baseline.cache.hit, false);
         assert.equal(first.details.baseline.cache.reason, 'cache-stored');
         assert.equal(createdContainers.length, 3);
-        assert.equal(pgbenchCalls, 1);
+        assert.equal(baselineLoadCalls, 1);
+        assert.equal(sutLoadCalls, 1);
+        assert.ok(
+          baselineSql.some((sql) => sql.includes('CREATE TABLE IF NOT EXISTS')),
+          'scenario should prepare baseline benchmark table before load',
+        );
 
         const second = await run(cluster);
         assert.equal(second.details.baseline.cache.hit, true);
         assert.equal(second.details.baseline.cache.reason, 'cache-hit');
         assert.equal(createdContainers.length, 3);
-        assert.equal(pgbenchCalls, 1);
+        assert.equal(baselineLoadCalls, 1);
+        assert.equal(sutLoadCalls, 2);
       } finally {
         await rm(outputDir, {recursive: true, force: true});
       }

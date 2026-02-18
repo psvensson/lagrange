@@ -122,6 +122,7 @@ function mergeWithDefaults(partial = {}) {
       jobs: BENCHMARK_DEFAULTS.jobs,
       loadOpsPerSec: BENCHMARK_DEFAULTS.loadOpsPerSec,
       loadDuration: BENCHMARK_DEFAULTS.loadDuration,
+      loadMaxInFlight: BENCHMARK_DEFAULTS.loadMaxInFlight,
       readyTimeoutMs: BENCHMARK_DEFAULTS.readyTimeoutMs,
       readyPollIntervalMs: BENCHMARK_DEFAULTS.readyPollIntervalMs,
       tableName: BENCHMARK_DEFAULTS.tableName,

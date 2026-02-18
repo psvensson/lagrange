@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "key": "v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638",
+  "signature": {
+    "schemaVersion": 1,
+    "engine": "postgres",
+    "machine": {
+      "platform": "linux",
+      "arch": "x64",
+      "hostname": "peter-System-Product-Name",
+      "cpuCount": 20,
+      "cpuModel": "13th Gen Intel(R) Core(TM) i5-13600KF"
+    },
+    "benchmark": {
+      "baselineImage": "postgres:16",
+      "user": "benchmark",
+      "database": "benchmark",
+      "port": 5432,
+      "durationSeconds": 30,
+      "clients": 8,
+      "jobs": 4,
+      "tableName": "benchmark_events",
+      "replicationFactor": 3,
+      "syncReplicaAcks": 1
+    }
+  },
+  "cachedAt": "2026-02-18T15:40:17.381Z",
+  "metrics": {
+    "tps": 4276.371362,
+    "latencyAverageMs": 1.87,
+    "latencyStddevMs": 0.743,
+    "transactionsProcessed": 128285,
+    "failedTransactions": 0,
+    "raw": "pgbench (16.9 (Debian 16.9-1.pgdg120+1))\ntransaction type: /tmp/ddb-pgbench-workload.sql\nscaling factor: 1\nquery mode: simple\nnumber of clients: 8\nnumber of threads: 4\nmaximum number of tries: 1\nduration: 30 s\nnumber of transactions actually processed: 128285\nnumber of failed transactions: 0 (0.000%)\nlatency average = 1.870 ms\nlatency stddev = 0.743 ms\ninitial connection time = 2.597 ms\ntps = 4276.371362 (without initial connection time)\n",
+    "durationSeconds": 30,
+    "clients": 8,
+    "jobs": 4,
+    "host": "127.0.0.1",
+    "port": 5432
+  }
+}

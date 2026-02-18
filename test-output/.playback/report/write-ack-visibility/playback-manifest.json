@@ -1,0 +1,19 @@
+{
+  "scenarioName": "write-ack-visibility",
+  "startedAt": 1771431642008,
+  "endedAt": 1771431648386,
+  "durationMs": 6378,
+  "files": {
+    "events": "test-output/.playback/report/write-ack-visibility/events.ndjson",
+    "samples": "test-output/.playback/report/write-ack-visibility/samples.ndjson",
+    "snapshots": "test-output/.playback/report/write-ack-visibility/snapshots.ndjson",
+    "manifest": "test-output/.playback/report/write-ack-visibility/playback-manifest.json",
+    "viewer": "test-output/.playback/report/write-ack-visibility/playback-viewer.html"
+  },
+  "counts": {
+    "events": 8,
+    "samples": 0,
+    "snapshots": 0
+  },
+  "warnings": []
+}

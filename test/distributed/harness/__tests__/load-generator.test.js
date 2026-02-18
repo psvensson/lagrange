@@ -227,6 +227,28 @@ test('waitComplete resolves after duration with metrics', async () => {
   }
 });
 
+test('strict pacing does not exceed configured rate target', async () => {
+  const nodes = [createMockNode('n1')];
+  const opsPerSec = 100;
+  const durationMs = 500;
+  const expectedMaxTotal = Math.floor((opsPerSec * durationMs) / MS_PER_SECOND);
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec,
+    duration: durationMs,
+    maxInFlight: 200,
+  });
+  const run = gen.start();
+  try {
+    const metrics = await run.waitComplete();
+    assert.ok(
+      metrics.total <= expectedMaxTotal,
+      `expected total <= ${expectedMaxTotal}, got ${metrics.total}`,
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
 test('load dispatch is spread across nodes', async () => {
   const calls = {
     n1: ZERO,
@@ -294,6 +316,22 @@ test('cancel stops the load run immediately', async () => {
     const metrics = await run.waitComplete();
     assert.ok(metrics, 'waitComplete should resolve after cancel');
     assert.strictEqual(typeof metrics.total, 'number');
+  } finally {
+    run.cancel();
+  }
+});
+
+test('configured maxInFlight is forwarded to load run', async () => {
+  const nodes = [createMockNode('n1'), createMockNode('n2')];
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 20,
+    duration: 100,
+    maxInFlight: 17,
+  });
+  const run = gen.start();
+  try {
+    assert.strictEqual(run._maxInFlight, 17);
+    await run.waitComplete();
   } finally {
     run.cancel();
   }

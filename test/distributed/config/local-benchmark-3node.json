@@ -25,6 +25,7 @@
     "jobs": 4,
     "loadOpsPerSec": 120,
     "loadDuration": "30s",
+    "loadMaxInFlight": 128,
     "readyTimeoutMs": 30000,
     "readyPollIntervalMs": 500,
     "tableName": "benchmark_events",

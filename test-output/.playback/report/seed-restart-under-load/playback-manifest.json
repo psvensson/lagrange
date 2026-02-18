@@ -1,0 +1,26 @@
+{
+  "scenarioName": "seed-restart-under-load",
+  "startedAt": 1771431185856,
+  "endedAt": 1771431332227,
+  "durationMs": 146371,
+  "files": {
+    "events": "test-output/.playback/report/seed-restart-under-load/events.ndjson",
+    "samples": "test-output/.playback/report/seed-restart-under-load/samples.ndjson",
+    "snapshots": "test-output/.playback/report/seed-restart-under-load/snapshots.ndjson",
+    "manifest": "test-output/.playback/report/seed-restart-under-load/playback-manifest.json",
+    "viewer": "test-output/.playback/report/seed-restart-under-load/playback-viewer.html"
+  },
+  "counts": {
+    "events": 12,
+    "samples": 30,
+    "snapshots": 0
+  },
+  "warnings": [
+    {
+      "code": "stats-capture-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+      "message": "Failed to capture container stats for node 7493b0ab-a054-5fad-a91b-5e331db29304: (HTTP code 404) no such container - No such container: 012609f3ff14226a7932f4d7cffc8c172d7eebcd8f6d38f88015d9d47fe15b00 ",
+      "timestamp": 1771431201868,
+      "details": null
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{"timestamp":1771430682031,"type":"cluster.start","scope":"cluster","entityId":"cluster","details":{"scenarioName":"examples-catalog"}}
+{"timestamp":1771430682031,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.creating","networkName":"ddb-test-net-reuse-local-5"}}
+{"timestamp":1771430682033,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.created","networkName":"ddb-test-net-reuse-local-5","networkId":"b49ffea222a02f8aa2bcfd22a773c9127672796e50b394de3135ca83bc77e5a7"}}
+{"timestamp":1771430682033,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.starting","nodeId":"7493b0ab-a054-5fad-a91b-5e331db29304"}}
+{"timestamp":1771430692379,"type":"node.created","scope":"node","entityId":"7493b0ab-a054-5fad-a91b-5e331db29304","details":{"role":"seed","ip":"172.19.0.2","containerId":"c633340cdbd061cd74b259625ddee2bb89042a6e0cf8b386fbbca8c74085b44e"}}
+{"timestamp":1771430692379,"type":"node.started","scope":"node","entityId":"7493b0ab-a054-5fad-a91b-5e331db29304","details":{"role":"seed"}}
+{"timestamp":1771430692379,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.bootstrap.waiting","nodeId":"7493b0ab-a054-5fad-a91b-5e331db29304"}}
+{"timestamp":1771430716051,"type":"capture.warning","scope":"capture","entityId":"stats-capture-failed-7493b0ab-a054-5fad-a91b-5e331db29304","details":{"message":"Failed to capture container stats for node 7493b0ab-a054-5fad-a91b-5e331db29304: (HTTP code 404) no such container - No such container: c633340cdbd061cd74b259625ddee2bb89042a6e0cf8b386fbbca8c74085b44e "}}
+{"timestamp":1771430722425,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.starting","nodeCount":1}}
+{"timestamp":1771430781553,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.complete","nodeCount":1}}

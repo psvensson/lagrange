@@ -11,6 +11,7 @@ const DURATION_SECONDS_SUFFIX = 's';
 const DURATION_MINUTES_SUFFIX = 'm';
 const SECONDS_PER_MINUTE = 60;
 const MS_PER_SECOND = 1000;
+const MIN_DISPATCH_DELAY_MS = 1;
 const PERCENTILE_P50 = 0.5;
 const PERCENTILE_P95 = 0.95;
 const PERCENTILE_P99 = 0.99;
@@ -18,20 +19,32 @@ const ZERO = 0;
 const ONE = 1;
 const IN_FLIGHT_PER_NODE = 2;
 const DRAIN_WAIT_MS = 10;
+const MAX_DISPATCHES_PER_TICK = 64;
 
 const LOAD_TABLE_NAME = 'logs';
+const LOAD_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
 const LOAD_NODE_ID = 'load-generator';
 const LOG_LEVEL_INFO = 'info';
 const INSERT_OP = 'INSERT';
 const SELECT_OP = 'SELECT';
 const UPDATE_OP = 'UPDATE';
 const DELETE_OP = 'DELETE';
+const WORKLOAD_PROFILE_DEFAULT = 'default';
+const WORKLOAD_PROFILE_BENCHMARK_EVENTS = 'benchmark_events_mixed';
+const BENCHMARK_PAYLOAD_MODULO = 100000;
+const BENCHMARK_EVENT_ID_PREFIX = 'bench-';
+const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 const DEFAULT_OPERATIONS = Object.freeze([
   INSERT_OP,
   SELECT_OP,
   UPDATE_OP,
   DELETE_OP,
+]);
+
+const BENCHMARK_OPERATIONS = Object.freeze([
+  INSERT_OP,
+  SELECT_OP,
 ]);
 
 /**
@@ -53,30 +66,74 @@ function parseDuration(duration) {
   return value;
 }
 
+function normalizeTableName(tableName, fallback = LOAD_TABLE_NAME) {
+  const candidate = String(tableName || fallback).trim();
+  if (!IDENTIFIER_PATTERN.test(candidate)) {
+    return fallback;
+  }
+  return candidate;
+}
+
 /**
  * Build a SQL statement for the given operation type and counter.
  * @param {string} operation - One of INSERT, SELECT, UPDATE, DELETE
  * @param {number} counter - Monotonic operation counter
+ * @param {Object} [options]
+ * @param {string} [options.tableName]
+ * @param {string} [options.workloadProfile]
  * @returns {string} SQL statement
  */
-function buildSqlStatement(operation, counter) {
+function buildSqlStatement(operation, counter, options = {}) {
+  const workloadProfile = String(
+    options.workloadProfile || WORKLOAD_PROFILE_DEFAULT,
+  );
+  const tableName = normalizeTableName(
+    options.tableName,
+    workloadProfile === WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
+      LOAD_TABLE_BENCHMARK_EVENTS :
+      LOAD_TABLE_NAME,
+  );
+  if (workloadProfile === WORKLOAD_PROFILE_BENCHMARK_EVENTS) {
+    const eventId = BENCHMARK_EVENT_ID_PREFIX + counter;
+    const payload = counter % BENCHMARK_PAYLOAD_MODULO;
+    const timestamp = Date.now();
+    switch (operation) {
+    case INSERT_OP:
+      return `INSERT INTO ${tableName} ` +
+        '(event_id, payload, created_at) VALUES (' +
+        `'${eventId}', ${payload}, ${timestamp})`;
+    case SELECT_OP:
+      return `SELECT count(*) FROM ${tableName} ` +
+        `WHERE payload = ${payload}`;
+    case UPDATE_OP:
+      return `UPDATE ${tableName} ` +
+        `SET created_at = ${timestamp} ` +
+        `WHERE event_id = '${eventId}'`;
+    case DELETE_OP:
+      return `DELETE FROM ${tableName} ` +
+        `WHERE event_id = '${eventId}'`;
+    default:
+      return 'SELECT 1';
+    }
+  }
+
   const logId = `load-${counter}`;
   const timestamp = Date.now();
   switch (operation) {
   case INSERT_OP:
-    return `INSERT INTO ${LOAD_TABLE_NAME} ` +
-      `(log_id, timestamp, level, node_id, message, created_at) VALUES (` +
+    return `INSERT INTO ${tableName} ` +
+      '(log_id, timestamp, level, node_id, message, created_at) VALUES (' +
       `'${logId}', ${timestamp}, '${LOG_LEVEL_INFO}', ` +
       `'${LOAD_NODE_ID}', 'load-${counter}', ${timestamp})`;
   case SELECT_OP:
-    return `SELECT * FROM ${LOAD_TABLE_NAME} ` +
+    return `SELECT * FROM ${tableName} ` +
       `WHERE log_id = '${logId}' LIMIT 1`;
   case UPDATE_OP:
-    return `UPDATE ${LOAD_TABLE_NAME} ` +
+    return `UPDATE ${tableName} ` +
       `SET message = 'updated-${counter}' ` +
       `WHERE log_id = '${logId}'`;
   case DELETE_OP:
-    return `DELETE FROM ${LOAD_TABLE_NAME} ` +
+    return `DELETE FROM ${tableName} ` +
       `WHERE log_id = '${logId}'`;
   default:
     return 'SELECT 1';
@@ -118,6 +175,9 @@ function computeMetrics(
     failed: failedCount,
     errors: errorCount,
     latency: {
+      avg: sorted.length > ZERO ?
+        sorted.reduce((sum, value) => sum + value, ZERO) / sorted.length :
+        ZERO,
       p50: percentile(sorted, PERCENTILE_P50),
       p95: percentile(sorted, PERCENTILE_P95),
       p99: percentile(sorted, PERCENTILE_P99),
@@ -137,6 +197,9 @@ class LoadRun {
    * @param {number} options.opsPerSec - Target operations per second
    * @param {number} options.durationMs - Duration in milliseconds
    * @param {Array<string>} options.operations - SQL operation types
+   * @param {number} [options.maxInFlight] - Optional in-flight cap
+   * @param {string} [options.tableName]
+   * @param {string} [options.workloadProfile]
    */
   constructor(nodes, options) {
     this._nodes = [...nodes];
@@ -144,8 +207,18 @@ class LoadRun {
     this._opsPerSec = options.opsPerSec;
     this._durationMs = options.durationMs;
     this._operations = options.operations;
+    this._tableName = options.tableName || LOAD_TABLE_NAME;
+    this._workloadProfile =
+      options.workloadProfile || WORKLOAD_PROFILE_DEFAULT;
     this._maxInFlight = options.maxInFlight ||
       this._availableNodes.length * IN_FLIGHT_PER_NODE;
+    this._dispatchIntervalMs = this._opsPerSec > ZERO ?
+      MS_PER_SECOND / this._opsPerSec :
+      MS_PER_SECOND;
+    this._targetOperationCount = Math.max(
+      ZERO,
+      Math.floor((this._durationMs * this._opsPerSec) / MS_PER_SECOND),
+    );
 
     this._latencies = [];
     this._successCount = ZERO;
@@ -156,7 +229,9 @@ class LoadRun {
     this._inFlight = ZERO;
     this._cancelled = false;
     this._startTime = null;
-    this._intervalId = null;
+    this._dispatchTimerId = null;
+    this._nextDispatchAtMs = null;
+    this._schedulingStopped = false;
     this._durationTimeoutId = null;
     this._completePromise = null;
     this._resolveComplete = null;
@@ -167,40 +242,103 @@ class LoadRun {
    */
   _start() {
     this._startTime = Date.now();
-    const intervalMs = MS_PER_SECOND / this._opsPerSec;
 
     this._completePromise = new Promise((resolve) => {
       this._resolveComplete = resolve;
     });
 
-    this._intervalId = setInterval(() => {
-      this._tick();
-    }, intervalMs);
+    this._nextDispatchAtMs = this._startTime;
+    this._scheduleNextDispatch(MIN_DISPATCH_DELAY_MS);
 
     this._durationTimeoutId = setTimeout(() => {
+      this._schedulingStopped = true;
+      this._clearDispatchTimer();
       this._finish();
     }, this._durationMs);
   }
 
   /**
-   * Execute one operation tick.
+   * Schedule the next dispatch timer.
+   * @param {number} delayMs
+   * @private
    */
-  _tick() {
-    if (this._cancelled) {
+  _scheduleNextDispatch(delayMs) {
+    if (this._cancelled || this._schedulingStopped) {
       return;
     }
-    if (this._inFlight >= this._maxInFlight) {
-      return;
-    }
-    const opIndex = this._counter % this._operations.length;
-    const operation = this._operations[opIndex];
-    const sql = buildSqlStatement(operation, this._counter);
-    this._counter++;
+    const boundedDelay = Math.max(MIN_DISPATCH_DELAY_MS, Math.ceil(delayMs));
+    this._dispatchTimerId = setTimeout(() => {
+      this._dispatchTimerId = null;
+      this._dispatchTick();
+    }, boundedDelay);
+  }
 
-    this._inFlight++;
-    this._executeWithFailover(sql).finally(() => {
-      this._inFlight = Math.max(ZERO, this._inFlight - ONE);
-    });
+  /**
+   * Clear the dispatch timer.
+   * @private
+   */
+  _clearDispatchTimer() {
+    if (this._dispatchTimerId !== null) {
+      clearTimeout(this._dispatchTimerId);
+      this._dispatchTimerId = null;
+    }
+  }
+
+  /**
+   * Dispatch one scheduled operation tick with strict pacing.
+   * @private
+   */
+  _dispatchTick() {
+    if (this._cancelled || this._schedulingStopped) {
+      return;
+    }
+    if (this._counter >= this._targetOperationCount) {
+      this._schedulingStopped = true;
+      this._clearDispatchTimer();
+      return;
+    }
+
+    const now = Date.now();
+    const nextDispatchAtMs = Number(this._nextDispatchAtMs);
+    if (Number.isFinite(nextDispatchAtMs) && now < nextDispatchAtMs) {
+      this._scheduleNextDispatch(nextDispatchAtMs - now);
+      return;
+    }
+
+    let dispatchedThisTick = ZERO;
+    while (
+      Number.isFinite(this._nextDispatchAtMs) &&
+      now >= this._nextDispatchAtMs &&
+      this._inFlight < this._maxInFlight &&
+      this._counter < this._targetOperationCount &&
+      dispatchedThisTick < MAX_DISPATCHES_PER_TICK
+    ) {
+      const opIndex = this._counter % this._operations.length;
+      const operation = this._operations[opIndex];
+      const sql = buildSqlStatement(operation, this._counter, {
+        tableName: this._tableName,
+        workloadProfile: this._workloadProfile,
+      });
+      this._counter++;
+
+      this._inFlight++;
+      this._executeWithFailover(sql).finally(() => {
+        this._inFlight = Math.max(ZERO, this._inFlight - ONE);
+      });
+      this._nextDispatchAtMs += this._dispatchIntervalMs;
+      dispatchedThisTick++;
+    }
+
+    if (this._counter >= this._targetOperationCount) {
+      this._schedulingStopped = true;
+      this._clearDispatchTimer();
+      return;
+    }
+    const delayMs = Math.max(
+      MIN_DISPATCH_DELAY_MS,
+      this._nextDispatchAtMs - Date.now(),
+    );
+    this._scheduleNextDispatch(delayMs);
   }
 
   /**
@@ -246,10 +384,7 @@ class LoadRun {
    * Finish the load run.
    */
   _finish() {
-    if (this._intervalId !== null) {
-      clearInterval(this._intervalId);
-      this._intervalId = null;
-    }
+    this._clearDispatchTimer();
     if (this._durationTimeoutId !== null) {
       clearTimeout(this._durationTimeoutId);
       this._durationTimeoutId = null;
@@ -297,6 +432,7 @@ class LoadRun {
    */
   cancel() {
     this._cancelled = true;
+    this._schedulingStopped = true;
     this._finish();
   }
 }
@@ -312,6 +448,9 @@ class LoadGenerator {
    * @param {number} [options.opsPerSec] - Target ops/sec
    * @param {string|number} [options.duration] - Duration ('30s', '1m', ms)
    * @param {Array<string>} [options.operations] - SQL operation types
+   * @param {number} [options.maxInFlight] - Optional in-flight cap
+   * @param {string} [options.tableName] - Target table name
+   * @param {string} [options.workloadProfile] - SQL workload profile
    */
   constructor(nodes, options = {}) {
     this._nodes = nodes;
@@ -319,7 +458,23 @@ class LoadGenerator {
       LOAD_DEFAULTS.defaultOpsPerSec;
     this._duration = options.duration ||
       LOAD_DEFAULTS.defaultDuration;
-    this._operations = options.operations || DEFAULT_OPERATIONS;
+    this._workloadProfile =
+      options.workloadProfile || WORKLOAD_PROFILE_DEFAULT;
+    const defaultOperations = this._workloadProfile ===
+      WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
+      BENCHMARK_OPERATIONS :
+      DEFAULT_OPERATIONS;
+    this._operations = options.operations || defaultOperations;
+    this._maxInFlight = Number.isInteger(options.maxInFlight) &&
+      options.maxInFlight > ZERO ?
+      options.maxInFlight :
+      null;
+    this._tableName = normalizeTableName(
+      options.tableName,
+      this._workloadProfile === WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
+        LOAD_TABLE_BENCHMARK_EVENTS :
+        LOAD_TABLE_NAME,
+    );
   }
 
   /**
@@ -332,6 +487,11 @@ class LoadGenerator {
       opsPerSec: this._opsPerSec,
       durationMs,
       operations: this._operations,
+      tableName: this._tableName,
+      workloadProfile: this._workloadProfile,
+      ...(this._maxInFlight !== null ?
+        {maxInFlight: this._maxInFlight} :
+        {}),
     });
     run._start();
     return run;

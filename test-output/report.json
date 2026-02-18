@@ -1,27 +1,1831 @@
 {
-  "timestamp": "2026-02-14T19:26:38.402Z",
+  "timestamp": "2026-02-18T16:20:48.389Z",
   "summary": {
-    "total": 1,
+    "total": 17,
     "passed": 1,
-    "failed": 0,
-    "duration": 33722
+    "failed": 16,
+    "duration": 654837
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 10,
+      "comparableGroupCount": 1,
+      "groups": [
+        {
+          "similarityKey": "postgres-baseline-comparison|{\"workload\":\"custom-mixed-insert-select\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+          "scenario": "postgres-baseline-comparison",
+          "observationCount": 2,
+          "baselineClusterSize": 3,
+          "targetClusterSize": 5,
+          "baselineOpsPerSec": 70.02994701681641,
+          "targetOpsPerSec": 35.78766598178417,
+          "baselineOpsPerSecPerNode": 23.343315672272137,
+          "targetOpsPerSecPerNode": 7.157533196356835,
+          "observedThroughputScale": 0.5110337435096219,
+          "expectedThroughputScale": 1.6666666666666667,
+          "throughputScaleEfficiency": 0.30662024610577315,
+          "p99LatencyScale": 3.5385714285714287,
+          "baselineReportTimestamp": "2026-02-17T17:38:38.310Z",
+          "baselineReportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/postgres-baseline-size3-current-20260217.report.json",
+          "targetReportTimestamp": "2026-02-17T18:14:30.153Z",
+          "targetReportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/postgres-baseline-size5-current-20260217-rerun3.report.json"
+        }
+      ],
+      "topOpportunities": [
+        {
+          "similarityKey": "postgres-baseline-comparison|{\"workload\":\"custom-mixed-insert-select\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+          "scenario": "postgres-baseline-comparison",
+          "observationCount": 2,
+          "baselineClusterSize": 3,
+          "targetClusterSize": 5,
+          "baselineOpsPerSec": 70.02994701681641,
+          "targetOpsPerSec": 35.78766598178417,
+          "baselineOpsPerSecPerNode": 23.343315672272137,
+          "targetOpsPerSecPerNode": 7.157533196356835,
+          "observedThroughputScale": 0.5110337435096219,
+          "expectedThroughputScale": 1.6666666666666667,
+          "throughputScaleEfficiency": 0.30662024610577315,
+          "p99LatencyScale": 3.5385714285714287,
+          "baselineReportTimestamp": "2026-02-17T17:38:38.310Z",
+          "baselineReportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/postgres-baseline-size3-current-20260217.report.json",
+          "targetReportTimestamp": "2026-02-17T18:14:30.153Z",
+          "targetReportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/postgres-baseline-size5-current-20260217-rerun3.report.json"
+        }
+      ]
+    },
+    "scenarios": [
+      {
+        "scenario": "admin-query-smoke",
+        "similarityKey": "admin-query-smoke|default",
+        "current": {
+          "passed": true,
+          "clusterSize": 5,
+          "durationMs": 34606,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "examples-catalog",
+        "similarityKey": "examples-catalog|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 40394,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "network-partition-split-brain",
+        "similarityKey": "network-partition-split-brain|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 40854,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "node-failure-rebalance",
+        "similarityKey": "node-failure-rebalance|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 64491,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "node-join-under-load",
+        "similarityKey": "node-join-under-load|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 38699,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "partition-kill-heal-under-load",
+        "similarityKey": "partition-kill-heal-under-load|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 40868,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 40421,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-17T12:11:44.589Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/postgres-baseline-size3-20260217-implemented2.report.json",
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 57584,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": true,
+          "durationMs": -17163,
+          "durationRatio": -0.2980515420950264,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "rolling-restart",
+        "similarityKey": "rolling-restart|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 40417,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "seed-restart-under-load",
+        "similarityKey": "seed-restart-under-load|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 40876,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "seven-node-load-during-partitioning",
+        "similarityKey": "seven-node-load-during-partitioning|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 40392,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "seven-node-read-write-load-distribution",
+        "similarityKey": "seven-node-read-write-load-distribution|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 40457,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "seven-node-table-partition-distribution",
+        "similarityKey": "seven-node-table-partition-distribution|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 40371,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "sustained-write-throughput",
+        "similarityKey": "sustained-write-throughput|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 40885,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "table-distribution-helpers",
+        "similarityKey": "table-distribution-helpers|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 31461,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "three-node-seed-rebalance",
+        "similarityKey": "three-node-seed-rebalance|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 40406,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "wasm-service-failover",
+        "similarityKey": "wasm-service-failover|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 32861,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      },
+      {
+        "scenario": "write-ack-visibility",
+        "similarityKey": "write-ack-visibility|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 6378,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      }
+    ]
   },
   "scenarios": [
     {
-      "scenario": "three-node-seed-rebalance",
+      "scenario": "admin-query-smoke",
       "passed": true,
-      "duration": 33722,
-      "startedAt": "2026-02-14T19:25:33.472Z",
+      "duration": 34606,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:04:07.132Z",
       "convergenceTiming": null,
       "analysisSummary": null,
       "error": null,
       "stackTrace": null,
       "logs": null,
       "playback": {
+        "scenarioName": "admin-query-smoke",
+        "startedAt": 1771430647132,
+        "endedAt": 1771430682026,
+        "durationMs": 34894,
+        "files": {
+          "events": "test-output/.playback/report/admin-query-smoke/events.ndjson",
+          "samples": "test-output/.playback/report/admin-query-smoke/samples.ndjson",
+          "snapshots": "test-output/.playback/report/admin-query-smoke/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/admin-query-smoke/playback-manifest.json",
+          "viewer": "test-output/.playback/report/admin-query-smoke/playback-viewer.html"
+        },
+        "counts": {
+          "events": 33,
+          "samples": 57,
+          "snapshots": 5
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 57,
+        "nodeCount": 5,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 8,
+            "postWarmupSampleCount": 0
+          },
+          {
+            "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 10,
+            "postWarmupSampleCount": 0
+          },
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 23,
+            "postWarmupSampleCount": 0
+          },
+          {
+            "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 8,
+            "postWarmupSampleCount": 0
+          },
+          {
+            "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 8,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/admin-query-smoke/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": {
+        "queries": 2
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "examples-catalog",
+      "passed": false,
+      "duration": 40394,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:04:42.030Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "examples-catalog",
+        "startedAt": 1771430682031,
+        "endedAt": 1771430781553,
+        "durationMs": 99522,
+        "files": {
+          "events": "test-output/.playback/report/examples-catalog/events.ndjson",
+          "samples": "test-output/.playback/report/examples-catalog/samples.ndjson",
+          "snapshots": "test-output/.playback/report/examples-catalog/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/examples-catalog/playback-manifest.json",
+          "viewer": "test-output/.playback/report/examples-catalog/playback-viewer.html"
+        },
+        "counts": {
+          "events": 14,
+          "samples": 30,
+          "snapshots": 0
+        },
+        "warnings": [
+          {
+            "code": "stats-capture-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+            "message": "Failed to capture container stats for node 7493b0ab-a054-5fad-a91b-5e331db29304: (HTTP code 404) no such container - No such container: c633340cdbd061cd74b259625ddee2bb89042a6e0cf8b386fbbca8c74085b44e ",
+            "timestamp": 1771430716051,
+            "details": null
+          },
+          {
+            "code": "service-query-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+            "message": "Failed to query services on node 7493b0ab-a054-5fad-a91b-5e331db29304: Admin API query connection closed for node 7493b0ab-a054-5fad-a91b-5e331db29304",
+            "timestamp": 1771430781553,
+            "details": {
+              "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+              "error": "Admin API query connection closed for node 7493b0ab-a054-5fad-a91b-5e331db29304",
+              "reachability": {
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "timestamp": 1771430715049,
+                "reachable": true,
+                "adminReady": true,
+                "reachableBy": "admin_ws",
+                "bootstrapHealth": {
+                  "attempted": true,
+                  "ok": false,
+                  "statusCode": -1,
+                  "error": "http_status_-1",
+                  "url": "http://172.19.0.2:8080/health",
+                  "endpoint": null,
+                  "query": null
+                },
+                "adminHealth": {
+                  "attempted": true,
+                  "ok": false,
+                  "statusCode": -1,
+                  "error": "http_status_-1",
+                  "url": "http://172.19.0.2:8081/health",
+                  "endpoint": null,
+                  "query": null
+                },
+                "adminWs": {
+                  "attempted": true,
+                  "ok": true,
+                  "statusCode": null,
+                  "error": null,
+                  "url": null,
+                  "endpoint": "ws://172.19.0.2:8081/api/admin/stream",
+                  "query": null
+                },
+                "sqlProbe": {
+                  "attempted": false,
+                  "ok": false,
+                  "statusCode": null,
+                  "error": null,
+                  "url": null,
+                  "endpoint": null,
+                  "query": "SELECT node_id FROM nodes LIMIT 1"
+                },
+                "lastError": null
+              }
+            }
+          },
+          {
+            "code": "topology-capture-failed",
+            "message": "Failed to capture topology snapshot: Admin API query connection closed for node 7493b0ab-a054-5fad-a91b-5e331db29304",
+            "timestamp": 1771430781553,
+            "details": {
+              "anchorNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+              "error": "Admin API query connection closed for node 7493b0ab-a054-5fad-a91b-5e331db29304",
+              "reachability": [
+                {
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "timestamp": 1771430715049,
+                  "reachable": true,
+                  "adminReady": true,
+                  "reachableBy": "admin_ws",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": -1,
+                    "error": "http_status_-1",
+                    "url": "http://172.19.0.2:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": -1,
+                    "error": "http_status_-1",
+                    "url": "http://172.19.0.2:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.19.0.2:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 23,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 23,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/examples-catalog/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "network-partition-split-brain",
+      "passed": false,
+      "duration": 40854,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:06:21.556Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "network-partition-split-brain",
+        "startedAt": 1771430781556,
+        "endedAt": 1771430848130,
+        "durationMs": 66574,
+        "files": {
+          "events": "test-output/.playback/report/network-partition-split-brain/events.ndjson",
+          "samples": "test-output/.playback/report/network-partition-split-brain/samples.ndjson",
+          "snapshots": "test-output/.playback/report/network-partition-split-brain/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/network-partition-split-brain/playback-manifest.json",
+          "viewer": "test-output/.playback/report/network-partition-split-brain/playback-viewer.html"
+        },
+        "counts": {
+          "events": 12,
+          "samples": 30,
+          "snapshots": 0
+        },
+        "warnings": [
+          {
+            "code": "stats-capture-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+            "message": "Failed to capture container stats for node 7493b0ab-a054-5fad-a91b-5e331db29304: (HTTP code 404) no such container - No such container: 1412e206bff07a4ea07bff0a5e319c24dda9e6fe2a034536e560a009ac8142c7 ",
+            "timestamp": 1771430815574,
+            "details": null
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 23,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 23,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/network-partition-split-brain/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "node-failure-rebalance",
+      "passed": false,
+      "duration": 64491,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:07:28.132Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Not all nodes reached ACTIVE state within 30000ms",
+      "stackTrace": "Error: Not all nodes reached ACTIVE state within 30000ms\n    at Cluster._waitForAllActive (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1776:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1037:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "node-failure-rebalance",
+        "startedAt": 1771430848132,
+        "endedAt": 1771430912909,
+        "durationMs": 64777,
+        "files": {
+          "events": "test-output/.playback/report/node-failure-rebalance/events.ndjson",
+          "samples": "test-output/.playback/report/node-failure-rebalance/samples.ndjson",
+          "snapshots": "test-output/.playback/report/node-failure-rebalance/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/node-failure-rebalance/playback-manifest.json",
+          "viewer": "test-output/.playback/report/node-failure-rebalance/playback-viewer.html"
+        },
+        "counts": {
+          "events": 29,
+          "samples": 225,
+          "snapshots": 0
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 225,
+        "nodeCount": 5,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "analysis-window-too-short",
+            "sampleCount": 43,
+            "postWarmupSampleCount": 11,
+            "analysisWindowMs": 10018
+          },
+          {
+            "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "analysis-window-too-short",
+            "sampleCount": 44,
+            "postWarmupSampleCount": 14,
+            "analysisWindowMs": 13023
+          },
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "analysis-window-too-short",
+            "sampleCount": 52,
+            "postWarmupSampleCount": 22,
+            "analysisWindowMs": 21004
+          },
+          {
+            "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 43,
+            "postWarmupSampleCount": 7
+          },
+          {
+            "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "analysis-window-too-short",
+            "sampleCount": 43,
+            "postWarmupSampleCount": 9,
+            "analysisWindowMs": 8014
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/node-failure-rebalance/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "node-join-under-load",
+      "passed": false,
+      "duration": 38699,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:08:32.911Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "cluster.addNode is not a function",
+      "stackTrace": "TypeError: cluster.addNode is not a function\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/node-join-under-load.js:35:33)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processTimers (node:internal/timers:520:9)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:896:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "node-join-under-load",
+        "startedAt": 1771430912911,
+        "endedAt": 1771430952002,
+        "durationMs": 39091,
+        "files": {
+          "events": "test-output/.playback/report/node-join-under-load/events.ndjson",
+          "samples": "test-output/.playback/report/node-join-under-load/samples.ndjson",
+          "snapshots": "test-output/.playback/report/node-join-under-load/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/node-join-under-load/playback-manifest.json",
+          "viewer": "test-output/.playback/report/node-join-under-load/playback-viewer.html"
+        },
+        "counts": {
+          "events": 69,
+          "samples": 74,
+          "snapshots": 6
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 74,
+        "nodeCount": 5,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 12,
+            "postWarmupSampleCount": 0
+          },
+          {
+            "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 14,
+            "postWarmupSampleCount": 0
+          },
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 27,
+            "postWarmupSampleCount": 0
+          },
+          {
+            "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 9,
+            "postWarmupSampleCount": 0
+          },
+          {
+            "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 12,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/node-join-under-load/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "partition-kill-heal-under-load",
+      "passed": false,
+      "duration": 40868,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:09:12.004Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "partition-kill-heal-under-load",
+        "startedAt": 1771430952005,
+        "endedAt": 1771431104902,
+        "durationMs": 152897,
+        "files": {
+          "events": "test-output/.playback/report/partition-kill-heal-under-load/events.ndjson",
+          "samples": "test-output/.playback/report/partition-kill-heal-under-load/samples.ndjson",
+          "snapshots": "test-output/.playback/report/partition-kill-heal-under-load/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/partition-kill-heal-under-load/playback-manifest.json",
+          "viewer": "test-output/.playback/report/partition-kill-heal-under-load/playback-viewer.html"
+        },
+        "counts": {
+          "events": 12,
+          "samples": 30,
+          "snapshots": 0
+        },
+        "warnings": [
+          {
+            "code": "stats-capture-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+            "message": "Failed to capture container stats for node 7493b0ab-a054-5fad-a91b-5e331db29304: (HTTP code 404) no such container - No such container: e45199f674839e63a13fa59b4c66bbbd96338b57d32ce9ba300edcce7fd3b82f ",
+            "timestamp": 1771430974010,
+            "details": null
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 11,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 11,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/partition-kill-heal-under-load/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 40421,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:11:44.904Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1771431104904,
+        "endedAt": 1771431145386,
+        "durationMs": 40482,
+        "files": {
+          "events": "test-output/.playback/report/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/.playback/report/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/.playback/report/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/.playback/report/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 11,
+          "samples": 28,
+          "snapshots": 0
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 28,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 28,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/postgres-baseline-comparison/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "rolling-restart",
+      "passed": false,
+      "duration": 40417,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:12:25.387Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "rolling-restart",
+        "startedAt": 1771431145387,
+        "endedAt": 1771431185856,
+        "durationMs": 40469,
+        "files": {
+          "events": "test-output/.playback/report/rolling-restart/events.ndjson",
+          "samples": "test-output/.playback/report/rolling-restart/samples.ndjson",
+          "snapshots": "test-output/.playback/report/rolling-restart/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/rolling-restart/playback-manifest.json",
+          "viewer": "test-output/.playback/report/rolling-restart/playback-viewer.html"
+        },
+        "counts": {
+          "events": 11,
+          "samples": 28,
+          "snapshots": 0
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 28,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 28,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/rolling-restart/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "seed-restart-under-load",
+      "passed": false,
+      "duration": 40876,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:13:05.856Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "seed-restart-under-load",
+        "startedAt": 1771431185856,
+        "endedAt": 1771431332227,
+        "durationMs": 146371,
+        "files": {
+          "events": "test-output/.playback/report/seed-restart-under-load/events.ndjson",
+          "samples": "test-output/.playback/report/seed-restart-under-load/samples.ndjson",
+          "snapshots": "test-output/.playback/report/seed-restart-under-load/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/seed-restart-under-load/playback-manifest.json",
+          "viewer": "test-output/.playback/report/seed-restart-under-load/playback-viewer.html"
+        },
+        "counts": {
+          "events": 12,
+          "samples": 30,
+          "snapshots": 0
+        },
+        "warnings": [
+          {
+            "code": "stats-capture-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+            "message": "Failed to capture container stats for node 7493b0ab-a054-5fad-a91b-5e331db29304: (HTTP code 404) no such container - No such container: 012609f3ff14226a7932f4d7cffc8c172d7eebcd8f6d38f88015d9d47fe15b00 ",
+            "timestamp": 1771431201868,
+            "details": null
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 5,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-samples",
+            "sampleCount": 5
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/seed-restart-under-load/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "seven-node-load-during-partitioning",
+      "passed": false,
+      "duration": 40392,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:15:32.230Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "seven-node-load-during-partitioning",
+        "startedAt": 1771431332230,
+        "endedAt": 1771431372654,
+        "durationMs": 40424,
+        "files": {
+          "events": "test-output/.playback/report/seven-node-load-during-partitioning/events.ndjson",
+          "samples": "test-output/.playback/report/seven-node-load-during-partitioning/samples.ndjson",
+          "snapshots": "test-output/.playback/report/seven-node-load-during-partitioning/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/seven-node-load-during-partitioning/playback-manifest.json",
+          "viewer": "test-output/.playback/report/seven-node-load-during-partitioning/playback-viewer.html"
+        },
+        "counts": {
+          "events": 11,
+          "samples": 29,
+          "snapshots": 0
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 29,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 29,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/seven-node-load-during-partitioning/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "seven-node-read-write-load-distribution",
+      "passed": false,
+      "duration": 40457,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:16:12.654Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "seven-node-read-write-load-distribution",
+        "startedAt": 1771431372655,
+        "endedAt": 1771431413163,
+        "durationMs": 40508,
+        "files": {
+          "events": "test-output/.playback/report/seven-node-read-write-load-distribution/events.ndjson",
+          "samples": "test-output/.playback/report/seven-node-read-write-load-distribution/samples.ndjson",
+          "snapshots": "test-output/.playback/report/seven-node-read-write-load-distribution/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/seven-node-read-write-load-distribution/playback-manifest.json",
+          "viewer": "test-output/.playback/report/seven-node-read-write-load-distribution/playback-viewer.html"
+        },
+        "counts": {
+          "events": 11,
+          "samples": 29,
+          "snapshots": 0
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 29,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 29,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/seven-node-read-write-load-distribution/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "seven-node-table-partition-distribution",
+      "passed": false,
+      "duration": 40371,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:16:53.163Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "seven-node-table-partition-distribution",
+        "startedAt": 1771431413163,
+        "endedAt": 1771431453593,
+        "durationMs": 40430,
+        "files": {
+          "events": "test-output/.playback/report/seven-node-table-partition-distribution/events.ndjson",
+          "samples": "test-output/.playback/report/seven-node-table-partition-distribution/samples.ndjson",
+          "snapshots": "test-output/.playback/report/seven-node-table-partition-distribution/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/seven-node-table-partition-distribution/playback-manifest.json",
+          "viewer": "test-output/.playback/report/seven-node-table-partition-distribution/playback-viewer.html"
+        },
+        "counts": {
+          "events": 11,
+          "samples": 29,
+          "snapshots": 0
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 29,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 29,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/seven-node-table-partition-distribution/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "sustained-write-throughput",
+      "passed": false,
+      "duration": 40885,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:17:33.593Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "sustained-write-throughput",
+        "startedAt": 1771431453594,
+        "endedAt": 1771431537027,
+        "durationMs": 83433,
+        "files": {
+          "events": "test-output/.playback/report/sustained-write-throughput/events.ndjson",
+          "samples": "test-output/.playback/report/sustained-write-throughput/samples.ndjson",
+          "snapshots": "test-output/.playback/report/sustained-write-throughput/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/sustained-write-throughput/playback-manifest.json",
+          "viewer": "test-output/.playback/report/sustained-write-throughput/playback-viewer.html"
+        },
+        "counts": {
+          "events": 12,
+          "samples": 30,
+          "snapshots": 0
+        },
+        "warnings": [
+          {
+            "code": "stats-capture-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+            "message": "Failed to capture container stats for node 7493b0ab-a054-5fad-a91b-5e331db29304: (HTTP code 404) no such container - No such container: 249df65ed45d305ac8c1e0f319dd3c5d28f1e40041290b753d84dcc03b897b98 ",
+            "timestamp": 1771431471608,
+            "details": null
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 7,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-samples",
+            "sampleCount": 7
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/sustained-write-throughput/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "table-distribution-helpers",
+      "passed": false,
+      "duration": 31461,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:18:57.030Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "scenarioModule.run is not a function",
+      "stackTrace": "TypeError: scenarioModule.run is not a function\n    at runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:896:30)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "table-distribution-helpers",
+        "startedAt": 1771431537031,
+        "endedAt": 1771431568637,
+        "durationMs": 31606,
+        "files": {
+          "events": "test-output/.playback/report/table-distribution-helpers/events.ndjson",
+          "samples": "test-output/.playback/report/table-distribution-helpers/samples.ndjson",
+          "snapshots": "test-output/.playback/report/table-distribution-helpers/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/table-distribution-helpers/playback-manifest.json",
+          "viewer": "test-output/.playback/report/table-distribution-helpers/playback-viewer.html"
+        },
+        "counts": {
+          "events": 33,
+          "samples": 47,
+          "snapshots": 1
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 47,
+        "nodeCount": 5,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-samples",
+            "sampleCount": 7
+          },
+          {
+            "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 10,
+            "postWarmupSampleCount": 0
+          },
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 20,
+            "postWarmupSampleCount": 0
+          },
+          {
+            "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-samples",
+            "sampleCount": 4
+          },
+          {
+            "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-samples",
+            "sampleCount": 6
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/table-distribution-helpers/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "three-node-seed-rebalance",
+      "passed": false,
+      "duration": 40406,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:19:28.638Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
         "scenarioName": "three-node-seed-rebalance",
-        "startedAt": 1771097133473,
-        "endedAt": 1771097198400,
-        "durationMs": 64927,
+        "startedAt": 1771431568638,
+        "endedAt": 1771431609083,
+        "durationMs": 40445,
         "files": {
           "events": "test-output/.playback/report/three-node-seed-rebalance/events.ndjson",
           "samples": "test-output/.playback/report/three-node-seed-rebalance/samples.ndjson",
@@ -30,19 +1834,248 @@
           "viewer": "test-output/.playback/report/three-node-seed-rebalance/playback-viewer.html"
         },
         "counts": {
-          "events": 82,
-          "samples": 77,
-          "snapshots": 22
+          "events": 11,
+          "samples": 29,
+          "snapshots": 0
         },
-        "warnings": [
-          {
-            "code": "query-node-unavailable",
-            "message": "No reachable node available for topology snapshot query",
-            "timestamp": 1771097134475
-          }
-        ]
+        "warnings": []
       },
-      "loadMetrics": null
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 29,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 29,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/three-node-seed-rebalance/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "wasm-service-failover",
+      "passed": false,
+      "duration": 32861,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:20:09.101Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become available within 30000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 30000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "wasm-service-failover",
+        "startedAt": 1771431609101,
+        "endedAt": 1771431642008,
+        "durationMs": 32907,
+        "files": {
+          "events": "test-output/.playback/report/wasm-service-failover/events.ndjson",
+          "samples": "test-output/.playback/report/wasm-service-failover/samples.ndjson",
+          "snapshots": "test-output/.playback/report/wasm-service-failover/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/wasm-service-failover/playback-manifest.json",
+          "viewer": "test-output/.playback/report/wasm-service-failover/playback-viewer.html"
+        },
+        "counts": {
+          "events": 11,
+          "samples": 29,
+          "snapshots": 0
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 29,
+        "nodeCount": 1,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-post-warmup-samples",
+            "sampleCount": 29,
+            "postWarmupSampleCount": 0
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/wasm-service-failover/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    },
+    {
+      "scenario": "write-ack-visibility",
+      "passed": false,
+      "duration": 6378,
+      "clusterSize": 5,
+      "startedAt": "2026-02-18T16:20:42.008Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Node \"7493b0ab-a054-5fad-a91b-5e331db29304\" (seed) failed to reuse container: (HTTP code 500) server error - Cannot restart container 517bae39258c8f67719c64a0c880c4d982e648c6217700b3ed53b6cd5ad3e04d: container is marked for removal and cannot be started ",
+      "stackTrace": "Error: Node \"7493b0ab-a054-5fad-a91b-5e331db29304\" (seed) failed to reuse container: (HTTP code 500) server error - Cannot restart container 517bae39258c8f67719c64a0c880c4d982e648c6217700b3ed53b6cd5ad3e04d: container is marked for removal and cannot be started \n    at Cluster._startNode (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1685:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:947:22)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "write-ack-visibility",
+        "startedAt": 1771431642008,
+        "endedAt": 1771431648386,
+        "durationMs": 6378,
+        "files": {
+          "events": "test-output/.playback/report/write-ack-visibility/events.ndjson",
+          "samples": "test-output/.playback/report/write-ack-visibility/samples.ndjson",
+          "snapshots": "test-output/.playback/report/write-ack-visibility/snapshots.ndjson",
+          "manifest": "test-output/.playback/report/write-ack-visibility/playback-manifest.json",
+          "viewer": "test-output/.playback/report/write-ack-visibility/playback-viewer.html"
+        },
+        "counts": {
+          "events": 8,
+          "samples": 0,
+          "snapshots": 0
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/write-ack-visibility/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": false,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
     }
-  ]
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local.json",
+    "scenarioFilter": "all"
+  }
 }

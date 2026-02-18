@@ -1,0 +1,26 @@
+{
+  "scenarioName": "network-partition-split-brain",
+  "startedAt": 1771430781556,
+  "endedAt": 1771430848130,
+  "durationMs": 66574,
+  "files": {
+    "events": "test-output/.playback/report/network-partition-split-brain/events.ndjson",
+    "samples": "test-output/.playback/report/network-partition-split-brain/samples.ndjson",
+    "snapshots": "test-output/.playback/report/network-partition-split-brain/snapshots.ndjson",
+    "manifest": "test-output/.playback/report/network-partition-split-brain/playback-manifest.json",
+    "viewer": "test-output/.playback/report/network-partition-split-brain/playback-viewer.html"
+  },
+  "counts": {
+    "events": 12,
+    "samples": 30,
+    "snapshots": 0
+  },
+  "warnings": [
+    {
+      "code": "stats-capture-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+      "message": "Failed to capture container stats for node 7493b0ab-a054-5fad-a91b-5e331db29304: (HTTP code 404) no such container - No such container: 1412e206bff07a4ea07bff0a5e319c24dda9e6fe2a034536e560a009ac8142c7 ",
+      "timestamp": 1771430815574,
+      "details": null
+    }
+  ]
+}

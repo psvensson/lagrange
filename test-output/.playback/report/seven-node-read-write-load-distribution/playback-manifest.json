@@ -1,0 +1,19 @@
+{
+  "scenarioName": "seven-node-read-write-load-distribution",
+  "startedAt": 1771431372655,
+  "endedAt": 1771431413163,
+  "durationMs": 40508,
+  "files": {
+    "events": "test-output/.playback/report/seven-node-read-write-load-distribution/events.ndjson",
+    "samples": "test-output/.playback/report/seven-node-read-write-load-distribution/samples.ndjson",
+    "snapshots": "test-output/.playback/report/seven-node-read-write-load-distribution/snapshots.ndjson",
+    "manifest": "test-output/.playback/report/seven-node-read-write-load-distribution/playback-manifest.json",
+    "viewer": "test-output/.playback/report/seven-node-read-write-load-distribution/playback-viewer.html"
+  },
+  "counts": {
+    "events": 11,
+    "samples": 29,
+    "snapshots": 0
+  },
+  "warnings": []
+}

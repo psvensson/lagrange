@@ -1,0 +1,19 @@
+{
+  "scenarioName": "admin-query-smoke",
+  "startedAt": 1771430647132,
+  "endedAt": 1771430682026,
+  "durationMs": 34894,
+  "files": {
+    "events": "test-output/.playback/report/admin-query-smoke/events.ndjson",
+    "samples": "test-output/.playback/report/admin-query-smoke/samples.ndjson",
+    "snapshots": "test-output/.playback/report/admin-query-smoke/snapshots.ndjson",
+    "manifest": "test-output/.playback/report/admin-query-smoke/playback-manifest.json",
+    "viewer": "test-output/.playback/report/admin-query-smoke/playback-viewer.html"
+  },
+  "counts": {
+    "events": 33,
+    "samples": 57,
+    "snapshots": 5
+  },
+  "warnings": []
+}

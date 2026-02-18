@@ -125,6 +125,10 @@ test('Unit: mergeWithDefaults fills all fields from empty object', async (t) => 
         BENCHMARK_DEFAULTS.durationSeconds,
       );
       assert.strictEqual(
+        config.benchmark.loadMaxInFlight,
+        BENCHMARK_DEFAULTS.loadMaxInFlight,
+      );
+      assert.strictEqual(
         config.benchmark.clients,
         BENCHMARK_DEFAULTS.clients,
       );
@@ -203,6 +207,7 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
       benchmark: {
         baselineImage: 'postgres:15',
         durationSeconds: 45,
+        loadMaxInFlight: 256,
         clients: 10,
         jobs: 5,
         tableName: 'bench_custom',
@@ -263,6 +268,7 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
     );
     assert.strictEqual(config.benchmark.baselineImage, 'postgres:15');
     assert.strictEqual(config.benchmark.durationSeconds, 45);
+    assert.strictEqual(config.benchmark.loadMaxInFlight, 256);
     assert.strictEqual(config.benchmark.clients, 10);
     assert.strictEqual(config.benchmark.jobs, 5);
     assert.strictEqual(config.benchmark.tableName, 'bench_custom');
