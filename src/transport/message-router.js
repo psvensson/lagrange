@@ -1562,6 +1562,72 @@ class MessageRouter extends EventEmitter {
   }
 
   /**
+   * Deliver message locally by invoking the registered handler directly,
+   * bypassing WebSocket serialization. Falls back to deliverRemote when
+   * no handler is registered (e.g. join request/complete special handlers).
+   * @param {string} targetAddress - Target address.
+   * @param {string} messageId - Message ID.
+   * @param {Object} payload - Message payload.
+   * @param {string} correlationId - Correlation ID.
+   * @return {Promise<Object>} Delivery outcome with result and queueWaitMs.
+   * @private
+   */
+  async deliverLocal(targetAddress, messageId, payload, correlationId) {
+    const handler = this.handlers.get(targetAddress);
+    if (!handler) {
+      // Fall back to remote path for special handlers (join request, etc.)
+      return this.deliverRemote(
+        targetAddress, messageId, payload,
+        this.nodeId, correlationId,
+      );
+    }
+
+    const envelope = {
+      messageId,
+      sourceAddress: ROUTER_ADDRESS.buildSourceAddress(this.nodeId),
+      sourceNodeId: this.nodeId,
+      targetAddress,
+      payload,
+      timestamp: Date.now(),
+    };
+
+    try {
+      const result = await Promise.resolve(handler(envelope));
+      return {
+        result: {
+          messageId,
+          correlationId,
+          acknowledged: true,
+          ...(result && typeof result === TRANSPORT_TYPEOF.OBJECT
+            ? (() => {
+              const {
+                acknowledged: _ack,
+                type: handlerType,
+                ...rest
+              } = result;
+              const merged = {...rest};
+              if (handlerType) merged.responseType = handlerType;
+              return merged;
+            })()
+            : {}),
+        },
+        queueWaitMs: TRANSPORT_NUM.ZERO,
+      };
+    } catch (error) {
+      return {
+        result: {
+          messageId,
+          correlationId,
+          acknowledged: false,
+          error: error.message,
+        },
+        queueWaitMs: TRANSPORT_NUM.ZERO,
+      };
+    }
+  }
+
+
+  /**
    * Deliver a message to a target service via WebSocket connections.
    * @param {string} targetAddress - Target service address.
    * @param {Object} message - Message to deliver.
@@ -1604,28 +1670,9 @@ class MessageRouter extends EventEmitter {
     let deliveryOutcome;
 
     if (targetNodeId === this.nodeId) {
-      // If the target resolves to this node but we do not have a
-      // self-connection (eg startServer=false), reject rather than
-      // silently bypassing transport.
-      const selfConn = this.nodeConnections.get(this.nodeId);
-      const hasSelfConn =
-        selfConn && selfConn.state === ConnectionState.CONNECTED;
-      if (!hasSelfConn) {
-        deliveryOutcome = {
-          result: {
-            messageId,
-            correlationId,
-            acknowledged: false,
-            error: ROUTER_ERROR_MSG.noConnectionToNode(this.nodeId),
-          },
-          queueWaitMs: TRANSPORT_NUM.ZERO,
-        };
-      } else {
-        deliveryOutcome = await this.deliverRemote(
-          targetAddress, messageId, message,
-          targetNodeId, correlationId,
-        );
-      }
+      deliveryOutcome = await this.deliverLocal(
+        targetAddress, messageId, message, correlationId,
+      );
     } else {
       deliveryOutcome = await this.deliverRemote(
         targetAddress, messageId, message,

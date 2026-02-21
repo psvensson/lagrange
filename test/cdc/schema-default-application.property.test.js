@@ -367,14 +367,14 @@ test('Property: prepareInsertData applies timestamp defaults', async (t) => {
         const hasUpdatedAt = schema.columns.some((col) => col.name === 'updated_at');
 
         const minimalData = generateMinimalData(tableName);
+        delete minimalData.created_at;
+        delete minimalData.updated_at;
         if (Object.keys(minimalData).length === 0) {
           const pkField = getPrimaryKeyField(tableName);
           if (pkField) {
             minimalData[pkField] = `test-${pkField}`;
           }
         }
-        delete minimalData.created_at;
-        delete minimalData.updated_at;
 
         const beforeTime = Date.now();
         const result = service.prepareInsertData(tableName, minimalData);

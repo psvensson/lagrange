@@ -3,46 +3,44 @@ TAP version 14
     # Subtest: InMemoryLogAdapter removeEntriesAfter removes entries after index
         ok 1 - InMemoryLogAdapter removeEntriesAfter removes entries after index
         1..1
-    ok 1 - InMemoryLogAdapter removeEntriesAfter removes entries after index # time=7.605ms
+    ok 1 - InMemoryLogAdapter removeEntriesAfter removes entries after index # time=9.991ms
     
     # Subtest: InMemoryLogAdapter removeEntriesAfter preserves entries at index
         ok 1 - InMemoryLogAdapter removeEntriesAfter preserves entries at index
         1..1
-    ok 2 - InMemoryLogAdapter removeEntriesAfter preserves entries at index # time=1.27ms
+    ok 2 - InMemoryLogAdapter removeEntriesAfter preserves entries at index # time=2.314ms
     
     # Subtest: InMemoryLogAdapter removeEntriesAfter(0) clears entire log
         ok 1 - InMemoryLogAdapter removeEntriesAfter(0) clears entire log
         1..1
-    ok 3 - InMemoryLogAdapter removeEntriesAfter(0) clears entire log # time=3.592ms
+    ok 3 - InMemoryLogAdapter removeEntriesAfter(0) clears entire log # time=2.11ms
     
     # Subtest: SQLiteLogAdapter truncation removes entries at and after index
         ok 1 - SQLiteLogAdapter truncation removes entries at and after index
         1..1
-    ok 4 - SQLiteLogAdapter truncation removes entries at and after index # time=5.608ms
+    ok 4 - SQLiteLogAdapter truncation removes entries at and after index # time=4.681ms
     
     # Subtest: SQLiteLogAdapter truncation preserves entries before index
         ok 1 - SQLiteLogAdapter truncation preserves entries before index
         1..1
-    ok 5 - SQLiteLogAdapter truncation preserves entries before index # time=2.27ms
+    ok 5 - SQLiteLogAdapter truncation preserves entries before index # time=2.183ms
     
     # Subtest: SQLiteLogAdapter truncation at 1 clears entire log
         ok 1 - SQLiteLogAdapter truncation at 1 clears entire log
         1..1
-    ok 6 - SQLiteLogAdapter truncation at 1 clears entire log # time=2.178ms
+    ok 6 - SQLiteLogAdapter truncation at 1 clears entire log # time=2.606ms
     
     # Subtest: InMemoryLogAdapter truncation is idempotent
         ok 1 - InMemoryLogAdapter truncation is idempotent
         1..1
-    ok 7 - InMemoryLogAdapter truncation is idempotent # time=0.924ms
+    ok 7 - InMemoryLogAdapter truncation is idempotent # time=1.074ms
     
     # Subtest: SQLiteLogAdapter truncation is idempotent
         ok 1 - SQLiteLogAdapter truncation is idempotent
         1..1
-    ok 8 - SQLiteLogAdapter truncation is idempotent # time=2.247ms
+    ok 8 - SQLiteLogAdapter truncation is idempotent # time=3.372ms
     
     1..8
-ok 1 - Property 3: Log Truncation Correctness # time=29.543ms
+ok 1 - Property 3: Log Truncation Correctness # time=34.143ms
 
 1..1
-# { total: 8, pass: 8 }
-# time=33.954ms

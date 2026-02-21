@@ -14,13 +14,17 @@ import {EndpointService} from '../../src/control-plane/endpoint-service.js';
 import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {ClusterReadinessSignal} from '../../src/rebalancer/cluster-readiness-signal.js';
 import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {NodeStatus} from '../../src/rebalancer/unified-rebalancer.js';
+import {CDCPipelineReadinessGate} from '../../src/cdc/cdc-pipeline-readiness-gate.js';
+import {CDC_PROPAGATED_TABLES} from '../../src/cache/cache-constants.js';
 import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
+import {CDCConfirmationTracker} from '../../src/cdc/cdc-confirmation-tracker.js';
 import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
@@ -65,6 +69,25 @@ test('Control plane dispatch integration', async (t) => {
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
       t.ok(systemTableCache, 'should have system table cache');
 
+      const cdcReadinessGate = new CDCPipelineReadinessGate({
+        systemTableCache,
+        cdcPropagatedTables: CDC_PROPAGATED_TABLES,
+      });
+      const clusterReadinessSignal = new ClusterReadinessSignal({
+        cdcPipelineReadinessGate: cdcReadinessGate,
+        systemTableCache,
+        expectedNodeCount: 1,
+      });
+
+      const clusterReady = await waitFor(() => {
+        const result = clusterReadinessSignal.evaluate({
+          partitionServices: bootstrapResult.partitionServices,
+          messageGroupServices: bootstrapResult.messageGroupServices,
+        });
+        return result.ready;
+      }, 3000, 25);
+      t.ok(clusterReady, 'cluster readiness should be satisfied');
+
       // Get real CDCIntegrationService from bootstrap
       const cdcIntegrationService = bootstrapService.cdcIntegrationService;
       t.ok(cdcIntegrationService, 'should have CDC integration service');
@@ -82,10 +105,16 @@ test('Control plane dispatch integration', async (t) => {
       // Create a wrapper that tracks deliveries to replica-handler
       // but lets other deliveries (like SQL queries) go through normally
       realMessageRouter.deliver = async (target, payload, options) => {
-        // Only intercept deliveries to replica-handler on the target node
-        if (target && target.includes('/service/replica-handler')) {
+        // Intercept handler deliveries to the fake target node.
+        // This avoids needing a real network connection while preserving
+        // the dispatch logic and payload formatting.
+        if (
+          typeof target === 'string' &&
+          target.startsWith('node-target-dispatch/service/')
+        ) {
+          if (target.includes('/service/replica-handler')) {
           deliveries.push({target, payload, options});
-          // Return a successful INITIATED response to allow the workflow to proceed
+          }
           return {
             acknowledged: true,
             status: ReplicaOperationResponseStatus.INITIATED,
@@ -181,7 +210,10 @@ test('Control plane dispatch integration', async (t) => {
       // Add a target node to the cache (simulating a node that has joined and is ready)
       const now = Date.now();
       const targetNodeId = 'node-target-dispatch';
-      systemTableCache.applySystemTableChange(SystemTableName.NODES, 'INSERT', {
+
+      // Ensure the target node exists in SQL (ReplicaDispatchService uses SQLQueryEngine
+      // to validate handler registration).
+      await cdcIntegrationService.upsertSystemTableRow(SystemTableName.NODES, {
         node_id: targetNodeId,
         node_address: 'ws://node-target-dispatch:9001',
         cpu_cores: 4,
@@ -196,27 +228,45 @@ test('Control plane dispatch integration', async (t) => {
         last_heartbeat: now,
         ready_lease_expires_at: now + 10000,
         created_at: now,
+        updated_at: now,
       });
 
       // Get a partition ID from the bootstrapped partitions
-      const partitions = systemTableCache.getAll('partitions') || [];
-      t.ok(partitions.length > 0, 'should have partitions');
-      const partitionId = partitions[0].partition_id;
+      const systemPartitionReady = await waitFor(() => {
+        const partitions = systemTableCache.getAll(SystemTableName.PARTITIONS) || [];
+        return partitions.some(
+          (p) => typeof p?.partition_id === 'string' && p.partition_id.endsWith('-p1'),
+        );
+      }, 3000, 25);
+      t.ok(systemPartitionReady, 'should have at least one system-table partition (*-p1)');
+
+      const partitions = systemTableCache.getAll(SystemTableName.PARTITIONS) || [];
+      const selectedPartition = partitions.find(
+        (p) => typeof p?.partition_id === 'string' && p.partition_id.endsWith('-p1'),
+      );
+      t.ok(selectedPartition, 'should select a system-table partition');
+      const partitionId = selectedPartition.partition_id;
 
       // Add a service entry for the target node so the handler
       // registration check in dispatchOperationRow passes.
-      systemTableCache.applySystemTableChange(
-        SystemTableName.SERVICES, 'INSERT', {
-          service_id: `replica-${targetNodeId}-${partitionId}`,
-          node_id: targetNodeId,
-          partition_id: partitionId,
-          service_type: 'partition',
-          status: SERVICE_STATUS.ACTIVE,
-          address: `${targetNodeId}/partition/replica-${targetNodeId}-${partitionId}`,
-          raft_role: 'follower',
-          created_at: now,
-        },
-      );
+      await cdcIntegrationService.upsertSystemTableRow(SystemTableName.SERVICES, {
+        service_id: `replica-${targetNodeId}-${partitionId}`,
+        node_id: targetNodeId,
+        partition_id: partitionId,
+        service_type: 'partition',
+        status: SERVICE_STATUS.ACTIVE,
+        address: `${targetNodeId}/partition/replica-${targetNodeId}-${partitionId}`,
+        raft_role: 'follower',
+        created_at: now,
+        updated_at: now,
+      });
+
+      // The coordinator insert triggers a cache update async; ensure a deterministic
+      // confirmation primitive is in place for subsequent waits.
+      const cdcConfirmationTracker = new CDCConfirmationTracker({
+        systemTableCache,
+        timeoutMs: 5000,
+      });
 
       // Create a replica operation using the real coordinator
       // This will trigger the real CDC flow:
@@ -236,7 +286,13 @@ test('Control plane dispatch integration', async (t) => {
 
       // Wait for the CDC event to be processed and the operation to be dispatched
       // The real flow is asynchronous: create -> persist -> CDC -> dispatch
-      const dispatched = await waitFor(() => deliveries.length >= 1, 1000, 25);
+      await cdcConfirmationTracker.awaitConfirmation(
+        SystemTableName.REPLICA_OPERATIONS,
+        operation.operationId,
+        5000,
+      );
+
+      const dispatched = await waitFor(() => deliveries.length >= 1, 3000, 25);
       t.ok(dispatched, 'operation should be dispatched via CDC flow');
 
       // Verify the operation was dispatched
@@ -266,6 +322,8 @@ test('Control plane dispatch integration', async (t) => {
 
       // Restore original deliver method before cleanup
       realMessageRouter.deliver = originalDeliver;
+
+      cdcConfirmationTracker.shutdown();
 
       // Cleanup
       heartbeatSvc.stop();

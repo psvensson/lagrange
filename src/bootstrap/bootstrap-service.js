@@ -61,7 +61,17 @@ import {
   INITIAL_MESSAGE_GROUP_REPLICA_IDS,
 } from './system-table-schemas-constants.js';
 import {CacheHydrationService as _CacheHydrationService} from '../cache/cache-hydration-service.js';
-import {CACHE_HYDRATION_TABLES} from '../cache/cache-constants.js';
+import {
+  CACHE_HYDRATION_TABLES,
+  CDC_PROPAGATED_TABLES,
+} from '../cache/cache-constants.js';
+import {
+  CDCPipelineReadinessGate,
+} from '../cdc/cdc-pipeline-readiness-gate.js';
+import {
+  CDC_PIPELINE_READINESS_TIMEOUT_MS,
+  CDC_LIFECYCLE_LOG_MSG,
+} from '../constants/cdc-lifecycle-constants.js';
 import {
   getMissingSystemServiceLeaders,
   getMissingSystemServiceLeaderCount,
@@ -1942,12 +1952,24 @@ class BootstrapService extends EventEmitter {
               this.handleNodeReadyRebalanceTrigger(cdcEvent, previousNodeRow);
             }
 
-            if (messageGroup.isLeaderReplica()) {
-              await this.propagatePartitionCDCEvent(messageGroup, cdcEvent);
+            const propagationMessageGroupService =
+              this.resolveCdcPropagationMessageGroup(messageGroup);
+            if (propagationMessageGroupService) {
+              await this.propagatePartitionCDCEvent(
+                propagationMessageGroupService, cdcEvent,
+              );
 
               if (tableName === TABLES.CONFIG) {
                 this.applyCurrentEpochFromCache();
               }
+            } else {
+              this.logger.warn(
+                CDC_LIFECYCLE_LOG_MSG.MESSAGE_GROUP_RESOLUTION_NULL, {
+                  tableName: cdcEvent.tableName,
+                  operation: cdcEvent.operation,
+                  reason: 'no_leader_message_group',
+                },
+              );
             }
           }
         });
@@ -2661,6 +2683,23 @@ class BootstrapService extends EventEmitter {
 
     await this.subscribeToInitialSystemTableCDC();
 
+    // Gate: verify CDC pipeline is fully wired before proceeding.
+    // Requirements 2.4, 2.5 — node must not transition to READY with
+    // an incomplete CDC pipeline.
+    const cdcReadinessGate = new CDCPipelineReadinessGate({
+      systemTableCache,
+      cdcPropagatedTables: CDC_PROPAGATED_TABLES,
+    });
+    const cdcReadinessTimeoutMs = this.config.cdcPipelineReadinessTimeoutMs ||
+      CDC_PIPELINE_READINESS_TIMEOUT_MS;
+    await cdcReadinessGate.waitForReady(
+      {
+        partitionServices: this.partitionServices,
+        messageGroupServices: this.messageGroupServices,
+      },
+      cdcReadinessTimeoutMs,
+    );
+
     // Now that cache is populated, update CDC integration service to use cache
     // This switches from bootstrap mode (direct writes) to normal mode (cache-based routing)
     // Create SQL query engine for cache-based routing (used by CDC and partition services)
@@ -2989,6 +3028,13 @@ class BootstrapService extends EventEmitter {
             const propagationMessageGroupService =
               this.resolveCdcPropagationMessageGroup(messageGroupService);
             if (!propagationMessageGroupService) {
+              this.logger.warn(
+                CDC_LIFECYCLE_LOG_MSG.MESSAGE_GROUP_RESOLUTION_NULL, {
+                  tableName: cdcEvent.tableName,
+                  operation: cdcEvent.operation,
+                  reason: 'no_leader_message_group',
+                },
+              );
               return;
             }
 
@@ -4011,7 +4057,7 @@ class BootstrapService extends EventEmitter {
           replicaId,
           error: err.message,
         });
-        throw err;
+        // Continue best-effort cleanup to avoid leaving infrastructure running.
       }
     }
     if (this.messageRouter) {
@@ -4038,7 +4084,7 @@ class BootstrapService extends EventEmitter {
           replicaId,
           error: err.message,
         });
-        throw err;
+        // Continue best-effort cleanup to avoid leaving infrastructure running.
       }
     }
     if (this.messageRouter) {

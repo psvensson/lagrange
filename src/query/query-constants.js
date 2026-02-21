@@ -1,5 +1,5 @@
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {NUM, TIME_MS} from '../constants/index.js';
+import {NUM, TIME_MS, TABLES} from '../constants/index.js';
 
 const QUERY_SUBSYSTEM = Object.freeze({
   QUERY_ROUTER: 'query-router',
@@ -262,6 +262,22 @@ const QUERY_DEFAULT_VALUE = Object.freeze({
   PRIMARY_KEY: 'id',
 });
 
+const SQL_PARSE_CACHE = Object.freeze({
+  DEFAULT_MAX_SIZE: NUM.THOUSAND,
+});
+
+/**
+ * Tables excluded from non-transactional write tracking to prevent
+ * infinite recursion. Write tracking persists rows into
+ * sql_write_operations via the SQL engine, which would re-trigger
+ * tracking for these metadata tables, causing a stack overflow.
+ */
+const WRITE_TRACKING_EXCLUDED_TABLES = Object.freeze(new Set([
+  TABLES.SQL_WRITE_OPERATIONS,
+  TABLES.SQL_TRANSACTIONS,
+  TABLES.SQL_TRANSACTION_PARTICIPANTS,
+]));
+
 // Canonical config keys used by query subsystem components.
 const QUERY_CONFIG_KEY = Object.freeze({
   QUERY_TIMEOUT_MS: CONFIG_KEY.QUERY_TIMEOUT_MS,
@@ -292,6 +308,7 @@ const QUERY_DEFAULTS = Object.freeze({
   MAX_PARALLEL_PARTITIONS: NUM.THOUSAND,
   LEADER_RETRY_ATTEMPTS: NUM.FIVE,
   LEADER_RETRY_DELAY_MS: NUM.FIVE * NUM.TEN,
+  NO_SERVICE_WARN_THROTTLE_MS: TIME_MS.SECOND * NUM.FIVE,
 
   COORDINATOR_MAX_PARALLEL_PARTITIONS: NUM.THOUSAND,
   COORDINATOR_MAX_CONCURRENT_CONNECTIONS: NUM.THOUSAND * NUM.TEN,
@@ -325,4 +342,6 @@ export {
   QUERY_STATUS,
   QUERY_SUBSYSTEM,
   QUERY_SORT_DIRECTION,
+  SQL_PARSE_CACHE,
+  WRITE_TRACKING_EXCLUDED_TABLES,
 };

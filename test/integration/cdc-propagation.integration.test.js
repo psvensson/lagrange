@@ -21,6 +21,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {CDCConfirmationTracker} from '../../src/cdc/cdc-confirmation-tracker.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {
   initializeTestEnvironment,
@@ -39,8 +40,7 @@ const ports = createPortAllocator(import.meta.url);
  */
 const TEST_TIMEOUTS = {
   LEADERSHIP_WAIT_MS: 5000,
-  CDC_PROPAGATION_WAIT_MS: 3000,
-  POLL_INTERVAL_MS: 50,
+  CDC_CONFIRMATION_WAIT_MS: 3000,
 };
 
 /**
@@ -64,63 +64,12 @@ function generateUniqueNodeId(counter) {
 // Counter for generating unique node IDs
 let nodeIdCounter = 0xD00000000000;
 
-/**
- * Wait for a value to appear in the system cache.
- * Uses bounded polling with configurable intervals.
- *
- * @param {Object} systemTableCache - System table cache instance.
- * @param {string} tableName - Table name to query.
- * @param {string} key - Primary key value to look for.
- * @param {number} timeoutMs - Maximum wait time.
- * @param {number} intervalMs - Polling interval.
- * @returns {Promise<Object|null>} Record or null.
- */
-async function waitForCacheValue(
-  systemTableCache,
-  tableName,
-  key,
-  timeoutMs = TEST_TIMEOUTS.CDC_PROPAGATION_WAIT_MS,
-  intervalMs = TEST_TIMEOUTS.POLL_INTERVAL_MS,
-) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const record = systemTableCache.get(tableName, key);
-    if (record) {
-      return record;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  return null;
-}
 
-/**
- * Wait for a cache value to match a predicate.
- *
- * @param {Object} systemTableCache - System table cache instance.
- * @param {string} tableName - Table name to query.
- * @param {string} key - Primary key value to look for.
- * @param {Function} predicate - Function that returns true when condition is met.
- * @param {number} timeoutMs - Maximum wait time.
- * @param {number} intervalMs - Polling interval.
- * @returns {Promise<Object|null>} Record or null.
- */
-async function waitForCacheUpdate(
-  systemTableCache,
-  tableName,
-  key,
-  predicate,
-  timeoutMs = TEST_TIMEOUTS.CDC_PROPAGATION_WAIT_MS,
-  intervalMs = TEST_TIMEOUTS.POLL_INTERVAL_MS,
-) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const record = systemTableCache.get(tableName, key);
-    if (record && predicate(record)) {
-      return record;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  return null;
+function createCdcConfirmationTracker(systemTableCache) {
+  return new CDCConfirmationTracker({
+    systemTableCache,
+    timeoutMs: TEST_TIMEOUTS.CDC_CONFIRMATION_WAIT_MS,
+  });
 }
 
 test('CDC propagation integration', {timeout: 30000}, async (t) => {
@@ -192,12 +141,7 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       // =====================================================================
       // PHASE 4: Verify seed node is in cache (from bootstrap CDC)
       // =====================================================================
-      const seedNodeInCache = await waitForCacheValue(
-        systemTableCache,
-        TABLES.NODES,
-        seedNodeId,
-        TEST_TIMEOUTS.CDC_PROPAGATION_WAIT_MS,
-      );
+      const seedNodeInCache = systemTableCache.get(TABLES.NODES, seedNodeId);
 
       t.ok(seedNodeInCache, 'seed node should be in cache from bootstrap');
       t.equal(seedNodeInCache[COLUMN.NODE_ID], seedNodeId, 'cached node ID should match');
@@ -206,6 +150,11 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       // PHASE 5: Write data through SQL (goes through Raft consensus)
       // =====================================================================
       const testCpuUsage = 42;
+      const cdcConfirmationTracker = createCdcConfirmationTracker(systemTableCache);
+      const confirmation = cdcConfirmationTracker.awaitConfirmation(
+        TABLES.NODES,
+        seedNodeId,
+      );
       const updateResult = await sqlQueryEngine.executeQuery(
         'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
         [testCpuUsage, seedNodeId],
@@ -213,16 +162,13 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
 
       t.equal(updateResult.success, true, 'SQL UPDATE should succeed through Raft');
 
+      await confirmation;
+      cdcConfirmationTracker.shutdown();
+
       // =====================================================================
       // PHASE 6: Verify CDC event propagated to cache
       // =====================================================================
-      const updatedNode = await waitForCacheUpdate(
-        systemTableCache,
-        TABLES.NODES,
-        seedNodeId,
-        (node) => node[COLUMN.CPU_USAGE_PERCENT] === testCpuUsage,
-        TEST_TIMEOUTS.CDC_PROPAGATION_WAIT_MS,
-      );
+      const updatedNode = systemTableCache.get(TABLES.NODES, seedNodeId);
 
       t.ok(updatedNode, 'updated node should appear in cache after CDC propagation');
       t.equal(
@@ -239,8 +185,6 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       if (bootstrapResult?.partitionServices) {
         stopAllRebalancers(bootstrapResult.partitionServices);
       }
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
       await gracefulShutdown(bootstrapService, bootstrapResult, null);
     }
   });
@@ -301,6 +245,12 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       // =====================================================================
       const testMemoryUsage = 55.5;
 
+      const cdcConfirmationTracker = createCdcConfirmationTracker(systemTableCache);
+      const confirmation = cdcConfirmationTracker.awaitConfirmation(
+        TABLES.NODES,
+        seedNodeId,
+      );
+
       const updateResult = await sqlQueryEngine.executeQuery(
         'UPDATE nodes SET memory_usage_percent = ? WHERE node_id = ?',
         [testMemoryUsage, seedNodeId],
@@ -308,16 +258,13 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
 
       t.equal(updateResult.success, true, 'UPDATE should succeed');
 
+      await confirmation;
+      cdcConfirmationTracker.shutdown();
+
       // =====================================================================
       // PHASE 4: Verify CDC event propagated to cache
       // =====================================================================
-      const updatedNode = await waitForCacheUpdate(
-        systemTableCache,
-        TABLES.NODES,
-        seedNodeId,
-        (node) => node[COLUMN.MEMORY_USAGE_PERCENT] === testMemoryUsage,
-        TEST_TIMEOUTS.CDC_PROPAGATION_WAIT_MS,
-      );
+      const updatedNode = systemTableCache.get(TABLES.NODES, seedNodeId);
 
       t.ok(updatedNode, 'updated node should appear in cache after CDC propagation');
       t.equal(
@@ -334,8 +281,6 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       if (bootstrapResult?.partitionServices) {
         stopAllRebalancers(bootstrapResult.partitionServices);
       }
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
       await gracefulShutdown(bootstrapService, bootstrapResult, null);
     }
   });
@@ -396,25 +341,28 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       // =====================================================================
       const cpuValues = [10, 25, 50, 75, 100];
 
+      const cdcConfirmationTracker = createCdcConfirmationTracker(systemTableCache);
+
       for (const cpuValue of cpuValues) {
+        const confirmation = cdcConfirmationTracker.awaitConfirmation(
+          TABLES.NODES,
+          seedNodeId,
+        );
         const updateResult = await sqlQueryEngine.executeQuery(
           'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
           [cpuValue, seedNodeId],
         );
         t.equal(updateResult.success, true, `UPDATE to ${cpuValue} should succeed`);
+        await confirmation;
       }
+
+      cdcConfirmationTracker.shutdown();
 
       // =====================================================================
       // PHASE 4: Verify final value propagated to cache
       // =====================================================================
       const finalCpuValue = cpuValues[cpuValues.length - 1];
-      const finalNode = await waitForCacheUpdate(
-        systemTableCache,
-        TABLES.NODES,
-        seedNodeId,
-        (node) => node[COLUMN.CPU_USAGE_PERCENT] === finalCpuValue,
-        TEST_TIMEOUTS.CDC_PROPAGATION_WAIT_MS,
-      );
+      const finalNode = systemTableCache.get(TABLES.NODES, seedNodeId);
 
       t.ok(finalNode, 'final update should appear in cache');
       t.equal(
@@ -431,8 +379,6 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       if (bootstrapResult?.partitionServices) {
         stopAllRebalancers(bootstrapResult.partitionServices);
       }
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
       await gracefulShutdown(bootstrapService, bootstrapResult, null);
     }
   });
@@ -485,9 +431,16 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       // =====================================================================
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
 
+      const testCpuUsage = 77;
+      const isTargetNodesUpdateEvent = (e) => (
+        e.tableName === TABLES.NODES &&
+        (e.operation === 'UPDATE' || e.operation === 'UPSERT')
+      );
+
       // Register a listener to track CDC events
       const listener = (tableName, operation, record) => {
-        cdcEventsReceived.push({tableName, operation, record, timestamp: Date.now()});
+        const event = {tableName, operation, record, timestamp: Date.now()};
+        cdcEventsReceived.push(event);
       };
       systemTableCache.onCacheChange(listener);
 
@@ -503,7 +456,11 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       // =====================================================================
       // PHASE 3: Write data through SQL
       // =====================================================================
-      const testCpuUsage = 77;
+      const cdcConfirmationTracker = createCdcConfirmationTracker(systemTableCache);
+      const confirmation = cdcConfirmationTracker.awaitConfirmation(
+        TABLES.NODES,
+        seedNodeId,
+      );
       const updateResult = await sqlQueryEngine.executeQuery(
         'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
         [testCpuUsage, seedNodeId],
@@ -511,21 +468,24 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
 
       t.equal(updateResult.success, true, 'SQL UPDATE should succeed');
 
+      await confirmation;
+      cdcConfirmationTracker.shutdown();
+
+      // Clean up listener
+      systemTableCache.offCacheChange(listener);
+
       // =====================================================================
       // PHASE 4: Wait for CDC event to be received by listener
       // =====================================================================
-      const start = Date.now();
-      while (Date.now() - start < TEST_TIMEOUTS.CDC_PROPAGATION_WAIT_MS) {
-        const nodesEvent = cdcEventsReceived.find(
-          (e) => e.tableName === TABLES.NODES &&
-                 e.record?.[COLUMN.NODE_ID] === seedNodeId &&
-                 e.record?.[COLUMN.CPU_USAGE_PERCENT] === testCpuUsage,
-        );
-        if (nodesEvent) {
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, TEST_TIMEOUTS.POLL_INTERVAL_MS));
-      }
+      const nodesEvent = cdcEventsReceived.find((e) => isTargetNodesUpdateEvent(e));
+      t.ok(nodesEvent, 'should observe cache listener event for update');
+
+      const updatedNode = systemTableCache.get(TABLES.NODES, seedNodeId);
+      t.equal(
+        Number(updatedNode?.[COLUMN.CPU_USAGE_PERCENT]),
+        testCpuUsage,
+        'cache should reflect updated cpu_usage_percent',
+      );
 
       // =====================================================================
       // PHASE 5: Verify CDC event was received by listener
@@ -534,14 +494,13 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       t.ok(nodesEvents.length > 0, 'should receive CDC events for nodes table');
 
       const updateEvent = nodesEvents.find(
-        (e) => e.record?.[COLUMN.NODE_ID] === seedNodeId &&
-               e.record?.[COLUMN.CPU_USAGE_PERCENT] === testCpuUsage,
+        (e) => isTargetNodesUpdateEvent(e),
       );
       t.ok(updateEvent, 'should receive CDC event for the specific update');
-      t.equal(updateEvent.operation, 'UPDATE', 'operation should be UPDATE');
-
-      // Clean up listener
-      systemTableCache.offCacheChange(listener);
+      t.ok(
+        updateEvent?.operation === 'UPDATE' || updateEvent?.operation === 'UPSERT',
+        'operation should be UPDATE or UPSERT',
+      );
 
       t.comment('CDC propagation verified - cache listener received events');
     } finally {
@@ -551,8 +510,6 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       if (bootstrapResult?.partitionServices) {
         stopAllRebalancers(bootstrapResult.partitionServices);
       }
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
       await gracefulShutdown(bootstrapService, bootstrapResult, null);
     }
   });

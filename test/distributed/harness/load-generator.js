@@ -20,6 +20,7 @@ const ONE = 1;
 const IN_FLIGHT_PER_NODE = 2;
 const DRAIN_WAIT_MS = 10;
 const MAX_DISPATCHES_PER_TICK = 64;
+const MAX_DISTINCT_ERROR_MESSAGES = 10;
 
 const LOAD_TABLE_NAME = 'logs';
 const LOAD_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
@@ -161,15 +162,17 @@ function percentile(sorted, percentile) {
  * @param {number} failedCount
  * @param {number} errorCount
  * @param {number} durationMs - Total run duration in ms
+ * @param {Array<string>} [distinctErrors] - Distinct error messages
  * @returns {Object} Metrics snapshot
  */
 function computeMetrics(
   latencies, successCount, failedCount, errorCount, durationMs,
+  distinctErrors,
 ) {
   const sorted = [...latencies].sort((a, b) => a - b);
   const total = successCount + failedCount;
   const elapsed = durationMs > ZERO ? durationMs : ONE;
-  return {
+  const metrics = {
     total,
     success: successCount,
     failed: failedCount,
@@ -184,6 +187,10 @@ function computeMetrics(
     },
     opsPerSec: (total / elapsed) * MS_PER_SECOND,
   };
+  if (Array.isArray(distinctErrors) && distinctErrors.length > ZERO) {
+    metrics.distinctErrors = distinctErrors;
+  }
+  return metrics;
 }
 
 /**
@@ -224,6 +231,8 @@ class LoadRun {
     this._successCount = ZERO;
     this._failedCount = ZERO;
     this._errorCount = ZERO;
+    this._distinctErrorSet = new Set();
+    this._distinctErrors = [];
     this._counter = ZERO;
     this._nextNodeIndex = ZERO;
     this._inFlight = ZERO;
@@ -348,7 +357,6 @@ class LoadRun {
    */
   async _executeWithFailover(sql) {
     const startTs = Date.now();
-    let lastError = null;
     const nodeCount = this._availableNodes.length;
     if (nodeCount === ZERO) {
       this._failedCount++;
@@ -369,15 +377,29 @@ class LoadRun {
         this._successCount++;
         return;
       } catch (err) {
-        lastError = err;
         this._errorCount++;
+        this._captureErrorMessage(err);
       }
     }
 
     this._failedCount++;
-    if (lastError) {
-      this._errorCount++;
+  }
+
+  /**
+   * Capture a distinct error message for diagnostics.
+   * @param {Error} err
+   * @private
+   */
+  _captureErrorMessage(err) {
+    if (this._distinctErrorSet.size >= MAX_DISTINCT_ERROR_MESSAGES) {
+      return;
     }
+    const message = String(err?.message || err || 'unknown');
+    if (this._distinctErrorSet.has(message)) {
+      return;
+    }
+    this._distinctErrorSet.add(message);
+    this._distinctErrors.push(message);
   }
 
   /**
@@ -424,6 +446,7 @@ class LoadRun {
       this._failedCount,
       this._errorCount,
       elapsed,
+      this._distinctErrors,
     );
   }
 

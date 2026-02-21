@@ -271,7 +271,8 @@ test('Property 10: Operation Log Persistence', async (t) => {
           partitionId: fc.uuid(),
           nodeId: fc.uuid(),
         }),
-        fc.string({minLength: 1, maxLength: 100}),
+        fc.string({minLength: 1, maxLength: 100})
+          .filter((value) => value.trim().length > 0),
         async (move, errorMessage) => {
           const {coordinator, persistedOperations} =
             createTestCoordinatorWithPersistence();

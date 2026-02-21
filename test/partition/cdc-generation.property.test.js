@@ -205,6 +205,9 @@ test('Property 6: CDC event generated for UPDATE operations', async (t) => {
           partition.subscribeToCDC((event) => {
             cdcEvents.push(event);
           });
+          // Allow async buffer replay to complete, then clear replayed events
+          await Promise.resolve();
+          cdcEvents.length = 0;
 
           // Perform UPDATE
           await partition.updateData(tableName, {id: data.id}, {value: newValue});
@@ -281,6 +284,9 @@ test('Property 6: CDC event generated for DELETE operations', async (t) => {
           partition.subscribeToCDC((event) => {
             cdcEvents.push(event);
           });
+          // Allow async buffer replay to complete, then clear replayed events
+          await Promise.resolve();
+          cdcEvents.length = 0;
 
           // Perform DELETE
           await partition.deleteData(tableName, {id: data.id});

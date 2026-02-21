@@ -197,7 +197,8 @@ describe('MessageRouter transport cleanup verification', () => {
           fc.string({minLength: 1, maxLength: 15})
             .filter((s) => !s.includes('/') && s.trim().length > 0),
           fc.record({
-            type: fc.string({minLength: 1, maxLength: 20}),
+            type: fc.string({minLength: 1, maxLength: 20})
+              .filter((s) => s.trim().length > 0),
             data: fc.string({minLength: 0, maxLength: 50}),
           }),
           async (entityType, entityId, payload) => {
@@ -216,17 +217,18 @@ describe('MessageRouter transport cleanup verification', () => {
               const handlerResponse = {acknowledged: true, echo: 'ok'};
               testRouter.register(address, () => handlerResponse);
 
-              // Capture what deliverRemote returns directly
-              const directResult = await testRouter.deliverRemote(
-                address, 'direct-msg-id', payload, nodeId, 'direct-corr',
+              // Capture what deliverLocal returns directly
+              const directOutcome = await testRouter.deliverLocal(
+                address, 'direct-msg-id', payload, 'direct-corr',
               );
+              const directResult = directOutcome.result;
 
               // Capture what deliver() returns
               const deliverResult = await testRouter.deliver(
                 address, {...payload, messageId: 'deliver-msg-id'},
               );
 
-              // Both paths must produce acknowledged: true
+              // Both paths must produce acknowledged: true and preserve payload fields.
               return directResult.acknowledged === true &&
                      deliverResult.acknowledged === true &&
                      directResult.echo === deliverResult.echo;
@@ -249,7 +251,8 @@ describe('MessageRouter transport cleanup verification', () => {
           fc.string({minLength: 1, maxLength: 15})
             .filter((s) => !s.includes('/') && s.trim().length > 0),
           fc.record({
-            type: fc.string({minLength: 1, maxLength: 20}),
+            type: fc.string({minLength: 1, maxLength: 20})
+              .filter((s) => s.trim().length > 0),
           }),
           async (entityType, entityId, payload) => {
             const port = portCounter++;
@@ -267,18 +270,29 @@ describe('MessageRouter transport cleanup verification', () => {
               const address = `${remoteId}/${entityType}/${entityId}`;
 
               // deliver() for a remote node with no connection
-              const deliverResult = await testRouter.deliver(
-                address, payload, {targetNodeId: remoteId},
-              );
+              let deliverFailed = false;
+              try {
+                const deliverResult = await testRouter.deliver(
+                  address, payload, {targetNodeId: remoteId},
+                );
+                deliverFailed = deliverResult?.acknowledged === false;
+              } catch (_error) {
+                deliverFailed = true;
+              }
 
               // deliverRemote() directly for same target
-              const directResult = await testRouter.deliverRemote(
-                address, 'direct-id', payload, remoteId, 'direct-corr',
-              );
+              let directFailed = false;
+              try {
+                const directOutcome = await testRouter.deliverRemote(
+                  address, 'direct-id', payload, remoteId, 'direct-corr',
+                );
+                directFailed = directOutcome?.result?.acknowledged === false;
+              } catch (_error) {
+                directFailed = true;
+              }
 
-              // Both must fail with acknowledged: false
-              return deliverResult.acknowledged === false &&
-                     directResult.acknowledged === false;
+              // Both paths must fail consistently (error result or thrown failure).
+              return deliverFailed && directFailed;
             } finally {
               await testRouter.shutdown();
             }

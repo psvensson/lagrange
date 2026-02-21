@@ -22,6 +22,8 @@ import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {CDCConfirmationTracker} from '../../src/cdc/cdc-confirmation-tracker.js';
+import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {URL} from 'url';
 import {
   initializeTestEnvironment,
@@ -187,7 +189,10 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
     let bootstrapResult;
     let seedApi;
     let joiningService;
+    let cdcConfirmationTracker;
     let seedSqlEngine;
+    let seedConfirmationTracker;
+    let joiningConfirmationTracker;
 
     try {
       // =========================================================================
@@ -210,6 +215,16 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
       // PHASE 2: Start Bootstrap API for joining nodes
       // =========================================================================
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
+
+      cdcConfirmationTracker = new CDCConfirmationTracker({
+        systemTableCache,
+        timeoutMs: 5000,
+      });
+
+      seedConfirmationTracker = new CDCConfirmationTracker({
+        systemTableCache,
+        timeoutMs: 5000,
+      });
 
       seedApi = new BootstrapAPI({
         seedNodeId,
@@ -273,6 +288,14 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
       t.equal(joinResult.success, true, 'node join should succeed');
       t.ok(joinResult.messageRouter, 'joining node should have message router');
 
+      const joiningCache = joiningService.cdcIntegrationService?.systemTableCache || null;
+      if (joiningCache && joiningCache !== systemTableCache) {
+        joiningConfirmationTracker = new CDCConfirmationTracker({
+          systemTableCache: joiningCache,
+          timeoutMs: 5000,
+        });
+      }
+
       // =========================================================================
       // PHASE 5: Verify joining node is connected via WebSocket
       // =========================================================================
@@ -309,6 +332,13 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
       // PHASE 7: Write data through SQL (goes through Raft consensus)
       // =========================================================================
       // Update the joining node's status to trigger Raft replication
+      const seedConfirmation = seedConfirmationTracker.awaitConfirmation(
+        TABLES.NODES,
+        joiningNodeId,
+      );
+      const joiningConfirmation = joiningConfirmationTracker ?
+        joiningConfirmationTracker.awaitConfirmation(TABLES.NODES, joiningNodeId) :
+        Promise.resolve();
       const updateResult = await seedSqlEngine.executeQuery(
         'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
         [42, joiningNodeId],
@@ -316,12 +346,11 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
 
       t.equal(updateResult.success, true, 'update should succeed through Raft');
 
+      await Promise.all([seedConfirmation, joiningConfirmation]);
+
       // =========================================================================
       // PHASE 8: Verify data was replicated (read from system cache)
       // =========================================================================
-      // Wait for CDC to propagate the update
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
       const verifyResult = await waitForQueryRows(
         seedSqlEngine,
         'SELECT cpu_usage_percent FROM nodes WHERE node_id = ?',
@@ -336,6 +365,14 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
         42,
         'updated value should be replicated',
       );
+      if (joiningCache) {
+        const cachedJoiningNode = joiningCache.get(TABLES.NODES, joiningNodeId);
+        t.equal(
+          cachedJoiningNode?.[COLUMN.CPU_USAGE_PERCENT],
+          42,
+          'joining node cache should observe replicated update',
+        );
+      }
 
       // =========================================================================
       // PHASE 9: Verify no "Unknown message type" warnings
@@ -359,6 +396,13 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
     } finally {
       // Restore console.warn
       console.warn = originalWarn;
+
+      if (seedConfirmationTracker) {
+        seedConfirmationTracker.shutdown();
+      }
+      if (joiningConfirmationTracker) {
+        joiningConfirmationTracker.shutdown();
+      }
 
       // =========================================================================
       // CLEANUP - Stop rebalancers FIRST to prevent async operations
@@ -437,6 +481,7 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
     let bootstrapResult;
     let seedApi;
     let joiningService;
+    let cdcConfirmationTracker;
 
     try {
       // =========================================================================
@@ -457,6 +502,11 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
       // PHASE 2: Start Bootstrap API and join a second node
       // =========================================================================
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
+
+      cdcConfirmationTracker = new CDCConfirmationTracker({
+        systemTableCache,
+        timeoutMs: 5000,
+      });
 
       seedApi = new BootstrapAPI({
         seedNodeId,
@@ -509,12 +559,15 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
       // =========================================================================
       // Perform several writes to trigger Raft replication and append ack
       for (let i = 0; i < 3; i++) {
+        const confirmation = cdcConfirmationTracker.awaitConfirmation(
+          TABLES.NODES,
+          seedNodeId,
+        );
         await seedSqlEngine.executeQuery(
           'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
           [i * 10, seedNodeId],
         );
-        // Small delay to allow Raft messages to flow
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await confirmation;
       }
 
       // =========================================================================
@@ -542,11 +595,15 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
       };
 
       // Trigger one more write
+      const finalConfirmation = cdcConfirmationTracker.awaitConfirmation(
+        TABLES.NODES,
+        seedNodeId,
+      );
       await seedSqlEngine.executeQuery(
         'UPDATE nodes SET memory_usage_percent = ? WHERE node_id = ?',
         [50, seedNodeId],
       );
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await finalConfirmation;
 
       console.warn = originalConsoleWarn;
 
@@ -560,6 +617,9 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
         'should have no unknown message type console warnings',
       );
     } finally {
+      if (cdcConfirmationTracker) {
+        cdcConfirmationTracker.shutdown();
+      }
       // =========================================================================
       // CLEANUP - Stop rebalancers FIRST to prevent async operations
       // =========================================================================

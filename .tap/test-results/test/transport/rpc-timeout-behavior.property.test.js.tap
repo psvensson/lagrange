@@ -1,28 +1,28 @@
 TAP version 14
 # Subtest: Property 4: RPC Timeout Behavior
     # Subtest: requests timeout after configured duration
-        ok 1 - Should timeout with correct message for 95ms
-        ok 2 - Should wait at least 95ms (waited 95ms)
-        ok 3 - Should timeout with correct message for 38ms
-        ok 4 - Should wait at least 38ms (waited 39ms)
-        ok 5 - Should timeout with correct message for 41ms
-        ok 6 - Should wait at least 41ms (waited 41ms)
-        ok 7 - Should timeout with correct message for 98ms
-        ok 8 - Should wait at least 98ms (waited 97ms)
-        ok 9 - Should timeout with correct message for 94ms
-        ok 10 - Should wait at least 94ms (waited 94ms)
-        ok 11 - Should timeout with correct message for 21ms
-        ok 12 - Should wait at least 21ms (waited 21ms)
-        ok 13 - Should timeout with correct message for 95ms
-        ok 14 - Should wait at least 95ms (waited 96ms)
-        ok 15 - Should timeout with correct message for 74ms
-        ok 16 - Should wait at least 74ms (waited 74ms)
-        ok 17 - Should timeout with correct message for 100ms
-        ok 18 - Should wait at least 100ms (waited 100ms)
-        ok 19 - Should timeout with correct message for 81ms
-        ok 20 - Should wait at least 81ms (waited 82ms)
+        ok 1 - Should timeout with correct message for 41ms
+        ok 2 - Should wait at least 41ms (waited 42ms)
+        ok 3 - Should timeout with correct message for 26ms
+        ok 4 - Should wait at least 26ms (waited 26ms)
+        ok 5 - Should timeout with correct message for 55ms
+        ok 6 - Should wait at least 55ms (waited 56ms)
+        ok 7 - Should timeout with correct message for 54ms
+        ok 8 - Should wait at least 54ms (waited 54ms)
+        ok 9 - Should timeout with correct message for 53ms
+        ok 10 - Should wait at least 53ms (waited 53ms)
+        ok 11 - Should timeout with correct message for 47ms
+        ok 12 - Should wait at least 47ms (waited 47ms)
+        ok 13 - Should timeout with correct message for 53ms
+        ok 14 - Should wait at least 53ms (waited 53ms)
+        ok 15 - Should timeout with correct message for 83ms
+        ok 16 - Should wait at least 83ms (waited 83ms)
+        ok 17 - Should timeout with correct message for 94ms
+        ok 18 - Should wait at least 94ms (waited 94ms)
+        ok 19 - Should timeout with correct message for 93ms
+        ok 20 - Should wait at least 93ms (waited 93ms)
         1..20
-    ok 1 - requests timeout after configured duration # time=746.718ms
+    ok 1 - requests timeout after configured duration # time=610.653ms
     
     # Subtest: pending request is cleaned up after timeout
         ok 1 - Should have no pending requests after timeout
@@ -46,45 +46,45 @@ TAP version 14
         ok 19 - Should have no pending requests after timeout
         ok 20 - Correlation ID should not be pending after timeout
         1..20
-    ok 2 - pending request is cleaned up after timeout # time=310.888ms
+    ok 2 - pending request is cleaned up after timeout # time=308.862ms
     
     # Subtest: timeout counter is incremented
-        ok 1 - Should have 1 timeouts recorded
+        ok 1 - Should have 5 timeouts recorded
         ok 2 - Should have 2 timeouts recorded
-        ok 3 - Should have 3 timeouts recorded
-        ok 4 - Should have 3 timeouts recorded
-        ok 5 - Should have 3 timeouts recorded
+        ok 3 - Should have 2 timeouts recorded
+        ok 4 - Should have 1 timeouts recorded
+        ok 5 - Should have 2 timeouts recorded
         ok 6 - Should have 5 timeouts recorded
-        ok 7 - Should have 2 timeouts recorded
+        ok 7 - Should have 1 timeouts recorded
         ok 8 - Should have 5 timeouts recorded
-        ok 9 - Should have 4 timeouts recorded
+        ok 9 - Should have 3 timeouts recorded
         ok 10 - Should have 5 timeouts recorded
         1..10
-    ok 3 - timeout counter is incremented # time=672.061ms
+    ok 3 - timeout counter is incremented # time=627.353ms
     
     # Subtest: custom timeout overrides default
         ok 1 - Should use custom timeout 21ms
-        ok 2 - Should timeout before default (22ms < 105ms)
-        ok 3 - Should use custom timeout 44ms
-        ok 4 - Should timeout before default (44ms < 145ms)
-        ok 5 - Should use custom timeout 32ms
-        ok 6 - Should timeout before default (32ms < 162ms)
-        ok 7 - Should use custom timeout 21ms
-        ok 8 - Should timeout before default (22ms < 104ms)
-        ok 9 - Should use custom timeout 49ms
-        ok 10 - Should timeout before default (49ms < 102ms)
-        ok 11 - Should use custom timeout 26ms
-        ok 12 - Should timeout before default (27ms < 183ms)
-        ok 13 - Should use custom timeout 20ms
-        ok 14 - Should timeout before default (21ms < 104ms)
-        ok 15 - Should use custom timeout 24ms
-        ok 16 - Should timeout before default (24ms < 120ms)
-        ok 17 - Should use custom timeout 31ms
-        ok 18 - Should timeout before default (31ms < 156ms)
-        ok 19 - Should use custom timeout 22ms
-        ok 20 - Should timeout before default (22ms < 110ms)
+        ok 2 - Should timeout before default (21ms < 170ms)
+        ok 3 - Should use custom timeout 40ms
+        ok 4 - Should timeout before default (40ms < 185ms)
+        ok 5 - Should use custom timeout 24ms
+        ok 6 - Should timeout before default (24ms < 174ms)
+        ok 7 - Should use custom timeout 24ms
+        ok 8 - Should timeout before default (24ms < 197ms)
+        ok 9 - Should use custom timeout 21ms
+        ok 10 - Should timeout before default (21ms < 195ms)
+        ok 11 - Should use custom timeout 31ms
+        ok 12 - Should timeout before default (31ms < 193ms)
+        ok 13 - Should use custom timeout 22ms
+        ok 14 - Should timeout before default (23ms < 162ms)
+        ok 15 - Should use custom timeout 20ms
+        ok 16 - Should timeout before default (20ms < 139ms)
+        ok 17 - Should use custom timeout 22ms
+        ok 18 - Should timeout before default (22ms < 153ms)
+        ok 19 - Should use custom timeout 29ms
+        ok 20 - Should timeout before default (29ms < 177ms)
         1..20
-    ok 4 - custom timeout overrides default # time=297.674ms
+    ok 4 - custom timeout overrides default # time=260.583ms
     
     # Subtest: timeout event is emitted
         ok 1 - Should emit timeout event
@@ -128,7 +128,7 @@ TAP version 14
         ok 39 - Event should have correct target
         ok 40 - Event should have correct timeout
         1..40
-    ok 5 - timeout event is emitted # time=324.236ms
+    ok 5 - timeout event is emitted # time=353.975ms
     
     # Subtest: late response after timeout is ignored
         ok 1 - Late response should not be matched
@@ -152,11 +152,9 @@ TAP version 14
         ok 19 - Late response should not be matched
         ok 20 - Response counter should not increment for late response
         1..20
-    ok 6 - late response after timeout is ignored # time=206.197ms
+    ok 6 - late response after timeout is ignored # time=207.274ms
     
     1..6
-ok 1 - Property 4: RPC Timeout Behavior # time=2563.482ms
+ok 1 - Property 4: RPC Timeout Behavior # time=2374.157ms
 
 1..1
-# { total: 130, pass: 130 }
-# time=2622.803ms

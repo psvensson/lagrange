@@ -1007,7 +1007,7 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
           `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
         ],
         Entrypoint: ['sh', '-lc'],
-        Cmd: ['rm -rf /data/* && exec node /app/src/index.js'],
+        Cmd: ['rm -rf /data/* && exec node --max-old-space-size=1536 /app/src/index.js'],
       },
       NetworkSettings: {
         Networks: {

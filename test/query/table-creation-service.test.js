@@ -78,3 +78,32 @@ test('TableCreationService - continues when split/merge evaluation fails',
     t.equal(result.success, true);
     t.equal(result.operation, 'CREATE_TABLE');
   });
+
+test('TableCreationService - writes partition metadata with logical table_name',
+  async (t) => {
+    const writes = [];
+    const service = new TableCreationService({
+      systemCache: {
+        find() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async insertSystemTableRow(tableName, row) {
+          writes.push({tableName, row});
+          return {success: true};
+        },
+      },
+    });
+
+    const result = await service.createTable(createCreateTableAst());
+    t.equal(result.success, true);
+
+    const partitionWrite = writes.find((entry) => entry.tableName === 'partitions');
+    t.ok(partitionWrite, 'expected partitions write');
+    t.equal(
+      partitionWrite?.row?.table_name,
+      'users',
+      'partition metadata should include logical table_name',
+    );
+  });

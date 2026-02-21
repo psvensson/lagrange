@@ -20,6 +20,8 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {BOOTSTRAP_PIPELINE_ERROR_CODE} from '../../src/bootstrap/bootstrap-constants.js';
+import {CDCPipelineReadinessGate} from '../../src/cdc/cdc-pipeline-readiness-gate.js';
+import {CDC_PROPAGATED_TABLES} from '../../src/cache/cache-constants.js';
 import {COLUMN, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {URL} from 'url';
@@ -146,6 +148,28 @@ async function waitForPartitionLeader(bootstrapResult, partitionId, timeoutMs = 
   return null;
 }
 
+/**
+ * Wait for CDC pipeline readiness for the given bootstrap context.
+ * @param {Object} bootstrapResult - Result from bootstrap().
+ * @param {number} timeoutMs - Readiness timeout.
+ * @return {Promise<void>}
+ */
+async function waitForCdcPipelineReadiness(bootstrapResult, timeoutMs = 3000) {
+  const systemTableCache = NodeService.getInstance().getSystemTableCache();
+  const readinessGate = new CDCPipelineReadinessGate({
+    systemTableCache,
+    cdcPropagatedTables: CDC_PROPAGATED_TABLES,
+  });
+
+  await readinessGate.waitForReady(
+    {
+      partitionServices: bootstrapResult.partitionServices,
+      messageGroupServices: bootstrapResult.messageGroupServices,
+    },
+    timeoutMs,
+  );
+}
+
 test('Leader metadata validation on join', {timeout: 30000}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
@@ -184,6 +208,10 @@ test('Leader metadata validation on join', {timeout: 30000}, async (t) => {
           3000,
         );
         t.ok(servicesLeader, 'services partition should elect a leader');
+
+        // Ensure CDC pipeline is fully ready before introducing
+        // incomplete leader metadata into the join path.
+        await waitForCdcPipelineReadiness(bootstrapResult);
 
         // =========================================================================
         // PHASE 2: Create BootstrapAPI with incomplete leader metadata cache
@@ -286,6 +314,10 @@ test('Leader metadata validation on join', {timeout: 30000}, async (t) => {
           3000,
         );
         t.ok(servicesLeader, 'services partition should elect a leader');
+
+        // Ensure CDC pipeline is fully ready before introducing incomplete
+        // message-group leader metadata into the join path.
+        await waitForCdcPipelineReadiness(bootstrapResult);
 
         // =========================================================================
         // PHASE 2: Get message group IDs from the real cache
@@ -399,6 +431,10 @@ test('Leader metadata validation on join', {timeout: 30000}, async (t) => {
         3000,
       );
       t.ok(servicesLeader, 'services partition should elect a leader');
+
+      // Ensure CDC pipeline is fully ready before reading message groups and
+      // introducing incomplete leader metadata into the join path.
+      await waitForCdcPipelineReadiness(bootstrapResult);
 
       // =========================================================================
       // PHASE 2: Get message group IDs from the real cache
@@ -524,6 +560,9 @@ test('Leader metadata validation on join', {timeout: 30000}, async (t) => {
         3000,
       );
       t.ok(servicesLeader, 'services partition should elect a leader');
+
+      // Ensure CDC pipeline is fully ready before successful metadata assertions.
+      await waitForCdcPipelineReadiness(bootstrapResult);
 
       // =========================================================================
       // PHASE 2: Create BootstrapAPI with complete leader metadata (real cache)

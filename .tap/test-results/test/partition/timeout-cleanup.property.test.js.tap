@@ -3,31 +3,29 @@ TAP version 14
     # Subtest: timeout removes request and rejects promise
         ok 1 - timeout removes request and rejects promise
         1..1
-    ok 1 - timeout removes request and rejects promise # time=302.892ms
+    ok 1 - timeout removes request and rejects promise # time=292.619ms
     
     # Subtest: pending count decreases after timeout
         ok 1 - pending count decreases after timeout
         1..1
-    ok 2 - pending count decreases after timeout # time=203.398ms
+    ok 2 - pending count decreases after timeout # time=204.17ms
     
     # Subtest: clear rejects all pending requests
         ok 1 - clear rejects all pending requests
         1..1
-    ok 3 - clear rejects all pending requests # time=2.079ms
+    ok 3 - clear rejects all pending requests # time=2.155ms
     
     # Subtest: reject removes request and rejects promise
         ok 1 - reject removes request and rejects promise
         1..1
-    ok 4 - reject removes request and rejects promise # time=2.15ms
+    ok 4 - reject removes request and rejects promise # time=2.849ms
     
     # Subtest: getPendingIds returns all tracked IDs
         ok 1 - getPendingIds returns all tracked IDs
         1..1
-    ok 5 - getPendingIds returns all tracked IDs # time=1.483ms
+    ok 5 - getPendingIds returns all tracked IDs # time=1.556ms
     
     1..5
-ok 1 - Property 8: Timeout Cleanup # time=620.42ms
+ok 1 - Property 8: Timeout Cleanup # time=689.303ms
 
 1..1
-# { total: 5, pass: 5 }
-# time=623.815ms

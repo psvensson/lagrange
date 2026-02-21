@@ -19,30 +19,28 @@ TAP version 14
     ok 17 - Type 'error' exists in both modules
     ok 18 - RAFT_PACKET_TYPES is identical between modules
     1..18
-ok 1 - Property 5: RAFT_PACKET_TYPES is identical between modules # time=3.028ms
+ok 1 - Property 5: RAFT_PACKET_TYPES is identical between modules # time=5.713ms
 
 # Subtest: Property 5: Valid Raft packets detected consistently
     ok 1 - Valid Raft packets detected consistently across modules
     1..1
-ok 2 - Property 5: Valid Raft packets detected consistently # time=3.096ms
+ok 2 - Property 5: Valid Raft packets detected consistently # time=5.857ms
 
 # Subtest: Property 5: Non-Raft payloads rejected consistently
     ok 1 - Non-Raft payloads rejected consistently across modules
     1..1
-ok 3 - Property 5: Non-Raft payloads rejected consistently # time=3.16ms
+ok 3 - Property 5: Non-Raft payloads rejected consistently # time=7.51ms
 
 # Subtest: Property 5: Arbitrary payloads handled consistently
     ok 1 - Arbitrary payloads handled consistently across modules
     1..1
-ok 4 - Property 5: Arbitrary payloads handled consistently # time=1.493ms
+ok 4 - Property 5: Arbitrary payloads handled consistently # time=2.135ms
 
 # Subtest: Property 5: Functions are referentially equal
     ok 1 - isRaftPacket is the same function reference
     ok 2 - RAFT_PACKET_TYPES is the same Set reference
     ok 3 - Functions are referentially equal
     1..3
-ok 5 - Property 5: Functions are referentially equal # time=0.257ms
+ok 5 - Property 5: Functions are referentially equal # time=0.464ms
 
 1..5
-# { total: 24, pass: 24 }
-# time=16.592ms

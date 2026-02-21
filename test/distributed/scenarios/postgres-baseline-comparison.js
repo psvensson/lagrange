@@ -133,6 +133,44 @@ function buildBenchmarkPartitionLookupSql(tableName) {
     '\'';
 }
 
+function buildBenchmarkTableLookupSql(tableName) {
+  return 'SELECT table_id FROM tables WHERE table_name = \'' +
+    escapeSqlLiteral(tableName) +
+    '\'';
+}
+
+function buildBenchmarkPartitionLookupByTableIdSql(tableId) {
+  return 'SELECT partition_id FROM partitions WHERE table_id = \'' +
+    escapeSqlLiteral(tableId) +
+    '\'';
+}
+
+function buildBenchmarkPartitionRepairSql(tableName, tableId) {
+  return 'UPDATE partitions SET table_name = \'' +
+    escapeSqlLiteral(tableName) +
+    '\' WHERE table_id = \'' +
+    escapeSqlLiteral(tableId) +
+    '\'';
+}
+
+function firstStringField(rows, ...keys) {
+  for (const row of rows) {
+    for (const key of keys) {
+      const value = row?.[key];
+      if (typeof value === 'string' && value.length > ZERO) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+async function querySutTableId(seedNode, tableName) {
+  const result = await seedNode.query(buildBenchmarkTableLookupSql(tableName));
+  const rows = rowsFromQueryResult(result);
+  return firstStringField(rows, 'table_id', 'tableId');
+}
+
 function resolveScenarioOverrides(cluster) {
   const overrides = cluster?._scenarioOverrides?.postgresBaselineComparison;
   const createPostgresPool =
@@ -151,6 +189,11 @@ function resolveScenarioOverrides(cluster) {
 
 async function ensureSutBenchmarkTable(seedNode, tableName) {
   await seedNode.query(buildBenchmarkTableDdl(tableName));
+  const tableId = await querySutTableId(seedNode, tableName);
+  if (!tableId) {
+    return;
+  }
+  await seedNode.query(buildBenchmarkPartitionRepairSql(tableName, tableId));
 }
 
 async function ensurePostgresBenchmarkTable(pool, tableName) {
@@ -190,13 +233,25 @@ async function waitForSutBenchmarkTableReady(seedNode, tableName, options = {}) 
 
   while (Date.now() < deadline) {
     try {
-      const result = await seedNode.query(
+      const tableNameResult = await seedNode.query(
         buildBenchmarkPartitionLookupSql(tableName),
       );
-      const rows = rowsFromQueryResult(result);
-      if (rows.length > ZERO) {
+      const tableNameRows = rowsFromQueryResult(tableNameResult);
+      if (tableNameRows.length > ZERO) {
         return;
       }
+
+      const tableId = await querySutTableId(seedNode, tableName);
+      if (tableId) {
+        const tableIdResult = await seedNode.query(
+          buildBenchmarkPartitionLookupByTableIdSql(tableId),
+        );
+        const tableIdRows = rowsFromQueryResult(tableIdResult);
+        if (tableIdRows.length > ZERO) {
+          return;
+        }
+      }
+
       lastError = new Error(
         'partition metadata for table "' + tableName + '" not visible yet',
       );

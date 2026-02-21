@@ -2,135 +2,138 @@ TAP version 14
 # Subtest: setup
     ok 1 - configuration initialized
     1..1
-ok 1 - setup # time=71.999ms
+ok 1 - setup # time=54.7ms
 
 # Subtest: Property 19: Structured Logging Consistency
-{"level":50,"time":"2026-02-17T06:48:24.730Z","nodeId":"test-node","pid":2316546,"serviceId":"0000001b-92ae-5653-8000-0008c15ec9d1","serviceType":"node","traceId":"a2c5ea1c-000f-1000-a46c-1c84c26428b5","nodeId":"test-node","msg":"c~}"}
-{"level":30,"time":"2026-02-17T06:48:24.731Z","nodeId":"test-node","pid":2316546,"serviceId":"9e3bd907-2172-54c4-8000-000e00000008","traceId":"5f3848ba-9f66-3042-80a0-fc200000000f","nodeId":"test-node","msg":"iI]dX"}
-{"level":10,"time":"2026-02-17T06:48:24.732Z","nodeId":"test-node","pid":2316546,"serviceId":"0000000c-0008-1000-b6fd-31f8fffffff1","nodeId":"test-node","msg":"& 9 R"}
-{"level":50,"time":"2026-02-17T06:48:24.732Z","nodeId":"test-node","pid":2316546,"serviceId":"df0bb7df-0003-1000-8beb-2a0900000010","serviceType":"partition","traceId":"ffffffec-78db-283a-8000-00079a771514","nodeId":"test-node","msg":"key"}
-{"level":20,"time":"2026-02-17T06:48:24.734Z","nodeId":"test-node","pid":2316546,"serviceId":"70e38cd1-3208-31cd-be1f-3db9b00ddc3c","serviceType":"node","traceId":"fffffffa-fffd-5fff-bd5e-ef7900000011","nodeId":"test-node","msg":"D"}
-{"level":10,"time":"2026-02-17T06:48:24.734Z","nodeId":"test-node","pid":2316546,"serviceId":"ffffffe7-9f27-27dc-8000-0006911f2e81","serviceType":"message_group","traceId":"8badcfc4-55f0-384a-8f55-02b3eb8d431f","nodeId":"test-node","msg":"J?@-=Tf(E*3b"}
-{"level":50,"time":"2026-02-17T06:48:24.735Z","nodeId":"test-node","pid":2316546,"serviceType":"message_group","nodeId":"test-node","msg":"q"}
-{"level":10,"time":"2026-02-17T06:48:24.735Z","nodeId":"test-node","pid":2316546,"serviceId":"ffffffef-001c-1000-8000-000745f8afdb","traceId":"00000011-7000-5710-bfff-ffea0000001f","nodeId":"test-node","msg":"ozNsQI1$:5`c"}
-{"level":10,"time":"2026-02-17T06:48:24.735Z","nodeId":"test-node","pid":2316546,"serviceId":"2fa3eac3-52d6-3599-8000-001500000006","serviceType":"node","nodeId":"test-node","msg":"2H}"}
-{"level":10,"time":"2026-02-17T06:48:24.735Z","nodeId":"test-node","pid":2316546,"serviceType":"node","traceId":"18a05058-7071-31d2-8000-00117cdd1196","nodeId":"test-node","msg":"9gO"}
+{"level":10,"time":"2026-02-20T13:47:25.564Z","nodeId":"test-node","pid":3229602,"serviceId":"0000000a-34cb-4e08-8000-001400a9101a","serviceType":"message_group","nodeId":"test-node","msg":"y"}
+{"level":10,"time":"2026-02-20T13:47:25.565Z","nodeId":"test-node","pid":3229602,"serviceId":"00000006-fff6-5fff-bfff-fffb0000001d","serviceType":"node","traceId":"00000000-ffee-5fff-b385-0afa00000007","nodeId":"test-node","msg":"y$s"}
+{"level":50,"time":"2026-02-20T13:47:25.565Z","nodeId":"test-node","pid":3229602,"serviceId":"1bdbcb4c-0016-1000-805f-15560000000e","serviceType":"message_group","traceId":"57559c07-5ff2-4577-a39a-446f00000011","nodeId":"test-node","msg":"?V"}
+{"level":20,"time":"2026-02-20T13:47:25.566Z","nodeId":"test-node","pid":3229602,"traceId":"85dc911a-0011-1000-8000-0017fffffff2","nodeId":"test-node","msg":"bir"}
+{"level":20,"time":"2026-02-20T13:47:25.566Z","nodeId":"test-node","pid":3229602,"serviceId":"00000003-fff7-5fff-a0b8-87086ab2f2a5","serviceType":"message_group","traceId":"0000000f-fffe-5fff-bfff-ffe2b59d9e21","nodeId":"test-node","msg":"g"}
+{"level":20,"time":"2026-02-20T13:47:25.566Z","nodeId":"test-node","pid":3229602,"serviceId":"fffffff5-0013-1000-9369-ee0c382fbf62","serviceType":"message_group","traceId":"00000013-000a-1000-8000-000192247545","nodeId":"test-node","msg":"~|!##\"~\"b\"*"}
+{"level":10,"time":"2026-02-20T13:47:25.566Z","nodeId":"test-node","pid":3229602,"serviceId":"00000015-9128-24ec-b896-fdb2c962f26c","serviceType":"message_group","traceId":"c100daee-b665-498e-85a6-d81d118f9715","nodeId":"test-node","msg":"%#"}
+{"level":20,"time":"2026-02-20T13:47:25.567Z","nodeId":"test-node","pid":3229602,"serviceId":"f2910c48-736f-55db-8a75-7cf6ca8ecf64","serviceType":"node","traceId":"0000000c-0010-1000-8000-000d8f383816","nodeId":"test-node","msg":"hasO"}
+{"level":20,"time":"2026-02-20T13:47:25.567Z","nodeId":"test-node","pid":3229602,"serviceId":"00000012-001a-1000-9d7a-292314afdaab","serviceType":"partition","traceId":"f75a2757-001b-1000-8000-00020000001c","nodeId":"test-node","msg":"n"}
+{"level":30,"time":"2026-02-20T13:47:25.567Z","nodeId":"test-node","pid":3229602,"serviceId":"90587c4a-0238-59d1-980a-d11600000006","serviceType":"message_group","traceId":"0000001b-08dc-25fa-9841-c4430000001c","nodeId":"test-node","msg":">/]/"}
     # Subtest: log entries include required metadata
         ok 1 - all log entries include required metadata
         1..1
-    ok 1 - log entries include required metadata # time=14.984ms
+    ok 1 - log entries include required metadata # time=10.386ms
     
-{"level":10,"time":"2026-02-17T06:48:24.739Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"i!"}
-{"level":50,"time":"2026-02-17T06:48:24.739Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"S"}
-{"level":50,"time":"2026-02-17T06:48:24.739Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"}$}* \"~%%~~w"}
-{"level":10,"time":"2026-02-17T06:48:24.739Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"[4qs1m3Ipon|"}
-{"level":50,"time":"2026-02-17T06:48:24.740Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"![R"}
-{"level":40,"time":"2026-02-17T06:48:24.740Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"constructor"}
-{"level":50,"time":"2026-02-17T06:48:24.740Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"!6"}
-{"level":40,"time":"2026-02-17T06:48:24.740Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"PYsn$7J[A"}
-{"level":10,"time":"2026-02-17T06:48:24.740Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"~'"}
-{"level":30,"time":"2026-02-17T06:48:24.741Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"`PM'x"}
+{"level":40,"time":"2026-02-20T13:47:25.570Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"de&"}
+{"level":20,"time":"2026-02-20T13:47:25.570Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"call"}
+{"level":10,"time":"2026-02-20T13:47:25.571Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"oh&~"}
+{"level":30,"time":"2026-02-20T13:47:25.571Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"!$\"I"}
+{"level":10,"time":"2026-02-20T13:47:25.571Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"vz/-"}
+{"level":30,"time":"2026-02-20T13:47:25.571Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"v~a"}
+{"level":10,"time":"2026-02-20T13:47:25.571Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"e9\\`n/AkpE/"}
+{"level":50,"time":"2026-02-20T13:47:25.571Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"k1"}
+{"level":50,"time":"2026-02-20T13:47:25.572Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"o"}
+{"level":50,"time":"2026-02-20T13:47:25.572Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"xY$Hy@}"}
     # Subtest: log structure is consistent across all levels
         ok 1 - log structure is consistent across all levels
         1..1
-    ok 2 - log structure is consistent across all levels # time=2.836ms
+    ok 2 - log structure is consistent across all levels # time=2.829ms
     
-{"level":30,"time":"2026-02-17T06:48:24.742Z","nodeId":"test-node","pid":2316546,"serviceId":"00000007-0007-1000-8000-0004ffffffef","serviceType":"partition","nodeId":"test-node","msg":"x"}
-{"level":30,"time":"2026-02-17T06:48:24.742Z","nodeId":"test-node","pid":2316546,"serviceId":"7d2c94f4-fff1-5fff-9b7a-d9f70000001b","serviceType":"node","nodeId":"test-node","msg":"J! ~"}
-{"level":30,"time":"2026-02-17T06:48:24.742Z","nodeId":"test-node","pid":2316546,"serviceId":"0000000a-a5df-5cd5-a5a9-bae0d232d531","serviceType":"message_group","nodeId":"test-node","msg":"yNs]\\576Aet"}
-{"level":30,"time":"2026-02-17T06:48:24.743Z","nodeId":"test-node","pid":2316546,"serviceId":"2219f82a-8590-253f-8000-000500000004","serviceType":"partition","nodeId":"test-node","msg":"}MR<d]Yn\\?"}
-{"level":30,"time":"2026-02-17T06:48:24.743Z","nodeId":"test-node","pid":2316546,"serviceId":"00000016-fff5-5fff-8000-0017d4fb8810","serviceType":"node","nodeId":"test-node","msg":"!A__"}
-{"level":30,"time":"2026-02-17T06:48:24.743Z","nodeId":"test-node","pid":2316546,"serviceId":"bf7e7000-4374-100b-8000-00033f779bdf","serviceType":"node","nodeId":"test-node","msg":"zi"}
-{"level":30,"time":"2026-02-17T06:48:24.743Z","nodeId":"test-node","pid":2316546,"serviceId":"0ea29f19-cda0-530a-9fd1-ba6172f428ff","serviceType":"message_group","nodeId":"test-node","msg":"}=% {tG!btl"}
-{"level":30,"time":"2026-02-17T06:48:24.744Z","nodeId":"test-node","pid":2316546,"serviceId":"6fa58bd3-0004-1000-8000-00130000001b","serviceType":"node","nodeId":"test-node","msg":"~U'M`"}
-{"level":30,"time":"2026-02-17T06:48:24.744Z","nodeId":"test-node","pid":2316546,"serviceId":"fffffff6-776f-1a06-a826-662200000016","serviceType":"message_group","nodeId":"test-node","msg":"# w"}
-{"level":30,"time":"2026-02-17T06:48:24.744Z","nodeId":"test-node","pid":2316546,"serviceId":"6e56cc47-e55a-350a-bfff-fff01da0f92b","serviceType":"message_group","nodeId":"test-node","msg":"Rd<m!kfruE"}
+{"level":30,"time":"2026-02-20T13:47:25.573Z","nodeId":"test-node","pid":3229602,"serviceId":"fef363bf-b671-4f02-bfff-fffafffffffb","serviceType":"node","nodeId":"test-node","msg":"|-)HrH:<L@"}
+{"level":30,"time":"2026-02-20T13:47:25.574Z","nodeId":"test-node","pid":3229602,"serviceId":"fffffff3-194b-5c29-9942-512fffffffe8","serviceType":"partition","nodeId":"test-node","msg":"HZ%<1P"}
+{"level":30,"time":"2026-02-20T13:47:25.574Z","nodeId":"test-node","pid":3229602,"serviceId":"af0095d3-9be3-1200-8000-00134efa8e6b","serviceType":"message_group","nodeId":"test-node","msg":"X.#<l1`~\"!"}
+{"level":30,"time":"2026-02-20T13:47:25.574Z","nodeId":"test-node","pid":3229602,"serviceId":"00000002-0009-1000-8000-000fce45d73c","serviceType":"partition","nodeId":"test-node","msg":"Mlew"}
+{"level":30,"time":"2026-02-20T13:47:25.574Z","nodeId":"test-node","pid":3229602,"serviceId":"00000017-92a5-5d83-bc3f-9f11ffffffed","serviceType":"node","nodeId":"test-node","msg":"&q\":"}
+{"level":30,"time":"2026-02-20T13:47:25.575Z","nodeId":"test-node","pid":3229602,"serviceId":"c0903286-f23b-2ff6-bfff-ffee8dab62ad","serviceType":"partition","nodeId":"test-node","msg":".Z~`!L3\\BjR"}
+{"level":30,"time":"2026-02-20T13:47:25.575Z","nodeId":"test-node","pid":3229602,"serviceId":"00000008-ee32-1235-8000-00192fc79684","serviceType":"message_group","nodeId":"test-node","msg":"co"}
+{"level":30,"time":"2026-02-20T13:47:25.575Z","nodeId":"test-node","pid":3229602,"serviceId":"00000017-0006-1000-bb60-bb15ffffffe6","serviceType":"message_group","nodeId":"test-node","msg":"@s"}
+{"level":30,"time":"2026-02-20T13:47:25.575Z","nodeId":"test-node","pid":3229602,"serviceId":"0d28cfad-5001-19ae-8000-001dcac87000","serviceType":"partition","nodeId":"test-node","msg":"S%GG"}
+{"level":30,"time":"2026-02-20T13:47:25.575Z","nodeId":"test-node","pid":3229602,"serviceId":"00000002-f4dd-3f07-b50c-e9c800000010","serviceType":"message_group","nodeId":"test-node","msg":"CCf2>bKg?"}
     # Subtest: child logger preserves metadata
         ok 1 - child logger preserves metadata in all entries
         1..1
-    ok 3 - child logger preserves metadata # time=2.868ms
+    ok 3 - child logger preserves metadata # time=3.213ms
     
-{"level":30,"time":"2026-02-17T06:48:24.745Z","nodeId":"test-node","pid":2316546,"serviceId":"00000018-0001-1000-8000-000000000016","traceId":"00000006-fffc-5fff-98ac-b59dfffffff4","nodeId":"test-node","msg":"ENt?WSxSJp&2"}
-{"level":30,"time":"2026-02-17T06:48:24.745Z","nodeId":"test-node","pid":2316546,"serviceId":"0000001d-ffed-5fff-a9bc-bc8dc553566a","traceId":"cbdc78cd-0015-1000-bc2c-d346ffffffe8","nodeId":"test-node","msg":".]vt"}
-{"level":30,"time":"2026-02-17T06:48:24.746Z","nodeId":"test-node","pid":2316546,"serviceId":"94d67cd8-58a7-26cb-8000-00150000001b","traceId":"095ccafc-5e89-3377-9ecf-4a0f23af3f90","nodeId":"test-node","msg":"oz1Cv"}
-{"level":30,"time":"2026-02-17T06:48:24.746Z","nodeId":"test-node","pid":2316546,"serviceId":"57e1620f-fffa-5fff-8000-000c0000001c","traceId":"00000009-eda8-15c4-bfff-fffafffffff8","nodeId":"test-node","msg":"P!\"\""}
-{"level":30,"time":"2026-02-17T06:48:24.746Z","nodeId":"test-node","pid":2316546,"serviceId":"94e41e05-ffe5-5fff-8000-001a088e4a94","traceId":"ffffffe0-2ae5-5706-8000-00170000001e","nodeId":"test-node","msg":"wQWq-r[p[\\"}
-{"level":30,"time":"2026-02-17T06:48:24.746Z","nodeId":"test-node","pid":2316546,"serviceId":"be4b7b05-001a-1000-8bd3-1240ffffffed","traceId":"8240e811-6e30-3947-8088-15bb0000000e","nodeId":"test-node","msg":"E+n%:%oBP/Y\\"}
-{"level":30,"time":"2026-02-17T06:48:24.746Z","nodeId":"test-node","pid":2316546,"serviceId":"89e559c8-fff1-5fff-8000-000600000013","traceId":"fffffff3-0017-1000-8000-001c85024288","nodeId":"test-node","msg":"`K"}
-{"level":30,"time":"2026-02-17T06:48:24.747Z","nodeId":"test-node","pid":2316546,"serviceId":"ffffffeb-b5d4-43d4-9d33-d77fe4416a64","traceId":"edc75fa9-e078-3ff4-8000-0004eb60046b","nodeId":"test-node","msg":"K"}
-{"level":30,"time":"2026-02-17T06:48:24.747Z","nodeId":"test-node","pid":2316546,"serviceId":"00000008-0007-1000-94bc-6d2abca3cdbe","traceId":"fffffffc-ffed-5fff-bfff-fff03e89c7a2","nodeId":"test-node","msg":"l]TQKp=)"}
-{"level":30,"time":"2026-02-17T06:48:24.747Z","nodeId":"test-node","pid":2316546,"serviceId":"53f618bc-2c24-1b0c-b14b-5c771d514386","traceId":"d5f91654-faa0-32b8-8e3b-6eaeffffffe8","nodeId":"test-node","msg":"|a"}
+{"level":30,"time":"2026-02-20T13:47:25.577Z","nodeId":"test-node","pid":3229602,"serviceId":"3ed0eba1-6f69-4e80-99c7-e491c3b86889","traceId":"fffffff1-0019-1000-8000-000c0000000e","nodeId":"test-node","msg":"wr"}
+{"level":30,"time":"2026-02-20T13:47:25.577Z","nodeId":"test-node","pid":3229602,"serviceId":"09f1314b-0014-1000-ba65-73ce00000013","traceId":"79c9a9c4-be6a-49fa-8d70-a1740000001d","nodeId":"test-node","msg":"0A_LX%C%c)^"}
+{"level":30,"time":"2026-02-20T13:47:25.577Z","nodeId":"test-node","pid":3229602,"serviceId":"0000000f-8f8f-2a65-8000-000f050eb323","traceId":"2491a20a-9059-5ec7-acbf-1e913a26a404","nodeId":"test-node","msg":"1J$]"}
+{"level":30,"time":"2026-02-20T13:47:25.577Z","nodeId":"test-node","pid":3229602,"serviceId":"00000001-d731-502c-8000-00133cbd3b30","traceId":"0000000f-79f5-1228-8000-0019fffffff1","nodeId":"test-node","msg":"toString"}
+{"level":30,"time":"2026-02-20T13:47:25.577Z","nodeId":"test-node","pid":3229602,"serviceId":"2b960890-0004-1000-9b35-5b08e367bb64","traceId":"0000001a-5d78-2db6-bfff-fff70000000e","nodeId":"test-node","msg":"$O&!{y}"}
+{"level":30,"time":"2026-02-20T13:47:25.583Z","nodeId":"test-node","pid":3229602,"serviceId":"480bb7c5-3a43-42e3-8000-000dfffffffb","traceId":"ffffffeb-000d-1000-a073-1c5c00000006","nodeId":"test-node","msg":"Onameetter_"}
+{"level":30,"time":"2026-02-20T13:47:25.583Z","nodeId":"test-node","pid":3229602,"serviceId":"0188b02d-fffb-5fff-a4b1-deba0000000a","traceId":"a26b78d4-0005-1000-a523-56665b455658","nodeId":"test-node","msg":";$;pp.E"}
+{"level":30,"time":"2026-02-20T13:47:25.583Z","nodeId":"test-node","pid":3229602,"serviceId":"00000015-ffff-5fff-bfff-ffe80000001d","traceId":"f49f0bc4-001a-1000-804e-00b4fffffff0","nodeId":"test-node","msg":"Gett"}
+{"level":30,"time":"2026-02-20T13:47:25.583Z","nodeId":"test-node","pid":3229602,"serviceId":"ae522481-000f-1000-8000-00080000000f","traceId":"6f1047e6-0013-1000-a269-3a0ffffffff3","nodeId":"test-node","msg":"_mTz'r~6\"_?*"}
+{"level":30,"time":"2026-02-20T13:47:25.584Z","nodeId":"test-node","pid":3229602,"serviceId":"7bd4e82a-51da-37a2-abf0-55ab8c362c5e","traceId":"ffffffe4-5794-577a-bfff-ffe78a48c794","nodeId":"test-node","msg":"uf)7.jAo|9?e"}
     # Subtest: nested child loggers merge bindings
         ok 1 - nested child loggers merge all bindings
         1..1
-    ok 4 - nested child loggers merge bindings # time=2.991ms
+    ok 4 - nested child loggers merge bindings # time=8.034ms
     
-{"level":30,"time":"2026-02-17T06:48:24.748Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"V;D[`#N7RpB"}
-{"level":30,"time":"2026-02-17T06:48:24.748Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"xxWrN"}
-{"level":30,"time":"2026-02-17T06:48:24.748Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"g}c/4"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"!WMD#k1|XdT"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"n?RfJ"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"^i"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"tfV:ckz!^bf"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"!>a"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"Tq!*"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"`c{DK9"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"J;"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"o+9@,>g_MUj"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"yDra[gjB1d-"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"F\"a H1!b$M["}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"%D3"}
-{"level":30,"time":"2026-02-17T06:48:24.749Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"x(lnQvlKzu"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"6i3v%"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"O-?*Z~35){Y."}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"\"%K&fm\"9B^"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"nLQ)<i3jsWy"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"re"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"Pqi=CTkXh]U"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"a'?x\"z.U<{A!"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"ca"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"Z$"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"&:psBB"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"call"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"yBN^L#6{Vn`"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"~ [&M]F"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"f=vxqgTmhJ=+"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"v"}
-{"level":30,"time":"2026-02-17T06:48:24.750Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"x3`GPkre#="}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"bin"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":".\""}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"|\"D"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"L@#"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":",\"5zt- TqY"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":" T&"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"key"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"hvalu"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"Iq&"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"|&$!z`G\"/"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"R"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"(@{i:b"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"/w8Az"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"<{W"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"name"}
-{"level":30,"time":"2026-02-17T06:48:24.751Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"C"}
-{"level":30,"time":"2026-02-17T06:48:24.752Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"RD ]np:x0o*G"}
-{"level":30,"time":"2026-02-17T06:48:24.752Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"N7'T:"}
-{"level":30,"time":"2026-02-17T06:48:24.752Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"k=C"}
-{"level":30,"time":"2026-02-17T06:48:24.752Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"ref"}
-{"level":30,"time":"2026-02-17T06:48:24.752Z","nodeId":"test-node","pid":2316546,"nodeId":"test-node","msg":"=@_k%n7e"}
+{"level":30,"time":"2026-02-20T13:47:25.585Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"##"}
+{"level":30,"time":"2026-02-20T13:47:25.585Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"valueOf"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"!d"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"CCT1%)t|)&!l"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"i]1<wiw-i"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"Z#!|rgie$z"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"~"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"B((3WMR0I\"(a"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"*4xp\"i"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"fT)&V>G#Y)-"}
     # Subtest: timestamps are monotonically increasing
         ok 1 - timestamps are monotonically increasing
         1..1
-    ok 5 - timestamps are monotonically increasing # time=4.315ms
+    ok 5 - timestamps are monotonically increasing # time=4.355ms
     
     1..5
-ok 2 - Property 19: Structured Logging Consistency # time=30.803ms
+ok 2 - Property 19: Structured Logging Consistency # time=31.238ms
 
 # Subtest: cleanup
     ok 1 - cleanup complete
     1..1
-ok 3 - cleanup # time=0.323ms
+ok 3 - cleanup # time=0.366ms
 
+{"level":30,"time":"2026-02-20T13:47:25.585Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"g<0Q${"}
+{"level":30,"time":"2026-02-20T13:47:25.585Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"SQSKAB!"}
+{"level":30,"time":"2026-02-20T13:47:25.585Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":">|SI&k+-"}
+{"level":30,"time":"2026-02-20T13:47:25.585Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"):)s-"}
+{"level":30,"time":"2026-02-20T13:47:25.585Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"P]DO9E\"VRgU"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"Lo"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"@men"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"-$A&~Ny"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"bind"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"u! z"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"Z~R`sQY"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"^9~}+<"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"a"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"oto_"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"e\"&Prope__lo"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"\"4"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"4VB."}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"$;3-;ev%M2"}
+{"level":30,"time":"2026-02-20T13:47:25.586Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":";OFl"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"/"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"9UHzBi"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"j|=7Tb@nu{$"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"1ff8<!"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"?"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"call"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"bz{v"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":",~>Zz2/%O97$"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"3M}UU~nz_u8!"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"?NB"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"G"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"[{9K3@dcaZA"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"`F"}
+{"level":30,"time":"2026-02-20T13:47:25.587Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"eH5{/)"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"/C<Q"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"r{&.yAT"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"A4X~(?P?Em2"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"iwA"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"K"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"e{?"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"oo,=j9PAB"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"-+R:Ox"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"N7"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"SSCoz!@R0Ee"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":" ]?-@t"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"NFIEs}<RhA#:"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":":|"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"ixV@"}
+{"level":30,"time":"2026-02-20T13:47:25.588Z","nodeId":"test-node","pid":3229602,"nodeId":"test-node","msg":"\\e3InxL"}
 1..3
-# { total: 7, pass: 7 }
-# time=109.933ms

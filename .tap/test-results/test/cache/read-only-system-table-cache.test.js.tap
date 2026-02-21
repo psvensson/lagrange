@@ -2,70 +2,70 @@ TAP version 14
 # Subtest: ReadOnlySystemTableCache - requires underlying cache
     ok 1 - Should throw when no cache provided
     1..1
-ok 1 - ReadOnlySystemTableCache - requires underlying cache # time=7.241ms
+ok 1 - ReadOnlySystemTableCache - requires underlying cache # time=3.808ms
 
 # Subtest: ReadOnlySystemTableCache - get works correctly
     ok 1 - Should return correct record
     ok 2 - Should have correct address
     1..2
-ok 2 - ReadOnlySystemTableCache - get works correctly # time=0.853ms
+ok 2 - ReadOnlySystemTableCache - get works correctly # time=0.466ms
 
 # Subtest: ReadOnlySystemTableCache - find works correctly
     ok 1 - Should find a record
     ok 2 - Should match predicate
     1..2
-ok 3 - ReadOnlySystemTableCache - find works correctly # time=0.756ms
+ok 3 - ReadOnlySystemTableCache - find works correctly # time=0.462ms
 
 # Subtest: ReadOnlySystemTableCache - filter works correctly
     ok 1 - Should return matching records
     1..1
-ok 4 - ReadOnlySystemTableCache - filter works correctly # time=0.563ms
+ok 4 - ReadOnlySystemTableCache - filter works correctly # time=0.351ms
 
 # Subtest: ReadOnlySystemTableCache - getAll works correctly
     ok 1 - Should return all records
     1..1
-ok 5 - ReadOnlySystemTableCache - getAll works correctly # time=0.619ms
+ok 5 - ReadOnlySystemTableCache - getAll works correctly # time=0.431ms
 
 # Subtest: ReadOnlySystemTableCache - has works correctly
     ok 1 - Should return true
     ok 2 - Should return false
     1..2
-ok 6 - ReadOnlySystemTableCache - has works correctly # time=0.612ms
+ok 6 - ReadOnlySystemTableCache - has works correctly # time=0.35ms
 
 # Subtest: ReadOnlySystemTableCache - count works correctly
     ok 1 - Should return correct count
     1..1
-ok 7 - ReadOnlySystemTableCache - count works correctly # time=0.534ms
+ok 7 - ReadOnlySystemTableCache - count works correctly # time=0.37ms
 
 # Subtest: ReadOnlySystemTableCache - getTableNames works correctly
     ok 1 - Should include nodes
     ok 2 - Should include partitions
     1..2
-ok 8 - ReadOnlySystemTableCache - getTableNames works correctly # time=0.569ms
+ok 8 - ReadOnlySystemTableCache - getTableNames works correctly # time=0.504ms
 
-{"level":50,"time":"2026-02-17T06:43:52.832Z","nodeId":"test-node","pid":2311786,"subsystem":"cache","operation":"applySystemTableChange","attemptedMethod":"applySystemTableChange","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
+{"level":50,"time":"2026-02-20T13:46:53.598Z","nodeId":"test-node","pid":3226160,"subsystem":"cache","operation":"applySystemTableChange","attemptedMethod":"applySystemTableChange","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
 # Subtest: createReadOnlyCache - blocks applySystemTableChange
     ok 1 - Should throw on write attempt
     1..1
-ok 9 - createReadOnlyCache - blocks applySystemTableChange # time=1.37ms
+ok 9 - createReadOnlyCache - blocks applySystemTableChange # time=1.115ms
 
-{"level":50,"time":"2026-02-17T06:43:52.855Z","nodeId":"test-node","pid":2311786,"subsystem":"cache","operation":"clear","attemptedMethod":"clear","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
+{"level":50,"time":"2026-02-20T13:46:53.615Z","nodeId":"test-node","pid":3226160,"subsystem":"cache","operation":"clear","attemptedMethod":"clear","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
 # Subtest: createReadOnlyCache - blocks clear
     ok 1 - Should throw on clear attempt
     1..1
-ok 10 - createReadOnlyCache - blocks clear # time=0.731ms
+ok 10 - createReadOnlyCache - blocks clear # time=0.426ms
 
-{"level":50,"time":"2026-02-17T06:43:52.880Z","nodeId":"test-node","pid":2311786,"subsystem":"cache","operation":"direct_access","attemptedProperty":"_cache","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
+{"level":50,"time":"2026-02-20T13:46:53.629Z","nodeId":"test-node","pid":3226160,"subsystem":"cache","operation":"direct_access","attemptedProperty":"_cache","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
 # Subtest: createReadOnlyCache - blocks direct cache access
     ok 1 - Should throw on direct cache access
     1..1
-ok 11 - createReadOnlyCache - blocks direct cache access # time=0.634ms
+ok 11 - createReadOnlyCache - blocks direct cache access # time=0.408ms
 
-{"level":50,"time":"2026-02-17T06:43:52.903Z","nodeId":"test-node","pid":2311786,"subsystem":"cache","operation":"direct_access","attemptedProperty":"tables","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
+{"level":50,"time":"2026-02-20T13:46:53.645Z","nodeId":"test-node","pid":3226160,"subsystem":"cache","operation":"direct_access","attemptedProperty":"tables","hint":"Use CDCIntegrationService for writes","nodeId":"test-node","msg":"Attempted to write to read-only cache"}
 # Subtest: createReadOnlyCache - blocks tables access
     ok 1 - Should throw on tables access
     1..1
-ok 12 - createReadOnlyCache - blocks tables access # time=0.58ms
+ok 12 - createReadOnlyCache - blocks tables access # time=0.45ms
 
 # Subtest: createReadOnlyCache - allows read operations
     ok 1 - get should work
@@ -75,15 +75,13 @@ ok 12 - createReadOnlyCache - blocks tables access # time=0.58ms
     ok 5 - has should work
     ok 6 - count should work
     1..6
-ok 13 - createReadOnlyCache - allows read operations # time=1.073ms
+ok 13 - createReadOnlyCache - allows read operations # time=0.843ms
 
 # Subtest: createReadOnlyCache - reflects underlying cache changes
     ok 1 - Should have 2 nodes initially
     ok 2 - Should have 3 nodes after CDC update
     ok 3 - Should see new node
     1..3
-ok 14 - createReadOnlyCache - reflects underlying cache changes # time=0.815ms
+ok 14 - createReadOnlyCache - reflects underlying cache changes # time=0.4ms
 
 1..14
-# { total: 25, pass: 25 }
-# time=437.298ms

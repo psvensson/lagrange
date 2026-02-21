@@ -233,3 +233,8 @@ npm test -- --grep "should insert"
 # Run a single test
 npm test -- --grep "exact test name"
 ```
+
+## Distributed test harness
+
+Used for lifelike testing scenarios with multiple nodes and for efficiency testing.
+See; test/distributed/README.local.md

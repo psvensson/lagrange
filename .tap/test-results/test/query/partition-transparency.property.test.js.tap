@@ -2,17 +2,17 @@ TAP version 14
 # Subtest: Property 45: stripPartitionDetails removes internal partition fields
     ok 1 - stripPartitionDetails removes all internal partition fields
     1..1
-ok 1 - Property 45: stripPartitionDetails removes internal partition fields # time=10.776ms
+ok 1 - Property 45: stripPartitionDetails removes internal partition fields # time=6.779ms
 
 # Subtest: Property 45: User data fields preserved after stripping
     ok 1 - User data fields are preserved after stripping partition details
     1..1
-ok 2 - Property 45: User data fields preserved after stripping # time=5.906ms
+ok 2 - Property 45: User data fields preserved after stripping # time=2.491ms
 
 # Subtest: Property 45: isPartitionField identifies partition fields
     ok 1 - isPartitionField correctly identifies partition-related fields
     1..1
-ok 3 - Property 45: isPartitionField identifies partition fields # time=1.091ms
+ok 3 - Property 45: isPartitionField identifies partition fields # time=0.693ms
 
 # Subtest: Property 45: Null/undefined results handled gracefully
     ok 1 - Null result returns null
@@ -20,8 +20,6 @@ ok 3 - Property 45: isPartitionField identifies partition fields # time=1.091ms
     ok 3 - Empty object returns object
     ok 4 - Null/undefined results are handled gracefully
     1..4
-ok 4 - Property 45: Null/undefined results handled gracefully # time=1.106ms
+ok 4 - Property 45: Null/undefined results handled gracefully # time=0.556ms
 
 1..4
-# { total: 7, pass: 7 }
-# time=172.561ms

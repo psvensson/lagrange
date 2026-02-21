@@ -8,26 +8,16 @@ TAP version 14
         ok 5 - should have message group assignment
         ok 6 - should have valid assignment strategy
         ok 7 - should have system table snapshots
-{"level":50,"time":"2026-02-17T06:42:52.334Z","nodeId":"test-node","pid":2311224,"subsystem":"query-executor","partitionId":"node_endpoints-p1","address":"8bb9de84-10d5-4356-bc3e-38e20ef1bf40/partition/node_endpoints-p1-r1","error":"Connection to node 8bb9de84-10d5-4356-bc3e-38e20ef1bf40 closed","nodeId":"test-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:52.335Z","nodeId":"test-node","pid":2311224,"subsystem":"query-executor","partitionId":"nodes-p1","address":"8bb9de84-10d5-4356-bc3e-38e20ef1bf40/partition/nodes-p1-r1","error":"Connection to node 8bb9de84-10d5-4356-bc3e-38e20ef1bf40 closed","nodeId":"test-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:52.335Z","nodeId":"test-node","pid":2311224,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-8bb9de84-10d5-4356-bc3e-38e20ef1bf40-ws","error":"Distributed operation failed due to participant failures","nodeId":"test-node","msg":"Failed to upsert system table row"}
-{"level":50,"time":"2026-02-17T06:42:52.335Z","nodeId":"test-node","pid":2311224,"subsystem":"cdc-integration","tableName":"nodes","id":"8bb9de84-10d5-4356-bc3e-38e20ef1bf40","error":"Distributed operation failed due to participant failures","nodeId":"test-node","msg":"Failed to update system table row"}
-{"level":50,"time":"2026-02-17T06:42:52.335Z","nodeId":"test-node","pid":2311224,"subsystem":"latency-group-manager","nodeId":"test-node","trigger":"initial","error":"Distributed operation failed due to participant failures","msg":"Latency assignment cycle failed"}
         1..7
-    ok 1 - new node with UUID receives valid bootstrap response # time=3525.029ms
+    ok 1 - new node with UUID receives valid bootstrap response # time=8314.672ms
     
     # Subtest: duplicate node ID is rejected
         ok 1 - seed bootstrap should succeed
         ok 2 - first registration should succeed
         ok 3 - idempotent second registration should return a response
         ok 4 - response should target same seed
-{"level":50,"time":"2026-02-17T06:42:55.291Z","nodeId":"test-node","pid":2311224,"subsystem":"query-executor","partitionId":"node_endpoints-p1","address":"433aea21-eeb8-481e-9d47-49facfce525a/partition/node_endpoints-p1-r1","error":"Connection to node 433aea21-eeb8-481e-9d47-49facfce525a closed","nodeId":"test-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:55.291Z","nodeId":"test-node","pid":2311224,"subsystem":"query-executor","partitionId":"nodes-p1","address":"433aea21-eeb8-481e-9d47-49facfce525a/partition/nodes-p1-r1","error":"Connection to node 433aea21-eeb8-481e-9d47-49facfce525a closed","nodeId":"test-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:55.292Z","nodeId":"test-node","pid":2311224,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-433aea21-eeb8-481e-9d47-49facfce525a-ws","error":"Distributed operation failed due to participant failures","nodeId":"test-node","msg":"Failed to upsert system table row"}
-{"level":50,"time":"2026-02-17T06:42:55.292Z","nodeId":"test-node","pid":2311224,"subsystem":"cdc-integration","tableName":"nodes","id":"433aea21-eeb8-481e-9d47-49facfce525a","error":"Distributed operation failed due to participant failures","nodeId":"test-node","msg":"Failed to update system table row"}
-{"level":50,"time":"2026-02-17T06:42:55.292Z","nodeId":"test-node","pid":2311224,"subsystem":"latency-group-manager","nodeId":"test-node","trigger":"initial","error":"Distributed operation failed due to participant failures","msg":"Latency assignment cycle failed"}
         1..4
-    ok 2 - duplicate node ID is rejected # time=2915.8ms
+    ok 2 - duplicate node ID is rejected # time=7411.901ms
     
     # Subtest: bootstrap response contains required fields
         ok 1 - seed bootstrap should succeed
@@ -36,17 +26,10 @@ TAP version 14
         ok 4 - should have messageGroupAssignment
         ok 5 - should have systemTableSnapshots
         ok 6 - should have currentEpoch
-{"level":50,"time":"2026-02-17T06:42:58.527Z","nodeId":"test-node","pid":2311224,"subsystem":"query-executor","partitionId":"node_endpoints-p1","address":"6118eff4-91d6-4abb-af04-f2fd34c959a4/partition/node_endpoints-p1-r1","error":"Connection to node 6118eff4-91d6-4abb-af04-f2fd34c959a4 closed","nodeId":"test-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:58.527Z","nodeId":"test-node","pid":2311224,"subsystem":"query-executor","partitionId":"nodes-p1","address":"6118eff4-91d6-4abb-af04-f2fd34c959a4/partition/nodes-p1-r1","error":"Connection to node 6118eff4-91d6-4abb-af04-f2fd34c959a4 closed","nodeId":"test-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:58.528Z","nodeId":"test-node","pid":2311224,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-6118eff4-91d6-4abb-af04-f2fd34c959a4-ws","error":"Distributed operation failed due to participant failures","nodeId":"test-node","msg":"Failed to upsert system table row"}
-{"level":50,"time":"2026-02-17T06:42:58.528Z","nodeId":"test-node","pid":2311224,"subsystem":"cdc-integration","tableName":"nodes","id":"6118eff4-91d6-4abb-af04-f2fd34c959a4","error":"Distributed operation failed due to participant failures","nodeId":"test-node","msg":"Failed to update system table row"}
-{"level":50,"time":"2026-02-17T06:42:58.528Z","nodeId":"test-node","pid":2311224,"subsystem":"latency-group-manager","nodeId":"test-node","trigger":"initial","error":"Distributed operation failed due to participant failures","msg":"Latency assignment cycle failed"}
         1..6
-    ok 3 - bootstrap response contains required fields # time=3203.273ms
+    ok 3 - bootstrap response contains required fields # time=7892.265ms
     
     1..3
-ok 1 - Property 11: Node Bootstrap Consistency # time=9767.49ms
+ok 1 - Property 11: Node Bootstrap Consistency # time=23739.864ms
 
 1..1
-# { total: 17, pass: 17 }
-# time=9774.15ms

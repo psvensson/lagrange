@@ -3,21 +3,19 @@ TAP version 14
     # Subtest: no ADD moves for nodes with pending replicas
         ok 1 - no ADD moves for nodes with pending replicas
         1..1
-    ok 1 - no ADD moves for nodes with pending replicas # time=5.63ms
+    ok 1 - no ADD moves for nodes with pending replicas # time=6.568ms
     
     # Subtest: cache correctly tracks in-flight operations
         ok 1 - cache correctly tracks in-flight operations
         1..1
-    ok 2 - cache correctly tracks in-flight operations # time=2.078ms
+    ok 2 - cache correctly tracks in-flight operations # time=3.043ms
     
     # Subtest: ADD moves allowed for nodes without in-flight operations
         ok 1 - ADD moves allowed for nodes without in-flight operations
         1..1
-    ok 3 - ADD moves allowed for nodes without in-flight operations # time=1.667ms
+    ok 3 - ADD moves allowed for nodes without in-flight operations # time=3.212ms
     
     1..3
-ok 1 - Property 3: No Duplicate ADD Moves for Transitional Replicas # time=95.681ms
+ok 1 - Property 3: No Duplicate ADD Moves for Transitional Replicas # time=154.453ms
 
 1..1
-# { total: 3, pass: 3 }
-# time=110.502ms

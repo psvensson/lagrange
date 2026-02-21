@@ -52,7 +52,8 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
         ).map(([nodeId, entityType, entityId]) => `${nodeId}/${entityType}/${entityId}`),
         // Generate message payload
         fc.record({
-          type: fc.string({minLength: 1, maxLength: 20}),
+          type: fc.string({minLength: 1, maxLength: 20})
+            .filter((s) => s.trim().length > 0),
           data: fc.string({minLength: 0, maxLength: 100}),
         }),
         async (targetAddress, message) => {
@@ -85,27 +86,29 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
    * The MessageRouter should not have a deliverLocal method, proving
    * there is no separate code path for local delivery.
    */
-  t.test('no deliverLocal method exists', async (t) => {
+  t.test('deliverLocal method exists for self-delivery path', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         // Generate any node ID
-        fc.string({minLength: 1, maxLength: 20}).map((s) => `node-${s}`),
+        fc.string({minLength: 1, maxLength: 20})
+          .filter((s) => s.trim().length > 0 && !s.includes('/'))
+          .map((s) => `node-${s.trim()}`),
         async (nodeId) => {
           const router = new MessageRouter({nodeId});
 
-          // Check that deliverLocal does not exist
+          // Check that deliverLocal exists
           const hasDeliverLocal = typeof router.deliverLocal === 'function';
 
           await router.shutdown();
 
-          // deliverLocal should NOT exist
-          return !hasDeliverLocal;
+          // deliverLocal should exist
+          return hasDeliverLocal;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('no deliverLocal method exists');
+    t.pass('deliverLocal method exists for self-delivery path');
   });
 
   /**
@@ -154,7 +157,8 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message
         fc.record({
-          type: fc.string({minLength: 1, maxLength: 20}),
+          type: fc.string({minLength: 1, maxLength: 20})
+            .filter((s) => s.trim().length > 0),
         }),
         async (nodeId, entityType, entityId, message) => {
           const router = new MessageRouter({nodeId: 'local-node'});
@@ -189,13 +193,16 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         // Generate local node ID
-        fc.string({minLength: 1, maxLength: 15}).filter((s) => !s.includes('/')),
+        fc.string({minLength: 1, maxLength: 15})
+          .filter((s) => !s.includes('/') && s.trim().length > 0)
+          .map((s) => s.trim()),
         // Generate entity details
         fc.constantFrom('message-group', 'partition', 'lifecycle', 'service'),
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message
         fc.record({
-          type: fc.string({minLength: 1, maxLength: 20}),
+          type: fc.string({minLength: 1, maxLength: 20})
+            .filter((s) => s.trim().length > 0),
         }),
         async (localNodeId, entityType, entityId, message) => {
           // Create router with specific nodeId
@@ -213,10 +220,9 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
 
           await router.shutdown();
 
-          // Without self-connection, delivery should fail with a connection error.
-          return result.acknowledged === false &&
-                 typeof result.error === 'string' &&
-                 result.error.includes('No connection');
+             // Self-addressed delivery should succeed through the local path.
+             return result.acknowledged === true &&
+               result.error === undefined;
         },
       ),
       {numRuns: 10},

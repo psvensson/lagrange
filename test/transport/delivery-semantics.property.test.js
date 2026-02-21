@@ -60,7 +60,8 @@ test('Property 5: Delivery Semantics', async (t) => {
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message payload
         fc.record({
-          type: fc.string({minLength: 1, maxLength: 20}),
+          type: fc.string({minLength: 1, maxLength: 20})
+            .filter((s) => s.trim().length > 0),
           data: fc.string({minLength: 0, maxLength: 100}),
         }),
         // Generate handler response data
@@ -123,7 +124,8 @@ test('Property 5: Delivery Semantics', async (t) => {
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message payload
         fc.record({
-          type: fc.string({minLength: 1, maxLength: 20}),
+          type: fc.string({minLength: 1, maxLength: 20})
+            .filter((s) => s.trim().length > 0),
           data: fc.string({minLength: 0, maxLength: 100}),
         }),
         async (entityType, entityId, message) => {
@@ -175,7 +177,8 @@ test('Property 5: Delivery Semantics', async (t) => {
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message payload
         fc.record({
-          type: fc.string({minLength: 1, maxLength: 20}),
+          type: fc.string({minLength: 1, maxLength: 20})
+            .filter((s) => s.trim().length > 0),
         }),
         // Generate error message (non-empty, no special chars that could break)
         fc.string({minLength: 1, maxLength: 50})
@@ -199,15 +202,11 @@ test('Property 5: Delivery Semantics', async (t) => {
               throw new Error(errorMessage);
             });
 
-            // Deliver message - should reject
-            try {
-              await router.deliver(targetAddress, message);
-              // If we get here, the delivery didn't reject as expected
-              return false;
-            } catch (error) {
-              // Error should contain the handler's error message
-              return error.message.includes(errorMessage);
-            }
+            // Deliver message - should return explicit failure result
+            const result = await router.deliver(targetAddress, message);
+            return result.acknowledged === false &&
+                   typeof result.error === 'string' &&
+                   result.error.includes(errorMessage);
           } finally {
             await router.shutdown();
           }
@@ -235,7 +234,8 @@ test('Property 5: Delivery Semantics', async (t) => {
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message payload
         fc.record({
-          type: fc.string({minLength: 1, maxLength: 20}),
+          type: fc.string({minLength: 1, maxLength: 20})
+            .filter((s) => s.trim().length > 0),
         }),
         // Generate whether handler exists
         fc.boolean(),
@@ -289,7 +289,8 @@ test('Property 5: Delivery Semantics', async (t) => {
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message payload
         fc.record({
-          type: fc.string({minLength: 1, maxLength: 20}),
+          type: fc.string({minLength: 1, maxLength: 20})
+            .filter((s) => s.trim().length > 0),
           data: fc.option(fc.string({maxLength: 50})),
         }),
         // Generate handler behavior
@@ -352,7 +353,8 @@ test('Property 5: Delivery Semantics', async (t) => {
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message payload
         fc.record({
-          type: fc.string({minLength: 1, maxLength: 20}),
+          type: fc.string({minLength: 1, maxLength: 20})
+            .filter((s) => s.trim().length > 0),
         }),
         // Generate handler response with various acknowledged values
         fc.constantFrom(true, false),
@@ -404,7 +406,8 @@ test('Property 5: Delivery Semantics', async (t) => {
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message payload
         fc.record({
-          type: fc.string({minLength: 1, maxLength: 20}),
+          type: fc.string({minLength: 1, maxLength: 20})
+            .filter((s) => s.trim().length > 0),
         }),
         // Generate whether handler throws
         fc.boolean(),
@@ -432,16 +435,16 @@ test('Property 5: Delivery Semantics', async (t) => {
               }));
             }
 
-            // Deliver message
-            try {
-              const result = await router.deliver(targetAddress, message);
-              // Success case: error should be undefined
-              return result.acknowledged === true &&
-                     (result.error === undefined || result.error === null);
-            } catch (error) {
-              // Error case: should have thrown with error message
-              return shouldThrow && error.message.includes('Test error');
+            // Deliver message and verify explicit success/failure shape
+            const result = await router.deliver(targetAddress, message);
+            if (shouldThrow) {
+              return result.acknowledged === false &&
+                     typeof result.error === 'string' &&
+                     result.error.includes('Test error');
             }
+
+            return result.acknowledged === true &&
+                   (result.error === undefined || result.error === null);
           } finally {
             await router.shutdown();
           }
@@ -469,7 +472,8 @@ test('Property 5: Delivery Semantics', async (t) => {
         fc.string({minLength: 1, maxLength: 20}).filter((s) => !s.includes('/')),
         // Generate message payload
         fc.record({
-          type: fc.string({minLength: 1, maxLength: 20}),
+          type: fc.string({minLength: 1, maxLength: 20})
+            .filter((s) => s.trim().length > 0),
         }),
         // Generate handler response with multiple fields
         fc.record({

@@ -442,6 +442,7 @@ async function main() {
       sqlQueryEngine = new SQLQueryEngine({
         systemCache: systemTableCache,
         messageRouter: joinResult.messageRouter,
+        cdcIntegrationService: nodeJoiningService.cdcIntegrationService,
         nodeId: config.get(CONFIG_KEY.NODE_ID),
         runtimeDriverRegistry: nodeJoiningService.runtimeDriverRegistry,
         serviceRuntimeLifecycle: nodeJoiningService.serviceRuntimeLifecycle,
@@ -592,6 +593,7 @@ async function main() {
     const sqlQueryEngine = new SQLQueryEngine({
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
+      cdcIntegrationService: bootstrapService.cdcIntegrationService,
       nodeId: config.get(CONFIG_KEY.NODE_ID),
       runtimeDriverRegistry: bootstrapService.runtimeDriverRegistry,
       serviceRuntimeLifecycle: bootstrapService.serviceRuntimeLifecycle,

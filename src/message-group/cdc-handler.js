@@ -9,6 +9,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {CDC_OPERATION} from '../constants/index.js';
+import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 
 /**
@@ -84,6 +85,9 @@ class CDCHandler extends EventEmitter {
     this.flushIntervalMs = options.flushIntervalMs ||
       config.get(CONFIG_KEY.MESSAGE_GROUP_CDC_FLUSH_INTERVAL_MS) || 1000;
     this.maxProcessedEventIds = options.maxProcessedEventIds || 10000;
+
+    // Optional CDC pipeline metrics for delivery tracking
+    this.cdcPipelineMetrics = options.cdcPipelineMetrics || null;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -390,6 +394,13 @@ class CDCHandler extends EventEmitter {
       // Canonical CDC apply path: all steady-state cache mutations flow here.
       // See architecture.md: Sanctioned direct applySystemTableChange call sites.
       this.cache.applySystemTableChange(tableName, operation, data);
+
+      // Track successful delivery to cache
+      if (this.cdcPipelineMetrics) {
+        this.cdcPipelineMetrics.increment(
+          CDC_PIPELINE_METRIC.EVENTS_DELIVERED,
+        );
+      }
 
       // Update tracking
       this.lastAppliedTimestamp.set(tableName, timestamp);

@@ -1352,12 +1352,12 @@ class MessageGroupService extends EventEmitter {
         timestamp: eventTimestamp,
       });
 
-      // Replicate if leader using liferaft
-      // Only use liferaft's command if it considers itself the leader
+      // Replicate via Raft so all message group replicas (and their
+      // co-located system caches) receive this CDC event.
       const isLiferaftLeader =
         this.raft && this.raft.state === LifeRaft.LEADER;
       if (isLiferaftLeader) {
-        // Fire and forget - don't wait for commit
+        // Leader: propose directly to Raft log for replication.
         this.raftProvider.propose(this.raft, {
           type: 'CDC',
           tableName,
@@ -1371,6 +1371,13 @@ class MessageGroupService extends EventEmitter {
             });
           }
         });
+      } else {
+        // Non-leader: forward to the MG leader for Raft replication.
+        // Without this, CDC events from partition leaders co-located
+        // with a non-leader MG replica never reach other nodes.
+        // Dedup in cdcHandler.applyImmediate prevents double-apply
+        // when the Raft-replicated entry arrives back on this node.
+        this.forwardCDCEventToLeader(tableName, operation, data);
       }
 
       try {
@@ -1420,6 +1427,48 @@ class MessageGroupService extends EventEmitter {
     });
   }
 
+  /**
+   * Forward a CDC event to the message group leader for Raft replication.
+   * Called when the local MG replica is not the Raft leader. Uses the
+   * existing latency CDC propagation message type which the leader
+   * already handles via handleLatencyCdcPropagationMessage.
+   * Fire-and-forget: forwarding failures are logged but do not block
+   * the caller. The local cache is already updated before this runs.
+   * @param {string} tableName - System table name.
+   * @param {string} operation - CDC operation.
+   * @param {Object} data - Record data.
+   * @private
+   */
+  forwardCDCEventToLeader(tableName, operation, data) {
+    if (!this.leaderId || this.leaderId === this.replicaId) {
+      return;
+    }
+    let leaderAddress;
+    try {
+      leaderAddress = this.buildPeerAddress(this.leaderId);
+    } catch (_err) {
+      this.logger.debug('Cannot resolve leader address for CDC forward', {
+        groupId: this.groupId,
+        leaderId: this.leaderId,
+      });
+      return;
+    }
+    const payload = {
+      type: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION,
+      tableName,
+      operation,
+      data,
+      sourceNodeId: this.nodeId,
+    };
+    this.transport.deliver(leaderAddress, payload).catch((err) => {
+      this.logger.debug('CDC forward to leader failed', {
+        groupId: this.groupId,
+        leaderId: this.leaderId,
+        tableName,
+        error: err.message,
+      });
+    });
+  }
 
   /**
    * Query the system table cache.

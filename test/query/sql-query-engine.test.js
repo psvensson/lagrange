@@ -103,6 +103,109 @@ test('SQLQueryEngine - executes SELECT query', async (t) => {
   mockPartitionData.clear();
 });
 
+test('SQLQueryEngine - resolves partitions by table_id when table_name is missing',
+  async (t) => {
+    mockPartitionData.set('p1', [{id: 'alice', name: 'Alice'}]);
+
+    const cache = createMockSystemCache(
+      [{table_id: 'tbl-users', table_name: 'users', primaryKey: 'id'}],
+      [
+        {
+          partition_id: 'p1',
+          table_id: 'tbl-users',
+          partition_key_start: null,
+          partition_key_end: null,
+        },
+      ],
+    );
+
+    const engine = new SQLQueryEngine({
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+    });
+
+    const result = await engine.executeQuery('SELECT * FROM users');
+
+    t.equal(result.success, true);
+    t.equal(result.partitions.length, 1);
+    t.equal(result.partitions[0], 'p1');
+    t.equal(result.rows.length, 1);
+
+    mockPartitionData.clear();
+  });
+
+test('SQLQueryEngine - falls back to tables.find when tables.get is keyed by table_id',
+  async (t) => {
+    mockPartitionData.set('p1', [{id: 'alice', name: 'Alice'}]);
+
+    const tableRecord = {table_id: 'tbl-users', table_name: 'users', primaryKey: 'id'};
+    const partitionRecords = [{
+      partition_id: 'p1',
+      table_id: 'tbl-users',
+      partition_key_start: null,
+      partition_key_end: null,
+    }];
+    const serviceRecords = [{
+      service_id: 'p1',
+      service_type: 'partition',
+      partition_id: 'p1',
+      node_id: 'test-node',
+      raft_role: 'leader',
+      address: 'test-node/partition/p1',
+      status: 'active',
+    }];
+
+    const cache = {
+      get(type, key) {
+        if (type === TABLES.TABLES && key === tableRecord.table_id) {
+          return tableRecord;
+        }
+        return null;
+      },
+      find(type, predicate) {
+        if (type === TABLES.TABLES && predicate(tableRecord)) {
+          return tableRecord;
+        }
+        return null;
+      },
+      filter(type, predicate) {
+        if (type === TABLES.PARTITIONS) {
+          return partitionRecords.filter(predicate);
+        }
+        if (type === TABLES.SERVICES) {
+          return serviceRecords.filter(predicate);
+        }
+        return [];
+      },
+      getAll(type) {
+        if (type === TABLES.PARTITIONS) {
+          return partitionRecords;
+        }
+        if (type === TABLES.TABLES) {
+          return [tableRecord];
+        }
+        if (type === TABLES.SERVICES) {
+          return serviceRecords;
+        }
+        return [];
+      },
+    };
+
+    const engine = new SQLQueryEngine({
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+    });
+
+    const result = await engine.executeQuery('SELECT * FROM users');
+
+    t.equal(result.success, true);
+    t.equal(result.partitions.length, 1);
+    t.equal(result.partitions[0], 'p1');
+    t.equal(result.rows.length, 1);
+
+    mockPartitionData.clear();
+  });
+
 test('SQLQueryEngine - routes SELECT with key filter to single partition', async (t) => {
   // Set up mock partition data
   mockPartitionData.set('p1', [{id: 'alice', name: 'Alice'}]);

@@ -7,60 +7,48 @@ TAP version 14
     ok 5 - infrastructure should come before partitions
     ok 6 - WebSocket server should be running
     ok 7 - self-connection should be established
-{"level":50,"time":"2026-02-17T06:41:41.821Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"node_endpoints-p1","address":"test-node-1771310494374/partition/node_endpoints-p1-r1","error":"Connection to node test-node-1771310494374 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:41:41.821Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"nodes-p1","address":"test-node-1771310494374/partition/nodes-p1-r1","error":"Connection to node test-node-1771310494374 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:41:41.822Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-test-node-1771310494374-ws","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
-{"level":50,"time":"2026-02-17T06:41:41.822Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1771310494374","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to update system table row"}
-{"level":50,"time":"2026-02-17T06:41:41.822Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"latency-group-manager","nodeId":"test-bootstrap-node","trigger":"initial","error":"Distributed operation failed due to participant failures","msg":"Latency assignment cycle failed"}
+{"level":50,"time":"2026-02-20T13:44:16.490Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-02-20T13:44:16.491Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to generate CDC event for committed entry"}
     1..7
-ok 1 - Bootstrap sequence - server starts before services # time=7482.617ms
+ok 1 - Bootstrap sequence - server starts before services # time=9109.003ms
 
 # Subtest: Bootstrap sequence - self-connection established before services
     ok 1 - bootstrap should succeed
     ok 2 - self-connection should be established before services are created
-{"level":50,"time":"2026-02-17T06:41:49.203Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"node_endpoints-p1","address":"test-node-1771310501847/partition/node_endpoints-p1-r1","error":"Connection to node test-node-1771310501847 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:41:49.203Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"nodes-p1","address":"test-node-1771310501847/partition/nodes-p1-r1","error":"Connection to node test-node-1771310501847 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:41:49.203Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-test-node-1771310501847-ws","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
-{"level":50,"time":"2026-02-17T06:41:49.203Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1771310501847","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to update system table row"}
-{"level":50,"time":"2026-02-17T06:41:49.203Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"latency-group-manager","nodeId":"test-bootstrap-node","trigger":"initial","error":"Distributed operation failed due to participant failures","msg":"Latency assignment cycle failed"}
+{"level":50,"time":"2026-02-20T13:44:24.958Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-02-20T13:44:24.959Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to generate CDC event for committed entry"}
     1..2
-ok 2 - Bootstrap sequence - self-connection established before services # time=7379.108ms
+ok 2 - Bootstrap sequence - self-connection established before services # time=8466.331ms
 
 # Subtest: Bootstrap sequence - services created after self-connection
     ok 1 - bootstrap should succeed
     ok 2 - message group services should be created
     ok 3 - partition services should be created
     ok 4 - self-connection should still be active after services created
-{"level":50,"time":"2026-02-17T06:41:55.181Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"node_endpoints-p1","address":"test-node-1771310509228/partition/node_endpoints-p1-r1","error":"Connection to node test-node-1771310509228 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:41:55.181Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"nodes-p1","address":"test-node-1771310509228/partition/nodes-p1-r1","error":"Connection to node test-node-1771310509228 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:41:55.181Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-test-node-1771310509228-ws","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
-{"level":50,"time":"2026-02-17T06:41:55.181Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1771310509228","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to update system table row"}
-{"level":50,"time":"2026-02-17T06:41:55.181Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"latency-group-manager","nodeId":"test-bootstrap-node","trigger":"initial","error":"Distributed operation failed due to participant failures","msg":"Latency assignment cycle failed"}
+{"level":50,"time":"2026-02-20T13:44:33.834Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-02-20T13:44:33.835Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to generate CDC event for committed entry"}
     1..4
-ok 3 - Bootstrap sequence - services created after self-connection # time=5974.251ms
+ok 3 - Bootstrap sequence - services created after self-connection # time=8874.973ms
 
-{"level":50,"time":"2026-02-17T06:41:55.832Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":525,"error":"Message group mg-1 failed to establish leadership within 100ms","stack":"Error: Message group mg-1 failed to establish leadership within 100ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1145:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1729:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:472:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:362:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:179:20)","msg":"Bootstrap phase failed"}
-{"level":50,"time":"2026-02-17T06:41:55.833Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":627,"error":"Message group mg-1 failed to establish leadership within 100ms","stack":"Error: Message group mg-1 failed to establish leadership within 100ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1145:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1729:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:472:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:362:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:179:20)","servicesCreated":93,"msg":"Bootstrap failed"}
+{"level":50,"time":"2026-02-20T13:44:35.373Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":520,"error":"Message group mg-1 failed to establish leadership within 100ms","stack":"Error: Message group mg-1 failed to establish leadership within 100ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1155:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1739:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:482:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:372:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:179:20)","msg":"Bootstrap phase failed"}
 # Subtest: Bootstrap sequence - without wsPort fails (no server)
     ok 1 - bootstrap should fail without wsPort
     ok 2 - should have error message
     ok 3 - error should mention leadership timeout
     1..3
-ok 4 - Bootstrap sequence - without wsPort fails (no server) # time=661.641ms
+ok 4 - Bootstrap sequence - without wsPort fails (no server) # time=658.166ms
 
+{"level":50,"time":"2026-02-20T13:44:35.374Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"bootstrap","nodeId":"test-bootstrap-node","phase":"partitions","duration":624,"error":"Message group mg-1 failed to establish leadership within 100ms","stack":"Error: Message group mg-1 failed to establish leadership within 100ms\n    at BootstrapService.waitForMessageGroupLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1155:19)\n    at async BootstrapService.phasePartitions (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:1739:7)\n    at async BootstrapService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:482:7)\n    at async BootstrapService.bootstrap (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/bootstrap-service.js:372:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/bootstrap-sequence.test.js:179:20)","servicesCreated":93,"msg":"Bootstrap failed"}
 # Subtest: Bootstrap sequence - startWebSocketServer after bootstrap
     ok 1 - bootstrap should succeed
     ok 2 - WebSocket server should be running
     ok 3 - self-connection should be established
     ok 4 - WebSocket server should still be running
     ok 5 - self-connection should still be established
-{"level":50,"time":"2026-02-17T06:42:03.169Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"node_endpoints-p1","address":"test-node-1771310515862/partition/node_endpoints-p1-r1","error":"Connection to node test-node-1771310515862 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:03.169Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"nodes-p1","address":"test-node-1771310515862/partition/nodes-p1-r1","error":"Connection to node test-node-1771310515862 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:03.170Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-test-node-1771310515862-ws","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
-{"level":50,"time":"2026-02-17T06:42:03.170Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1771310515862","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to update system table row"}
-{"level":50,"time":"2026-02-17T06:42:03.170Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"latency-group-manager","nodeId":"test-bootstrap-node","trigger":"initial","error":"Distributed operation failed due to participant failures","msg":"Latency assignment cycle failed"}
+{"level":50,"time":"2026-02-20T13:44:43.659Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-02-20T13:44:43.659Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to generate CDC event for committed entry"}
     1..5
-ok 5 - Bootstrap sequence - startWebSocketServer after bootstrap # time=7321.687ms
+ok 5 - Bootstrap sequence - startWebSocketServer after bootstrap # time=9267.288ms
 
 # Subtest: Bootstrap sequence - epoch manager initialized with partition assignments
     ok 1 - bootstrap should succeed
@@ -100,34 +88,26 @@ ok 5 - Bootstrap sequence - startWebSocketServer after bootstrap # time=7321.687
     ok 35 - partition storage_reservations-p1 should be assigned to seed node
     ok 36 - partition tables-p1 should be assigned to seed node
     ok 37 - partition wasm_operations-p1 should be assigned to seed node
-{"level":50,"time":"2026-02-17T06:42:10.547Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"node_endpoints-p1","address":"test-node-1771310523191/partition/node_endpoints-p1-r1","error":"Connection to node test-node-1771310523191 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:10.547Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"nodes-p1","address":"test-node-1771310523191/partition/nodes-p1-r1","error":"Connection to node test-node-1771310523191 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:10.547Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-test-node-1771310523191-ws","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
-{"level":50,"time":"2026-02-17T06:42:10.547Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1771310523191","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to update system table row"}
-{"level":50,"time":"2026-02-17T06:42:10.547Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"latency-group-manager","nodeId":"test-bootstrap-node","trigger":"initial","error":"Distributed operation failed due to participant failures","msg":"Latency assignment cycle failed"}
+{"level":50,"time":"2026-02-20T13:44:52.998Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-02-20T13:44:52.999Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to generate CDC event for committed entry"}
     1..37
-ok 6 - Bootstrap sequence - epoch manager initialized with partition assignments # time=7374.748ms
+ok 6 - Bootstrap sequence - epoch manager initialized with partition assignments # time=9226.384ms
 
 # Subtest: Bootstrap sequence - epoch manager cleaned up on shutdown
     ok 1 - bootstrap should succeed
     ok 2 - epoch manager should exist before shutdown
-{"level":50,"time":"2026-02-17T06:42:17.802Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"node_endpoints-p1","address":"test-node-1771310530567/partition/node_endpoints-p1-r1","error":"Connection to node test-node-1771310530567 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:17.802Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"query-executor","partitionId":"nodes-p1","address":"test-node-1771310530567/partition/nodes-p1-r1","error":"Connection to node test-node-1771310530567 closed","nodeId":"test-bootstrap-node","msg":"Query routing failed"}
-{"level":50,"time":"2026-02-17T06:42:17.802Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"node_endpoints","id":"ep-test-node-1771310530567-ws","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to upsert system table row"}
-{"level":50,"time":"2026-02-17T06:42:17.802Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"cdc-integration","tableName":"nodes","id":"test-node-1771310530567","error":"Distributed operation failed due to participant failures","nodeId":"test-bootstrap-node","msg":"Failed to update system table row"}
-{"level":50,"time":"2026-02-17T06:42:17.802Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"latency-group-manager","nodeId":"test-bootstrap-node","trigger":"initial","error":"Distributed operation failed due to participant failures","msg":"Latency assignment cycle failed"}
+{"level":50,"time":"2026-02-20T13:45:01.847Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-02-20T13:45:01.847Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"partition","partitionId":"nodes-p1","error":"Latency topology services are not initialized","nodeId":"test-bootstrap-node","msg":"Failed to generate CDC event for committed entry"}
     ok 3 - epoch manager should be null after shutdown
     1..3
-ok 7 - Bootstrap sequence - epoch manager cleaned up on shutdown # time=7253.265ms
+ok 7 - Bootstrap sequence - epoch manager cleaned up on shutdown # time=8837.493ms
 
-{"level":50,"time":"1970-01-01T00:00:01.010Z","nodeId":"test-bootstrap-node","pid":2310639,"subsystem":"bootstrap","totalPartitions":2,"leadersFound":0,"missingLeaders":["services-p1","nodes-p1"],"elapsedMs":10,"nodeId":"test-bootstrap-node","msg":"Some partitions still electing leaders, failing bootstrap"}
 # Subtest: Bootstrap sequence - partition leadership wait fails when no leaders
     ok 1 - should report leadership timeout
     ok 2 - should list services partition
     ok 3 - should list nodes partition
     1..3
-ok 8 - Bootstrap sequence - partition leadership wait fails when no leaders # time=16.212ms
+ok 8 - Bootstrap sequence - partition leadership wait fails when no leaders # time=32.209ms
 
+{"level":50,"time":"1970-01-01T00:00:01.010Z","nodeId":"test-bootstrap-node","pid":3224065,"subsystem":"bootstrap","totalPartitions":2,"leadersFound":0,"missingLeaders":["services-p1","nodes-p1"],"elapsedMs":10,"nodeId":"test-bootstrap-node","msg":"Some partitions still electing leaders, failing bootstrap"}
 1..8
-# { total: 64, pass: 64 }
-# time=43495.862ms

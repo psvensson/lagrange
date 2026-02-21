@@ -1,0 +1,73 @@
+{
+  "scenarioName": "postgres-baseline-comparison",
+  "startedAt": 1771517776073,
+  "endedAt": 1771517867572,
+  "durationMs": 91499,
+  "files": {
+    "events": "test-output/reports/.playback/pg-baseline-run6/postgres-baseline-comparison/events.ndjson",
+    "samples": "test-output/reports/.playback/pg-baseline-run6/postgres-baseline-comparison/samples.ndjson",
+    "snapshots": "test-output/reports/.playback/pg-baseline-run6/postgres-baseline-comparison/snapshots.ndjson",
+    "manifest": "test-output/reports/.playback/pg-baseline-run6/postgres-baseline-comparison/playback-manifest.json",
+    "viewer": "test-output/reports/.playback/pg-baseline-run6/postgres-baseline-comparison/playback-viewer.html"
+  },
+  "counts": {
+    "events": 53,
+    "samples": 222,
+    "snapshots": 2
+  },
+  "warnings": [
+    {
+      "code": "query-node-unavailable",
+      "message": "No admin-ready reachable node available for topology snapshot query",
+      "timestamp": 1771517792273,
+      "details": {
+        "reachability": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "timestamp": 1771517792083,
+            "reachable": true,
+            "adminReady": false,
+            "reachableBy": "bootstrap_health",
+            "bootstrapHealth": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": 200,
+              "error": null,
+              "url": "http://172.18.0.2:8080/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminHealth": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": "http://172.18.0.2:8081/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminWs": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": "ws://172.18.0.2:8081/api/admin/stream",
+              "query": null
+            },
+            "sqlProbe": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": null,
+              "query": "SELECT node_id FROM nodes LIMIT 1"
+            },
+            "lastError": null
+          }
+        ]
+      }
+    }
+  ]
+}

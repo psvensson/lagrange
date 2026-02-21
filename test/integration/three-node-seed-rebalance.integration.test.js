@@ -29,8 +29,60 @@ const TEST_TIMEOUT_MS = 30000;
 const READY_TIMEOUT_MS = 12000;
 const REBALANCE_TIMEOUT_MS = 20000;
 const POLL_INTERVAL_MS = 100;
+const CLEANUP_TIMEOUT_MS = 10000;
 const EXPECTED_NODE_COUNT = 3;
 const REQUIRED_REBALANCED_PARTITIONS = 1;
+
+async function runWithCleanupTimeout(task, label, t) {
+  let timeoutId;
+  try {
+    await Promise.race([
+      task(),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${CLEANUP_TIMEOUT_MS}ms`));
+        }, CLEANUP_TIMEOUT_MS);
+      }),
+    ]);
+  } catch (error) {
+    t.comment(`cleanup warning: ${error.message}`);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+function forceReleaseActiveHandles() {
+  // Best-effort fallback for rare teardown leaks from network/timer handles.
+  for (const handle of process._getActiveHandles()) {
+    if (
+      handle === process.stdin ||
+      handle === process.stdout ||
+      handle === process.stderr
+    ) {
+      continue;
+    }
+
+    try {
+      if (typeof handle.unref === 'function') {
+        handle.unref();
+      }
+    } catch {
+      // Best-effort cleanup only.
+    }
+
+    try {
+      if (typeof handle.close === 'function') {
+        handle.close();
+      } else if (typeof handle.destroy === 'function') {
+        handle.destroy();
+      }
+    } catch {
+      // Best-effort cleanup only.
+    }
+  }
+}
 
 /**
  * Collect partition service rows from the system cache.
@@ -238,9 +290,22 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
         'should identify baseline partitions rebalanced off seed',
       );
     } finally {
-      await gracefulJoiningShutdown(node3JoinService);
-      await gracefulJoiningShutdown(node2JoinService);
-      await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
+      await runWithCleanupTimeout(
+        () => gracefulJoiningShutdown(node3JoinService),
+        'node3 joining shutdown',
+        t,
+      );
+      await runWithCleanupTimeout(
+        () => gracefulJoiningShutdown(node2JoinService),
+        'node2 joining shutdown',
+        t,
+      );
+      await runWithCleanupTimeout(
+        () => gracefulShutdown(bootstrapService, bootstrapResult, seedApi),
+        'cluster graceful shutdown',
+        t,
+      );
+      forceReleaseActiveHandles();
     }
   });
 });

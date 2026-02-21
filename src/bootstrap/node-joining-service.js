@@ -42,7 +42,15 @@ import {
 import {
   CACHE_DEFAULT,
   CACHE_HYDRATION_TABLES,
+  CDC_PROPAGATED_TABLES,
 } from '../cache/cache-constants.js';
+import {
+  CDCPipelineReadinessGate,
+} from '../cdc/cdc-pipeline-readiness-gate.js';
+import {
+  CDC_PIPELINE_READINESS_TIMEOUT_MS,
+  CDC_LIFECYCLE_LOG_MSG,
+} from '../constants/cdc-lifecycle-constants.js';
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
@@ -99,6 +107,7 @@ import {
   TABLES,
   TRANSPORT_TYPE,
   TYPEOF,
+  TIME_MS,
   UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
@@ -2352,6 +2361,25 @@ class NodeJoiningService extends EventEmitter {
       // Subscribe to CDC events to keep cache updated
       await this.subscribeToCDCEvents();
 
+      // Gate: verify CDC pipeline is fully wired before proceeding.
+      // Requirements 2.4, 2.6 — node must not transition to READY with
+      // an incomplete CDC pipeline.
+      const cdcReadinessGate = new CDCPipelineReadinessGate({
+        systemTableCache,
+        cdcPropagatedTables: CDC_PROPAGATED_TABLES,
+      });
+      const cdcReadinessTimeoutMs =
+        this.config.cdcPipelineReadinessTimeoutMs ||
+        CDC_PIPELINE_READINESS_TIMEOUT_MS;
+      await cdcReadinessGate.waitForReady(
+        {
+          partitionServices: this.partitionServices,
+          messageGroupServices: this.messageGroupServices,
+          cdcSubscriptionsActive: this.cdcSubscriptionsActive === true,
+        },
+        cdcReadinessTimeoutMs,
+      );
+
       // Hand hydrated desired/actual state to unified reconciler once.
       await this.triggerJoinReconciler(
         JOINING_UNIFIED_RECONCILE.HYDRATION_REASON,
@@ -2421,6 +2449,8 @@ class NodeJoiningService extends EventEmitter {
       [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
       [COLUMN.CAPABILITIES]: JSON.stringify([]),
       [COLUMN.LAST_HEARTBEAT]: now,
+      [COLUMN.READY_LEASE_EXPIRES_AT]:
+        now + TIME_MS.CONTROL_PLANE_READY_LEASE,
       [COLUMN.CREATED_AT]: now,
     };
 
@@ -3067,6 +3097,18 @@ class NodeJoiningService extends EventEmitter {
       partitionServices: this.partitionServices.size,
     });
     this.stopJoiningLifecycleOwners();
+    if (this.rebalanceCoordinator) {
+      try {
+        await this.rebalanceCoordinator.shutdown();
+      } catch (error) {
+        this.logger.warn('Node joining cleanup step failed', {
+          nodeId: this.nodeId,
+          step: 'rebalanceCoordinator.shutdown',
+          error: error.message,
+        });
+      }
+      this.rebalanceCoordinator = null;
+    }
     LatencyTopologySetup.stop(this.latencyTopology);
     this.latencyTopology = null;
 
@@ -3120,7 +3162,7 @@ class NodeJoiningService extends EventEmitter {
           replicaId,
           error: err.message,
         });
-        throw err;
+        // Continue best-effort cleanup to avoid leaving services running.
       }
     }
     this.partitionServices.clear();
@@ -3137,7 +3179,7 @@ class NodeJoiningService extends EventEmitter {
           replicaId,
           error: err.message,
         });
-        throw err;
+        // Continue best-effort cleanup to avoid leaving services running.
       }
     }
     this.messageGroupServices.clear();
@@ -3233,6 +3275,13 @@ class NodeJoiningService extends EventEmitter {
             const propagationMessageGroupService =
               this.resolveCdcPropagationMessageGroup(messageGroupService);
             if (!propagationMessageGroupService) {
+              this.logger.warn(
+                CDC_LIFECYCLE_LOG_MSG.MESSAGE_GROUP_RESOLUTION_NULL, {
+                  tableName: cdcEvent.tableName,
+                  operation: cdcEvent.operation,
+                  reason: 'no_leader_message_group',
+                },
+              );
               return;
             }
 
@@ -3468,6 +3517,7 @@ class NodeJoiningService extends EventEmitter {
       systemTableCache,
       messageRouter: this.messageRouter,
     });
+    sqlQueryEngine.setCDCIntegrationService(cdcIntegrationService);
 
     for (const messageGroup of this.messageGroupServices.values()) {
       if (messageGroup.setCdcIntegrationService) {

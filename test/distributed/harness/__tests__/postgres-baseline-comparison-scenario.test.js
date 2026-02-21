@@ -148,7 +148,14 @@ describe('postgres-baseline-comparison scenario', () => {
         id: 'seed-1',
         role: 'seed',
         query: async (sql) => {
-          if (String(sql).includes('FROM partitions')) {
+          const statement = String(sql);
+          if (statement.includes('FROM tables')) {
+            return {rows: [{table_id: 'tbl-benchmark'}]};
+          }
+          if (statement.startsWith('UPDATE partitions SET table_name')) {
+            return {rows: [], changes: 1};
+          }
+          if (statement.includes('FROM partitions')) {
             return {rows: [{partition_id: 'p1'}]};
           }
           return {rows: []};
@@ -427,7 +434,14 @@ describe('postgres-baseline-comparison scenario', () => {
           id: 'seed-1',
           role: 'seed',
           query: async (sql) => {
-            if (String(sql).includes('FROM partitions')) {
+            const statement = String(sql);
+            if (statement.includes('FROM tables')) {
+              return {rows: [{table_id: 'tbl-benchmark'}]};
+            }
+            if (statement.startsWith('UPDATE partitions SET table_name')) {
+              return {rows: [], changes: 1};
+            }
+            if (statement.includes('FROM partitions')) {
               return {rows: [{partition_id: 'p1'}]};
             }
             return {rows: []};

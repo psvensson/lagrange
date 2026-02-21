@@ -358,6 +358,9 @@ test('PartitionService - generates CDC events on update', async (t) => {
   partition.subscribeToCDC((event) => {
     cdcEvents.push(event);
   });
+  // Allow async buffer replay to complete, then clear replayed events
+  await Promise.resolve();
+  cdcEvents.length = 0;
 
   await partition.updateData('cdc_test', {id: 'cdc-1'}, {value: 200});
 
@@ -395,6 +398,9 @@ test('PartitionService - generates CDC events on delete', async (t) => {
   partition.subscribeToCDC((event) => {
     cdcEvents.push(event);
   });
+  // Allow async buffer replay to complete, then clear replayed events
+  await Promise.resolve();
+  cdcEvents.length = 0;
 
   await partition.deleteData('cdc_test', {id: 'cdc-1'});
 
@@ -438,6 +444,9 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
   partition.subscribeToCDC((event) => {
     cdcEvents.push(event);
   });
+  // Allow async buffer replay to complete, then clear replayed events
+  await Promise.resolve();
+  cdcEvents.length = 0;
 
   // Upsert same key — should produce UPSERT, not INSERT
   await partition.upsertData('cdc_test', {id: 'u1', value: 20});
@@ -487,6 +496,9 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
   partition.subscribeToCDC((event) => {
     cdcEvents.push(event);
   });
+  // Allow async buffer replay to complete, then clear replayed events
+  await Promise.resolve();
+  cdcEvents.length = 0;
 
   // Upsert same key via raw SQL — should produce UPSERT, not INSERT
   await partition.executeQuery(

@@ -318,7 +318,7 @@ class SQLiteLogAdapter {
     ).get(index);
 
     if (!row) {
-      throw new Error(`Entry not found at index ${index}`);
+      return null;
     }
 
     const entry = JSON.parse(row.command);

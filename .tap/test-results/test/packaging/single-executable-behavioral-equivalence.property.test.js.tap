@@ -51,8 +51,6 @@ TAP version 14
     ok 49 - main version output includes semver for -v
     ok 50 - Main help/version output is stable
     1..50
-ok 1 - Single Executable Behavioral Equivalence - Property Test # time=13150.882ms
+ok 1 - Single Executable Behavioral Equivalence - Property Test # time=12792.619ms
 
 1..1
-# { total: 50, pass: 50 }
-# time=13174.168ms

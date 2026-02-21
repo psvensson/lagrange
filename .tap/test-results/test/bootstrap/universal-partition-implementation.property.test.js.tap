@@ -91,18 +91,16 @@ TAP version 14
     ok 89 - System table storage_reservations query succeeded
     ok 90 - System table storage_reservations exists in SQLite
     1..90
-ok 1 - Property 32: System tables use same PartitionService as user tables # time=9106.846ms
+ok 1 - Property 32: System tables use same PartitionService as user tables # time=9106.273ms
 
 # Subtest: Property 32: User tables use same PartitionService as system tables
     ok 1 - User tables use same PartitionService infrastructure as system tables
     1..1
-ok 2 - Property 32: User tables use same PartitionService as system tables # time=3040.793ms
+ok 2 - Property 32: User tables use same PartitionService as system tables # time=3040.182ms
 
 # Subtest: Property 32: No infrastructure distinction between system and user tables
     ok 1 - No infrastructure distinction between system and user tables
     1..1
-ok 3 - Property 32: No infrastructure distinction between system and user tables # time=3048.48ms
+ok 3 - Property 32: No infrastructure distinction between system and user tables # time=3046.781ms
 
 1..3
-# { total: 92, pass: 92 }
-# time=15282.708ms

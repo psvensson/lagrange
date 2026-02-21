@@ -38,6 +38,9 @@ import {
   REBALANCER_TRIGGER,
   STABILIZATION_RESET_TRIGGER,
 } from './rebalancer-constants.js';
+import {
+  CLUSTER_READINESS_TIMEOUT_MS,
+} from '../constants/cdc-lifecycle-constants.js';
 
 const EntityType = REBALANCER_ENTITY_TYPE;
 
@@ -251,6 +254,13 @@ class UnifiedRebalancer extends EventEmitter {
       options.storageAdmissionService || null;
     this.storageAccountingService =
       options.storageAccountingService || null;
+
+    // Cluster readiness gate (optional, for bootstrap-lifecycle-hardening)
+    // When provided, defers first planning cycle until cluster is ready.
+    this.clusterReadinessSignal = options.clusterReadinessSignal || null;
+    this.clusterReadinessConfirmed = !this.clusterReadinessSignal;
+    this.clusterReadinessStartMs = null;
+    this.clusterReadinessTimeoutMs = CLUSTER_READINESS_TIMEOUT_MS;
 
     // Planning is delegated to MovePlanner (single-path planning).
     this.movePlanner = new MovePlanner({
@@ -1343,6 +1353,46 @@ class UnifiedRebalancer extends EventEmitter {
     }
 
     try {
+      // Cluster readiness gate — defer first planning cycle until
+      // the cluster reaches a stable state (Requirements 4.1, 4.3, 4.4, 4.5)
+      if (!this.clusterReadinessConfirmed) {
+        const now = Date.now();
+        if (this.clusterReadinessStartMs === null) {
+          this.clusterReadinessStartMs = now;
+        }
+
+        const result = this.clusterReadinessSignal.evaluate({
+          partitionServices: new Map(),
+          messageGroupServices: new Map(),
+          cdcSubscriptionsActive: true,
+        });
+
+        if (result.ready) {
+          this.clusterReadinessConfirmed = true;
+          this.logger.info(REBALANCER_LOG_MSG.CLUSTER_READINESS_CONFIRMED, {
+            entityId: this.entityId,
+          });
+        } else {
+          const elapsed = now - this.clusterReadinessStartMs;
+          if (elapsed >= this.clusterReadinessTimeoutMs) {
+            this.clusterReadinessConfirmed = true;
+            this.logger.warn(
+              REBALANCER_LOG_MSG.CLUSTER_READINESS_TIMEOUT, {
+                entityId: this.entityId,
+                elapsedMs: elapsed,
+                unmetConditions: result.unmetConditions,
+              });
+          } else {
+            this.logger.info(REBALANCER_LOG_MSG.CLUSTER_NOT_READY, {
+              entityId: this.entityId,
+              unmetConditions: result.unmetConditions,
+            });
+            this.scheduleNextCheck();
+            return;
+          }
+        }
+      }
+
       // Check if we're still in stabilization period (Requirements 2.2, 2.3)
       if (!this.isStabilized()) {
         this.logger.debug(REBALANCER_LOG_MSG.WAIT_STABILIZATION, {

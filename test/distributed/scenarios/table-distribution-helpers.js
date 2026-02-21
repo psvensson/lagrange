@@ -13,6 +13,12 @@ const ZERO = 0;
 const SQL_SELECT_TABLE_PARTITIONS_PREFIX =
   'SELECT partition_id FROM partitions WHERE table_name = \'';
 const SQL_SELECT_TABLE_PARTITIONS_SUFFIX = '\'';
+const SQL_SELECT_TABLE_ID_PREFIX =
+  'SELECT table_id FROM tables WHERE table_name = \'';
+const SQL_SELECT_TABLE_ID_SUFFIX = '\'';
+const SQL_SELECT_PARTITIONS_BY_TABLE_ID_PREFIX =
+  'SELECT partition_id FROM partitions WHERE table_id = \'';
+const SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX = '\'';
 const SQL_SELECT_ACTIVE_PARTITION_SERVICES =
   'SELECT partition_id, node_id, status FROM services ' +
   'WHERE service_type = \'' + SERVICE_TYPE_PARTITION + '\' ' +
@@ -59,6 +65,21 @@ function escapeSql(value) {
 }
 
 /**
+ * Return the first non-empty table_id from rows.
+ * @param {Array<Object>} rows
+ * @return {string|null}
+ */
+function firstTableId(rows) {
+  for (const row of rows) {
+    const value = row?.table_id || row?.tableId;
+    if (typeof value === 'string' && value.length > ZERO) {
+      return value;
+    }
+  }
+  return null;
+}
+
+/**
  * Query the current partition + replica distribution for a single table.
  * @param {Object} seedNode
  * @param {Object} [options]
@@ -78,13 +99,28 @@ async function queryTableDistribution(seedNode, options = {}) {
   const partitionSql = SQL_SELECT_TABLE_PARTITIONS_PREFIX +
     escapeSql(tableName) +
     SQL_SELECT_TABLE_PARTITIONS_SUFFIX;
+  const tableIdSql = SQL_SELECT_TABLE_ID_PREFIX +
+    escapeSql(tableName) +
+    SQL_SELECT_TABLE_ID_SUFFIX;
 
-  const [partitionResult, servicesResult] = await Promise.all([
+  const [partitionResult, tableResult, servicesResult] = await Promise.all([
     seedNode.query(partitionSql),
+    seedNode.query(tableIdSql),
     seedNode.query(SQL_SELECT_ACTIVE_PARTITION_SERVICES),
   ]);
 
-  const partitionRows = rowsFromResult(partitionResult);
+  let partitionRows = rowsFromResult(partitionResult);
+  if (partitionRows.length === ZERO) {
+    const tableRows = rowsFromResult(tableResult);
+    const tableId = firstTableId(tableRows);
+    if (tableId) {
+      const partitionByIdSql = SQL_SELECT_PARTITIONS_BY_TABLE_ID_PREFIX +
+        escapeSql(tableId) +
+        SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX;
+      const partitionByIdResult = await seedNode.query(partitionByIdSql);
+      partitionRows = rowsFromResult(partitionByIdResult);
+    }
+  }
   const serviceRows = rowsFromResult(servicesResult);
 
   const partitionIds = new Set();

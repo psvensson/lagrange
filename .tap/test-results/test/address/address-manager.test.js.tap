@@ -3,21 +3,21 @@ TAP version 14
     # Subtest: singleton pattern
         ok 1 - should return the same instance
         1..1
-    ok 1 - singleton pattern # time=7.327ms
+    ok 1 - singleton pattern # time=14.089ms
     
     # Subtest: generateNodeAddress
         ok 1 - should generate an address
         ok 2 - should generate a valid UUID
         ok 3 - should track the address
         1..3
-    ok 2 - generateNodeAddress # time=1.036ms
+    ok 2 - generateNodeAddress # time=1.246ms
     
     # Subtest: generateServiceAddress
         ok 1 - should generate an address
         ok 2 - should generate a valid UUID
         ok 3 - should track the address
         1..3
-    ok 3 - generateServiceAddress # time=0.699ms
+    ok 3 - generateServiceAddress # time=0.801ms
     
     # Subtest: validateAddress
         ok 1 - should validate correct UUID
@@ -27,7 +27,7 @@ TAP version 14
         ok 5 - should reject undefined
         ok 6 - should reject number
         1..6
-    ok 4 - validateAddress # time=0.754ms
+    ok 4 - validateAddress # time=0.903ms
     
     # Subtest: conflict detection
         ok 1 - should detect node conflict
@@ -36,7 +36,7 @@ TAP version 14
         ok 4 - should detect any conflict
         ok 5 - should not detect conflict for new address
         1..5
-    ok 5 - conflict detection # time=0.699ms
+    ok 5 - conflict detection # time=0.923ms
     
     # Subtest: registerNodeAddress
         ok 1 - should register valid address
@@ -44,71 +44,71 @@ TAP version 14
         ok 3 - should reject duplicate address
         ok 4 - should reject invalid address
         1..4
-    ok 6 - registerNodeAddress # time=0.586ms
+    ok 6 - registerNodeAddress # time=0.698ms
     
     # Subtest: registerServiceAddress
         ok 1 - should register valid address
         ok 2 - should track registered address
         ok 3 - should reject duplicate address
         1..3
-    ok 7 - registerServiceAddress # time=0.516ms
+    ok 7 - registerServiceAddress # time=0.595ms
     
     # Subtest: cross-type conflict detection
         ok 1 - should register as node address
         ok 2 - should reject same address as service
         1..2
-    ok 8 - cross-type conflict detection # time=0.454ms
+    ok 8 - cross-type conflict detection # time=0.444ms
     
     # Subtest: unregisterNodeAddress
         ok 1 - should unregister existing
         ok 2 - should remove from tracking
         ok 3 - should return false for non-existent
         1..3
-    ok 9 - unregisterNodeAddress # time=0.554ms
+    ok 9 - unregisterNodeAddress # time=0.581ms
     
     # Subtest: unregisterServiceAddress
         ok 1 - should unregister existing
         ok 2 - should remove from tracking
         1..2
-    ok 10 - unregisterServiceAddress # time=0.449ms
+    ok 10 - unregisterServiceAddress # time=0.488ms
     
     # Subtest: getAllNodeAddresses
         ok 1 - should return all addresses
         ok 2 - should include first address
         ok 3 - should include second address
         1..3
-    ok 11 - getAllNodeAddresses # time=0.505ms
+    ok 11 - getAllNodeAddresses # time=0.558ms
     
     # Subtest: getAllServiceAddresses
         ok 1 - should return all addresses
         ok 2 - should include first address
         ok 3 - should include second address
         1..3
-    ok 12 - getAllServiceAddresses # time=0.571ms
+    ok 12 - getAllServiceAddresses # time=0.63ms
     
     # Subtest: clear
         ok 1 - should clear node addresses
         ok 2 - should clear service addresses
         1..2
-    ok 13 - clear # time=0.446ms
+    ok 13 - clear # time=0.535ms
     
     # Subtest: AddressType enum
         ok 1 - should have NODE type
         ok 2 - should have SERVICE type
         1..2
-    ok 14 - AddressType enum # time=0.613ms
+    ok 14 - AddressType enum # time=0.554ms
     
     # Subtest: parse - valid addresses
         ok 1 - should parse partition address
         ok 2 - should parse message-group address
         ok 3 - should parse raft address
         1..3
-    ok 15 - parse - valid addresses # time=1.639ms
+    ok 15 - parse - valid addresses # time=2.363ms
     
     # Subtest: parse - addresses with special characters
         ok 1 - should handle special characters in components
         1..1
-    ok 16 - parse - addresses with special characters # time=0.409ms
+    ok 16 - parse - addresses with special characters # time=0.454ms
     
     # Subtest: parse - malformed addresses
         ok 1 - should throw for address with only 2 components
@@ -118,21 +118,21 @@ TAP version 14
         ok 5 - should throw for null
         ok 6 - should throw for non-string
         1..6
-    ok 17 - parse - malformed addresses # time=1.306ms
+    ok 17 - parse - malformed addresses # time=1.989ms
     
     # Subtest: parse - empty components
         ok 1 - should throw for empty nodeId
         ok 2 - should throw for empty serviceType
         ok 3 - should throw for empty serviceId
         1..3
-    ok 18 - parse - empty components # time=0.811ms
+    ok 18 - parse - empty components # time=0.869ms
     
     # Subtest: format - valid components
         ok 1 - should format partition address
         ok 2 - should format message-group address
         ok 3 - should format raft address
         1..3
-    ok 19 - format - valid components # time=0.572ms
+    ok 19 - format - valid components # time=0.651ms
     
     # Subtest: format - empty components
         ok 1 - should throw for empty nodeId
@@ -140,14 +140,14 @@ TAP version 14
         ok 3 - should throw for empty serviceId
         ok 4 - should throw for null nodeId
         1..4
-    ok 20 - format - empty components # time=0.692ms
+    ok 20 - format - empty components # time=0.949ms
     
     # Subtest: validate - valid addresses
         ok 1 - should validate partition address
         ok 2 - should validate message-group address
         ok 3 - should validate minimal address
         1..3
-    ok 21 - validate - valid addresses # time=0.548ms
+    ok 21 - validate - valid addresses # time=2.737ms
     
     # Subtest: validate - invalid addresses
         ok 1 - should be invalid for 2 components
@@ -159,7 +159,7 @@ TAP version 14
         ok 7 - should mention string in error
         ok 8 - should be invalid for number
         1..8
-    ok 22 - validate - invalid addresses # time=0.537ms
+    ok 22 - validate - invalid addresses # time=1.048ms
     
     # Subtest: validate - empty components
         ok 1 - should be invalid for empty nodeId
@@ -169,40 +169,40 @@ TAP version 14
         ok 5 - should be invalid for empty serviceId
         ok 6 - should mention serviceId
         1..6
-    ok 23 - validate - empty components # time=0.612ms
+    ok 23 - validate - empty components # time=0.828ms
     
     # Subtest: getNodeId - extracts nodeId
         ok 1 - should extract nodeId
         ok 2 - should extract nodeId with dashes
         ok 3 - should throw for invalid address
         1..3
-    ok 24 - getNodeId - extracts nodeId # time=0.555ms
+    ok 24 - getNodeId - extracts nodeId # time=0.883ms
     
     # Subtest: getServiceType - extracts serviceType
         ok 1 - should extract serviceType
         ok 2 - should extract serviceType with dashes
         ok 3 - should throw for invalid address
         1..3
-    ok 25 - getServiceType - extracts serviceType # time=0.379ms
+    ok 25 - getServiceType - extracts serviceType # time=0.752ms
     
     # Subtest: getServiceId - extracts serviceId
         ok 1 - should extract serviceId
         ok 2 - should extract serviceId
         ok 3 - should throw for invalid address
         1..3
-    ok 26 - getServiceId - extracts serviceId # time=0.342ms
+    ok 26 - getServiceId - extracts serviceId # time=0.687ms
     
     # Subtest: round-trip: format then parse
         ok 1 - nodeId should round-trip
         ok 2 - serviceType should round-trip
         ok 3 - serviceId should round-trip
         1..3
-    ok 27 - round-trip: format then parse # time=0.37ms
+    ok 27 - round-trip: format then parse # time=0.723ms
     
     # Subtest: round-trip: parse then format
         ok 1 - address should round-trip
         1..1
-    ok 28 - round-trip: parse then format # time=0.2ms
+    ok 28 - round-trip: parse then format # time=0.424ms
     
     # Subtest: error classes
         ok 1 - should have name
@@ -213,11 +213,9 @@ TAP version 14
         ok 6 - should store address
         ok 7 - should mention component
         1..7
-    ok 29 - error classes # time=0.501ms
+    ok 29 - error classes # time=1.055ms
     
     1..29
-ok 1 - AddressManager # time=34.784ms
+ok 1 - AddressManager # time=50.746ms
 
 1..1
-# { total: 99, pass: 99 }
-# time=48.378ms

@@ -3,31 +3,29 @@ TAP version 14
     # Subtest: delivery without connection fails for remote addresses
         ok 1 - delivery without connection fails for remote addresses
         1..1
-    ok 1 - delivery without connection fails for remote addresses # time=14.277ms
+    ok 1 - delivery without connection fails for remote addresses # time=9.993ms
     
-    # Subtest: no deliverLocal method exists
-        ok 1 - no deliverLocal method exists
+    # Subtest: deliverLocal method exists for self-delivery path
+        ok 1 - deliverLocal method exists for self-delivery path
         1..1
-    ok 2 - no deliverLocal method exists # time=2.09ms
+    ok 2 - deliverLocal method exists for self-delivery path # time=1.198ms
     
     # Subtest: handlers map uses unified naming
         ok 1 - handlers map uses unified naming
         1..1
-    ok 3 - handlers map uses unified naming # time=2.092ms
+    ok 3 - handlers map uses unified naming # time=1.035ms
     
     # Subtest: deliver extracts nodeId from unified address
         ok 1 - deliver extracts nodeId from unified address
         1..1
-    ok 4 - deliver extracts nodeId from unified address # time=3.183ms
+    ok 4 - deliver extracts nodeId from unified address # time=1.604ms
     
     # Subtest: self-addressed messages require self-connection
         ok 1 - self-addressed messages require self-connection
         1..1
-    ok 5 - self-addressed messages require self-connection # time=2.806ms
+    ok 5 - self-addressed messages require self-connection # time=1.653ms
     
     1..5
-ok 1 - Property 3: Uniform WebSocket Delivery # time=29.04ms
+ok 1 - Property 3: Uniform WebSocket Delivery # time=18.704ms
 
 1..1
-# { total: 5, pass: 5 }
-# time=117.243ms

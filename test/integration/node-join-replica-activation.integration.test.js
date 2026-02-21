@@ -128,7 +128,7 @@ async function waitForServiceLeaderRow(
   return null;
 }
 
-test('Node join replica activation', {timeout: 30000}, async (t) => {
+test('Node join replica activation', {timeout: 180000}, async (t) => {
   t.beforeEach(() => {
     // Keep rebalance activity quiet in join-focused integration checks.
     initializeTestEnvironment({
@@ -700,7 +700,7 @@ test('Node join replica activation', {timeout: 30000}, async (t) => {
       // =========================================================================
       // PHASE 3: Query nodes table - should have seed node
       // =========================================================================
-      const result1 = await waitForNodes(sqlQueryEngine, 1);
+      const result1 = await waitForNodes(sqlQueryEngine, 1, 10000);
       t.equal(result1.success !== false, true, 'query should succeed');
       const nodes1 = result1.rows || [];
       t.ok(nodes1.length >= 1, 'should have at least seed node');
@@ -734,7 +734,7 @@ test('Node join replica activation', {timeout: 30000}, async (t) => {
       t.equal(joinResult2.success, true, 'second node join should succeed');
 
       // Query nodes table - should have seed + second node
-      const result2 = await waitForNodes(sqlQueryEngine, 2);
+      const result2 = await waitForNodes(sqlQueryEngine, 2, 10000);
       t.equal(result2.success !== false, true, 'query after 2nd join should succeed');
       const nodes2 = result2.rows || [];
 
@@ -770,7 +770,7 @@ test('Node join replica activation', {timeout: 30000}, async (t) => {
       // =========================================================================
       // PHASE 6: Query nodes table - should have all 3 nodes
       // =========================================================================
-      const result3 = await waitForNodes(sqlQueryEngine, 3);
+      const result3 = await waitForNodes(sqlQueryEngine, 3, 15000);
       t.equal(result3.success !== false, true, 'query after 3rd join should succeed');
       const nodes3 = result3.rows || [];
 

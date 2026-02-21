@@ -3,56 +3,54 @@ TAP version 14
     # Subtest: valid transitions succeed
         ok 1 - valid transitions succeed
         1..1
-    ok 1 - valid transitions succeed # time=6.174ms
+    ok 1 - valid transitions succeed # time=4.665ms
     
-{"level":50,"time":"2026-02-17T06:48:35.583Z","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"ffffffe2-a2b0-12fa-bfff-fffafffffffb","currentStatus":"active","newStatus":"starting","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.584Z","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"467dbe19-bde3-3ac4-a5a2-455800000001","currentStatus":"active","newStatus":"syncing","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.584Z","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"1cc6f5b4-0006-1000-9cd6-e880e860125c","currentStatus":"starting","newStatus":"stopping","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.584Z","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"ffffffec-000b-1000-bfff-fffdd2a58ddf","currentStatus":"starting","newStatus":"stopped","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.584Z","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"68bfbfd8-5ac4-461a-8000-000f6dd759ea","currentStatus":"stopped","newStatus":"stopping","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.585Z","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"fd6ccb61-2fd5-16d0-848d-af090aee3ab0","currentStatus":"active","newStatus":"syncing","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.585Z","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"00000000-13ec-22c5-a26e-b350b0084672","currentStatus":"failed","newStatus":"active","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.585Z","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"0000001e-0015-1000-bfff-fff406771682","currentStatus":"active","newStatus":"stopped","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.585Z","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"6764a87f-ffff-5fff-b68b-0cdd0000001b","currentStatus":"stopped","newStatus":"starting","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.585Z","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"0000000a-0467-1726-9c2e-adbc97242825","currentStatus":"active","newStatus":"stopped","nodeId":"d5595cad-dde7-4983-88c1-58ff77636051","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.942Z","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"c8f5ce3e-0011-1000-bfff-ffee00000005","currentStatus":"stopping","newStatus":"active","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","msg":"Invalid status transition attempted"}
     # Subtest: invalid transitions fail
         ok 1 - invalid transitions fail
         1..1
-    ok 2 - invalid transitions fail # time=3.317ms
+    ok 2 - invalid transitions fail # time=2.26ms
     
     # Subtest: transition to FAILED always succeeds
         ok 1 - transition to FAILED always succeeds
         1..1
-    ok 3 - transition to FAILED always succeeds # time=1.433ms
+    ok 3 - transition to FAILED always succeeds # time=1.405ms
     
     # Subtest: isValidTransition validates correctly
         ok 1 - isValidTransition validates correctly
         1..1
-    ok 4 - isValidTransition validates correctly # time=0.744ms
+    ok 4 - isValidTransition validates correctly # time=0.857ms
     
-{"level":50,"time":"2026-02-17T06:48:35.655Z","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"e3ffed21-70c2-464f-b20f-572c4a5daf1d","currentStatus":"failed","newStatus":"stopping","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.655Z","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"6c5a68e0-056d-11b2-b789-e82700000012","currentStatus":"stopped","newStatus":"stopped","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.655Z","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"00000010-e6ba-16e6-8000-0004fffffff9","currentStatus":"failed","newStatus":"starting","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.655Z","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"0000000a-21cf-1e36-aef7-f9a40000000f","currentStatus":"stopped","newStatus":"active","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.656Z","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"00000000-be2b-1096-8000-001afffffff5","currentStatus":"stopped","newStatus":"active","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.656Z","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"26e28be7-fff6-5fff-ac52-29ab4c49b7c9","currentStatus":"failed","newStatus":"stopping","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.656Z","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"1a541f3b-ffe1-5fff-8000-00006ecfab27","currentStatus":"failed","newStatus":"starting","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.656Z","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"ed813ca7-8fb9-11c9-8000-000b00000007","currentStatus":"stopped","newStatus":"starting","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.656Z","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"e2a92e91-ffee-5fff-90f6-8f31ffffffe0","currentStatus":"failed","newStatus":"starting","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","msg":"Invalid status transition attempted"}
-{"level":50,"time":"2026-02-17T06:48:35.656Z","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","pid":2317249,"subsystem":"replica-lifecycle","replicaId":"17868b58-b59f-2018-8a1c-6499656d6d3e","currentStatus":"stopped","newStatus":"stopped","nodeId":"42d1c533-73e1-4085-9024-d4a6fecde020","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.995Z","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"ffffffea-29ab-2207-bfff-ffebfffffff5","currentStatus":"stopped","newStatus":"syncing","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","msg":"Invalid status transition attempted"}
     # Subtest: terminal states have no outgoing transitions
         ok 1 - terminal states have no outgoing transitions
         1..1
-    ok 5 - terminal states have no outgoing transitions # time=2.865ms
+    ok 5 - terminal states have no outgoing transitions # time=1.356ms
     
     # Subtest: status updates emit statusChanged event
         ok 1 - status updates emit statusChanged event
         1..1
-    ok 6 - status updates emit statusChanged event # time=1.951ms
+    ok 6 - status updates emit statusChanged event # time=1.058ms
     
     1..6
-ok 1 - Property 79: Replica Status State Machine Validity # time=188.637ms
+ok 1 - Property 79: Replica Status State Machine Validity # time=148.394ms
 
+{"level":50,"time":"2026-02-20T13:47:36.942Z","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"0000001b-b1ab-382a-b333-e9fefffffffa","currentStatus":"failed","newStatus":"syncing","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.942Z","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"2a1f1738-499d-3987-8000-0017ffffffee","currentStatus":"failed","newStatus":"syncing","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.942Z","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"fffffff5-bc20-3ab7-a9f1-9acbd8a789df","currentStatus":"syncing","newStatus":"stopped","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.942Z","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"0000001a-967d-27f9-8000-001b0000000e","currentStatus":"active","newStatus":"stopped","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.942Z","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"79038d24-000a-1000-8000-000cffffffed","currentStatus":"stopping","newStatus":"active","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.943Z","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"00000016-b3d4-23b8-a856-5c8f00000013","currentStatus":"starting","newStatus":"stopping","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.943Z","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"ffffffe3-fff7-5fff-98f9-d6130000000b","currentStatus":"active","newStatus":"stopped","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.943Z","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"1dae6e0d-ffe6-5fff-8c9f-74496608f4c7","currentStatus":"stopped","newStatus":"stopping","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.943Z","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"3a3bd4e7-7f8d-1faf-868f-7e80c016f25f","currentStatus":"syncing","newStatus":"stopping","nodeId":"8cecc5ca-42fb-4632-b0a2-cb7a7a4608dc","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.995Z","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"b15091a3-e73e-485f-8000-001000000011","currentStatus":"stopped","newStatus":"active","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.995Z","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"00000006-9196-4d98-8000-000a00000019","currentStatus":"failed","newStatus":"stopping","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.995Z","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"ae4b810c-0009-1000-81c7-ba0a0000001e","currentStatus":"failed","newStatus":"active","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.995Z","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"ffffffef-8286-5c68-8000-0001e837d99b","currentStatus":"stopped","newStatus":"syncing","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.996Z","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"0000000d-0007-1000-9aab-a9fb00000011","currentStatus":"failed","newStatus":"starting","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.996Z","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"fffffff6-0003-1000-8761-a388681561cc","currentStatus":"stopped","newStatus":"active","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.996Z","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"0000001d-d1d8-37e1-8e4c-95c5fffffff1","currentStatus":"failed","newStatus":"stopping","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.996Z","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"1a96adaa-001b-1000-bfff-ffe453b8b63e","currentStatus":"failed","newStatus":"starting","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","msg":"Invalid status transition attempted"}
+{"level":50,"time":"2026-02-20T13:47:36.996Z","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","pid":3230329,"subsystem":"replica-lifecycle","replicaId":"1be419a1-ffe2-5fff-8000-0004a8592361","currentStatus":"failed","newStatus":"starting","nodeId":"45ee244e-1a2a-424a-b835-79f7f40fc2cd","msg":"Invalid status transition attempted"}
 1..1
-# { total: 6, pass: 6 }
-# time=206.302ms

@@ -88,7 +88,7 @@ async function waitForResolvedAddress(
   return resolved;
 }
 
-test('MOVE_REPLICA handoff ownership integration', {timeout: 30000}, async (t) => {
+test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });

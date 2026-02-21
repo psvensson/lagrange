@@ -43,6 +43,7 @@ import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from './bootstrap-constants.js';
+import {NODE_STATE} from '../constants/node-state.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {NODE_CONFIG_KEY, NODE_DEFAULT} from '../node/node-constants.js';
 import {CONFIG_CATEGORY, CONFIG_KEY} from '../config/config-constants.js';
@@ -77,6 +78,16 @@ const BOOTSTRAP_REQUIRED_LEADER_TABLES = Object.freeze([
   TABLES.NODE_ENDPOINTS,
   TABLES.CONFIG,
 ]);
+
+/**
+ * Node statuses that indicate the node is dead and eligible
+ * for re-registration via the bootstrap API.
+ */
+const REJOIN_TERMINAL_STATES = Object.freeze(new Set([
+  NODE_STATE.STOPPED,
+  NODE_STATE.FAILED,
+  NODE_STATE.SHUTTING_DOWN,
+]));
 
 /**
  * BootstrapAPI provides REST endpoints for node bootstrap and discovery.
@@ -945,18 +956,49 @@ class BootstrapAPI {
     // Check if node ID already exists
     const existingNode = systemTableCache.get(TABLES.NODES, nodeId);
     if (existingNode) {
-      return `Node ID ${nodeId} is already registered`;
+      if (!this._isNodeDead(existingNode)) {
+        return BOOTSTRAP_API_ERROR.NODE_ID_ALREADY_REGISTERED(nodeId);
+      }
+      this.logger.info(BOOTSTRAP_API_LOG_MSG.STALE_NODE_REJOIN_ALLOWED, {
+        nodeId,
+        existingStatus: existingNode[COLUMN.STATUS],
+        existingLease: existingNode[COLUMN.READY_LEASE_EXPIRES_AT],
+      });
     }
 
-    // Check for address conflicts
+    // Check for address conflicts (skip dead nodes)
     const allNodes = systemTableCache.getAll(TABLES.NODES) || [];
     for (const node of allNodes) {
-      if (node.node_address === nodeAddress) {
-        return `Node address ${nodeAddress} is already in use`;
+      if (node[COLUMN.NODE_ADDRESS] === nodeAddress &&
+          node[COLUMN.NODE_ID] !== nodeId &&
+          !this._isNodeDead(node)) {
+        return BOOTSTRAP_API_ERROR.NODE_ADDRESS_IN_USE(nodeAddress);
       }
     }
 
     return null;
+  }
+
+  /**
+   * Determine whether a node record represents a dead node that
+   * is eligible for re-registration. A node is dead when its
+   * status is terminal OR its ready lease has expired.
+   * @param {Object} nodeRecord - Row from the nodes table.
+   * @return {boolean} True if the node is considered dead.
+   * @private
+   */
+  _isNodeDead(nodeRecord) {
+    const status = nodeRecord[COLUMN.STATUS];
+    if (REJOIN_TERMINAL_STATES.has(status)) {
+      return true;
+    }
+    const leaseExpiry = Number(
+      nodeRecord[COLUMN.READY_LEASE_EXPIRES_AT],
+    );
+    if (Number.isFinite(leaseExpiry) && leaseExpiry <= Date.now()) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -1555,10 +1597,18 @@ class BootstrapAPI {
       return {ready: missingCount === NUM.ZERO, ...missing};
     }
 
-    const timeoutMs = BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS;
-    let delay = BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.INITIAL_DELAY_MS;
-    const maxDelay = BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.MAX_DELAY_MS;
-    const backoff = BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.BACKOFF_MULTIPLIER;
+    const configuredTimeoutMs =
+      this.bootstrapService?.config?.leadershipWaitTimeoutMs;
+    const timeoutMs = Math.min(
+      configuredTimeoutMs || BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS,
+      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS,
+    );
+    let delay = this.bootstrapService?.config?.leadershipWaitInitialDelayMs ||
+      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.INITIAL_DELAY_MS;
+    const maxDelay = this.bootstrapService?.config?.leadershipWaitMaxDelayMs ||
+      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.MAX_DELAY_MS;
+    const backoff = this.bootstrapService?.config?.leadershipWaitBackoffMultiplier ||
+      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.BACKOFF_MULTIPLIER;
     const start = Date.now();
 
     while (Date.now() - start < timeoutMs) {

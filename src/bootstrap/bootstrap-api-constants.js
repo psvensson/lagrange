@@ -57,6 +57,8 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
   SHUTDOWN: 'Bootstrap API shutdown',
   SERVER_CLOSE_ERROR: 'Bootstrap server close error',
   READY_NODES_FOR_BOOTSTRAP: 'Ready nodes for bootstrap response',
+  STALE_NODE_REJOIN_ALLOWED:
+    'Allowing re-registration of dead node',
 });
 
 const BOOTSTRAP_API_ERROR = Object.freeze({

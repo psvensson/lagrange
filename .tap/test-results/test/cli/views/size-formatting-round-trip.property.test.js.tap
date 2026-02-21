@@ -3,38 +3,38 @@ TAP version 14
     # Subtest: formatted size parses back within 10% of original
         ok 1 - formatted size parses back within 10% of original
         1..1
-    ok 1 - formatted size parses back within 10% of original # time=5.791ms
+    ok 1 - formatted size parses back within 10% of original # time=3.09ms
     
     # Subtest: zero bytes formats correctly
         ok 1 - should be equal
         1..1
-    ok 2 - zero bytes formats correctly # time=0.578ms
+    ok 2 - zero bytes formats correctly # time=0.362ms
     
     # Subtest: null/undefined returns N/A
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 3 - null/undefined returns N/A # time=0.478ms
+    ok 3 - null/undefined returns N/A # time=0.277ms
     
     # Subtest: formatted string contains valid unit
         ok 1 - formatted string contains valid unit
         1..1
-    ok 4 - formatted string contains valid unit # time=1.026ms
+    ok 4 - formatted string contains valid unit # time=0.625ms
     
     # Subtest: larger values use larger units
         ok 1 - larger values use larger units
         1..1
-    ok 5 - larger values use larger units # time=1.007ms
+    ok 5 - larger values use larger units # time=0.737ms
     
     # Subtest: numeric part is reasonable
         ok 1 - numeric part is reasonable
         1..1
-    ok 6 - numeric part is reasonable # time=0.709ms
+    ok 6 - numeric part is reasonable # time=0.471ms
     
     # Subtest: formatting is deterministic
         ok 1 - formatting is deterministic
         1..1
-    ok 7 - formatting is deterministic # time=0.643ms
+    ok 7 - formatting is deterministic # time=0.523ms
     
     # Subtest: specific size boundaries format correctly
         ok 1 - should be equal
@@ -43,16 +43,14 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 8 - specific size boundaries format correctly # time=0.758ms
+    ok 8 - specific size boundaries format correctly # time=0.68ms
     
     # Subtest: fractional values format with one decimal
         ok 1 - fractional values format with one decimal
         1..1
-    ok 9 - fractional values format with one decimal # time=0.672ms
+    ok 9 - fractional values format with one decimal # time=0.447ms
     
     1..9
-ok 1 - Property 31: Size Formatting Round Trip # time=19.744ms
+ok 1 - Property 31: Size Formatting Round Trip # time=12.441ms
 
 1..1
-# { total: 14, pass: 14 }
-# time=26.05ms

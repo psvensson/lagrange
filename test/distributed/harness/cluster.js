@@ -115,7 +115,7 @@ const REUSE_NODE_ID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 const REUSE_CONTAINER_NAME_PREFIX = 'ddb-test-reuse';
 const REUSE_ENTRYPOINT = Object.freeze(['sh', '-lc']);
 const REUSE_START_COMMAND =
-  'rm -rf /data/* && exec node /app/src/index.js';
+  'rm -rf /data/* && exec node --max-old-space-size=1536 /app/src/index.js';
 const REUSE_START_COMMAND_ARGS = Object.freeze([REUSE_START_COMMAND]);
 
 /**

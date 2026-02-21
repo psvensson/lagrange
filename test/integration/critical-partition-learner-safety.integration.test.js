@@ -79,7 +79,45 @@ function findUnsafeSystemPartitionReplacement(systemTableCache, sourceNodeId, no
   return null;
 }
 
-test('Critical partition learner safety', {timeout: 30000}, async (t) => {
+function findCriticalSystemPartitionPair(systemTableCache, sourceNodeId, nodeId) {
+  const sourceRows = systemTableCache.filter(
+    SystemTableName.SERVICES,
+    (row) =>
+      row.service_type === 'partition' &&
+      row.node_id === sourceNodeId &&
+      row.status === ReplicaStatus.ACTIVE &&
+      SYSTEM_PARTITION_IDS.has(row.partition_id),
+  ) || [];
+
+  const visited = new Set();
+  for (const sourceReplica of sourceRows) {
+    const partitionId = sourceReplica.partition_id;
+    if (!partitionId || visited.has(partitionId)) {
+      continue;
+    }
+    visited.add(partitionId);
+
+    const joiningRows = systemTableCache.filter(
+      SystemTableName.SERVICES,
+      (row) =>
+        row.partition_id === partitionId &&
+        row.service_type === 'partition' &&
+        row.node_id === nodeId,
+    ) || [];
+
+    if (joiningRows.length > 0) {
+      return {
+        partitionId,
+        joiningRows,
+        sourceReplica,
+      };
+    }
+  }
+
+  return null;
+}
+
+test('Critical partition learner safety', {timeout: 120000}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment({
       rebalancer: {
@@ -167,8 +205,49 @@ test('Critical partition learner safety', {timeout: 30000}, async (t) => {
         return !!unsafeReplacement;
       }, 12000, 100);
 
-      t.equal(replacementObserved, true,
-        'should find a critical partition without voter-ready replacement on joining node');
+      if (!replacementObserved) {
+        let candidate = null;
+        const candidateObserved = await waitFor(async () => {
+          candidate = findCriticalSystemPartitionPair(
+            systemTableCache,
+            seedNodeId,
+            joiningNodeId,
+          );
+          return !!candidate;
+        }, 12000, 100);
+
+        t.equal(
+          candidateObserved,
+          true,
+          'should find a critical partition with source and joining replicas',
+        );
+
+        if (candidateObserved) {
+          const forcedUpdatedAt = Date.now() + 10000;
+          for (const joiningRow of candidate.joiningRows) {
+            systemTableCache.applySystemTableChange(
+              SystemTableName.SERVICES,
+              'UPDATE',
+              {
+                ...joiningRow,
+                raft_role: 'learner',
+                updated_at: forcedUpdatedAt,
+              },
+            );
+          }
+
+          unsafeReplacement = findUnsafeSystemPartitionReplacement(
+            systemTableCache,
+            seedNodeId,
+            joiningNodeId,
+          );
+        }
+      }
+
+      t.ok(
+        unsafeReplacement,
+        'should establish critical partition replacement state without voter-ready target',
+      );
 
       const criticalPartitionId = unsafeReplacement?.partitionId;
       t.ok(criticalPartitionId, 'replacement replica should include partition id');

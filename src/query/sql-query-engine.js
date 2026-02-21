@@ -45,6 +45,8 @@ import {
   QUERY_OPERATION,
   QUERY_SESSION,
   QUERY_SUBSYSTEM,
+  SQL_PARSE_CACHE,
+  WRITE_TRACKING_EXCLUDED_TABLES,
 } from './query-constants.js';
 import {isSqlRequest} from './sql-request.js';
 import {PartitionCallbackDispatcher} from
@@ -68,6 +70,7 @@ import {
 } from './sql-adapter-constants.js';
 import {parseCallbackModuleArtifact} from './callback-module-artifact.js';
 import {reorderParams} from './pg-translate.js';
+import {SqlParseCache} from './sql-parse-cache.js';
 
 const CODE_LOOKUP_BY_FUNCTION_ID_SQL =
   `SELECT * FROM ${TABLES.CODE} WHERE function_id = ?`;
@@ -160,6 +163,10 @@ class SQLQueryEngine {
       getTablePartitions: (name) => this.getTablePartitions(name),
       isSystemTable: (name) => this.isSystemTable(name),
     });
+
+    this.parseCache = new SqlParseCache(
+      SQL_PARSE_CACHE.DEFAULT_MAX_SIZE,
+    );
 
     this.logger = this.initLogger();
 
@@ -966,11 +973,17 @@ class SQLQueryEngine {
 
     const queryStartMs = Date.now();
 
-    // Parse the SQL
+    // Parse the SQL (check cache first)
     let ast;
     try {
-      const parser = new SQLParser(sql, {dialect: options.dialect});
-      ast = parser.parse();
+      const dialect = options.dialect;
+      ast = this.parseCache.get(sql, dialect);
+      if (!ast) {
+        const parser = new SQLParser(sql, {dialect});
+        ast = parser.parse();
+        this.parseCache.set(sql, dialect, ast);
+        ast = this.parseCache.cloneAst(ast);
+      }
       // If PG mode produced param mapping, reorder params
       if (ast._paramMapping && ast._paramMapping.length > 0) {
         params = reorderParams(params, ast._paramMapping);
@@ -1165,6 +1178,12 @@ class SQLQueryEngine {
    * @private
    */
   async executeSelect(ast, params, sessionId) {
+    // FROM-less SELECT (e.g., SELECT 1, SELECT 1+1) — route to any
+    // available partition and let SQLite evaluate the expression.
+    if (!ast.from) {
+      return this.executeFromlessSelect(ast, params, sessionId);
+    }
+
     const tableName = ast.from.name;
     const planningStartTimeMs = Date.now();
     const distributedPlan = this.distributedQueryPlanner.planSelect(
@@ -1242,6 +1261,67 @@ class SQLQueryEngine {
   }
 
   /**
+   * Execute a SELECT without a FROM clause (e.g., SELECT 1, SELECT 1+1).
+   * Routes to any available partition and lets SQLite evaluate the
+   * expression directly.
+   * @param {Object} ast - Parsed SELECT AST with null from.
+   * @param {Array} params - Query parameters.
+   * @param {string} sessionId - Session ID.
+   * @return {Promise<Object>} Query result.
+   * @private
+   */
+  async executeFromlessSelect(ast, params, _sessionId) {
+    const allPartitions =
+      this.systemCache?.getAll?.(TABLES.PARTITIONS) || [];
+    if (allPartitions.length === 0) {
+      return {
+        success: false,
+        error: QUERY_ERROR_MSG.NO_PARTITIONS_FOR_TABLE,
+        errorCode: QUERY_ERROR_CODE.PARTITION_NOT_FOUND,
+      };
+    }
+
+    const targetPartitionId = allPartitions[0].partition_id;
+    const cols = ast.columns.map((col) =>
+      this.queryExecutor.buildColumnSQL(col),
+    );
+    const sql = `SELECT ${cols.join(', ')}`;
+
+    const results = await this.queryExecutor.executeOnPartitions(
+      [targetPartitionId],
+      sql,
+      params,
+      null,
+      true,
+    );
+
+    const first = results[0];
+    if (!first || !first.success) {
+      return {
+        success: false,
+        error: first?.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
+        errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
+      };
+    }
+
+    return {
+      success: true,
+      rows: first.rows || [],
+      count: first.rows?.length || 0,
+      partitions: [targetPartitionId],
+      tableName: null,
+      distributedPlan: null,
+      distributedDiagnostics: null,
+      distributedMetrics: {
+        planningDurationMs: 0,
+        executionDurationMs: 0,
+        fanout: null,
+        mergeDurationMs: 0,
+      },
+    };
+  }
+
+  /**
    * Execute an INSERT statement.
    * @param {Object} ast - Parsed INSERT AST.
    * @param {Array} params - Query parameters.
@@ -1271,14 +1351,14 @@ class SQLQueryEngine {
       params,
       {sessionId},
     );
-    const payloadHash = this.createWriteOperationPayloadHash(
-      writePlan,
-      QUERY_AST_TYPE.INSERT,
-    );
 
     const txState = this.transactionCoordinator.getTransaction(sessionId);
     const writePartitions = Array.from(writePlan.partitionStatements.keys());
     if (txState) {
+      const payloadHash = this.createWriteOperationPayloadHash(
+        writePlan,
+        QUERY_AST_TYPE.INSERT,
+      );
       const enlistResult = await this.transactionCoordinator.enlistParticipants(
         sessionId,
         writePartitions,
@@ -1293,7 +1373,7 @@ class SQLQueryEngine {
         idempotencyKey: writePlan.idempotencyKey,
         payloadHash,
       });
-    } else {
+    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
       this.fireNonTransactionalWriteStart(
         writePlan,
         QUERY_AST_TYPE.INSERT,
@@ -1325,7 +1405,7 @@ class SQLQueryEngine {
             retryCount: 0,
           },
         );
-      } else {
+      } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
         this.fireNonTransactionalWriteResult(
           writePlan,
           QUERY_AST_TYPE.INSERT,
@@ -1346,7 +1426,7 @@ class SQLQueryEngine {
         writePlan.operationId,
         result,
       );
-    } else {
+    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
       this.fireNonTransactionalWriteResult(
         writePlan,
         QUERY_AST_TYPE.INSERT,
@@ -1405,13 +1485,13 @@ class SQLQueryEngine {
         partitionIds,
       },
     );
-    const payloadHash = this.createWriteOperationPayloadHash(
-      writePlan,
-      QUERY_AST_TYPE.UPDATE,
-    );
 
     const txState = this.transactionCoordinator.getTransaction(sessionId);
     if (txState) {
+      const payloadHash = this.createWriteOperationPayloadHash(
+        writePlan,
+        QUERY_AST_TYPE.UPDATE,
+      );
       const enlistResult = await this.transactionCoordinator.enlistParticipants(
         sessionId,
         partitionIds,
@@ -1426,7 +1506,7 @@ class SQLQueryEngine {
         idempotencyKey: writePlan.idempotencyKey,
         payloadHash,
       });
-    } else {
+    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
       this.fireNonTransactionalWriteStart(
         writePlan,
         QUERY_AST_TYPE.UPDATE,
@@ -1458,7 +1538,7 @@ class SQLQueryEngine {
             retryCount: 0,
           },
         );
-      } else {
+      } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
         this.fireNonTransactionalWriteResult(
           writePlan,
           QUERY_AST_TYPE.UPDATE,
@@ -1479,7 +1559,7 @@ class SQLQueryEngine {
         writePlan.operationId,
         result,
       );
-    } else {
+    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
       this.fireNonTransactionalWriteResult(
         writePlan,
         QUERY_AST_TYPE.UPDATE,
@@ -1537,13 +1617,13 @@ class SQLQueryEngine {
         partitionIds,
       },
     );
-    const payloadHash = this.createWriteOperationPayloadHash(
-      writePlan,
-      QUERY_AST_TYPE.DELETE,
-    );
 
     const txState = this.transactionCoordinator.getTransaction(sessionId);
     if (txState) {
+      const payloadHash = this.createWriteOperationPayloadHash(
+        writePlan,
+        QUERY_AST_TYPE.DELETE,
+      );
       const enlistResult = await this.transactionCoordinator.enlistParticipants(
         sessionId,
         partitionIds,
@@ -1558,7 +1638,7 @@ class SQLQueryEngine {
         idempotencyKey: writePlan.idempotencyKey,
         payloadHash,
       });
-    } else {
+    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
       this.fireNonTransactionalWriteStart(
         writePlan,
         QUERY_AST_TYPE.DELETE,
@@ -1590,7 +1670,7 @@ class SQLQueryEngine {
             retryCount: 0,
           },
         );
-      } else {
+      } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
         this.fireNonTransactionalWriteResult(
           writePlan,
           QUERY_AST_TYPE.DELETE,
@@ -1611,7 +1691,7 @@ class SQLQueryEngine {
         writePlan.operationId,
         result,
       );
-    } else {
+    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
       this.fireNonTransactionalWriteResult(
         writePlan,
         QUERY_AST_TYPE.DELETE,
@@ -2030,26 +2110,42 @@ class SQLQueryEngine {
       throw new Error(`${QUERY_ERROR_MSG.SYSTEM_CACHE_NOT_AVAILABLE}: ${tableName}`);
     }
 
+    const matchesTableRef = (partition, tableRef) =>
+      partition.table_name === tableRef ||
+      partition.tableName === tableRef ||
+      partition.table_id === tableRef ||
+      partition.tableId === tableRef;
+
+    const tableInfo = this.getTableInfo(tableName);
+    const tableId = tableInfo?.table_id || tableInfo?.tableId || null;
+
     // Get partitions from system cache - the single source of truth
     if (typeof this.systemCache.filter === 'function') {
-      const partitions = this.systemCache.filter(TABLES.PARTITIONS, (p) =>
-        p.table_name === tableName ||
-        p.tableName === tableName ||
-        p.table_id === tableName ||
-        p.tableId === tableName,
+      const directMatches =
+        this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
+          matchesTableRef(partition, tableName),
+        ) || [];
+      if (directMatches.length > 0 || !tableId || tableId === tableName) {
+        return directMatches;
+      }
+
+      return this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
+        matchesTableRef(partition, tableId),
       ) || [];
-      return partitions;
     }
 
     if (typeof this.systemCache.getAll === 'function') {
       const all = this.systemCache.getAll(TABLES.PARTITIONS) || [];
-      const partitions = all.filter((p) =>
-        p.table_name === tableName ||
-        p.tableName === tableName ||
-        p.table_id === tableName ||
-        p.tableId === tableName,
+      const directMatches = all.filter((partition) =>
+        matchesTableRef(partition, tableName),
       );
-      return partitions;
+      if (directMatches.length > 0 || !tableId || tableId === tableName) {
+        return directMatches;
+      }
+
+      return all.filter((partition) =>
+        matchesTableRef(partition, tableId),
+      );
     }
 
     throw new Error(`${QUERY_ERROR_MSG.SYSTEM_CACHE_UNSUPPORTED}: ${tableName}`);
@@ -2068,7 +2164,10 @@ class SQLQueryEngine {
 
     try {
       if (typeof this.systemCache.get === 'function') {
-        return this.systemCache.get(TABLES.TABLES, tableName);
+        const byPrimaryKey = this.systemCache.get(TABLES.TABLES, tableName);
+        if (byPrimaryKey) {
+          return byPrimaryKey;
+        }
       }
       if (typeof this.systemCache.find === 'function') {
         return this.systemCache.find(TABLES.TABLES, (t) =>

@@ -3,31 +3,29 @@ TAP version 14
     # Subtest: all config values accessible via symbolic names
         ok 1 - all configuration values are accessible via symbolic names
         1..1
-    ok 1 - all config values accessible via symbolic names # time=78.531ms
+    ok 1 - all config values accessible via symbolic names # time=86.288ms
     
     # Subtest: configuration values are consistent across accesses
         ok 1 - configuration values are consistent across multiple accesses
         1..1
-    ok 2 - configuration values are consistent across accesses # time=41.203ms
+    ok 2 - configuration values are consistent across accesses # time=47.769ms
     
     # Subtest: configuration categories provide organized access
         ok 1 - configuration categories provide organized access to values
         1..1
-    ok 3 - configuration categories provide organized access # time=30.571ms
+    ok 3 - configuration categories provide organized access # time=36.276ms
     
     # Subtest: configuration accepts valid overrides
         ok 1 - configuration accepts and applies valid overrides
         1..1
-    ok 4 - configuration accepts valid overrides # time=263.464ms
+    ok 4 - configuration accepts valid overrides # time=243.858ms
     
     # Subtest: getAll returns immutable clone
         ok 1 - getAll returns an immutable clone
         1..1
-    ok 5 - getAll returns immutable clone # time=14.891ms
+    ok 5 - getAll returns immutable clone # time=16.243ms
     
     1..5
-ok 1 - Property 13: Configuration Centralization # time=432.793ms
+ok 1 - Property 13: Configuration Centralization # time=434.526ms
 
 1..1
-# { total: 5, pass: 5 }
-# time=439.524ms

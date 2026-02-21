@@ -3,41 +3,39 @@ TAP version 14
     # Subtest: detects stragglers exceeding 2x median latency
         ok 1 - Detects stragglers exceeding 2x median latency
         1..1
-    ok 1 - detects stragglers exceeding 2x median latency # time=5.475ms
+    ok 1 - detects stragglers exceeding 2x median latency # time=4.496ms
     
     # Subtest: does not flag fast partitions as stragglers
         ok 1 - Does not flag fast partitions as stragglers
         1..1
-    ok 2 - does not flag fast partitions as stragglers # time=0.783ms
+    ok 2 - does not flag fast partitions as stragglers # time=1.226ms
     
     # Subtest: calculates median latency correctly
         ok 1 - Calculates median latency correctly
         1..1
-    ok 3 - calculates median latency correctly # time=1.348ms
+    ok 3 - calculates median latency correctly # time=1.872ms
     
     # Subtest: threshold is 2x median by default
         ok 1 - Threshold is 2x median by default
         1..1
-    ok 4 - threshold is 2x median by default # time=0.649ms
+    ok 4 - threshold is 2x median by default # time=0.711ms
     
     # Subtest: analyzes results and identifies all stragglers
         ok 1 - Analyzes results and identifies all stragglers
         1..1
-    ok 5 - analyzes results and identifies all stragglers # time=0.73ms
+    ok 5 - analyzes results and identifies all stragglers # time=0.851ms
     
     # Subtest: tracks detected stragglers in stats
         ok 1 - Tracks detected stragglers in stats
         1..1
-    ok 6 - tracks detected stragglers in stats # time=2.064ms
+    ok 6 - tracks detected stragglers in stats # time=1.524ms
     
     # Subtest: reset clears all state
         ok 1 - Reset clears all state
         1..1
-    ok 7 - reset clears all state # time=1.735ms
+    ok 7 - reset clears all state # time=1.375ms
     
     1..7
-ok 1 - Property 73: Straggler Detection # time=17.114ms
+ok 1 - Property 73: Straggler Detection # time=16.324ms
 
 1..1
-# { total: 7, pass: 7 }
-# time=76.531ms

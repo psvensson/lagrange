@@ -157,6 +157,7 @@ class TableCreationService {
     const partitionMetadata = {
       partition_id: partitionId,
       table_id: tableId,
+      table_name: tableName,
       partition_key_start: null, // NULL means unbounded lower
       partition_key_end: null, // NULL means unbounded upper
       replica_count: this.defaultReplicaCount,

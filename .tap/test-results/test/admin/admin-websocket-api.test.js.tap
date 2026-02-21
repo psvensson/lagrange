@@ -5,7 +5,7 @@ TAP version 14
     ok 3 - should have no clients initially
     ok 4 - should not be initialized after shutdown
     1..4
-ok 1 - AdminWebSocketAPI - initialization # time=30.403ms
+ok 1 - AdminWebSocketAPI - initialization # time=43.304ms
 
 # Subtest: AdminWebSocketAPI - cache dump on connection
     ok 1 - should receive cache_dump
@@ -24,13 +24,13 @@ ok 1 - AdminWebSocketAPI - initialization # time=30.403ms
     ok 14 - should have 1 node
     ok 15 - should have correct node
     1..15
-ok 2 - AdminWebSocketAPI - cache dump on connection # time=6.227ms
+ok 2 - AdminWebSocketAPI - cache dump on connection # time=10.269ms
 
 # Subtest: AdminWebSocketAPI - multiple concurrent connections
     ok 1 - should have 3 connected clients
     ok 2 - should have 2 clients after disconnect
     1..2
-ok 3 - AdminWebSocketAPI - multiple concurrent connections # time=55.033ms
+ok 3 - AdminWebSocketAPI - multiple concurrent connections # time=59.353ms
 
 # Subtest: AdminWebSocketAPI - query execution SELECT
     ok 1 - should receive query_result
@@ -40,7 +40,7 @@ ok 3 - AdminWebSocketAPI - multiple concurrent connections # time=55.033ms
     ok 5 - should have partitions array
     ok 6 - should have tableName
     1..6
-ok 4 - AdminWebSocketAPI - query execution SELECT # time=5.584ms
+ok 4 - AdminWebSocketAPI - query execution SELECT # time=5.774ms
 
 # Subtest: AdminWebSocketAPI - query execution INSERT
     ok 1 - should receive query_result
@@ -50,19 +50,19 @@ ok 4 - AdminWebSocketAPI - query execution SELECT # time=5.584ms
     ok 5 - should have partitions
     ok 6 - should have tableName
     1..6
-ok 5 - AdminWebSocketAPI - query execution INSERT # time=4.68ms
+ok 5 - AdminWebSocketAPI - query execution INSERT # time=4.948ms
 
 # Subtest: AdminWebSocketAPI - query execution UPDATE
     ok 1 - should have UPDATE operation
     ok 2 - should have affectedRows
     1..2
-ok 6 - AdminWebSocketAPI - query execution UPDATE # time=4.381ms
+ok 6 - AdminWebSocketAPI - query execution UPDATE # time=4.679ms
 
 # Subtest: AdminWebSocketAPI - query execution DELETE
     ok 1 - should have DELETE operation
     ok 2 - should have affectedRows
     1..2
-ok 7 - AdminWebSocketAPI - query execution DELETE # time=4.249ms
+ok 7 - AdminWebSocketAPI - query execution DELETE # time=4.519ms
 
 # Subtest: AdminWebSocketAPI - partition callback execution route
     ok 1 - should receive query_result
@@ -74,7 +74,7 @@ ok 7 - AdminWebSocketAPI - query execution DELETE # time=4.249ms
     ok 7 - should pass callbackExport to SqlRequest
     ok 8 - should pass runtimeKind to SqlRequest
     1..8
-ok 8 - AdminWebSocketAPI - partition callback execution route # time=6.9ms
+ok 8 - AdminWebSocketAPI - partition callback execution route # time=5.329ms
 
 # Subtest: AdminWebSocketAPI - partition callback validation requires callback fields
     ok 1 - should return query_result envelope
@@ -82,7 +82,7 @@ ok 8 - AdminWebSocketAPI - partition callback execution route # time=6.9ms
     ok 3 - should return malformed error for missing module ref
     ok 4 - should include validation error
     1..4
-ok 9 - AdminWebSocketAPI - partition callback validation requires callback fields # time=4.642ms
+ok 9 - AdminWebSocketAPI - partition callback validation requires callback fields # time=6.099ms
 
 # Subtest: AdminWebSocketAPI - error handling TABLE_NOT_FOUND
     ok 1 - should receive query_result
@@ -90,31 +90,31 @@ ok 9 - AdminWebSocketAPI - partition callback validation requires callback field
     ok 3 - should have error
     ok 4 - should have error code
     1..4
-ok 10 - AdminWebSocketAPI - error handling TABLE_NOT_FOUND # time=4.056ms
+ok 10 - AdminWebSocketAPI - error handling TABLE_NOT_FOUND # time=4.176ms
 
 # Subtest: AdminWebSocketAPI - error handling SYNTAX_ERROR
     ok 1 - should have SYNTAX_ERROR
     1..1
-ok 11 - AdminWebSocketAPI - error handling SYNTAX_ERROR # time=4.029ms
+ok 11 - AdminWebSocketAPI - error handling SYNTAX_ERROR # time=4.173ms
 
 # Subtest: AdminWebSocketAPI - malformed JSON handling
     ok 1 - should have error code
     ok 2 - should have error message
     ok 3 - should have hint
     1..3
-ok 12 - AdminWebSocketAPI - malformed JSON handling # time=3.849ms
+ok 12 - AdminWebSocketAPI - malformed JSON handling # time=3.945ms
 
 # Subtest: AdminWebSocketAPI - unknown message type ignored
     ok 1 - should receive query result
     ok 2 - should have correct queryId
     1..2
-ok 13 - AdminWebSocketAPI - unknown message type ignored # time=3.83ms
+ok 13 - AdminWebSocketAPI - unknown message type ignored # time=3.875ms
 
 # Subtest: AdminWebSocketAPI - refresh message
     ok 1 - should receive initial dump
     ok 2 - should receive refresh dump
     1..2
-ok 14 - AdminWebSocketAPI - refresh message # time=5.978ms
+ok 14 - AdminWebSocketAPI - refresh message # time=4.168ms
 
 # Subtest: AdminWebSocketAPI - CDC event broadcasting
     ok 1 - client 1 should receive event
@@ -123,7 +123,7 @@ ok 14 - AdminWebSocketAPI - refresh message # time=5.978ms
     ok 4 - should have correct record
     ok 5 - client 2 should receive event
     1..5
-ok 15 - AdminWebSocketAPI - CDC event broadcasting # time=3.922ms
+ok 15 - AdminWebSocketAPI - CDC event broadcasting # time=3.886ms
 
 # Subtest: AdminWebSocketAPI - health endpoint
     ok 1 - should return 200
@@ -131,26 +131,26 @@ ok 15 - AdminWebSocketAPI - CDC event broadcasting # time=3.922ms
     ok 3 - should have nodeId
     ok 4 - should have 1 connected client
     1..4
-ok 16 - AdminWebSocketAPI - health endpoint # time=10.118ms
+ok 16 - AdminWebSocketAPI - health endpoint # time=12.135ms
 
 # Subtest: AdminWebSocketAPI - cleanup on disconnect
     ok 1 - should have 1 client
     ok 2 - should have 0 clients after disconnect
     1..2
-ok 17 - AdminWebSocketAPI - cleanup on disconnect # time=54.179ms
+ok 17 - AdminWebSocketAPI - cleanup on disconnect # time=54.126ms
 
 # Subtest: AdminWebSocketAPI - query without queryId
     ok 1 - should have error
     ok 2 - should have error code
     1..2
-ok 18 - AdminWebSocketAPI - query without queryId # time=3.654ms
+ok 18 - AdminWebSocketAPI - query without queryId # time=3.842ms
 
 # Subtest: AdminWebSocketAPI - query without sql
     ok 1 - should have queryId
     ok 2 - should have error
     ok 3 - should have error code
     1..3
-ok 19 - AdminWebSocketAPI - query without sql # time=3.463ms
+ok 19 - AdminWebSocketAPI - query without sql # time=3.552ms
 
 # Subtest: AdminWebSocketAPI - dashboard landing page
     ok 1 - should return 200
@@ -158,7 +158,7 @@ ok 19 - AdminWebSocketAPI - query without sql # time=3.463ms
     ok 3 - should disable dashboard page caching
     ok 4 - should return dashboard html
     1..4
-ok 20 - AdminWebSocketAPI - dashboard landing page # time=4.131ms
+ok 20 - AdminWebSocketAPI - dashboard landing page # time=4.57ms
 
 # Subtest: AdminWebSocketAPI - test catalog endpoint
     ok 1 - should return 200
@@ -167,7 +167,7 @@ ok 20 - AdminWebSocketAPI - dashboard landing page # time=4.131ms
     ok 4 - should include config entries
     ok 5 - should publish default config for UI selection
     1..5
-ok 21 - AdminWebSocketAPI - test catalog endpoint # time=6.022ms
+ok 21 - AdminWebSocketAPI - test catalog endpoint # time=4.503ms
 
 # Subtest: AdminWebSocketAPI - start/stop test run endpoints
     ok 1 - should start run
@@ -175,27 +175,27 @@ ok 21 - AdminWebSocketAPI - test catalog endpoint # time=6.022ms
     ok 3 - should stop run
     ok 4 - should return stop status
     1..4
-ok 22 - AdminWebSocketAPI - start/stop test run endpoints # time=5.774ms
+ok 22 - AdminWebSocketAPI - start/stop test run endpoints # time=8.471ms
 
 # Subtest: AdminWebSocketAPI - delete test run endpoint
     ok 1 - should delete run
     ok 2 - should return deleted flag
     ok 3 - should return deleted run id
     1..3
-ok 23 - AdminWebSocketAPI - delete test run endpoint # time=4.512ms
+ok 23 - AdminWebSocketAPI - delete test run endpoint # time=4.54ms
 
 # Subtest: AdminWebSocketAPI - output asset endpoint
     ok 1 - should return output file
     ok 2 - should be equal
     ok 3 - should return requested payload
     1..3
-ok 24 - AdminWebSocketAPI - output asset endpoint # time=4.132ms
+ok 24 - AdminWebSocketAPI - output asset endpoint # time=6.106ms
 
 # Subtest: AdminWebSocketAPI - stream endpoint returns 404 for unknown run
     ok 1 - should return not found
     ok 2 - should be equal
     1..2
-ok 25 - AdminWebSocketAPI - stream endpoint returns 404 for unknown run # time=4.393ms
+ok 25 - AdminWebSocketAPI - stream endpoint returns 404 for unknown run # time=4.606ms
 
 # Subtest: AdminWebSocketAPI - stream endpoint serves archived run backlog
     ok 1 - should return stream response for archived run
@@ -203,13 +203,13 @@ ok 25 - AdminWebSocketAPI - stream endpoint returns 404 for unknown run # time=4
     ok 3 - should include archived log frame
     ok 4 - should include archived log content
     1..4
-ok 26 - AdminWebSocketAPI - stream endpoint serves archived run backlog # time=4.574ms
+ok 26 - AdminWebSocketAPI - stream endpoint serves archived run backlog # time=4.715ms
 
 # Subtest: AdminWebSocketAPI - debug routes require security headers
     ok 1 - should reject missing security context
     ok 2 - should match pattern
     1..2
-ok 27 - AdminWebSocketAPI - debug routes require security headers # time=8.032ms
+ok 27 - AdminWebSocketAPI - debug routes require security headers # time=7.399ms
 
 # Subtest: AdminWebSocketAPI - debug session create/get/attach routes
     ok 1 - should create debug session
@@ -221,7 +221,7 @@ ok 27 - AdminWebSocketAPI - debug routes require security headers # time=8.032ms
     ok 7 - should route to metadata store methods
     ok 8 - should be equal
     1..8
-ok 28 - AdminWebSocketAPI - debug session create/get/attach routes # time=4.727ms
+ok 28 - AdminWebSocketAPI - debug session create/get/attach routes # time=4.63ms
 
 # Subtest: AdminWebSocketAPI - debug session update/detach routes
     ok 1 - should update debug session
@@ -234,7 +234,7 @@ ok 28 - AdminWebSocketAPI - debug session create/get/attach routes # time=4.727m
     ok 8 - should be equal
     ok 9 - should be equal
     1..9
-ok 29 - AdminWebSocketAPI - debug session update/detach routes # time=4.203ms
+ok 29 - AdminWebSocketAPI - debug session update/detach routes # time=4.267ms
 
 # Subtest: AdminWebSocketAPI - debug breakpoints/snapshots and DAP routes
     ok 1 - should write breakpoints
@@ -251,7 +251,7 @@ ok 29 - AdminWebSocketAPI - debug session update/detach routes # time=4.203ms
     ok 12 - should be equal
     ok 13 - should be equal
     1..13
-ok 30 - AdminWebSocketAPI - debug breakpoints/snapshots and DAP routes # time=5.858ms
+ok 30 - AdminWebSocketAPI - debug breakpoints/snapshots and DAP routes # time=5.748ms
 
 # Subtest: AdminWebSocketAPI - debug trace stream route wiring and filtering
     ok 1 - should register debug trace websocket route
@@ -259,7 +259,7 @@ ok 30 - AdminWebSocketAPI - debug breakpoints/snapshots and DAP routes # time=5.
     ok 3 - should be equal
     ok 4 - should cleanup subscription on disconnect
     1..4
-ok 31 - AdminWebSocketAPI - debug trace stream route wiring and filtering # time=105.43ms
+ok 31 - AdminWebSocketAPI - debug trace stream route wiring and filtering # time=104.235ms
 
 # Subtest: live query subscribe routes to liveQueryManager
     ok 1 - should respond with live_query_event
@@ -267,24 +267,22 @@ ok 31 - AdminWebSocketAPI - debug trace stream route wiring and filtering # time
     ok 3 - should register with live query manager
     ok 4 - should pass parsed query to manager
     1..4
-ok 32 - live query subscribe routes to liveQueryManager # time=19.553ms
+ok 32 - live query subscribe routes to liveQueryManager # time=5.993ms
 
 # Subtest: live query subscribe rejects missing subscriptionId
     ok 1 - should respond with error
     ok 2 - should include error message
     1..2
-ok 33 - live query subscribe rejects missing subscriptionId # time=3.83ms
+ok 33 - live query subscribe rejects missing subscriptionId # time=3.522ms
 
 # Subtest: live query unsubscribe routes to liveQueryManager
     ok 1 - should unregister from live query manager
     1..1
-ok 34 - live query unsubscribe routes to liveQueryManager # time=55.126ms
+ok 34 - live query unsubscribe routes to liveQueryManager # time=53.863ms
 
 # Subtest: live query client disconnect cleans up subscriptions
     ok 1 - should notify live query manager of disconnection
     1..1
-ok 35 - live query client disconnect cleans up subscriptions # time=58.581ms
+ok 35 - live query client disconnect cleans up subscriptions # time=53.276ms
 
 1..35
-# { total: 146, pass: 146 }
-# time=565.199ms

@@ -19,6 +19,12 @@ import {RebalanceCoordinator} from '../rebalancer/rebalance-coordinator.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {assertCritical} from '../utils/assert.js';
 import {PendingRequestTracker} from './pending-request-tracker.js';
+import {CDCEventBuffer} from './cdc-event-buffer.js';
+import {CDCPipelineMetrics} from '../cdc/cdc-pipeline-metrics.js';
+import {
+  CDC_PIPELINE_METRIC,
+  CDC_LIFECYCLE_LOG_MSG,
+} from '../constants/cdc-lifecycle-constants.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
@@ -32,6 +38,9 @@ import {
 } from '../bootstrap/system-table-schemas-constants.js';
 import {AddressManager} from '../address/address-manager.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
+import {
+  getSystemCachePrimaryKeyFieldOrFallback,
+} from '../cache/system-cache-key-descriptor.js';
 import {
   COLUMN,
   CDC_OPERATION,
@@ -380,6 +389,13 @@ class PartitionService extends EventEmitter {
 
     // CDC subscribers
     this.cdcSubscribers = new Set();
+    // CDC event buffer for events generated before subscribers register
+    this.cdcEventBuffer = new CDCEventBuffer({logger: this.logger});
+    // CDC pipeline metrics (shared across the node)
+    this.cdcPipelineMetrics = options.cdcPipelineMetrics ||
+      new CDCPipelineMetrics();
+    // Optional CDC confirmation tracker for awaitable CDC delivery
+    this.cdcConfirmationTracker = options.cdcConfirmationTracker || null;
     // Recently-applied write keys for idempotent Raft replay handling.
     this.recentlyAppliedEntryKeys = new Set();
     this.recentlyAppliedEntryOrder = [];
@@ -1992,7 +2008,7 @@ class PartitionService extends EventEmitter {
    * @param {Object} data - Data to insert.
    * @return {Promise<Object>} Insert result.
    */
-  async insertData(tableName, data) {
+  async insertData(tableName, data, options) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -2012,7 +2028,7 @@ class PartitionService extends EventEmitter {
       data,
       sql,
       params: values,
-    });
+    }, options);
   }
 
   /**
@@ -2022,7 +2038,7 @@ class PartitionService extends EventEmitter {
    * @param {Object} data - Data to update.
    * @return {Promise<Object>} Update result.
    */
-  async updateData(tableName, whereClause, data) {
+  async updateData(tableName, whereClause, data, options) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -2044,7 +2060,7 @@ class PartitionService extends EventEmitter {
       whereClause,
       sql,
       params,
-    });
+    }, options);
   }
 
   /**
@@ -2053,7 +2069,7 @@ class PartitionService extends EventEmitter {
    * @param {Object} whereClause - WHERE clause conditions.
    * @return {Promise<Object>} Delete result.
    */
-  async deleteData(tableName, whereClause) {
+  async deleteData(tableName, whereClause, options) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -2070,7 +2086,7 @@ class PartitionService extends EventEmitter {
       whereClause,
       sql,
       params,
-    });
+    }, options);
   }
 
   /**
@@ -2079,7 +2095,7 @@ class PartitionService extends EventEmitter {
    * @param {Object} data - Data to upsert.
    * @return {Promise<Object>} Upsert result.
    */
-  async upsertData(tableName, data) {
+  async upsertData(tableName, data, options) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -2099,7 +2115,7 @@ class PartitionService extends EventEmitter {
       data,
       sql,
       params: values,
-    });
+    }, options);
   }
 
   /**
@@ -2189,7 +2205,7 @@ class PartitionService extends EventEmitter {
    * @return {Promise<Object>} Operation result.
    * @private
    */
-  async proposeWrite(operation) {
+  async proposeWrite(operation, options) {
     const proposeStartMs = Date.now();
     const timestamp = this.hlcClock.now();
     const entryBuildStartMs = Date.now();
@@ -2230,6 +2246,7 @@ class PartitionService extends EventEmitter {
       } catch (_metricsErr) {
         // Metrics logging must not propagate to callers
       }
+      this._attachCdcConfirmation(result, operation, options);
       return result;
     }
 
@@ -2275,6 +2292,7 @@ class PartitionService extends EventEmitter {
         } catch (_metricsErr) {
           // Metrics logging must not propagate to callers
         }
+        this._attachCdcConfirmation(result, operation, options);
         return result;
       } catch (error) {
         this.recordWritePhaseDuration(
@@ -2312,6 +2330,31 @@ class PartitionService extends EventEmitter {
     }
 
     throw new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
+  }
+
+  /**
+   * Attach a CDC confirmation promise to the write result when the
+   * caller requested awaitable CDC confirmation.
+   *
+   * @param {Object} result - Write result to augment.
+   * @param {Object} operation - Write operation with tableName and data.
+   * @param {Object} [options] - Write options.
+   * @private
+   */
+  _attachCdcConfirmation(result, operation, options) {
+    if (!options?.awaitCDCConfirmation || !this.cdcConfirmationTracker) {
+      return;
+    }
+    const tableName = operation.tableName || this.tableName;
+    const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+    // For UPDATE/DELETE the primary key lives in whereClause, not data.
+    const whereClause = operation.whereClause || {};
+    const data = operation.data || {};
+    const pkValue = whereClause[pkField] ?? data[pkField];
+    if (pkValue !== undefined && pkValue !== null) {
+      result.cdcConfirmation =
+        this.cdcConfirmationTracker.awaitConfirmation(tableName, pkValue);
+    }
   }
 
   /**
@@ -2433,13 +2476,6 @@ class PartitionService extends EventEmitter {
       subscriberCount: this.cdcSubscribers.size,
     });
 
-    if (this.cdcSubscribers.size === NUM.ZERO) {
-      this.logger.debug(PARTITION_SERVICE_LOG_MSG.NO_CDC_SUBSCRIBERS, {
-        partitionId: this.partitionId,
-      });
-      return;
-    }
-
     let operation;
     let entryType = entry.type;
 
@@ -2546,6 +2582,31 @@ class PartitionService extends EventEmitter {
       sourcePartition: this.partitionId,
       sourceReplica: this.replicaId,
     };
+
+    // Buffer the event when no subscribers are registered
+    if (this.cdcSubscribers.size === NUM.ZERO) {
+      const buffered = this.cdcEventBuffer.buffer(cdcEvent);
+      if (buffered) {
+        this.cdcPipelineMetrics.increment(
+          CDC_PIPELINE_METRIC.EVENTS_BUFFERED,
+        );
+        this.logger.warn(CDC_LIFECYCLE_LOG_MSG.EVENT_BUFFERED, {
+          tableName,
+          operation,
+          partitionId: this.partitionId,
+        });
+      } else {
+        this.cdcPipelineMetrics.increment(
+          CDC_PIPELINE_METRIC.EVENTS_DROPPED,
+        );
+        this.logger.warn(CDC_LIFECYCLE_LOG_MSG.NO_SUBSCRIBERS_NO_BUFFER, {
+          tableName,
+          operation,
+          partitionId: this.partitionId,
+        });
+      }
+      return;
+    }
 
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATED_CDC_EVENT, {
       partitionId: this.partitionId,
@@ -3030,6 +3091,9 @@ class PartitionService extends EventEmitter {
       partitionId: this.partitionId,
       subscriberCount: this.cdcSubscribers.size,
     });
+    if (this.cdcEventBuffer.hasEvents()) {
+      this.cdcEventBuffer.replay(subscriber);
+    }
   }
 
   /**

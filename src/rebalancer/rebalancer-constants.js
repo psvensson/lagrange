@@ -178,6 +178,10 @@ const REBALANCER_LOG_MSG = Object.freeze({
   SUBOPTIMAL_STATE: 'Suboptimal rebalancing state detected',
   DEGRADED_TARGET: 'Replica target is constrained by available ready nodes',
   IMMEDIATE_TRIGGER: 'Immediate rebalancing check triggered',
+  CLUSTER_NOT_READY: 'Cluster readiness not confirmed, deferring planning',
+  CLUSTER_READINESS_TIMEOUT:
+    'Cluster readiness timed out, proceeding with available state',
+  CLUSTER_READINESS_CONFIRMED: 'Cluster readiness confirmed',
   SHUTDOWN: 'Rebalancer shutdown',
 });
 

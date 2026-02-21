@@ -2,23 +2,21 @@ TAP version 14
 # Subtest: Property 6: CDC event generated for INSERT operations
     ok 1 - CDC event generated for INSERT operations
     1..1
-ok 1 - Property 6: CDC event generated for INSERT operations # time=26.05ms
+ok 1 - Property 6: CDC event generated for INSERT operations # time=16.329ms
 
 # Subtest: Property 6: CDC event generated for UPDATE operations
     ok 1 - CDC event generated for UPDATE operations
     1..1
-ok 2 - Property 6: CDC event generated for UPDATE operations # time=11.444ms
+ok 2 - Property 6: CDC event generated for UPDATE operations # time=7.724ms
 
 # Subtest: Property 6: CDC event generated for DELETE operations
     ok 1 - CDC event generated for DELETE operations
     1..1
-ok 3 - Property 6: CDC event generated for DELETE operations # time=10.666ms
+ok 3 - Property 6: CDC event generated for DELETE operations # time=6.301ms
 
 # Subtest: Property 6: CDC events delivered to multiple subscribers
     ok 1 - CDC events delivered to multiple subscribers
     1..1
-ok 4 - Property 6: CDC events delivered to multiple subscribers # time=11.467ms
+ok 4 - Property 6: CDC events delivered to multiple subscribers # time=7.712ms
 
 1..4
-# { total: 4, pass: 4 }
-# time=232.978ms

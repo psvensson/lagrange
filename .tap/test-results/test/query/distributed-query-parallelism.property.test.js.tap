@@ -1,330 +1,396 @@
 TAP version 14
 # Subtest: Property 49: Distributed Query Parallelism
 Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1771310931661-0-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310931662', partitionCount: 3, originalCount: 3 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310931662',
-  partitionCount: 3,
-  totalLatencyMs: 52,
-  medianLatencyMs: 51,
-  maxPartitionLatencyMs: 51,
-  totalRows: 7,
-  totalBytes: 306,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 3,
-  fanoutTotalLatencyMs: 52,
-  fanoutMedianLatencyMs: 51,
-  mergeDurationMs: 0,
-  totalRows: 7,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 4,
-  timestamp: '1771310931715-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310931715', partitionCount: 4, originalCount: 4 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310931715',
-  partitionCount: 4,
-  totalLatencyMs: 51,
-  medianLatencyMs: 51,
-  maxPartitionLatencyMs: 51,
-  totalRows: 9,
-  totalBytes: 402,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 4,
-  fanoutTotalLatencyMs: 51,
-  fanoutMedianLatencyMs: 51,
-  mergeDurationMs: 0,
-  totalRows: 9,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 4,
-  timestamp: '1771310931767-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310931767', partitionCount: 4, originalCount: 4 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310931767',
-  partitionCount: 4,
-  totalLatencyMs: 50,
-  medianLatencyMs: 49.5,
-  maxPartitionLatencyMs: 50,
-  totalRows: 3,
-  totalBytes: 132,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 4,
-  fanoutTotalLatencyMs: 50,
-  fanoutMedianLatencyMs: 49.5,
-  mergeDurationMs: 0,
-  totalRows: 3,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 4,
-  timestamp: '1771310931818-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310931818', partitionCount: 4, originalCount: 4 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310931818',
-  partitionCount: 4,
-  totalLatencyMs: 51,
-  medianLatencyMs: 50.5,
-  maxPartitionLatencyMs: 51,
-  totalRows: 3,
-  totalBytes: 130,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 4,
-  fanoutTotalLatencyMs: 51,
-  fanoutMedianLatencyMs: 50.5,
-  mergeDurationMs: 0,
-  totalRows: 3,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1771310931869-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310931870', partitionCount: 2, originalCount: 2 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310931870',
-  partitionCount: 2,
-  totalLatencyMs: 50,
-  medianLatencyMs: 50,
-  maxPartitionLatencyMs: 50,
-  totalRows: 3,
-  totalBytes: 130,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 2,
-  fanoutTotalLatencyMs: 50,
-  fanoutMedianLatencyMs: 50,
-  mergeDurationMs: 0,
-  totalRows: 3,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1771310931920-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310931921', partitionCount: 2, originalCount: 2 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310931921',
-  partitionCount: 2,
-  totalLatencyMs: 50,
-  medianLatencyMs: 50,
-  maxPartitionLatencyMs: 50,
-  totalRows: 5,
-  totalBytes: 222,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 2,
-  fanoutTotalLatencyMs: 50,
-  fanoutMedianLatencyMs: 50,
-  mergeDurationMs: 0,
-  totalRows: 5,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1771310931972-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310931972', partitionCount: 3, originalCount: 3 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310931972',
-  partitionCount: 3,
-  totalLatencyMs: 51,
-  medianLatencyMs: 51,
-  maxPartitionLatencyMs: 51,
-  totalRows: 9,
-  totalBytes: 374,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 3,
-  fanoutTotalLatencyMs: 51,
-  fanoutMedianLatencyMs: 51,
-  mergeDurationMs: 0,
-  totalRows: 9,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1771310932024-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932024', partitionCount: 2, originalCount: 2 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932024',
-  partitionCount: 2,
-  totalLatencyMs: 51,
-  medianLatencyMs: 51,
-  maxPartitionLatencyMs: 51,
-  totalRows: 5,
-  totalBytes: 220,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 2,
-  fanoutTotalLatencyMs: 51,
-  fanoutMedianLatencyMs: 51,
-  mergeDurationMs: 0,
-  totalRows: 5,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
   partitionCount: 5,
-  timestamp: '1771310932076-0-query-executor',
+  timestamp: '1771595273592-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771310932076', partitionCount: 5, originalCount: 5 }
+Starting parallel query execution { queryId: 'q-1-1771595273592', partitionCount: 5, originalCount: 5 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
 Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
 metrics.fanout.complete {
-  queryId: 'q-1-1771310932076',
+  queryId: 'q-1-1771595273592',
   partitionCount: 5,
-  totalLatencyMs: 50,
+  totalLatencyMs: 53,
   medianLatencyMs: 50,
-  maxPartitionLatencyMs: 50,
-  totalRows: 7,
-  totalBytes: 314,
+  maxPartitionLatencyMs: 51,
+  totalRows: 4,
+  totalBytes: 174,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
 metrics.select.distributed {
   partitionCount: 5,
+  fanoutTotalLatencyMs: 53,
+  fanoutMedianLatencyMs: 50,
+  mergeDurationMs: 0,
+  totalRows: 4,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1771595273647-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595273647', partitionCount: 2, originalCount: 2 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595273647',
+  partitionCount: 2,
+  totalLatencyMs: 51,
+  medianLatencyMs: 51,
+  maxPartitionLatencyMs: 51,
+  totalRows: 8,
+  totalBytes: 354,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 2,
+  fanoutTotalLatencyMs: 51,
+  fanoutMedianLatencyMs: 51,
+  mergeDurationMs: 0,
+  totalRows: 8,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 5,
+  timestamp: '1771595273698-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595273698', partitionCount: 5, originalCount: 5 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595273698',
+  partitionCount: 5,
+  totalLatencyMs: 51,
+  medianLatencyMs: 51,
+  maxPartitionLatencyMs: 51,
+  totalRows: 9,
+  totalBytes: 384,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 5,
+  fanoutTotalLatencyMs: 51,
+  fanoutMedianLatencyMs: 51,
+  mergeDurationMs: 0,
+  totalRows: 9,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1771595273750-0-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595273750', partitionCount: 2, originalCount: 2 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595273750',
+  partitionCount: 2,
+  totalLatencyMs: 50,
+  medianLatencyMs: 50,
+  maxPartitionLatencyMs: 50,
+  totalRows: 10,
+  totalBytes: 442,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 2,
   fanoutTotalLatencyMs: 50,
   fanoutMedianLatencyMs: 50,
   mergeDurationMs: 0,
-  totalRows: 7,
+  totalRows: 10,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 5,
+  timestamp: '1771595273801-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595273801', partitionCount: 5, originalCount: 5 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595273801',
+  partitionCount: 5,
+  totalLatencyMs: 52,
+  medianLatencyMs: 50,
+  maxPartitionLatencyMs: 51,
+  totalRows: 3,
+  totalBytes: 136,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 5,
+  fanoutTotalLatencyMs: 52,
+  fanoutMedianLatencyMs: 50,
+  mergeDurationMs: 0,
+  totalRows: 3,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1771595273853-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595273853', partitionCount: 2, originalCount: 2 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595273853',
+  partitionCount: 2,
+  totalLatencyMs: 51,
+  medianLatencyMs: 51,
+  maxPartitionLatencyMs: 51,
+  totalRows: 10,
+  totalBytes: 440,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 2,
+  fanoutTotalLatencyMs: 51,
+  fanoutMedianLatencyMs: 51,
+  mergeDurationMs: 0,
+  totalRows: 10,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 5,
+  timestamp: '1771595273905-0-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595273905', partitionCount: 5, originalCount: 5 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595273905',
+  partitionCount: 5,
+  totalLatencyMs: 51,
+  medianLatencyMs: 51,
+  maxPartitionLatencyMs: 51,
+  totalRows: 8,
+  totalBytes: 344,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 5,
+  fanoutTotalLatencyMs: 51,
+  fanoutMedianLatencyMs: 51,
+  mergeDurationMs: 0,
+  totalRows: 8,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
 Executing distributed SELECT {
   partitionCount: 4,
-  timestamp: '1771310932127-1-query-executor',
+  timestamp: '1771595273958-0-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771310932127', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: 'q-1-1771595273958', partitionCount: 4, originalCount: 4 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
 metrics.fanout.complete {
-  queryId: 'q-1-1771310932127',
+  queryId: 'q-1-1771595273958',
   partitionCount: 4,
-  totalLatencyMs: 52,
-  medianLatencyMs: 50.5,
+  totalLatencyMs: 51,
+  medianLatencyMs: 50,
   maxPartitionLatencyMs: 51,
-  totalRows: 2,
-  totalBytes: 86,
+  totalRows: 6,
+  totalBytes: 270,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
 metrics.select.distributed {
   partitionCount: 4,
-  fanoutTotalLatencyMs: 52,
-  fanoutMedianLatencyMs: 50.5,
+  fanoutTotalLatencyMs: 51,
+  fanoutMedianLatencyMs: 50,
   mergeDurationMs: 0,
-  totalRows: 2,
+  totalRows: 6,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 5,
+  timestamp: '1771595274010-0-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274010', partitionCount: 5, originalCount: 5 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274010',
+  partitionCount: 5,
+  totalLatencyMs: 51,
+  medianLatencyMs: 50,
+  maxPartitionLatencyMs: 50,
+  totalRows: 5,
+  totalBytes: 228,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 5,
+  fanoutTotalLatencyMs: 51,
+  fanoutMedianLatencyMs: 50,
+  mergeDurationMs: 0,
+  totalRows: 5,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1771595274062-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274062', partitionCount: 4, originalCount: 4 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274062',
+  partitionCount: 4,
+  totalLatencyMs: 51,
+  medianLatencyMs: 51,
+  maxPartitionLatencyMs: 51,
+  totalRows: 4,
+  totalBytes: 182,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 4,
+  fanoutTotalLatencyMs: 51,
+  fanoutMedianLatencyMs: 51,
+  mergeDurationMs: 0,
+  totalRows: 4,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
     # Subtest: queries execute on all partitions in parallel
         ok 1 - Queries execute on all partitions in parallel
         1..1
-    ok 1 - queries execute on all partitions in parallel # time=526.176ms
+    ok 1 - queries execute on all partitions in parallel # time=528.926ms
     
 Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1771310932185-0-query-executor',
+  partitionCount: 4,
+  timestamp: '1771595274118-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771310932185', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1771595274118', partitionCount: 4, originalCount: 4 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274118',
+  partitionCount: 4,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 10,
+  totalBytes: 434,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 4,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 10,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1771595274120-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274120', partitionCount: 2, originalCount: 2 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 metrics.fanout.complete {
-  queryId: 'q-1-1771310932185',
+  queryId: 'q-1-1771595274120',
+  partitionCount: 2,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 8,
+  totalBytes: 356,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 2,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 8,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 2,
+  timestamp: '1771595274122-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274122', partitionCount: 2, originalCount: 2 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274122',
   partitionCount: 2,
   totalLatencyMs: 0,
   medianLatencyMs: 0,
   maxPartitionLatencyMs: 0,
-  totalRows: 5,
-  totalBytes: 224,
+  totalRows: 7,
+  totalBytes: 310,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
@@ -333,27 +399,27 @@ metrics.select.distributed {
   fanoutTotalLatencyMs: 0,
   fanoutMedianLatencyMs: 0,
   mergeDurationMs: 0,
-  totalRows: 5,
+  totalRows: 7,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771310932186-1-query-executor',
+  timestamp: '1771595274123-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771310932186', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1771595274123', partitionCount: 2, originalCount: 2 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 metrics.fanout.complete {
-  queryId: 'q-1-1771310932186',
+  queryId: 'q-1-1771595274123',
   partitionCount: 2,
   totalLatencyMs: 1,
   medianLatencyMs: 0.5,
   maxPartitionLatencyMs: 1,
-  totalRows: 11,
-  totalBytes: 464,
+  totalRows: 8,
+  totalBytes: 354,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
@@ -362,185 +428,34 @@ metrics.select.distributed {
   fanoutTotalLatencyMs: 1,
   fanoutMedianLatencyMs: 0.5,
   mergeDurationMs: 0,
-  totalRows: 11,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1771310932187-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932188', partitionCount: 3, originalCount: 3 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932188',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 7,
-  totalBytes: 308,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 3,
-  fanoutTotalLatencyMs: 0,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 7,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1771310932189-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932189', partitionCount: 3, originalCount: 3 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932189',
-  partitionCount: 3,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 11,
-  totalBytes: 488,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 3,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 1,
-  mergeDurationMs: 0,
-  totalRows: 11,
+  totalRows: 8,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
 Executing distributed SELECT {
   partitionCount: 4,
-  timestamp: '1771310932190-1-query-executor',
+  timestamp: '1771595274124-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771310932190', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: 'q-1-1771595274125', partitionCount: 4, originalCount: 4 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
 metrics.fanout.complete {
-  queryId: 'q-1-1771310932190',
+  queryId: 'q-1-1771595274125',
   partitionCount: 4,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 1,
-  totalRows: 2,
-  totalBytes: 92,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 4,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 2,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1771310932192-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932192', partitionCount: 2, originalCount: 2 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932192',
-  partitionCount: 2,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 9,
-  totalBytes: 376,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 2,
-  fanoutTotalLatencyMs: 0,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 9,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1771310932193-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932193', partitionCount: 5, originalCount: 5 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932193',
-  partitionCount: 5,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 7,
-  totalBytes: 294,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 5,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 1,
-  mergeDurationMs: 0,
-  totalRows: 7,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1771310932194-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932195', partitionCount: 3, originalCount: 3 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932195',
-  partitionCount: 3,
   totalLatencyMs: 0,
   medianLatencyMs: 0,
   maxPartitionLatencyMs: 0,
   totalRows: 6,
-  totalBytes: 270,
+  totalBytes: 268,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
 metrics.select.distributed {
-  partitionCount: 3,
+  partitionCount: 4,
   fanoutTotalLatencyMs: 0,
   fanoutMedianLatencyMs: 0,
   mergeDurationMs: 0,
@@ -549,23 +464,115 @@ metrics.select.distributed {
   speculativeExecutions: 0
 }
 Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1771310932196-1-query-executor',
+  partitionCount: 4,
+  timestamp: '1771595274126-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771310932196', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: 'q-1-1771595274126', partitionCount: 4, originalCount: 4 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274126',
+  partitionCount: 4,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 1,
+  totalRows: 4,
+  totalBytes: 180,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 4,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 4,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1771595274128-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274128', partitionCount: 4, originalCount: 4 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274128',
+  partitionCount: 4,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
+  totalRows: 6,
+  totalBytes: 272,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 4,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 1,
+  mergeDurationMs: 0,
+  totalRows: 6,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1771595274129-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274129', partitionCount: 3, originalCount: 3 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 metrics.fanout.complete {
-  queryId: 'q-1-1771310932196',
+  queryId: 'q-1-1771595274129',
+  partitionCount: 3,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 12,
+  totalBytes: 530,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 3,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 12,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1771595274130-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274131', partitionCount: 3, originalCount: 3 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274131',
   partitionCount: 3,
   totalLatencyMs: 0,
   medianLatencyMs: 0,
   maxPartitionLatencyMs: 0,
   totalRows: 2,
-  totalBytes: 86,
+  totalBytes: 90,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
@@ -580,52 +587,299 @@ metrics.select.distributed {
 }
 Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771310932197-1-query-executor',
+  timestamp: '1771595274132-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771310932197', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1771595274132', partitionCount: 2, originalCount: 2 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 metrics.fanout.complete {
-  queryId: 'q-1-1771310932197',
+  queryId: 'q-1-1771595274132',
   partitionCount: 2,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 9,
-  totalBytes: 392,
+  totalLatencyMs: 0,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 5,
+  totalBytes: 214,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
 metrics.select.distributed {
   partitionCount: 2,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 1,
+  fanoutTotalLatencyMs: 0,
+  fanoutMedianLatencyMs: 0,
   mergeDurationMs: 0,
-  totalRows: 9,
+  totalRows: 5,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
     # Subtest: all partition results are combined
         ok 1 - All partition results are combined correctly
         1..1
-    ok 2 - all partition results are combined # time=14.422ms
+    ok 2 - all partition results are combined # time=15.824ms
     
 Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1771310932200-0-query-executor',
+  partitionCount: 3,
+  timestamp: '1771595274135-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771310932200', partitionCount: 5, originalCount: 5 }
+Starting parallel query execution { queryId: 'q-1-1771595274135', partitionCount: 3, originalCount: 3 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274135',
+  partitionCount: 3,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
+  totalRows: 3,
+  totalBytes: 60,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 3,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 1,
+  mergeDurationMs: 0,
+  totalRows: 3,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 5,
+  timestamp: '1771595274136-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274136', partitionCount: 5, originalCount: 5 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
 Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
 metrics.fanout.complete {
-  queryId: 'q-1-1771310932200',
+  queryId: 'q-1-1771595274136',
+  partitionCount: 5,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 5,
+  totalBytes: 100,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 5,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 5,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1771595274138-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274138', partitionCount: 4, originalCount: 4 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274138',
+  partitionCount: 4,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
+  totalRows: 4,
+  totalBytes: 80,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 4,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 1,
+  mergeDurationMs: 0,
+  totalRows: 4,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 5,
+  timestamp: '1771595274139-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274139', partitionCount: 5, originalCount: 5 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274139',
+  partitionCount: 5,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 1,
+  totalRows: 5,
+  totalBytes: 100,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 5,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 5,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1771595274141-0-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274141', partitionCount: 4, originalCount: 4 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274141',
+  partitionCount: 4,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
+  totalRows: 4,
+  totalBytes: 80,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 4,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 1,
+  mergeDurationMs: 0,
+  totalRows: 4,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1771595274142-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274142', partitionCount: 3, originalCount: 3 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274142',
+  partitionCount: 3,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
+  totalRows: 3,
+  totalBytes: 60,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 3,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 1,
+  mergeDurationMs: 0,
+  totalRows: 3,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 3,
+  timestamp: '1771595274143-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274143', partitionCount: 3, originalCount: 3 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274143',
+  partitionCount: 3,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 1,
+  totalRows: 3,
+  totalBytes: 60,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 3,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 3,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 4,
+  timestamp: '1771595274144-1-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274144', partitionCount: 4, originalCount: 4 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274144',
+  partitionCount: 4,
+  totalLatencyMs: 1,
+  medianLatencyMs: 0,
+  maxPartitionLatencyMs: 0,
+  totalRows: 4,
+  totalBytes: 80,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+metrics.select.distributed {
+  partitionCount: 4,
+  fanoutTotalLatencyMs: 1,
+  fanoutMedianLatencyMs: 0,
+  mergeDurationMs: 0,
+  totalRows: 4,
+  stragglerCount: 0,
+  speculativeExecutions: 0
+}
+Executing distributed SELECT {
+  partitionCount: 5,
+  timestamp: '1771595274146-0-query-executor',
+  hasJoins: false,
+  hasAggregates: false
+}
+Starting parallel query execution { queryId: 'q-1-1771595274146', partitionCount: 5, originalCount: 5 }
+Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
+Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
+Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
+metrics.fanout.complete {
+  queryId: 'q-1-1771595274146',
   partitionCount: 5,
   totalLatencyMs: 1,
   medianLatencyMs: 1,
@@ -645,203 +899,18 @@ metrics.select.distributed {
   speculativeExecutions: 0
 }
 Executing distributed SELECT {
-  partitionCount: 4,
-  timestamp: '1771310932201-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932201', partitionCount: 4, originalCount: 4 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932201',
-  partitionCount: 4,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 4,
-  totalBytes: 80,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 4,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 1,
-  totalRows: 4,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 4,
-  timestamp: '1771310932203-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932203', partitionCount: 4, originalCount: 4 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932203',
-  partitionCount: 4,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 4,
-  totalBytes: 80,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 4,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 1,
-  mergeDurationMs: 0,
-  totalRows: 4,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 4,
-  timestamp: '1771310932204-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932204', partitionCount: 4, originalCount: 4 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932204',
-  partitionCount: 4,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 1,
-  totalRows: 4,
-  totalBytes: 80,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 4,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 4,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1771310932206-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932206', partitionCount: 5, originalCount: 5 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932206',
-  partitionCount: 5,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 5,
-  totalBytes: 100,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 5,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 1,
-  mergeDurationMs: 0,
-  totalRows: 5,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1771310932207-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932207', partitionCount: 3, originalCount: 3 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932207',
-  partitionCount: 3,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 3,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 3,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 3,
-  timestamp: '1771310932208-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932209', partitionCount: 3, originalCount: 3 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932209',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 3,
-  fanoutTotalLatencyMs: 0,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 3,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
   partitionCount: 2,
-  timestamp: '1771310932210-1-query-executor',
+  timestamp: '1771595274147-1-query-executor',
   hasJoins: false,
   hasAggregates: false
 }
-Starting parallel query execution { queryId: 'q-1-1771310932210', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: 'q-1-1771595274147', partitionCount: 2, originalCount: 2 }
 Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
 metrics.fanout.complete {
-  queryId: 'q-1-1771310932210',
+  queryId: 'q-1-1771595274147',
   partitionCount: 2,
-  totalLatencyMs: 0,
+  totalLatencyMs: 1,
   medianLatencyMs: 0,
   maxPartitionLatencyMs: 0,
   totalRows: 2,
@@ -851,81 +920,19 @@ metrics.fanout.complete {
 }
 metrics.select.distributed {
   partitionCount: 2,
-  fanoutTotalLatencyMs: 0,
+  fanoutTotalLatencyMs: 1,
   fanoutMedianLatencyMs: 0,
   mergeDurationMs: 0,
   totalRows: 2,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
-Executing distributed SELECT {
-  partitionCount: 5,
-  timestamp: '1771310932211-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932211', partitionCount: 5, originalCount: 5 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
-Routing query to partition service { partitionId: 'p3', address: 'test-node/partition/p3' }
-Routing query to partition service { partitionId: 'p4', address: 'test-node/partition/p4' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932211',
-  partitionCount: 5,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 5,
-  totalBytes: 100,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 5,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 1,
-  mergeDurationMs: 0,
-  totalRows: 5,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-Executing distributed SELECT {
-  partitionCount: 1,
-  timestamp: '1771310932212-1-query-executor',
-  hasJoins: false,
-  hasAggregates: false
-}
-Starting parallel query execution { queryId: 'q-1-1771310932212', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p0', address: 'test-node/partition/p0' }
-metrics.fanout.complete {
-  queryId: 'q-1-1771310932212',
-  partitionCount: 1,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 20,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
-metrics.select.distributed {
-  partitionCount: 1,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 1,
-  stragglerCount: 0,
-  speculativeExecutions: 0
-}
     # Subtest: partition count is tracked in result
         ok 1 - Partition count is tracked in result
         1..1
-    ok 3 - partition count is tracked in result # time=14.141ms
+    ok 3 - partition count is tracked in result # time=13.888ms
     
     1..3
-ok 1 - Property 49: Distributed Query Parallelism # time=558.527ms
+ok 1 - Property 49: Distributed Query Parallelism # time=562.671ms
 
 1..1
-# { total: 3, pass: 3 }
-# time=598.467ms

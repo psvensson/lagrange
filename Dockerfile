@@ -14,4 +14,4 @@ COPY src/ ./src/
 
 EXPOSE 8080 8081 9080
 
-ENTRYPOINT ["node", "src/index.js"]
+ENTRYPOINT ["node", "--max-old-space-size=1536", "src/index.js"]

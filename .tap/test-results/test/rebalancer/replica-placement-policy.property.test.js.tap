@@ -3,26 +3,24 @@ TAP version 14
     # Subtest: replica count matches policy specification
         ok 1 - Replica count matches policy specification
         1..1
-    ok 1 - replica count matches policy specification # time=6.928ms
+    ok 1 - replica count matches policy specification # time=12.553ms
     
     # Subtest: replicas distributed across different nodes
         ok 1 - Replicas distributed across different nodes
         1..1
-    ok 2 - replicas distributed across different nodes # time=2.578ms
+    ok 2 - replicas distributed across different nodes # time=4.24ms
     
     # Subtest: placement considers node resource usage
         ok 1 - Placement considers node resource usage
         1..1
-    ok 3 - placement considers node resource usage # time=0.925ms
+    ok 3 - placement considers node resource usage # time=1.594ms
     
     # Subtest: policy constraints are respected
         ok 1 - Policy constraints are respected
         1..1
-    ok 4 - policy constraints are respected # time=1.249ms
+    ok 4 - policy constraints are respected # time=2.189ms
     
     1..4
-ok 1 - Property 3: Replica Placement Policy Compliance # time=53.449ms
+ok 1 - Property 3: Replica Placement Policy Compliance # time=105.409ms
 
 1..1
-# { total: 4, pass: 4 }
-# time=71.042ms

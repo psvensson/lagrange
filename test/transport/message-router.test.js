@@ -156,8 +156,8 @@ t.test('MessageRouter unit tests', async (t) => {
     await router.shutdown();
   });
 
-  t.test('should return error when delivering without connection', async (t) => {
-    // Without a self-connection, local delivery should fail rather than bypass transport.
+  t.test('should deliver locally without connection via deliverLocal', async (t) => {
+    // Local delivery bypasses WebSocket — no self-connection needed.
     const router = new MessageRouter({nodeId: 'test-node'});
     await router.initialize();
 
@@ -167,21 +167,20 @@ t.test('MessageRouter unit tests', async (t) => {
       return {acknowledged: true, data: 'response'};
     });
 
-    // Without self-connection, delivery should fail with a connection error.
     const result = await router.deliver('test-node/service/local-service', {
       type: 'TEST_MESSAGE',
       data: 'hello',
     });
 
     t.ok(result.messageId, 'should have message ID');
-    t.equal(result.acknowledged, false, 'should not be acknowledged');
-    t.ok(result.error, 'should include error message');
-    t.equal(receivedMessages.length, 0, 'should not invoke handler');
+    t.equal(result.acknowledged, true, 'should be acknowledged');
+    t.equal(result.data, 'response', 'should include handler data');
+    t.equal(receivedMessages.length, 1, 'should invoke handler');
 
     await router.shutdown();
   });
 
-  t.test('should return error for async handler without connection', async (t) => {
+  t.test('should deliver locally for async handler without connection', async (t) => {
     const router = new MessageRouter({nodeId: 'test-node'});
     await router.initialize();
 
@@ -190,10 +189,12 @@ t.test('MessageRouter unit tests', async (t) => {
       return {acknowledged: true, processed: envelope.payload.data};
     });
 
-    const result = await router.deliver('test-node/service/async-service', {data: 'async-test'});
+    const result = await router.deliver(
+      'test-node/service/async-service', {data: 'async-test'},
+    );
 
-    t.equal(result.acknowledged, false, 'should not be acknowledged');
-    t.ok(result.error, 'should include error message');
+    t.equal(result.acknowledged, true, 'should be acknowledged');
+    t.equal(result.processed, 'async-test', 'should include handler result');
 
     await router.shutdown();
   });
@@ -598,6 +599,78 @@ t.test('MessageRouter unit tests', async (t) => {
 
     await router1.shutdown();
     // router2 doesn't need shutdown since it failed to initialize
+  });
+
+  t.test('should fall back to deliverRemote when no handler registered',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize({startServer: false});
+
+      let deliverRemoteCalled = false;
+      let capturedArgs = null;
+      const originalDeliverRemote = router.deliverRemote.bind(router);
+      router.deliverRemote = async (...args) => {
+        deliverRemoteCalled = true;
+        capturedArgs = args;
+        return originalDeliverRemote(...args);
+      };
+
+      // No handler registered for this address
+      const result = await router.deliver(
+        'test-node/service/unregistered', {data: 'test'},
+      );
+
+      t.ok(deliverRemoteCalled, 'should call deliverRemote as fallback');
+      t.equal(
+        capturedArgs[0], 'test-node/service/unregistered',
+        'should pass target address to deliverRemote',
+      );
+      t.equal(result.acknowledged, false, 'should not be acknowledged');
+
+      await router.shutdown();
+    });
+
+  t.test('should log metrics for local delivery', async (t) => {
+    const router = new MessageRouter({nodeId: 'metrics-local-node'});
+    await router.initialize({startServer: false});
+
+    const loggedEntries = [];
+    const originalInfo = router.logger.info.bind(router.logger);
+    router.logger.info = (tag, data) => {
+      loggedEntries.push({tag, data});
+      return originalInfo(tag, data);
+    };
+
+    router.register(
+      'metrics-local-node/service/svc', () => ({acknowledged: true}),
+    );
+
+    // Deliver enough messages to trigger a fault metric (first fault fires)
+    // A failed delivery triggers FAULT on the 1st occurrence
+    router.register(
+      'metrics-local-node/service/fail-svc', () => {
+        throw new Error('fail');
+      },
+    );
+
+    await router.deliver(
+      'metrics-local-node/service/fail-svc', {data: 'trigger-metric'},
+    );
+
+    const metricsLogs = loggedEntries.filter(
+      (e) => e.tag === 'metrics.transport.deliver',
+    );
+    t.ok(metricsLogs.length > 0, 'should emit transport deliver metric');
+    t.equal(
+      metricsLogs[0].data.targetNodeId, 'metrics-local-node',
+      'metric should target local node',
+    );
+    t.equal(
+      metricsLogs[0].data.acknowledged, false,
+      'metric should reflect acknowledged status',
+    );
+
+    await router.shutdown();
   });
 
   t.test('outbound queue enforces per-node concurrency', async (t) => {

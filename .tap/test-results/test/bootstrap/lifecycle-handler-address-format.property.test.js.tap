@@ -3,31 +3,29 @@ TAP version 14
     # Subtest: lifecycle address follows unified format pattern
         ok 1 - lifecycle address follows unified format for UUIDs
         1..1
-    ok 1 - lifecycle address follows unified format pattern # time=4.369ms
+    ok 1 - lifecycle address follows unified format pattern # time=3.016ms
     
     # Subtest: lifecycle address works with arbitrary string node IDs
         ok 1 - lifecycle address follows unified format for strings
         1..1
-    ok 2 - lifecycle address works with arbitrary string node IDs # time=1.845ms
+    ok 2 - lifecycle address works with arbitrary string node IDs # time=1.771ms
     
     # Subtest: lifecycle address always ends with /lifecycle/manager suffix
         ok 1 - lifecycle address always ends with /lifecycle/manager suffix
         1..1
-    ok 3 - lifecycle address always ends with /lifecycle/manager suffix # time=1.102ms
+    ok 3 - lifecycle address always ends with /lifecycle/manager suffix # time=1.114ms
     
     # Subtest: lifecycle address always starts with node ID
         ok 1 - lifecycle address always starts with node ID
         1..1
-    ok 4 - lifecycle address always starts with node ID # time=0.626ms
+    ok 4 - lifecycle address always starts with node ID # time=0.595ms
     
     # Subtest: lifecycle address has three segments in unified format
         ok 1 - lifecycle address has three segments in unified format
         1..1
-    ok 5 - lifecycle address has three segments in unified format # time=0.57ms
+    ok 5 - lifecycle address has three segments in unified format # time=0.563ms
     
     1..5
-ok 1 - Property 10: Lifecycle Handler Address Format # time=106.122ms
+ok 1 - Property 10: Lifecycle Handler Address Format # time=110.701ms
 
 1..1
-# { total: 5, pass: 5 }
-# time=110.46ms

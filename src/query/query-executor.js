@@ -81,6 +81,10 @@ class QueryExecutor {
     this.lastCoordinatorMetrics = null;
     this.logger = this.initLogger();
 
+    // Per-partition warning throttle to prevent log floods when a
+    // partition has no active service (e.g. during rebalancer lag).
+    this.noServiceWarnLastAt = new Map();
+
     // Configuration
     const config = ConfigurationManager.getInstance();
     this.queryTimeoutMs = config.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
@@ -89,6 +93,8 @@ class QueryExecutor {
       QUERY_DEFAULTS.LEADER_RETRY_ATTEMPTS;
     this.leaderRetryDelayMs = config.get(QUERY_CONFIG_KEY.LEADER_RETRY_DELAY_MS) ||
       QUERY_DEFAULTS.LEADER_RETRY_DELAY_MS;
+    this.noServiceWarnThrottleMs =
+      QUERY_DEFAULTS.NO_SERVICE_WARN_THROTTLE_MS;
   }
 
   /**
@@ -940,7 +946,16 @@ class QueryExecutor {
               rows: [],
             };
           } else if (!hasRoutableService) {
-            this.logger.warn(QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION, {partitionId});
+            const now = Date.now();
+            const lastAt = this.noServiceWarnLastAt.get(partitionId);
+            if (!Number.isFinite(lastAt) ||
+                now - lastAt >= this.noServiceWarnThrottleMs) {
+              this.noServiceWarnLastAt.set(partitionId, now);
+              this.logger.warn(
+                QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION,
+                {partitionId},
+              );
+            }
             return {
               partitionId,
               success: false,
@@ -949,7 +964,16 @@ class QueryExecutor {
             };
           }
         } else {
-          this.logger.warn(QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION, {partitionId});
+          const now = Date.now();
+          const lastAt = this.noServiceWarnLastAt.get(partitionId);
+          if (!Number.isFinite(lastAt) ||
+              now - lastAt >= this.noServiceWarnThrottleMs) {
+            this.noServiceWarnLastAt.set(partitionId, now);
+            this.logger.warn(
+              QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION,
+              {partitionId},
+            );
+          }
           return {
             partitionId,
             success: false,
@@ -1132,7 +1156,16 @@ class QueryExecutor {
     const services = this.getRoutablePartitionServices(partitionId);
 
     if (services.length === 0) {
-      this.logger.warn(QUERY_LOG_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION, {partitionId});
+      const now = Date.now();
+      const lastWarnAt = this.noServiceWarnLastAt.get(partitionId);
+      if (!Number.isFinite(lastWarnAt) ||
+          now - lastWarnAt >= this.noServiceWarnThrottleMs) {
+        this.noServiceWarnLastAt.set(partitionId, now);
+        this.logger.warn(
+          QUERY_LOG_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION,
+          {partitionId},
+        );
+      }
       return [];
     }
 

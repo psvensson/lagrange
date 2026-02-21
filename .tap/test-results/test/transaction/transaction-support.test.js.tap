@@ -10,7 +10,7 @@ BEGIN TRANSACTION { sessionId: 'test-session-1' }
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 1 - Transaction - BEGIN TRANSACTION starts a transaction # time=5.089ms
+ok 1 - Transaction - BEGIN TRANSACTION starts a transaction # time=5.104ms
 
 Executing SQL query { sql: 'COMMIT', paramCount: 0, sessionId: 'test-session-2' }
 COMMIT { sessionId: 'test-session-2', participants: [] }
@@ -18,7 +18,7 @@ COMMIT { sessionId: 'test-session-2', participants: [] }
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 2 - Transaction - COMMIT without active transaction returns error # time=0.978ms
+ok 2 - Transaction - COMMIT without active transaction returns error # time=0.88ms
 
 Executing SQL query { sql: 'ROLLBACK', paramCount: 0, sessionId: 'test-session-3' }
 ROLLBACK { sessionId: 'test-session-3', participants: [] }
@@ -26,7 +26,7 @@ ROLLBACK { sessionId: 'test-session-3', participants: [] }
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 3 - Transaction - ROLLBACK without active transaction returns error # time=0.619ms
+ok 3 - Transaction - ROLLBACK without active transaction returns error # time=0.901ms
 
 Executing SQL query {
   sql: 'BEGIN TRANSACTION',
@@ -44,7 +44,7 @@ BEGIN TRANSACTION { sessionId: 'test-session-4' }
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 4 - Transaction - double BEGIN returns error # time=0.598ms
+ok 4 - Transaction - double BEGIN returns error # time=0.689ms
 
 Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'cross-tx-1' }
 BEGIN TRANSACTION { sessionId: 'cross-tx-1' }
@@ -68,8 +68,8 @@ metrics.query.lifecycle {
   sessionId: 'cross-tx-1',
   statementType: 'INSERT',
   parseDurationMs: 3,
-  executionDurationMs: 7,
-  totalDurationMs: 10,
+  executionDurationMs: 9,
+  totalDurationMs: 12,
   partitionCount: 2,
   rowCount: 0,
   success: true
@@ -79,7 +79,7 @@ metrics.query.lifecycle {
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 5 - Transaction - cross-partition INSERT enlists all touched participants # time=11.473ms
+ok 5 - Transaction - cross-partition INSERT enlists all touched participants # time=13.547ms
 
 Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'cross-tx-2' }
 BEGIN TRANSACTION { sessionId: 'cross-tx-2' }
@@ -100,8 +100,8 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 metrics.query.lifecycle {
   sessionId: 'cross-tx-2',
   statementType: 'INSERT',
-  parseDurationMs: 1,
-  executionDurationMs: 0,
+  parseDurationMs: 0,
+  executionDurationMs: 1,
   totalDurationMs: 1,
   partitionCount: 1,
   rowCount: 0,
@@ -115,26 +115,26 @@ Executing SQL query {
 No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
 Routing UPDATE to partitions { tableName: 'users', partitionCount: 2, sessionId: 'cross-tx-2' }
 Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1771310964494', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: 'q-1-1771595311361', partitionCount: 1, originalCount: 1 }
 Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing UPDATE { table: 'users', partitionCount: 1 }
+Starting parallel query execution { queryId: 'q-2-1771595311362', partitionCount: 1, originalCount: 1 }
+Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 metrics.fanout.complete {
-  queryId: 'q-1-1771310964494',
+  queryId: 'q-1-1771595311361',
   partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
+  totalLatencyMs: 1,
+  medianLatencyMs: 1,
+  maxPartitionLatencyMs: 1,
   totalRows: 1,
   totalBytes: 32,
   stragglerCount: 0,
   speculativeExecutions: 0
 }
-Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-2-1771310964495', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
 metrics.fanout.complete {
-  queryId: 'q-2-1771310964495',
+  queryId: 'q-2-1771595311362',
   partitionCount: 1,
-  totalLatencyMs: 0,
+  totalLatencyMs: 1,
   medianLatencyMs: 0,
   maxPartitionLatencyMs: 0,
   totalRows: 1,
@@ -145,9 +145,9 @@ metrics.fanout.complete {
 metrics.query.lifecycle {
   sessionId: 'cross-tx-2',
   statementType: 'UPDATE',
-  parseDurationMs: 3,
-  executionDurationMs: 2,
-  totalDurationMs: 5,
+  parseDurationMs: 4,
+  executionDurationMs: 4,
+  totalDurationMs: 8,
   partitionCount: 2,
   rowCount: 0,
   success: true
@@ -157,7 +157,7 @@ metrics.query.lifecycle {
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 6 - Transaction - cross-partition UPDATE enlists all touched participants # time=6.596ms
+ok 6 - Transaction - cross-partition UPDATE enlists all touched participants # time=10.476ms
 
 Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'single-tx-1' }
 BEGIN TRANSACTION { sessionId: 'single-tx-1' }
@@ -180,8 +180,8 @@ Routing query to partition service { partitionId: 'p1', address: 'test-node/part
 metrics.query.lifecycle {
   sessionId: 'single-tx-1',
   statementType: 'INSERT',
-  parseDurationMs: 0,
-  executionDurationMs: 1,
+  parseDurationMs: 1,
+  executionDurationMs: 0,
   totalDurationMs: 1,
   partitionCount: 1,
   rowCount: 0,
@@ -193,7 +193,7 @@ COMMIT { sessionId: 'single-tx-1', participants: [ 'p1' ] }
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 7 - Transaction - single-partition operations succeed # time=1.824ms
+ok 7 - Transaction - single-partition operations succeed # time=2.184ms
 
 Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'rollback-tx-1' }
 BEGIN TRANSACTION { sessionId: 'rollback-tx-1' }
@@ -215,8 +215,8 @@ metrics.query.lifecycle {
   sessionId: 'rollback-tx-1',
   statementType: 'INSERT',
   parseDurationMs: 0,
-  executionDurationMs: 1,
-  totalDurationMs: 1,
+  executionDurationMs: 0,
+  totalDurationMs: 0,
   partitionCount: 1,
   rowCount: 0,
   success: true
@@ -228,7 +228,7 @@ ROLLBACK { sessionId: 'rollback-tx-1', participants: [ 'p1' ] }
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 8 - Transaction - ROLLBACK reverts changes # time=1.615ms
+ok 8 - Transaction - ROLLBACK reverts changes # time=1.642ms
 
 Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'session-a' }
 BEGIN TRANSACTION { sessionId: 'session-a' }
@@ -244,7 +244,7 @@ COMMIT { sessionId: 'session-a', participants: [] }
     ok 5 - should be equal
     ok 6 - should be equal
     1..6
-ok 9 - Transaction - different sessions have independent transactions # time=0.925ms
+ok 9 - Transaction - different sessions have independent transactions # time=1.104ms
 
 Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'concurrent-1' }
 BEGIN TRANSACTION { sessionId: 'concurrent-1' }
@@ -263,7 +263,7 @@ Executing SQL query { sql: 'COMMIT', paramCount: 0, sessionId: 'concurrent-2' }
 COMMIT { sessionId: 'concurrent-2', participants: [] }
     ok 7 - should be equal
     1..7
-ok 10 - Transaction - concurrent transactions on same partition use SQLite locking # time=1.128ms
+ok 10 - Transaction - concurrent transactions on same partition use SQLite locking # time=3.987ms
 
 # Subtest: Transaction - getTransactionPartition returns bound partition
     ok 1 - should be equal
@@ -299,8 +299,6 @@ Executing SQL query { sql: 'COMMIT', paramCount: 0, sessionId: 'bound-tx' }
 COMMIT { sessionId: 'bound-tx', participants: [ 'p1' ] }
     ok 4 - should be equal
     1..4
-ok 11 - Transaction - getTransactionPartition returns bound partition # time=1.482ms
+ok 11 - Transaction - getTransactionPartition returns bound partition # time=1.923ms
 
 1..11
-# { total: 39, pass: 39 }
-# time=78.141ms
