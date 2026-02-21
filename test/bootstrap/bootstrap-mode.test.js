@@ -7,6 +7,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {WRITE_ROUTER_MODE} from '../../src/cdc/write-router/index.js';
 
 // Use hardcoded partition IDs matching the constants file
 const NODES_PARTITION_ID = 'nodes-p1';
@@ -131,6 +132,37 @@ test('Bootstrap mode - starts disabled by default', (t) => {
   const service = new CDCIntegrationService({nodeId: 'test-seed-node'});
   t.equal(service.bootstrapMode, false, 'should start disabled');
   t.equal(service.localPartitionServices, null, 'should have no partition services');
+  t.equal(
+    service.writeRouter.mode,
+    WRITE_ROUTER_MODE.SQL_ROUTED,
+    'should start with SQL write router',
+  );
+  t.end();
+});
+
+test('Bootstrap mode - swaps write router strategy on mode transitions', (t) => {
+  const service = new CDCIntegrationService({nodeId: 'test-seed-node'});
+  service.initialize();
+
+  const mockPartitionServices = new Map();
+  mockPartitionServices.set(
+    NODES_PARTITION_ID,
+    createMockPartitionService(NODES_PARTITION_ID),
+  );
+
+  service.setBootstrapMode(true, mockPartitionServices);
+  t.equal(
+    service.writeRouter.mode,
+    WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT,
+    'should use bootstrap direct write router when enabled',
+  );
+
+  service.clearBootstrapMode();
+  t.equal(
+    service.writeRouter.mode,
+    WRITE_ROUTER_MODE.SQL_ROUTED,
+    'should switch back to SQL write router when disabled',
+  );
   t.end();
 });
 

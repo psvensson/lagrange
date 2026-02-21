@@ -3,34 +3,34 @@ TAP version 14
     # Subtest: buildPeerAddress generates unified format for simple peer IDs
         ok 1 - buildPeerAddress generates unified format for simple peer IDs
         1..1
-    ok 1 - buildPeerAddress generates unified format for simple peer IDs # time=7.526ms
+    ok 1 - buildPeerAddress generates unified format for simple peer IDs # time=7.371ms
     
     # Subtest: buildPeerAddress preserves already-unified addresses
         ok 1 - buildPeerAddress preserves already-unified addresses
         1..1
-    ok 2 - buildPeerAddress preserves already-unified addresses # time=1.112ms
+    ok 2 - buildPeerAddress preserves already-unified addresses # time=1.817ms
     
     # Subtest: buildPeerAddress uses systemTableCache when available
         ok 1 - buildPeerAddress uses systemTableCache when available
         1..1
-    ok 3 - buildPeerAddress uses systemTableCache when available # time=1.814ms
+    ok 3 - buildPeerAddress uses systemTableCache when available # time=4.454ms
     
     # Subtest: buildPeerAddress throws when cache misses
         ok 1 - buildPeerAddress throws when cache misses
         1..1
-    ok 4 - buildPeerAddress throws when cache misses # time=1.034ms
+    ok 4 - buildPeerAddress throws when cache misses # time=2.448ms
     
     # Subtest: getRaftMessageType maps liferaft types correctly
         ok 1 - getRaftMessageType maps liferaft types correctly
         1..1
-    ok 5 - getRaftMessageType maps liferaft types correctly # time=0.581ms
+    ok 5 - getRaftMessageType maps liferaft types correctly # time=0.471ms
     
     # Subtest: getRaftMessageType passes through unknown types
         ok 1 - getRaftMessageType passes through unknown types
         1..1
-    ok 6 - getRaftMessageType passes through unknown types # time=0.484ms
+    ok 6 - getRaftMessageType passes through unknown types # time=0.547ms
     
     1..6
-ok 1 - Property 5: Unified Address Format # time=15.128ms
+ok 1 - Property 5: Unified Address Format # time=20.411ms
 
 1..1

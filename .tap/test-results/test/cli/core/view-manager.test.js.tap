@@ -5,26 +5,26 @@ TAP version 14
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - constructor initializes with default state # time=5.022ms
+    ok 1 - constructor initializes with default state # time=6.852ms
     
     # Subtest: registerView adds view to manager
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 2 - registerView adds view to manager # time=0.504ms
+    ok 2 - registerView adds view to manager # time=0.793ms
     
     # Subtest: unregisterView removes view
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 3 - unregisterView removes view # time=0.421ms
+    ok 3 - unregisterView removes view # time=0.655ms
     
     # Subtest: getViewNames returns all registered names
         ok 1 - should be equivalent
         1..1
-    ok 4 - getViewNames returns all registered names # time=0.86ms
+    ok 4 - getViewNames returns all registered names # time=1.241ms
     
     # Subtest: switchView changes current view
         ok 1 - should be equal
@@ -35,34 +35,34 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 5 - switchView changes current view # time=0.752ms
+    ok 5 - switchView changes current view # time=2.952ms
     
     # Subtest: switchView returns false for unknown view
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 6 - switchView returns false for unknown view # time=0.241ms
+    ok 6 - switchView returns false for unknown view # time=0.484ms
     
     # Subtest: refresh updates current view with navigation data
         ok 1 - should be equal
         1..1
-    ok 7 - refresh updates current view with navigation data # time=0.508ms
+    ok 7 - refresh updates current view with navigation data # time=0.871ms
     
     # Subtest: handleCDCUpdate tracks changed rows
         ok 1 - should be equal
         1..1
-    ok 8 - handleCDCUpdate tracks changed rows # time=0.318ms
+    ok 8 - handleCDCUpdate tracks changed rows # time=0.429ms
     
     # Subtest: handleCDCUpdate only affects relevant view
         ok 1 - should be equal
         1..1
-    ok 9 - handleCDCUpdate only affects relevant view # time=0.2ms
+    ok 9 - handleCDCUpdate only affects relevant view # time=0.337ms
     
     # Subtest: clearChangedRow removes highlight
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 10 - clearChangedRow removes highlight # time=0.306ms
+    ok 10 - clearChangedRow removes highlight # time=0.438ms
     
     # Subtest: clearAllChangedRows clears all highlights
         ok 1 - should be equal
@@ -70,40 +70,40 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 11 - clearAllChangedRows clears all highlights # time=0.666ms
+    ok 11 - clearAllChangedRows clears all highlights # time=0.671ms
     
     # Subtest: isChangeRelevant returns correct value
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 12 - isChangeRelevant returns correct value # time=0.372ms
+    ok 12 - isChangeRelevant returns correct value # time=0.464ms
     
     # Subtest: emits events via event bus
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 13 - emits events via event bus # time=0.494ms
+    ok 13 - emits events via event bus # time=0.679ms
     
     # Subtest: destroy cleans up all views
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 14 - destroy cleans up all views # time=0.534ms
+    ok 14 - destroy cleans up all views # time=0.547ms
     
     # Subtest: unregisterView clears current if unregistering current
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 15 - unregisterView clears current if unregistering current # time=0.561ms
+    ok 15 - unregisterView clears current if unregistering current # time=0.571ms
     
     # Subtest: responds to cache:update events
         ok 1 - should be equal
         1..1
-    ok 16 - responds to cache:update events # time=0.41ms
+    ok 16 - responds to cache:update events # time=0.418ms
     
     1..16
-ok 1 - ViewManager # time=16.565ms
+ok 1 - ViewManager # time=23.685ms
 
 1..1

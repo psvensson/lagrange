@@ -3,24 +3,24 @@ TAP version 14
     # Subtest: critical triggers cause immediate checks
         ok 1 - Critical triggers cause immediate checks
         1..1
-    ok 1 - critical triggers cause immediate checks # time=3.902ms
+    ok 1 - critical triggers cause immediate checks # time=4.007ms
     
     # Subtest: non-critical triggers use periodic scheduling
         ok 1 - Non-critical triggers use periodic scheduling
         1..1
-    ok 2 - non-critical triggers use periodic scheduling # time=0.813ms
+    ok 2 - non-critical triggers use periodic scheduling # time=0.705ms
     
     # Subtest: scheduling includes jitter for non-critical events
         ok 1 - Scheduling includes jitter for non-critical events
         1..1
-    ok 3 - scheduling includes jitter for non-critical events # time=1.101ms
+    ok 3 - scheduling includes jitter for non-critical events # time=0.962ms
     
     # Subtest: replica below minimum triggers immediate rebalance
         ok 1 - Replica below minimum triggers immediate rebalance
         1..1
-    ok 4 - replica below minimum triggers immediate rebalance # time=2.719ms
+    ok 4 - replica below minimum triggers immediate rebalance # time=1.956ms
     
     1..4
-ok 1 - Property 23: Rebalancing Scheduling # time=78.634ms
+ok 1 - Property 23: Rebalancing Scheduling # time=64.49ms
 
 1..1

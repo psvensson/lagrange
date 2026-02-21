@@ -4,28 +4,28 @@ TAP version 14
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 1 - constructor initializes with default values # time=7.057ms
+    ok 1 - constructor initializes with default values # time=7.61ms
     
     # Subtest: constructor accepts custom maxEntries
         ok 1 - should be equal
         1..1
-    ok 2 - constructor accepts custom maxEntries # time=0.235ms
+    ok 2 - constructor accepts custom maxEntries # time=0.432ms
     
     # Subtest: add adds query to front of history
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 3 - add adds query to front of history # time=2.486ms
+    ok 3 - add adds query to front of history # time=0.607ms
     
     # Subtest: add trims whitespace
         ok 1 - should be equal
         1..1
-    ok 4 - add trims whitespace # time=0.237ms
+    ok 4 - add trims whitespace # time=0.351ms
     
     # Subtest: add ignores empty queries
         ok 1 - should be equal
         1..1
-    ok 5 - add ignores empty queries # time=0.184ms
+    ok 5 - add ignores empty queries # time=0.327ms
     
     # Subtest: add moves duplicate to front
         ok 1 - should be equal
@@ -33,151 +33,151 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 6 - add moves duplicate to front # time=0.461ms
+    ok 6 - add moves duplicate to front # time=0.595ms
     
     # Subtest: add enforces maxEntries limit
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 7 - add enforces maxEntries limit # time=0.335ms
+    ok 7 - add enforces maxEntries limit # time=0.51ms
     
     # Subtest: getAt returns query at index
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 8 - getAt returns query at index # time=0.554ms
+    ok 8 - getAt returns query at index # time=0.426ms
     
     # Subtest: getAt returns null for invalid index
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 9 - getAt returns null for invalid index # time=0.686ms
+    ok 9 - getAt returns null for invalid index # time=0.43ms
     
     # Subtest: getAll returns copy of entries
         ok 1 - should be equivalent
         ok 2 - should be equal
         1..2
-    ok 10 - getAll returns copy of entries # time=1.759ms
+    ok 10 - getAll returns copy of entries # time=1.1ms
     
     # Subtest: length returns entry count
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 11 - length returns entry count # time=0.547ms
+    ok 11 - length returns entry count # time=0.369ms
     
     # Subtest: clear removes all entries
         ok 1 - should be equal
         1..1
-    ok 12 - clear removes all entries # time=0.356ms
+    ok 12 - clear removes all entries # time=0.261ms
     
     # Subtest: contains returns true for existing query
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 13 - contains returns true for existing query # time=0.469ms
+    ok 13 - contains returns true for existing query # time=0.27ms
     
     # Subtest: contains returns false for non-existing query
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 14 - contains returns false for non-existing query # time=0.511ms
+    ok 14 - contains returns false for non-existing query # time=0.287ms
     
     # Subtest: search returns matching queries
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 15 - search returns matching queries # time=0.79ms
+    ok 15 - search returns matching queries # time=0.727ms
     
     # Subtest: search is case-insensitive
         ok 1 - should be equal
         1..1
-    ok 16 - search is case-insensitive # time=0.357ms
+    ok 16 - search is case-insensitive # time=0.33ms
     
     # Subtest: search returns all for empty pattern
         ok 1 - should be equal
         1..1
-    ok 17 - search returns all for empty pattern # time=0.323ms
+    ok 17 - search returns all for empty pattern # time=0.307ms
     
     # Subtest: serialize returns JSON string
         ok 1 - should be equal
         1..1
-    ok 18 - serialize returns JSON string # time=0.401ms
+    ok 18 - serialize returns JSON string # time=0.375ms
     
     # Subtest: deserialize loads from JSON string
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 19 - deserialize loads from JSON string # time=0.571ms
+    ok 19 - deserialize loads from JSON string # time=0.542ms
     
     # Subtest: deserialize handles invalid JSON
         ok 1 - should be equal
         1..1
-    ok 20 - deserialize handles invalid JSON # time=0.339ms
+    ok 20 - deserialize handles invalid JSON # time=0.509ms
     
     # Subtest: deserialize filters invalid entries
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 21 - deserialize filters invalid entries # time=0.489ms
+    ok 21 - deserialize filters invalid entries # time=0.665ms
     
     # Subtest: deserialize respects maxEntries
         ok 1 - should be equal
         1..1
-    ok 22 - deserialize respects maxEntries # time=0.316ms
+    ok 22 - deserialize respects maxEntries # time=0.43ms
     
     # Subtest: getMostRecent returns first entry
         ok 1 - should be equal
         1..1
-    ok 23 - getMostRecent returns first entry # time=0.243ms
+    ok 23 - getMostRecent returns first entry # time=0.408ms
     
     # Subtest: getMostRecent returns null for empty history
         ok 1 - should be equal
         1..1
-    ok 24 - getMostRecent returns null for empty history # time=0.177ms
+    ok 24 - getMostRecent returns null for empty history # time=0.353ms
     
     # Subtest: remove removes specific query
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 25 - remove removes specific query # time=0.334ms
+    ok 25 - remove removes specific query # time=0.624ms
     
     # Subtest: remove returns false for non-existing query
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 26 - remove returns false for non-existing query # time=0.279ms
+    ok 26 - remove returns false for non-existing query # time=0.428ms
     
     # Subtest: resolvePath expands home directory
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 27 - resolvePath expands home directory # time=0.332ms
+    ok 27 - resolvePath expands home directory # time=0.523ms
     
     # Subtest: resolvePath handles non-home paths
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 28 - resolvePath handles non-home paths # time=0.315ms
+    ok 28 - resolvePath handles non-home paths # time=0.497ms
     
     # Subtest: DEFAULT_MAX_ENTRIES constant is 100
         ok 1 - should be equal
         1..1
-    ok 29 - DEFAULT_MAX_ENTRIES constant is 100 # time=0.191ms
+    ok 29 - DEFAULT_MAX_ENTRIES constant is 100 # time=0.335ms
     
     # Subtest: DEFAULT_PERSIST_PATH constant is correct
         ok 1 - should be equal
         1..1
-    ok 30 - DEFAULT_PERSIST_PATH constant is correct # time=0.173ms
+    ok 30 - DEFAULT_PERSIST_PATH constant is correct # time=0.332ms
     
     1..30
-ok 1 - QueryHistory # time=29.093ms
+ok 1 - QueryHistory # time=29.637ms
 
 1..1

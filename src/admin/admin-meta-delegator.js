@@ -38,14 +38,14 @@ function isDelegatable(action) {
  * the WASM delegation set. Returns routing info on success
  * or a structured error otherwise.
  *
- * @param {Object} systemTableCache - System table cache.
+ * @param {Object} systemCacheClient - System cache read client.
  * @param {string} action - The command action name.
  * @param {Object} payload - The command payload.
  * @return {{success: boolean, leaderAddress?: string,
  *   serviceId?: string, command?: string, payload?: Object,
  *   error?: string, code?: string}} Routing or error result.
  */
-function delegateToWasmMeta(systemTableCache, action, payload) {
+function delegateToWasmMeta(systemCacheClient, action, payload) {
   if (!isDelegatable(action)) {
     return {
       success: false,
@@ -54,7 +54,7 @@ function delegateToWasmMeta(systemTableCache, action, payload) {
     };
   }
   return routeToMetaService(
-    systemTableCache,
+    systemCacheClient,
     META_SERVICE_ID.WASM_META,
     action,
     payload,

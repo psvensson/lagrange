@@ -5,7 +5,7 @@ TAP version 14
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - constructor initializes with default state # time=5.937ms
+    ok 1 - constructor initializes with default state # time=9.139ms
     
     # Subtest: getColumns returns correct column definitions
         ok 1 - should be equal
@@ -19,7 +19,7 @@ TAP version 14
         ok 9 - should be equal
         ok 10 - should be equal
         1..10
-    ok 2 - getColumns returns correct column definitions # time=0.684ms
+    ok 2 - getColumns returns correct column definitions # time=0.769ms
     
     # Subtest: formatRow formats node data correctly
         ok 1 - should be equal
@@ -30,7 +30,7 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 3 - formatRow formats node data correctly # time=0.584ms
+    ok 3 - formatRow formats node data correctly # time=0.653ms
     
     # Subtest: formatRow handles missing values
         ok 1 - should be equal
@@ -41,68 +41,68 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 4 - formatRow handles missing values # time=0.507ms
+    ok 4 - formatRow handles missing values # time=0.65ms
     
     # Subtest: getRowStatus returns NORMAL for healthy node
         ok 1 - should be equal
         1..1
-    ok 5 - getRowStatus returns NORMAL for healthy node # time=0.303ms
+    ok 5 - getRowStatus returns NORMAL for healthy node # time=0.392ms
     
     # Subtest: getRowStatus returns ERROR for failed node
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 6 - getRowStatus returns ERROR for failed node # time=0.255ms
+    ok 6 - getRowStatus returns ERROR for failed node # time=0.498ms
     
     # Subtest: getRowStatus returns WARNING for high CPU usage
         ok 1 - should be equal
         1..1
-    ok 7 - getRowStatus returns WARNING for high CPU usage # time=0.2ms
+    ok 7 - getRowStatus returns WARNING for high CPU usage # time=0.573ms
     
     # Subtest: getRowStatus returns WARNING for high memory usage
         ok 1 - should be equal
         1..1
-    ok 8 - getRowStatus returns WARNING for high memory usage # time=0.197ms
+    ok 8 - getRowStatus returns WARNING for high memory usage # time=0.388ms
     
     # Subtest: getRowStatus returns WARNING for high disk usage
         ok 1 - should be equal
         1..1
-    ok 9 - getRowStatus returns WARNING for high disk usage # time=0.296ms
+    ok 9 - getRowStatus returns WARNING for high disk usage # time=0.359ms
     
     # Subtest: getRowStatus handles null resource values
         ok 1 - should be equal
         1..1
-    ok 10 - getRowStatus handles null resource values # time=0.212ms
+    ok 10 - getRowStatus handles null resource values # time=0.353ms
     
     # Subtest: getItemKey returns node_id
         ok 1 - should be equal
         1..1
-    ok 11 - getItemKey returns node_id # time=0.217ms
+    ok 11 - getItemKey returns node_id # time=0.35ms
     
     # Subtest: getItemKey handles missing node_id
         ok 1 - should be equal
         1..1
-    ok 12 - getItemKey handles missing node_id # time=0.222ms
+    ok 12 - getItemKey handles missing node_id # time=0.332ms
     
     # Subtest: handleDrillDown returns navigation action
         ok 1 - should be equivalent
         1..1
-    ok 13 - handleDrillDown returns navigation action # time=1.25ms
+    ok 13 - handleDrillDown returns navigation action # time=2.235ms
     
     # Subtest: handleDrillDown returns null when no selection
         ok 1 - should be equal
         1..1
-    ok 14 - handleDrillDown returns null when no selection # time=0.239ms
+    ok 14 - handleDrillDown returns null when no selection # time=0.394ms
     
     # Subtest: handleKey triggers drill-down on Enter
         ok 1 - should be equivalent
         1..1
-    ok 15 - handleKey triggers drill-down on Enter # time=0.37ms
+    ok 15 - handleKey triggers drill-down on Enter # time=0.646ms
     
     # Subtest: handleKey triggers drill-down on Return
         ok 1 - should be equivalent
         1..1
-    ok 16 - handleKey triggers drill-down on Return # time=0.296ms
+    ok 16 - handleKey triggers drill-down on Return # time=0.436ms
     
     # Subtest: getSelectedDetails returns node details
         ok 1 - should be equal
@@ -111,34 +111,34 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 17 - getSelectedDetails returns node details # time=0.659ms
+    ok 17 - getSelectedDetails returns node details # time=1.063ms
     
     # Subtest: getSelectedDetails returns null when no selection
         ok 1 - should be equal
         1..1
-    ok 18 - getSelectedDetails returns null when no selection # time=0.253ms
+    ok 18 - getSelectedDetails returns null when no selection # time=0.334ms
     
     # Subtest: render includes all nodes
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 19 - render includes all nodes # time=0.46ms
+    ok 19 - render includes all nodes # time=0.724ms
     
     # Subtest: filter works correctly
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 20 - filter works correctly # time=0.38ms
+    ok 20 - filter works correctly # time=0.592ms
     
     # Subtest: sort works correctly
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 21 - sort works correctly # time=0.359ms
+    ok 21 - sort works correctly # time=0.688ms
     
     1..21
-ok 1 - NodesView # time=20.442ms
+ok 1 - NodesView # time=31.71ms
 
 1..1

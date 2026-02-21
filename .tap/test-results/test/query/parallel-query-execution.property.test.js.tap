@@ -1,506 +1,506 @@
 TAP version 14
 # Subtest: Property 70: Parallel Query Execution
-Starting parallel query execution { queryId: 'q-1-1771595277035', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156289'[39m, partitionCount: [33m3[39m, originalCount: [33m3[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277035',
-  partitionCount: 2,
-  totalLatencyMs: 2,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 2,
-  totalBytes: 40,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156289'[39m,
+  partitionCount: [33m3[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m3[39m,
+  totalBytes: [33m60[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277037', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156291'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277037',
-  partitionCount: 2,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 2,
-  totalBytes: 40,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156291'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m40[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277038', partitionCount: 5, originalCount: 5 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156291'[39m, partitionCount: [33m4[39m, originalCount: [33m4[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277038',
-  partitionCount: 5,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 5,
-  totalBytes: 100,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156291'[39m,
+  partitionCount: [33m4[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m4[39m,
+  totalBytes: [33m80[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277038', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156291'[39m, partitionCount: [33m5[39m, originalCount: [33m5[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277038',
-  partitionCount: 4,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 4,
-  totalBytes: 80,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156291'[39m,
+  partitionCount: [33m5[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m5[39m,
+  totalBytes: [33m100[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277039', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156292'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277039',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156292'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m40[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277039', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156292'[39m, partitionCount: [33m5[39m, originalCount: [33m5[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277039',
-  partitionCount: 2,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 2,
-  totalBytes: 40,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156292'[39m,
+  partitionCount: [33m5[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m5[39m,
+  totalBytes: [33m100[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277040', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156292'[39m, partitionCount: [33m3[39m, originalCount: [33m3[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277040',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156292'[39m,
+  partitionCount: [33m3[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m3[39m,
+  totalBytes: [33m60[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277040', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156293'[39m, partitionCount: [33m5[39m, originalCount: [33m5[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277040',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156293'[39m,
+  partitionCount: [33m5[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m5[39m,
+  totalBytes: [33m100[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277041', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156293'[39m, partitionCount: [33m3[39m, originalCount: [33m3[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277041',
-  partitionCount: 2,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 2,
-  totalBytes: 40,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156293'[39m,
+  partitionCount: [33m3[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m3[39m,
+  totalBytes: [33m60[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277041', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156293'[39m, partitionCount: [33m3[39m, originalCount: [33m3[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277041',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156293'[39m,
+  partitionCount: [33m3[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m3[39m,
+  totalBytes: [33m60[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
     # Subtest: queries execute in parallel - all start before any ends
         ok 1 - Queries execute in parallel - all start before any ends
         1..1
-    ok 1 - queries execute in parallel - all start before any ends # time=11.767ms
+    ok 1 - queries execute in parallel - all start before any ends # time=7.002ms
     
-Starting parallel query execution { queryId: 'q-1-1771595277046', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156296'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277046',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156296'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m40[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277046', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156296'[39m, partitionCount: [33m5[39m, originalCount: [33m5[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277046',
-  partitionCount: 3,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156296'[39m,
+  partitionCount: [33m5[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m1[39m,
+  maxPartitionLatencyMs: [33m1[39m,
+  totalRows: [33m5[39m,
+  totalBytes: [33m100[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277047', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156297'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277047',
-  partitionCount: 4,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 4,
-  totalBytes: 80,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156297'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m40[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277047', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156297'[39m, partitionCount: [33m5[39m, originalCount: [33m5[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277047',
-  partitionCount: 4,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 4,
-  totalBytes: 80,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156297'[39m,
+  partitionCount: [33m5[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m5[39m,
+  totalBytes: [33m100[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277048', partitionCount: 5, originalCount: 5 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156297'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277048',
-  partitionCount: 5,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 5,
-  totalBytes: 100,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156297'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m40[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277048', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156297'[39m, partitionCount: [33m4[39m, originalCount: [33m4[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277048',
-  partitionCount: 2,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 2,
-  totalBytes: 40,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156297'[39m,
+  partitionCount: [33m4[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m4[39m,
+  totalBytes: [33m80[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277049', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156298'[39m, partitionCount: [33m4[39m, originalCount: [33m4[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277049',
-  partitionCount: 4,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 4,
-  totalBytes: 80,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156298'[39m,
+  partitionCount: [33m4[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m4[39m,
+  totalBytes: [33m80[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277049', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156298'[39m, partitionCount: [33m5[39m, originalCount: [33m5[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277049',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156298'[39m,
+  partitionCount: [33m5[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m5[39m,
+  totalBytes: [33m100[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277049', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156298'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277049',
-  partitionCount: 3,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156298'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m40[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277050', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156298'[39m, partitionCount: [33m3[39m, originalCount: [33m3[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277050',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156298'[39m,
+  partitionCount: [33m3[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m3[39m,
+  totalBytes: [33m60[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
     # Subtest: all partitions are queried
         ok 1 - All partitions are queried
         1..1
-    ok 2 - all partitions are queried # time=5.405ms
+    ok 2 - all partitions are queried # time=3.031ms
     
-Starting parallel query execution { queryId: 'q-1-1771595277053', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156300'[39m, partitionCount: [33m4[39m, originalCount: [33m4[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277053',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 2,
-  totalBytes: 82,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156300'[39m,
+  partitionCount: [33m4[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m4[39m,
+  totalBytes: [33m170[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277054', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156301'[39m, partitionCount: [33m4[39m, originalCount: [33m4[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277054',
-  partitionCount: 4,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 130,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156301'[39m,
+  partitionCount: [33m4[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m86[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277054', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156301'[39m, partitionCount: [33m3[39m, originalCount: [33m3[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277054',
-  partitionCount: 3,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 5,
-  totalBytes: 212,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156301'[39m,
+  partitionCount: [33m3[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m3[39m,
+  totalBytes: [33m132[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277055', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156302'[39m, partitionCount: [33m3[39m, originalCount: [33m3[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277055',
-  partitionCount: 4,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 42,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156302'[39m,
+  partitionCount: [33m3[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m5[39m,
+  totalBytes: [33m210[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277055', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156302'[39m, partitionCount: [33m3[39m, originalCount: [33m3[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277055',
-  partitionCount: 3,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 1,
-  totalBytes: 42,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156302'[39m,
+  partitionCount: [33m3[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m88[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277056', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156303'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277056',
-  partitionCount: 4,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 130,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156303'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m5[39m,
+  totalBytes: [33m208[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277056', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156303'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277056',
-  partitionCount: 3,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 2,
-  totalBytes: 86,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156303'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m5[39m,
+  totalBytes: [33m212[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277057', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156303'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277057',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 4,
-  totalBytes: 168,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156303'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m3[39m,
+  totalBytes: [33m124[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277057', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156303'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277057',
-  partitionCount: 3,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 4,
-  totalBytes: 174,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156303'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m88[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277058', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156304'[39m, partitionCount: [33m4[39m, originalCount: [33m4[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277058',
-  partitionCount: 2,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 5,
-  totalBytes: 206,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156304'[39m,
+  partitionCount: [33m4[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m88[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
     # Subtest: results from all partitions are combined
         ok 1 - Results from all partitions are combined
         1..1
-    ok 3 - results from all partitions are combined # time=6.772ms
+    ok 3 - results from all partitions are combined # time=5.028ms
     
-Starting parallel query execution { queryId: 'q-1-1771595277059', partitionCount: 3, originalCount: 3 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156305'[39m, partitionCount: [33m4[39m, originalCount: [33m4[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277059',
-  partitionCount: 3,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 3,
-  totalBytes: 60,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156305'[39m,
+  partitionCount: [33m4[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m4[39m,
+  totalBytes: [33m80[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277060', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156305'[39m, partitionCount: [33m3[39m, originalCount: [33m3[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277060',
-  partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 20,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156305'[39m,
+  partitionCount: [33m3[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m3[39m,
+  totalBytes: [33m60[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277060', partitionCount: 5, originalCount: 5 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156305'[39m, partitionCount: [33m3[39m, originalCount: [33m3[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277060',
-  partitionCount: 5,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 5,
-  totalBytes: 100,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156305'[39m,
+  partitionCount: [33m3[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m1[39m,
+  maxPartitionLatencyMs: [33m1[39m,
+  totalRows: [33m3[39m,
+  totalBytes: [33m60[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277061', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156306'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277061',
-  partitionCount: 4,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 4,
-  totalBytes: 80,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156306'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m40[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277061', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156306'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277061',
-  partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 20,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156306'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m40[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277061', partitionCount: 4, originalCount: 4 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156306'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277061',
-  partitionCount: 4,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 4,
-  totalBytes: 80,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156306'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m40[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277062', partitionCount: 5, originalCount: 5 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156306'[39m, partitionCount: [33m3[39m, originalCount: [33m3[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277062',
-  partitionCount: 5,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 5,
-  totalBytes: 100,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156306'[39m,
+  partitionCount: [33m3[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m1[39m,
+  maxPartitionLatencyMs: [33m1[39m,
+  totalRows: [33m3[39m,
+  totalBytes: [33m60[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277062', partitionCount: 2, originalCount: 2 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156307'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277062',
-  partitionCount: 2,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 2,
-  totalBytes: 40,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156307'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  totalBytes: [33m20[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277063', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156307'[39m, partitionCount: [33m5[39m, originalCount: [33m5[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277063',
-  partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 20,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156307'[39m,
+  partitionCount: [33m5[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m5[39m,
+  totalBytes: [33m100[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595277063', partitionCount: 1, originalCount: 1 }
+Starting parallel query execution { queryId: [32m'q-1-1771666156307'[39m, partitionCount: [33m4[39m, originalCount: [33m4[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595277063',
-  partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 20,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666156307'[39m,
+  partitionCount: [33m4[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m4[39m,
+  totalBytes: [33m80[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
     # Subtest: metrics track partition count correctly
         ok 1 - Metrics track partition count correctly
         1..1
-    ok 4 - metrics track partition count correctly # time=4.507ms
+    ok 4 - metrics track partition count correctly # time=2.821ms
     
     1..4
-ok 1 - Property 70: Parallel Query Execution # time=34.159ms
+ok 1 - Property 70: Parallel Query Execution # time=21.124ms
 
 1..1

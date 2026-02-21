@@ -5,23 +5,23 @@ TAP version 14
         ok 2 - should have no pending requests
         ok 3 - should have no message group service
         1..3
-    ok 1 - constructor creates client with default options # time=6.411ms
+    ok 1 - constructor creates client with default options # time=8.42ms
     
     # Subtest: constructor accepts custom options
         ok 1 - should use custom timeout
         ok 2 - should use custom service
         1..2
-    ok 2 - constructor accepts custom options # time=0.44ms
+    ok 2 - constructor accepts custom options # time=0.539ms
     
     # Subtest: setMessageGroupService sets the service
         ok 1 - should set service
         1..1
-    ok 3 - setMessageGroupService sets the service # time=0.292ms
+    ok 3 - setMessageGroupService sets the service # time=0.431ms
     
     # Subtest: call throws without message group service
         ok 1 - should throw without service
         1..1
-    ok 4 - call throws without message group service # time=1.666ms
+    ok 4 - call throws without message group service # time=2.256ms
     
     # Subtest: call sends message with correlation ID
         ok 1 - should send message
@@ -30,73 +30,73 @@ TAP version 14
         ok 4 - should include request type
         ok 5 - should include request data
         1..5
-    ok 5 - call sends message with correlation ID # time=101.925ms
+    ok 5 - call sends message with correlation ID # time=100.758ms
     
     # Subtest: call resolves when handleResponse is called
         ok 1 - should match pending request
         ok 2 - should resolve with response status
         ok 3 - should resolve with response data
         1..3
-    ok 6 - call resolves when handleResponse is called # time=11.033ms
+    ok 6 - call resolves when handleResponse is called # time=11.249ms
     
     # Subtest: call rejects on timeout
         ok 1 - should reject with timeout error
         ok 2 - should increment timeout counter
         1..2
-    ok 7 - call rejects on timeout # time=51.256ms
+    ok 7 - call rejects on timeout # time=50.253ms
     
     # Subtest: call uses custom timeout from options
         ok 1 - should use custom timeout
         1..1
-    ok 8 - call uses custom timeout from options # time=51.005ms
+    ok 8 - call uses custom timeout from options # time=50.952ms
     
-{"level":50,"time":"2026-02-20T13:48:36.320Z","nodeId":"test-node","pid":3235247,"subsystem":"rpc-client","correlationId":"57348036-a938-42a9-9000-2ef517f83cd1","target":"target","error":"Send failed","nodeId":"test-node","msg":"RPC send failed"}
     # Subtest: call rejects on send error
         ok 1 - should reject with send error
         ok 2 - should increment error counter
         1..2
-    ok 9 - call rejects on send error # time=1.732ms
+    ok 9 - call rejects on send error # time=2.233ms
     
     # Subtest: handleResponse returns false for unknown correlation ID
         ok 1 - should not match unknown ID
         1..1
-    ok 10 - handleResponse returns false for unknown correlation ID # time=0.341ms
+    ok 10 - handleResponse returns false for unknown correlation ID # time=0.515ms
     
+{"level":50,"time":"2026-02-21T09:31:19.731Z","nodeId":"test-node","pid":3770533,"subsystem":"rpc-client","correlationId":"4fda90f2-bbb2-473c-8955-61f36512a035","target":"target","error":"Send failed","nodeId":"test-node","msg":"RPC send failed"}
     # Subtest: handleResponse cleans up pending request
         ok 1 - should have pending request
         ok 2 - should remove pending request
         1..2
-    ok 11 - handleResponse cleans up pending request # time=11.057ms
+    ok 11 - handleResponse cleans up pending request # time=10.505ms
     
     # Subtest: getPendingCount returns correct count
         ok 1 - should start at zero
         ok 2 - should have two pending
         1..2
-    ok 12 - getPendingCount returns correct count # time=10.884ms
+    ok 12 - getPendingCount returns correct count # time=11.172ms
     
     # Subtest: hasPendingRequest checks for correlation ID
         ok 1 - should have pending
         ok 2 - should not have unknown
         1..2
-    ok 13 - hasPendingRequest checks for correlation ID # time=11.085ms
+    ok 13 - hasPendingRequest checks for correlation ID # time=11.248ms
     
     # Subtest: cancelRequest cancels pending request
         ok 1 - should return true for cancelled
         ok 2 - should reject with cancel reason
         1..2
-    ok 14 - cancelRequest cancels pending request # time=11.373ms
+    ok 14 - cancelRequest cancels pending request # time=11.306ms
     
     # Subtest: cancelRequest returns false for unknown ID
         ok 1 - should return false for unknown
         1..1
-    ok 15 - cancelRequest returns false for unknown ID # time=0.382ms
+    ok 15 - cancelRequest returns false for unknown ID # time=0.418ms
     
     # Subtest: getStats returns statistics
         ok 1 - should track requests sent
         ok 2 - should track timeouts
         ok 3 - should track pending requests
         1..3
-    ok 16 - getStats returns statistics # time=51.078ms
+    ok 16 - getStats returns statistics # time=51.109ms
     
     # Subtest: shutdown cancels all pending requests
         ok 1 - should have pending requests
@@ -104,7 +104,7 @@ TAP version 14
         ok 3 - should reject with shutdown
         ok 4 - should reject with shutdown
         1..4
-    ok 17 - shutdown cancels all pending requests # time=11.485ms
+    ok 17 - shutdown cancels all pending requests # time=11.535ms
     
     # Subtest: emits timeout event
         ok 1 - should emit timeout event
@@ -112,7 +112,7 @@ TAP version 14
         ok 3 - should include target
         ok 4 - should include timeout
         1..4
-    ok 18 - emits timeout event # time=50.349ms
+    ok 18 - emits timeout event # time=51.283ms
     
     # Subtest: emits response event
         ok 1 - should emit response event
@@ -120,14 +120,14 @@ TAP version 14
         ok 3 - should include latency
         ok 4 - should include response
         1..4
-    ok 19 - emits response event # time=11.594ms
+    ok 19 - emits response event # time=12.517ms
     
     # Subtest: emits shutdown event
         ok 1 - should emit shutdown event
         1..1
-    ok 20 - emits shutdown event # time=0.231ms
+    ok 20 - emits shutdown event # time=0.454ms
     
     1..20
-ok 1 - RPCClient # time=403.077ms
+ok 1 - RPCClient # time=407.824ms
 
 1..1

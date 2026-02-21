@@ -3,74 +3,74 @@ RaftRoleTracker initialized
 # Subtest: RaftRoleTracker - initialization
     ok 1 - Tracker should be initialized
     1..1
-ok 1 - RaftRoleTracker - initialization # time=3.442ms
+ok 1 - RaftRoleTracker - initialization # time=2.515ms
 
-Service registered for role tracking { serviceId: 'service-1' }
+Service registered for role tracking { serviceId: [32m'service-1'[39m }
 # Subtest: RaftRoleTracker - registerService adds service to tracking
     ok 1 - Service should be tracked
     1..1
-ok 2 - RaftRoleTracker - registerService adds service to tracking # time=0.89ms
+ok 2 - RaftRoleTracker - registerService adds service to tracking # time=0.753ms
 
-Service registered for role tracking { serviceId: 'service-1' }
-Service unregistered from role tracking { serviceId: 'service-1' }
+Service registered for role tracking { serviceId: [32m'service-1'[39m }
+Service unregistered from role tracking { serviceId: [32m'service-1'[39m }
 # Subtest: RaftRoleTracker - unregisterService removes service
     ok 1 - Service should not be tracked
     1..1
-ok 3 - RaftRoleTracker - unregisterService removes service # time=0.787ms
+ok 3 - RaftRoleTracker - unregisterService removes service # time=0.58ms
 
-Service registered for role tracking { serviceId: 'service-1' }
-Raft role changed { serviceId: 'service-1', oldRole: 'follower', newRole: 'leader' }
-Updated service Raft role { serviceId: 'service-1', role: 'leader' }
+Service registered for role tracking { serviceId: [32m'service-1'[39m }
+Raft role changed { serviceId: [32m'service-1'[39m, oldRole: [32m'follower'[39m, newRole: [32m'leader'[39m }
+Updated service Raft role { serviceId: [32m'service-1'[39m, role: [32m'leader'[39m }
 # Subtest: RaftRoleTracker - handles role change events from service
     ok 1 - Should have one CDC update
     ok 2 - Should update services table
     ok 3 - Should update correct service
     ok 4 - Should set role to leader
     1..4
-ok 4 - RaftRoleTracker - handles role change events from service # time=11.217ms
+ok 4 - RaftRoleTracker - handles role change events from service # time=10.964ms
 
-Service registered for role tracking { serviceId: 'service-1' }
-Raft role changed { serviceId: 'service-1', oldRole: null, newRole: 'leader' }
-Updated service Raft role { serviceId: 'service-1', role: 'leader' }
+Service registered for role tracking { serviceId: [32m'service-1'[39m }
+Raft role changed { serviceId: [32m'service-1'[39m, oldRole: [1mnull[22m, newRole: [32m'leader'[39m }
+Updated service Raft role { serviceId: [32m'service-1'[39m, role: [32m'leader'[39m }
 # Subtest: RaftRoleTracker - setServiceRole updates role manually
     ok 1 - Should have one CDC update
     ok 2 - Should set role to leader
     1..2
-ok 5 - RaftRoleTracker - setServiceRole updates role manually # time=1.311ms
+ok 5 - RaftRoleTracker - setServiceRole updates role manually # time=0.781ms
 
 # Subtest: RaftRoleTracker - setServiceRole rejects invalid role
     ok 1 - Should throw invalid role error
     1..1
-ok 6 - RaftRoleTracker - setServiceRole rejects invalid role # time=0.36ms
+ok 6 - RaftRoleTracker - setServiceRole rejects invalid role # time=0.256ms
 
-Service registered for role tracking { serviceId: 'service-1' }
-Raft role changed { serviceId: 'service-1', oldRole: null, newRole: 'follower' }
-Updated service Raft role { serviceId: 'service-1', role: 'follower' }
+Service registered for role tracking { serviceId: [32m'service-1'[39m }
+Raft role changed { serviceId: [32m'service-1'[39m, oldRole: [1mnull[22m, newRole: [32m'follower'[39m }
+Updated service Raft role { serviceId: [32m'service-1'[39m, role: [32m'follower'[39m }
 # Subtest: RaftRoleTracker - getServiceRole returns tracked role
     ok 1 - Should return follower role
     1..1
-ok 7 - RaftRoleTracker - getServiceRole returns tracked role # time=0.83ms
+ok 7 - RaftRoleTracker - getServiceRole returns tracked role # time=0.59ms
 
 # Subtest: RaftRoleTracker - getServiceRole falls back to SQL engine
     ok 1 - Should return role from SQL engine
     1..1
-ok 8 - RaftRoleTracker - getServiceRole falls back to SQL engine # time=0.44ms
+ok 8 - RaftRoleTracker - getServiceRole falls back to SQL engine # time=0.253ms
 
 # Subtest: RaftRoleTracker - getServicesByRole filters correctly
     ok 1 - Should find 2 leaders
     1..1
-ok 9 - RaftRoleTracker - getServicesByRole filters correctly # time=0.375ms
+ok 9 - RaftRoleTracker - getServicesByRole filters correctly # time=0.221ms
 
 # Subtest: RaftRoleTracker - getLeaders returns leader services
     ok 1 - Should find 1 leader
     ok 2 - Should be service-1
     1..2
-ok 10 - RaftRoleTracker - getLeaders returns leader services # time=0.418ms
+ok 10 - RaftRoleTracker - getLeaders returns leader services # time=0.227ms
 
 # Subtest: RaftRoleTracker - getFollowers returns follower services
     ok 1 - Should find 2 followers
     1..1
-ok 11 - RaftRoleTracker - getFollowers returns follower services # time=0.33ms
+ok 11 - RaftRoleTracker - getFollowers returns follower services # time=0.285ms
 
 # Subtest: RaftRoleTracker - isValidRole validates roles
     ok 1 - leader should be valid
@@ -79,41 +79,41 @@ ok 11 - RaftRoleTracker - getFollowers returns follower services # time=0.33ms
     ok 4 - invalid should not be valid
     ok 5 - empty string should not be valid
     1..5
-ok 12 - RaftRoleTracker - isValidRole validates roles # time=0.533ms
+ok 12 - RaftRoleTracker - isValidRole validates roles # time=0.311ms
 
-Service registered for role tracking { serviceId: 'service-1' }
-Raft role changed { serviceId: 'service-1', oldRole: null, newRole: 'leader' }
-Updated service Raft role { serviceId: 'service-1', role: 'leader' }
+Service registered for role tracking { serviceId: [32m'service-1'[39m }
+Raft role changed { serviceId: [32m'service-1'[39m, oldRole: [1mnull[22m, newRole: [32m'leader'[39m }
+Updated service Raft role { serviceId: [32m'service-1'[39m, role: [32m'leader'[39m }
 # Subtest: RaftRoleTracker - emits roleChanged event
     ok 1 - Should emit roleChanged event
     ok 2 - Event should have serviceId
     ok 3 - Event should have newRole
     ok 4 - Event should have timestamp
     1..4
-ok 13 - RaftRoleTracker - emits roleChanged event # time=1.039ms
+ok 13 - RaftRoleTracker - emits roleChanged event # time=0.784ms
 
-Service registered for role tracking { serviceId: 'service-1' }
+Service registered for role tracking { serviceId: [32m'service-1'[39m }
 # Subtest: RaftRoleTracker - handles missing CDC service gracefully
     ok 1 - Should not succeed without CDC service
     ok 2 - Should indicate missing CDC service
     1..2
-ok 14 - RaftRoleTracker - handles missing CDC service gracefully # time=0.842ms
+ok 14 - RaftRoleTracker - handles missing CDC service gracefully # time=0.486ms
 
-Service registered for role tracking { serviceId: 'service-1' }
-Service registered for role tracking { serviceId: 'service-2' }
-Service unregistered from role tracking { serviceId: 'service-1' }
-Service unregistered from role tracking { serviceId: 'service-2' }
+Service registered for role tracking { serviceId: [32m'service-1'[39m }
+Service registered for role tracking { serviceId: [32m'service-2'[39m }
+Service unregistered from role tracking { serviceId: [32m'service-1'[39m }
+Service unregistered from role tracking { serviceId: [32m'service-2'[39m }
 RaftRoleTracker shutdown
 # Subtest: RaftRoleTracker - shutdown cleans up
     ok 1 - Should have no tracked services after shutdown
     1..1
-ok 15 - RaftRoleTracker - shutdown cleans up # time=1.037ms
+ok 15 - RaftRoleTracker - shutdown cleans up # time=0.719ms
 
 # Subtest: RaftRole enum has correct values
     ok 1 - LEADER should be leader
     ok 2 - FOLLOWER should be follower
     ok 3 - CANDIDATE should be candidate
     1..3
-ok 16 - RaftRole enum has correct values # time=0.385ms
+ok 16 - RaftRole enum has correct values # time=0.229ms
 
 1..16

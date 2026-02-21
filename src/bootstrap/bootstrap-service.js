@@ -117,6 +117,8 @@ import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
 import {createSeedPhaseOwners} from './owners/seed-phase-owners.js';
+import {StartupPipelineRunner} from './pipeline/startup-pipeline-runner.js';
+import {createSeedStartupPlan} from './pipeline/seed-startup-plan.js';
 import {
   NodeLifecycleStateMachine,
   NodeState,
@@ -356,35 +358,14 @@ class BootstrapService extends EventEmitter {
     });
 
     try {
-      // Phase 1: Infrastructure setup
-      await this.executePhase(
-        BootstrapPhase.INFRASTRUCTURE,
-        () => this.seedPhaseOwners.infrastructure(),
-      );
-
-      // Phase 2: Message group creation
-      await this.executePhase(
-        BootstrapPhase.MESSAGE_GROUPS,
-        () => this.seedPhaseOwners.messageGroups(),
-      );
-
-      // Phase 3: Partition creation for system tables
-      await this.executePhase(
-        BootstrapPhase.PARTITIONS,
-        () => this.seedPhaseOwners.partitions(),
-      );
-
-      // Phase 4: Service registration
-      await this.executePhase(
-        BootstrapPhase.REGISTRATION,
-        () => this.seedPhaseOwners.registration(),
-      );
-
-      // Phase 5: Cache hydration
-      await this.executePhase(
-        BootstrapPhase.CACHE_HYDRATION,
-        () => this.seedPhaseOwners.cacheHydration(),
-      );
+      const startupPipelineRunner = new StartupPipelineRunner({
+        logger: this.logger,
+        eventSink: this,
+      });
+      const seedPlan = createSeedStartupPlan(this);
+      await startupPipelineRunner.run({
+        phases: seedPlan.phases,
+      });
 
       // Initialize replica handler after all services are ready
       this.initializeReplicaHandler();
@@ -962,6 +943,47 @@ class BootstrapService extends EventEmitter {
     );
 
     return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
+  }
+
+  /**
+   * Compatibility shim for deferred election activation during bootstrap.
+   * Replica create/start ownership remains in unified lifecycle adapters.
+   * @return {Promise<void>}
+   * @private
+   */
+  async startDeferredBootstrapReplicaElections() {
+    if (this.messageGroupReplicas && this.messageGroupReplicas.length > NUM.ZERO) {
+      this.logger.info(BootstrapLog.STARTING_MG_ELECTIONS, {
+        totalReplicas: this.messageGroupReplicas.length,
+        nodeId: this.nodeId,
+      });
+
+      for (const messageGroup of this.messageGroupReplicas) {
+        messageGroup.startElection();
+      }
+
+      // Wait for message group leadership before starting partition elections
+      // This ensures message groups are stable before partitions start electing
+      await this.waitForMessageGroupLeadership(
+        INITIAL_MESSAGE_GROUP_ID,
+        INITIAL_MESSAGE_GROUP_REPLICA_IDS,
+      );
+
+      this.logger.debug(BootstrapLog.MESSAGE_GROUP_LEADERSHIP_READY, {
+        groupId: INITIAL_MESSAGE_GROUP_ID,
+        nodeId: this.nodeId,
+      });
+    }
+
+    this.logger.info(BootstrapLog.STARTING_PARTITION_ELECTIONS, {
+      totalReplicas: this.partitionReplicas.length,
+      partitionsCreated: this.partitionsCreated,
+      nodeId: this.nodeId,
+    });
+
+    for (const partition of this.partitionReplicas) {
+      partition.startElection();
+    }
   }
 
   /**
@@ -1724,38 +1746,7 @@ class BootstrapService extends EventEmitter {
     );
     this.partitionsCreated = SYSTEM_TABLE_SCHEMAS.length;
 
-    if (this.messageGroupReplicas && this.messageGroupReplicas.length > NUM.ZERO) {
-      this.logger.info(BootstrapLog.STARTING_MG_ELECTIONS, {
-        totalReplicas: this.messageGroupReplicas.length,
-        nodeId: this.nodeId,
-      });
-
-      for (const messageGroup of this.messageGroupReplicas) {
-        messageGroup.startElection();
-      }
-
-      // Wait for message group leadership before starting partition elections
-      // This ensures message groups are stable before partitions start electing
-      await this.waitForMessageGroupLeadership(
-        INITIAL_MESSAGE_GROUP_ID,
-        INITIAL_MESSAGE_GROUP_REPLICA_IDS,
-      );
-
-      this.logger.debug(BootstrapLog.MESSAGE_GROUP_LEADERSHIP_READY, {
-        groupId: INITIAL_MESSAGE_GROUP_ID,
-        nodeId: this.nodeId,
-      });
-    }
-
-    this.logger.info(BootstrapLog.STARTING_PARTITION_ELECTIONS, {
-      totalReplicas: this.partitionReplicas.length,
-      partitionsCreated: this.partitionsCreated,
-      nodeId: this.nodeId,
-    });
-
-    for (const partition of this.partitionReplicas) {
-      partition.startElection();
-    }
+    await this.startDeferredBootstrapReplicaElections();
 
     if (this.serviceReconciler) {
       this.serviceReconciler.stop();

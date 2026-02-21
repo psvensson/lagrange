@@ -27,14 +27,14 @@ const META_ROUTER_ERROR_MSG = Object.freeze({
 /**
  * Checks if the given meta-service has a routable leader.
  *
- * @param {Object} systemTableCache - The system table cache.
+ * @param {Object} systemCacheClient - System cache read client.
  * @param {string} serviceId - The meta-service ID to check.
  * @return {{available: boolean, leaderAddress?: string,
  *   error?: string}} Availability result.
  * @throws {Error} If systemTableCache is missing.
  */
-function checkMetaServiceAvailability(systemTableCache, serviceId) {
-  if (!systemTableCache) {
+function checkMetaServiceAvailability(systemCacheClient, serviceId) {
+  if (!systemCacheClient) {
     throw new Error(META_ROUTER_ERROR_MSG.CACHE_REQUIRED);
   }
   if (!isMetaService(serviceId)) {
@@ -43,7 +43,7 @@ function checkMetaServiceAvailability(systemTableCache, serviceId) {
       error: META_ROUTER_ERROR_MSG.NOT_META_SERVICE,
     };
   }
-  const services = systemTableCache.getAll(TABLES.SERVICES) || [];
+  const services = systemCacheClient.getAll(TABLES.SERVICES) || [];
   const leader = services.find(
     (s) => s[COLUMN.SERVICE_ID] === serviceId &&
            s[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
@@ -58,7 +58,7 @@ function checkMetaServiceAvailability(systemTableCache, serviceId) {
 /**
  * Routes a command to a meta-service leader if available.
  *
- * @param {Object} systemTableCache - The system table cache.
+ * @param {Object} systemCacheClient - System cache read client.
  * @param {string} serviceId - The meta-service ID.
  * @param {string} command - The command name.
  * @param {Object} payload - The command payload.
@@ -67,7 +67,7 @@ function checkMetaServiceAvailability(systemTableCache, serviceId) {
  *   error?: string, code?: string}} Routing result.
  */
 function routeToMetaService(
-  systemTableCache, serviceId, command, payload,
+  systemCacheClient, serviceId, command, payload,
 ) {
   if (!isMetaService(serviceId)) {
     return {
@@ -77,7 +77,7 @@ function routeToMetaService(
     };
   }
   const availability = checkMetaServiceAvailability(
-    systemTableCache, serviceId,
+    systemCacheClient, serviceId,
   );
   if (!availability.available) {
     return {

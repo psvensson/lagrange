@@ -3,24 +3,24 @@ TAP version 14
     # Subtest: in-flight operations are returned for non-terminal statuses
         ok 1 - in-flight operations are returned
         1..1
-    ok 1 - in-flight operations are returned for non-terminal statuses # time=7.323ms
+    ok 1 - in-flight operations are returned for non-terminal statuses # time=10.208ms
     
     # Subtest: terminal statuses are excluded from in-flight operations
         ok 1 - terminal statuses are excluded
         1..1
-    ok 2 - terminal statuses are excluded from in-flight operations # time=1.317ms
+    ok 2 - terminal statuses are excluded from in-flight operations # time=1.281ms
     
     # Subtest: hasPendingMove identifies in-flight replica operations
         ok 1 - hasPendingMove identifies in-flight operations
         1..1
-    ok 3 - hasPendingMove identifies in-flight replica operations # time=1.479ms
+    ok 3 - hasPendingMove identifies in-flight replica operations # time=1.516ms
     
     # Subtest: hasPendingAddForNode identifies pending ADD operations
         ok 1 - hasPendingAddForNode identifies pending ADD operations
         1..1
-    ok 4 - hasPendingAddForNode identifies pending ADD operations # time=1.194ms
+    ok 4 - hasPendingAddForNode identifies pending ADD operations # time=1.222ms
     
     1..4
-ok 1 - Property 80: Pending Move Tracking # time=120.625ms
+ok 1 - Property 80: Pending Move Tracking # time=135.683ms
 
 1..1

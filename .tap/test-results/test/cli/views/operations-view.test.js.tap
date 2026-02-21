@@ -5,7 +5,7 @@ TAP version 14
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 1 - constructor initializes with default state # time=6.312ms
+    ok 1 - constructor initializes with default state # time=14.033ms
     
     # Subtest: getColumns returns correct column definitions
         ok 1 - should be equal
@@ -17,7 +17,7 @@ TAP version 14
         ok 7 - should be equal
         ok 8 - should be equal
         1..8
-    ok 2 - getColumns returns correct column definitions # time=0.75ms
+    ok 2 - getColumns returns correct column definitions # time=1.361ms
     
     # Subtest: formatRow formats operation data correctly
         ok 1 - should be equal
@@ -28,7 +28,7 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 3 - formatRow formats operation data correctly # time=0.73ms
+    ok 3 - formatRow formats operation data correctly # time=1.72ms
     
     # Subtest: formatRow handles missing values
         ok 1 - should be equal
@@ -39,22 +39,22 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 4 - formatRow handles missing values # time=0.486ms
+    ok 4 - formatRow handles missing values # time=1.092ms
     
     # Subtest: getRowStatus returns NORMAL for completed operation
         ok 1 - should be equal
         1..1
-    ok 5 - getRowStatus returns NORMAL for completed operation # time=0.254ms
+    ok 5 - getRowStatus returns NORMAL for completed operation # time=0.545ms
     
     # Subtest: getRowStatus returns NORMAL for removed operation
         ok 1 - should be equal
         1..1
-    ok 6 - getRowStatus returns NORMAL for removed operation # time=0.197ms
+    ok 6 - getRowStatus returns NORMAL for removed operation # time=0.41ms
     
     # Subtest: getRowStatus returns ERROR for failed operation
         ok 1 - should be equal
         1..1
-    ok 7 - getRowStatus returns ERROR for failed operation # time=0.209ms
+    ok 7 - getRowStatus returns ERROR for failed operation # time=0.376ms
     
     # Subtest: getRowStatus returns WARNING for in-progress operation
         ok 1 - should be equal
@@ -62,27 +62,27 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 8 - getRowStatus returns WARNING for in-progress operation # time=0.338ms
+    ok 8 - getRowStatus returns WARNING for in-progress operation # time=0.772ms
     
     # Subtest: getItemKey returns operation_id
         ok 1 - should be equal
         1..1
-    ok 9 - getItemKey returns operation_id # time=0.194ms
+    ok 9 - getItemKey returns operation_id # time=0.41ms
     
     # Subtest: getItemKey handles missing operation_id
         ok 1 - should be equal
         1..1
-    ok 10 - getItemKey handles missing operation_id # time=0.198ms
+    ok 10 - getItemKey handles missing operation_id # time=0.358ms
     
     # Subtest: handleDrillDown returns navigation action
         ok 1 - should be equivalent
         1..1
-    ok 11 - handleDrillDown returns navigation action # time=1.101ms
+    ok 11 - handleDrillDown returns navigation action # time=2.299ms
     
     # Subtest: handleDrillDown returns null when no selection
         ok 1 - should be equal
         1..1
-    ok 12 - handleDrillDown returns null when no selection # time=0.194ms
+    ok 12 - handleDrillDown returns null when no selection # time=0.382ms
     
     # Subtest: getSelectedDetails returns operation details
         ok 1 - should be equal
@@ -91,60 +91,60 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 13 - getSelectedDetails returns operation details # time=0.551ms
+    ok 13 - getSelectedDetails returns operation details # time=1.209ms
     
     # Subtest: getSelectedDetails includes error section when error exists
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 14 - getSelectedDetails includes error section when error exists # time=0.348ms
+    ok 14 - getSelectedDetails includes error section when error exists # time=0.915ms
     
     # Subtest: getSelectedDetails includes workflow history
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 15 - getSelectedDetails includes workflow history # time=0.29ms
+    ok 15 - getSelectedDetails includes workflow history # time=0.687ms
     
     # Subtest: getSelectedDetails returns null when no selection
         ok 1 - should be equal
         1..1
-    ok 16 - getSelectedDetails returns null when no selection # time=0.195ms
+    ok 16 - getSelectedDetails returns null when no selection # time=0.451ms
     
     # Subtest: render includes all operations
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 17 - render includes all operations # time=0.432ms
+    ok 17 - render includes all operations # time=1.033ms
     
     # Subtest: filter works correctly
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 18 - filter works correctly # time=0.379ms
+    ok 18 - filter works correctly # time=0.838ms
     
     # Subtest: getInFlightCount returns correct count
         ok 1 - should be equal
         1..1
-    ok 19 - getInFlightCount returns correct count # time=0.28ms
+    ok 19 - getInFlightCount returns correct count # time=0.545ms
     
     # Subtest: getCompletedCount returns correct count
         ok 1 - should be equal
         1..1
-    ok 20 - getCompletedCount returns correct count # time=0.368ms
+    ok 20 - getCompletedCount returns correct count # time=0.523ms
     
     # Subtest: getFailedCount returns correct count
         ok 1 - should be equal
         1..1
-    ok 21 - getFailedCount returns correct count # time=0.295ms
+    ok 21 - getFailedCount returns correct count # time=4.341ms
     
     # Subtest: exports workflow step constants
         ok 1 - should be equivalent
         ok 2 - should be equivalent
         1..2
-    ok 22 - exports workflow step constants # time=0.5ms
+    ok 22 - exports workflow step constants # time=1.241ms
     
     1..22
-ok 1 - OperationsView # time=19.41ms
+ok 1 - OperationsView # time=44.55ms
 
 1..1

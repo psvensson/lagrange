@@ -2,21 +2,21 @@ TAP version 14
 # Subtest: Property 39: Split point is median key
     ok 1 - Split point is median key
     1..1
-ok 1 - Property 39: Split point is median key # time=10.415ms
+ok 1 - Property 39: Split point is median key # time=10.68ms
 
 # Subtest: Property 39: Median split creates balanced partitions
     ok 1 - Median split creates balanced partitions
     1..1
-ok 2 - Property 39: Median split creates balanced partitions # time=2.868ms
+ok 2 - Property 39: Median split creates balanced partitions # time=2.79ms
 
 # Subtest: Property 39: Split point is within partition range
     ok 1 - Split point is within partition range
     1..1
-ok 3 - Property 39: Split point is within partition range # time=2.745ms
+ok 3 - Property 39: Split point is within partition range # time=1.456ms
 
 # Subtest: Property 39: Resulting partitions have correct ranges
     ok 1 - Resulting partitions have correct ranges
     1..1
-ok 4 - Property 39: Resulting partitions have correct ranges # time=2.878ms
+ok 4 - Property 39: Resulting partitions have correct ranges # time=2.496ms
 
 1..4

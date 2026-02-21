@@ -2,26 +2,26 @@ TAP version 14
 # Subtest: setup
     ok 1 - configuration initialized
     1..1
-ok 1 - setup # time=99.39ms
+ok 1 - setup # time=81.676ms
 
 # Subtest: LogQueryService singleton
     ok 1 - should return the same instance
     1..1
-ok 2 - LogQueryService singleton # time=0.761ms
+ok 2 - LogQueryService singleton # time=0.523ms
 
 # Subtest: LogQueryService initialization
     ok 1 - should not be initialized before initialize()
 LogQueryService initialized
     ok 2 - should be initialized after initialize()
     1..2
-ok 3 - LogQueryService initialization # time=1.098ms
+ok 3 - LogQueryService initialization # time=0.737ms
 
 # Subtest: LogQueryService default config
     ok 1 - should have default limit
     ok 2 - should have max limit
     ok 3 - should have default time range
     1..3
-ok 4 - LogQueryService default config # time=0.448ms
+ok 4 - LogQueryService default config # time=0.279ms
 
 # Subtest: LOG_LEVEL_ORDER
     ok 1 - TRACE should be 0
@@ -31,7 +31,7 @@ ok 4 - LogQueryService default config # time=0.448ms
     ok 5 - ERROR should be 4
     ok 6 - FATAL should be 5
     1..6
-ok 5 - LOG_LEVEL_ORDER # time=0.636ms
+ok 5 - LOG_LEVEL_ORDER # time=0.355ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL basic
@@ -40,76 +40,76 @@ LogQueryService initialized
     ok 3 - should order by timestamp DESC
     ok 4 - should have default limit
     1..4
-ok 6 - LogQueryService buildQuerySQL basic # time=0.868ms
+ok 6 - LogQueryService buildQuerySQL basic # time=0.677ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL with level filter
     ok 1 - should have WHERE clause
     ok 2 - should filter by level and above
     1..2
-ok 7 - LogQueryService buildQuerySQL with level filter # time=0.829ms
+ok 7 - LogQueryService buildQuerySQL with level filter # time=0.375ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL with node filter
     ok 1 - should filter by node_id
     1..1
-ok 8 - LogQueryService buildQuerySQL with node filter # time=0.63ms
+ok 8 - LogQueryService buildQuerySQL with node filter # time=0.321ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL with service filter
     ok 1 - should filter by service_id
     1..1
-ok 9 - LogQueryService buildQuerySQL with service filter # time=0.582ms
+ok 9 - LogQueryService buildQuerySQL with service filter # time=0.336ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL with time range
     ok 1 - should filter by start time
     ok 2 - should filter by end time
     1..2
-ok 10 - LogQueryService buildQuerySQL with time range # time=0.534ms
+ok 10 - LogQueryService buildQuerySQL with time range # time=0.332ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL with message pattern
     ok 1 - should filter by message pattern
     1..1
-ok 11 - LogQueryService buildQuerySQL with message pattern # time=0.424ms
+ok 11 - LogQueryService buildQuerySQL with message pattern # time=0.248ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL with trace filter
     ok 1 - should filter by trace_id
     1..1
-ok 12 - LogQueryService buildQuerySQL with trace filter # time=0.404ms
+ok 12 - LogQueryService buildQuerySQL with trace filter # time=0.232ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL with pagination
     ok 1 - should have custom limit
     ok 2 - should have offset
     1..2
-ok 13 - LogQueryService buildQuerySQL with pagination # time=0.49ms
+ok 13 - LogQueryService buildQuerySQL with pagination # time=0.274ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL with custom order
     ok 1 - should have custom order
     1..1
-ok 14 - LogQueryService buildQuerySQL with custom order # time=0.431ms
+ok 14 - LogQueryService buildQuerySQL with custom order # time=0.226ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL sanitizes order column
     ok 1 - should reject invalid orderBy column
     1..1
-ok 15 - LogQueryService buildQuerySQL sanitizes order column # time=1.413ms
+ok 15 - LogQueryService buildQuerySQL sanitizes order column # time=0.836ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL limits max results
     ok 1 - should cap at max limit
     1..1
-ok 16 - LogQueryService buildQuerySQL limits max results # time=0.433ms
+ok 16 - LogQueryService buildQuerySQL limits max results # time=0.318ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL escapes strings
     ok 1 - should escape single quotes
     1..1
-ok 17 - LogQueryService buildQuerySQL escapes strings # time=0.459ms
+ok 17 - LogQueryService buildQuerySQL escapes strings # time=0.263ms
 
 LogQueryService initialized
 # Subtest: LogQueryService buildQuerySQL with multiple filters
@@ -121,14 +121,14 @@ LogQueryService initialized
     ok 6 - should filter by start time
     ok 7 - should filter by end time
     1..7
-ok 18 - LogQueryService buildQuerySQL with multiple filters # time=0.929ms
+ok 18 - LogQueryService buildQuerySQL with multiple filters # time=0.495ms
 
 LogQueryService initialized
 # Subtest: LogQueryService queryLogs without engine returns error
     ok 1 - should fail without engine
     ok 2 - should have correct error code
     1..2
-ok 19 - LogQueryService queryLogs without engine returns error # time=0.885ms
+ok 19 - LogQueryService queryLogs without engine returns error # time=0.379ms
 
 LogQueryService initialized
 # Subtest: LogQueryService queryLogs with mock engine
@@ -136,7 +136,7 @@ LogQueryService initialized
     ok 2 - should return count
     ok 3 - should return results
     1..3
-ok 20 - LogQueryService queryLogs with mock engine # time=0.989ms
+ok 20 - LogQueryService queryLogs with mock engine # time=0.577ms
 
 LogQueryService initialized
 # Subtest: LogQueryService getRecentLogs
@@ -144,14 +144,14 @@ LogQueryService initialized
     ok 2 - should have start time
     ok 3 - should have end time
     1..3
-ok 21 - LogQueryService getRecentLogs # time=0.809ms
+ok 21 - LogQueryService getRecentLogs # time=0.531ms
 
 LogQueryService initialized
 # Subtest: LogQueryService getErrorLogs
     ok 1 - should execute query
     ok 2 - should filter ERROR and above
     1..2
-ok 22 - LogQueryService getErrorLogs # time=0.753ms
+ok 22 - LogQueryService getErrorLogs # time=0.477ms
 
 LogQueryService initialized
 # Subtest: LogQueryService getLogsByTrace orders ASC
@@ -159,7 +159,7 @@ LogQueryService initialized
     ok 2 - should filter by trace
     ok 3 - should order ASC for traces
     1..3
-ok 23 - LogQueryService getLogsByTrace orders ASC # time=0.698ms
+ok 23 - LogQueryService getLogsByTrace orders ASC # time=0.42ms
 
 LogQueryService initialized
 # Subtest: LogQueryService countByLevel
@@ -167,7 +167,7 @@ LogQueryService initialized
     ok 2 - should group by level
     ok 3 - should count
     1..3
-ok 24 - LogQueryService countByLevel # time=0.689ms
+ok 24 - LogQueryService countByLevel # time=0.417ms
 
 LogQueryService initialized
 # Subtest: LogQueryService getLogCountTimeSeries
@@ -176,25 +176,25 @@ LogQueryService initialized
     ok 3 - should group by time bucket
     ok 4 - should order by time bucket
     1..4
-ok 25 - LogQueryService getLogCountTimeSeries # time=0.733ms
+ok 25 - LogQueryService getLogCountTimeSeries # time=0.518ms
 
 LogQueryService initialized
 # Subtest: LogQueryService searchLogs
     ok 1 - should execute query
     ok 2 - should search in message
     1..2
-ok 26 - LogQueryService searchLogs # time=0.68ms
+ok 26 - LogQueryService searchLogs # time=0.484ms
 
 LogQueryService initialized
 LogQueryService shutdown
 # Subtest: LogQueryService shutdown
     ok 1 - should not be initialized after shutdown
     1..1
-ok 27 - LogQueryService shutdown # time=0.545ms
+ok 27 - LogQueryService shutdown # time=0.404ms
 
 # Subtest: cleanup
     ok 1 - cleanup complete
     1..1
-ok 28 - cleanup # time=0.249ms
+ok 28 - cleanup # time=0.206ms
 
 1..28

@@ -2,21 +2,21 @@ TAP version 14
 # Subtest: Property 4: All listeners receive CDC events with correct data
     ok 1 - All listeners receive CDC events with correct data
     1..1
-ok 1 - Property 4: All listeners receive CDC events with correct data # time=9.036ms
+ok 1 - Property 4: All listeners receive CDC events with correct data # time=10.977ms
 
 # Subtest: Property 4: CDC notifications are non-blocking
     ok 1 - CDC notifications are non-blocking
     1..1
-ok 2 - Property 4: CDC notifications are non-blocking # time=1.705ms
+ok 2 - Property 4: CDC notifications are non-blocking # time=4.521ms
 
 # Subtest: Property 4: Listener errors are isolated
     ok 1 - Listener errors are isolated
     1..1
-ok 3 - Property 4: Listener errors are isolated # time=2.381ms
+ok 3 - Property 4: Listener errors are isolated # time=1.657ms
 
 # Subtest: Property 4: Notification record matches applied change
     ok 1 - Notification record matches applied change
     1..1
-ok 4 - Property 4: Notification record matches applied change # time=1.539ms
+ok 4 - Property 4: Notification record matches applied change # time=1.744ms
 
 1..4

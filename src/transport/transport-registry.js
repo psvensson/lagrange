@@ -52,15 +52,15 @@ const REGISTRY_ERROR_MSG = Object.freeze({
 class TransportRegistry {
   /**
    * Create a new TransportRegistry instance.
-   * @param {Object} systemTableCache - SystemTableCache instance for endpoint lookups
-   * @throws {Error} If systemTableCache is not provided
+   * @param {Object} systemCacheClient - Read-only cache client for endpoint lookups.
+   * @throws {Error} If systemCacheClient is not provided.
    */
-  constructor(systemTableCache) {
-    if (!systemTableCache) {
+    constructor(systemCacheClient) {
+      if (!systemCacheClient) {
       throw new Error(REGISTRY_ERROR_MSG.SYSTEM_CACHE_REQUIRED);
     }
 
-    this.systemTableCache = systemTableCache;
+      this.systemCacheClient = systemCacheClient;
     this.providers = new Map();
     this.logger = LoggingService.getInstance().forSubsystem(REGISTRY_SUBSYSTEM);
   }
@@ -155,49 +155,21 @@ class TransportRegistry {
 
     this.logger.debug(REGISTRY_LOG_MSG.SELECTING_ENDPOINT, {nodeId});
 
-    // Get all endpoints for the node from SystemTableCache
-    const endpoints = this.getEndpointsForNode(nodeId);
-
-    if (endpoints.length === 0) {
-      this.logger.debug(REGISTRY_LOG_MSG.NO_ENDPOINTS_FOUND, {nodeId});
+    const candidates = this.getDeliveryCandidates(nodeId);
+    if (candidates.length === 0) {
+      this.logger.debug(REGISTRY_LOG_MSG.NO_AVAILABLE_ENDPOINTS, {nodeId});
       return null;
     }
 
-    // Find the first endpoint (already sorted by priority) with an available provider
-    for (const endpoint of endpoints) {
-      const provider = this.providers.get(endpoint[COLUMN.TRANSPORT_TYPE]);
+    const selected = candidates[0];
+    this.logger.debug(REGISTRY_LOG_MSG.ENDPOINT_SELECTED, {
+      nodeId,
+      endpointId: selected.endpoint[COLUMN.ENDPOINT_ID],
+      transportType: selected.endpoint[COLUMN.TRANSPORT_TYPE],
+      priority: selected.endpoint[COLUMN.PRIORITY],
+    });
 
-      if (!provider) {
-        this.logger.debug(REGISTRY_LOG_MSG.NO_AVAILABLE_PROVIDER, {
-          nodeId,
-          transportType: endpoint[COLUMN.TRANSPORT_TYPE],
-          endpointId: endpoint[COLUMN.ENDPOINT_ID],
-        });
-        continue;
-      }
-
-      if (!provider.isAvailable()) {
-        this.logger.debug(REGISTRY_LOG_MSG.NO_AVAILABLE_PROVIDER, {
-          nodeId,
-          transportType: endpoint[COLUMN.TRANSPORT_TYPE],
-          endpointId: endpoint[COLUMN.ENDPOINT_ID],
-          reason: 'provider not available',
-        });
-        continue;
-      }
-
-      this.logger.debug(REGISTRY_LOG_MSG.ENDPOINT_SELECTED, {
-        nodeId,
-        endpointId: endpoint[COLUMN.ENDPOINT_ID],
-        transportType: endpoint[COLUMN.TRANSPORT_TYPE],
-        priority: endpoint[COLUMN.PRIORITY],
-      });
-
-      return endpoint;
-    }
-
-    this.logger.debug(REGISTRY_LOG_MSG.NO_AVAILABLE_ENDPOINTS, {nodeId});
-    return null;
+    return selected.endpoint;
   }
 
   /**
@@ -219,7 +191,7 @@ class TransportRegistry {
     this.logger.debug(REGISTRY_LOG_MSG.GETTING_ENDPOINTS, {nodeId});
 
     // Query SystemTableCache for endpoints matching this node
-    const endpoints = this.systemTableCache.filter(
+    const endpoints = this.systemCacheClient.filter(
       TABLES.NODE_ENDPOINTS,
       (endpoint) =>
         endpoint[COLUMN.NODE_ID] === nodeId &&
@@ -234,6 +206,50 @@ class TransportRegistry {
     });
 
     return endpoints;
+  }
+
+  /**
+   * Resolve endpoint delivery candidates with providers, in priority order.
+   * This method is the single owner for endpoint/provider selection rules.
+   * @param {string} nodeId - Target node ID.
+   * @return {Array<{endpoint: Object, provider: Object}>} Ordered candidates.
+   */
+  getDeliveryCandidates(nodeId) {
+    if (!nodeId) {
+      throw new Error(REGISTRY_ERROR_MSG.NODE_ID_REQUIRED);
+    }
+
+    const endpoints = this.getEndpointsForNode(nodeId);
+    if (endpoints.length === 0) {
+      this.logger.debug(REGISTRY_LOG_MSG.NO_ENDPOINTS_FOUND, {nodeId});
+      return [];
+    }
+
+    const candidates = [];
+    for (const endpoint of endpoints) {
+      const transportType = endpoint[COLUMN.TRANSPORT_TYPE];
+      const provider = this.providers.get(transportType);
+      if (!provider) {
+        this.logger.debug(REGISTRY_LOG_MSG.NO_AVAILABLE_PROVIDER, {
+          nodeId,
+          transportType,
+          endpointId: endpoint[COLUMN.ENDPOINT_ID],
+        });
+        continue;
+      }
+      if (!provider.isAvailable()) {
+        this.logger.debug(REGISTRY_LOG_MSG.NO_AVAILABLE_PROVIDER, {
+          nodeId,
+          transportType,
+          endpointId: endpoint[COLUMN.ENDPOINT_ID],
+          reason: 'provider not available',
+        });
+        continue;
+      }
+      candidates.push({endpoint, provider});
+    }
+
+    return candidates;
   }
 
   /**

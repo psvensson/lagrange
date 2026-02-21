@@ -3,39 +3,39 @@ TAP version 14
     # Subtest: all SQL keywords are highlighted
         ok 1 - all SQL keywords are highlighted
         1..1
-    ok 1 - all SQL keywords are highlighted # time=6.35ms
+    ok 1 - all SQL keywords are highlighted # time=8.908ms
     
     # Subtest: keyword highlighting is case-insensitive
         ok 1 - keyword highlighting is case-insensitive
         1..1
-    ok 2 - keyword highlighting is case-insensitive # time=0.822ms
+    ok 2 - keyword highlighting is case-insensitive # time=1.041ms
     
     # Subtest: stripping highlighting returns original text
         ok 1 - stripping highlighting returns original text
         1..1
-    ok 3 - stripping highlighting returns original text # time=2.707ms
+    ok 3 - stripping highlighting returns original text # time=2.678ms
     
     # Subtest: keywords inside strings are not highlighted
         ok 1 - keywords inside strings are not highlighted
         1..1
-    ok 4 - keywords inside strings are not highlighted # time=0.668ms
+    ok 4 - keywords inside strings are not highlighted # time=0.658ms
     
     # Subtest: keywords inside comments are not highlighted as keywords
         ok 1 - keywords inside comments are not highlighted as keywords
         1..1
-    ok 5 - keywords inside comments are not highlighted as keywords # time=0.685ms
+    ok 5 - keywords inside comments are not highlighted as keywords # time=0.564ms
     
     # Subtest: highlighting preserves non-keyword text
         ok 1 - highlighting preserves non-keyword text
         1..1
-    ok 6 - highlighting preserves non-keyword text # time=1.338ms
+    ok 6 - highlighting preserves non-keyword text # time=1.942ms
     
     # Subtest: multiple keywords in same query are all highlighted
         ok 1 - multiple keywords in same query are all highlighted
         1..1
-    ok 7 - multiple keywords in same query are all highlighted # time=0.642ms
+    ok 7 - multiple keywords in same query are all highlighted # time=0.595ms
     
     1..7
-ok 1 - Property 22: SQL Keyword Highlighting # time=16.7ms
+ok 1 - Property 22: SQL Keyword Highlighting # time=19.627ms
 
 1..1

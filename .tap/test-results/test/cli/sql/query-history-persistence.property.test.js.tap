@@ -3,39 +3,39 @@ TAP version 14
     # Subtest: serialize then deserialize preserves all entries
         ok 1 - serialize then deserialize preserves all entries
         1..1
-    ok 1 - serialize then deserialize preserves all entries # time=10.037ms
+    ok 1 - serialize then deserialize preserves all entries # time=12.059ms
     
     # Subtest: entry order is preserved after round-trip
         ok 1 - entry order is preserved after round-trip
         1..1
-    ok 2 - entry order is preserved after round-trip # time=2.935ms
+    ok 2 - entry order is preserved after round-trip # time=4.003ms
     
     # Subtest: deserialize filters invalid entries
         ok 1 - deserialize filters invalid entries
         1..1
-    ok 3 - deserialize filters invalid entries # time=1.809ms
+    ok 3 - deserialize filters invalid entries # time=2.273ms
     
     # Subtest: deserialize handles malformed JSON gracefully
         ok 1 - deserialize handles malformed JSON gracefully
         1..1
-    ok 4 - deserialize handles malformed JSON gracefully # time=1.057ms
+    ok 4 - deserialize handles malformed JSON gracefully # time=1.045ms
     
     # Subtest: serialize produces valid JSON
         ok 1 - serialize produces valid JSON
         1..1
-    ok 5 - serialize produces valid JSON # time=1.676ms
+    ok 5 - serialize produces valid JSON # time=1.857ms
     
     # Subtest: double round-trip is idempotent
         ok 1 - double round-trip is idempotent
         1..1
-    ok 6 - double round-trip is idempotent # time=1.436ms
+    ok 6 - double round-trip is idempotent # time=2.193ms
     
     # Subtest: deserialize respects maxEntries
         ok 1 - deserialize respects maxEntries
         1..1
-    ok 7 - deserialize respects maxEntries # time=5.093ms
+    ok 7 - deserialize respects maxEntries # time=7.148ms
     
     1..7
-ok 1 - Property 19: Query History Persistence Round-Trip # time=30.653ms
+ok 1 - Property 19: Query History Persistence Round-Trip # time=37.832ms
 
 1..1

@@ -148,8 +148,8 @@ class RouterDeliveryManager {
       messageId, targetAddress, targetNodeId,
     });
 
-    const endpoints = transportRegistry.getEndpointsForNode(targetNodeId);
-    if (endpoints.length === TRANSPORT_NUM.ZERO) {
+    const candidates = transportRegistry.getDeliveryCandidates(targetNodeId);
+    if (candidates.length === TRANSPORT_NUM.ZERO) {
       this.logger.warn(ROUTER_LOG_MSG.TRANSPORT_NO_ENDPOINTS, {
         messageId, targetNodeId,
       });
@@ -161,31 +161,10 @@ class RouterDeliveryManager {
     }
 
     const attempts = [];
-    for (const endpoint of endpoints) {
+    for (const candidate of candidates) {
+      const endpoint = candidate.endpoint;
+      const provider = candidate.provider;
       const transportType = endpoint[COLUMN.TRANSPORT_TYPE];
-      const provider = transportRegistry.getProvider(transportType);
-
-      if (!provider) {
-        attempts.push({
-          endpoint: {
-            endpointId: endpoint[COLUMN.ENDPOINT_ID],
-            transportType, priority: endpoint[COLUMN.PRIORITY],
-          },
-          error: {code: 'PROVIDER_NOT_FOUND', message: `No provider: ${transportType}`},
-        });
-        continue;
-      }
-
-      if (!provider.isAvailable()) {
-        attempts.push({
-          endpoint: {
-            endpointId: endpoint[COLUMN.ENDPOINT_ID],
-            transportType, priority: endpoint[COLUMN.PRIORITY],
-          },
-          error: {code: 'PROVIDER_UNAVAILABLE', message: `Unavailable: ${transportType}`},
-        });
-        continue;
-      }
 
       this.logger.debug(ROUTER_LOG_MSG.TRANSPORT_ENDPOINT_SELECTED, {
         messageId, targetNodeId, endpointId: endpoint[COLUMN.ENDPOINT_ID],

@@ -4,91 +4,91 @@ TAP version 14
     ok 2 - should be equivalent
     ok 3 - should be equal
     1..3
-ok 1 - StateManager - getState returns immutable copy # time=5.513ms
+ok 1 - StateManager - getState returns immutable copy # time=6.225ms
 
 # Subtest: StateManager - setState updates state
     ok 1 - should be equal
     1..1
-ok 2 - StateManager - setState updates state # time=0.684ms
+ok 2 - StateManager - setState updates state # time=0.461ms
 
 # Subtest: StateManager - setState deep merges objects
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 3 - StateManager - setState deep merges objects # time=0.459ms
+ok 3 - StateManager - setState deep merges objects # time=0.312ms
 
 # Subtest: StateManager - setState validates connection status
     ok 1 - expected to throw
     1..1
-ok 4 - StateManager - setState validates connection status # time=0.668ms
+ok 4 - StateManager - setState validates connection status # time=0.499ms
 
 # Subtest: StateManager - setState validates view
     ok 1 - expected to throw
     1..1
-ok 5 - StateManager - setState validates view # time=0.298ms
+ok 5 - StateManager - setState validates view # time=0.21ms
 
 # Subtest: StateManager - setState emits state:changed event
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 6 - StateManager - setState emits state:changed event # time=0.353ms
+ok 6 - StateManager - setState emits state:changed event # time=0.41ms
 
 # Subtest: StateManager - get() retrieves nested values
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 7 - StateManager - get() retrieves nested values # time=0.214ms
+ok 7 - StateManager - get() retrieves nested values # time=0.257ms
 
 # Subtest: StateManager - batchUpdate applies multiple changes
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 8 - StateManager - batchUpdate applies multiple changes # time=0.34ms
+ok 8 - StateManager - batchUpdate applies multiple changes # time=0.268ms
 
 # Subtest: StateManager - createSnapshot and restoreSnapshot
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 9 - StateManager - createSnapshot and restoreSnapshot # time=0.588ms
+ok 9 - StateManager - createSnapshot and restoreSnapshot # time=2.783ms
 
 # Subtest: StateManager - restoreSnapshot throws for invalid index
     ok 1 - expected to throw
     1..1
-ok 10 - StateManager - restoreSnapshot throws for invalid index # time=0.295ms
+ok 10 - StateManager - restoreSnapshot throws for invalid index # time=0.321ms
 
 # Subtest: StateManager - getSnapshots returns snapshot metadata
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 11 - StateManager - getSnapshots returns snapshot metadata # time=0.317ms
+ok 11 - StateManager - getSnapshots returns snapshot metadata # time=0.396ms
 
 # Subtest: StateManager - reset() restores initial state
     ok 1 - should be equal
     1..1
-ok 12 - StateManager - reset() restores initial state # time=0.231ms
+ok 12 - StateManager - reset() restores initial state # time=0.302ms
 
 # Subtest: StateManager - subscribe notifies on path changes
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 13 - StateManager - subscribe notifies on path changes # time=0.418ms
+ok 13 - StateManager - subscribe notifies on path changes # time=0.586ms
 
 # Subtest: StateManager - validates selectedIndex
     ok 1 - expected to throw
     1..1
-ok 14 - StateManager - validates selectedIndex # time=0.237ms
+ok 14 - StateManager - validates selectedIndex # time=0.375ms
 
 # Subtest: StateManager - validates sortDirection
     ok 1 - expected to throw
     1..1
-ok 15 - StateManager - validates sortDirection # time=0.289ms
+ok 15 - StateManager - validates sortDirection # time=0.285ms
 
 # Subtest: StateManager - validates refreshInterval
     ok 1 - expected to throw
     1..1
-ok 16 - StateManager - validates refreshInterval # time=0.249ms
+ok 16 - StateManager - validates refreshInterval # time=0.308ms
 
 1..16

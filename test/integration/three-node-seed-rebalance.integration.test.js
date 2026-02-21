@@ -33,6 +33,24 @@ const CLEANUP_TIMEOUT_MS = 10000;
 const EXPECTED_NODE_COUNT = 3;
 const REQUIRED_REBALANCED_PARTITIONS = 1;
 
+async function withTimeout(task, timeoutMs, label) {
+  let timeoutId;
+  try {
+    return await Promise.race([
+      task(),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 async function runWithCleanupTimeout(task, label, t) {
   let timeoutId;
   try {
@@ -141,7 +159,10 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
     await cleanupTestEnvironment();
   });
 
-  await t.test('moves at least one partition replica off seed node', async (t) => {
+  await t.test(
+    'moves at least one partition replica off seed node',
+    {timeout: TEST_TIMEOUT_MS},
+    async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440401';
     const node2Id = '550e8400-e29b-41d4-a716-446655440402';
     const node3Id = '550e8400-e29b-41d4-a716-446655440403';
@@ -165,7 +186,11 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
     let node3JoinService = null;
 
     try {
-      bootstrapResult = await bootstrapService.bootstrap();
+      bootstrapResult = await withTimeout(
+        () => bootstrapService.bootstrap(),
+        READY_TIMEOUT_MS,
+        'seed bootstrap',
+      );
       t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
 
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
@@ -188,7 +213,11 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
         epochManager: bootstrapResult.epochManager,
         bootstrapService,
       });
-      await seedApi.initialize(0, {listen: false});
+      await withTimeout(
+        () => seedApi.initialize(0, {listen: false}),
+        READY_TIMEOUT_MS,
+        'seed API initialize',
+      );
       seedApi.setSqlQueryEngine(queryEngine);
       const httpPost = createInProcHttpPost(seedApi);
 
@@ -238,10 +267,18 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
         httpPost,
       });
 
-      const node2Result = await node2JoinService.join();
+      const node2Result = await withTimeout(
+        () => node2JoinService.join(),
+        READY_TIMEOUT_MS,
+        'node2 join',
+      );
       t.equal(node2Result.success, true, 'second node should join');
 
-      const node3Result = await node3JoinService.join();
+      const node3Result = await withTimeout(
+        () => node3JoinService.join(),
+        READY_TIMEOUT_MS,
+        'node3 join',
+      );
       t.equal(node3Result.success, true, 'third node should join');
 
       const nodesReady = await waitFor(() => {
@@ -307,5 +344,6 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
       );
       forceReleaseActiveHandles();
     }
-  });
+    },
+  );
 });

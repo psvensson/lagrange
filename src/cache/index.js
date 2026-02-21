@@ -17,3 +17,11 @@ export {
   CacheHydrationService,
   SYSTEM_TABLES_TO_HYDRATE,
 } from './cache-hydration-service.js';
+
+export {
+  SYSTEM_CACHE_CLIENT_MODE,
+  SYSTEM_CACHE_CLIENT_ERROR_MSG,
+  createDirectSystemCacheClient,
+  createProxySystemCacheClient,
+  createSystemCacheClient,
+} from './system-cache-client.js';

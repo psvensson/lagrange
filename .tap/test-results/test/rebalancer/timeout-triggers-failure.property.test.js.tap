@@ -1,629 +1,629 @@
 TAP version 14
 # Subtest: Property 7: Timeout Triggers Failure
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '987ff17e-469d-40a2-9a4d-49db9b7496eb',
-  type: 'ADD',
-  partitionId: 'test-partition',
-  targetNodeId: 'test-node',
-  entityType: 'partition',
-  entityId: 'test-partition'
+  operationId: [32m'9d5b1f99-19f4-467d-a4fe-2deb1b5f8e53'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'test-partition'[39m,
+  targetNodeId: [32m'test-node'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'test-partition'[39m
 }
     # Subtest: operation in PENDING times out and fails
         ok 1 - Initial step is PENDING
         ok 2 - Initial status is pending
 metrics.rebalance.operation {
-  operationId: '987ff17e-469d-40a2-9a4d-49db9b7496eb',
-  entityType: 'partition',
-  finalState: 'failed',
-  totalDurationMs: 3
+  operationId: [32m'9d5b1f99-19f4-467d-a4fe-2deb1b5f8e53'[39m,
+  entityType: [32m'partition'[39m,
+  finalState: [32m'failed'[39m,
+  totalDurationMs: [33m3[39m
 }
         ok 3 - Status is failed after timeout
         ok 4 - Workflow step is FAILED
         ok 5 - Error message mentions timeout
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m0[39m }
         1..5
-    ok 1 - operation in PENDING times out and fails # time=67.579ms
+    ok 1 - operation in PENDING times out and fails # time=49.948ms
     
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '3a891044-7335-4c84-986a-d515a8e20256',
-  type: 'ADD',
-  partitionId: 'test-partition',
-  targetNodeId: 'test-node',
-  entityType: 'partition',
-  entityId: 'test-partition'
+  operationId: [32m'1fc5fd76-1fe7-4182-b5e5-14d9d9128f4d'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'test-partition'[39m,
+  targetNodeId: [32m'test-node'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'test-partition'[39m
 }
 Operation step changed {
-  operationId: '3a891044-7335-4c84-986a-d515a8e20256',
-  previousStep: 'PENDING',
-  newStep: 'SENDING',
-  status: 'pending',
-  partitionId: 'test-partition'
+  operationId: [32m'1fc5fd76-1fe7-4182-b5e5-14d9d9128f4d'[39m,
+  previousStep: [32m'PENDING'[39m,
+  newStep: [32m'SENDING'[39m,
+  status: [32m'pending'[39m,
+  partitionId: [32m'test-partition'[39m
 }
     # Subtest: operation in SENDING times out and fails
         ok 1 - Step is SENDING
 metrics.rebalance.operation {
-  operationId: '3a891044-7335-4c84-986a-d515a8e20256',
-  entityType: 'partition',
-  finalState: 'failed',
-  totalDurationMs: 1
+  operationId: [32m'1fc5fd76-1fe7-4182-b5e5-14d9d9128f4d'[39m,
+  entityType: [32m'partition'[39m,
+  finalState: [32m'failed'[39m,
+  totalDurationMs: [33m1[39m
 }
         ok 2 - Status is failed after timeout
         ok 3 - Error message mentions SENDING step
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m0[39m }
         1..3
-    ok 2 - operation in SENDING times out and fails # time=2.468ms
+    ok 2 - operation in SENDING times out and fails # time=1.428ms
     
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: 'fe14587c-9051-4551-950f-da4f06403990',
-  type: 'ADD',
-  partitionId: 'test-partition',
-  targetNodeId: 'test-node',
-  entityType: 'partition',
-  entityId: 'test-partition'
+  operationId: [32m'46b18cdd-d410-4a8e-ada2-10d3e2a412f2'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'test-partition'[39m,
+  targetNodeId: [32m'test-node'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'test-partition'[39m
 }
 Operation step changed {
-  operationId: 'fe14587c-9051-4551-950f-da4f06403990',
-  previousStep: 'PENDING',
-  newStep: 'CREATING',
-  status: 'creating',
-  partitionId: 'test-partition'
+  operationId: [32m'46b18cdd-d410-4a8e-ada2-10d3e2a412f2'[39m,
+  previousStep: [32m'PENDING'[39m,
+  newStep: [32m'CREATING'[39m,
+  status: [32m'creating'[39m,
+  partitionId: [32m'test-partition'[39m
 }
     # Subtest: operation in CREATING times out and fails
         ok 1 - Step is CREATING
 metrics.rebalance.operation {
-  operationId: 'fe14587c-9051-4551-950f-da4f06403990',
-  entityType: 'partition',
-  finalState: 'failed',
-  totalDurationMs: 0
+  operationId: [32m'46b18cdd-d410-4a8e-ada2-10d3e2a412f2'[39m,
+  entityType: [32m'partition'[39m,
+  finalState: [32m'failed'[39m,
+  totalDurationMs: [33m1[39m
 }
         ok 2 - Status is failed after timeout
         ok 3 - Error message mentions CREATING step
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m0[39m }
         1..3
-    ok 3 - operation in CREATING times out and fails # time=1.888ms
+    ok 3 - operation in CREATING times out and fails # time=1.091ms
     
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '1631743d-9d61-464b-a324-2c2368b613b6',
-  type: 'ADD',
-  partitionId: 'test-partition',
-  targetNodeId: 'test-node',
-  entityType: 'partition',
-  entityId: 'test-partition'
+  operationId: [32m'7939c5d2-a9e5-4811-a92b-cbdb928c0c14'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'test-partition'[39m,
+  targetNodeId: [32m'test-node'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'test-partition'[39m
 }
 Operation step changed {
-  operationId: '1631743d-9d61-464b-a324-2c2368b613b6',
-  previousStep: 'PENDING',
-  newStep: 'SYNCING',
-  status: 'syncing',
-  partitionId: 'test-partition'
+  operationId: [32m'7939c5d2-a9e5-4811-a92b-cbdb928c0c14'[39m,
+  previousStep: [32m'PENDING'[39m,
+  newStep: [32m'SYNCING'[39m,
+  status: [32m'syncing'[39m,
+  partitionId: [32m'test-partition'[39m
 }
     # Subtest: operation in SYNCING times out and fails
         ok 1 - Step is SYNCING
 metrics.rebalance.operation {
-  operationId: '1631743d-9d61-464b-a324-2c2368b613b6',
-  entityType: 'partition',
-  finalState: 'failed',
-  totalDurationMs: 1
+  operationId: [32m'7939c5d2-a9e5-4811-a92b-cbdb928c0c14'[39m,
+  entityType: [32m'partition'[39m,
+  finalState: [32m'failed'[39m,
+  totalDurationMs: [33m0[39m
 }
         ok 2 - Status is failed after timeout
         ok 3 - Error message mentions SYNCING step
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m0[39m }
         1..3
-    ok 4 - operation in SYNCING times out and fails # time=2.032ms
+    ok 4 - operation in SYNCING times out and fails # time=1.753ms
     
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '67c08fa1-7f4a-4c40-80ed-812817090973',
-  type: 'REMOVE',
-  partitionId: 'test-partition',
-  targetNodeId: 'test-node',
-  entityType: 'partition',
-  entityId: 'test-partition'
+  operationId: [32m'0aa52152-9a55-4a73-ace3-e13c01d943e5'[39m,
+  type: [32m'REMOVE'[39m,
+  partitionId: [32m'test-partition'[39m,
+  targetNodeId: [32m'test-node'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'test-partition'[39m
 }
 Operation step changed {
-  operationId: '67c08fa1-7f4a-4c40-80ed-812817090973',
-  previousStep: 'PENDING',
-  newStep: 'STOPPING',
-  status: 'removing',
-  partitionId: 'test-partition'
+  operationId: [32m'0aa52152-9a55-4a73-ace3-e13c01d943e5'[39m,
+  previousStep: [32m'PENDING'[39m,
+  newStep: [32m'STOPPING'[39m,
+  status: [32m'removing'[39m,
+  partitionId: [32m'test-partition'[39m
 }
     # Subtest: operation in STOPPING times out and fails
         ok 1 - Step is STOPPING
 metrics.rebalance.operation {
-  operationId: '67c08fa1-7f4a-4c40-80ed-812817090973',
-  entityType: 'partition',
-  finalState: 'failed',
-  totalDurationMs: 1
+  operationId: [32m'0aa52152-9a55-4a73-ace3-e13c01d943e5'[39m,
+  entityType: [32m'partition'[39m,
+  finalState: [32m'failed'[39m,
+  totalDurationMs: [33m0[39m
 }
         ok 2 - Status is failed after timeout
         ok 3 - Error message mentions STOPPING step
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m0[39m }
         1..3
-    ok 5 - operation in STOPPING times out and fails # time=2.08ms
+    ok 5 - operation in STOPPING times out and fails # time=1.44ms
     
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '79bc119c-0429-48a1-bd14-26d9cd037551',
-  type: 'ADD',
-  partitionId: 'test-partition',
-  targetNodeId: 'test-node',
-  entityType: 'partition',
-  entityId: 'test-partition'
+  operationId: [32m'1e47aa4d-dec4-4920-9dff-951fabe710c4'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'test-partition'[39m,
+  targetNodeId: [32m'test-node'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'test-partition'[39m
 }
 Operation completed {
-  operationId: '79bc119c-0429-48a1-bd14-26d9cd037551',
-  type: 'ADD',
-  partitionId: 'test-partition',
-  targetNodeId: 'test-node'
+  operationId: [32m'1e47aa4d-dec4-4920-9dff-951fabe710c4'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'test-partition'[39m,
+  targetNodeId: [32m'test-node'[39m
 }
 metrics.rebalance.operation {
-  operationId: '79bc119c-0429-48a1-bd14-26d9cd037551',
-  entityType: 'partition',
-  finalState: 'active',
-  totalDurationMs: 0
+  operationId: [32m'1e47aa4d-dec4-4920-9dff-951fabe710c4'[39m,
+  entityType: [32m'partition'[39m,
+  finalState: [32m'active'[39m,
+  totalDurationMs: [33m0[39m
 }
     # Subtest: completed operation does not timeout
         ok 1 - Step is ACTIVE
         ok 2 - Status is still active after timeout check
         ok 3 - Workflow step is still ACTIVE
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m0[39m }
         1..3
-    ok 6 - completed operation does not timeout # time=2.056ms
+    ok 6 - completed operation does not timeout # time=1.085ms
     
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: 'eb4948e7-412f-4bdd-aa47-e3062b62adad',
-  type: 'ADD',
-  partitionId: 'test-partition',
-  targetNodeId: 'test-node',
-  entityType: 'partition',
-  entityId: 'test-partition'
+  operationId: [32m'e865d6e7-d224-4814-b5cd-9951cd0a6b70'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'test-partition'[39m,
+  targetNodeId: [32m'test-node'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'test-partition'[39m
 }
 metrics.rebalance.operation {
-  operationId: 'eb4948e7-412f-4bdd-aa47-e3062b62adad',
-  entityType: 'partition',
-  finalState: 'failed',
-  totalDurationMs: 0
+  operationId: [32m'e865d6e7-d224-4814-b5cd-9951cd0a6b70'[39m,
+  entityType: [32m'partition'[39m,
+  finalState: [32m'failed'[39m,
+  totalDurationMs: [33m0[39m
 }
     # Subtest: failed operation does not timeout again
         ok 1 - Error message unchanged after timeout check
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m0[39m }
         1..1
-    ok 7 - failed operation does not timeout again # time=1.458ms
+    ok 7 - failed operation does not timeout again # time=0.923ms
     
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '908ddd74-afec-4199-b9ac-8f8afad296c7',
-  type: 'ADD',
-  partitionId: 'test-partition',
-  targetNodeId: 'test-node',
-  entityType: 'partition',
-  entityId: 'test-partition'
+  operationId: [32m'd8e66f9f-f95f-4c6c-9974-b91af4defc84'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'test-partition'[39m,
+  targetNodeId: [32m'test-node'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'test-partition'[39m
 }
     # Subtest: timeout increments statistics
         ok 1 - Initial timeout count is 0
 metrics.rebalance.operation {
-  operationId: '908ddd74-afec-4199-b9ac-8f8afad296c7',
-  entityType: 'partition',
-  finalState: 'failed',
-  totalDurationMs: 1
+  operationId: [32m'd8e66f9f-f95f-4c6c-9974-b91af4defc84'[39m,
+  entityType: [32m'partition'[39m,
+  finalState: [32m'failed'[39m,
+  totalDurationMs: [33m0[39m
 }
         ok 2 - Timeout count is 1 after timeout
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m0[39m }
         1..2
-    ok 8 - timeout increments statistics # time=1.739ms
+    ok 8 - timeout increments statistics # time=1.176ms
     
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '222d97d4-231a-4033-b350-0dee28c1776c',
-  type: 'ADD',
-  partitionId: 'test-partition-1',
-  targetNodeId: 'test-node-1',
-  entityType: 'partition',
-  entityId: 'test-partition-1'
+  operationId: [32m'54e8fe3d-0021-4ff1-b877-245dbd4549fe'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'test-partition-1'[39m,
+  targetNodeId: [32m'test-node-1'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'test-partition-1'[39m
 }
 Creating operation {
-  operationId: '6ea0cf1e-555b-4902-93d9-925fbb23f8bd',
-  type: 'ADD',
-  partitionId: 'test-partition-2',
-  targetNodeId: 'test-node-2',
-  entityType: 'partition',
-  entityId: 'test-partition-2'
+  operationId: [32m'8f213eec-653b-4a19-b79f-0f14c220646c'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'test-partition-2'[39m,
+  targetNodeId: [32m'test-node-2'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'test-partition-2'[39m
 }
     # Subtest: multiple operations can timeout in same check
         ok 1 - Two operations tracked
 metrics.rebalance.operation {
-  operationId: '222d97d4-231a-4033-b350-0dee28c1776c',
-  entityType: 'partition',
-  finalState: 'failed',
-  totalDurationMs: 0
+  operationId: [32m'54e8fe3d-0021-4ff1-b877-245dbd4549fe'[39m,
+  entityType: [32m'partition'[39m,
+  finalState: [32m'failed'[39m,
+  totalDurationMs: [33m0[39m
 }
 metrics.rebalance.operation {
-  operationId: '6ea0cf1e-555b-4902-93d9-925fbb23f8bd',
-  entityType: 'partition',
-  finalState: 'failed',
-  totalDurationMs: 1
+  operationId: [32m'8f213eec-653b-4a19-b79f-0f14c220646c'[39m,
+  entityType: [32m'partition'[39m,
+  finalState: [32m'failed'[39m,
+  totalDurationMs: [33m1[39m
 }
         ok 2 - Op1 status is failed
         ok 3 - Op2 status is failed
         ok 4 - Two operations timed out
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m0[39m }
         1..4
-    ok 9 - multiple operations can timeout in same check # time=2.456ms
+    ok 9 - multiple operations can timeout in same check # time=2.317ms
     
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '83d1ea65-a639-45d5-99df-766e8d5bb9f8',
-  type: 'ADD',
-  partitionId: '00000014-000c-1000-8000-0008fffffff8',
-  targetNodeId: 'd18e8426-0015-1000-bfff-fff3fd9bcc1f',
-  entityType: 'partition',
-  entityId: '00000014-000c-1000-8000-0008fffffff8'
+  operationId: [32m'f16bbcf5-758a-414a-a77d-1587bddcca28'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'd17fc4e0-23d2-3d56-bfff-fffaffffffec'[39m,
+  targetNodeId: [32m'39c6e0c5-73cd-2c46-a4b2-cda1db7dc22e'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'd17fc4e0-23d2-3d56-bfff-fffaffffffec'[39m
 }
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m1[39m }
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '860a817d-eb7a-40b0-8aca-68f2d888e8d2',
-  type: 'ADD',
-  partitionId: '00000017-0018-1000-8000-0015171eac0c',
-  targetNodeId: '5800c065-fff7-5fff-8000-0015fffffffc',
-  entityType: 'partition',
-  entityId: '00000017-0018-1000-8000-0015171eac0c'
+  operationId: [32m'4d59fa18-212e-40a3-adfd-7948d81ccbeb'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'fffffffb-0000-1000-8000-001c00000008'[39m,
+  targetNodeId: [32m'00000015-0008-1000-bfff-fff800000005'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'fffffffb-0000-1000-8000-001c00000008'[39m
 }
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m1[39m }
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: 'e617a2c7-6581-42a2-be01-69ab49cda741',
-  type: 'ADD',
-  partitionId: '89f68d17-f95f-531b-bfff-ffffd6624a1b',
-  targetNodeId: '00000017-0017-1000-86a4-26590000001b',
-  entityType: 'partition',
-  entityId: '89f68d17-f95f-531b-bfff-ffffd6624a1b'
+  operationId: [32m'0ad35fe4-4bd3-444e-b767-8a20a949af52'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'00000015-272f-4e22-a422-060b9a24c6c7'[39m,
+  targetNodeId: [32m'98d9ebb7-0008-1000-bfff-fff00000000a'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'00000015-272f-4e22-a422-060b9a24c6c7'[39m
 }
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m1[39m }
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: 'da6c3dbc-1f9b-4b1d-8d5f-85093364e386',
-  type: 'ADD',
-  partitionId: '00000015-000c-1000-8000-001d7fb602d8',
-  targetNodeId: '0000000f-8cf1-3717-8000-000e00000011',
-  entityType: 'partition',
-  entityId: '00000015-000c-1000-8000-001d7fb602d8'
+  operationId: [32m'c8f5d90a-7c25-4d3c-a467-fe3c09e6d551'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'0000001c-a22c-5796-940f-e293b24890cd'[39m,
+  targetNodeId: [32m'5bd5e2ee-ccf8-453c-9669-2767c73fdf9d'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'0000001c-a22c-5796-940f-e293b24890cd'[39m
 }
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m1[39m }
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '1df4ab96-7e45-43d2-aa97-ebde71dd5df3',
-  type: 'ADD',
-  partitionId: '00000007-0018-1000-8dd8-acb92e0c2b40',
-  targetNodeId: '00000018-001b-1000-8000-001c95a3e73a',
-  entityType: 'partition',
-  entityId: '00000007-0018-1000-8dd8-acb92e0c2b40'
+  operationId: [32m'9085f7a8-f9e8-4201-8c29-53cd656a045c'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'00000006-4b41-58f4-8000-000e04a2bc14'[39m,
+  targetNodeId: [32m'e03a4096-5b7e-208a-8000-0002bc7e051b'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'00000006-4b41-58f4-8000-000e04a2bc14'[39m
 }
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m1[39m }
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '2552b334-dabf-4cee-99f4-a2c843b918b3',
-  type: 'ADD',
-  partitionId: '00000012-06dc-477d-bfff-fffafffffff4',
-  targetNodeId: '00000009-f5c3-3f99-8000-000ddee0a9f0',
-  entityType: 'partition',
-  entityId: '00000012-06dc-477d-bfff-fffafffffff4'
+  operationId: [32m'a1e233cb-6032-4220-bcef-9238b4f500fa'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'b8e1fc4f-f018-24a2-8000-000736f6b229'[39m,
+  targetNodeId: [32m'582d115f-0017-1000-96b2-fef700000016'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'b8e1fc4f-f018-24a2-8000-000736f6b229'[39m
 }
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m1[39m }
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '0a96e1c0-dba7-4c0c-8066-533dba09ac03',
-  type: 'ADD',
-  partitionId: '00000018-0007-1000-bb3b-9be075556320',
-  targetNodeId: 'ffffffee-ffe5-5fff-bfff-fff20000000f',
-  entityType: 'partition',
-  entityId: '00000018-0007-1000-bb3b-9be075556320'
+  operationId: [32m'e51b4717-06d1-423b-943a-f55fe2361e08'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'386250c3-ae02-25cc-9eaf-fcc30e97cb6d'[39m,
+  targetNodeId: [32m'e6254d87-3152-2258-b265-1a0d00000018'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'386250c3-ae02-25cc-9eaf-fcc30e97cb6d'[39m
 }
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m1[39m }
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: 'f8734bf3-ee6a-414c-b941-7a79ee8ebfaf',
-  type: 'ADD',
-  partitionId: 'ffffffeb-d0a1-58f7-8000-0002bc9461eb',
-  targetNodeId: '533cb641-46a3-471a-8c85-979d00000012',
-  entityType: 'partition',
-  entityId: 'ffffffeb-d0a1-58f7-8000-0002bc9461eb'
+  operationId: [32m'b1bde1b3-24d5-4d2a-aa24-08c9ca8848e3'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'60eacd6f-aaa7-4e83-8298-d9a460c41195'[39m,
+  targetNodeId: [32m'dfcb9c74-de13-577b-8000-001afffffff1'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'60eacd6f-aaa7-4e83-8298-d9a460c41195'[39m
 }
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m1[39m }
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: 'bd25176e-157f-4233-8e5b-df86daafbe15',
-  type: 'ADD',
-  partitionId: '00000013-35e1-15c8-bfff-fffb06ef22ef',
-  targetNodeId: '00000015-901b-4aa8-86bb-c4d2ffffffe2',
-  entityType: 'partition',
-  entityId: '00000013-35e1-15c8-bfff-fffb06ef22ef'
+  operationId: [32m'6b1c4eb5-d18e-4970-9a2b-3ed7c3b326f7'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'a3698785-7cd8-2a17-adab-239c00000002'[39m,
+  targetNodeId: [32m'ffffffe7-0014-1000-8000-000214a390db'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'a3698785-7cd8-2a17-adab-239c00000002'[39m
 }
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m1[39m }
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '681571d5-4ed0-4f83-aa00-30cf97acd75c',
-  type: 'ADD',
-  partitionId: '00000018-b71d-1643-bbee-6b6a00000007',
-  targetNodeId: '47479e15-2679-57ab-bfff-ffe300000008',
-  entityType: 'partition',
-  entityId: '00000018-b71d-1643-bbee-6b6a00000007'
+  operationId: [32m'89a4e2f6-b35c-47ca-9d70-73d5ddb18b8d'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'fffffff8-8ea1-5f7d-af49-b1b160fa8b37'[39m,
+  targetNodeId: [32m'139447c3-0003-1000-8000-0007978ef809'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'fffffff8-8ea1-5f7d-af49-b1b160fa8b37'[39m
 }
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 1 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m1[39m }
     # Subtest: operation within timeout does not fail
         ok 1 - Operations within timeout do not fail
         1..1
-    ok 10 - operation within timeout does not fail # time=10.859ms
+    ok 10 - operation within timeout does not fail # time=7.856ms
     
 RebalanceCoordinator initialized {
-  nodeId: 'test-node-1',
+  nodeId: [32m'test-node-1'[39m,
   config: {
-    pendingTimeoutMs: 30000,
-    creatingTimeoutMs: 60000,
-    syncingTimeoutMs: 300000,
-    removingTimeoutMs: 60000,
-    maxConcurrentAdds: 5,
-    maxConcurrentRemoves: 5,
-    periodicCheckIntervalMs: 60000,
-    reservationTtlMs: 300000
+    pendingTimeoutMs: [33m30000[39m,
+    creatingTimeoutMs: [33m60000[39m,
+    syncingTimeoutMs: [33m300000[39m,
+    removingTimeoutMs: [33m60000[39m,
+    maxConcurrentAdds: [33m5[39m,
+    maxConcurrentRemoves: [33m5[39m,
+    periodicCheckIntervalMs: [33m60000[39m,
+    reservationTtlMs: [33m300000[39m
   }
 }
 Creating operation {
-  operationId: '3d897afd-fa68-4df9-b5ab-0014771f8810',
-  type: 'ADD',
-  partitionId: 'test-partition',
-  targetNodeId: 'test-node',
-  entityType: 'partition',
-  entityId: 'test-partition'
+  operationId: [32m'aadd4d31-63d4-4013-911a-244039a44907'[39m,
+  type: [32m'ADD'[39m,
+  partitionId: [32m'test-partition'[39m,
+  targetNodeId: [32m'test-node'[39m,
+  entityType: [32m'partition'[39m,
+  entityId: [32m'test-partition'[39m
 }
 metrics.rebalance.operation {
-  operationId: '3d897afd-fa68-4df9-b5ab-0014771f8810',
-  entityType: 'partition',
-  finalState: 'failed',
-  totalDurationMs: 1
+  operationId: [32m'aadd4d31-63d4-4013-911a-244039a44907'[39m,
+  entityType: [32m'partition'[39m,
+  finalState: [32m'failed'[39m,
+  totalDurationMs: [33m0[39m
 }
     # Subtest: operationFailed event is emitted on timeout
         ok 1 - operationFailed event was emitted
         ok 2 - Event contains correct operation
         ok 3 - Event error message mentions timeout
-Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down RebalanceCoordinator { nodeId: [32m'test-node-1'[39m, inFlightOperations: [33m0[39m }
         1..3
-    ok 11 - operationFailed event is emitted on timeout # time=1.838ms
+    ok 11 - operationFailed event is emitted on timeout # time=1.85ms
     
     1..11
-ok 1 - Property 7: Timeout Triggers Failure # time=107.274ms
+ok 1 - Property 7: Timeout Triggers Failure # time=77.511ms
 
 1..1

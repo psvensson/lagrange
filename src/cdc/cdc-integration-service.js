@@ -53,6 +53,11 @@ import {
   CDC_STATS_DEFAULT,
   CDC_SUBSYSTEM,
 } from './cdc-constants.js';
+import {
+  WRITE_ROUTER_MODE,
+  createBootstrapDirectWriteRouter,
+  createSqlWriteRouter,
+} from './write-router/index.js';
 
 /**
  * Valid system table names for CDC operations.
@@ -116,6 +121,7 @@ class CDCIntegrationService extends EventEmitter {
     // Bootstrap mode for seed node direct writes
     this.bootstrapMode = false;
     this.localPartitionServices = null;
+    this.writeRouter = this.createSqlWriteRouter();
 
     // HLC clock for timestamps
     this.hlcClock = new HLCClockService(this.nodeId);
@@ -239,6 +245,36 @@ class CDCIntegrationService extends EventEmitter {
   }
 
   /**
+   * Create SQL-routed write strategy.
+   * @return {Object}
+   * @private
+   */
+  createSqlWriteRouter() {
+    return createSqlWriteRouter({
+      execute: (sql, params) => this.executeSQLViaQueryEngine(sql, params),
+    });
+  }
+
+  /**
+   * Create bootstrap direct-write strategy.
+   * @return {Object}
+   * @private
+   */
+  createBootstrapDirectWriteRouter() {
+    return createBootstrapDirectWriteRouter({
+      execute: (sql, params) => this.executeSQLDirectToLocalPartition(sql, params),
+    });
+  }
+
+  /**
+   * Set active write router strategy.
+   * @param {Object} writeRouter
+   */
+  setWriteRouter(writeRouter) {
+    this.writeRouter = writeRouter;
+  }
+
+  /**
    * Enable or disable bootstrap mode for seed node direct writes.
    *
    * Bootstrap Mode (Seed Node Only):
@@ -266,6 +302,7 @@ class CDCIntegrationService extends EventEmitter {
       }
       this.bootstrapMode = true;
       this.localPartitionServices = partitionServices;
+      this.setWriteRouter(this.createBootstrapDirectWriteRouter());
       this.logger.info('Bootstrap mode enabled - writes will go directly to local partitions', {
         nodeId: this.nodeId,
         partitionCount: partitionServices.size,
@@ -273,6 +310,7 @@ class CDCIntegrationService extends EventEmitter {
     } else {
       this.bootstrapMode = false;
       this.localPartitionServices = null;
+      this.setWriteRouter(this.createSqlWriteRouter());
       this.logger.info('Bootstrap mode disabled - writes will route through SQL engine', {
         nodeId: this.nodeId,
       });
@@ -488,13 +526,8 @@ class CDCIntegrationService extends EventEmitter {
    * @return {Promise<Object>} Query result.
    * @private
    */
-  async executeSQL(sql, params = []) {
-    // Bootstrap mode: Direct write to local partition (seed node only)
-    if (this.bootstrapMode) {
-      return await this.executeSQLDirectToLocalPartition(sql, params);
-    }
-
-    // Normal mode: Route through SQL engine to partition leader
+  async executeSQLViaQueryEngine(sql, params = []) {
+    // SQL-routed mode: Route through SQL engine to partition leader
     if (!this.sqlQueryEngine) {
       throw new Error(
         `${CDC_ERROR_MSG.CDC_ENGINE_MISSING_PREFIX}` +
@@ -539,7 +572,8 @@ class CDCIntegrationService extends EventEmitter {
               durationMs,
               attempt,
               maxAttempts,
-              bootstrapMode: this.bootstrapMode,
+              bootstrapMode:
+                this.writeRouter?.mode === WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT,
               tableName,
             });
           } catch (_metricsErr) {
@@ -566,6 +600,20 @@ class CDCIntegrationService extends EventEmitter {
 
     // Should be unreachable due to throws/returns above.
     throw new Error(ERRORS.QUERY_FAILED);
+  }
+
+  /**
+   * Execute SQL using the active write-router strategy.
+   * @param {string} sql
+   * @param {Array} params
+   * @return {Promise<Object>}
+   * @private
+   */
+  async executeSQL(sql, params = []) {
+    if (!this.writeRouter || typeof this.writeRouter.execute !== TYPEOF.FUNCTION) {
+      throw new Error('CDC write router is not configured');
+    }
+    return this.writeRouter.execute(sql, params);
   }
 
   /**

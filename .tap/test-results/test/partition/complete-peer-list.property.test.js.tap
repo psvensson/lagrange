@@ -2,26 +2,26 @@ TAP version 14
 # Subtest: Property 4: PartitionService receives complete peer list
     ok 1 - PartitionService receives complete peer list
     1..1
-ok 1 - Property 4: PartitionService receives complete peer list # time=29.97ms
+ok 1 - Property 4: PartitionService receives complete peer list # time=34.99ms
 
 # Subtest: Property 4: Peer list includes self
     ok 1 - Peer list includes self
     1..1
-ok 2 - Property 4: Peer list includes self # time=20.255ms
+ok 2 - Property 4: Peer list includes self # time=21.895ms
 
 # Subtest: Property 4: Peer list enables Raft group formation
     ok 1 - Peer list enables Raft group formation
     1..1
-ok 3 - Property 4: Peer list enables Raft group formation # time=12.945ms
+ok 3 - Property 4: Peer list enables Raft group formation # time=9.095ms
 
 # Subtest: Property 4: Incomplete peer list prevents premature leadership
     ok 1 - Incomplete peer list prevents premature leadership
     1..1
-ok 4 - Property 4: Incomplete peer list prevents premature leadership # time=7.505ms
+ok 4 - Property 4: Incomplete peer list prevents premature leadership # time=4.62ms
 
 # Subtest: Property 4: Peer addresses use unified format
     ok 1 - Peer addresses use unified format
     1..1
-ok 5 - Property 4: Peer addresses use unified format # time=8.793ms
+ok 5 - Property 4: Peer addresses use unified format # time=4.904ms
 
 1..5

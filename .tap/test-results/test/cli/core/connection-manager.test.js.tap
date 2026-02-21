@@ -5,56 +5,56 @@ TAP version 14
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 1 - ConnectionManager - initial state # time=4.812ms
+ok 1 - ConnectionManager - initial state # time=9.315ms
 
 # Subtest: ConnectionManager - default config values
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 2 - ConnectionManager - default config values # time=0.312ms
+ok 2 - ConnectionManager - default config values # time=0.568ms
 
 # Subtest: ConnectionManager - custom config values
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 3 - ConnectionManager - custom config values # time=0.258ms
+ok 3 - ConnectionManager - custom config values # time=0.45ms
 
 # Subtest: ConnectionManager - buildWebSocketUrl adds protocol
     ok 1 - should be equal
     1..1
-ok 4 - ConnectionManager - buildWebSocketUrl adds protocol # time=0.217ms
+ok 4 - ConnectionManager - buildWebSocketUrl adds protocol # time=0.367ms
 
 # Subtest: ConnectionManager - buildWebSocketUrl converts http to ws
     ok 1 - should be equal
     1..1
-ok 5 - ConnectionManager - buildWebSocketUrl converts http to ws # time=0.186ms
+ok 5 - ConnectionManager - buildWebSocketUrl converts http to ws # time=0.334ms
 
 # Subtest: ConnectionManager - buildWebSocketUrl converts https to wss
     ok 1 - should be equal
     1..1
-ok 6 - ConnectionManager - buildWebSocketUrl converts https to wss # time=0.158ms
+ok 6 - ConnectionManager - buildWebSocketUrl converts https to wss # time=0.274ms
 
 # Subtest: ConnectionManager - buildWebSocketUrl preserves ws protocol
     ok 1 - should be equal
     1..1
-ok 7 - ConnectionManager - buildWebSocketUrl preserves ws protocol # time=0.158ms
+ok 7 - ConnectionManager - buildWebSocketUrl preserves ws protocol # time=0.275ms
 
 # Subtest: ConnectionManager - buildWebSocketUrl preserves wss protocol
     ok 1 - should be equal
     1..1
-ok 8 - ConnectionManager - buildWebSocketUrl preserves wss protocol # time=0.142ms
+ok 8 - ConnectionManager - buildWebSocketUrl preserves wss protocol # time=0.269ms
 
 # Subtest: ConnectionManager - buildWebSocketUrl handles trailing slash
     ok 1 - should be equal
     1..1
-ok 9 - ConnectionManager - buildWebSocketUrl handles trailing slash # time=0.153ms
+ok 9 - ConnectionManager - buildWebSocketUrl handles trailing slash # time=0.26ms
 
 # Subtest: ConnectionManager - buildWebSocketUrl preserves existing path
     ok 1 - should be equal
     1..1
-ok 10 - ConnectionManager - buildWebSocketUrl preserves existing path # time=0.146ms
+ok 10 - ConnectionManager - buildWebSocketUrl preserves existing path # time=0.255ms
 
 # Subtest: ConnectionManager - calculateBackoffDelay exponential
     ok 1 - should be equal
@@ -63,103 +63,103 @@ ok 10 - ConnectionManager - buildWebSocketUrl preserves existing path # time=0.1
     ok 4 - should be equal
     ok 5 - should be equal
     1..5
-ok 11 - ConnectionManager - calculateBackoffDelay exponential # time=0.331ms
+ok 11 - ConnectionManager - calculateBackoffDelay exponential # time=0.594ms
 
 # Subtest: ConnectionManager - calculateBackoffDelay caps at maxDelay
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 12 - ConnectionManager - calculateBackoffDelay caps at maxDelay # time=0.18ms
+ok 12 - ConnectionManager - calculateBackoffDelay caps at maxDelay # time=0.336ms
 
 # Subtest: ConnectionManager - disconnect sets status
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 13 - ConnectionManager - disconnect sets status # time=0.296ms
+ok 13 - ConnectionManager - disconnect sets status # time=0.525ms
 
 # Subtest: ConnectionManager - disconnect cancels reconnect timer
     ok 1 - should be equal
     1..1
-ok 14 - ConnectionManager - disconnect cancels reconnect timer # time=0.205ms
+ok 14 - ConnectionManager - disconnect cancels reconnect timer # time=0.364ms
 
 # Subtest: ConnectionManager - resetReconnectAttempts
     ok 1 - should be equal
     1..1
-ok 15 - ConnectionManager - resetReconnectAttempts # time=0.155ms
+ok 15 - ConnectionManager - resetReconnectAttempts # time=0.302ms
 
 # Subtest: ConnectionManager - cancelReconnect clears timer
     ok 1 - should be equal
     1..1
-ok 16 - ConnectionManager - cancelReconnect clears timer # time=0.154ms
+ok 16 - ConnectionManager - cancelReconnect clears timer # time=0.293ms
 
 # Subtest: ConnectionManager - sendQuery returns false when not connected
     ok 1 - should be equal
     1..1
-ok 17 - ConnectionManager - sendQuery returns false when not connected # time=0.163ms
+ok 17 - ConnectionManager - sendQuery returns false when not connected # time=0.309ms
 
 # Subtest: ConnectionManager - subscribeLiveQuery returns false when not connected
     ok 1 - should be equal
     1..1
-ok 18 - ConnectionManager - subscribeLiveQuery returns false when not connected # time=0.164ms
+ok 18 - ConnectionManager - subscribeLiveQuery returns false when not connected # time=0.304ms
 
 # Subtest: ConnectionManager - unsubscribeLiveQuery returns false when not connected
     ok 1 - should be equal
     1..1
-ok 19 - ConnectionManager - unsubscribeLiveQuery returns false when not connected # time=0.154ms
+ok 19 - ConnectionManager - unsubscribeLiveQuery returns false when not connected # time=0.294ms
 
 # Subtest: ConnectionManager - requestCacheDump returns false when not connected
     ok 1 - should be equal
     1..1
-ok 20 - ConnectionManager - requestCacheDump returns false when not connected # time=0.152ms
+ok 20 - ConnectionManager - requestCacheDump returns false when not connected # time=0.282ms
 
 # Subtest: ConnectionManager - handleMessage parses cache_dump
     ok 1 - should be equivalent
     1..1
-ok 21 - ConnectionManager - handleMessage parses cache_dump # time=1.093ms
+ok 21 - ConnectionManager - handleMessage parses cache_dump # time=1.982ms
 
 # Subtest: ConnectionManager - handleMessage parses cdc_event
     ok 1 - should be equivalent
     1..1
-ok 22 - ConnectionManager - handleMessage parses cdc_event # time=0.326ms
+ok 22 - ConnectionManager - handleMessage parses cdc_event # time=0.544ms
 
 # Subtest: ConnectionManager - handleMessage parses query_result
     ok 1 - should be equivalent
     1..1
-ok 23 - ConnectionManager - handleMessage parses query_result # time=0.298ms
+ok 23 - ConnectionManager - handleMessage parses query_result # time=0.459ms
 
 # Subtest: ConnectionManager - handleMessage parses error
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 24 - ConnectionManager - handleMessage parses error # time=0.284ms
+ok 24 - ConnectionManager - handleMessage parses error # time=0.504ms
 
 # Subtest: ConnectionManager - handleMessage parses error from error field
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 25 - ConnectionManager - handleMessage parses error from error field # time=0.22ms
+ok 25 - ConnectionManager - handleMessage parses error from error field # time=0.381ms
 
 # Subtest: ConnectionManager - handleMessage handles invalid JSON
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 26 - ConnectionManager - handleMessage handles invalid JSON # time=0.22ms
+ok 26 - ConnectionManager - handleMessage handles invalid JSON # time=0.364ms
 
 # Subtest: ConnectionManager - handleMessage ignores unknown types
     ok 1 - should be equal
     1..1
-ok 27 - ConnectionManager - handleMessage ignores unknown types # time=0.156ms
+ok 27 - ConnectionManager - handleMessage ignores unknown types # time=0.266ms
 
 # Subtest: ConnectionManager - scheduleReconnect respects max attempts
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 28 - ConnectionManager - scheduleReconnect respects max attempts # time=0.243ms
+ok 28 - ConnectionManager - scheduleReconnect respects max attempts # time=0.408ms
 
 # Subtest: ConnectionManager - scheduleReconnect does nothing if intentional disconnect
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 29 - ConnectionManager - scheduleReconnect does nothing if intentional disconnect # time=0.169ms
+ok 29 - ConnectionManager - scheduleReconnect does nothing if intentional disconnect # time=0.317ms
 
 1..29

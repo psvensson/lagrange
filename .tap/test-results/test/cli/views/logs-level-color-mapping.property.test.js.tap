@@ -3,64 +3,64 @@ TAP version 14
     # Subtest: ERROR logs return ERROR row status
         ok 1 - ERROR logs return ERROR row status
         1..1
-    ok 1 - ERROR logs return ERROR row status # time=9.169ms
+    ok 1 - ERROR logs return ERROR row status # time=5.249ms
     
     # Subtest: WARN logs return WARNING row status
         ok 1 - WARN logs return WARNING row status
         1..1
-    ok 2 - WARN logs return WARNING row status # time=2.41ms
+    ok 2 - WARN logs return WARNING row status # time=1.278ms
     
     # Subtest: INFO logs return NORMAL row status
         ok 1 - INFO logs return NORMAL row status
         1..1
-    ok 3 - INFO logs return NORMAL row status # time=1.907ms
+    ok 3 - INFO logs return NORMAL row status # time=1.026ms
     
     # Subtest: DEBUG logs return NORMAL row status
         ok 1 - DEBUG logs return NORMAL row status
         1..1
-    ok 4 - DEBUG logs return NORMAL row status # time=1.709ms
+    ok 4 - DEBUG logs return NORMAL row status # time=0.896ms
     
     # Subtest: TRACE logs return NORMAL row status
         ok 1 - TRACE logs return NORMAL row status
         1..1
-    ok 5 - TRACE logs return NORMAL row status # time=1.949ms
+    ok 5 - TRACE logs return NORMAL row status # time=1.208ms
     
     # Subtest: getLevelColor returns red for ERROR
         ok 1 - getLevelColor returns red for ERROR
         1..1
-    ok 6 - getLevelColor returns red for ERROR # time=0.788ms
+    ok 6 - getLevelColor returns red for ERROR # time=0.445ms
     
     # Subtest: getLevelColor returns yellow for WARN
         ok 1 - getLevelColor returns yellow for WARN
         1..1
-    ok 7 - getLevelColor returns yellow for WARN # time=0.6ms
+    ok 7 - getLevelColor returns yellow for WARN # time=0.386ms
     
     # Subtest: getLevelColor returns white for INFO
         ok 1 - getLevelColor returns white for INFO
         1..1
-    ok 8 - getLevelColor returns white for INFO # time=0.646ms
+    ok 8 - getLevelColor returns white for INFO # time=0.305ms
     
     # Subtest: getLevelColor returns gray for DEBUG and TRACE
         ok 1 - getLevelColor returns gray for DEBUG and TRACE
         1..1
-    ok 9 - getLevelColor returns gray for DEBUG and TRACE # time=0.641ms
+    ok 9 - getLevelColor returns gray for DEBUG and TRACE # time=0.313ms
     
     # Subtest: row status is case insensitive
         ok 1 - row status is case insensitive
         1..1
-    ok 10 - row status is case insensitive # time=1.588ms
+    ok 10 - row status is case insensitive # time=0.991ms
     
     # Subtest: LOG_LEVEL_COLORS constant has correct mappings
         ok 1 - LOG_LEVEL_COLORS constant has correct mappings
         1..1
-    ok 11 - LOG_LEVEL_COLORS constant has correct mappings # time=0.571ms
+    ok 11 - LOG_LEVEL_COLORS constant has correct mappings # time=0.35ms
     
     # Subtest: rendered rows have correct status based on level
         ok 1 - rendered rows have correct status based on level
         1..1
-    ok 12 - rendered rows have correct status based on level # time=4.362ms
+    ok 12 - rendered rows have correct status based on level # time=2.291ms
     
     1..12
-ok 1 - Property 42: Logs Level Color Mapping # time=36.116ms
+ok 1 - Property 42: Logs Level Color Mapping # time=23.54ms
 
 1..1

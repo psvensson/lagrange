@@ -4,7 +4,7 @@ TAP version 14
     ok 2 - Should have no cache
     ok 3 - Should have no CDC service
     1..3
-ok 1 - ContextManager - constructor # time=5.841ms
+ok 1 - ContextManager - constructor # time=6.681ms
 
 Context manager initialized
 # Subtest: ContextManager - initialize
@@ -12,18 +12,18 @@ Context manager initialized
     ok 2 - Should have CDC service
     ok 3 - Should have SQL engine
     1..3
-ok 2 - ContextManager - initialize # time=1.076ms
+ok 2 - ContextManager - initialize # time=1.585ms
 
 # Subtest: ContextManager - getContext returns null when not found
     ok 1 - Should return null
     1..1
-ok 3 - ContextManager - getContext returns null when not found # time=0.488ms
+ok 3 - ContextManager - getContext returns null when not found # time=0.632ms
 
 Context created {
-  contextId: '338842b0-7f1d-4fb5-b656-b306d9ac1459',
-  contextType: 'function',
-  contextName: 'test-context',
-  ownerId: 'owner-123'
+  contextId: [32m'f4a3ccbd-73a8-4b86-a918-a7ea8fb6d260'[39m,
+  contextType: [32m'function'[39m,
+  contextName: [32m'test-context'[39m,
+  ownerId: [32m'owner-123'[39m
 }
 # Subtest: ContextManager - setContext creates new context
     ok 1 - Should return context ID
@@ -34,106 +34,106 @@ Context created {
     ok 6 - Should have correct data
     ok 7 - Should have correct owner
     1..7
-ok 4 - ContextManager - setContext creates new context # time=2.524ms
+ok 4 - ContextManager - setContext creates new context # time=3.401ms
 
 Context created {
-  contextId: '97fe38ed-f68c-4500-8e13-4a0dee4550b1',
-  contextType: 'service',
-  contextName: 'my-service',
-  ownerId: null
+  contextId: [32m'947355d8-971c-4d45-ab5b-a1dce1f569f3'[39m,
+  contextType: [32m'service'[39m,
+  contextName: [32m'my-service'[39m,
+  ownerId: [1mnull[22m
 }
 Context updated {
-  contextId: '97fe38ed-f68c-4500-8e13-4a0dee4550b1',
-  contextType: 'service',
-  contextName: 'my-service',
-  ownerId: null
+  contextId: [32m'947355d8-971c-4d45-ab5b-a1dce1f569f3'[39m,
+  contextType: [32m'service'[39m,
+  contextName: [32m'my-service'[39m,
+  ownerId: [1mnull[22m
 }
 # Subtest: ContextManager - setContext updates existing context
     ok 1 - Should indicate existing context
     ok 2 - Should have updated data
     1..2
-ok 5 - ContextManager - setContext updates existing context # time=0.646ms
+ok 5 - ContextManager - setContext updates existing context # time=1.101ms
 
 Context created {
-  contextId: '95df4dec-1b40-480d-a6f4-f4ef40c23082',
-  contextType: 'user',
-  contextName: 'user-ctx',
-  ownerId: null
+  contextId: [32m'b549341c-e8a0-4d2a-958d-2575c1436183'[39m,
+  contextType: [32m'user'[39m,
+  contextName: [32m'user-ctx'[39m,
+  ownerId: [1mnull[22m
 }
 Context deleted {
-  contextId: '95df4dec-1b40-480d-a6f4-f4ef40c23082',
-  contextType: 'user',
-  contextName: 'user-ctx'
+  contextId: [32m'b549341c-e8a0-4d2a-958d-2575c1436183'[39m,
+  contextType: [32m'user'[39m,
+  contextName: [32m'user-ctx'[39m
 }
 # Subtest: ContextManager - deleteContext removes context
     ok 1 - Should return true
     ok 2 - Should not find deleted context
     1..2
-ok 6 - ContextManager - deleteContext removes context # time=0.547ms
+ok 6 - ContextManager - deleteContext removes context # time=0.956ms
 
-Context not found for deletion { contextType: 'function', contextName: 'nonexistent' }
+Context not found for deletion { contextType: [32m'function'[39m, contextName: [32m'nonexistent'[39m }
 # Subtest: ContextManager - deleteContext returns false for nonexistent
     ok 1 - Should return false
     1..1
-ok 7 - ContextManager - deleteContext returns false for nonexistent # time=0.358ms
+ok 7 - ContextManager - deleteContext returns false for nonexistent # time=0.475ms
 
 Context created {
-  contextId: 'b4eb062d-d1f3-4a09-b62b-10b639124870',
-  contextType: 'function',
-  contextName: 'ctx1',
-  ownerId: 'owner-1'
+  contextId: [32m'c7ddc20e-b09b-4454-831c-463ee0c734b6'[39m,
+  contextType: [32m'function'[39m,
+  contextName: [32m'ctx1'[39m,
+  ownerId: [32m'owner-1'[39m
 }
 Context created {
-  contextId: '7cc00869-92ab-444b-a28e-b5f1fd31cea1',
-  contextType: 'function',
-  contextName: 'ctx2',
-  ownerId: 'owner-1'
+  contextId: [32m'c7a43715-e8a6-4d53-bf67-6e8f739d6fc9'[39m,
+  contextType: [32m'function'[39m,
+  contextName: [32m'ctx2'[39m,
+  ownerId: [32m'owner-1'[39m
 }
 Context created {
-  contextId: 'b8d11521-be23-4511-ac85-6a9b50b55eff',
-  contextType: 'function',
-  contextName: 'ctx3',
-  ownerId: 'owner-2'
+  contextId: [32m'ed51af1b-ff27-46d8-a963-d1048d4555d8'[39m,
+  contextType: [32m'function'[39m,
+  contextName: [32m'ctx3'[39m,
+  ownerId: [32m'owner-2'[39m
 }
 # Subtest: ContextManager - getContextsByOwner returns matching
     ok 1 - Should return 2 contexts
     ok 2 - Should include ctx1
     ok 3 - Should include ctx2
     1..3
-ok 8 - ContextManager - getContextsByOwner returns matching # time=0.87ms
+ok 8 - ContextManager - getContextsByOwner returns matching # time=1.267ms
 
 Context created {
-  contextId: '0fac34e7-43dc-4062-ae78-d787b6a68469',
-  contextType: 'function',
-  contextName: 'func-ctx',
-  ownerId: null
+  contextId: [32m'1af4d0e9-897a-4b18-a496-d3bd17da24db'[39m,
+  contextType: [32m'function'[39m,
+  contextName: [32m'func-ctx'[39m,
+  ownerId: [1mnull[22m
 }
 Context created {
-  contextId: '5e86f68a-44db-4bb3-b14d-c582d87b8d2b',
-  contextType: 'service',
-  contextName: 'svc-ctx',
-  ownerId: null
+  contextId: [32m'b4bd2198-3bea-437e-8962-6ecc6e6d83f6'[39m,
+  contextType: [32m'service'[39m,
+  contextName: [32m'svc-ctx'[39m,
+  ownerId: [1mnull[22m
 }
 Context created {
-  contextId: '4b99b1ad-0fee-4e13-82a0-2aba0aca67f1',
-  contextType: 'user',
-  contextName: 'user-ctx',
-  ownerId: null
+  contextId: [32m'd19f45b2-3945-4133-91de-32a986307b6d'[39m,
+  contextType: [32m'user'[39m,
+  contextName: [32m'user-ctx'[39m,
+  ownerId: [1mnull[22m
 }
 # Subtest: ContextManager - getContextsByType returns matching
     ok 1 - Should return 1 function context
     ok 2 - Should return 1 service context
     1..2
-ok 9 - ContextManager - getContextsByType returns matching # time=0.735ms
+ok 9 - ContextManager - getContextsByType returns matching # time=1.401ms
 
 # Subtest: ContextManager - validates context type
     ok 1 - Should throw for invalid type
     1..1
-ok 10 - ContextManager - validates context type # time=1.011ms
+ok 10 - ContextManager - validates context type # time=1.8ms
 
 # Subtest: ContextManager - throws when CDC not available
     ok 1 - Should throw when CDC not available
     1..1
-ok 11 - ContextManager - throws when CDC not available # time=0.504ms
+ok 11 - ContextManager - throws when CDC not available # time=0.908ms
 
 1..11

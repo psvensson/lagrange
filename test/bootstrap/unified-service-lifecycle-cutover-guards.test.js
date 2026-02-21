@@ -24,6 +24,7 @@ const CUTOVER_GUARD_PATTERN = Object.freeze({
   TRIGGER_BOOTSTRAP_RECONCILER: 'triggerBootstrapReconciler(',
   QUEUE_JOIN_REPLICA: 'queueJoinServiceReplica(',
   TRIGGER_JOIN_RECONCILER: 'triggerJoinReconciler(',
+  START_ELECTION: '.startElection(',
   IF_SERVICE_DISPATCHER: 'if (this.serviceDispatcher',
   HANDLE_DISPATCHABLE_MESSAGE: 'this.handleDispatchableAdminMessage(',
   HANDLE_QUERY_MESSAGE: 'this.handleQueryMessage(',
@@ -107,6 +108,14 @@ describe('Unified service lifecycle hard-cutover guardrails', () => {
       ),
       true,
     );
+    assert.equal(
+      messageGroupPhaseBody.includes(CUTOVER_GUARD_PATTERN.START_ELECTION),
+      false,
+    );
+    assert.equal(
+      partitionPhaseBody.includes(CUTOVER_GUARD_PATTERN.START_ELECTION),
+      false,
+    );
   });
 
   it('keeps join phase entrypoints free of direct message-group startup', () => {
@@ -143,6 +152,14 @@ describe('Unified service lifecycle hard-cutover guardrails', () => {
     assert.equal(
       joinExistingBody.includes(CUTOVER_GUARD_PATTERN.TRIGGER_JOIN_RECONCILER),
       true,
+    );
+    assert.equal(
+      selfHostedBody.includes(CUTOVER_GUARD_PATTERN.START_ELECTION),
+      false,
+    );
+    assert.equal(
+      joinExistingBody.includes(CUTOVER_GUARD_PATTERN.START_ELECTION),
+      false,
     );
   });
 

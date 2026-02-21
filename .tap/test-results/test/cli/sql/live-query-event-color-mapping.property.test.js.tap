@@ -3,39 +3,39 @@ TAP version 14
     # Subtest: INSERT events are always green
         ok 1 - INSERT events are always green
         1..1
-    ok 1 - INSERT events are always green # time=3.872ms
+    ok 1 - INSERT events are always green # time=7.066ms
     
     # Subtest: UPDATE events are always yellow
         ok 1 - UPDATE events are always yellow
         1..1
-    ok 2 - UPDATE events are always yellow # time=0.758ms
+    ok 2 - UPDATE events are always yellow # time=1.436ms
     
     # Subtest: DELETE events are always red
         ok 1 - DELETE events are always red
         1..1
-    ok 3 - DELETE events are always red # time=0.733ms
+    ok 3 - DELETE events are always red # time=1.453ms
     
     # Subtest: color mapping is deterministic for any event
         ok 1 - Color mapping is deterministic
         1..1
-    ok 4 - color mapping is deterministic for any event # time=0.593ms
+    ok 4 - color mapping is deterministic for any event # time=1.182ms
     
     # Subtest: formatted events contain correct color tags
         ok 1 - Formatted events contain correct color tags
         1..1
-    ok 5 - formatted events contain correct color tags # time=0.721ms
+    ok 5 - formatted events contain correct color tags # time=1.572ms
     
     # Subtest: EVENT_COLORS constant matches getEventColor
         ok 1 - EVENT_COLORS constant matches getEventColor method
         1..1
-    ok 6 - EVENT_COLORS constant matches getEventColor # time=0.445ms
+    ok 6 - EVENT_COLORS constant matches getEventColor # time=0.795ms
     
     # Subtest: unknown event types default to white
         ok 1 - Unknown event types default to white
         1..1
-    ok 7 - unknown event types default to white # time=0.846ms
+    ok 7 - unknown event types default to white # time=1.295ms
     
     1..7
-ok 1 - Property 49: Live Query Event Color Mapping # time=11.501ms
+ok 1 - Property 49: Live Query Event Color Mapping # time=21.312ms
 
 1..1

@@ -6,48 +6,48 @@ TAP version 14
         ok 3 - should have local address
         ok 4 - should not be initialized
         1..4
-    ok 1 - constructor creates transport with default options # time=5.305ms
+    ok 1 - constructor creates transport with default options # time=7.593ms
     
     # Subtest: constructor accepts custom options
         ok 1 - should use custom node ID
         ok 2 - should use custom address
         1..2
-    ok 2 - constructor accepts custom options # time=0.336ms
+    ok 2 - constructor accepts custom options # time=0.541ms
     
     # Subtest: initialize sets initialized flag
         ok 1 - should be initialized
         1..1
-    ok 3 - initialize sets initialized flag # time=0.636ms
+    ok 3 - initialize sets initialized flag # time=0.615ms
     
     # Subtest: initialize is idempotent
         ok 1 - should remain initialized
         1..1
-    ok 4 - initialize is idempotent # time=0.251ms
+    ok 4 - initialize is idempotent # time=0.239ms
     
     # Subtest: register adds message handler
         ok 1 - should have handler
         1..1
-    ok 5 - register adds message handler # time=0.26ms
+    ok 5 - register adds message handler # time=0.246ms
     
     # Subtest: register throws for non-function handler
         ok 1 - should throw for invalid handler
         1..1
-    ok 6 - register throws for non-function handler # time=0.795ms
+    ok 6 - register throws for non-function handler # time=0.847ms
     
     # Subtest: unregister removes message handler
         ok 1 - should not have handler
         1..1
-    ok 7 - unregister removes message handler # time=0.263ms
+    ok 7 - unregister removes message handler # time=0.259ms
     
     # Subtest: getConnectionState returns null for unknown node
         ok 1 - should return null
         1..1
-    ok 8 - getConnectionState returns null for unknown node # time=0.218ms
+    ok 8 - getConnectionState returns null for unknown node # time=0.193ms
     
     # Subtest: getConnectedNodes returns empty array initially
         ok 1 - should return empty array
         1..1
-    ok 9 - getConnectedNodes returns empty array initially # time=0.501ms
+    ok 9 - getConnectedNodes returns empty array initially # time=0.481ms
     
     # Subtest: getStats returns transport statistics
         ok 1 - should have transport ID
@@ -57,33 +57,33 @@ TAP version 14
         ok 5 - should have zero messages
         ok 6 - should have zero connected nodes
         1..6
-    ok 10 - getStats returns transport statistics # time=0.503ms
+    ok 10 - getStats returns transport statistics # time=0.501ms
     
     # Subtest: deliver returns error when no connection
         ok 1 - should not be acknowledged
         ok 2 - should have error
         1..2
-    ok 11 - deliver returns error when no connection # time=0.371ms
+    ok 11 - deliver returns error when no connection # time=0.473ms
     
     # Subtest: shutdown clears all state
         ok 1 - should not be initialized
         ok 2 - should have no handlers
         ok 3 - should have no connections
         1..3
-    ok 12 - shutdown clears all state # time=0.322ms
+    ok 12 - shutdown clears all state # time=0.481ms
     
     # Subtest: emits initialized event
         ok 1 - should emit event
         ok 2 - should have transport ID
         ok 3 - should have local node ID
         1..3
-    ok 13 - emits initialized event # time=0.339ms
+    ok 13 - emits initialized event # time=0.455ms
     
     # Subtest: emits shutdown event
         ok 1 - should emit event
         ok 2 - should have transport ID
         1..2
-    ok 14 - emits shutdown event # time=0.277ms
+    ok 14 - emits shutdown event # time=0.315ms
     
     # Subtest: ConnectionState enum has expected values
         ok 1 - should be equal
@@ -92,7 +92,7 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 15 - ConnectionState enum has expected values # time=0.489ms
+    ok 15 - ConnectionState enum has expected values # time=0.468ms
     
     # Subtest: WSMessageType enum has expected values
         ok 1 - should be equal
@@ -101,14 +101,14 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 16 - WSMessageType enum has expected values # time=0.433ms
+    ok 16 - WSMessageType enum has expected values # time=0.494ms
     
     # Subtest: server and client communication
         ok 1 - should be acknowledged
         ok 2 - server should receive message
         ok 3 - should have correct data
         1..3
-    ok 17 - server and client communication # time=172.602ms
+    ok 17 - server and client communication # time=178.309ms
     
     # Subtest: async handler returns resolved value in ACK
         ok 1 - should be acknowledged
@@ -118,9 +118,9 @@ TAP version 14
         ok 5 - result should not be a Promise
         ok 6 - result should not have .then method
         1..6
-    ok 18 - async handler returns resolved value in ACK # time=173.767ms
+    ok 18 - async handler returns resolved value in ACK # time=164.009ms
     
     1..18
-ok 1 - WebSocketTransport # time=362.124ms
+ok 1 - WebSocketTransport # time=362.773ms
 
 1..1

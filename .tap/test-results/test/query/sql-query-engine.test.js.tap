@@ -1,102 +1,102 @@
 TAP version 14
-Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query { sql: [32m'SELECT * FROM users'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
 Resolved partitions for SELECT {
-  tableName: 'users',
-  totalPartitions: 2,
-  targetPartitions: 2,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  totalPartitions: [33m2[39m,
+  targetPartitions: [33m2[39m,
+  sessionId: [32m'default'[39m
 }
 Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1771595283443-0-sql-query-engine',
-  hasJoins: false,
-  hasAggregates: false
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1771666169641-0-sql-query-engine'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595283444', partitionCount: 2, originalCount: 2 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Starting parallel query execution { queryId: [32m'q-1-1771666169642'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
+Routing query to partition service { partitionId: [32m'p2'[39m, address: [32m'test-node/partition/p2'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283444',
-  partitionCount: 2,
-  totalLatencyMs: 5,
-  medianLatencyMs: 2.5,
-  maxPartitionLatencyMs: 3,
-  totalRows: 2,
-  totalBytes: 96,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169642'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m7[39m,
+  medianLatencyMs: [33m6[39m,
+  maxPartitionLatencyMs: [33m6[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m96[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.select.distributed {
-  partitionCount: 2,
-  fanoutTotalLatencyMs: 5,
-  fanoutMedianLatencyMs: 2.5,
-  mergeDurationMs: 0,
-  totalRows: 2,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  partitionCount: [33m2[39m,
+  fanoutTotalLatencyMs: [33m7[39m,
+  fanoutMedianLatencyMs: [33m6[39m,
+  mergeDurationMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'SELECT',
-  parseDurationMs: 2,
-  executionDurationMs: 8,
-  totalDurationMs: 10,
-  partitionCount: 2,
-  rowCount: 2,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'SELECT'[39m,
+  parseDurationMs: [33m5[39m,
+  executionDurationMs: [33m11[39m,
+  totalDurationMs: [33m16[39m,
+  partitionCount: [33m2[39m,
+  rowCount: [33m2[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - executes SELECT query
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 1 - SQLQueryEngine - executes SELECT query # time=13.975ms
+ok 1 - SQLQueryEngine - executes SELECT query # time=21.556ms
 
-Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 1 }
+Executing SQL query { sql: [32m'SELECT * FROM users'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m1[39m }
 Resolved partitions for SELECT {
-  tableName: 'users',
-  totalPartitions: 1,
-  targetPartitions: 1,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  totalPartitions: [33m1[39m,
+  targetPartitions: [33m1[39m,
+  sessionId: [32m'default'[39m
 }
 Executing distributed SELECT {
-  partitionCount: 1,
-  timestamp: '1771595283452-1-sql-query-engine',
-  hasJoins: false,
-  hasAggregates: false
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1771666169656-0-sql-query-engine'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595283453', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Starting parallel query execution { queryId: [32m'q-1-1771666169656'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283453',
-  partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 62,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169656'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m1[39m,
+  maxPartitionLatencyMs: [33m1[39m,
+  totalRows: [33m1[39m,
+  totalBytes: [33m62[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.select.distributed {
-  partitionCount: 1,
-  fanoutTotalLatencyMs: 0,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 1,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  partitionCount: [33m1[39m,
+  fanoutTotalLatencyMs: [33m1[39m,
+  fanoutMedianLatencyMs: [33m1[39m,
+  mergeDurationMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'SELECT',
-  parseDurationMs: 0,
-  executionDurationMs: 1,
-  totalDurationMs: 1,
-  partitionCount: 1,
-  rowCount: 1,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'SELECT'[39m,
+  parseDurationMs: [33m0[39m,
+  executionDurationMs: [33m2[39m,
+  totalDurationMs: [33m2[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m1[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - resolves partitions by table_id when table_name is missing
     ok 1 - should be equal
@@ -104,53 +104,53 @@ metrics.query.lifecycle {
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 2 - SQLQueryEngine - resolves partitions by table_id when table_name is missing # time=1.958ms
+ok 2 - SQLQueryEngine - resolves partitions by table_id when table_name is missing # time=3.239ms
 
-Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 1 }
+Executing SQL query { sql: [32m'SELECT * FROM users'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m1[39m }
 Resolved partitions for SELECT {
-  tableName: 'users',
-  totalPartitions: 1,
-  targetPartitions: 1,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  totalPartitions: [33m1[39m,
+  targetPartitions: [33m1[39m,
+  sessionId: [32m'default'[39m
 }
 Executing distributed SELECT {
-  partitionCount: 1,
-  timestamp: '1771595283455-0-sql-query-engine',
-  hasJoins: false,
-  hasAggregates: false
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1771666169659-0-sql-query-engine'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595283455', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Starting parallel query execution { queryId: [32m'q-1-1771666169659'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283455',
-  partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 62,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169659'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  totalBytes: [33m62[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.select.distributed {
-  partitionCount: 1,
-  fanoutTotalLatencyMs: 0,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 1,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  partitionCount: [33m1[39m,
+  fanoutTotalLatencyMs: [33m1[39m,
+  fanoutMedianLatencyMs: [33m0[39m,
+  mergeDurationMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'SELECT',
-  parseDurationMs: 0,
-  executionDurationMs: 2,
-  totalDurationMs: 2,
-  partitionCount: 1,
-  rowCount: 1,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'SELECT'[39m,
+  parseDurationMs: [33m1[39m,
+  executionDurationMs: [33m1[39m,
+  totalDurationMs: [33m2[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m1[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - falls back to tables.find when tables.get is keyed by table_id
     ok 1 - should be equal
@@ -158,102 +158,102 @@ metrics.query.lifecycle {
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 3 - SQLQueryEngine - falls back to tables.find when tables.get is keyed by table_id # time=2.2ms
+ok 3 - SQLQueryEngine - falls back to tables.find when tables.get is keyed by table_id # time=3.057ms
 
 Executing SQL query {
-  sql: "SELECT * FROM users WHERE id = 'alice'",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"SELECT * FROM users WHERE id = 'alice'"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
 Resolved partitions for query {
-  tableName: 'users',
+  tableName: [32m'users'[39m,
   keyConditions: {
-    type: 'equals',
-    values: [ 'alice' ],
-    low: null,
-    high: null,
-    lowInclusive: true,
-    highInclusive: false,
-    fromBetween: false,
-    predicateShape: 'eq'
+    type: [32m'equals'[39m,
+    values: [ [32m'alice'[39m ],
+    low: [1mnull[22m,
+    high: [1mnull[22m,
+    lowInclusive: [33mtrue[39m,
+    highInclusive: [33mfalse[39m,
+    fromBetween: [33mfalse[39m,
+    predicateShape: [32m'eq'[39m
   },
-  matchingCount: 1,
-  totalPartitions: 2
+  matchingCount: [33m1[39m,
+  totalPartitions: [33m2[39m
 }
 Resolved partitions for SELECT {
-  tableName: 'users',
-  totalPartitions: 1,
-  targetPartitions: 1,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  totalPartitions: [33m1[39m,
+  targetPartitions: [33m1[39m,
+  sessionId: [32m'default'[39m
 }
 Executing distributed SELECT {
-  partitionCount: 1,
-  timestamp: '1771595283463-0-sql-query-engine',
-  hasJoins: false,
-  hasAggregates: false
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1771666169669-0-sql-query-engine'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595283464', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Starting parallel query execution { queryId: [32m'q-1-1771666169670'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283464',
-  partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 62,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169670'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  totalBytes: [33m62[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.select.distributed {
-  partitionCount: 1,
-  fanoutTotalLatencyMs: 0,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 1,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  partitionCount: [33m1[39m,
+  fanoutTotalLatencyMs: [33m0[39m,
+  fanoutMedianLatencyMs: [33m0[39m,
+  mergeDurationMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'SELECT',
-  parseDurationMs: 3,
-  executionDurationMs: 5,
-  totalDurationMs: 8,
-  partitionCount: 1,
-  rowCount: 1,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'SELECT'[39m,
+  parseDurationMs: [33m2[39m,
+  executionDurationMs: [33m6[39m,
+  totalDurationMs: [33m8[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m1[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - routes SELECT with key filter to single partition
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 4 - SQLQueryEngine - routes SELECT with key filter to single partition # time=8.396ms
+ok 4 - SQLQueryEngine - routes SELECT with key filter to single partition # time=9.277ms
 
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice')",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"INSERT INTO users (id, name) VALUES ('alice', 'Alice')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
 Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'default'[39m
 }
-Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'INSERT',
-  parseDurationMs: 1,
-  executionDurationMs: 2,
-  totalDurationMs: 3,
-  partitionCount: 1,
-  rowCount: 0,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'INSERT'[39m,
+  parseDurationMs: [33m1[39m,
+  executionDurationMs: [33m2[39m,
+  totalDurationMs: [33m3[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m0[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - executes INSERT and routes to correct partition
     ok 1 - should be equal
@@ -261,131 +261,131 @@ metrics.query.lifecycle {
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 5 - SQLQueryEngine - executes INSERT and routes to correct partition # time=3.934ms
+ok 5 - SQLQueryEngine - executes INSERT and routes to correct partition # time=3.798ms
 
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice'), ('zack', 'Zack')",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"INSERT INTO users (id, name) VALUES ('alice', 'Alice'), ('zack', 'Zack')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
 Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 2,
-  partitionCount: 2,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  rowCount: [33m2[39m,
+  partitionCount: [33m2[39m,
+  sessionId: [32m'default'[39m
 }
-Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p2'[39m, rowCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p2'[39m, address: [32m'test-node/partition/p2'[39m }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'INSERT',
-  parseDurationMs: 1,
-  executionDurationMs: 1,
-  totalDurationMs: 2,
-  partitionCount: 2,
-  rowCount: 0,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'INSERT'[39m,
+  parseDurationMs: [33m0[39m,
+  executionDurationMs: [33m1[39m,
+  totalDurationMs: [33m1[39m,
+  partitionCount: [33m2[39m,
+  rowCount: [33m0[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - routes INSERT to multiple partitions
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 6 - SQLQueryEngine - routes INSERT to multiple partitions # time=1.944ms
+ok 6 - SQLQueryEngine - routes INSERT to multiple partitions # time=1.874ms
 
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice'), ('zack', 'Zack') RETURNING id",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"INSERT INTO users (id, name) VALUES ('alice', 'Alice'), ('zack', 'Zack') RETURNING id"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
 Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 2,
-  partitionCount: 2,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  rowCount: [33m2[39m,
+  partitionCount: [33m2[39m,
+  sessionId: [32m'default'[39m
 }
-Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Executing INSERT { table: 'users', partitionId: 'p2', rowCount: 1 }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p2'[39m, rowCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p2'[39m, address: [32m'test-node/partition/p2'[39m }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'INSERT',
-  parseDurationMs: 1,
-  executionDurationMs: 1,
-  totalDurationMs: 2,
-  partitionCount: 2,
-  rowCount: 0,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'INSERT'[39m,
+  parseDurationMs: [33m0[39m,
+  executionDurationMs: [33m2[39m,
+  totalDurationMs: [33m2[39m,
+  partitionCount: [33m2[39m,
+  rowCount: [33m0[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - merges RETURNING rows for distributed INSERT
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equivalent
     1..3
-ok 7 - SQLQueryEngine - merges RETURNING rows for distributed INSERT # time=2.877ms
+ok 7 - SQLQueryEngine - merges RETURNING rows for distributed INSERT # time=4.124ms
 
 Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18 RETURNING id",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18 RETURNING id"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Routing UPDATE to partitions { tableName: 'users', partitionCount: 2, sessionId: 'default' }
-Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1771595283476', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-2-1771595283477', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Routing UPDATE to partitions { tableName: [32m'users'[39m, partitionCount: [33m2[39m, sessionId: [32m'default'[39m }
+Executing UPDATE { table: [32m'users'[39m, partitionCount: [33m1[39m }
+Starting parallel query execution { queryId: [32m'q-1-1771666169687'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
+Executing UPDATE { table: [32m'users'[39m, partitionCount: [33m1[39m }
+Starting parallel query execution { queryId: [32m'q-2-1771666169688'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p2'[39m, address: [32m'test-node/partition/p2'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283476',
-  partitionCount: 1,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 1,
-  totalBytes: 32,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169687'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m2[39m,
+  medianLatencyMs: [33m2[39m,
+  maxPartitionLatencyMs: [33m2[39m,
+  totalRows: [33m1[39m,
+  totalBytes: [33m32[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.fanout.complete {
-  queryId: 'q-2-1771595283477',
-  partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 0,
-  totalBytes: 0,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-2-1771666169688'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m1[39m,
+  totalRows: [33m0[39m,
+  totalBytes: [33m0[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
-Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-3-1771595283477', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+Executing UPDATE { table: [32m'users'[39m, partitionCount: [33m1[39m }
+Starting parallel query execution { queryId: [32m'q-3-1771666169689'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p2'[39m, address: [32m'test-node/partition/p2'[39m }
 metrics.fanout.complete {
-  queryId: 'q-3-1771595283477',
-  partitionCount: 1,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 1,
-  totalRows: 0,
-  totalBytes: 0,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-3-1771666169689'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m1[39m,
+  totalRows: [33m0[39m,
+  totalBytes: [33m0[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'UPDATE',
-  parseDurationMs: 1,
-  executionDurationMs: 3,
-  totalDurationMs: 4,
-  partitionCount: 2,
-  rowCount: 0,
-  success: false
+  sessionId: [32m'default'[39m,
+  statementType: [32m'UPDATE'[39m,
+  parseDurationMs: [33m1[39m,
+  executionDurationMs: [33m5[39m,
+  totalDurationMs: [33m6[39m,
+  partitionCount: [33m2[39m,
+  rowCount: [33m0[39m,
+  success: [33mfalse[39m
 }
 # Subtest: SQLQueryEngine - surfaces partial failure for distributed UPDATE
     ok 1 - should be equal
@@ -394,52 +394,52 @@ metrics.query.lifecycle {
     ok 4 - should be equal
     ok 5 - should be equivalent
     1..5
-ok 8 - SQLQueryEngine - surfaces partial failure for distributed UPDATE # time=4.563ms
+ok 8 - SQLQueryEngine - surfaces partial failure for distributed UPDATE # time=7.957ms
 
 Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE id = 'alice'",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"UPDATE users SET status = 'active' WHERE id = 'alice'"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
 Resolved partitions for query {
-  tableName: 'users',
+  tableName: [32m'users'[39m,
   keyConditions: {
-    type: 'equals',
-    values: [ 'alice' ],
-    low: null,
-    high: null,
-    lowInclusive: true,
-    highInclusive: false,
-    fromBetween: false,
-    predicateShape: 'eq'
+    type: [32m'equals'[39m,
+    values: [ [32m'alice'[39m ],
+    low: [1mnull[22m,
+    high: [1mnull[22m,
+    lowInclusive: [33mtrue[39m,
+    highInclusive: [33mfalse[39m,
+    fromBetween: [33mfalse[39m,
+    predicateShape: [32m'eq'[39m
   },
-  matchingCount: 1,
-  totalPartitions: 2
+  matchingCount: [33m1[39m,
+  totalPartitions: [33m2[39m
 }
-Routing UPDATE to partitions { tableName: 'users', partitionCount: 1, sessionId: 'default' }
-Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1771595283480', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing UPDATE to partitions { tableName: [32m'users'[39m, partitionCount: [33m1[39m, sessionId: [32m'default'[39m }
+Executing UPDATE { table: [32m'users'[39m, partitionCount: [33m1[39m }
+Starting parallel query execution { queryId: [32m'q-1-1771666169694'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283480',
-  partitionCount: 1,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 1,
-  totalBytes: 32,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169694'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  totalBytes: [33m32[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'UPDATE',
-  parseDurationMs: 0,
-  executionDurationMs: 2,
-  totalDurationMs: 2,
-  partitionCount: 1,
-  rowCount: 0,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'UPDATE'[39m,
+  parseDurationMs: [33m1[39m,
+  executionDurationMs: [33m2[39m,
+  totalDurationMs: [33m3[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m0[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - executes UPDATE with key filter
     ok 1 - should be equal
@@ -447,158 +447,158 @@ metrics.query.lifecycle {
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 9 - SQLQueryEngine - executes UPDATE with key filter # time=2.329ms
+ok 9 - SQLQueryEngine - executes UPDATE with key filter # time=3.571ms
 
 Executing SQL query {
-  sql: "UPDATE users SET status = 'active' WHERE age > 18",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"UPDATE users SET status = 'active' WHERE age > 18"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
-Routing UPDATE to partitions { tableName: 'users', partitionCount: 2, sessionId: 'default' }
-Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1771595283483', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
-Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-2-1771595283483', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p2', address: 'test-node/partition/p2' }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
+Routing UPDATE to partitions { tableName: [32m'users'[39m, partitionCount: [33m2[39m, sessionId: [32m'default'[39m }
+Executing UPDATE { table: [32m'users'[39m, partitionCount: [33m1[39m }
+Starting parallel query execution { queryId: [32m'q-1-1771666169697'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
+Executing UPDATE { table: [32m'users'[39m, partitionCount: [33m1[39m }
+Starting parallel query execution { queryId: [32m'q-2-1771666169698'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p2'[39m, address: [32m'test-node/partition/p2'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283483',
-  partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 32,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169697'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m2[39m,
+  medianLatencyMs: [33m1[39m,
+  maxPartitionLatencyMs: [33m1[39m,
+  totalRows: [33m1[39m,
+  totalBytes: [33m32[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.fanout.complete {
-  queryId: 'q-2-1771595283483',
-  partitionCount: 1,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 28,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-2-1771666169698'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  totalBytes: [33m28[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'UPDATE',
-  parseDurationMs: 0,
-  executionDurationMs: 2,
-  totalDurationMs: 2,
-  partitionCount: 2,
-  rowCount: 0,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'UPDATE'[39m,
+  parseDurationMs: [33m1[39m,
+  executionDurationMs: [33m2[39m,
+  totalDurationMs: [33m3[39m,
+  partitionCount: [33m2[39m,
+  rowCount: [33m0[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - executes UPDATE on all partitions without key filter
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 10 - SQLQueryEngine - executes UPDATE on all partitions without key filter # time=2.569ms
+ok 10 - SQLQueryEngine - executes UPDATE on all partitions without key filter # time=3.576ms
 
 Executing SQL query {
-  sql: "DELETE FROM users WHERE id = 'alice'",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"DELETE FROM users WHERE id = 'alice'"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
 Resolved partitions for query {
-  tableName: 'users',
+  tableName: [32m'users'[39m,
   keyConditions: {
-    type: 'equals',
-    values: [ 'alice' ],
-    low: null,
-    high: null,
-    lowInclusive: true,
-    highInclusive: false,
-    fromBetween: false,
-    predicateShape: 'eq'
+    type: [32m'equals'[39m,
+    values: [ [32m'alice'[39m ],
+    low: [1mnull[22m,
+    high: [1mnull[22m,
+    lowInclusive: [33mtrue[39m,
+    highInclusive: [33mfalse[39m,
+    fromBetween: [33mfalse[39m,
+    predicateShape: [32m'eq'[39m
   },
-  matchingCount: 1,
-  totalPartitions: 2
+  matchingCount: [33m1[39m,
+  totalPartitions: [33m2[39m
 }
-Routing DELETE to partitions { tableName: 'users', partitionCount: 1, sessionId: 'default' }
-Executing DELETE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1771595283486', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing DELETE to partitions { tableName: [32m'users'[39m, partitionCount: [33m1[39m, sessionId: [32m'default'[39m }
+Executing DELETE { table: [32m'users'[39m, partitionCount: [33m1[39m }
+Starting parallel query execution { queryId: [32m'q-1-1771666169702'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283486',
-  partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 32,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169702'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  totalBytes: [33m32[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'DELETE',
-  parseDurationMs: 1,
-  executionDurationMs: 1,
-  totalDurationMs: 2,
-  partitionCount: 1,
-  rowCount: 0,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'DELETE'[39m,
+  parseDurationMs: [33m1[39m,
+  executionDurationMs: [33m2[39m,
+  totalDurationMs: [33m3[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m0[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - executes DELETE with key filter
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 11 - SQLQueryEngine - executes DELETE with key filter # time=2.915ms
+ok 11 - SQLQueryEngine - executes DELETE with key filter # time=3.64ms
 
 Executing SQL query {
-  sql: 'SELECT * FROM nonexistent',
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m'SELECT * FROM nonexistent'[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'SELECT',
-  parseDurationMs: 0,
-  executionDurationMs: 1,
-  totalDurationMs: 1,
-  partitionCount: 0,
-  rowCount: 0,
-  success: false
+  sessionId: [32m'default'[39m,
+  statementType: [32m'SELECT'[39m,
+  parseDurationMs: [33m0[39m,
+  executionDurationMs: [33m0[39m,
+  totalDurationMs: [33m0[39m,
+  partitionCount: [33m0[39m,
+  rowCount: [33m0[39m,
+  success: [33mfalse[39m
 }
 # Subtest: SQLQueryEngine - returns error for non-existent table
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 12 - SQLQueryEngine - returns error for non-existent table # time=1.813ms
+ok 12 - SQLQueryEngine - returns error for non-existent table # time=1.603ms
 
-Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'default' }
-BEGIN TRANSACTION { sessionId: 'default' }
+Executing SQL query { sql: [32m'BEGIN TRANSACTION'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
+BEGIN TRANSACTION { sessionId: [32m'default'[39m }
 # Subtest: SQLQueryEngine - handles transaction statements
     ok 1 - should be equal
     ok 2 - should be equal
-Executing SQL query { sql: 'COMMIT', paramCount: 0, sessionId: 'default' }
-COMMIT { sessionId: 'default', participants: [] }
+Executing SQL query { sql: [32m'COMMIT'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
+COMMIT { sessionId: [32m'default'[39m, participants: [] }
     ok 3 - should be equal
     ok 4 - should be equal
-Executing SQL query { sql: 'BEGIN TRANSACTION', paramCount: 0, sessionId: 'default' }
-BEGIN TRANSACTION { sessionId: 'default' }
+Executing SQL query { sql: [32m'BEGIN TRANSACTION'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
+BEGIN TRANSACTION { sessionId: [32m'default'[39m }
     ok 5 - should be equal
     ok 6 - should be equal
-Executing SQL query { sql: 'ROLLBACK', paramCount: 0, sessionId: 'default' }
-ROLLBACK { sessionId: 'default', participants: [] }
+Executing SQL query { sql: [32m'ROLLBACK'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
+ROLLBACK { sessionId: [32m'default'[39m, participants: [] }
     ok 7 - should be equal
     ok 8 - should be equal
     1..8
-ok 13 - SQLQueryEngine - handles transaction statements # time=3.406ms
+ok 13 - SQLQueryEngine - handles transaction statements # time=3.272ms
 
-Executing SQL query { sql: 'INVALID SQL STATEMENT', paramCount: 0, sessionId: 'default' }
+Executing SQL query { sql: [32m'INVALID SQL STATEMENT'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
 # Subtest: SQLQueryEngine - returns syntax error for invalid SQL
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 14 - SQLQueryEngine - returns syntax error for invalid SQL # time=3.161ms
+ok 14 - SQLQueryEngine - returns syntax error for invalid SQL # time=3.981ms
 
 # Subtest: SQLQueryEngine - parse method returns AST
     ok 1 - should be equal
@@ -606,71 +606,71 @@ ok 14 - SQLQueryEngine - returns syntax error for invalid SQL # time=3.161ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 15 - SQLQueryEngine - parse method returns AST # time=1.008ms
+ok 15 - SQLQueryEngine - parse method returns AST # time=1.344ms
 
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
 # Subtest: SQLQueryEngine - resolvePartitions method works
     ok 1 - should be equal
     1..1
-ok 16 - SQLQueryEngine - resolvePartitions method works # time=0.512ms
+ok 16 - SQLQueryEngine - resolvePartitions method works # time=0.59ms
 
-Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
+Executing SQL query { sql: [32m'SELECT * FROM users'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'SELECT',
-  parseDurationMs: 0,
-  executionDurationMs: 0,
-  totalDurationMs: 0,
-  partitionCount: 0,
-  rowCount: 0,
-  success: false
+  sessionId: [32m'default'[39m,
+  statementType: [32m'SELECT'[39m,
+  parseDurationMs: [33m0[39m,
+  executionDurationMs: [33m0[39m,
+  totalDurationMs: [33m0[39m,
+  partitionCount: [33m0[39m,
+  rowCount: [33m0[39m,
+  success: [33mfalse[39m
 }
 # Subtest: SQLQueryEngine - throws error when system cache not available
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 17 - SQLQueryEngine - throws error when system cache not available # time=0.866ms
+ok 17 - SQLQueryEngine - throws error when system cache not available # time=1.181ms
 
-Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
+Executing SQL query { sql: [32m'SELECT * FROM users'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'SELECT',
-  parseDurationMs: 0,
-  executionDurationMs: 0,
-  totalDurationMs: 0,
-  partitionCount: 0,
-  rowCount: 0,
-  success: false
+  sessionId: [32m'default'[39m,
+  statementType: [32m'SELECT'[39m,
+  parseDurationMs: [33m0[39m,
+  executionDurationMs: [33m0[39m,
+  totalDurationMs: [33m0[39m,
+  partitionCount: [33m0[39m,
+  rowCount: [33m0[39m,
+  success: [33mfalse[39m
 }
 # Subtest: SQLQueryEngine - returns empty array when no partitions found in cache
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 18 - SQLQueryEngine - returns empty array when no partitions found in cache # time=0.859ms
+ok 18 - SQLQueryEngine - returns empty array when no partitions found in cache # time=1.15ms
 
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice')",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"INSERT INTO users (id, name) VALUES ('alice', 'Alice')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
 Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'default'[39m
 }
-Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'INSERT',
-  parseDurationMs: 0,
-  executionDurationMs: 1,
-  totalDurationMs: 1,
-  partitionCount: 1,
-  rowCount: 0,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'INSERT'[39m,
+  parseDurationMs: [33m1[39m,
+  executionDurationMs: [33m1[39m,
+  totalDurationMs: [33m2[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m0[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - persists non-transactional distributed write operations
     ok 1 - should be equal
@@ -678,28 +678,28 @@ metrics.query.lifecycle {
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 19 - SQLQueryEngine - persists non-transactional distributed write operations # time=11.461ms
+ok 19 - SQLQueryEngine - persists non-transactional distributed write operations # time=11.911ms
 
 # Subtest: SQLQueryEngine - recovers distributed transactions from system cache snapshots
     ok 1 - should be equal
     ok 2 - should be equal
     1..2
-ok 20 - SQLQueryEngine - recovers distributed transactions from system cache snapshots # time=0.668ms
+ok 20 - SQLQueryEngine - recovers distributed transactions from system cache snapshots # time=1.001ms
 
 Resolved partitions for query {
-  tableName: 'users',
+  tableName: [32m'users'[39m,
   keyConditions: {
-    type: 'equals',
-    values: [ 'alice' ],
-    low: null,
-    high: null,
-    lowInclusive: true,
-    highInclusive: false,
-    fromBetween: false,
-    predicateShape: 'eq'
+    type: [32m'equals'[39m,
+    values: [ [32m'alice'[39m ],
+    low: [1mnull[22m,
+    high: [1mnull[22m,
+    lowInclusive: [33mtrue[39m,
+    highInclusive: [33mfalse[39m,
+    fromBetween: [33mfalse[39m,
+    predicateShape: [32m'eq'[39m
   },
-  matchingCount: 1,
-  totalPartitions: 1
+  matchingCount: [33m1[39m,
+  totalPartitions: [33m1[39m
 }
 # Subtest: SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output
     ok 1 - should be equal
@@ -708,312 +708,312 @@ Resolved partitions for query {
     ok 4 - should be equal
     ok 5 - should be equivalent
     1..5
-ok 21 - SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output # time=1.46ms
+ok 21 - SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output # time=2.163ms
 
 Executing SQL query {
-  sql: 'SELECT id FROM users WHERE id = ?',
-  paramCount: 1,
-  sessionId: 'default'
+  sql: [32m'SELECT id FROM users WHERE id = ?'[39m,
+  paramCount: [33m1[39m,
+  sessionId: [32m'default'[39m
 }
 Resolved partitions for query {
-  tableName: 'users',
+  tableName: [32m'users'[39m,
   keyConditions: {
-    type: 'equals',
-    values: [ 'alice' ],
-    low: null,
-    high: null,
-    lowInclusive: true,
-    highInclusive: false,
-    fromBetween: false,
-    predicateShape: 'eq'
+    type: [32m'equals'[39m,
+    values: [ [32m'alice'[39m ],
+    low: [1mnull[22m,
+    high: [1mnull[22m,
+    lowInclusive: [33mtrue[39m,
+    highInclusive: [33mfalse[39m,
+    fromBetween: [33mfalse[39m,
+    predicateShape: [32m'eq'[39m
   },
-  matchingCount: 1,
-  totalPartitions: 1
+  matchingCount: [33m1[39m,
+  totalPartitions: [33m1[39m
 }
 Resolved partitions for SELECT {
-  tableName: 'users',
-  totalPartitions: 1,
-  targetPartitions: 1,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  totalPartitions: [33m1[39m,
+  targetPartitions: [33m1[39m,
+  sessionId: [32m'default'[39m
 }
 Executing distributed SELECT {
-  partitionCount: 1,
-  timestamp: '1771595283518-0-sql-query-engine',
-  hasJoins: false,
-  hasAggregates: false
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1771666169735-0-sql-query-engine'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595283518', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Starting parallel query execution { queryId: [32m'q-1-1771666169735'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283518',
-  partitionCount: 1,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 1,
-  totalBytes: 62,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169735'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m1[39m,
+  maxPartitionLatencyMs: [33m1[39m,
+  totalRows: [33m1[39m,
+  totalBytes: [33m62[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.select.distributed {
-  partitionCount: 1,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 1,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  partitionCount: [33m1[39m,
+  fanoutTotalLatencyMs: [33m1[39m,
+  fanoutMedianLatencyMs: [33m1[39m,
+  mergeDurationMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'SELECT',
-  parseDurationMs: 0,
-  executionDurationMs: 1,
-  totalDurationMs: 1,
-  partitionCount: 1,
-  rowCount: 1,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'SELECT'[39m,
+  parseDurationMs: [33m0[39m,
+  executionDurationMs: [33m2[39m,
+  totalDurationMs: [33m2[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m1[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - distributed diagnostics schema is stable for SELECT
     ok 1 - should be equal
     ok 2 - should be equivalent
     ok 3 - should be equivalent
     1..3
-ok 22 - SQLQueryEngine - distributed diagnostics schema is stable for SELECT # time=2.037ms
+ok 22 - SQLQueryEngine - distributed diagnostics schema is stable for SELECT # time=2.661ms
 
-Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 1 }
+Executing SQL query { sql: [32m'SELECT * FROM users'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m1[39m }
 Resolved partitions for SELECT {
-  tableName: 'users',
-  totalPartitions: 1,
-  targetPartitions: 1,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  totalPartitions: [33m1[39m,
+  targetPartitions: [33m1[39m,
+  sessionId: [32m'default'[39m
 }
 Executing distributed SELECT {
-  partitionCount: 1,
-  timestamp: '1771595283520-1-sql-query-engine',
-  hasJoins: false,
-  hasAggregates: false
+  partitionCount: [33m1[39m,
+  timestamp: [32m'1771666169738-0-sql-query-engine'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
 }
-Starting parallel query execution { queryId: 'q-1-1771595283520', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'users-p1', address: 'test-node/partition/users-p1' }
+Starting parallel query execution { queryId: [32m'q-1-1771666169738'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'users-p1'[39m, address: [32m'test-node/partition/users-p1'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283520',
-  partitionCount: 1,
-  totalLatencyMs: 1,
-  medianLatencyMs: 1,
-  maxPartitionLatencyMs: 1,
-  totalRows: 1,
-  totalBytes: 32,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169738'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  totalBytes: [33m32[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.select.distributed {
-  partitionCount: 1,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 1,
-  mergeDurationMs: 0,
-  totalRows: 1,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  partitionCount: [33m1[39m,
+  fanoutTotalLatencyMs: [33m0[39m,
+  fanoutMedianLatencyMs: [33m0[39m,
+  mergeDurationMs: [33m0[39m,
+  totalRows: [33m1[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'SELECT',
-  parseDurationMs: 0,
-  executionDurationMs: 1,
-  totalDurationMs: 1,
-  partitionCount: 1,
-  rowCount: 1,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'SELECT'[39m,
+  parseDurationMs: [33m0[39m,
+  executionDurationMs: [33m2[39m,
+  totalDurationMs: [33m2[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m1[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - remains correct before and after partition split updates
     ok 1 - should be equal
     ok 2 - should be equal
-Executing SQL query { sql: 'SELECT * FROM users', paramCount: 0, sessionId: 'default' }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 2 }
+Executing SQL query { sql: [32m'SELECT * FROM users'[39m, paramCount: [33m0[39m, sessionId: [32m'default'[39m }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m2[39m }
 Resolved partitions for SELECT {
-  tableName: 'users',
-  totalPartitions: 2,
-  targetPartitions: 2,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  totalPartitions: [33m2[39m,
+  targetPartitions: [33m2[39m,
+  sessionId: [32m'default'[39m
 }
 Executing distributed SELECT {
-  partitionCount: 2,
-  timestamp: '1771595283521-0-sql-query-engine',
-  hasJoins: false,
-  hasAggregates: false
+  partitionCount: [33m2[39m,
+  timestamp: [32m'1771666169739-0-sql-query-engine'[39m,
+  hasJoins: [33mfalse[39m,
+  hasAggregates: [33mfalse[39m
 }
-Starting parallel query execution { queryId: 'q-2-1771595283521', partitionCount: 2, originalCount: 2 }
-Routing query to partition service { partitionId: 'users-p1a', address: 'test-node/partition/users-p1a' }
-Routing query to partition service { partitionId: 'users-p1b', address: 'test-node/partition/users-p1b' }
+Starting parallel query execution { queryId: [32m'q-2-1771666169740'[39m, partitionCount: [33m2[39m, originalCount: [33m2[39m }
+Routing query to partition service { partitionId: [32m'users-p1a'[39m, address: [32m'test-node/partition/users-p1a'[39m }
+Routing query to partition service { partitionId: [32m'users-p1b'[39m, address: [32m'test-node/partition/users-p1b'[39m }
 metrics.fanout.complete {
-  queryId: 'q-2-1771595283521',
-  partitionCount: 2,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 2,
-  totalBytes: 62,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-2-1771666169740'[39m,
+  partitionCount: [33m2[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  totalBytes: [33m62[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.select.distributed {
-  partitionCount: 2,
-  fanoutTotalLatencyMs: 1,
-  fanoutMedianLatencyMs: 0,
-  mergeDurationMs: 0,
-  totalRows: 2,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  partitionCount: [33m2[39m,
+  fanoutTotalLatencyMs: [33m0[39m,
+  fanoutMedianLatencyMs: [33m0[39m,
+  mergeDurationMs: [33m0[39m,
+  totalRows: [33m2[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'SELECT',
-  parseDurationMs: 0,
-  executionDurationMs: 1,
-  totalDurationMs: 1,
-  partitionCount: 2,
-  rowCount: 2,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'SELECT'[39m,
+  parseDurationMs: [33m0[39m,
+  executionDurationMs: [33m1[39m,
+  totalDurationMs: [33m1[39m,
+  partitionCount: [33m2[39m,
+  rowCount: [33m2[39m,
+  success: [33mtrue[39m
 }
     ok 3 - should be equal
     ok 4 - should be equal
     ok 5 - should be equivalent
     1..5
-ok 23 - SQLQueryEngine - remains correct before and after partition split updates # time=2.677ms
+ok 23 - SQLQueryEngine - remains correct before and after partition split updates # time=4.181ms
 
 Executing SQL query {
-  sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice')",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"INSERT INTO users (id, name) VALUES ('alice', 'Alice')"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
-No key conditions, using scatter-gather { tableName: 'users', partitionCount: 1 }
+No key conditions, using scatter-gather { tableName: [32m'users'[39m, partitionCount: [33m1[39m }
 Routing INSERT to partitions {
-  tableName: 'users',
-  rowCount: 1,
-  partitionCount: 1,
-  sessionId: 'default'
+  tableName: [32m'users'[39m,
+  rowCount: [33m1[39m,
+  partitionCount: [33m1[39m,
+  sessionId: [32m'default'[39m
 }
-Executing INSERT { table: 'users', partitionId: 'p1', rowCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Executing INSERT { table: [32m'users'[39m, partitionId: [32m'p1'[39m, rowCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'INSERT',
-  parseDurationMs: 0,
-  executionDurationMs: 0,
-  totalDurationMs: 0,
-  partitionCount: 1,
-  rowCount: 0,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'INSERT'[39m,
+  parseDurationMs: [33m1[39m,
+  executionDurationMs: [33m1[39m,
+  totalDurationMs: [33m2[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m0[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - non-transactional write persistence does not block INSERT critical path
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - INSERT took 2ms, expected < 50ms (write persistence should not block critical path)
     1..3
-ok 24 - SQLQueryEngine - non-transactional write persistence does not block INSERT critical path # time=61.06ms
+ok 24 - SQLQueryEngine - non-transactional write persistence does not block INSERT critical path # time=63ms
 
 Executing SQL query {
-  sql: "UPDATE users SET name = 'Bob' WHERE id = 'alice'",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"UPDATE users SET name = 'Bob' WHERE id = 'alice'"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
 Resolved partitions for query {
-  tableName: 'users',
+  tableName: [32m'users'[39m,
   keyConditions: {
-    type: 'equals',
-    values: [ 'alice' ],
-    low: null,
-    high: null,
-    lowInclusive: true,
-    highInclusive: false,
-    fromBetween: false,
-    predicateShape: 'eq'
+    type: [32m'equals'[39m,
+    values: [ [32m'alice'[39m ],
+    low: [1mnull[22m,
+    high: [1mnull[22m,
+    lowInclusive: [33mtrue[39m,
+    highInclusive: [33mfalse[39m,
+    fromBetween: [33mfalse[39m,
+    predicateShape: [32m'eq'[39m
   },
-  matchingCount: 1,
-  totalPartitions: 1
+  matchingCount: [33m1[39m,
+  totalPartitions: [33m1[39m
 }
-Routing UPDATE to partitions { tableName: 'users', partitionCount: 1, sessionId: 'default' }
-Executing UPDATE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1771595283585', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing UPDATE to partitions { tableName: [32m'users'[39m, partitionCount: [33m1[39m, sessionId: [32m'default'[39m }
+Executing UPDATE { table: [32m'users'[39m, partitionCount: [33m1[39m }
+Starting parallel query execution { queryId: [32m'q-1-1771666169806'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283585',
-  partitionCount: 1,
-  totalLatencyMs: 0,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 0,
-  totalBytes: 0,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169806'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m1[39m,
+  medianLatencyMs: [33m1[39m,
+  maxPartitionLatencyMs: [33m1[39m,
+  totalRows: [33m0[39m,
+  totalBytes: [33m0[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'UPDATE',
-  parseDurationMs: 0,
-  executionDurationMs: 1,
-  totalDurationMs: 1,
-  partitionCount: 1,
-  rowCount: 0,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'UPDATE'[39m,
+  parseDurationMs: [33m0[39m,
+  executionDurationMs: [33m2[39m,
+  totalDurationMs: [33m2[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m0[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - non-transactional write persistence does not block UPDATE critical path
     ok 1 - should be equal
-    ok 2 - UPDATE took 1ms, expected < 50ms (write persistence should not block critical path)
+    ok 2 - UPDATE took 3ms, expected < 50ms (write persistence should not block critical path)
     1..2
-ok 25 - SQLQueryEngine - non-transactional write persistence does not block UPDATE critical path # time=62.703ms
+ok 25 - SQLQueryEngine - non-transactional write persistence does not block UPDATE critical path # time=63.351ms
 
 Executing SQL query {
-  sql: "DELETE FROM users WHERE id = 'alice'",
-  paramCount: 0,
-  sessionId: 'default'
+  sql: [32m"DELETE FROM users WHERE id = 'alice'"[39m,
+  paramCount: [33m0[39m,
+  sessionId: [32m'default'[39m
 }
 Resolved partitions for query {
-  tableName: 'users',
+  tableName: [32m'users'[39m,
   keyConditions: {
-    type: 'equals',
-    values: [ 'alice' ],
-    low: null,
-    high: null,
-    lowInclusive: true,
-    highInclusive: false,
-    fromBetween: false,
-    predicateShape: 'eq'
+    type: [32m'equals'[39m,
+    values: [ [32m'alice'[39m ],
+    low: [1mnull[22m,
+    high: [1mnull[22m,
+    lowInclusive: [33mtrue[39m,
+    highInclusive: [33mfalse[39m,
+    fromBetween: [33mfalse[39m,
+    predicateShape: [32m'eq'[39m
   },
-  matchingCount: 1,
-  totalPartitions: 1
+  matchingCount: [33m1[39m,
+  totalPartitions: [33m1[39m
 }
-Routing DELETE to partitions { tableName: 'users', partitionCount: 1, sessionId: 'default' }
-Executing DELETE { table: 'users', partitionCount: 1 }
-Starting parallel query execution { queryId: 'q-1-1771595283648', partitionCount: 1, originalCount: 1 }
-Routing query to partition service { partitionId: 'p1', address: 'test-node/partition/p1' }
+Routing DELETE to partitions { tableName: [32m'users'[39m, partitionCount: [33m1[39m, sessionId: [32m'default'[39m }
+Executing DELETE { table: [32m'users'[39m, partitionCount: [33m1[39m }
+Starting parallel query execution { queryId: [32m'q-1-1771666169870'[39m, partitionCount: [33m1[39m, originalCount: [33m1[39m }
+Routing query to partition service { partitionId: [32m'p1'[39m, address: [32m'test-node/partition/p1'[39m }
 metrics.fanout.complete {
-  queryId: 'q-1-1771595283648',
-  partitionCount: 1,
-  totalLatencyMs: 1,
-  medianLatencyMs: 0,
-  maxPartitionLatencyMs: 0,
-  totalRows: 0,
-  totalBytes: 0,
-  stragglerCount: 0,
-  speculativeExecutions: 0
+  queryId: [32m'q-1-1771666169870'[39m,
+  partitionCount: [33m1[39m,
+  totalLatencyMs: [33m0[39m,
+  medianLatencyMs: [33m0[39m,
+  maxPartitionLatencyMs: [33m0[39m,
+  totalRows: [33m0[39m,
+  totalBytes: [33m0[39m,
+  stragglerCount: [33m0[39m,
+  speculativeExecutions: [33m0[39m
 }
 metrics.query.lifecycle {
-  sessionId: 'default',
-  statementType: 'DELETE',
-  parseDurationMs: 1,
-  executionDurationMs: 1,
-  totalDurationMs: 2,
-  partitionCount: 1,
-  rowCount: 0,
-  success: true
+  sessionId: [32m'default'[39m,
+  statementType: [32m'DELETE'[39m,
+  parseDurationMs: [33m1[39m,
+  executionDurationMs: [33m1[39m,
+  totalDurationMs: [33m2[39m,
+  partitionCount: [33m1[39m,
+  rowCount: [33m0[39m,
+  success: [33mtrue[39m
 }
 # Subtest: SQLQueryEngine - non-transactional write persistence does not block DELETE critical path
     ok 1 - should be equal
     ok 2 - DELETE took 2ms, expected < 50ms (write persistence should not block critical path)
     1..2
-ok 26 - SQLQueryEngine - non-transactional write persistence does not block DELETE critical path # time=63.563ms
+ok 26 - SQLQueryEngine - non-transactional write persistence does not block DELETE critical path # time=62.399ms
 
 1..26

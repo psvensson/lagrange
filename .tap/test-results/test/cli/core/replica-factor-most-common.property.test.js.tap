@@ -2,26 +2,26 @@ TAP version 14
 # Subtest: Property 27: Replica Factor Most Common - basic case
     ok 1 - Replica factor equals most common replica_count
     1..1
-ok 1 - Property 27: Replica Factor Most Common - basic case # time=4.824ms
+ok 1 - Property 27: Replica Factor Most Common - basic case # time=7.838ms
 
 # Subtest: Property 27: Replica Factor Most Common - uniform replica counts
     ok 1 - Replica factor correct when all partitions have same count
     1..1
-ok 2 - Property 27: Replica Factor Most Common - uniform replica counts # time=0.775ms
+ok 2 - Property 27: Replica Factor Most Common - uniform replica counts # time=1.335ms
 
 # Subtest: Property 27: Replica Factor Most Common - no partitions returns null
     ok 1 - Replica factor is null when table has no partitions
     1..1
-ok 3 - Property 27: Replica Factor Most Common - no partitions returns null # time=2.136ms
+ok 3 - Property 27: Replica Factor Most Common - no partitions returns null # time=3.845ms
 
 # Subtest: Property 27: Replica Factor Most Common - mixed counts
     ok 1 - Replica factor correct with mixed replica counts
     1..1
-ok 4 - Property 27: Replica Factor Most Common - mixed counts # time=1.257ms
+ok 4 - Property 27: Replica Factor Most Common - mixed counts # time=1.671ms
 
 # Subtest: Property 27: Replica Factor Most Common - handles missing replica_count
     ok 1 - Replica factor ignores partitions without replica_count
     1..1
-ok 5 - Property 27: Replica Factor Most Common - handles missing replica_count # time=0.643ms
+ok 5 - Property 27: Replica Factor Most Common - handles missing replica_count # time=0.872ms
 
 1..5

@@ -114,6 +114,8 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {CDC_EVENT} from '../cdc/cdc-constants.js';
 import {createJoiningPhaseOwners} from './owners/join-phase-owners.js';
+import {StartupPipelineRunner} from './pipeline/startup-pipeline-runner.js';
+import {createJoinStartupPlan} from './pipeline/join-startup-plan.js';
 import {
   PgWireStartupSafetyGate,
 } from './pgwire-startup-safety-gate.js';
@@ -314,44 +316,28 @@ class NodeJoiningService extends EventEmitter {
       // Requirements: 2.6 - CONNECTING state for establishing WebSocket connections
       this.lifecycleStateMachine.transition(NodeState.CONNECTING);
 
-      // Phase 1: Contact seed node via HTTP
-      await this.executePhase(
-        JoiningPhase.CONTACTING_SEED,
-        () => this.joiningPhaseOwners.contactSeed(),
-      );
+      const startupPipelineRunner = new StartupPipelineRunner({
+        logger: this.logger,
+        eventSink: this,
+      });
+      const joinPlan = createJoinStartupPlan(this);
 
+      // Phase 1: Contact seed node via HTTP
       // Phase 2: Connect to seed node via WebSocket for cross-node communication
       // Requirements: 8.1, 8.2 - Start server and self-connect BEFORE creating services
-      await this.executePhase(
-        JoiningPhase.CONNECTING_WEBSOCKET,
-        () => this.joiningPhaseOwners.connectWebSocket(),
-      );
+      await startupPipelineRunner.run({
+        phases: joinPlan.phases.slice(0, 2),
+      });
 
       // Transition to DISCOVERING state
       // Requirements: 2.7 - DISCOVERING state for receiving system cache
       this.lifecycleStateMachine.transition(NodeState.DISCOVERING);
 
       // Phase 3: Create or join message group based on assignment
-      // Requirements: 8.3 - Services created AFTER self-connection established
-      const assignment = this.bootstrapResponse.messageGroupAssignment;
-
-      if (assignment.strategy === AssignmentStrategy.CREATE_SELF_HOSTED) {
-        await this.executePhase(
-          JoiningPhase.CREATING_MESSAGE_GROUP,
-          () => this.joiningPhaseOwners.createSelfHostedMessageGroup(assignment),
-        );
-      } else if (assignment.strategy === AssignmentStrategy.MOVE_REPLICA) {
-        await this.executePhase(
-          JoiningPhase.JOINING_MESSAGE_GROUP,
-          () => this.joiningPhaseOwners.joinExistingMessageGroup(assignment),
-        );
-      }
-
       // Phase 4: Wait for leadership establishment
-      await this.executePhase(
-        JoiningPhase.WAITING_LEADERSHIP,
-        () => this.joiningPhaseOwners.waitForLeadership(),
-      );
+      await startupPipelineRunner.run({
+        phases: joinPlan.phases.slice(2, 4),
+      });
 
       // Initialize ReplicaHandler BEFORE registering node in cluster
       // This is critical because:
@@ -382,10 +368,9 @@ class NodeJoiningService extends EventEmitter {
 
       // Phase 5: Query system partitions for cluster state
       // This includes registering the node in the cluster's nodes table
-      await this.executePhase(
-        JoiningPhase.QUERYING_STATE,
-        () => this.joiningPhaseOwners.querySystemState(),
-      );
+      await startupPipelineRunner.run({
+        phases: joinPlan.phases.slice(4, 5),
+      });
 
       await this.signalReadyForReplicas();
       this.startLatencyTopologyLifecycle();
@@ -1033,6 +1018,23 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
+   * Compatibility shim for deferred self-hosted join elections.
+   * Replica create/start ownership remains in unified lifecycle adapters.
+   * @return {void}
+   * @private
+   */
+  startDeferredJoinMessageGroupElections(groupId) {
+    this.logger.debug(JOINING_LOG_MSG.MESSAGE_GROUP_ELECTIONS_START, {
+      groupId,
+      replicaCount: this.joinMessageGroupReplicas.length,
+    });
+
+    for (const messageGroup of this.joinMessageGroupReplicas) {
+      messageGroup.startElection();
+    }
+  }
+
+  /**
    * Phase 3a: Create self-hosted message group (3 replicas on this node).
    * Requirements: 8.3 - Services created AFTER self-connection established.
    * @param {Object} assignment - Assignment instructions.
@@ -1096,14 +1098,7 @@ class NodeJoiningService extends EventEmitter {
       JOINING_UNIFIED_RECONCILE.MESSAGE_GROUPS_REASON,
     );
 
-    this.logger.debug(JOINING_LOG_MSG.MESSAGE_GROUP_ELECTIONS_START, {
-      groupId,
-      replicaCount: this.joinMessageGroupReplicas.length,
-    });
-
-    for (const messageGroup of this.joinMessageGroupReplicas) {
-      messageGroup.startElection();
-    }
+    this.startDeferredJoinMessageGroupElections(groupId);
 
     this.logger.info(JOINING_LOG_MSG.SELF_HOSTED_CREATED, {
       nodeId: this.nodeId,

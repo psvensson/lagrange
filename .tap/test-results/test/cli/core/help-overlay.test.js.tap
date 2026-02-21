@@ -5,7 +5,7 @@ TAP version 14
         ok 2 - has help shortcut
         ok 3 - has quit shortcut
         1..3
-    ok 1 - constructor initializes with shortcuts # time=3.204ms
+    ok 1 - constructor initializes with shortcuts # time=3.672ms
     
     # Subtest: getGlobalShortcuts() returns categorized shortcuts
         ok 1 - has categories
@@ -14,7 +14,7 @@ TAP version 14
         ok 4 - has Actions category
         ok 5 - has General category
         1..5
-    ok 2 - getGlobalShortcuts() returns categorized shortcuts # time=0.94ms
+    ok 2 - getGlobalShortcuts() returns categorized shortcuts # time=0.894ms
     
     # Subtest: getViewHelp() returns help for all views
         ok 1 - has help for nodes
@@ -58,20 +58,20 @@ TAP version 14
         ok 39 - contexts has description
         ok 40 - contexts has shortcuts
         1..40
-    ok 3 - getViewHelp() returns help for all views # time=7.042ms
+    ok 3 - getViewHelp() returns help for all views # time=4.041ms
     
     # Subtest: getHelpContent() returns combined content
         ok 1 - has global shortcuts
         ok 2 - has view help
         ok 3 - has current view
         1..3
-    ok 4 - getHelpContent() returns combined content # time=0.854ms
+    ok 4 - getHelpContent() returns combined content # time=0.761ms
     
     # Subtest: getHelpContent() handles unknown view
         ok 1 - has global shortcuts
         ok 2 - view help is null
         1..2
-    ok 5 - getHelpContent() handles unknown view # time=0.456ms
+    ok 5 - getHelpContent() handles unknown view # time=0.475ms
     
     # Subtest: formatHelpText() returns formatted string
         ok 1 - has title
@@ -79,19 +79,19 @@ TAP version 14
         ok 3 - has navigation category
         ok 4 - has dismiss hint
         1..4
-    ok 6 - formatHelpText() returns formatted string # time=0.795ms
+    ok 6 - formatHelpText() returns formatted string # time=0.784ms
     
     # Subtest: getStatusBarHints() returns hints for view
         ok 1 - has help hint
         ok 2 - has quit hint
         ok 3 - has drill down hint
         1..3
-    ok 7 - getStatusBarHints() returns hints for view # time=0.666ms
+    ok 7 - getStatusBarHints() returns hints for view # time=0.664ms
     
     # Subtest: getStatusBarHints() returns SQL-specific hints
         ok 1 - has execute hint
         1..1
-    ok 8 - getStatusBarHints() returns SQL-specific hints # time=0.346ms
+    ok 8 - getStatusBarHints() returns SQL-specific hints # time=0.334ms
     
     # Subtest: getUsageText() returns CLI usage
         ok 1 - has usage section
@@ -99,61 +99,61 @@ TAP version 14
         ok 3 - has help option
         ok 4 - has examples
         1..4
-    ok 9 - getUsageText() returns CLI usage # time=0.623ms
+    ok 9 - getUsageText() returns CLI usage # time=8.509ms
     
     # Subtest: show() sets visible and emits event
         ok 1 - should be equal
         ok 2 - emitted help:show
         1..2
-    ok 10 - show() sets visible and emits event # time=0.8ms
+    ok 10 - show() sets visible and emits event # time=0.921ms
     
     # Subtest: hide() clears visible and emits event
         ok 1 - should be equal
         ok 2 - emitted help:hide
         1..2
-    ok 11 - hide() clears visible and emits event # time=0.491ms
+    ok 11 - hide() clears visible and emits event # time=0.538ms
     
     # Subtest: toggle() toggles visibility
         ok 1 - should be equal
         ok 2 - should be equal
         ok 3 - should be equal
         1..3
-    ok 12 - toggle() toggles visibility # time=0.551ms
+    ok 12 - toggle() toggles visibility # time=0.611ms
     
     # Subtest: handleKey() dismisses when visible
         ok 1 - key was handled
         ok 2 - overlay hidden
         1..2
-    ok 13 - handleKey() dismisses when visible # time=0.466ms
+    ok 13 - handleKey() dismisses when visible # time=0.465ms
     
     # Subtest: handleKey() returns false when not visible
         ok 1 - key was not handled
         1..1
-    ok 14 - handleKey() returns false when not visible # time=0.355ms
+    ok 14 - handleKey() returns false when not visible # time=0.354ms
     
     # Subtest: getShortcutsByCategory() returns category shortcuts
         ok 1 - has navigation shortcuts
         ok 2 - has arrow keys
         1..2
-    ok 15 - getShortcutsByCategory() returns category shortcuts # time=0.506ms
+    ok 15 - getShortcutsByCategory() returns category shortcuts # time=0.562ms
     
     # Subtest: getShortcutsByCategory() returns empty for unknown
         ok 1 - should be equivalent
         1..1
-    ok 16 - getShortcutsByCategory() returns empty for unknown # time=1.577ms
+    ok 16 - getShortcutsByCategory() returns empty for unknown # time=1.531ms
     
     # Subtest: getViewShortcuts() returns view shortcuts
         ok 1 - has SQL shortcuts
         ok 2 - has execute shortcut
         1..2
-    ok 17 - getViewShortcuts() returns view shortcuts # time=0.499ms
+    ok 17 - getViewShortcuts() returns view shortcuts # time=0.475ms
     
     # Subtest: getViewShortcuts() returns empty for unknown
         ok 1 - should be equivalent
         1..1
-    ok 18 - getViewShortcuts() returns empty for unknown # time=0.367ms
+    ok 18 - getViewShortcuts() returns empty for unknown # time=0.364ms
     
     1..18
-ok 1 - HelpOverlay # time=33.311ms
+ok 1 - HelpOverlay # time=38.877ms
 
 1..1

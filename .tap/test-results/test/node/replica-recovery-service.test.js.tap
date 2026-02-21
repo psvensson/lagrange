@@ -4,34 +4,34 @@ TAP version 14
     ok 2 - should not be initialized
     ok 3 - should not be running
     1..3
-ok 1 - ReplicaRecoveryService - constructor # time=2.132ms
+ok 1 - ReplicaRecoveryService - constructor # time=2.266ms
 
 # Subtest: ReplicaRecoveryService - initialize
     ok 1 - should be initialized
     1..1
-ok 2 - ReplicaRecoveryService - initialize # time=0.805ms
+ok 2 - ReplicaRecoveryService - initialize # time=0.6ms
 
 # Subtest: ReplicaRecoveryService - initialize requires nodeId
     ok 1 - should have error message
     1..1
-ok 3 - ReplicaRecoveryService - initialize requires nodeId # time=0.341ms
+ok 3 - ReplicaRecoveryService - initialize requires nodeId # time=0.349ms
 
 # Subtest: ReplicaRecoveryService - start and stop
     ok 1 - should be running after start
     ok 2 - should not be running after stop
     1..2
-ok 4 - ReplicaRecoveryService - start and stop # time=0.629ms
+ok 4 - ReplicaRecoveryService - start and stop # time=0.469ms
 
 # Subtest: ReplicaRecoveryService - idle cadence backs off and resets on activity
     ok 1 - should increase interval after idle cycle
     ok 2 - should reset interval to base when activity is detected
     1..2
-ok 5 - ReplicaRecoveryService - idle cadence backs off and resets on activity # time=0.649ms
+ok 5 - ReplicaRecoveryService - idle cadence backs off and resets on activity # time=0.548ms
 
 # Subtest: ReplicaRecoveryService - start requires initialization
     ok 1 - should have error message
     1..1
-ok 6 - ReplicaRecoveryService - start requires initialization # time=0.286ms
+ok 6 - ReplicaRecoveryService - start requires initialization # time=0.28ms
 
 # Subtest: ReplicaRecoveryService - creates partition replica when below minimum
     ok 1 - should emit replicaCreated event
@@ -41,7 +41,7 @@ ok 6 - ReplicaRecoveryService - start requires initialization # time=0.286ms
     ok 5 - should create partition replica
     ok 6 - should have correct partition_id
     1..6
-ok 7 - ReplicaRecoveryService - creates partition replica when below minimum # time=1.097ms
+ok 7 - ReplicaRecoveryService - creates partition replica when below minimum # time=0.99ms
 
 # Subtest: ReplicaRecoveryService - creates message group replica when below minimum
     ok 1 - should emit replicaCreated event
@@ -51,24 +51,24 @@ ok 7 - ReplicaRecoveryService - creates partition replica when below minimum # t
     ok 5 - should create message group replica
     ok 6 - should have correct group_id
     1..6
-ok 8 - ReplicaRecoveryService - creates message group replica when below minimum # time=1.694ms
+ok 8 - ReplicaRecoveryService - creates message group replica when below minimum # time=0.859ms
 
 # Subtest: ReplicaRecoveryService - no recovery when replica count is sufficient
     ok 1 - should not create any replicas
     1..1
-ok 9 - ReplicaRecoveryService - no recovery when replica count is sufficient # time=0.886ms
+ok 9 - ReplicaRecoveryService - no recovery when replica count is sufficient # time=0.438ms
 
 # Subtest: ReplicaRecoveryService - prefers nodes without existing replicas
     ok 1 - should have one insert operation
     ok 2 - should create replica on node without existing replica
     1..2
-ok 10 - ReplicaRecoveryService - prefers nodes without existing replicas # time=0.935ms
+ok 10 - ReplicaRecoveryService - prefers nodes without existing replicas # time=0.618ms
 
-{"level":50,"time":"2026-02-20T13:47:35.776Z","nodeId":"f453344e-650e-47fe-b415-8ef5308c9c9c","pid":3230258,"subsystem":"replica-recovery","partitionId":"partition-1","needed":3,"nodeId":"f453344e-650e-47fe-b415-8ef5308c9c9c","msg":"No healthy nodes available for partition recovery"}
+{"level":50,"time":"2026-02-21T09:28:27.557Z","nodeId":"3c326ad2-f8c0-4eb7-8903-f2f48cbacd15","pid":3763294,"subsystem":"replica-recovery","partitionId":"partition-1","needed":3,"nodeId":"3c326ad2-f8c0-4eb7-8903-f2f48cbacd15","msg":"No healthy nodes available for partition recovery"}
 # Subtest: ReplicaRecoveryService - handles no healthy nodes
     ok 1 - should not create replicas when no healthy nodes
     1..1
-ok 11 - ReplicaRecoveryService - handles no healthy nodes # time=1.462ms
+ok 11 - ReplicaRecoveryService - handles no healthy nodes # time=1.058ms
 
 # Subtest: ReplicaRecoveryService - getStats
     ok 1 - should have nodeId
@@ -80,14 +80,14 @@ ok 11 - ReplicaRecoveryService - handles no healthy nodes # time=1.462ms
     ok 7 - should not be running
     ok 8 - should be initialized
     1..8
-ok 12 - ReplicaRecoveryService - getStats # time=1.233ms
+ok 12 - ReplicaRecoveryService - getStats # time=0.607ms
 
 # Subtest: ReplicaRecoveryService - shutdown
     ok 1 - should be running
     ok 2 - should not be running
     ok 3 - should not be initialized
     1..3
-ok 13 - ReplicaRecoveryService - shutdown # time=0.822ms
+ok 13 - ReplicaRecoveryService - shutdown # time=0.754ms
 
 # Subtest: ReplicaRecoveryService - NodeStatus values
     ok 1 - should have active
@@ -95,7 +95,7 @@ ok 13 - ReplicaRecoveryService - shutdown # time=0.822ms
     ok 3 - should have failed
     ok 4 - should have recovering
     1..4
-ok 14 - ReplicaRecoveryService - NodeStatus values # time=0.7ms
+ok 14 - ReplicaRecoveryService - NodeStatus values # time=0.445ms
 
 # Subtest: ReplicaRecoveryService - ReplicaStatus values
     ok 1 - should have active
@@ -104,12 +104,12 @@ ok 14 - ReplicaRecoveryService - NodeStatus values # time=0.7ms
     ok 4 - should have starting
     ok 5 - should have stopping
     1..5
-ok 15 - ReplicaRecoveryService - ReplicaStatus values # time=0.756ms
+ok 15 - ReplicaRecoveryService - ReplicaStatus values # time=0.428ms
 
 # Subtest: ReplicaRecoveryService - ServiceType values
     ok 1 - should have partition
     ok 2 - should have message_group
     1..2
-ok 16 - ReplicaRecoveryService - ServiceType values # time=0.515ms
+ok 16 - ReplicaRecoveryService - ServiceType values # time=0.305ms
 
 1..16

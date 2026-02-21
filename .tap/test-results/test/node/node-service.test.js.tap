@@ -4,7 +4,7 @@ TAP version 14
         ok 1 - should return same instance
         ok 2 - should be NodeService
         1..2
-    ok 1 - singleton pattern # time=7.545ms
+    ok 1 - singleton pattern # time=13.955ms
     
     # Subtest: initialization
         ok 1 - should not be initialized initially
@@ -13,17 +13,17 @@ TAP version 14
         ok 4 - should have node address
         ok 5 - should be active
         1..5
-    ok 2 - initialization # time=1.313ms
+    ok 2 - initialization # time=2.03ms
     
     # Subtest: initialization with custom options
         ok 1 - should use custom node ID
         1..1
-    ok 3 - initialization with custom options # time=0.608ms
+    ok 3 - initialization with custom options # time=0.877ms
     
     # Subtest: double initialization is idempotent
         ok 1 - should keep first node ID
         1..1
-    ok 4 - double initialization is idempotent # time=0.717ms
+    ok 4 - double initialization is idempotent # time=0.503ms
     
     # Subtest: start and stop service
         ok 1 - should return service ID
@@ -34,22 +34,22 @@ TAP version 14
         ok 6 - should be stopped
         ok 7 - should not find service after stop
         1..7
-    ok 5 - start and stop service # time=804.308ms
+    ok 5 - start and stop service # time=755.654ms
     
     # Subtest: start service without initialization throws
         ok 1 - should throw not initialized
         1..1
-    ok 6 - start service without initialization throws # time=1.249ms
+    ok 6 - start service without initialization throws # time=1.409ms
     
     # Subtest: start duplicate service throws
         ok 1 - should throw already exists
         1..1
-    ok 7 - start duplicate service throws # time=729.237ms
+    ok 7 - start duplicate service throws # time=621.241ms
     
     # Subtest: stop non-existent service throws
         ok 1 - should throw not found
         1..1
-    ok 8 - stop non-existent service throws # time=0.45ms
+    ok 8 - stop non-existent service throws # time=0.466ms
     
     # Subtest: get node stats
         ok 1 - should have node ID
@@ -69,7 +69,7 @@ TAP version 14
         ok 15 - should have OS
         ok 16 - should have Node version
         1..16
-    ok 9 - get node stats # time=2.834ms
+    ok 9 - get node stats # time=2.572ms
     
     # Subtest: get service health
         ok 1 - should have service ID
@@ -77,19 +77,19 @@ TAP version 14
         ok 3 - should be healthy
         ok 4 - should have last health check
         1..4
-    ok 10 - get service health # time=665.017ms
+    ok 10 - get service health # time=477.475ms
     
     # Subtest: get health for non-existent service throws
         ok 1 - should throw not found
         1..1
-    ok 11 - get health for non-existent service throws # time=0.44ms
+    ok 11 - get health for non-existent service throws # time=0.422ms
     
     # Subtest: get all services
         ok 1 - should have 2 services
         ok 2 - should include svc-1
         ok 3 - should include svc-2
         1..3
-    ok 12 - get all services # time=583.927ms
+    ok 12 - get all services # time=581.65ms
     
     # Subtest: get running service count
         ok 1 - should start with 0
@@ -97,7 +97,7 @@ TAP version 14
         ok 3 - should have 2 running
         ok 4 - should have 1 after stop
         1..4
-    ok 13 - get running service count # time=571.526ms
+    ok 13 - get running service count # time=640.177ms
     
     # Subtest: message group service tracking
         ok 1 - should have no MG initially
@@ -105,51 +105,51 @@ TAP version 14
         ok 3 - should get MG replica
         ok 4 - should be correct MG
         1..4
-    ok 14 - message group service tracking # time=588.852ms
+    ok 14 - message group service tracking # time=469.943ms
     
     # Subtest: route service message
         ok 1 - should get ok response
         ok 2 - should have service ID
         1..2
-    ok 15 - route service message # time=608.72ms
+    ok 15 - route service message # time=539.471ms
     
     # Subtest: route message to non-existent service throws
         ok 1 - should throw not found
         1..1
-    ok 16 - route message to non-existent service throws # time=0.401ms
+    ok 16 - route message to non-existent service throws # time=0.728ms
     
     # Subtest: emits events on service lifecycle
         ok 1 - should emit 2 events
         ok 2 - should be equivalent
         ok 3 - should be equivalent
         1..3
-    ok 17 - emits events on service lifecycle # time=566.581ms
+    ok 17 - emits events on service lifecycle # time=653.289ms
     
     # Subtest: shutdown cleans up all services
         ok 1 - should have 2 services
         ok 2 - should not be initialized
         ok 3 - should be stopped
         1..3
-    ok 18 - shutdown cleans up all services # time=611.644ms
+    ok 18 - shutdown cleans up all services # time=569.987ms
     
     # Subtest: lifecycle state machine is initialized on node init
         ok 1 - should be null before init
         ok 2 - should be READY after init
         ok 3 - should have state machine
         1..3
-    ok 19 - lifecycle state machine is initialized on node init # time=0.986ms
+    ok 19 - lifecycle state machine is initialized on node init # time=0.78ms
     
     # Subtest: getLifecycleState returns current state
         ok 1 - should return READY state
         ok 2 - should be string ready
         1..2
-    ok 20 - getLifecycleState returns current state # time=0.818ms
+    ok 20 - getLifecycleState returns current state # time=0.467ms
     
     # Subtest: isReady returns true when in READY state
         ok 1 - should be ready after init
         ok 2 - should not be draining
         1..2
-    ok 21 - isReady returns true when in READY state # time=0.789ms
+    ok 21 - isReady returns true when in READY state # time=0.614ms
     
     # Subtest: emits lifecycleStateChange events during initialization
         ok 1 - should emit 5 state change events
@@ -159,7 +159,7 @@ TAP version 14
         ok 5 - last from SYNCING
         ok 6 - last to READY
         1..6
-    ok 22 - emits lifecycleStateChange events during initialization # time=1.002ms
+    ok 22 - emits lifecycleStateChange events during initialization # time=1.271ms
     
     # Subtest: emits cdcNodeStateChange events for nodes table updates
         ok 1 - should emit 5 CDC events
@@ -168,7 +168,7 @@ TAP version 14
         ok 4 - should have previous state
         ok 5 - should have timestamp
         1..5
-    ok 23 - emits cdcNodeStateChange events for nodes table updates # time=0.676ms
+    ok 23 - emits cdcNodeStateChange events for nodes table updates # time=1.137ms
     
     # Subtest: shutdown transitions through DRAINING to STOPPED
         ok 1 - should emit 2 events during shutdown
@@ -177,7 +177,7 @@ TAP version 14
         ok 4 - second from DRAINING
         ok 5 - second to STOPPED
         1..5
-    ok 24 - shutdown transitions through DRAINING to STOPPED # time=4.128ms
+    ok 24 - shutdown transitions through DRAINING to STOPPED # time=6.239ms
     
     # Subtest: NodeState enum is exported correctly
         ok 1 - NodeState should be exported
@@ -190,13 +190,13 @@ TAP version 14
         ok 8 - DRAINING should be draining
         ok 9 - STOPPED should be stopped
         1..9
-    ok 25 - NodeState enum is exported correctly # time=0.867ms
+    ok 25 - NodeState enum is exported correctly # time=0.859ms
     
     # Subtest: isReady and isDraining return false before initialization
         ok 1 - should not be ready before init
         ok 2 - should not be draining before init
         1..2
-    ok 26 - isReady and isDraining return false before initialization # time=0.749ms
+    ok 26 - isReady and isDraining return false before initialization # time=0.446ms
     
     # Subtest: initialization can use externally managed lifecycle state machine
         ok 1 - should preserve externally managed initial state
@@ -204,9 +204,9 @@ TAP version 14
         ok 3 - should reflect external lifecycle transitions
         ok 4 - should forward external lifecycle events
         1..4
-    ok 27 - initialization can use externally managed lifecycle state machine # time=0.99ms
+    ok 27 - initialization can use externally managed lifecycle state machine # time=0.583ms
     
     1..27
-ok 1 - NodeService # time=6528.127ms
+ok 1 - NodeService # time=6198.707ms
 
 1..1

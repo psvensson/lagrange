@@ -3,7 +3,7 @@ TAP version 14
     ok 1 - Should not be initialized
     ok 2 - Should have no engine
     1..2
-ok 1 - FunctionQueryExecutor - constructor # time=64.261ms
+ok 1 - FunctionQueryExecutor - constructor # time=77.75ms
 
 Function query executor initialized
 # Subtest: FunctionQueryExecutor - initialize
@@ -11,81 +11,81 @@ Function query executor initialized
     ok 2 - Should have engine
     ok 3 - Should have registry
     1..3
-ok 2 - FunctionQueryExecutor - initialize # time=1.295ms
+ok 2 - FunctionQueryExecutor - initialize # time=1.61ms
 
-Executing query via FunctionQueryExecutor { sql: 'SELECT * FROM test', paramCount: 0, timeout: 30000 }
+Executing query via FunctionQueryExecutor { sql: [32m'SELECT * FROM test'[39m, paramCount: [33m0[39m, timeout: [33m30000[39m }
 Query executed successfully {
-  sql: 'SELECT * FROM test',
-  rowCount: 1,
-  affectedRows: 1,
-  durationMs: 1
+  sql: [32m'SELECT * FROM test'[39m,
+  rowCount: [33m1[39m,
+  affectedRows: [33m1[39m,
+  durationMs: [33m1[39m
 }
 # Subtest: FunctionQueryExecutor - executeQuery returns results
     ok 1 - Should succeed
     ok 2 - Should return rows
     ok 3 - Should have partitions
     1..3
-ok 3 - FunctionQueryExecutor - executeQuery returns results # time=2.273ms
+ok 3 - FunctionQueryExecutor - executeQuery returns results # time=2.879ms
 
 Executing query via FunctionQueryExecutor {
-  sql: 'SELECT * FROM test WHERE id = ?',
-  paramCount: 1,
-  timeout: 30000
+  sql: [32m'SELECT * FROM test WHERE id = ?'[39m,
+  paramCount: [33m1[39m,
+  timeout: [33m30000[39m
 }
 Query executed successfully {
-  sql: 'SELECT * FROM test WHERE id = ?',
-  rowCount: 1,
-  affectedRows: 1,
-  durationMs: 0
+  sql: [32m'SELECT * FROM test WHERE id = ?'[39m,
+  rowCount: [33m1[39m,
+  affectedRows: [33m1[39m,
+  durationMs: [33m0[39m
 }
 # Subtest: FunctionQueryExecutor - executeQuery with params
     ok 1 - Should succeed
     ok 2 - Should return 1 row
     1..2
-ok 4 - FunctionQueryExecutor - executeQuery with params # time=0.888ms
+ok 4 - FunctionQueryExecutor - executeQuery with params # time=1.18ms
 
-Executing query via FunctionQueryExecutor { sql: 'SELECT ERROR', paramCount: 0, timeout: 30000 }
+Executing query via FunctionQueryExecutor { sql: [32m'SELECT ERROR'[39m, paramCount: [33m0[39m, timeout: [33m30000[39m }
 # Subtest: FunctionQueryExecutor - executeQuery throws on error
     ok 1 - Should throw on error
     1..1
-ok 5 - FunctionQueryExecutor - executeQuery throws on error # time=2.734ms
+ok 5 - FunctionQueryExecutor - executeQuery throws on error # time=2.653ms
 
 # Subtest: FunctionQueryExecutor - executeQuery throws without engine
     ok 1 - Should throw without engine
     1..1
-ok 6 - FunctionQueryExecutor - executeQuery throws without engine # time=0.759ms
+ok 6 - FunctionQueryExecutor - executeQuery throws without engine # time=0.735ms
 
-Executing streaming query { sql: 'SELECT * FROM test', batchSize: 2 }
-Streaming query completed { sql: 'SELECT * FROM test', totalRows: 5, durationMs: 0 }
+Executing streaming query { sql: [32m'SELECT * FROM test'[39m, batchSize: [33m2[39m }
+Streaming query completed { sql: [32m'SELECT * FROM test'[39m, totalRows: [33m5[39m, durationMs: [33m1[39m }
 # Subtest: FunctionQueryExecutor - executeQueryWithCallback streams batches
     ok 1 - Should succeed
     ok 2 - Should count all rows
     ok 3 - Should have batches
     1..3
-ok 7 - FunctionQueryExecutor - executeQueryWithCallback streams batches # time=1.299ms
+ok 7 - FunctionQueryExecutor - executeQueryWithCallback streams batches # time=1.32ms
 
 # Subtest: FunctionQueryExecutor - executeQueryWithCallback requires callback
     ok 1 - Should require function callback
     1..1
-ok 8 - FunctionQueryExecutor - executeQueryWithCallback requires callback # time=0.718ms
+ok 8 - FunctionQueryExecutor - executeQueryWithCallback requires callback # time=0.836ms
 
 Executing query then invoke {
-  invocationId: 'a2f53c55-80f5-46c4-ac6e-0a998ab39ea1',
-  sql: 'SELECT * FROM test',
-  nextFunctionId: 'my-function'
+  invocationId: [32m'0aabdf85-a1fc-4e1c-b481-ace4d8def9e1'[39m,
+  sql: [32m'SELECT * FROM test'[39m,
+  nextFunctionId: [32m'my-function'[39m
 }
-Executing query via FunctionQueryExecutor { sql: 'SELECT * FROM test', paramCount: 0, timeout: 30000 }
+Executing query via FunctionQueryExecutor { sql: [32m'SELECT * FROM test'[39m, paramCount: [33m0[39m, timeout: [33m30000[39m }
 Query executed successfully {
-  sql: 'SELECT * FROM test',
-  rowCount: 1,
-  affectedRows: 1,
-  durationMs: 0
+  sql: [32m'SELECT * FROM test'[39m,
+  rowCount: [33m1[39m,
+  affectedRows: [33m1[39m,
+  durationMs: [33m0[39m
 }
 Query completed, function invoked {
-  invocationId: 'a2f53c55-80f5-46c4-ac6e-0a998ab39ea1',
-  nextFunctionId: 'my-function',
-  rowCount: 1,
-  durationMs: 0
+  invocationId: [32m'0aabdf85-a1fc-4e1c-b481-ace4d8def9e1'[39m,
+  nextFunctionId: [32m'my-function'[39m,
+  rowCount: [33m1[39m,
+  durationMs: [33m1[39m
 }
 # Subtest: FunctionQueryExecutor - executeQueryThenInvoke calls function
     ok 1 - Should succeed
@@ -96,19 +96,19 @@ Query completed, function invoked {
     ok 6 - Should pass query result
     ok 7 - Should pass extra context
     1..7
-ok 9 - FunctionQueryExecutor - executeQueryThenInvoke calls function # time=2.285ms
+ok 9 - FunctionQueryExecutor - executeQueryThenInvoke calls function # time=2.345ms
 
 Executing query then invoke {
-  invocationId: 'b18d1756-353d-4e60-b15f-87e5298366e3',
-  sql: 'SELECT * FROM test',
-  nextFunctionId: 'error-func'
+  invocationId: [32m'19add2ae-6a48-4d89-8fc8-533e9d3c4fc0'[39m,
+  sql: [32m'SELECT * FROM test'[39m,
+  nextFunctionId: [32m'error-func'[39m
 }
-Executing query via FunctionQueryExecutor { sql: 'SELECT * FROM test', paramCount: 0, timeout: 30000 }
+Executing query via FunctionQueryExecutor { sql: [32m'SELECT * FROM test'[39m, paramCount: [33m0[39m, timeout: [33m30000[39m }
 Query executed successfully {
-  sql: 'SELECT * FROM test',
-  rowCount: 1,
-  affectedRows: 1,
-  durationMs: 0
+  sql: [32m'SELECT * FROM test'[39m,
+  rowCount: [33m1[39m,
+  affectedRows: [33m1[39m,
+  durationMs: [33m0[39m
 }
 # Subtest: FunctionQueryExecutor - executeQueryThenInvoke returns failure on function error
     ok 1 - Should return failure
@@ -117,11 +117,11 @@ Query executed successfully {
     ok 4 - Should preserve query result
     ok 5 - Should preserve query rows
     1..5
-ok 10 - FunctionQueryExecutor - executeQueryThenInvoke returns failure on function error # time=1.512ms
+ok 10 - FunctionQueryExecutor - executeQueryThenInvoke returns failure on function error # time=1.938ms
 
 # Subtest: FunctionQueryExecutor - executeQueryThenInvoke throws without registry
     ok 1 - Should throw without registry
     1..1
-ok 11 - FunctionQueryExecutor - executeQueryThenInvoke throws without registry # time=0.737ms
+ok 11 - FunctionQueryExecutor - executeQueryThenInvoke throws without registry # time=1.409ms
 
 1..11

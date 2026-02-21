@@ -3,44 +3,44 @@ TAP version 14
     # Subtest: default sort is timestamp descending
         ok 1 - default sort is timestamp descending
         1..1
-    ok 1 - default sort is timestamp descending # time=8.465ms
+    ok 1 - default sort is timestamp descending # time=8.27ms
     
     # Subtest: ascending sort produces correct order
         ok 1 - ascending sort produces correct order
         1..1
-    ok 2 - ascending sort produces correct order # time=2.41ms
+    ok 2 - ascending sort produces correct order # time=7.653ms
     
     # Subtest: descending sort produces correct order
         ok 1 - descending sort produces correct order
         1..1
-    ok 3 - descending sort produces correct order # time=2.469ms
+    ok 3 - descending sort produces correct order # time=4.642ms
     
     # Subtest: toggling sort direction reverses order
         ok 1 - toggling sort direction reverses order
         1..1
-    ok 4 - toggling sort direction reverses order # time=1.652ms
+    ok 4 - toggling sort direction reverses order # time=12.666ms
     
     # Subtest: sort preserves all data
         ok 1 - sort preserves all data
         1..1
-    ok 5 - sort preserves all data # time=5.921ms
+    ok 5 - sort preserves all data # time=3.043ms
     
     # Subtest: sort handles null timestamps
         ok 1 - sort handles null timestamps
         1..1
-    ok 6 - sort handles null timestamps # time=1.351ms
+    ok 6 - sort handles null timestamps # time=2.12ms
     
     # Subtest: sort is stable for equal timestamps
         ok 1 - sort is stable for equal timestamps
         1..1
-    ok 7 - sort is stable for equal timestamps # time=0.734ms
+    ok 7 - sort is stable for equal timestamps # time=1.662ms
     
     # Subtest: sort works with filtered data
         ok 1 - sort works with filtered data
         1..1
-    ok 8 - sort works with filtered data # time=2.061ms
+    ok 8 - sort works with filtered data # time=3.579ms
     
     1..8
-ok 1 - Property 43: Logs Sorting Correctness # time=29.842ms
+ok 1 - Property 43: Logs Sorting Correctness # time=54.631ms
 
 1..1
