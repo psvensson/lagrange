@@ -15,6 +15,15 @@ import {
   LOGGING_LOG_MSG,
   LOGS_TABLE_DEFAULT,
 } from './logging-constants.js';
+import {
+  WORK_CLASS,
+  WORK_CLASS_SCHEDULER_ERROR,
+  WorkClassScheduler,
+} from '../runtime/work-class-scheduler.js';
+import {
+  CONTROL_PLANE_ROLLOUT_REQUIRED,
+  assertRequiredControlPlaneRollout,
+} from '../runtime/control-plane-rollout-controls.js';
 
 const LOGGING_PIPELINE_METRIC_PREFIX = Object.freeze({
   LOGGING: 'metrics.logging.',
@@ -41,6 +50,11 @@ class LogsTableService extends EventEmitter {
   constructor(options = {}) {
     super();
 
+    this.rolloutControls = assertRequiredControlPlaneRollout({
+      owner: 'LogsTableService',
+      controls: options.rolloutControls,
+      required: CONTROL_PLANE_ROLLOUT_REQUIRED.LOGS_TABLE_SERVICE,
+    });
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.partitionService = options.partitionService || null;
 
@@ -55,15 +69,27 @@ class LogsTableService extends EventEmitter {
       config.get(CONFIG_KEY.LOGGING_MAX_RETRIES) || LOGS_TABLE_DEFAULT.MAX_RETRIES;
     this.retryDelayMs = options.retryDelayMs ||
       config.get(CONFIG_KEY.LOGGING_RETRY_DELAY_MS) || LOGS_TABLE_DEFAULT.RETRY_DELAY_MS;
+    this.flushChunkSize = Number.isFinite(options.flushChunkSize) &&
+      options.flushChunkSize > 0 ?
+      Math.floor(options.flushChunkSize) :
+      LOGS_TABLE_DEFAULT.FLUSH_CHUNK_SIZE;
+    this.flushYieldMs = Number.isFinite(options.flushYieldMs) &&
+      options.flushYieldMs >= 0 ?
+      Math.floor(options.flushYieldMs) :
+      LOGS_TABLE_DEFAULT.FLUSH_YIELD_MS;
     this.maxPendingWrites = Number.isFinite(options.maxPendingWrites) &&
       options.maxPendingWrites > 0 ?
       Math.floor(options.maxPendingWrites) :
       LOGS_TABLE_DEFAULT.MAX_PENDING_WRITES;
+    this.workClassScheduler = options.workClassScheduler ||
+      new WorkClassScheduler();
 
     // State
     this.initialized = false;
     this.pendingWrites = [];
     this.flushTimer = null;
+    this.flushContinuationTimer = null;
+    this.flushWorkScheduled = false;
     this.isWriting = false;
     this.writeCount = 0;
     this.errorCount = 0;
@@ -78,9 +104,9 @@ class LogsTableService extends EventEmitter {
    * Get the singleton instance.
    * @return {LogsTableService} The logs table service instance.
    */
-  static getInstance() {
+  static getInstance(options = {}) {
     if (!LogsTableService.instance) {
-      LogsTableService.instance = new LogsTableService();
+      LogsTableService.instance = new LogsTableService(options);
     }
     return LogsTableService.instance;
   }
@@ -133,9 +159,32 @@ class LogsTableService extends EventEmitter {
       throw new Error(LOGGING_ERROR_MSG.LOGGING_SERVICE_REQUIRED);
     }
 
+    const backgroundChunkSize = Math.max(
+      1,
+      Math.min(
+        this.batchSize,
+        LOGS_TABLE_DEFAULT.BACKGROUND_FLUSH_CHUNK_SIZE,
+      ),
+    );
+    const backgroundYieldMs = Math.max(
+      0,
+      LOGS_TABLE_DEFAULT.BACKGROUND_FLUSH_YIELD_MS,
+    );
+    this.logger.log('metrics.logging.logs_table_connect.start', {
+      bufferedEntries: loggingService.getBufferSize(),
+      flushMode: 'background',
+      chunkSize: backgroundChunkSize,
+      yieldMs: backgroundYieldMs,
+    });
+
     // Register our write callback with the logging service
     const flushedCount = await loggingService.onLogsTableReady(
       (entry) => this.writeLogEntry(entry),
+      {
+        flushMode: 'background',
+        chunkSize: backgroundChunkSize,
+        yieldMs: backgroundYieldMs,
+      },
     );
 
     this.logger.log(LOGGING_LOG_MSG.connectedLoggingService(flushedCount));
@@ -177,22 +226,57 @@ class LogsTableService extends EventEmitter {
 
     // Flush if batch size reached
     if (this.pendingWrites.length >= this.batchSize) {
-      await this.flush();
+      await this.flush({
+        maxEntries: this.flushChunkSize,
+        yieldPending: true,
+      });
     }
   }
 
   /**
    * Flush pending log entries to the logs table.
+   * @param {Object} [options] - Flush behavior options.
+   * @param {number} [options.maxEntries] - Max entries to process in this pass.
+   * @param {boolean} [options.yieldPending] - Schedule continuation when pending entries remain.
    * @return {Promise<number>} Number of entries written.
    */
-  async flush() {
+  async flush(options = {}) {
+    const scheduleThroughWorkClass = options.scheduleThroughWorkClass !== false;
+    if (scheduleThroughWorkClass && this.workClassScheduler) {
+      if (this.flushWorkScheduled) {
+        return 0;
+      }
+      this.flushWorkScheduled = true;
+      try {
+        return await this.workClassScheduler.enqueue(WORK_CLASS.C, async () => {
+          return this.flush({
+            ...options,
+            scheduleThroughWorkClass: false,
+          });
+        });
+      } catch (error) {
+        if (error?.code === WORK_CLASS_SCHEDULER_ERROR.WORK_CLASS_C_SHED) {
+          this.recordDroppedWrite();
+          return 0;
+        }
+        throw error;
+      } finally {
+        this.flushWorkScheduled = false;
+      }
+    }
+
     if (this.isWriting || this.pendingWrites.length === 0) {
       return 0;
     }
 
+    const maxEntries = Number.isFinite(options.maxEntries) &&
+      options.maxEntries > 0 ?
+      Math.floor(options.maxEntries) :
+      this.pendingWrites.length;
+    const yieldPending = options.yieldPending === true;
+
     this.isWriting = true;
-    const entriesToWrite = [...this.pendingWrites];
-    this.pendingWrites = [];
+    const entriesToWrite = this.pendingWrites.splice(0, maxEntries);
 
     let writtenCount = 0;
 
@@ -216,9 +300,36 @@ class LogsTableService extends EventEmitter {
       }
     } finally {
       this.isWriting = false;
+      if (yieldPending && this.pendingWrites.length > 0) {
+        this.scheduleContinuationFlush();
+      }
     }
 
     return writtenCount;
+  }
+
+  /**
+   * Schedule a continuation flush for pending queued entries.
+   * @private
+   */
+  scheduleContinuationFlush() {
+    if (this.flushContinuationTimer) {
+      return;
+    }
+
+    this.flushContinuationTimer = setTimeout(() => {
+      this.flushContinuationTimer = null;
+      this.flush({
+        maxEntries: this.flushChunkSize,
+        yieldPending: true,
+      }).catch((error) => {
+        console.error(LOGGING_ERROR_MSG.PERIODIC_FLUSH_FAILED, error.message);
+      });
+    }, this.flushYieldMs);
+
+    if (this.flushContinuationTimer.unref) {
+      this.flushContinuationTimer.unref();
+    }
   }
 
   /**
@@ -314,6 +425,10 @@ class LogsTableService extends EventEmitter {
       clearInterval(this.flushTimer);
       this.flushTimer = null;
     }
+    if (this.flushContinuationTimer) {
+      clearTimeout(this.flushContinuationTimer);
+      this.flushContinuationTimer = null;
+    }
   }
 
   /**
@@ -327,9 +442,13 @@ class LogsTableService extends EventEmitter {
       writeCount: this.writeCount,
       errorCount: this.errorCount,
       isWriting: this.isWriting,
+      flushChunkSize: this.flushChunkSize,
+      flushYieldMs: this.flushYieldMs,
       maxPendingWrites: this.maxPendingWrites,
       droppedWrites: this.droppedWrites,
       selfLoopPreventedWrites: this.selfLoopPreventedWrites,
+      flushWorkScheduled: this.flushWorkScheduled,
+      workClassSchedulerEnabled: Boolean(this.workClassScheduler),
     };
   }
 
@@ -418,7 +537,7 @@ class LogsTableService extends EventEmitter {
     this.stopFlushTimer();
 
     // Final flush
-    if (this.pendingWrites.length > 0) {
+    while (this.pendingWrites.length > 0) {
       await this.flush();
     }
 

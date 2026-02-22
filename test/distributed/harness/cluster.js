@@ -10,6 +10,7 @@ import http from 'node:http';
 import {DockerProvider} from './docker-provider.js';
 import {ChaosPrimitives} from './chaos.js';
 import {LoadGenerator} from './load-generator.js';
+import {ENTRYPOINT_ENV} from '../../../src/constants/entrypoint.js';
 import {
   waitForConvergence,
   assertConsistency,
@@ -34,15 +35,33 @@ import {
 const BOOTSTRAP_POLL_INTERVAL_MS = 500;
 const ACTIVE_POLL_INTERVAL_MS = 1000;
 const ACTIVE_STATE = 'ACTIVE';
+const INACTIVE_STATE = 'inactive';
+const UNKNOWN_STATE = 'unknown';
+const UNKNOWN_PHASE = 'unknown';
 const DATA_DIR_PATH = '/data';
+const MIN_TIMEOUT_MS = 1;
 const HTTP_OK_LOWER = 200;
 const HTTP_OK_UPPER = 299;
 const FETCH_TIMEOUT_MS = 1000;
-const ADMIN_QUERY_TIMEOUT_MS = 5000;
+const BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS = 10000;
+const BOOTSTRAP_READY_STABLE_WINDOW_MS = 10000;
+const ADMIN_QUERY_TIMEOUT_MS = 15000;
+const LOG_COLLECTION_TIMEOUT_MS = 1000;
 const LOG_TAIL_LINES = 50;
 const BOOTSTRAP_HEALTH_PATH = '/health';
+const BOOTSTRAP_JOIN_READY_PATH = '/bootstrap/ready';
 const ADMIN_HEALTH_PATH = '/health';
 const ADMIN_STREAM_PATH = '/api/admin/stream';
+const HTTP_METHOD_GET = 'GET';
+const HTTP_HEADER_CONTENT_TYPE = 'Content-Type';
+const HTTP_HEADER_CONTENT_LENGTH = 'Content-Length';
+const HTTP_CONTENT_TYPE_JSON = 'application/json';
+const HTTP_ERROR_STATUS = -1;
+const JOINING_HTTP_TIMEOUT_ENV_KEY = ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS;
+const JOINING_LEADERSHIP_WAIT_TIMEOUT_ENV_KEY =
+  ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS;
+const JOINING_HTTP_TIMEOUT_DEFAULT_MS = 30000;
+const JOINING_LEADERSHIP_WAIT_TIMEOUT_DEFAULT_MS = 120000;
 const WS_HOST_ENV_KEY = 'TRANSPORT_WS_HOST';
 const WS_BIND_ALL_HOST = '0.0.0.0';
 const RAFT_PROVIDER_ENV_KEY = RAFT_PROVIDER_DEFAULTS.envKey;
@@ -68,6 +87,7 @@ const REACHABILITY_STATUS_HTTP = 'http_status_';
 const REACHABILITY_ERROR_UNKNOWN = 'unknown reachability error';
 const STATUS_ACTIVE_LOWER = ACTIVE_STATE.toLowerCase();
 const WS_READY_STATE_OPEN = 1;
+const WS_READY_STATE_CONNECTING = 0;
 const PLAYBACK_SCOPE_CLUSTER = 'cluster';
 const PLAYBACK_SCOPE_NODE = 'node';
 const PLAYBACK_SCOPE_CHAOS = 'chaos';
@@ -87,6 +107,15 @@ const CLUSTER_STAGE_SETUP_JOINER_STARTED = 'setup.joiner.started';
 const CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE =
   'setup.cluster.waiting-active';
 const CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE = 'setup.cluster.active';
+const STARTUP_GATE_STATE_SEED_LIVE = 'seed_live';
+const STARTUP_GATE_STATE_SEED_JOIN_READY = 'seed_join_ready';
+const STARTUP_GATE_STATE_CLUSTER_ACTIVE = 'cluster_active';
+const STARTUP_GATE_STATE = Object.freeze({
+  SEED_LIVE: STARTUP_GATE_STATE_SEED_LIVE,
+  SEED_JOIN_READY: STARTUP_GATE_STATE_SEED_JOIN_READY,
+  CLUSTER_ACTIVE: STARTUP_GATE_STATE_CLUSTER_ACTIVE,
+});
+const STARTUP_GATE_WAITING_EVENT_INTERVAL = 20;
 const CLUSTER_STAGE_SETUP_LOG_SUB_STARTING = 'setup.logs.subscription.starting';
 const CLUSTER_STAGE_SETUP_LOG_SUB_READY = 'setup.logs.subscription.ready';
 const CLUSTER_STAGE_SETUP_LOG_SUB_FAILED = 'setup.logs.subscription.failed';
@@ -117,23 +146,273 @@ const REUSE_ENTRYPOINT = Object.freeze(['sh', '-lc']);
 const REUSE_START_COMMAND =
   'rm -rf /data/* && exec node --max-old-space-size=1536 /app/src/index.js';
 const REUSE_START_COMMAND_ARGS = Object.freeze([REUSE_START_COMMAND]);
+const CONTAINER_STOP_NOT_RUNNING_PATTERN = 'is not running';
+const CONTAINER_STOP_NOT_FOUND_PATTERN = 'no such container';
+
+/**
+ * Simple HTTP request with timeout using node:http.
+ * Returns the status code, or -1 on error/timeout.
+ */
+function httpRequest(options = {}) {
+  const url = String(options.url || '');
+  const timeoutMs = Number(options.timeoutMs) || 0;
+  const method = typeof options.method === 'string' ?
+    options.method :
+    HTTP_METHOD_GET;
+  const includeBody = options.includeBody === true;
+  const hasBody = options.body !== undefined && options.body !== null;
+  const payload = hasBody ? JSON.stringify(options.body) : null;
+  const headers = hasBody ?
+    {
+      [HTTP_HEADER_CONTENT_TYPE]: HTTP_CONTENT_TYPE_JSON,
+      [HTTP_HEADER_CONTENT_LENGTH]: Buffer.byteLength(payload),
+    } :
+    undefined;
+
+  return new Promise((resolve) => {
+    const resolveError = () => {
+      if (includeBody) {
+        resolve({
+          status: HTTP_ERROR_STATUS,
+          body: null,
+        });
+        return;
+      }
+      resolve(HTTP_ERROR_STATUS);
+    };
+    const onResponse = (res) => {
+      if (!includeBody) {
+        res.resume();
+        resolve(res.statusCode);
+        return;
+      }
+
+      let rawBody = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        rawBody += chunk;
+      });
+      res.on('end', () => {
+        let parsedBody = null;
+        if (rawBody.length > 0) {
+          try {
+            parsedBody = JSON.parse(rawBody);
+          } catch (_parseError) {
+            parsedBody = null;
+          }
+        }
+        resolve({
+          status: res.statusCode,
+          body: parsedBody,
+        });
+      });
+    };
+    const requestOptions = {
+      timeout: timeoutMs,
+      headers,
+    };
+    const useGetRequest = method === HTTP_METHOD_GET && !hasBody;
+    const req = useGetRequest ?
+      http.get(url, requestOptions, onResponse) :
+      http.request(url, {
+        ...requestOptions,
+        method,
+      }, onResponse);
+    req.on('error', resolveError);
+    req.on('timeout', () => {
+      req.destroy();
+      resolveError();
+    });
+    if (payload !== null) {
+      req.write(payload);
+    }
+    if (!useGetRequest) {
+      req.end();
+    }
+  });
+}
 
 /**
  * Simple HTTP GET with timeout using node:http.
  * Returns the status code, or -1 on error/timeout.
  */
 function httpGet(url, timeoutMs) {
-  return new Promise((resolve) => {
-    const req = http.get(url, {timeout: timeoutMs}, (res) => {
-      res.resume();
-      resolve(res.statusCode);
-    });
-    req.on('error', () => resolve(-1));
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(-1);
-    });
+  return httpRequest({
+    url,
+    timeoutMs,
+    method: HTTP_METHOD_GET,
   });
+}
+
+/**
+ * Resolve a timeout override while enforcing a positive integer value.
+ * @param {*} value
+ * @param {number} fallback
+ * @returns {number}
+ */
+function resolvePositiveTimeoutMs(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < MIN_TIMEOUT_MS) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
+/**
+ * Resolve/reject with timeout protection for potentially hanging operations.
+ * @param {Promise<*>} promise
+ * @param {number} timeoutMs
+ * @param {string} timeoutMessage
+ * @returns {Promise<*>}
+ */
+function withTimeout(promise, timeoutMs, timeoutMessage) {
+  const boundedTimeoutMs = Math.max(MIN_TIMEOUT_MS, Number(timeoutMs) || 0);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(new Error(timeoutMessage));
+    }, boundedTimeoutMs);
+    if (typeof timer.unref === 'function') {
+      timer.unref();
+    }
+    Promise.resolve(promise)
+      .then((result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
+/**
+ * Format count-map entries as "key:value" pairs for diagnostic errors.
+ * @param {Map<string|number, number>} counts
+ * @returns {string}
+ */
+function formatCountSummary(counts) {
+  return Array.from(counts.entries())
+    .map(([key, count]) => String(key) + ':' + String(count))
+    .join(', ');
+}
+
+/**
+ * Format node diagnostics into compact "node=state" entries.
+ * @param {Array<Object>} nodeDiagnostics
+ * @returns {string}
+ */
+function formatNodeDiagnostics(nodeDiagnostics = []) {
+  return nodeDiagnostics
+    .map((diagnostic) => {
+      const nodeId = String(diagnostic.nodeId || 'unknown-node');
+      if (diagnostic.active === true) {
+        return nodeId + '=active';
+      }
+      if (typeof diagnostic.error === 'string' &&
+          diagnostic.error.length > 0) {
+        return nodeId + '=error:' + diagnostic.error;
+      }
+      const stateValue = typeof diagnostic.state === 'string' &&
+        diagnostic.state.length > 0 ?
+        diagnostic.state :
+        UNKNOWN_STATE;
+      return nodeId + '=' + stateValue;
+    })
+    .join(', ');
+}
+
+/**
+ * Poll a probe until success or timeout.
+ * @param {Object} options
+ * @param {function(): Promise<Object>} options.probe
+ * @param {function(Object): boolean} options.isSuccess
+ * @param {number} options.deadline
+ * @param {number} options.intervalMs
+ * @param {function(number): Promise<void>} options.sleep
+ * @param {function(Object): Promise<void>|void} [options.onAttempt]
+ * @returns {Promise<Object>}
+ */
+async function pollUntilCondition(options = {}) {
+  const deadline = Number(options.deadline) || Date.now();
+  const intervalMs = Math.max(0, Number(options.intervalMs) || 0);
+  const probe = options.probe;
+  const isSuccess = options.isSuccess;
+  const sleep = typeof options.sleep === 'function' ?
+    options.sleep :
+    async () => {};
+  const onAttempt = typeof options.onAttempt === 'function' ?
+    options.onAttempt :
+    null;
+
+  const startedAt = Date.now();
+  let attempts = 0;
+  let lastResult = null;
+
+  while (Date.now() < deadline) {
+    attempts += 1;
+    lastResult = await probe();
+    const elapsedMs = Date.now() - startedAt;
+    const attemptResult = {
+      attempts,
+      elapsedMs,
+      lastResult,
+      remainingMs: Math.max(0, deadline - Date.now()),
+    };
+
+    if (isSuccess(lastResult)) {
+      return {
+        success: true,
+        ...attemptResult,
+      };
+    }
+
+    if (onAttempt) {
+      await onAttempt(attemptResult);
+    }
+    await sleep(intervalMs);
+  }
+
+  return {
+    success: false,
+    attempts,
+    elapsedMs: Date.now() - startedAt,
+    lastResult,
+    remainingMs: 0,
+  };
+}
+
+/**
+ * Best-effort WebSocket close that suppresses transient close-time errors.
+ * @param {Object|null} socket
+ */
+function closeWebSocketSafely(socket) {
+  if (!socket || typeof socket.close !== 'function') {
+    return;
+  }
+  try {
+    socket.once('error', () => {});
+  } catch (_onceErr) {
+    // Ignore
+  }
+  try {
+    socket.close();
+  } catch (_closeErr) {
+    // Ignore
+  }
 }
 
 /**
@@ -201,6 +480,17 @@ function readContainerInspectEnvValue(inspect, key) {
 }
 
 /**
+ * Determine whether one reusable-container stop error can be ignored.
+ * @param {*} error
+ * @returns {boolean}
+ */
+function isIgnorableContainerStopError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes(CONTAINER_STOP_NOT_RUNNING_PATTERN) ||
+    message.includes(CONTAINER_STOP_NOT_FOUND_PATTERN);
+}
+
+/**
  * Build a health probe result from an HTTP status code.
  * @param {string} url
  * @param {number} statusCode
@@ -237,6 +527,7 @@ class NodeHandle {
     this._adminApiPort = adminApiPort;
     this._adminSocket = null;
     this._adminSocketReady = null;
+    this._pendingAdminSocket = null;
     this._pendingQueries = new Map();
     this._logStreamListeners = new Set();
     this._lastReachabilityDiagnostics = null;
@@ -365,6 +656,10 @@ class NodeHandle {
         // Best-effort cleanup
       }
     }
+    if (this._pendingAdminSocket &&
+      this._pendingAdminSocket.readyState === WS_READY_STATE_CONNECTING) {
+      closeWebSocketSafely(this._pendingAdminSocket);
+    }
     this._resetAdminSocket();
   }
 
@@ -423,16 +718,47 @@ class NodeHandle {
 
     this._adminSocketReady = new Promise((resolve, reject) => {
       const ws = new WebSocket(url);
+      this._pendingAdminSocket = ws;
+      let settled = false;
+      const connectTimeout = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        ws.off('open', onOpen);
+        ws.off('error', onOpenError);
+        closeWebSocketSafely(ws);
+        this._resetAdminSocket();
+        reject(new Error(
+          'Admin API query failed for node ' +
+          this.id + ': connection timed out',
+        ));
+      }, ADMIN_QUERY_TIMEOUT_MS);
+      if (typeof connectTimeout.unref === 'function') {
+        connectTimeout.unref();
+      }
 
       const onOpen = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(connectTimeout);
         ws.off('error', onOpenError);
+        this._pendingAdminSocket = null;
         this._bindAdminSocketHandlers(ws);
         this._adminSocket = ws;
         resolve(ws);
       };
 
       const onOpenError = (err) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(connectTimeout);
         ws.off('open', onOpen);
+        this._pendingAdminSocket = null;
         this._resetAdminSocket();
         reject(new Error(
           'Admin API query failed for node ' +
@@ -590,6 +916,7 @@ class NodeHandle {
   _resetAdminSocket() {
     this._adminSocket = null;
     this._adminSocketReady = null;
+    this._pendingAdminSocket = null;
   }
 
   /** Get node status from Admin API. */
@@ -764,6 +1091,84 @@ function distributeNodes(size, providers, nodesPerHost) {
 }
 
 /**
+ * Unified startup readiness gate.
+ * Drives startup readiness through deterministic states:
+ * seed_live -> seed_join_ready -> cluster_active.
+ */
+class StartupGate {
+  /**
+   * @param {Cluster} cluster
+   * @param {NodeHandle} seedNode
+   * @param {string} seedNodeId
+   */
+  constructor(cluster, seedNode, seedNodeId) {
+    this._cluster = cluster;
+    this._seedNode = seedNode;
+    this._seedNodeId = seedNodeId;
+    this._state = STARTUP_GATE_STATE.SEED_LIVE;
+  }
+
+  getState() {
+    return this._state;
+  }
+
+  /**
+   * Wait until seed bootstrap endpoint is join-ready.
+   * @returns {Promise<void>}
+   */
+  async waitForSeedJoinReady() {
+    this._cluster._recordClusterStage(
+      CLUSTER_STAGE_SETUP_SEED_BOOTSTRAP_WAITING,
+      {
+        nodeId: this._seedNodeId,
+        startupGateState: this._state,
+      },
+    );
+    await this._cluster._waitForBootstrapApi(this._seedNode);
+    this._state = STARTUP_GATE_STATE.SEED_JOIN_READY;
+    this._cluster._recordClusterStage(
+      CLUSTER_STAGE_SETUP_SEED_BOOTSTRAP_READY,
+      {
+        nodeId: this._seedNodeId,
+        startupGateState: this._state,
+      },
+    );
+  }
+
+  /**
+   * Wait until all cluster nodes are ACTIVE.
+   * @param {number} expectedNodeCount
+   * @returns {Promise<void>}
+   */
+  async waitForClusterActive(expectedNodeCount) {
+    if (this._state !== STARTUP_GATE_STATE.SEED_JOIN_READY) {
+      throw new Error(
+        'Startup gate state violation: expected ' +
+        STARTUP_GATE_STATE.SEED_JOIN_READY +
+        ' before cluster-active wait, got ' + this._state,
+      );
+    }
+
+    this._cluster._recordClusterStage(
+      CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+      {
+        expectedNodeCount,
+        startupGateState: this._state,
+      },
+    );
+    await this._cluster._waitForAllActive();
+    this._state = STARTUP_GATE_STATE.CLUSTER_ACTIVE;
+    this._cluster._recordClusterStage(
+      CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE,
+      {
+        nodeCount: this._cluster._nodes.size,
+        startupGateState: this._state,
+      },
+    );
+  }
+}
+
+/**
  * Unified cluster abstraction.
  * Scenarios interact exclusively with this interface.
  */
@@ -794,6 +1199,9 @@ class Cluster {
     this._traceManifest = null;
     this._traceStartWarning = null;
     this._cleanupUnregister = null;
+    this._httpGet = httpGet;
+    this._httpRequest = httpRequest;
+    this._activeLoadRuns = new Set();
   }
 
   _isContainerReuseEnabled() {
@@ -842,23 +1250,61 @@ class Cluster {
     return 'ddb-test-' + this._clusterId.slice(0, 8) + '-' + nodeId;
   }
 
-  _shouldRecreateReusableContainer(inspect, expectedNodeId, expectedProvider) {
+  _buildNodeEnv(nodeId, containerName, seedIp) {
+    const env = {};
+    env[CONTAINER_ENV_KEYS.NODE_ID] = nodeId;
+    env[CONTAINER_ENV_KEYS.DATA_DIR] = DATA_DIR_PATH;
+    env[CONTAINER_ENV_KEYS.NODE_ADDRESS] =
+      containerName + ':' + PORTS.REST;
+    env[WS_HOST_ENV_KEY] = WS_BIND_ALL_HOST;
+    env[RAFT_PROVIDER_ENV_KEY] =
+      String(this._config.raftProvider || RAFT_PROVIDER_DEFAULTS.provider);
+    if (this._config?.memoryLeak?.captureHeapArtifacts === true) {
+      const nearLimitCount = Number.isInteger(
+        this._config?.memoryLeak?.heapSnapshotNearLimitCount,
+      ) &&
+      this._config.memoryLeak.heapSnapshotNearLimitCount >=
+        HEAP_SNAPSHOT_NEAR_LIMIT_MIN_COUNT ?
+        this._config.memoryLeak.heapSnapshotNearLimitCount :
+        HEAP_SNAPSHOT_NEAR_LIMIT_DEFAULT_COUNT;
+      const existingNodeOptions = String(env[NODE_OPTIONS_ENV_KEY] || '').trim();
+      const leakNodeOptions = [
+        NODE_OPTION_HEAP_PROF,
+        NODE_OPTION_HEAP_SNAPSHOT_NEAR_LIMIT_PREFIX + nearLimitCount,
+      ].join(' ');
+      env[NODE_OPTIONS_ENV_KEY] = existingNodeOptions ?
+        existingNodeOptions + ' ' + leakNodeOptions :
+        leakNodeOptions;
+    }
+
+    if (seedIp) {
+      env[CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS] =
+        seedIp + ':' + PORTS.REST;
+      env[JOINING_HTTP_TIMEOUT_ENV_KEY] = String(
+        resolvePositiveTimeoutMs(
+          this._config?.timeouts?.joiningHttpTimeoutMs,
+          JOINING_HTTP_TIMEOUT_DEFAULT_MS,
+        ),
+      );
+      env[JOINING_LEADERSHIP_WAIT_TIMEOUT_ENV_KEY] = String(
+        resolvePositiveTimeoutMs(
+          this._config?.timeouts?.joiningLeadershipWaitTimeoutMs,
+          JOINING_LEADERSHIP_WAIT_TIMEOUT_DEFAULT_MS,
+        ),
+      );
+    }
+    return env;
+  }
+
+  _shouldRecreateReusableContainer(inspect, expectedEnv = {}) {
     if (!inspect || typeof inspect !== 'object') {
       return true;
     }
-    const currentNodeId = readContainerInspectEnvValue(
-      inspect,
-      CONTAINER_ENV_KEYS.NODE_ID,
-    );
-    if (currentNodeId !== expectedNodeId) {
-      return true;
-    }
-    const currentProvider = readContainerInspectEnvValue(
-      inspect,
-      RAFT_PROVIDER_ENV_KEY,
-    );
-    if (currentProvider !== expectedProvider) {
-      return true;
+    for (const [key, value] of Object.entries(expectedEnv)) {
+      const currentValue = readContainerInspectEnvValue(inspect, key);
+      if (String(currentValue || '') !== String(value)) {
+        return true;
+      }
     }
 
     const entrypoint = Array.isArray(inspect?.Config?.Entrypoint) ?
@@ -879,6 +1325,38 @@ class Cluster {
     }
 
     return false;
+  }
+
+  async _quiesceReusableContainers() {
+    if (!this._isContainerReuseEnabled()) {
+      return;
+    }
+    const provider = this._providers[this._hostAssignment[0]];
+    for (let index = 0; index < this._config.size; index++) {
+      const nodeId = this._buildNodeId(index);
+      const containerName = this._buildContainerName(nodeId, index);
+      let inspect = null;
+      try {
+        inspect = await provider.inspectContainerIfExists(containerName);
+      } catch (_inspectErr) {
+        inspect = null;
+      }
+      if (!inspect) {
+        continue;
+      }
+      const containerId = inspect.Id || inspect.id || containerName;
+      const status = String(inspect?.State?.Status || '').toLowerCase();
+      if (status !== CONTAINER_RUNNING_STATUS) {
+        continue;
+      }
+      try {
+        await provider.stopContainer(containerId);
+      } catch (error) {
+        if (!isIgnorableContainerStopError(error)) {
+          throw error;
+        }
+      }
+    }
   }
 
   /**
@@ -936,6 +1414,9 @@ class Cluster {
         networkId: this._networkId,
       },
     );
+    if (reuseContainers) {
+      await this._quiesceReusableContainers();
+    }
 
     const seedId = this._buildNodeId(0);
     this._recordClusterStage(
@@ -970,19 +1451,12 @@ class Cluster {
       },
     );
 
-    this._recordClusterStage(
-      CLUSTER_STAGE_SETUP_SEED_BOOTSTRAP_WAITING,
-      {
-        nodeId: seedId,
-      },
+    const startupGate = new StartupGate(
+      this,
+      seedNode,
+      seedId,
     );
-    await this._waitForBootstrapApi(seedNode);
-    this._recordClusterStage(
-      CLUSTER_STAGE_SETUP_SEED_BOOTSTRAP_READY,
-      {
-        nodeId: seedId,
-      },
-    );
+    await startupGate.waitForSeedJoinReady();
 
     for (let i = 1; i < this._config.size; i++) {
       const joinerId = this._buildNodeId(i);
@@ -1028,19 +1502,7 @@ class Cluster {
       );
     }
 
-    this._recordClusterStage(
-      CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
-      {
-        expectedNodeCount: this._config.size,
-      },
-    );
-    await this._waitForAllActive();
-    this._recordClusterStage(
-      CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE,
-      {
-        nodeCount: this._nodes.size,
-      },
-    );
+    await startupGate.waitForClusterActive(this._config.size);
     this._started = true;
     this._recordPlaybackEvent(
       PLAYBACK_EVENT_TYPE.CLUSTER_READY,
@@ -1118,6 +1580,7 @@ class Cluster {
         nodeCount: this._nodes.size,
       },
     );
+    await this._cancelActiveLoadRuns();
 
     // Collect final log snapshot and run analysis before teardown
     try {
@@ -1268,6 +1731,37 @@ class Cluster {
     }
   }
 
+  async _cancelActiveLoadRuns() {
+    if (this._activeLoadRuns.size === 0) {
+      return;
+    }
+
+    const activeRuns = Array.from(this._activeLoadRuns.values());
+    this._activeLoadRuns.clear();
+
+    for (const run of activeRuns) {
+      if (typeof run?.cancel !== 'function') {
+        continue;
+      }
+      try {
+        run.cancel();
+      } catch (_err) {
+        // Best-effort cancellation
+      }
+    }
+
+    await Promise.all(activeRuns.map(async (run) => {
+      if (typeof run?.waitComplete !== 'function') {
+        return;
+      }
+      try {
+        await run.waitComplete();
+      } catch (_err) {
+        // Best-effort completion wait
+      }
+    }));
+  }
+
   _unregisterCleanup() {
     if (typeof this._cleanupUnregister === 'function') {
       this._cleanupUnregister();
@@ -1381,6 +1875,7 @@ class Cluster {
     const nodes = Array.from(this._nodes.values());
     const generator = new LoadGenerator(nodes, options);
     const run = generator.start();
+    this._activeLoadRuns.add(run);
     let stopped = false;
     let cancelled = false;
     let progressTimer = null;
@@ -1420,6 +1915,7 @@ class Cluster {
         return;
       }
       stopped = true;
+      this._activeLoadRuns.delete(run);
       clearProgressTimer();
       this._recordPlaybackEvent(
         PLAYBACK_EVENT_TYPE.LOAD_COMPLETED,
@@ -1547,6 +2043,21 @@ class Cluster {
     );
   }
 
+  _recordPeriodicStartupWaitingStage(stage, attemptResult, details = {}) {
+    const attempts = Number(attemptResult?.attempts) || 0;
+    if (attempts % STARTUP_GATE_WAITING_EVENT_INTERVAL !== 0) {
+      return;
+    }
+    this._recordClusterStage(
+      stage,
+      {
+        attempts,
+        elapsedMs: Number(attemptResult?.elapsedMs) || 0,
+        ...details,
+      },
+    );
+  }
+
   async _runChaosAction(action, entityId, details, operation) {
     this._recordPlaybackEvent(
       PLAYBACK_EVENT_TYPE.CHAOS_ACTION_STARTED,
@@ -1576,36 +2087,7 @@ class Cluster {
     const reuseContainers = this._isContainerReuseEnabled();
     const containerName = this._buildContainerName(nodeId, nodeIndex);
 
-    const env = {};
-    env[CONTAINER_ENV_KEYS.NODE_ID] = nodeId;
-    env[CONTAINER_ENV_KEYS.DATA_DIR] = DATA_DIR_PATH;
-    env[CONTAINER_ENV_KEYS.NODE_ADDRESS] =
-      containerName + ':' + PORTS.REST;
-    env[WS_HOST_ENV_KEY] = WS_BIND_ALL_HOST;
-    env[RAFT_PROVIDER_ENV_KEY] =
-      String(this._config.raftProvider || RAFT_PROVIDER_DEFAULTS.provider);
-    if (this._config?.memoryLeak?.captureHeapArtifacts === true) {
-      const nearLimitCount = Number.isInteger(
-        this._config?.memoryLeak?.heapSnapshotNearLimitCount,
-      ) &&
-      this._config.memoryLeak.heapSnapshotNearLimitCount >=
-        HEAP_SNAPSHOT_NEAR_LIMIT_MIN_COUNT ?
-        this._config.memoryLeak.heapSnapshotNearLimitCount :
-        HEAP_SNAPSHOT_NEAR_LIMIT_DEFAULT_COUNT;
-      const existingNodeOptions = String(env[NODE_OPTIONS_ENV_KEY] || '').trim();
-      const leakNodeOptions = [
-        NODE_OPTION_HEAP_PROF,
-        NODE_OPTION_HEAP_SNAPSHOT_NEAR_LIMIT_PREFIX + nearLimitCount,
-      ].join(' ');
-      env[NODE_OPTIONS_ENV_KEY] = existingNodeOptions ?
-        existingNodeOptions + ' ' + leakNodeOptions :
-        leakNodeOptions;
-    }
-
-    if (seedIp) {
-      env[CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS] =
-        seedIp + ':' + PORTS.REST;
-    }
+    const env = this._buildNodeEnv(nodeId, containerName, seedIp);
 
     const labels = {
       [LABELS.CLUSTER]: this._clusterId,
@@ -1632,8 +2114,7 @@ class Cluster {
       if (existing &&
           this._shouldRecreateReusableContainer(
             existing,
-            nodeId,
-            env[RAFT_PROVIDER_ENV_KEY],
+            env,
           )) {
         const existingContainerId = existing.Id || existing.id || containerName;
         try {
@@ -1728,55 +2209,283 @@ class Cluster {
   async _waitForBootstrapApi(seedNode) {
     const timeout = this._config.timeouts?.nodeStartup ||
       TIMEOUTS.NODE_STARTUP;
+    const stableWindowMs = Math.max(
+      0,
+      this._config.timeouts?.bootstrapReadyStableWindowMs ??
+        BOOTSTRAP_READY_STABLE_WINDOW_MS,
+    );
     const deadline = Date.now() + timeout;
-    const url =
-      'http://' + seedNode.ip + ':' + PORTS.REST + BOOTSTRAP_HEALTH_PATH;
+    const bootstrapJoinReadyUrl =
+      'http://' + seedNode.ip + ':' + PORTS.REST + BOOTSTRAP_JOIN_READY_PATH;
+    const statusCounts = new Map();
+    const phaseCounts = new Map();
+    const reasonCounts = new Map();
+    let successWindowStartedAt = null;
+    const pollResult = await pollUntilCondition({
+      deadline,
+      intervalMs: BOOTSTRAP_POLL_INTERVAL_MS,
+      sleep: (ms) => this._sleep(ms),
+      probe: async () => {
+        const probeResponse = await this._httpRequest({
+          url: bootstrapJoinReadyUrl,
+          timeoutMs: BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS,
+          method: HTTP_METHOD_GET,
+          includeBody: true,
+        });
+        const normalizedProbe =
+          this._normalizeBootstrapReadinessProbeResult(probeResponse);
+        const status = normalizedProbe.status;
+        statusCounts.set(
+          status,
+          (statusCounts.get(status) || 0) + 1,
+        );
+        if (normalizedProbe.phase) {
+          phaseCounts.set(
+            normalizedProbe.phase,
+            (phaseCounts.get(normalizedProbe.phase) || 0) + 1,
+          );
+        }
+        for (const reason of normalizedProbe.reasons) {
+          reasonCounts.set(
+            reason,
+            (reasonCounts.get(reason) || 0) + 1,
+          );
+        }
+        const now = Date.now();
+        const success = status >= HTTP_OK_LOWER &&
+          status <= HTTP_OK_UPPER;
+        if (success) {
+          if (successWindowStartedAt === null) {
+            successWindowStartedAt = now;
+          }
+        } else {
+          successWindowStartedAt = null;
+        }
+        const stableElapsedMs = successWindowStartedAt === null ?
+          0 :
+          now - successWindowStartedAt;
+        return {
+          status,
+          phase: normalizedProbe.phase,
+          success,
+          state: normalizedProbe.state,
+          reasons: normalizedProbe.reasons,
+          retryAfterMs: normalizedProbe.retryAfterMs,
+          stableElapsedMs,
+          stable: success && stableElapsedMs >= stableWindowMs,
+        };
+      },
+      isSuccess: (result) => {
+        return result.stable === true;
+      },
+      onAttempt: ({attempts, elapsedMs, lastResult}) => {
+        this._recordPeriodicStartupWaitingStage(
+          CLUSTER_STAGE_SETUP_SEED_BOOTSTRAP_WAITING,
+          {
+            attempts,
+            elapsedMs,
+          },
+          {
+            nodeId: seedNode.id,
+            lastStatus: lastResult?.status ?? null,
+            lastPhase: lastResult?.phase ?? null,
+            lastState: lastResult?.state ?? null,
+            lastReasons: lastResult?.reasons || [],
+            stableWindowMs,
+            stableElapsedMs: lastResult?.stableElapsedMs ?? 0,
+          },
+        );
+      },
+    });
 
-    while (Date.now() < deadline) {
-      const status = await httpGet(url, FETCH_TIMEOUT_MS);
-      if (status >= HTTP_OK_LOWER && status <= HTTP_OK_UPPER) {
-        return;
-      }
-      await this._sleep(BOOTSTRAP_POLL_INTERVAL_MS);
+    if (pollResult.success) {
+      return;
     }
 
     await this._collectFailureLogs();
+    const statusSummary = formatCountSummary(statusCounts);
+    const phaseSummary = formatCountSummary(phaseCounts);
+    const reasonSummary = formatCountSummary(reasonCounts);
+    const lastStatus = pollResult.lastResult?.status ?? null;
+    const lastPhase = pollResult.lastResult?.phase || UNKNOWN_PHASE;
+    const lastState = pollResult.lastResult?.state || UNKNOWN_STATE;
+    const lastReasons = Array.isArray(pollResult.lastResult?.reasons) &&
+      pollResult.lastResult.reasons.length > 0 ?
+      pollResult.lastResult.reasons.join(',') :
+      'none';
     throw new Error(
-      'Seed node bootstrap API did not become available ' +
-      'within ' + timeout + 'ms',
+      'Seed node bootstrap API did not become join-ready ' +
+      'within ' + timeout + 'ms' +
+      ' (attempts=' + pollResult.attempts +
+      ', lastStatus=' + String(lastStatus) +
+      ', lastPhase=' + lastPhase +
+      ', lastState=' + lastState +
+      ', lastReasons=' + lastReasons +
+      ', stableWindowMs=' + stableWindowMs +
+      ', elapsedMs=' + pollResult.elapsedMs +
+      ', statusCounts=' + (statusSummary || 'none') +
+      ', phaseCounts=' + (phaseSummary || 'none') +
+      ', reasonCounts=' + (reasonSummary || 'none') +
+      ')',
     );
+  }
+
+  _normalizeBootstrapReadinessProbeResult(probeResponse) {
+    const normalized = {
+      status: HTTP_ERROR_STATUS,
+      phase: null,
+      state: null,
+      reasons: [],
+      retryAfterMs: null,
+    };
+
+    if (typeof probeResponse === 'number') {
+      normalized.status = probeResponse;
+      return normalized;
+    }
+
+    if (!probeResponse || typeof probeResponse !== 'object') {
+      return normalized;
+    }
+
+    normalized.status = Number.isFinite(probeResponse.status) ?
+      Math.floor(probeResponse.status) :
+      HTTP_ERROR_STATUS;
+
+    const body = probeResponse.body;
+    if (!body || typeof body !== 'object') {
+      return normalized;
+    }
+
+    normalized.phase = typeof body.phase === 'string' ? body.phase : null;
+    normalized.state = typeof body.state === 'string' ? body.state : null;
+    normalized.reasons = Array.isArray(body.reasons) ?
+      body.reasons.map((reason) => String(reason)) :
+      [];
+    normalized.retryAfterMs = Number.isFinite(body.retryAfterMs) ?
+      Math.floor(body.retryAfterMs) :
+      null;
+    return normalized;
+  }
+
+  async _probeClusterActiveState(deadline) {
+    const nodeDiagnostics = [];
+
+    for (const node of this._nodes.values()) {
+      const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
+      const probeTimeoutMs = Math.min(
+        ADMIN_QUERY_TIMEOUT_MS,
+        remainingMs,
+      );
+      try {
+        const status = await withTimeout(
+          node.getStatus(),
+          probeTimeoutMs,
+          'Node status probe timed out for ' + node.id,
+        );
+        const active = this._isNodeActive(status);
+        nodeDiagnostics.push({
+          nodeId: node.id,
+          active,
+          state: active ?
+            ACTIVE_STATE.toLowerCase() :
+            (this._extractNodeState(status) || INACTIVE_STATE),
+          error: null,
+        });
+      } catch (error) {
+        nodeDiagnostics.push({
+          nodeId: node.id,
+          active: false,
+          state: INACTIVE_STATE,
+          error: normalizeProbeError(error),
+        });
+      }
+    }
+
+    return {
+      allActive: nodeDiagnostics.every((diagnostic) => diagnostic.active === true),
+      nodeDiagnostics,
+    };
   }
 
   async _waitForAllActive() {
     const timeout = this._config.timeouts?.convergence ||
       TIMEOUTS.CONVERGENCE;
     const deadline = Date.now() + timeout;
-
-    while (Date.now() < deadline) {
-      let allActive = true;
-      for (const node of this._nodes.values()) {
-        try {
-          const status = await node.getStatus();
-          if (!this._isNodeActive(status)) {
-            allActive = false;
-            break;
+    const inactiveSummaryCounts = new Map();
+    const pollResult = await pollUntilCondition({
+      deadline,
+      intervalMs: ACTIVE_POLL_INTERVAL_MS,
+      sleep: (ms) => this._sleep(ms),
+      probe: () => this._probeClusterActiveState(deadline),
+      isSuccess: (result) => result.allActive === true,
+      onAttempt: ({attempts, elapsedMs, lastResult}) => {
+        for (const diagnostic of lastResult.nodeDiagnostics || []) {
+          if (diagnostic.active === true) {
+            continue;
           }
-        } catch (_err) {
-          allActive = false;
-          break;
+          const summaryKey = diagnostic.error ?
+            'error:' + diagnostic.error :
+            'state:' + (diagnostic.state || UNKNOWN_STATE);
+          inactiveSummaryCounts.set(
+            summaryKey,
+            (inactiveSummaryCounts.get(summaryKey) || 0) + 1,
+          );
         }
-      }
-      if (allActive) {
-        return;
-      }
-      await this._sleep(ACTIVE_POLL_INTERVAL_MS);
+
+        this._recordPeriodicStartupWaitingStage(
+          CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+          {
+            attempts,
+            elapsedMs,
+          },
+          {
+            nodeDiagnostics: lastResult.nodeDiagnostics || [],
+          },
+        );
+      },
+    });
+
+    if (pollResult.success) {
+      return;
     }
 
     await this._collectFailureLogs();
+    const nodeDiagnosticsSummary = formatNodeDiagnostics(
+      pollResult.lastResult?.nodeDiagnostics || [],
+    );
+    const inactiveSummary = formatCountSummary(inactiveSummaryCounts);
     throw new Error(
       'Not all nodes reached ' + ACTIVE_STATE +
-      ' state within ' + timeout + 'ms',
+      ' state within ' + timeout + 'ms' +
+      ' (attempts=' + pollResult.attempts +
+      ', elapsedMs=' + pollResult.elapsedMs +
+      ', nodeDiagnostics=' + (nodeDiagnosticsSummary || 'none') +
+      ', inactiveSummary=' + (inactiveSummary || 'none') +
+      ')',
     );
+  }
+
+  _extractNodeState(status) {
+    if (!status) {
+      return null;
+    }
+    if (Array.isArray(status.rows) && status.rows.length > 0) {
+      const row = status.rows[0];
+      if (typeof row.status === 'string' && row.status.length > 0) {
+        return row.status.toLowerCase();
+      }
+      if (typeof row.state === 'string' && row.state.length > 0) {
+        return row.state.toLowerCase();
+      }
+    }
+    if (typeof status.status === 'string' && status.status.length > 0) {
+      return status.status.toLowerCase();
+    }
+    if (typeof status.state === 'string' && status.state.length > 0) {
+      return status.state.toLowerCase();
+    }
+    return null;
   }
 
   _isNodeActive(status) {
@@ -1800,7 +2509,11 @@ class Cluster {
   async _collectFailureLogs() {
     for (const node of this._nodes.values()) {
       try {
-        const logs = await node.getLogs({tail: LOG_TAIL_LINES});
+        const logs = await withTimeout(
+          node.getLogs({tail: LOG_TAIL_LINES}),
+          LOG_COLLECTION_TIMEOUT_MS,
+          'Timed out collecting logs for node ' + node.id,
+        );
         process.stderr.write(
           '--- Logs from ' + node.id +
           ' (' + node.role + ') ---\n' + logs + '\n',

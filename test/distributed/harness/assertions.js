@@ -81,6 +81,15 @@ const OPERATION_FIELD_CANDIDATE_TIMESTAMPS = Object.freeze([
   'created_at',
   'timestamp',
 ]);
+const REPLICA_OPERATION_STATUS_ACTIVE = 'active';
+const REPLICA_OPERATION_STATUS_REMOVED = 'removed';
+const REPLICA_OPERATION_STATUS_FAILED = 'failed';
+const REPLICA_OPERATION_STATUS_UNKNOWN = 'unknown';
+const REPLICA_OPERATION_TERMINAL_STATUSES = new Set([
+  REPLICA_OPERATION_STATUS_ACTIVE,
+  REPLICA_OPERATION_STATUS_REMOVED,
+  REPLICA_OPERATION_STATUS_FAILED,
+]);
 
 /**
  * Probe reachability with structured diagnostics when available.
@@ -290,19 +299,24 @@ async function queryReachableClusterSnapshot(nodes) {
       if (!report.reachable) {
         continue;
       }
-      const [servicesResult, partitionsResult] =
+      const [servicesResult, partitionsResult, operationsResult] =
         await Promise.all([
           node.query(SERVICES_QUERY),
           node.query(PARTITIONS_QUERY),
+          node.query(REPLICA_OPERATIONS_QUERY),
         ]);
       const servicesRows = Array.isArray(servicesResult?.rows) ?
         servicesResult.rows :
         [];
       const expectedPartitionIds = extractPartitionIds(partitionsResult?.rows);
+      const operationRows = Array.isArray(operationsResult?.rows) ?
+        operationsResult.rows :
+        [];
       return {
         nodeId: String(node?.id || VALUE_UNKNOWN),
         servicesRows,
         expectedPartitionIds,
+        operationRows,
         error: null,
       };
     } catch (err) {
@@ -313,6 +327,7 @@ async function queryReachableClusterSnapshot(nodes) {
     nodeId: null,
     servicesRows: [],
     expectedPartitionIds: new Set(),
+    operationRows: [],
     error: lastError,
   };
 }
@@ -366,6 +381,9 @@ async function waitForConvergence(nodes, options = {}) {
   let latestLeaders = new Map();
   let latestRows = [];
   let latestExpectedPartitionIds = new Set();
+  let latestOperationRows = [];
+  let latestInFlightReplicaOperationCount = 0;
+  let latestInFlightReplicaOperationStatuses = new Map();
   let latestSnapshotNodeId = null;
   let latestSnapshotError = null;
 
@@ -377,11 +395,17 @@ async function waitForConvergence(nodes, options = {}) {
     const snapshot = await queryReachableClusterSnapshot(nodes);
     latestRows = snapshot.servicesRows;
     latestExpectedPartitionIds = snapshot.expectedPartitionIds;
+    latestOperationRows = snapshot.operationRows;
     latestSnapshotNodeId = snapshot.nodeId;
     latestSnapshotError = snapshot.error;
 
     latestCounts = countVotersPerPartition(latestRows);
     latestLeaders = extractLeaders(latestRows);
+    const inFlightSummary = summarizeInFlightReplicaOperations(
+      latestOperationRows,
+    );
+    latestInFlightReplicaOperationCount = inFlightSummary.total;
+    latestInFlightReplicaOperationStatuses = inFlightSummary.statusCounts;
 
     // Detect leader changes.
     for (const [pid, addr] of latestLeaders) {
@@ -402,13 +426,17 @@ async function waitForConvergence(nodes, options = {}) {
     const hasOverTarget = [...latestCounts.values()].some(
       (c) => c > targetVoterCount,
     );
+    const hasInFlightReplicaOperations =
+      latestInFlightReplicaOperationCount > 0;
     const quietElapsed = now - lastLeaderChangeAt;
     const allHaveLeaders = latestExpectedPartitionIds.size > 0 &&
       [...latestExpectedPartitionIds].every(
         (pid) => latestLeaders.has(pid),
       );
 
-    if (!hasOverTarget && quietElapsed >= quietWindowMs &&
+    if (!hasOverTarget &&
+        !hasInFlightReplicaOperations &&
+        quietElapsed >= quietWindowMs &&
         allHaveLeaders) {
       finalizeOverTargetState(overTargetState, now);
       const maxOT = Math.max(
@@ -455,6 +483,10 @@ async function waitForConvergence(nodes, options = {}) {
       overTargetSummary[pid] = entry.maxOverTargetMs;
     }
   }
+  const inFlightReplicaOperationSummary = {};
+  for (const [status, count] of latestInFlightReplicaOperationStatuses) {
+    inFlightReplicaOperationSummary[status] = count;
+  }
   const expectedPartitions = [...latestExpectedPartitionIds].sort();
 
   const partitionMembership = buildPartitionMembership(
@@ -483,6 +515,10 @@ async function waitForConvergence(nodes, options = {}) {
     'Expected partitions: ' + JSON.stringify(expectedPartitions) + '. ' +
     'Voter counts: ' + JSON.stringify(voterSummary) + '. ' +
     'Leaders: ' + JSON.stringify(leaderSummary) + '. ' +
+    'In-flight replica operations: ' +
+    latestInFlightReplicaOperationCount + '. ' +
+    'In-flight statuses: ' +
+    JSON.stringify(inFlightReplicaOperationSummary) + '. ' +
     'Over-target durations: ' + JSON.stringify(overTargetSummary) + '. ' +
     'Replica membership: ' + membershipSnippet + '. ' +
     'Operation history: ' + operationHistorySnippet;
@@ -492,6 +528,9 @@ async function waitForConvergence(nodes, options = {}) {
     voterCounts: voterSummary,
     leaders: leaderSummary,
     leaderChanges,
+    inFlightReplicaOperationCount: latestInFlightReplicaOperationCount,
+    inFlightReplicaOperationStatuses: inFlightReplicaOperationSummary,
+    replicaOperationRows: latestOperationRows,
     maxOverTargetMs: maxOT,
     overTargetDurations: overTargetSummary,
     expectedPartitions,
@@ -503,6 +542,30 @@ async function waitForConvergence(nodes, options = {}) {
     elapsedMs: Date.now() - startMs,
   };
   throw err;
+}
+
+function summarizeInFlightReplicaOperations(rows) {
+  const statusCounts = new Map();
+  if (!Array.isArray(rows)) {
+    return {
+      total: 0,
+      statusCounts,
+    };
+  }
+  for (const row of rows) {
+    const status = String(
+      row?.status || row?.state || REPLICA_OPERATION_STATUS_UNKNOWN,
+    ).toLowerCase();
+    if (REPLICA_OPERATION_TERMINAL_STATUSES.has(status)) {
+      continue;
+    }
+    statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+  }
+  return {
+    total: Array.from(statusCounts.values())
+      .reduce((sum, count) => sum + count, 0),
+    statusCounts,
+  };
 }
 
 function buildPartitionMembership(rows, targetVoterCount) {
@@ -774,13 +837,25 @@ async function assertConsistency(nodes) {
 
   // Collect state from each reachable node.
   const nodeStates = [];
+  const queryFailures = [];
   for (const node of reachable) {
-    const [nodesResult, partResult, svcResult] =
-      await Promise.all([
-        node.query(NODES_QUERY),
-        node.query(PARTITIONS_QUERY),
-        node.query(SERVICES_QUERY),
-      ]);
+    let nodesResult;
+    let partResult;
+    let svcResult;
+    try {
+      [nodesResult, partResult, svcResult] =
+        await Promise.all([
+          node.query(NODES_QUERY),
+          node.query(PARTITIONS_QUERY),
+          node.query(SERVICES_QUERY),
+        ]);
+    } catch (error) {
+      queryFailures.push({
+        nodeId: node.id,
+        error: error?.message || String(error),
+      });
+      continue;
+    }
 
     const activeNodes = ((nodesResult && nodesResult.rows) || [])
       .map((r) => r.node_id)
@@ -806,6 +881,21 @@ async function assertConsistency(nodes) {
       partitions,
       leaders,
     });
+  }
+
+  if (nodeStates.length < 2) {
+    const summary = summarizeReachabilityReports(reports);
+    const queryFailureSummary = queryFailures
+      .map((failure) => failure.nodeId + '=' + failure.error)
+      .join('; ');
+    throw new Error(
+      'Cannot assert consistency: fewer than 2 queryable ' +
+      'nodes (found ' + nodeStates.length + '). Reachability: ' +
+      summary +
+      (queryFailureSummary ?
+        '. Query failures: ' + queryFailureSummary :
+        ''),
+    );
   }
 
   // Compare all states against the first node.

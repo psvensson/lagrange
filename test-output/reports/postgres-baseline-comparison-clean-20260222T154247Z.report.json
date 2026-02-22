@@ -1,0 +1,357 @@
+{
+  "timestamp": "2026-02-22T15:45:08.043Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 140221
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 3,
+    "scenariosWithPriorities": 1,
+    "topComponents": [
+      {
+        "component": "error_retry_path",
+        "count": 1,
+        "highestPriority": "high",
+        "highestScore": 80
+      },
+      {
+        "component": "convergence_control_plane",
+        "count": 1,
+        "highestPriority": "medium",
+        "highestScore": 60
+      },
+      {
+        "component": "replication_write_path",
+        "count": 1,
+        "highestPriority": "medium",
+        "highestScore": 60
+      }
+    ],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 13,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 1,
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 6,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|{\"workload\":\"benchmark_events_mixed\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+        "current": {
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 140221,
+          "opsPerSec": 6.2424420694839355,
+          "p99LatencyMs": 0,
+          "opsPerSecPerNode": 2.0808140231613117
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-22T15:39:36.909Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-clean-20260222T153720Z.report.json",
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 136158,
+          "opsPerSec": 6.104186641099393,
+          "p99LatencyMs": 0,
+          "opsPerSecPerNode": 2.034728880366464
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": 4063,
+          "durationRatio": 0.029840332554826012,
+          "opsPerSec": 0.13825542838454297,
+          "opsPerSecRatio": 0.02264927934111178,
+          "opsPerSecPerNode": 0.046085142794847656,
+          "opsPerSecPerNodeRatio": 0.02264927934111178,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": {
+          "engine": "postgres",
+          "throughputRatioSutToBaseline": 0.052018616567346826,
+          "p99LatencyRatioSutToBaselineAvg": 0,
+          "sutOpsPerSec": 6.2424420694839355,
+          "baselineTps": 120.00400013333778,
+          "sutP99LatencyMs": 0,
+          "baselineLatencyAvgMs": 0.6977777777777778,
+          "cache": {
+            "enabled": true,
+            "hit": false,
+            "key": "v3-88f627e0690d0dffc0c82949f3277bc25ecd128fdbf28518e61a629a82298123",
+            "path": "test-output/reports/.playback/postgres-baseline-comparison-clean-20260222T154247Z/postgres-baseline-cache/v3-88f627e0690d0dffc0c82949f3277bc25ecd128fdbf28518e61a629a82298123.json",
+            "cachedAt": "2026-02-22T15:45:07.105Z",
+            "reason": "cache-stored"
+          }
+        },
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": true,
+      "duration": 140221,
+      "clusterSize": 3,
+      "startedAt": "2026-02-22T15:42:47.800Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1771774967801,
+        "endedAt": 1771775108040,
+        "durationMs": 140239,
+        "files": {
+          "events": "test-output/reports/.playback/postgres-baseline-comparison-clean-20260222T154247Z/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/postgres-baseline-comparison-clean-20260222T154247Z/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/postgres-baseline-comparison-clean-20260222T154247Z/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/postgres-baseline-comparison-clean-20260222T154247Z/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/postgres-baseline-comparison-clean-20260222T154247Z/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 150,
+          "samples": 288,
+          "snapshots": 79
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "loadMetrics": {
+          "total": 191,
+          "success": 0,
+          "failed": 191,
+          "errors": 191,
+          "latency": {
+            "avg": 0,
+            "p50": 0,
+            "p95": 0,
+            "p99": 0
+          },
+          "opsPerSec": 6.2424420694839355,
+          "distinctErrors": [
+            "Admin API query failed for node 7493b0ab-a054-5fad-a91b-5e331db29304: Distributed operation failed due to participant failures",
+            "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 after 5000ms"
+          ]
+        },
+        "details": {
+          "benchmark": {
+            "tool": "shared-load-generator",
+            "workload": "benchmark_events_mixed",
+            "durationSeconds": 30,
+            "clients": 8,
+            "jobs": 4,
+            "loadTargetOpsPerSec": 120,
+            "loadDuration": "30s",
+            "loadMaxInFlight": 16,
+            "operations": [
+              "INSERT",
+              "SELECT"
+            ],
+            "tableName": "benchmark_events"
+          },
+          "baseline": {
+            "engine": "postgres",
+            "image": "postgres:16",
+            "containerIp": "172.18.0.5",
+            "replicaContainerIps": [
+              "172.18.0.6",
+              "172.18.0.7"
+            ],
+            "replicationFactor": 3,
+            "syncReplicaAcks": 1,
+            "loadNodeCount": 8,
+            "poolMaxConnections": 16,
+            "cache": {
+              "enabled": true,
+              "hit": false,
+              "key": "v3-88f627e0690d0dffc0c82949f3277bc25ecd128fdbf28518e61a629a82298123",
+              "path": "test-output/reports/.playback/postgres-baseline-comparison-clean-20260222T154247Z/postgres-baseline-cache/v3-88f627e0690d0dffc0c82949f3277bc25ecd128fdbf28518e61a629a82298123.json",
+              "cachedAt": "2026-02-22T15:45:07.105Z",
+              "reason": "cache-stored"
+            },
+            "metrics": {
+              "total": 3600,
+              "success": 3600,
+              "failed": 0,
+              "errors": 0,
+              "latency": {
+                "avg": 0.6977777777777778,
+                "p50": 1,
+                "p95": 1,
+                "p99": 2
+              },
+              "opsPerSec": 120.00400013333778
+            }
+          },
+          "systemUnderTest": {
+            "seedNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "metrics": {
+              "opsPerSec": 6.2424420694839355,
+              "latency": {
+                "avg": 0,
+                "p50": 0,
+                "p95": 0,
+                "p99": 0
+              },
+              "total": 191,
+              "success": 0,
+              "failed": 191,
+              "errors": 191,
+              "loadTargetOpsPerSec": 120,
+              "loadMaxInFlight": 16
+            }
+          },
+          "comparison": {
+            "sutOpsPerSec": 6.2424420694839355,
+            "sutP99LatencyMs": 0,
+            "baselineTps": 120.00400013333778,
+            "baselineLatencyAvgMs": 0.6977777777777778,
+            "throughputRatioSutToBaseline": 0.052018616567346826,
+            "p99LatencyRatioSutToBaselineAvg": 0
+          },
+          "convergence": {
+            "settledAfterMs": 5177,
+            "leaderChanges": 0,
+            "maxOverTargetMs": 0
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": {
+        "total": 191,
+        "success": 0,
+        "failed": 191,
+        "errors": 191,
+        "latency": {
+          "avg": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "opsPerSec": 6.2424420694839355
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": [
+        {
+          "component": "error_retry_path",
+          "signal": "load_failure_rate",
+          "priority": "high",
+          "score": 80,
+          "reason": "Observed request failures suggest expensive retries or transient routing instability.",
+          "evidence": {
+            "total": 191,
+            "failed": 191,
+            "errors": 191,
+            "failureRate": 2
+          }
+        },
+        {
+          "component": "convergence_control_plane",
+          "signal": "convergence_settle_time",
+          "priority": "medium",
+          "score": 60,
+          "reason": "Convergence delay suggests extra work in replica movement, promotion, or membership updates.",
+          "evidence": {
+            "settledAfterMs": 5177,
+            "leaderChanges": 0
+          }
+        },
+        {
+          "component": "replication_write_path",
+          "signal": "baseline_throughput_gap",
+          "priority": "medium",
+          "score": 60,
+          "reason": "System throughput is significantly below baseline under identical workload.",
+          "evidence": {
+            "throughputRatioSutToBaseline": 0.052018616567346826,
+            "sutOpsPerSec": 6.2424420694839355,
+            "baselineTps": 120.00400013333778
+          }
+        }
+      ]
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": true,
+    "status": "passed",
+    "reason": null,
+    "settings": {
+      "enabled": true,
+      "maxThroughputRegressionRatio": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 1,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|{\"workload\":\"benchmark_events_mixed\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+        "currentOpsPerSec": 6.2424420694839355,
+        "baselineOpsPerSec": 6.104186641099393,
+        "throughputRegressionRatio": -0.02264927934111178,
+        "threshold": 0.1,
+        "regressedBeyondThreshold": false,
+        "mitigationApplied": false,
+        "approvedMitigationId": null,
+        "baselineReportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-clean-20260222T153720Z.report.json",
+        "baselineReportTimestamp": "2026-02-22T15:39:36.909Z"
+      }
+    ]
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node-timeout180.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

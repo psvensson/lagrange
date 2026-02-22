@@ -99,6 +99,9 @@ const CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES = new Set([
   SystemTableName.NODES,
   SystemTableName.NODE_ENDPOINTS,
 ]);
+const CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES = new Set([
+  SystemTableName.LOGS,
+]);
 const WRITE_PHASE_FIELD_ENTRY_BUILD_MS = 'entryBuildMs';
 const WRITE_PHASE_FIELD_LOG_APPEND_MS = 'logAppendMs';
 const WRITE_PHASE_FIELD_SQLITE_RUN_MS = 'sqliteRunMs';
@@ -109,6 +112,10 @@ const WRITE_PHASE_FIELD_TOTAL_MS = 'totalMs';
 
 function shouldEmitCdcRowFetchInfoLog(tableName) {
   return !CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES.has(tableName);
+}
+
+function shouldBufferCdcWithoutSubscribers(tableName) {
+  return !CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES.has(tableName);
 }
 
 /**
@@ -2585,6 +2592,9 @@ class PartitionService extends EventEmitter {
 
     // Buffer the event when no subscribers are registered
     if (this.cdcSubscribers.size === NUM.ZERO) {
+      if (!shouldBufferCdcWithoutSubscribers(tableName)) {
+        return;
+      }
       const buffered = this.cdcEventBuffer.buffer(cdcEvent);
       if (buffered) {
         this.cdcPipelineMetrics.increment(

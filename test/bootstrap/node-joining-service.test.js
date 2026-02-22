@@ -16,6 +16,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
 import {URL} from 'url';
 
 // Initialize configuration and logging for tests
@@ -68,6 +69,267 @@ test('NodeJoiningService - getStatus', async (t) => {
   t.equal(status.messageGroupCount, 0);
   t.equal(status.lastError, null);
 });
+
+test('NodeJoiningService - executePhase routes work through class A scheduler', async (t) => {
+  initializeTestEnvironment();
+
+  const scheduledClasses = [];
+  const scheduler = {
+    enqueue: async (workClass, task) => {
+      scheduledClasses.push(workClass);
+      return task();
+    },
+  };
+
+  const service = new NodeJoiningService({
+    nodeId: 'test-node-scheduler',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    workClassScheduler: scheduler,
+  });
+
+  await service.executePhase(JoiningPhase.CONTACT_SEED, async () => {});
+
+  t.same(scheduledClasses, [WORK_CLASS.A],
+    'joining phase execution should run through class A scheduler');
+});
+
+test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_READY',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let attempts = 0;
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440099',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      config: {
+        httpTimeoutMs: 100,
+        leadershipWaitTimeoutMs: 400,
+        leadershipWaitInitialDelayMs: 10,
+        leadershipWaitMaxDelayMs: 10,
+      },
+      httpPost: async () => {
+        attempts++;
+        if (attempts === 1) {
+          throw new Error(
+            'HTTP 503: {"success":false,"error":"Bootstrap not ready",' +
+            '"code":"BOOTSTRAP_NOT_READY","phase":"partitions"}',
+          );
+        }
+        return {
+          success: true,
+          seedNodeId: 'seed-node-1',
+          seedNodeWsAddress: 'ws://localhost:9080',
+          messageGroupAssignment: {
+            strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+          },
+        };
+      },
+    });
+
+    await service.phaseContactSeed();
+
+    t.equal(attempts, 2, 'should retry bootstrap request after bootstrap-not-ready response');
+    t.equal(service.seedNodeId, 'seed-node-1', 'should capture seed node id after retry');
+    t.equal(service.seedNodeWsAddress, 'ws://localhost:9080',
+      'should capture seed node websocket address after retry');
+    t.equal(
+      service.bootstrapResponse?.messageGroupAssignment?.strategy,
+      AssignmentStrategy.CREATE_SELF_HOSTED,
+      'should store bootstrap response after retry succeeds',
+    );
+  });
+
+test('NodeJoiningService - retries bootstrap when seed request times out',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let attempts = 0;
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440100',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      config: {
+        httpTimeoutMs: 10000,
+        leadershipWaitTimeoutMs: 400,
+        leadershipWaitInitialDelayMs: 10,
+        leadershipWaitMaxDelayMs: 10,
+      },
+      httpPost: async () => {
+        attempts++;
+        if (attempts === 1) {
+          throw new Error('Request timeout after 10000ms');
+        }
+        return {
+          success: true,
+          seedNodeId: 'seed-node-1',
+          seedNodeWsAddress: 'ws://localhost:9080',
+          messageGroupAssignment: {
+            strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+          },
+        };
+      },
+    });
+
+    await service.phaseContactSeed();
+
+    t.equal(attempts, 2, 'should retry bootstrap request after timeout');
+    t.equal(service.seedNodeId, 'seed-node-1',
+      'should still complete seed contact after retry');
+  });
+
+test('NodeJoiningService - retries generic HTTP 503 and honors retry hints with jitter',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let attempts = 0;
+    const retryDelays = [];
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440101',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      config: {
+        httpTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 400,
+        leadershipWaitInitialDelayMs: 10,
+        leadershipWaitMaxDelayMs: 100,
+        leadershipWaitBackoffMultiplier: 2,
+        leadershipWaitJitterRatio: 0.5,
+      },
+      random: () => 1,
+      sleep: async (delayMs) => {
+        retryDelays.push(delayMs);
+      },
+      httpPost: async () => {
+        attempts++;
+        if (attempts === 1) {
+          const error = new Error(
+            'HTTP 503: {"success":false,"error":"temporarily unavailable",' +
+            '"retryAfterMs":30}',
+          );
+          error.statusCode = 503;
+          error.retryAfterMs = 30;
+          throw error;
+        }
+        return {
+          success: true,
+          seedNodeId: 'seed-node-1',
+          seedNodeWsAddress: 'ws://localhost:9080',
+          messageGroupAssignment: {
+            strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+          },
+        };
+      },
+    });
+
+    await service.phaseContactSeed();
+
+    t.equal(attempts, 2, 'should retry after HTTP 503 response class');
+    t.equal(retryDelays.length, 1, 'should wait exactly once before retry');
+    t.ok(retryDelays[0] >= 30, 'should honor retryAfterMs lower bound');
+    t.ok(retryDelays[0] > 30, 'should apply positive jitter on top of retry hint');
+  });
+
+test('NodeJoiningService - treats bootstrap validation/conflict failures as terminal',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let attempts = 0;
+    const retryDelays = [];
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440102',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      config: {
+        httpTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 400,
+        leadershipWaitInitialDelayMs: 10,
+        leadershipWaitMaxDelayMs: 10,
+      },
+      sleep: async (delayMs) => {
+        retryDelays.push(delayMs);
+      },
+      httpPost: async () => {
+        attempts++;
+        const error = new Error('HTTP 409: {"error":"Node ID already registered"}');
+        error.statusCode = 409;
+        throw error;
+      },
+    });
+
+    await t.rejects(
+      service.phaseContactSeed(),
+      /Failed to contact seed node:/,
+      'should fail immediately on conflict/validation classes',
+    );
+    t.equal(attempts, 1, 'should not retry terminal conflict response');
+    t.same(retryDelays, [], 'should not wait/backoff for terminal errors');
+  });
+
+test('NodeJoiningService - retry diagnostics include attempt, elapsed, code, and next delay',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const debugEvents = [];
+    let attempts = 0;
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440103',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      config: {
+        httpTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 400,
+        leadershipWaitInitialDelayMs: 20,
+        leadershipWaitMaxDelayMs: 20,
+        leadershipWaitBackoffMultiplier: 2,
+        leadershipWaitJitterRatio: 0,
+      },
+      sleep: async () => {},
+      httpPost: async () => {
+        attempts++;
+        if (attempts === 1) {
+          throw new Error(
+            'HTTP 503: {"success":false,"error":"Bootstrap not ready",' +
+            '"code":"BOOTSTRAP_NOT_READY","phase":"registration"}',
+          );
+        }
+        return {
+          success: true,
+          seedNodeId: 'seed-node-1',
+          seedNodeWsAddress: 'ws://localhost:9080',
+          messageGroupAssignment: {
+            strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+          },
+        };
+      },
+    });
+
+    service.logger = {
+      debug(message, details) {
+        debugEvents.push({message, details});
+      },
+      info() {},
+      warn() {},
+      error() {},
+    };
+
+    await service.phaseContactSeed();
+
+    const retryEvent = debugEvents.find((event) =>
+      event.details &&
+      event.details.attempt === 1 &&
+      event.details.lastCode === 'BOOTSTRAP_NOT_READY',
+    );
+
+    t.ok(retryEvent, 'should emit retry diagnostics for first retryable failure');
+    t.equal(typeof retryEvent.details.elapsedMs, 'number',
+      'retry diagnostics should include elapsedMs');
+    t.equal(typeof retryEvent.details.nextDelayMs, 'number',
+      'retry diagnostics should include nextDelayMs');
+    t.equal(retryEvent.details.nextDelayMs, 20,
+      'retry diagnostics should report computed delay');
+  });
 
 test('NodeJoiningService - resolves control plane target from services metadata first',
   async (t) => {

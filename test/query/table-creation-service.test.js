@@ -107,3 +107,58 @@ test('TableCreationService - writes partition metadata with logical table_name',
       'partition metadata should include logical table_name',
     );
   });
+
+test('TableCreationService - provisions initial partition when callback is configured',
+  async (t) => {
+    let provisionContext = null;
+    const service = new TableCreationService({
+      systemCache: {
+        find() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async insertSystemTableRow() {
+          return {success: true};
+        },
+      },
+      partitionProvisioner: async (context) => {
+        provisionContext = context;
+      },
+    });
+
+    const result = await service.createTable(createCreateTableAst());
+    t.equal(result.success, true);
+    t.ok(provisionContext, 'partition provisioner should receive context');
+    t.equal(provisionContext?.tableName, 'users', 'provisioner gets table name');
+    t.equal(provisionContext?.replicaCount, 3, 'provisioner gets replica count');
+    t.ok(
+      String(provisionContext?.partitionId || '').startsWith('tbl-'),
+      'provisioner gets generated partition ID',
+    );
+  });
+
+test('TableCreationService - surfaces initial partition provisioning failures',
+  async (t) => {
+    const service = new TableCreationService({
+      systemCache: {
+        find() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async insertSystemTableRow() {
+          return {success: true};
+        },
+      },
+      partitionProvisioner: async () => {
+        throw new Error('provision failed');
+      },
+    });
+
+    await t.rejects(
+      service.createTable(createCreateTableAst()),
+      /provision failed/,
+      'create table should fail when partition provisioning fails',
+    );
+  });

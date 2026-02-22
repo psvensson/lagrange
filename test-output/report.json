@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-02-19T16:11:12.649Z",
+  "timestamp": "2026-02-21T12:47:33.655Z",
   "summary": {
     "total": 1,
     "passed": 0,
     "failed": 1,
-    "duration": 82192
+    "duration": 60227
   },
   "optimizationSummary": {
     "totalPriorityItems": 0,
@@ -73,17 +73,17 @@
         "current": {
           "passed": false,
           "clusterSize": 3,
-          "durationMs": 82192,
+          "durationMs": 60227,
           "opsPerSec": null,
           "p99LatencyMs": null,
           "opsPerSecPerNode": null
         },
         "previousSimilarRun": {
-          "reportTimestamp": "2026-02-19T16:01:02.037Z",
+          "reportTimestamp": "2026-02-21T12:40:51.027Z",
           "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/report.json",
           "passed": false,
           "clusterSize": 3,
-          "durationMs": 87143,
+          "durationMs": 60248,
           "opsPerSec": null,
           "p99LatencyMs": null,
           "opsPerSecPerNode": null
@@ -91,8 +91,8 @@
         "deltaVsPrevious": {
           "passedChanged": false,
           "clusterSizeChanged": false,
-          "durationMs": -4951,
-          "durationRatio": -0.056814660959572195,
+          "durationMs": -21,
+          "durationRatio": -0.0003485592882751295,
           "opsPerSec": 0,
           "opsPerSecRatio": null,
           "opsPerSecPerNode": 0,
@@ -109,19 +109,19 @@
     {
       "scenario": "postgres-baseline-comparison",
       "passed": false,
-      "duration": 82192,
+      "duration": 60227,
       "clusterSize": 3,
-      "startedAt": "2026-02-19T16:09:49.845Z",
+      "startedAt": "2026-02-21T12:46:33.416Z",
       "convergenceTiming": null,
       "analysisSummary": null,
-      "error": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 after 5000ms",
-      "stackTrace": "Error: Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 after 5000ms\n    at Timeout._onTimeout (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:307:16)\n    at listOnTimeout (node:internal/timers:588:17)\n    at process.processTimers (node:internal/timers:523:7)",
+      "error": "Seed node bootstrap API did not become available within 60000ms",
+      "stackTrace": "Error: Seed node bootstrap API did not become available within 60000ms\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1744:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:979:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
       "logs": null,
       "playback": {
         "scenarioName": "postgres-baseline-comparison",
-        "startedAt": 1771517389847,
-        "endedAt": 1771517472642,
-        "durationMs": 82795,
+        "startedAt": 1771677993417,
+        "endedAt": 1771678053653,
+        "durationMs": 60236,
         "files": {
           "events": "test-output/.playback/report/postgres-baseline-comparison/events.ndjson",
           "samples": "test-output/.playback/report/postgres-baseline-comparison/samples.ndjson",
@@ -130,305 +130,27 @@
           "viewer": "test-output/.playback/report/postgres-baseline-comparison/playback-viewer.html"
         },
         "counts": {
-          "events": 152,
-          "samples": 205,
-          "snapshots": 25
+          "events": 11,
+          "samples": 59,
+          "snapshots": 0
         },
-        "warnings": [
-          {
-            "code": "topology-capture-failed",
-            "message": "Failed to capture topology snapshot: Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 after 5000ms",
-            "timestamp": 1771517429907,
-            "details": {
-              "anchorNodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
-              "error": "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 after 5000ms",
-              "reachability": [
-                {
-                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
-                  "timestamp": 1771517424865,
-                  "reachable": true,
-                  "adminReady": false,
-                  "reachableBy": "bootstrap_health",
-                  "bootstrapHealth": {
-                    "attempted": true,
-                    "ok": true,
-                    "statusCode": 200,
-                    "error": null,
-                    "url": "http://172.18.0.2:8080/health",
-                    "endpoint": null,
-                    "query": null
-                  },
-                  "adminHealth": {
-                    "attempted": false,
-                    "ok": false,
-                    "statusCode": null,
-                    "error": null,
-                    "url": "http://172.18.0.2:8081/health",
-                    "endpoint": null,
-                    "query": null
-                  },
-                  "adminWs": {
-                    "attempted": false,
-                    "ok": false,
-                    "statusCode": null,
-                    "error": null,
-                    "url": null,
-                    "endpoint": "ws://172.18.0.2:8081/api/admin/stream",
-                    "query": null
-                  },
-                  "sqlProbe": {
-                    "attempted": false,
-                    "ok": false,
-                    "statusCode": null,
-                    "error": null,
-                    "url": null,
-                    "endpoint": null,
-                    "query": "SELECT node_id FROM nodes LIMIT 1"
-                  },
-                  "lastError": null
-                },
-                {
-                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
-                  "timestamp": 1771517424903,
-                  "reachable": true,
-                  "adminReady": true,
-                  "reachableBy": "admin_health",
-                  "bootstrapHealth": {
-                    "attempted": true,
-                    "ok": false,
-                    "statusCode": -1,
-                    "error": "http_status_-1",
-                    "url": "http://172.18.0.3:8080/health",
-                    "endpoint": null,
-                    "query": null
-                  },
-                  "adminHealth": {
-                    "attempted": true,
-                    "ok": true,
-                    "statusCode": 200,
-                    "error": null,
-                    "url": "http://172.18.0.3:8081/health",
-                    "endpoint": null,
-                    "query": null
-                  },
-                  "adminWs": {
-                    "attempted": false,
-                    "ok": false,
-                    "statusCode": null,
-                    "error": null,
-                    "url": null,
-                    "endpoint": "ws://172.18.0.3:8081/api/admin/stream",
-                    "query": null
-                  },
-                  "sqlProbe": {
-                    "attempted": false,
-                    "ok": false,
-                    "statusCode": null,
-                    "error": null,
-                    "url": null,
-                    "endpoint": null,
-                    "query": "SELECT node_id FROM nodes LIMIT 1"
-                  },
-                  "lastError": null
-                },
-                {
-                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
-                  "timestamp": 1771517424906,
-                  "reachable": true,
-                  "adminReady": true,
-                  "reachableBy": "admin_health",
-                  "bootstrapHealth": {
-                    "attempted": true,
-                    "ok": false,
-                    "statusCode": -1,
-                    "error": "http_status_-1",
-                    "url": "http://172.18.0.4:8080/health",
-                    "endpoint": null,
-                    "query": null
-                  },
-                  "adminHealth": {
-                    "attempted": true,
-                    "ok": true,
-                    "statusCode": 200,
-                    "error": null,
-                    "url": "http://172.18.0.4:8081/health",
-                    "endpoint": null,
-                    "query": null
-                  },
-                  "adminWs": {
-                    "attempted": false,
-                    "ok": false,
-                    "statusCode": null,
-                    "error": null,
-                    "url": null,
-                    "endpoint": "ws://172.18.0.4:8081/api/admin/stream",
-                    "query": null
-                  },
-                  "sqlProbe": {
-                    "attempted": false,
-                    "ok": false,
-                    "statusCode": null,
-                    "error": null,
-                    "url": null,
-                    "endpoint": null,
-                    "query": "SELECT node_id FROM nodes LIMIT 1"
-                  },
-                  "lastError": null
-                }
-              ]
-            }
-          },
-          {
-            "code": "service-query-failed-35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
-            "message": "Failed to query services on node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7: Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 after 5000ms",
-            "timestamp": 1771517429907,
-            "details": {
-              "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
-              "error": "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 after 5000ms",
-              "reachability": {
-                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
-                "timestamp": 1771517424903,
-                "reachable": true,
-                "adminReady": true,
-                "reachableBy": "admin_health",
-                "bootstrapHealth": {
-                  "attempted": true,
-                  "ok": false,
-                  "statusCode": -1,
-                  "error": "http_status_-1",
-                  "url": "http://172.18.0.3:8080/health",
-                  "endpoint": null,
-                  "query": null
-                },
-                "adminHealth": {
-                  "attempted": true,
-                  "ok": true,
-                  "statusCode": 200,
-                  "error": null,
-                  "url": "http://172.18.0.3:8081/health",
-                  "endpoint": null,
-                  "query": null
-                },
-                "adminWs": {
-                  "attempted": false,
-                  "ok": false,
-                  "statusCode": null,
-                  "error": null,
-                  "url": null,
-                  "endpoint": "ws://172.18.0.3:8081/api/admin/stream",
-                  "query": null
-                },
-                "sqlProbe": {
-                  "attempted": false,
-                  "ok": false,
-                  "statusCode": null,
-                  "error": null,
-                  "url": null,
-                  "endpoint": null,
-                  "query": "SELECT node_id FROM nodes LIMIT 1"
-                },
-                "lastError": null
-              }
-            }
-          },
-          {
-            "code": "service-query-failed-11601fe0-72d6-5853-8590-ec2881853e72",
-            "message": "Failed to query services on node 11601fe0-72d6-5853-8590-ec2881853e72: Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 after 5000ms",
-            "timestamp": 1771517455398,
-            "details": {
-              "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
-              "error": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 after 5000ms",
-              "reachability": {
-                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
-                "timestamp": 1771517450397,
-                "reachable": true,
-                "adminReady": true,
-                "reachableBy": "admin_health",
-                "bootstrapHealth": {
-                  "attempted": true,
-                  "ok": false,
-                  "statusCode": -1,
-                  "error": "http_status_-1",
-                  "url": "http://172.18.0.4:8080/health",
-                  "endpoint": null,
-                  "query": null
-                },
-                "adminHealth": {
-                  "attempted": true,
-                  "ok": true,
-                  "statusCode": 200,
-                  "error": null,
-                  "url": "http://172.18.0.4:8081/health",
-                  "endpoint": null,
-                  "query": null
-                },
-                "adminWs": {
-                  "attempted": false,
-                  "ok": false,
-                  "statusCode": null,
-                  "error": null,
-                  "url": null,
-                  "endpoint": "ws://172.18.0.4:8081/api/admin/stream",
-                  "query": null
-                },
-                "sqlProbe": {
-                  "attempted": false,
-                  "ok": false,
-                  "statusCode": null,
-                  "error": null,
-                  "url": null,
-                  "endpoint": null,
-                  "query": "SELECT node_id FROM nodes LIMIT 1"
-                },
-                "lastError": null
-              }
-            }
-          }
-        ]
+        "warnings": []
       },
       "trace": null,
       "traceAssertion": null,
       "memoryLeak": {
-        "enabled": true,
+        "enabled": false,
         "analyzed": false,
         "leakDetected": false,
-        "sampleCount": 205,
-        "nodeCount": 3,
+        "sampleCount": 0,
+        "nodeCount": 0,
         "leakingNodeCount": 0,
         "leakingNodes": [],
-        "nodes": [
-          {
-            "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
-            "analyzed": false,
-            "leakDetected": false,
-            "reason": "analysis-window-too-short",
-            "sampleCount": 62,
-            "postWarmupSampleCount": 31,
-            "analysisWindowMs": 30090
-          },
-          {
-            "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
-            "analyzed": false,
-            "leakDetected": false,
-            "reason": "analysis-window-too-short",
-            "sampleCount": 62,
-            "postWarmupSampleCount": 32,
-            "analysisWindowMs": 31093
-          },
-          {
-            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
-            "analyzed": false,
-            "leakDetected": false,
-            "reason": "analysis-window-too-short",
-            "sampleCount": 81,
-            "postWarmupSampleCount": 51,
-            "analysisWindowMs": 50006
-          }
-        ],
+        "nodes": [],
         "warnings": [],
         "config": {
-          "enabled": true,
-          "failOnDetection": true,
+          "enabled": false,
+          "failOnDetection": false,
           "requireSamples": false,
           "minSamplesPerNode": 8,
           "warmupFraction": 0.2,
@@ -439,19 +161,9 @@
           "minPositiveDeltaRatio": 0.65,
           "captureHeapArtifacts": false,
           "heapSnapshotNearLimitCount": 2
-        },
-        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/.playback/report/postgres-baseline-comparison/samples.ndjson"
+        }
       },
-      "memoryLeakAssertion": {
-        "enabled": true,
-        "required": true,
-        "analyzed": false,
-        "leakDetected": false,
-        "leakingNodeCount": 0,
-        "leakingNodes": [],
-        "passed": true,
-        "error": null
-      },
+      "memoryLeakAssertion": null,
       "performanceDiagnostics": null,
       "details": null,
       "exampleResults": null,
@@ -461,11 +173,11 @@
     }
   ],
   "benchmarkRegressionGate": {
-    "enabled": false,
+    "enabled": true,
     "status": "skipped",
-    "reason": "disabled",
+    "reason": "baseline-missing",
     "settings": {
-      "enabled": false,
+      "enabled": true,
       "maxThroughputRegressionRatio": 0.1,
       "baselineProvider": "liferaft",
       "failIfBaselineMissing": false,
@@ -476,12 +188,17 @@
     "comparedScenarioCount": 0,
     "failedScenarioCount": 0,
     "mitigatedScenarioCount": 0,
-    "missingBaselineScenarios": [],
+    "missingBaselineScenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|default"
+      }
+    ],
     "comparisons": []
   },
   "metadata": {
     "raftProvider": "liferaft",
-    "configPath": "test/distributed/config/local-three-node.json",
+    "configPath": "test/distributed/config/local-benchmark-3node.json",
     "scenarioFilter": "postgres-baseline-comparison"
   }
 }

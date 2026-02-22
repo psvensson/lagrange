@@ -1,15 +1,6 @@
 TAP version 14
-# Subtest: setup
-    ok 1 - configuration initialized
-    1..1
-ok 1 - setup # time=40.317ms
-
-# Subtest: LogsTableService singleton
-    ok 1 - should return the same instance
-LogsTableService shutdown
-    1..1
-ok 2 - LogsTableService singleton # time=0.911ms
-
+ok 1 - setup # SKIP filter: /initialization|flush routes write work through class C scheduler/
+ok 2 - LogsTableService singleton # SKIP filter: /initialization|flush routes write work through class C scheduler/
 # Subtest: LogsTableService initialization
     ok 1 - should not be initialized before initialize()
 LogsTableService initialized
@@ -19,118 +10,25 @@ LogsTableService initialized
     ok 5 - should have zero error count
 LogsTableService shutdown
     1..5
-ok 3 - LogsTableService initialization # time=0.71ms
+ok 3 - LogsTableService initialization # time=36.833ms
 
-# Subtest: LogsTableService default config
-    ok 1 - should have default batch size
-    ok 2 - should have default flush interval
-    ok 3 - should have default max retries
-    ok 4 - should have default retry delay
-    1..4
-ok 4 - LogsTableService default config # time=0.26ms
-
+ok 4 - LogsTableService default config # SKIP filter: /initialization|flush routes write work through class C scheduler/
 LogsTableService initialized
-# Subtest: LogsTableService writeLogEntry queues entries
-    ok 1 - should queue the entry
-LogsTableService shutdown
+# Subtest: LogsTableService flush routes write work through class C scheduler when configured
+    ok 1 - flush should schedule execution under class C
 LogsTableService shutdown
     1..1
-ok 5 - LogsTableService writeLogEntry queues entries # time=0.621ms
+ok 5 - LogsTableService flush routes write work through class C scheduler when configured # time=1.353ms
 
-LogsTableService initialized
-# Subtest: LogsTableService bounds pending queue and drops overflow
-    ok 1 - should cap pending writes to maxPendingWrites
-    ok 2 - should count dropped writes when queue overflows
-LogsTableService shutdown
-    1..2
-ok 6 - LogsTableService bounds pending queue and drops overflow # time=0.574ms
-
-LogsTableService initialized
-# Subtest: LogsTableService prioritizes non-metrics entries when queue is full
-    ok 1 - should keep non-metrics entry under backpressure
-    ok 2 - should keep queue capped
-    ok 3 - should drop one metrics entry
-LogsTableService shutdown
-    1..3
-ok 7 - LogsTableService prioritizes non-metrics entries when queue is full # time=0.506ms
-
-LogsTableService initialized
-# Subtest: LogsTableService flush with mock CDC service
-    ok 1 - should flush 2 entries
-    ok 2 - should write 2 rows
-    ok 3 - should write to logs table
-    ok 4 - should have correct log_id
-    ok 5 - should include service_id
-    ok 6 - should include trace_id
-    ok 7 - should include metadata
-    ok 8 - should have no pending writes after flush
-    ok 9 - should update write count
-LogsTableService shutdown
-    1..9
-ok 8 - LogsTableService flush with mock CDC service # time=0.852ms
-
-LogsTableService initialized
-# Subtest: LogsTableService handles write errors
-    ok 1 - should retry the configured number of times
-    ok 2 - should increment error count
-LogsTableService shutdown
-    1..2
-ok 9 - LogsTableService handles write errors # time=10.994ms
-
-LogsTableService initialized
-# Subtest: LogsTableService batch flush on size threshold
-    ok 1 - should auto-flush when batch size reached
-    ok 2 - should have no pending writes
-LogsTableService shutdown
-    1..2
-ok 10 - LogsTableService batch flush on size threshold # time=0.512ms
-
-{"level":30,"time":"2026-02-21T09:28:14.987Z","nodeId":"test-node","pid":3762588,"nodeId":"test-node","msg":"Buffered message 1"}
-# Subtest: LogsTableService connectToLoggingService flushes buffer
-    ok 1 - should have buffered entries
-LogsTableService initialized
-Connected to LoggingService, flushed 2 buffered entries
-    ok 2 - should return flushed count
-    ok 3 - logs table should be marked ready
-    ok 4 - buffer should be empty
-    ok 5 - should have pending writes queued
-    ok 6 - should write buffered entries
-LogsTableService shutdown
-LogsTableService shutdown
-    1..6
-ok 11 - LogsTableService connectToLoggingService flushes buffer # time=2.729ms
-
-LogsTableService initialized
-# Subtest: LogsTableService shutdown flushes pending
-    ok 1 - should have pending write
-LogsTableService shutdown
-    ok 2 - should flush on shutdown
-    ok 3 - should not be initialized after shutdown
-LogsTableService shutdown
-    1..3
-ok 12 - LogsTableService shutdown flushes pending # time=0.493ms
-
-LogsTableService initialized
-# Subtest: LogsTableService handles null entry
-    ok 1 - should not queue null entry
-LogsTableService shutdown
-    1..1
-ok 13 - LogsTableService handles null entry # time=0.268ms
-
-LogsTableService initialized
-# Subtest: LogsTableService drops logging-pipeline metrics to prevent recursion
-    ok 1 - should count dropped recursive pipeline metrics
-    ok 2 - should not persist recursive pipeline metrics
-LogsTableService shutdown
-LogsTableService shutdown
-    1..2
-ok 14 - LogsTableService drops logging-pipeline metrics to prevent recursion # time=0.423ms
-
-# Subtest: cleanup
-    ok 1 - cleanup complete
-    1..1
-ok 15 - cleanup # time=0.162ms
-
-{"level":30,"time":"2026-02-21T09:28:14.987Z","nodeId":"test-node","pid":3762588,"nodeId":"test-node","msg":"Buffered message 2"}
-{"level":30,"time":"2026-02-21T09:28:14.988Z","nodeId":"test-node","pid":3762588,"bufferedEntries":2,"nodeId":"test-node","msg":"Logs table ready, flushing buffer"}
-1..15
+ok 6 - LogsTableService writeLogEntry queues entries # SKIP filter: /initialization|flush routes write work through class C scheduler/
+ok 7 - LogsTableService bounds pending queue and drops overflow # SKIP filter: /initialization|flush routes write work through class C scheduler/
+ok 8 - LogsTableService prioritizes non-metrics entries when queue is full # SKIP filter: /initialization|flush routes write work through class C scheduler/
+ok 9 - LogsTableService flush with mock CDC service # SKIP filter: /initialization|flush routes write work through class C scheduler/
+ok 10 - LogsTableService handles write errors # SKIP filter: /initialization|flush routes write work through class C scheduler/
+ok 11 - LogsTableService batch flush on size threshold # SKIP filter: /initialization|flush routes write work through class C scheduler/
+ok 12 - LogsTableService connectToLoggingService flushes buffer # SKIP filter: /initialization|flush routes write work through class C scheduler/
+ok 13 - LogsTableService shutdown flushes pending # SKIP filter: /initialization|flush routes write work through class C scheduler/
+ok 14 - LogsTableService handles null entry # SKIP filter: /initialization|flush routes write work through class C scheduler/
+ok 15 - LogsTableService drops logging-pipeline metrics to prevent recursion # SKIP filter: /initialization|flush routes write work through class C scheduler/
+ok 16 - cleanup # SKIP filter: /initialization|flush routes write work through class C scheduler/
+1..16

@@ -264,6 +264,43 @@ test('runAssignmentCycle creates a group when no eligible group exists', async (
   t.end();
 });
 
+test('runAssignmentCycle tolerates async cache.has during group-id generation',
+  async (t) => {
+    setupConfig();
+    const cache = createMockCache({
+      nodes: [createNodeRow('node-a')],
+      groups: [],
+    });
+    const originalHas = cache.has;
+    cache.has = async (tableName, key) => originalHas(tableName, key);
+
+    const cdc = createMockCdc();
+    const measurement = createMockMeasurementService();
+    const selection = createMockGroupSelectionService();
+    const manager = new LatencyGroupManager({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      cdcIntegrationService: cdc,
+      latencyMeasurementService: measurement,
+      groupSelectionService: selection,
+      nowFn: () => 6000,
+    });
+    manager.initialize();
+
+    const result = await manager.runAssignmentCycle();
+
+    assert.equal(result.success, true);
+    assert.equal(result.changed, true);
+    assert.equal(result.createdGroup, true);
+    assert.equal(result.reason, LATENCY_GROUP_MANAGER_REASON.CREATE_NEW_GROUP);
+    assert.equal(result.targetGroupId, 'lg-node-a-6000');
+    assert.equal(cdc.upserts.length, 1);
+    assert.equal(cdc.updates.length, 1);
+
+    teardownConfig();
+    t.end();
+  });
+
 test('runAssignmentCycle reassigns node when better eligible group exists',
   async (t) => {
     setupConfig();

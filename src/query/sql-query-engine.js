@@ -32,9 +32,10 @@ import {
   DistributedTransactionCoordinator,
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator.js';
+import {OperationType} from '../rebalancer/replica-status.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {TABLES, METRICS_LOG_TAG} from '../constants/index.js';
+import {TABLES, METRICS_LOG_TAG, SERVICE_TYPE} from '../constants/index.js';
 import {
   QUERY_AST_TYPE,
   QUERY_CONFIG_KEY,
@@ -104,12 +105,26 @@ class SQLQueryEngine {
    * @param {Object} options.messageRouter - Message router for query routing.
    * @param {Object} options.cdcIntegrationService - CDC integration service.
    * @param {string} options.nodeId - Node ID.
+   * @param {Object} options.rebalanceCoordinator - Rebalance coordinator.
+   * @param {Function} options.tablePartitionProvisioner - Initial partition
+   *   provisioning callback for CREATE TABLE.
    */
   constructor(options = {}) {
     this.systemCache = options.systemCache || null;
     this.messageRouter = options.messageRouter || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.SQL_QUERY_ENGINE;
+    this.rebalanceCoordinator = options.rebalanceCoordinator || null;
+    this.tablePartitionProvisioningTimeoutMs =
+      Number.isFinite(options.tablePartitionProvisioningTimeoutMs) &&
+      options.tablePartitionProvisioningTimeoutMs > 0 ?
+        Math.floor(options.tablePartitionProvisioningTimeoutMs) :
+        QUERY_DEFAULTS.TABLE_CREATE_PROVISION_TIMEOUT_MS;
+    this.tablePartitionProvisioningPollIntervalMs =
+      Number.isFinite(options.tablePartitionProvisioningPollIntervalMs) &&
+      options.tablePartitionProvisioningPollIntervalMs > 0 ?
+        Math.floor(options.tablePartitionProvisioningPollIntervalMs) :
+        QUERY_DEFAULTS.TABLE_CREATE_PROVISION_POLL_INTERVAL_MS;
 
     this.partitionResolver = new PartitionResolver({
       systemCache: this.systemCache,
@@ -150,10 +165,17 @@ class SQLQueryEngine {
           this.persistDistributedWriteOperationRow(record),
       });
 
+    const tablePartitionProvisioner = typeof options.tablePartitionProvisioner ===
+      'function' ?
+      options.tablePartitionProvisioner :
+      (this.rebalanceCoordinator ?
+        (context) => this.provisionInitialTablePartition(context) :
+        null);
     this.tableCreationService = new TableCreationService({
       systemCache: this.systemCache,
       cdcIntegrationService: this.cdcIntegrationService,
       partitionSplitMergeManager: options.partitionSplitMergeManager || null,
+      partitionProvisioner: tablePartitionProvisioner,
     });
 
     this.partitionCallbackDispatcher = new PartitionCallbackDispatcher({
@@ -234,6 +256,22 @@ class SQLQueryEngine {
   setCDCIntegrationService(service) {
     this.cdcIntegrationService = service;
     this.tableCreationService.setCDCIntegrationService(service);
+  }
+
+  /**
+   * Set rebalance coordinator used for table partition provisioning.
+   * @param {Object} coordinator - RebalanceCoordinator instance.
+   */
+  setRebalanceCoordinator(coordinator) {
+    this.rebalanceCoordinator = coordinator || null;
+  }
+
+  /**
+   * Set initial table partition provisioner callback.
+   * @param {Function} provisioner - Provisioning callback.
+   */
+  setTablePartitionProvisioner(provisioner) {
+    this.tableCreationService.setPartitionProvisioner(provisioner);
   }
 
   /**
@@ -1167,6 +1205,166 @@ class SQLQueryEngine {
    */
   async executeCreateTable(ast, _sessionId) {
     return this.tableCreationService.createTable(ast);
+  }
+
+  /**
+   * Provision initial routable replica for a newly-created table partition.
+   * @param {Object} context - Table partition context.
+   * @param {string} context.tableId - Table ID.
+   * @param {string} context.partitionId - Partition ID.
+   * @return {Promise<void>}
+   * @private
+   */
+  async provisionInitialTablePartition(context) {
+    const partitionId = context?.partitionId;
+    const tableId = context?.tableId || null;
+
+    if (!partitionId) {
+      throw new Error(QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_PARTITION_ID_REQUIRED);
+    }
+
+    if (!this.rebalanceCoordinator ||
+        typeof this.rebalanceCoordinator.createOperation !== 'function' ||
+        typeof this.rebalanceCoordinator.executeOperation !== 'function') {
+      throw new Error(QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_COORDINATOR_REQUIRED);
+    }
+
+    await this.waitForTablePartitionMetadata(tableId, partitionId);
+
+    if (this.hasRoutablePartitionService(partitionId)) {
+      return;
+    }
+
+    const operation = await this.rebalanceCoordinator.createOperation({
+      type: OperationType.ADD,
+      partitionId,
+      entityType: SERVICE_TYPE.PARTITION,
+      entityId: partitionId,
+      nodeId: this.nodeId,
+    });
+    const executionResult = await this.rebalanceCoordinator.executeOperation(operation);
+
+    if (executionResult && executionResult.success === false &&
+        executionResult.skipped !== true) {
+      throw new Error(
+        executionResult.error ||
+        QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DISPATCH_FAILED,
+      );
+    }
+
+    await this.waitForRoutablePartitionService(partitionId);
+  }
+
+  /**
+   * Wait for table + partition metadata to appear in local cache before
+   * dispatching replica creation.
+   * @param {string|null} tableId - Table ID.
+   * @param {string} partitionId - Partition ID.
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForTablePartitionMetadata(tableId, partitionId) {
+    await this.waitForCondition(
+      () => {
+        const hasPartitionRecord = this.queryExecutor.hasPartitionRecord(partitionId);
+        const hasTableRecord = tableId ? this.hasTableMetadata(tableId) : true;
+        return hasPartitionRecord && hasTableRecord;
+      },
+      this.tablePartitionProvisioningTimeoutMs,
+      this.tablePartitionProvisioningPollIntervalMs,
+      QUERY_ERROR_MSG.TABLE_PARTITION_METADATA_TIMEOUT_PREFIX + partitionId,
+    );
+  }
+
+  /**
+   * Wait for at least one routable service row for the partition.
+   * @param {string} partitionId - Partition ID.
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForRoutablePartitionService(partitionId) {
+    await this.waitForCondition(
+      () => this.hasRoutablePartitionService(partitionId),
+      this.tablePartitionProvisioningTimeoutMs,
+      this.tablePartitionProvisioningPollIntervalMs,
+      QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId,
+    );
+  }
+
+  /**
+   * Check whether table metadata is available in local cache.
+   * @param {string} tableId - Table ID.
+   * @return {boolean} True when table exists in cache.
+   * @private
+   */
+  hasTableMetadata(tableId) {
+    if (!tableId || !this.systemCache) {
+      return false;
+    }
+
+    if (typeof this.systemCache.has === 'function') {
+      return this.systemCache.has(TABLES.TABLES, tableId);
+    }
+
+    if (typeof this.systemCache.get === 'function') {
+      return Boolean(this.systemCache.get(TABLES.TABLES, tableId));
+    }
+
+    if (typeof this.systemCache.filter === 'function') {
+      const matches = this.systemCache.filter(
+        TABLES.TABLES,
+        (row) => row.table_id === tableId,
+      );
+      return Array.isArray(matches) && matches.length > 0;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check whether a partition currently has a routable service row.
+   * @param {string} partitionId - Partition ID.
+   * @return {boolean} True when routable.
+   * @private
+   */
+  hasRoutablePartitionService(partitionId) {
+    if (!this.queryExecutor ||
+        typeof this.queryExecutor.hasRoutablePartitionService !== 'function') {
+      return false;
+    }
+    return this.queryExecutor.hasRoutablePartitionService(partitionId);
+  }
+
+  /**
+   * Wait for a condition with bounded timeout.
+   * @param {Function} predicate - Condition callback.
+   * @param {number} timeoutMs - Timeout in milliseconds.
+   * @param {number} intervalMs - Poll interval in milliseconds.
+   * @param {string} timeoutError - Timeout error message.
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForCondition(predicate, timeoutMs, intervalMs, timeoutError) {
+    const deadlineMs = Date.now() + timeoutMs;
+
+    while (Date.now() < deadlineMs) {
+      if (await predicate()) {
+        return;
+      }
+      await this.sleep(intervalMs);
+    }
+
+    throw new Error(timeoutError);
+  }
+
+  /**
+   * Delay helper for provisioning polling loops.
+   * @param {number} ms - Delay in milliseconds.
+   * @return {Promise<void>}
+   * @private
+   */
+  async sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**

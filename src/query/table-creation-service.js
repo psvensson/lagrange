@@ -27,11 +27,17 @@ class TableCreationService {
    * @param {Object} options - Configuration options.
    * @param {Object} options.systemCache - System table cache.
    * @param {Object} options.cdcIntegrationService - CDC integration service.
+   * @param {Function} options.partitionProvisioner - Initial partition
+   *   provisioning callback.
    */
   constructor(options = {}) {
     this.systemCache = options.systemCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.partitionSplitMergeManager = options.partitionSplitMergeManager || null;
+    this.partitionProvisioner =
+      typeof options.partitionProvisioner === 'function' ?
+        options.partitionProvisioner :
+        null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -80,6 +86,16 @@ class TableCreationService {
    */
   setPartitionSplitMergeManager(manager) {
     this.partitionSplitMergeManager = manager || null;
+  }
+
+  /**
+   * Set initial table partition provisioning callback.
+   * @param {Function} provisioner - Provisioning callback.
+   */
+  setPartitionProvisioner(provisioner) {
+    this.partitionProvisioner = typeof provisioner === 'function' ?
+      provisioner :
+      null;
   }
 
   /**
@@ -177,6 +193,13 @@ class TableCreationService {
       );
     }
 
+    await this.provisionInitialPartition({
+      tableId,
+      tableName,
+      partitionId,
+      replicaCount: partitionMetadata.replica_count,
+    });
+
     await this.evaluateSplitMergeLifecycle();
 
     this.logger.info(QUERY_LOG_MSG.TABLE_CREATED_SUCCESS, {
@@ -195,6 +218,52 @@ class TableCreationService {
       partitionId,
       columns: columns.length,
     };
+  }
+
+  /**
+   * Provision initial partition replica(s) for a newly-created table.
+   * @param {Object} context - Provisioning context.
+   * @param {string} context.tableId - Table ID.
+   * @param {string} context.tableName - Table name.
+   * @param {string} context.partitionId - Initial partition ID.
+   * @param {number} context.replicaCount - Desired replica count.
+   * @return {Promise<void>}
+   * @private
+   */
+  async provisionInitialPartition(context) {
+    if (typeof this.partitionProvisioner !== 'function') {
+      return;
+    }
+
+    const {tableId, tableName, partitionId, replicaCount} = context;
+    this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
+      tableId,
+      tableName,
+      partitionId,
+      replicaCount,
+    });
+
+    try {
+      await this.partitionProvisioner(context);
+      this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_SUCCESS, {
+        tableId,
+        tableName,
+        partitionId,
+        replicaCount,
+      });
+    } catch (error) {
+      this.logger.error(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_FAILED, {
+        tableId,
+        tableName,
+        partitionId,
+        replicaCount,
+        error: error.message,
+      });
+      if (!error.code) {
+        error.code = QUERY_ERROR_CODE.INTERNAL_ERROR;
+      }
+      throw error;
+    }
   }
 
   /**

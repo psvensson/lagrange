@@ -32,6 +32,7 @@ const DOCKER_OP_CONNECT_NETWORK = 'network.connect';
 const DOCKER_OP_DISCONNECT_NETWORK = 'network.disconnect';
 const DEFAULT_BUILD_LABELS = Object.freeze({});
 const CONTAINER_LOG_OPTION_RAW_BUFFER = 'rawBuffer';
+const CONTAINER_LOG_ERROR_STRING_TOO_LONG = 'ERR_STRING_TOO_LONG';
 const UTF8_ENCODING = 'utf8';
 const NETWORK_EXISTS_ERROR_PATTERN = 'already exists';
 const NETWORK_LIST_FILTER_NAME = 'name';
@@ -621,13 +622,19 @@ class DockerProvider {
    */
   async getContainerLogs(containerId, options = {}) {
     const container = this._docker.getContainer(containerId);
+    const hasTailOverride =
+      options.tail !== undefined &&
+      options.tail !== null;
+    const normalizedTail = hasTailOverride ?
+      String(Math.max(ZERO, Math.floor(Number(options.tail) || ZERO))) :
+      null;
     const logOpts = {
       stdout: true,
       stderr: true,
       follow: false,
     };
-    if (options.tail !== undefined) {
-      logOpts.tail = options.tail;
+    if (normalizedTail !== null) {
+      logOpts.tail = normalizedTail;
     }
     if (options.timestamps) {
       logOpts.timestamps = true;
@@ -635,7 +642,20 @@ class DockerProvider {
     if (options.since) {
       logOpts.since = options.since;
     }
-    const buffer = await container.logs(logOpts);
+    let buffer;
+    try {
+      buffer = await container.logs(logOpts);
+    } catch (error) {
+      const isStringTooLongError = error?.code ===
+        CONTAINER_LOG_ERROR_STRING_TOO_LONG;
+      if (isStringTooLongError && normalizedTail === null) {
+        return this.getContainerLogs(containerId, {
+          ...options,
+          tail: LOG_TAIL_ON_FAILURE,
+        });
+      }
+      throw error;
+    }
     if (options[CONTAINER_LOG_OPTION_RAW_BUFFER] === true) {
       return buffer;
     }

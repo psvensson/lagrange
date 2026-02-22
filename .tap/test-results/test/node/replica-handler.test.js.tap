@@ -6,7 +6,7 @@ TAP version 14
         ok 3 - node ID set correctly
         ok 4 - not initialized after shutdown
         1..4
-    ok 1 - initialization # time=8.75ms
+    ok 1 - initialization # time=6.607ms
     
     # Subtest: handleMessage routes to correct handler
         ok 1 - correlationId preserved
@@ -15,7 +15,7 @@ TAP version 14
         ok 4 - not found
         ok 5 - error for unknown
         1..5
-    ok 2 - handleMessage routes to correct handler # time=2.578ms
+    ok 2 - handleMessage routes to correct handler # time=2.642ms
     
     # Subtest: handleCreateReplica - returns initiated for new replica
         ok 1 - status is initiated
@@ -25,37 +25,43 @@ TAP version 14
         ok 5 - local replica tracked
         ok 6 - status is creating
         1..6
-    ok 3 - handleCreateReplica - returns initiated for new replica # time=1.058ms
+    ok 3 - handleCreateReplica - returns initiated for new replica # time=1.933ms
     
     # Subtest: handleCreateReplica - passes lifecycle stage callback options to partition factory
         ok 1 - lifecycle logs are suppressed for dynamic replica creation
         ok 2 - stage callback is passed to partition service factory
         1..2
-    ok 4 - handleCreateReplica - passes lifecycle stage callback options to partition factory # time=1.424ms
+    ok 4 - handleCreateReplica - passes lifecycle stage callback options to partition factory # time=0.696ms
+    
+    # Subtest: handleCreateReplica - first replica should not be treated as joining existing group
+        ok 1 - partition factory should receive create options
+        ok 2 - first replica should bootstrap leadership instead of learner join mode
+        1..2
+    ok 5 - handleCreateReplica - first replica should not be treated as joining existing group # time=0.775ms
     
     # Subtest: handleCreateReplica - returns already_exists for active replica
         ok 1 - already_exists
         ok 2 - replicaId in response
         1..2
-    ok 5 - handleCreateReplica - returns already_exists for active replica # time=0.547ms
+    ok 6 - handleCreateReplica - returns already_exists for active replica # time=0.557ms
     
     # Subtest: handleCreateReplica - returns in_progress for creating replica
         ok 1 - in_progress
         ok 2 - replicaId in response
         1..2
-    ok 6 - handleCreateReplica - returns in_progress for creating replica # time=0.654ms
+    ok 7 - handleCreateReplica - returns in_progress for creating replica # time=0.502ms
     
     # Subtest: handleCreateReplica - idempotent for same operationId
         ok 1 - in_progress
         ok 2 - operationId in response
         1..2
-    ok 7 - handleCreateReplica - idempotent for same operationId # time=0.491ms
+    ok 8 - handleCreateReplica - idempotent for same operationId # time=0.522ms
     
     # Subtest: handleRemoveReplica - returns not_found for missing replica
         ok 1 - not_found
         ok 2 - replicaId in response
         1..2
-    ok 8 - handleRemoveReplica - returns not_found for missing replica # time=0.494ms
+    ok 9 - handleRemoveReplica - returns not_found for missing replica # time=0.469ms
     
     # Subtest: handleRemoveReplica - returns initiated for existing replica
         ok 1 - initiated
@@ -63,26 +69,26 @@ TAP version 14
         ok 3 - operationId in response
         ok 4 - status is removing
         1..4
-    ok 9 - handleRemoveReplica - returns initiated for existing replica # time=1.415ms
+    ok 10 - handleRemoveReplica - returns initiated for existing replica # time=1.668ms
     
     # Subtest: handleRemoveReplica - returns in_progress for removing replica
         ok 1 - in_progress
         ok 2 - replicaId in response
         1..2
-    ok 10 - handleRemoveReplica - returns in_progress for removing replica # time=0.473ms
+    ok 11 - handleRemoveReplica - returns in_progress for removing replica # time=0.561ms
     
     # Subtest: handleRemoveReplica - returns completed for removed replica
         ok 1 - completed
         ok 2 - replicaId in response
         1..2
-    ok 11 - handleRemoveReplica - returns completed for removed replica # time=0.507ms
+    ok 12 - handleRemoveReplica - returns completed for removed replica # time=0.558ms
     
     # Subtest: registerExistingReplica - registers and is idempotent
         ok 1 - replica registered
         ok 2 - status correct
         ok 3 - status unchanged
         1..3
-    ok 12 - registerExistingReplica - registers and is idempotent # time=0.601ms
+    ok 13 - registerExistingReplica - registers and is idempotent # time=0.634ms
     
     # Subtest: getStats returns correct statistics
         ok 1 - correct node ID
@@ -91,7 +97,7 @@ TAP version 14
         ok 4 - correct in-progress count
         ok 5 - pending request tracker aggregate exists
         1..5
-    ok 13 - getStats returns correct statistics # time=0.758ms
+    ok 14 - getStats returns correct statistics # time=0.767ms
     
     # Subtest: getStats aggregates pending request tracker telemetry
         ok 1 - should count services with tracker telemetry
@@ -102,26 +108,26 @@ TAP version 14
         ok 6 - retains highest observed pending
         ok 7 - computes aggregate saturation
         1..7
-    ok 14 - getStats aggregates pending request tracker telemetry # time=0.742ms
+    ok 15 - getStats aggregates pending request tracker telemetry # time=1.01ms
     
     # Subtest: emits events during lifecycle operations
         ok 1 - replicaCreated event emitted
         ok 2 - correct replicaId
         1..2
-    ok 15 - emits events during lifecycle operations # time=0.938ms
+    ok 16 - emits events during lifecycle operations # time=0.828ms
     
     # Subtest: async creation updates status via CDC
         ok 1 - syncing status update via CDC
         ok 2 - active status update via CDC
         1..2
-    ok 16 - async creation updates status via CDC # time=0.771ms
+    ok 17 - async creation updates status via CDC # time=1.917ms
     
     # Subtest: async removal updates status via CDC
         ok 1 - removing status update via CDC
         ok 2 - removed status update via CDC
         ok 3 - service row deleted via CDC
         1..3
-    ok 17 - async removal updates status via CDC # time=0.869ms
+    ok 18 - async removal updates status via CDC # time=0.89ms
     
     # Subtest: registerWithRouter registers handler at correct address
         ok 1 - handler registered at correct address
@@ -129,20 +135,20 @@ TAP version 14
         ok 3 - create initiated
         ok 4 - correlationId preserved
         1..4
-    ok 18 - registerWithRouter registers handler at correct address # time=0.915ms
+    ok 19 - registerWithRouter registers handler at correct address # time=1.023ms
     
     # Subtest: unregisterFromRouter removes handler
         ok 1 - handler registered
         ok 2 - handler unregistered
         1..2
-    ok 19 - unregisterFromRouter removes handler # time=1.097ms
+    ok 20 - unregisterFromRouter removes handler # time=0.62ms
     
     # Subtest: registerWithRouter with RPC client notifies on response
         ok 1 - RPC client notified
         ok 2 - correct correlationId
         ok 3 - correct status
         1..3
-    ok 20 - registerWithRouter with RPC client notifies on response # time=0.894ms
+    ok 21 - registerWithRouter with RPC client notifies on response # time=0.801ms
     
     # Subtest: shouldGateActivationOnVoterReadiness - critical joins gate only with paired REMOVE
         ok 1 - should not gate when operation metadata is missing and no REMOVE is in flight
@@ -150,15 +156,15 @@ TAP version 14
         ok 3 - should gate when a paired REMOVE is in flight during join
         ok 4 - should not gate non-critical partitions
         1..4
-    ok 21 - shouldGateActivationOnVoterReadiness - critical joins gate only with paired REMOVE # time=0.702ms
+    ok 22 - shouldGateActivationOnVoterReadiness - critical joins gate only with paired REMOVE # time=0.701ms
     
     # Subtest: shouldGateActivationOnVoterReadiness - respects explicit operation type when available
         ok 1 - should gate ADD operations on critical partitions
         ok 2 - should not gate non-ADD operations when metadata is explicit
         1..2
-    ok 22 - shouldGateActivationOnVoterReadiness - respects explicit operation type when available # time=0.474ms
+    ok 23 - shouldGateActivationOnVoterReadiness - respects explicit operation type when available # time=0.512ms
     
-    1..22
-ok 1 - ReplicaHandler # time=391.317ms
+    1..23
+ok 1 - ReplicaHandler # time=396.987ms
 
 1..1

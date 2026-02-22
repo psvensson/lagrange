@@ -1,5 +1,6 @@
 const DEFAULT_REPLICA_STAGGER_DELAY_MS = 50;
 const DEFAULT_MAX_CONCURRENT_SERVICE_ACTIONS = 16;
+const DEFAULT_REPLICA_REGISTRATION_TRACE_ENABLED = false;
 
 const BOOTSTRAP_ASSIGNMENT_STRATEGY = Object.freeze({
   MOVE_REPLICA: 'MOVE_REPLICA',
@@ -284,6 +285,7 @@ const BOOTSTRAP_DEFAULT = Object.freeze({
   partitionDbPath: ':memory:',
   replicaStaggerDelayMs: DEFAULT_REPLICA_STAGGER_DELAY_MS,
   maxConcurrentServiceActions: DEFAULT_MAX_CONCURRENT_SERVICE_ACTIONS,
+  replicaRegistrationTraceEnabled: DEFAULT_REPLICA_REGISTRATION_TRACE_ENABLED,
   nodeReadyRebalanceDelayMs: BOOTSTRAP_REBALANCE_DELAY_MS,
   wsPort: null,
 });

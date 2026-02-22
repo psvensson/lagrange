@@ -89,9 +89,16 @@ const TABLE_WRITE_METRIC_SUPPRESSED_TABLES = new Set([
   SystemTableName.NODES,
   SystemTableName.NODE_ENDPOINTS,
 ]);
+const TABLE_WRITE_FAILURE_LOG_SUPPRESSED_TABLES = new Set([
+  SystemTableName.LOGS,
+]);
 
 function shouldEmitTableWriteMetric(tableName) {
   return !TABLE_WRITE_METRIC_SUPPRESSED_TABLES.has(tableName);
+}
+
+function shouldLogTableWriteFailure(tableName) {
+  return !TABLE_WRITE_FAILURE_LOG_SUPPRESSED_TABLES.has(tableName);
 }
 
 /**
@@ -676,6 +683,13 @@ class CDCIntegrationService extends EventEmitter {
    * @private
    */
   async waitForCacheUpdate(tableName, key, expectPresent) {
+    // During seed bootstrap registration, writes intentionally happen before
+    // cache hydration. Waiting for cache visibility in this mode causes
+    // per-write timeout delays and can stall bootstrap readiness.
+    if (this.bootstrapMode) {
+      return;
+    }
+
     if (!this.shouldWaitForCacheUpdate(tableName)) {
       return;
     }
@@ -1051,12 +1065,14 @@ class CDCIntegrationService extends EventEmitter {
     } catch (error) {
       this.stats.failures++;
 
-      this.logger.error(CDC_LOG_MSG.INSERT_FAILED, {
-        tableName,
-        id: trackingId,
-        error: error.message,
-        nodeId: this.nodeId,
-      });
+      if (shouldLogTableWriteFailure(tableName)) {
+        this.logger.error(CDC_LOG_MSG.INSERT_FAILED, {
+          tableName,
+          id: trackingId,
+          error: error.message,
+          nodeId: this.nodeId,
+        });
+      }
 
       this.emitErrorEvent({
         operation: CDCOperationType.INSERT,
@@ -1166,12 +1182,14 @@ class CDCIntegrationService extends EventEmitter {
     } catch (error) {
       this.stats.failures++;
 
-      this.logger.error(CDC_LOG_MSG.UPDATE_FAILED, {
-        tableName,
-        id,
-        error: error.message,
-        nodeId: this.nodeId,
-      });
+      if (shouldLogTableWriteFailure(tableName)) {
+        this.logger.error(CDC_LOG_MSG.UPDATE_FAILED, {
+          tableName,
+          id,
+          error: error.message,
+          nodeId: this.nodeId,
+        });
+      }
 
       this.emitErrorEvent({
         operation: CDCOperationType.UPDATE,
@@ -1255,12 +1273,14 @@ class CDCIntegrationService extends EventEmitter {
     } catch (error) {
       this.stats.failures++;
 
-      this.logger.error(CDC_LOG_MSG.DELETE_FAILED, {
-        tableName,
-        id,
-        error: error.message,
-        nodeId: this.nodeId,
-      });
+      if (shouldLogTableWriteFailure(tableName)) {
+        this.logger.error(CDC_LOG_MSG.DELETE_FAILED, {
+          tableName,
+          id,
+          error: error.message,
+          nodeId: this.nodeId,
+        });
+      }
 
       this.emitErrorEvent({
         operation: CDCOperationType.DELETE,
@@ -1340,12 +1360,14 @@ class CDCIntegrationService extends EventEmitter {
     } catch (error) {
       this.stats.failures++;
 
-      this.logger.error(CDC_LOG_MSG.UPSERT_FAILED, {
-        tableName,
-        id,
-        error: error.message,
-        nodeId: this.nodeId,
-      });
+      if (shouldLogTableWriteFailure(tableName)) {
+        this.logger.error(CDC_LOG_MSG.UPSERT_FAILED, {
+          tableName,
+          id,
+          error: error.message,
+          nodeId: this.nodeId,
+        });
+      }
 
       this.emitErrorEvent({
         operation: CDCOperationType.UPSERT,

@@ -22,11 +22,20 @@ const ENTRYPOINT_ENV = Object.freeze({
   LOG_LEVEL: 'LOG_LEVEL',
   PORT: 'PORT',
   SEED_NODE_ADDRESS: 'SEED_NODE_ADDRESS',
+  JOINING_HTTP_TIMEOUT_MS: 'NODE_JOINING_HTTP_TIMEOUT_MS',
+  JOINING_LEADERSHIP_WAIT_TIMEOUT_MS: 'NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS',
+  CONTROL_PLANE_LIFECYCLE_PROBES_REQUIRED:
+    'CONTROL_PLANE_LIFECYCLE_PROBES_REQUIRED',
+  CONTROL_PLANE_WORK_CLASS_SCHEDULER_REQUIRED:
+    'CONTROL_PLANE_WORK_CLASS_SCHEDULER_REQUIRED',
+  CONTROL_PLANE_DURABLE_JOIN_SESSIONS_REQUIRED:
+    'CONTROL_PLANE_DURABLE_JOIN_SESSIONS_REQUIRED',
 });
 
 const ENTRYPOINT_DEFAULT = Object.freeze({
   REST_API_PORT: 8080,
   WS_PORT_OFFSET: 1000,
+  READINESS_DRAIN_DEADLINE_MS: 10000,
   LOCALHOST: 'localhost',
   HTTP_PREFIX: 'http://',
 });
@@ -50,6 +59,9 @@ const ENTRYPOINT_LOG_MSG = Object.freeze({
   STARTING_SEED: 'Starting as seed node',
   BOOTSTRAP_FAILED: 'Bootstrap failed',
   BOOTSTRAP_COMPLETED: 'Bootstrap completed',
+  READINESS_TRANSITION: 'Bootstrap readiness state transitioned',
+  READINESS_BLOCKED_DURATION: 'Bootstrap readiness blocker duration observed',
+  READINESS_DRAINING: 'Bootstrap readiness marked draining',
   WS_STARTED: 'WebSocket server started for cross-node communication',
   WS_START_FAILED: 'Failed to start WebSocket server',
   NODE_READY: 'Node fully operational',
@@ -77,6 +89,12 @@ const ENTRYPOINT_TEXT = Object.freeze({
     '  NODE_ID          Override auto-generated node ID',
     '  LOG_LEVEL        Set logging level (error, warn, info, debug)',
     '  PORT             HTTP/WebSocket port (default: 8080)',
+    '  CONTROL_PLANE_LIFECYCLE_PROBES_REQUIRED',
+    '                   Require lifecycle probe controls (default: true)',
+    '  CONTROL_PLANE_WORK_CLASS_SCHEDULER_REQUIRED',
+    '                   Require work-class scheduler controls (default: true)',
+    '  CONTROL_PLANE_DURABLE_JOIN_SESSIONS_REQUIRED',
+    '                   Require durable join-session controls (default: true)',
   ],
   SEA_NATIVE_ERROR: 'Error: Native modules not available.',
   SEA_NATIVE_HELP: [

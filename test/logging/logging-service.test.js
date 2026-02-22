@@ -84,6 +84,40 @@ test('LoggingService flush on logs table ready', async (t) => {
   LoggingService.resetInstance();
 });
 
+test('LoggingService can flush buffered logs in background chunks', async (t) => {
+  LoggingService.resetInstance();
+  const logger = LoggingService.getInstance();
+  logger.initialize({nodeId: 'test-node'});
+
+  for (let i = 0; i < 5; i++) {
+    logger.info(`buffered-bg-${i}`);
+  }
+
+  const seenMessages = [];
+  const flushedCount = await logger.onLogsTableReady(async (entry) => {
+    if (entry?.message?.startsWith('buffered-bg-')) {
+      seenMessages.push(entry.message);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }, {
+    flushMode: 'background',
+    chunkSize: 1,
+    yieldMs: 1,
+  });
+
+  t.equal(flushedCount, 5, 'should report buffered entries immediately');
+  t.equal(
+    seenMessages.length,
+    0,
+    'should not synchronously drain buffered entries in background mode',
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  t.equal(seenMessages.length, 5, 'should flush all buffered entries asynchronously');
+
+  LoggingService.resetInstance();
+});
+
 test('LoggingService child logger', async (t) => {
   LoggingService.resetInstance();
   const logger = LoggingService.getInstance();

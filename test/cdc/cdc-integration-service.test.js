@@ -226,6 +226,30 @@ test('CDCIntegrationService - insertSystemTableRow waits for propagated tables',
   t.end();
 });
 
+test('CDCIntegrationService - waitForCacheUpdate skips in bootstrap mode', async (t) => {
+  const mockSqlEngine = createMockSqlQueryEngine();
+  const {cache, state} = createCacheWaitProbe();
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockSqlEngine,
+    systemTableCache: cache,
+  });
+  service.initialize();
+
+  // Enable bootstrap mode with local partition map to match seed registration path.
+  service.setBootstrapMode(true, new Map());
+
+  await service.waitForCacheUpdate(SystemTableName.NODES, 'node-1', true);
+
+  t.equal(
+    state.onCacheChangeCalls,
+    0,
+    'should not subscribe to cache waits while bootstrap mode is enabled',
+  );
+  t.equal(state.offCacheChangeCalls, 0, 'should not register cache wait listeners');
+  t.end();
+});
+
 test('CDCIntegrationService - updateSystemTableRow', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({

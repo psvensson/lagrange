@@ -174,6 +174,8 @@ test('Property 11: Load Metrics Accuracy', async (t) => {
 import {LoadGenerator} from '../load-generator.js';
 
 const ZERO = 0;
+const CANCEL_DISPATCH_SETTLE_MS = 25;
+const CANCEL_WAIT_TIMEOUT_MS = 200;
 
 /**
  * Create a mock node whose query method resolves immediately.
@@ -317,6 +319,41 @@ test('cancel stops the load run immediately', async () => {
     assert.ok(metrics, 'waitComplete should resolve after cancel');
     assert.strictEqual(typeof metrics.total, 'number');
   } finally {
+    run.cancel();
+  }
+});
+
+test('cancel resolves waitComplete when in-flight query is stuck', async () => {
+  const nodes = [{
+    id: 'n1',
+    async query(_sql) {
+      return new Promise(() => {});
+    },
+  }];
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 100,
+    duration: 60000,
+    maxInFlight: 1,
+  });
+  const run = gen.start();
+  let timeoutId = null;
+
+  try {
+    await new Promise((resolve) => setTimeout(resolve, CANCEL_DISPATCH_SETTLE_MS));
+    run.cancel();
+
+    await Promise.race([
+      run.waitComplete(),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('waitComplete did not resolve after cancel'));
+        }, CANCEL_WAIT_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
     run.cancel();
   }
 });

@@ -6,11 +6,16 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
 import {BOOTSTRAP_API_ERROR} from '../../src/bootstrap/bootstrap-api-constants.js';
+import {
+  BOOTSTRAP_PHASE,
+  BOOTSTRAP_PIPELINE_ERROR_CODE,
+} from '../../src/bootstrap/bootstrap-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SERVICE_STATUS, SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -95,7 +100,7 @@ test('BootstrapAPI - health endpoint', async (t) => {
   await api.shutdown();
 });
 
-test('BootstrapAPI - health returns 503 without SQL engine', async (t) => {
+test('BootstrapAPI - health reports initializing before SQL engine is ready', async (t) => {
   initializeTestEnvironment();
 
   const api = new BootstrapAPI({
@@ -112,11 +117,13 @@ test('BootstrapAPI - health returns 503 without SQL engine', async (t) => {
     url: '/health',
   });
 
-  t.equal(before.statusCode, 503,
-    'should return 503 when SQL engine is not available');
+  t.equal(before.statusCode, 200,
+    'should return 200 for liveness even before SQL engine is available');
   const beforeBody = JSON.parse(before.body);
   t.equal(beforeBody.status, 'initializing',
     'should report initializing status');
+  t.equal(beforeBody.ready, false,
+    'should expose readiness=false before SQL engine is available');
 
   // After setting the SQL engine, health should be 200
   api.setSqlQueryEngine({executeQuery: async () => ({success: true})});
@@ -131,9 +138,345 @@ test('BootstrapAPI - health returns 503 without SQL engine', async (t) => {
   const afterBody = JSON.parse(after.body);
   t.equal(afterBody.status, 'healthy',
     'should report healthy status');
+  t.equal(afterBody.ready, true,
+    'should expose readiness=true after SQL engine is set');
 
   await api.shutdown();
 });
+
+test('BootstrapAPI - keeps legacy /health available while readiness remains blocked',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const bootstrapService = {
+      phase: BOOTSTRAP_PHASE.INFRASTRUCTURE,
+    };
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapService,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const healthResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/health',
+    });
+    t.equal(healthResponse.statusCode, 200,
+      'legacy /health should remain available during readiness migration');
+    const healthBody = JSON.parse(healthResponse.body);
+    t.equal(healthBody.status, 'initializing',
+      'legacy /health should continue reporting bootstrap initialization');
+
+    const readyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(readyResponse.statusCode, 503,
+      '/readyz should still gate join readiness independently of /health');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - exposes explicit liveness, startup, and readiness probes', async (t) => {
+  initializeTestEnvironment();
+
+  const readinessSnapshot = {
+    ready: false,
+    phase: 'INIT',
+    state: 'bootstrapping',
+    reasons: ['BOOTSTRAP_PHASE_INCOMPLETE'],
+    retryAfterMs: 250,
+    timestamp: Date.now(),
+  };
+  const readinessState = {
+    evaluate() {
+      return readinessSnapshot;
+    },
+    getSnapshot() {
+      return readinessSnapshot;
+    },
+    recordProbeResult() {},
+  };
+
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: createEmptySystemTableCache(),
+    bootstrapService: {
+      phase: BOOTSTRAP_PHASE.INFRASTRUCTURE,
+    },
+    readinessState,
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const liveResponse = await api.getFastify().inject({
+    method: 'GET',
+    url: '/livez',
+  });
+  t.equal(liveResponse.statusCode, 200, 'livez should return 200');
+  const liveBody = JSON.parse(liveResponse.body);
+  t.equal(liveBody.alive, true, 'livez should expose alive=true');
+  t.equal(liveBody.nodeId, 'seed-node-1', 'livez should include node id');
+
+  const startupResponse = await api.getFastify().inject({
+    method: 'GET',
+    url: '/startupz',
+  });
+  t.equal(startupResponse.statusCode, 503,
+    'startupz should return 503 before bootstrap completes');
+  const startupBody = JSON.parse(startupResponse.body);
+  t.equal(startupBody.started, false, 'startupz should expose started=false');
+  t.equal(startupBody.phase, 'INIT', 'startupz should expose lifecycle phase');
+  t.equal(startupBody.state, 'bootstrapping', 'startupz should expose readiness state');
+
+  const readyResponse = await api.getFastify().inject({
+    method: 'GET',
+    url: '/readyz',
+  });
+  t.equal(readyResponse.statusCode, 503, 'readyz should return 503 while not ready');
+  const readyBody = JSON.parse(readyResponse.body);
+  t.equal(readyBody.ready, false, 'readyz should expose ready=false');
+  t.equal(readyBody.phase, 'INIT', 'readyz should expose lifecycle phase');
+  t.same(readyBody.reasons, ['BOOTSTRAP_PHASE_INCOMPLETE'],
+    'readyz should expose blocker reasons');
+  t.equal(readyBody.retryAfterMs, 250, 'readyz should expose retry hint');
+
+  const bootstrapReadyResponse = await api.getFastify().inject({
+    method: 'GET',
+    url: '/bootstrap/ready',
+  });
+  t.equal(bootstrapReadyResponse.statusCode, 503,
+    'bootstrap readiness probe should return 503 while not ready');
+  const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+  t.equal(bootstrapReadyBody.ready, false,
+    'bootstrap readiness probe should expose ready=false');
+  t.equal(bootstrapReadyBody.phase, 'INIT',
+    'bootstrap readiness probe should expose lifecycle phase');
+  t.equal(bootstrapReadyBody.scope, 'bootstrap_join',
+    'bootstrap readiness probe should declare bootstrap_join scope');
+
+  await api.shutdown();
+});
+
+test('BootstrapAPI - readiness stays gated until startup dependencies and stable window complete',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const bootstrapService = {
+      phase: BOOTSTRAP_PHASE.INFRASTRUCTURE,
+    };
+
+    const readinessCache = {
+      get() {
+        return null;
+      },
+      filter() {
+        return [];
+      },
+      find() {
+        return null;
+      },
+      getReadyNodes() {
+        return [];
+      },
+      getAll(tableName) {
+        if (tableName === TABLES.PARTITIONS) {
+          return [{
+            partition_id: 'partition-1',
+            table_name: TABLES.NODES,
+          }];
+        }
+        if (tableName === TABLES.MESSAGE_GROUPS) {
+          return [{
+            group_id: 'mg-1',
+          }];
+        }
+        if (tableName === TABLES.SERVICES) {
+          return [
+            {
+              service_id: 'partition-1-leader',
+              service_type: SERVICE_TYPE.PARTITION,
+              partition_id: 'partition-1',
+              node_id: 'seed-node-1',
+              address: 'seed-node-1/partition/partition-1-leader',
+              raft_role: RAFT_ROLE.LEADER,
+              status: SERVICE_STATUS.ACTIVE,
+            },
+            {
+              service_id: 'mg-1-leader',
+              service_type: SERVICE_TYPE.MESSAGE_GROUP,
+              group_id: 'mg-1',
+              node_id: 'seed-node-1',
+              address: 'seed-node-1/message-group/mg-1-leader',
+              raft_role: RAFT_ROLE.LEADER,
+              status: SERVICE_STATUS.ACTIVE,
+            },
+          ];
+        }
+        return [];
+      },
+    };
+
+    let nowMs = 1000;
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 50,
+      demotionFailureThreshold: 2,
+      now: () => nowMs,
+      retryAfterMs: 250,
+    });
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: readinessCache,
+      bootstrapService,
+      readinessState,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    let response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 503,
+      'readyz should stay unavailable while bootstrap phase is incomplete');
+    let body = JSON.parse(response.body);
+    t.ok(body.reasons.includes('BOOTSTRAP_PHASE_INCOMPLETE'),
+      'should expose bootstrap-phase blocker while startup incomplete');
+
+    bootstrapService.phase = BOOTSTRAP_PHASE.COMPLETE;
+    response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 503,
+      'readyz should remain unavailable while SQL engine is missing');
+    body = JSON.parse(response.body);
+    t.ok(body.reasons.includes(BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE),
+      'should expose SQL engine blocker before routing is available');
+
+    api.setSqlQueryEngine({executeQuery: async () => ({success: true})});
+    response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 503,
+      'readyz should remain unavailable while runtime wiring is incomplete');
+    body = JSON.parse(response.body);
+    t.ok(body.reasons.includes(BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY),
+      'should expose runtime-wiring blocker before message router is present');
+
+    api.messageRouter = {};
+    response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 503,
+      'readyz should require sustained success window before promotion');
+    body = JSON.parse(response.body);
+    t.ok(body.reasons.includes('READINESS_STABLE_WINDOW_PENDING'),
+      'should report stable-window pending before promotion threshold elapses');
+
+    nowMs += 60;
+    response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 200,
+      'readyz should promote after sustained success window elapses');
+    body = JSON.parse(response.body);
+    t.equal(body.ready, true, 'readyz should expose ready=true after promotion');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - transitions probes to draining non-ready state during shutdown',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const drainDeadlineMs = Date.now() + 5000;
+    const readySnapshot = {
+      ready: true,
+      phase: 'TRAFFIC_READY',
+      state: 'join_ready',
+      reasons: [],
+      retryAfterMs: 0,
+      timestamp: Date.now(),
+      draining: false,
+      drainDeadlineMs: null,
+    };
+    const drainingSnapshot = {
+      ready: false,
+      phase: 'DEGRADED',
+      state: 'degraded',
+      reasons: ['NODE_DRAINING'],
+      retryAfterMs: 100,
+      timestamp: Date.now(),
+      draining: true,
+      drainDeadlineMs,
+    };
+    let draining = false;
+    const readinessState = {
+      evaluate() {
+        return draining ? drainingSnapshot : readySnapshot;
+      },
+      getSnapshot() {
+        return draining ? drainingSnapshot : readySnapshot;
+      },
+      beginDrain() {
+        draining = true;
+        return drainingSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-drain',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+      },
+      readinessState,
+      messageRouter: {},
+      sqlQueryEngine: {executeQuery: async () => ({success: true})},
+    });
+
+    await api.initialize(0, {listen: false});
+
+    let response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 200,
+      'readyz should be healthy before draining signal');
+
+    api.markDraining({
+      drainDeadlineMs,
+      reasonCode: 'NODE_DRAINING',
+    });
+
+    response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    const body = JSON.parse(response.body);
+    t.equal(response.statusCode, 503,
+      'readyz should become non-ready after draining signal');
+    t.equal(body.draining, true,
+      'readyz payload should expose draining=true during shutdown');
+    t.equal(body.drainDeadlineMs, drainDeadlineMs,
+      'readyz payload should include drain deadline');
+    t.ok(body.reasons.includes('NODE_DRAINING'),
+      'readyz payload should include node-draining reason');
+
+    await api.shutdown();
+  });
 
 test('BootstrapAPI - bootstrap validation', async (t) => {
   initializeTestEnvironment();
@@ -257,6 +600,64 @@ test('BootstrapAPI - bootstrap conflict detection', async (t) => {
   await api.shutdown();
 });
 
+test('BootstrapAPI - returns bootstrap not ready before touching cache', async (t) => {
+  initializeTestEnvironment();
+
+  const readinessSnapshot = {
+    ready: false,
+    state: 'bootstrapping',
+    reasons: ['BOOTSTRAP_PHASE_INCOMPLETE'],
+    retryAfterMs: 350,
+    timestamp: Date.now(),
+  };
+  const readinessState = {
+    evaluate() {
+      return readinessSnapshot;
+    },
+    getSnapshot() {
+      return readinessSnapshot;
+    },
+    recordProbeResult() {},
+  };
+
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: null,
+    bootstrapService: {
+      phase: BOOTSTRAP_PHASE.INFRASTRUCTURE,
+    },
+    readinessState,
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const response = await api.getFastify().inject({
+    method: 'POST',
+    url: '/bootstrap',
+    payload: {
+      nodeId: '550e8400-e29b-41d4-a716-446655440010',
+      nodeAddress: 'ws://localhost:9090',
+    },
+  });
+
+  t.equal(response.statusCode, 503,
+    'should return 503 while bootstrap service is not complete');
+  const body = JSON.parse(response.body);
+  t.equal(body.error, BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+    'should return bootstrap not ready error');
+  t.equal(body.code, BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+    'should include bootstrap-not-ready pipeline code');
+  t.equal(body.phase, BOOTSTRAP_PHASE.INFRASTRUCTURE,
+    'should include current bootstrap phase');
+  t.equal(body.retryAfterMs, 350,
+    'should include retry hint while bootstrap is not ready');
+  t.same(body.reasons, ['BOOTSTRAP_PHASE_INCOMPLETE'],
+    'should include machine-readable blocker reasons');
+
+  await api.shutdown();
+});
+
 test('BootstrapAPI - blocks bootstrap until raft leaders are ready', async (t) => {
   initializeTestEnvironment();
 
@@ -320,9 +721,55 @@ test('BootstrapAPI - blocks bootstrap until raft leaders are ready', async (t) =
   t.equal(body.error, BOOTSTRAP_API_ERROR.RAFT_LEADERS_NOT_READY, 'should return error');
   t.equal(body.missingPartitionLeaders[0], 'partition-1', 'should report missing leader');
   t.equal(body.missingMessageGroupLeaders[0], 'mg-1', 'should report missing group leader');
+  t.equal(body.retryAfterMs, 500,
+    'should include retry guidance when leader metadata is incomplete');
+  t.ok(Array.isArray(body.reasons),
+    'should include reasons array for readiness-aware retries');
+  t.ok(body.reasons.includes(BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE),
+    'should include leader metadata blocker reason code');
 
   await api.shutdown();
 });
+
+test('BootstrapAPI - waitForServiceLeaders returns promptly when leaders are missing',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapService: {
+        config: {
+          leadershipWaitTimeoutMs: 1000,
+          leadershipWaitInitialDelayMs: 100,
+          leadershipWaitMaxDelayMs: 100,
+          leadershipWaitBackoffMultiplier: 2,
+        },
+      },
+      partitionServices: new Map([['partition-1', {partitionId: 'partition-1'}]]),
+      messageGroupServices: new Map([['mg-1', {groupId: 'mg-1'}]]),
+    });
+
+    api.getMissingServiceLeaders = () => {
+      return {
+        missingPartitionLeaders: ['partition-1'],
+        missingPartitionLeaderNodes: ['partition-1'],
+        missingPartitionLeaderAddresses: ['partition-1'],
+        missingMessageGroupLeaders: ['mg-1'],
+        missingMessageGroupLeaderNodes: ['mg-1'],
+        missingMessageGroupLeaderAddresses: ['mg-1'],
+      };
+    };
+
+    const start = Date.now();
+    const status = await api.waitForServiceLeaders();
+    const elapsedMs = Date.now() - start;
+
+    t.equal(status.ready, false, 'should report leaders as not ready');
+    t.ok(elapsedMs < 200,
+      `should return quickly without waiting full timeout (elapsed=${elapsedMs}ms)`);
+  });
 
 test('BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED', async (t) => {
   initializeTestEnvironment();

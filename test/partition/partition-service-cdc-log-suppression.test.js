@@ -82,6 +82,45 @@ test('PartitionService does not emit insert row-fetch info logs for logs table',
     db.close();
   });
 
+test('PartitionService skips no-subscriber CDC buffering for logs table writes',
+  async (t) => {
+    const partition = createTestPartitionService();
+    const warnCalls = [];
+    let bufferCalls = 0;
+
+    partition.logger = {
+      debug: () => {},
+      info: () => {},
+      warn: (...args) => warnCalls.push(args),
+      error: () => {},
+    };
+    partition.cdcEventBuffer.buffer = () => {
+      bufferCalls += 1;
+      return true;
+    };
+
+    await partition.generateCDCEvent({
+      type: 'INSERT',
+      tableName: SystemTableName.LOGS,
+      data: {
+        log_id: 'log-loop-1',
+        message: 'loop check',
+      },
+      timestamp: Date.now().toString(),
+    });
+
+    t.equal(
+      bufferCalls,
+      0,
+      'should not buffer logs table CDC events before subscribers are ready',
+    );
+    t.equal(
+      warnCalls.length,
+      0,
+      'should not emit no-subscriber warnings for logs table CDC events',
+    );
+  });
+
 test('PartitionService does not emit update row-fetch info logs for logs table',
   async (t) => {
     const partition = createTestPartitionService();

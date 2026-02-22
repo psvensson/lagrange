@@ -578,6 +578,52 @@ test('Unit: image metadata helpers read inspect labels', async (t) => {
   );
 });
 
+test('Unit: getContainerLogs normalizes numeric tail option to string',
+  async () => {
+    const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+    let capturedLogOpts = null;
+
+    provider._docker.getContainer = () => ({
+      logs: async (logOpts) => {
+        capturedLogOpts = logOpts;
+        return Buffer.from('line-a\nline-b\n', 'utf8');
+      },
+    });
+
+    const logs = await provider.getContainerLogs('container-logs-tail', {
+      tail: 50,
+    });
+
+    assert.strictEqual(capturedLogOpts.tail, '50');
+    assert.strictEqual(logs, 'line-a\nline-b\n');
+  });
+
+test('Unit: getContainerLogs retries with safe tail after oversized payload error',
+  async () => {
+    const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+    let callCount = 0;
+    let fallbackLogOpts = null;
+
+    provider._docker.getContainer = () => ({
+      logs: async (logOpts) => {
+        callCount += 1;
+        if (callCount === 1) {
+          const error = new Error('payload too large');
+          error.code = 'ERR_STRING_TOO_LONG';
+          throw error;
+        }
+        fallbackLogOpts = logOpts;
+        return Buffer.from('trimmed-log-line\n', 'utf8');
+      },
+    });
+
+    const logs = await provider.getContainerLogs('container-logs-large');
+
+    assert.strictEqual(callCount, 2);
+    assert.strictEqual(fallbackLogOpts.tail, '50');
+    assert.strictEqual(logs, 'trimmed-log-line\n');
+  });
+
 test('Unit: parseContainerStats computes cpu/memory/network metrics', async () => {
   const stats = {
     read: '2026-02-14T00:00:00.000Z',

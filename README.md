@@ -82,6 +82,18 @@ npm test
 npm run lint
 ```
 
+## Deployment Probes
+
+Seed nodes expose dedicated probe endpoints:
+
+- `GET /livez` for process liveness
+- `GET /startupz` for bootstrap completion
+- `GET /readyz` for join/admin readiness
+- `GET /bootstrap/ready` for lightweight bootstrap-operation readiness
+
+Deployment profiles, NGINX retry guidance, and `/health` migration notes are
+documented in `docs/bootstrap-readiness-probes.md`.
+
 ## Architecture
 
 ### Core Principles

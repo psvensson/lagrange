@@ -66,10 +66,14 @@ function buildPartitionReplicaRow(partitionId, replicaSuffix, raftRole) {
 
 function buildSequencedConvergenceNode(options = {}) {
   const snapshots = Array.isArray(options.snapshots) ? options.snapshots : [];
+  const operationSnapshots = Array.isArray(options.operationSnapshots) ?
+    options.operationSnapshots :
+    [];
   const partitionIds = Array.isArray(options.partitionIds) ?
     options.partitionIds :
     ['p1'];
   let snapshotIndex = 0;
+  let operationSnapshotIndex = 0;
 
   return {
     id: options.id || 'mock-sequence-node',
@@ -87,6 +91,14 @@ function buildSequencedConvergenceNode(options = {}) {
         );
         snapshotIndex += 1;
         return {rows: snapshots[boundedIndex] || []};
+      }
+      if (sql.includes('FROM replica_operations')) {
+        const boundedIndex = Math.min(
+          operationSnapshotIndex,
+          Math.max(operationSnapshots.length - 1, 0),
+        );
+        operationSnapshotIndex += 1;
+        return {rows: operationSnapshots[boundedIndex] || []};
       }
       return {rows: []};
     },
@@ -814,4 +826,79 @@ test('waitForConvergence — transient remove with leader gap recovers to stable
 
     assert.strictEqual(typeof result.settledAfterMs, 'number');
     assert.ok(result.settledAfterMs >= 0);
+  });
+
+test('waitForConvergence — waits for in-flight replica operations to settle',
+  async () => {
+    const partitionId = 'p1';
+    const stableRows = [
+      buildPartitionReplicaRow(partitionId, 'a', 'leader'),
+      buildPartitionReplicaRow(partitionId, 'b', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'c', 'follower'),
+    ];
+    const node = buildSequencedConvergenceNode({
+      id: 'mock-operations-settle-node',
+      partitionIds: [partitionId],
+      snapshots: [stableRows, stableRows, stableRows],
+      operationSnapshots: [
+        [{operation_id: 'op-1', status: 'creating'}],
+        [{operation_id: 'op-1', status: 'syncing'}],
+        [{operation_id: 'op-1', status: 'active'}],
+      ],
+    });
+
+    const startedAt = Date.now();
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 200,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 100,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+    });
+
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(
+      Date.now() - startedAt >= 10,
+      'convergence should wait for in-flight operations to settle',
+    );
+  });
+
+test('waitForConvergence — timeout diagnostics include in-flight operation counts',
+  async () => {
+    const partitionId = 'p1';
+    const stableRows = [
+      buildPartitionReplicaRow(partitionId, 'a', 'leader'),
+      buildPartitionReplicaRow(partitionId, 'b', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'c', 'follower'),
+    ];
+    const node = buildSequencedConvergenceNode({
+      id: 'mock-operations-timeout-node',
+      partitionIds: [partitionId],
+      snapshots: [stableRows],
+      operationSnapshots: [
+        [{operation_id: 'op-1', status: 'creating'}],
+      ],
+    });
+
+    try {
+      await waitForConvergence([node], {
+        settleTimeoutMs: 80,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 100,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+      });
+      assert.fail('Expected convergence timeout with in-flight operations');
+    } catch (err) {
+      assert.match(
+        err.message,
+        /In-flight replica operations: 1/,
+      );
+      assert.ok(err.diagnostics, 'should include timeout diagnostics');
+      assert.strictEqual(err.diagnostics.inFlightReplicaOperationCount, 1);
+      assert.deepStrictEqual(
+        err.diagnostics.inFlightReplicaOperationStatuses,
+        {creating: 1},
+      );
+    }
   });

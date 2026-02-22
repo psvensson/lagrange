@@ -285,6 +285,133 @@ export async function isPartitionLeader(service, bootstrapService = null) {
 }
 
 /**
+ * Temporarily force bootstrap probe SQL dependency to report unavailable.
+ * @param {Object} seedApi - BootstrapAPI instance.
+ * @param {Object} [options]
+ * @param {number} [options.blockedEvaluations]
+ * @return {{restore: Function, getRemaining: Function}}
+ */
+export function installTransientSqlReadinessFixture(seedApi, options = {}) {
+  if (!seedApi || typeof seedApi.isSqlEngineDependencyReady !== 'function') {
+    throw new Error('seedApi with isSqlEngineDependencyReady() is required');
+  }
+  const blockedEvaluations = Number.isFinite(options.blockedEvaluations) ?
+    Math.max(0, Math.floor(options.blockedEvaluations)) :
+    0;
+  let remaining = blockedEvaluations;
+  const original = seedApi.isSqlEngineDependencyReady.bind(seedApi);
+  seedApi.isSqlEngineDependencyReady = () => {
+    if (remaining > 0) {
+      remaining -= 1;
+      return false;
+    }
+    return original();
+  };
+
+  return {
+    restore: () => {
+      seedApi.isSqlEngineDependencyReady = original;
+    },
+    getRemaining: () => remaining,
+  };
+}
+
+/**
+ * Temporarily force probe leader-metadata status to report not-ready.
+ * @param {Object} seedApi - BootstrapAPI instance.
+ * @param {Object} [options]
+ * @param {number} [options.blockedEvaluations]
+ * @return {{restore: Function, getRemaining: Function}}
+ */
+export function installTransientLeaderMetadataFixture(seedApi, options = {}) {
+  if (!seedApi || typeof seedApi.getLeaderReadinessStatusForProbe !== 'function') {
+    throw new Error('seedApi with getLeaderReadinessStatusForProbe() is required');
+  }
+  const blockedEvaluations = Number.isFinite(options.blockedEvaluations) ?
+    Math.max(0, Math.floor(options.blockedEvaluations)) :
+    0;
+  let remaining = blockedEvaluations;
+  const original = seedApi.getLeaderReadinessStatusForProbe.bind(seedApi);
+  seedApi.getLeaderReadinessStatusForProbe = () => {
+    if (remaining > 0) {
+      remaining -= 1;
+      return {
+        ready: false,
+        missingPartitionLeaders: ['partition-fixture'],
+        missingMessageGroupLeaders: [],
+      };
+    }
+    return original();
+  };
+
+  return {
+    restore: () => {
+      seedApi.getLeaderReadinessStatusForProbe = original;
+    },
+    getRemaining: () => remaining,
+  };
+}
+
+/**
+ * Temporarily force bootstrap operation leader checks to report not-ready.
+ * @param {Object} seedApi - BootstrapAPI instance.
+ * @param {Object} [options]
+ * @param {number} [options.blockedCalls]
+ * @return {{restore: Function, getRemaining: Function}}
+ */
+export function installTransientBootstrapLeaderGateFixture(seedApi, options = {}) {
+  if (!seedApi || typeof seedApi.waitForServiceLeaders !== 'function') {
+    throw new Error('seedApi with waitForServiceLeaders() is required');
+  }
+  const blockedCalls = Number.isFinite(options.blockedCalls) ?
+    Math.max(0, Math.floor(options.blockedCalls)) :
+    0;
+  let remaining = blockedCalls;
+  const original = seedApi.waitForServiceLeaders.bind(seedApi);
+  seedApi.waitForServiceLeaders = async () => {
+    if (remaining > 0) {
+      remaining -= 1;
+      return {
+        ready: false,
+        missingPartitionLeaders: ['partition-fixture'],
+        missingMessageGroupLeaders: [],
+        missingPartitionLeaderNodes: [],
+        missingMessageGroupLeaderNodes: [],
+      };
+    }
+    return original();
+  };
+
+  return {
+    restore: () => {
+      seedApi.waitForServiceLeaders = original;
+    },
+    getRemaining: () => remaining,
+  };
+}
+
+/**
+ * Flood in-memory logging buffer for class-C saturation scenarios.
+ * @param {LoggingService} loggingService
+ * @param {Object} [options]
+ * @param {number} [options.count]
+ * @param {string} [options.message]
+ * @return {number} Current buffered entry count.
+ */
+export function floodBufferedLogs(loggingService, options = {}) {
+  const count = Number.isFinite(options.count) ?
+    Math.max(0, Math.floor(options.count)) :
+    0;
+  const message = typeof options.message === 'string' && options.message.length > 0 ?
+    options.message :
+    'readiness.fixture.log';
+  for (let index = 0; index < count; index += 1) {
+    loggingService.error(message, {index});
+  }
+  return loggingService.getBufferSize();
+}
+
+/**
  * Wait for a specific partition to elect a leader.
  *
  * @param {Object} bootstrapResult - Result returned by bootstrap().

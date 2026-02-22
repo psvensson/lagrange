@@ -12,6 +12,8 @@ import {HLCClockService} from './hlc/hlc-clock-service.js';
 import {DataDirectoryManager} from './storage/data-directory-manager.js';
 import {BootstrapService} from './bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
+import {BootstrapReadinessState} from './bootstrap/bootstrap-readiness-state.js';
+import {READINESS_EVENT} from './bootstrap/bootstrap-readiness-state-constants.js';
 import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
 import {ADMIN_DEFAULT} from './admin/admin-constants.js';
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
@@ -38,6 +40,9 @@ import {
   ENTRYPOINT_TEXT,
   ENTRYPOINT_VERSION,
 } from './constants/entrypoint.js';
+import {
+  resolveControlPlaneRolloutControls,
+} from './runtime/control-plane-rollout-controls.js';
 
 // Re-export modules for external use
 export * from './query/index.js';
@@ -110,6 +115,35 @@ function parseCommandLineArgs() {
   }
 
   return result;
+}
+
+/**
+ * Parse a positive millisecond value from environment input.
+ * @param {string|number|undefined} value
+ * @return {number|null}
+ */
+function parsePositiveTimeoutMs(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return null;
+  }
+  return Math.floor(parsed);
+}
+
+/**
+ * Resolve rollout controls from environment overrides.
+ * @param {Object} env
+ * @return {Object}
+ */
+function resolveRolloutControlsFromEnvironment(env) {
+  return resolveControlPlaneRolloutControls({
+    lifecycleProbes:
+      env[ENTRYPOINT_ENV.CONTROL_PLANE_LIFECYCLE_PROBES_REQUIRED],
+    workClassScheduler:
+      env[ENTRYPOINT_ENV.CONTROL_PLANE_WORK_CLASS_SCHEDULER_REQUIRED],
+    durableJoinSessions:
+      env[ENTRYPOINT_ENV.CONTROL_PLANE_DURABLE_JOIN_SESSIONS_REQUIRED],
+  });
 }
 
 /**
@@ -195,16 +229,23 @@ function createAdminAPIWithLiveQuery(options) {
  * Connect structured logging persistence to the replicated logs table.
  * @param {Object|null} cdcIntegrationService - CDC integration service.
  * @param {Object} logger - Entrypoint logger.
+ * @param {Object} rolloutControls - Startup rollout control map.
  * @return {Promise<LogsTableService|null>} Logs table service when connected.
  */
-async function connectLogsTablePersistence(cdcIntegrationService, logger) {
+async function connectLogsTablePersistence(
+  cdcIntegrationService,
+  logger,
+  rolloutControls,
+) {
   if (!cdcIntegrationService) {
     logger.warn(ENTRYPOINT_LOG_MSG.LOGS_TABLE_CONNECT_SKIPPED);
     return null;
   }
 
   try {
-    const logsTableService = LogsTableService.getInstance();
+    const logsTableService = LogsTableService.getInstance({
+      rolloutControls,
+    });
     logsTableService.initialize({cdcIntegrationService});
     const flushedCount = await logsTableService.connectToLoggingService();
     logger.info(ENTRYPOINT_LOG_MSG.LOGS_TABLE_CONNECTED, {
@@ -224,14 +265,20 @@ async function connectLogsTablePersistence(cdcIntegrationService, logger) {
  * Avoids blocking node readiness on buffered log flush duration.
  * @param {Object|null} cdcIntegrationService - CDC integration service.
  * @param {Object} logger - Entrypoint logger.
+ * @param {Object} rolloutControls - Startup rollout control map.
  * @return {{getService: Function, promise: Promise<LogsTableService|null>}}
  */
-function startLogsTablePersistence(cdcIntegrationService, logger) {
+function startLogsTablePersistence(
+  cdcIntegrationService,
+  logger,
+  rolloutControls,
+) {
   let connectedService = null;
 
   const promise = connectLogsTablePersistence(
     cdcIntegrationService,
     logger,
+    rolloutControls,
   ).then((service) => {
     connectedService = service;
     return service;
@@ -371,6 +418,7 @@ async function main() {
   // Check if we're joining an existing cluster or starting as seed node
   const seedNodeAddress = cliArgs.seedNodeAddress ||
     process.env[ENTRYPOINT_ENV.SEED_NODE_ADDRESS];
+  const rolloutControls = resolveRolloutControlsFromEnvironment(process.env);
 
   if (seedNodeAddress) {
     // Join existing cluster
@@ -389,6 +437,19 @@ async function main() {
     const wsPort =
       config.get(CONFIG_KEY.NODE_WS_PORT) ||
       (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
+    const joiningConfig = {};
+    const joinHttpTimeoutMs = parsePositiveTimeoutMs(
+      process.env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
+    );
+    if (joinHttpTimeoutMs !== null) {
+      joiningConfig.httpTimeoutMs = joinHttpTimeoutMs;
+    }
+    const joinLeadershipWaitTimeoutMs = parsePositiveTimeoutMs(
+      process.env[ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS],
+    );
+    if (joinLeadershipWaitTimeoutMs !== null) {
+      joiningConfig.leadershipWaitTimeoutMs = joinLeadershipWaitTimeoutMs;
+    }
 
     const nodeJoiningService = new NodeJoiningService({
       nodeId: config.get(CONFIG_KEY.NODE_ID),
@@ -397,6 +458,10 @@ async function main() {
       seedNodeAddress: seedUrl,
       wsPort: wsPort,
       dataDir: dataDirectoryManager.getDataDir(),
+      rolloutControls,
+      config: Object.keys(joiningConfig).length > 0 ?
+        joiningConfig :
+        undefined,
     });
 
     const joinResult = await nodeJoiningService.join();
@@ -409,10 +474,7 @@ async function main() {
       process.exit(1);
     }
 
-    const joinLogsPersistence = startLogsTablePersistence(
-      nodeJoiningService.cdcIntegrationService,
-      mainLogger,
-    );
+    let joinLogsPersistence = null;
 
     mainLogger.info(ENTRYPOINT_LOG_MSG.JOINED_CLUSTER, {
       messageGroupCount: joinResult.messageGroupServices.size,
@@ -444,6 +506,7 @@ async function main() {
         messageRouter: joinResult.messageRouter,
         cdcIntegrationService: nodeJoiningService.cdcIntegrationService,
         nodeId: config.get(CONFIG_KEY.NODE_ID),
+        rebalanceCoordinator: nodeJoiningService.rebalanceCoordinator,
         runtimeDriverRegistry: nodeJoiningService.runtimeDriverRegistry,
         serviceRuntimeLifecycle: nodeJoiningService.serviceRuntimeLifecycle,
         wasmExecutor,
@@ -479,6 +542,12 @@ async function main() {
       dataDir: dataDirectoryManager.getDataDir(),
     });
 
+    joinLogsPersistence = startLogsTablePersistence(
+      nodeJoiningService.cdcIntegrationService,
+      mainLogger,
+      rolloutControls,
+    );
+
     // Keep the process running
     let shutdownSignalCount = 0;
     const handleShutdownSignal = async (signal) => {
@@ -493,9 +562,9 @@ async function main() {
 
       mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
       try {
-        const joinLogsTableService =
-          joinLogsPersistence.getService() ||
-          await joinLogsPersistence.promise;
+        const joinLogsTableService = joinLogsPersistence ?
+          (joinLogsPersistence.getService() || await joinLogsPersistence.promise) :
+          null;
         await shutdownLogsTablePersistence(joinLogsTableService, mainLogger);
         shutdownDynamicConfigWiring(joinDynamicConfigWiring, mainLogger);
         await nodeJoiningService.cleanup();
@@ -536,7 +605,48 @@ async function main() {
         config.get(CONFIG_KEY.NODE_ADDRESS) || `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`,
       dataDirectoryManager,
       wsPort: wsPort,
+      rolloutControls,
     });
+    const readinessState = new BootstrapReadinessState();
+    readinessState.on(READINESS_EVENT.TRANSITION, (transition) => {
+      mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_TRANSITION, {
+        nodeId: config.get(CONFIG_KEY.NODE_ID),
+        previousState: transition.previousState,
+        previousReady: transition.previousReady,
+        state: transition.state,
+        ready: transition.ready,
+        reasons: transition.reasons,
+        timestamp: transition.timestamp,
+      });
+    });
+    readinessState.on(READINESS_EVENT.BLOCKED_DURATION, (event) => {
+      mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_BLOCKED_DURATION, {
+        nodeId: config.get(CONFIG_KEY.NODE_ID),
+        reason: event.reason,
+        durationMs: event.durationMs,
+        totalDurationMs: event.totalDurationMs,
+        timestamp: event.timestamp,
+      });
+    });
+
+    // Start Bootstrap API early so /health reports liveness during
+    // bootstrap phases. Readiness is still exposed via `ready: false`.
+    const bootstrapAPI = new BootstrapAPI({
+      seedNodeId: config.get(CONFIG_KEY.NODE_ID),
+      seedNodeAddress: config.get(CONFIG_KEY.NODE_ADDRESS),
+      wsPort: wsPort,
+      messageGroupServices: bootstrapService.messageGroupServices,
+      partitionServices: bootstrapService.partitionServices,
+      replicaHandler: bootstrapService.replicaHandler,
+      systemTableCache: bootstrapService.systemTableCache,
+      bootstrapService: bootstrapService,
+      epochManager: bootstrapService.epochManager,
+      messageRouter: bootstrapService.messageRouter,
+      readinessState,
+      rolloutControls,
+    });
+
+    await bootstrapAPI.initialize();
 
     const bootstrapResult = await bootstrapService.bootstrap();
 
@@ -547,10 +657,7 @@ async function main() {
       process.exit(1);
     }
 
-    const seedLogsPersistence = startLogsTablePersistence(
-      bootstrapService.cdcIntegrationService,
-      mainLogger,
-    );
+    let seedLogsPersistence = null;
 
     mainLogger.info(ENTRYPOINT_LOG_MSG.BOOTSTRAP_COMPLETED, {
       servicesCreated: bootstrapResult.servicesCreated,
@@ -558,22 +665,15 @@ async function main() {
       messageGroupsCreated: bootstrapResult.messageGroupsCreated,
     });
 
-    // Start Bootstrap API for node discovery
-    // Get system table cache from NodeService singleton
+    // Wire runtime dependencies into already-running bootstrap API.
+    // Get system table cache from NodeService singleton.
     const systemTableCache = NodeService.getInstance().getSystemTableCache();
-
-    const bootstrapAPI = new BootstrapAPI({
-      seedNodeId: config.get(CONFIG_KEY.NODE_ID),
-      seedNodeAddress: config.get(CONFIG_KEY.NODE_ADDRESS),
-      wsPort: wsPort,
-      messageGroupServices: bootstrapResult.messageGroupServices,
-      partitionServices: bootstrapResult.partitionServices,
-      replicaHandler: bootstrapResult.replicaHandler,
-      systemTableCache: systemTableCache,
-      bootstrapService: bootstrapService,
-    });
-
-    await bootstrapAPI.initialize();
+    bootstrapAPI.systemTableCache = systemTableCache;
+    bootstrapAPI.messageGroupServices = bootstrapResult.messageGroupServices;
+    bootstrapAPI.partitionServices = bootstrapResult.partitionServices;
+    bootstrapAPI.replicaHandler = bootstrapResult.replicaHandler;
+    bootstrapAPI.epochManager = bootstrapResult.epochManager;
+    bootstrapAPI.messageRouter = bootstrapResult.messageRouter;
 
     // Start WebSocket server for cross-node communication
     // This allows joining nodes to connect and receive lifecycle messages
@@ -595,6 +695,7 @@ async function main() {
       messageRouter: bootstrapResult.messageRouter,
       cdcIntegrationService: bootstrapService.cdcIntegrationService,
       nodeId: config.get(CONFIG_KEY.NODE_ID),
+      rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
       runtimeDriverRegistry: bootstrapService.runtimeDriverRegistry,
       serviceRuntimeLifecycle: bootstrapService.serviceRuntimeLifecycle,
       wasmExecutor,
@@ -633,6 +734,12 @@ async function main() {
       dataDir: dataDirectoryManager.getDataDir(),
     });
 
+    seedLogsPersistence = startLogsTablePersistence(
+      bootstrapService.cdcIntegrationService,
+      mainLogger,
+      rolloutControls,
+    );
+
     // Keep the process running
     let shutdownSignalCount = 0;
     const handleShutdownSignal = async (signal) => {
@@ -647,9 +754,20 @@ async function main() {
 
       mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
       try {
-        const seedLogsTableService =
-          seedLogsPersistence.getService() ||
-          await seedLogsPersistence.promise;
+        const drainDeadlineMs =
+          Date.now() + ENTRYPOINT_DEFAULT.READINESS_DRAIN_DEADLINE_MS;
+        const drainingSnapshot = bootstrapAPI.markDraining({
+          drainDeadlineMs,
+        });
+        mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_DRAINING, {
+          nodeId: config.get(CONFIG_KEY.NODE_ID),
+          phase: drainingSnapshot?.phase || null,
+          reasons: drainingSnapshot?.reasons || [],
+          drainDeadlineMs,
+        });
+        const seedLogsTableService = seedLogsPersistence ?
+          (seedLogsPersistence.getService() || await seedLogsPersistence.promise) :
+          null;
         await shutdownLogsTablePersistence(seedLogsTableService, mainLogger);
         shutdownDynamicConfigWiring(seedDynamicConfigWiring, mainLogger);
         await bootstrapService.shutdown();

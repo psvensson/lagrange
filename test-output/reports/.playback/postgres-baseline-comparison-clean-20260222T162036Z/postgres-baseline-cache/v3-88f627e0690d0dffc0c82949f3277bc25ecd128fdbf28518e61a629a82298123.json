@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 3,
+  "key": "v3-88f627e0690d0dffc0c82949f3277bc25ecd128fdbf28518e61a629a82298123",
+  "signature": {
+    "schemaVersion": 3,
+    "engine": "postgres",
+    "machine": {
+      "platform": "linux",
+      "arch": "x64",
+      "hostname": "peter-System-Product-Name",
+      "cpuCount": 20,
+      "cpuModel": "13th Gen Intel(R) Core(TM) i5-13600KF"
+    },
+    "benchmark": {
+      "baselineImage": "postgres:16",
+      "user": "benchmark",
+      "database": "benchmark",
+      "port": 5432,
+      "loadOpsPerSec": 120,
+      "loadDurationMs": 30000,
+      "loadMaxInFlight": 16,
+      "loadNodeCount": 8,
+      "tableName": "benchmark_events",
+      "workloadProfile": "benchmark_events_mixed",
+      "operations": [
+        "INSERT",
+        "SELECT"
+      ],
+      "replicationFactor": 3,
+      "syncReplicaAcks": 1
+    }
+  },
+  "cachedAt": "2026-02-22T16:23:05.058Z",
+  "metrics": {
+    "total": 3600,
+    "success": 3600,
+    "failed": 0,
+    "errors": 0,
+    "latency": {
+      "avg": 0.6488888888888888,
+      "p50": 1,
+      "p95": 1,
+      "p99": 2
+    },
+    "opsPerSec": 119.99600013332889
+  }
+}

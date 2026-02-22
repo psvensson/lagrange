@@ -1,0 +1,7 @@
+{"timestamp":1771668634439,"type":"cluster.start","scope":"cluster","entityId":"cluster","details":{"scenarioName":"postgres-baseline-comparison"}}
+{"timestamp":1771668634439,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.creating","networkName":"ddb-test-net-reuse-local-3"}}
+{"timestamp":1771668634466,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.created","networkName":"ddb-test-net-reuse-local-3","networkId":"1ac3466f5d55fecb591da889afe81b892180376d893e58959215a98f9809a7ab"}}
+{"timestamp":1771668634466,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.starting","nodeId":"7493b0ab-a054-5fad-a91b-5e331db29304"}}
+{"timestamp":1771668634616,"type":"node.created","scope":"node","entityId":"7493b0ab-a054-5fad-a91b-5e331db29304","details":{"role":"seed","ip":"172.18.0.2","containerId":"e7193436bbc9120646b9efddfff1ce405b3ce8bbc425e98009fefa36c4073771"}}
+{"timestamp":1771668634616,"type":"node.started","scope":"node","entityId":"7493b0ab-a054-5fad-a91b-5e331db29304","details":{"role":"seed"}}
+{"timestamp":1771668634616,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.bootstrap.waiting","nodeId":"7493b0ab-a054-5fad-a91b-5e331db29304"}}

@@ -9,6 +9,7 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -80,6 +81,31 @@ test('Bootstrap sequence - server starts before services', async (t) => {
   } finally {
     await bootstrap.shutdown();
   }
+});
+
+test('BootstrapService - executePhase routes work through class A scheduler', async (t) => {
+  initializeTestEnvironment();
+
+  const scheduledClasses = [];
+  const scheduler = {
+    enqueue: async (workClass, task) => {
+      scheduledClasses.push(workClass);
+      return task();
+    },
+  };
+
+  const bootstrap = new BootstrapService({
+    nodeId: 'bootstrap-scheduler-node',
+    nodeAddress: 'ws://localhost:12000',
+    wsPort: 12000,
+    workClassScheduler: scheduler,
+  });
+
+  await bootstrap.executePhase('infrastructure', async () => {});
+
+  t.same(scheduledClasses, [WORK_CLASS.A],
+    'bootstrap phase execution should run through class A scheduler');
+  await bootstrap.shutdown();
 });
 
 test('Bootstrap sequence - self-connection established before services', async (t) => {

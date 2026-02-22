@@ -1,0 +1,9 @@
+{"timestamp":1771704472318,"type":"cluster.start","scope":"cluster","entityId":"cluster","details":{"scenarioName":"postgres-baseline-comparison"}}
+{"timestamp":1771704472318,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.creating","networkName":"ddb-test-net-8a045d65"}}
+{"timestamp":1771704472334,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.created","networkName":"ddb-test-net-8a045d65","networkId":"4cd5b993be01d536dc1daf5522558354d53a9020b9e75d26415f6cfb79ab1935"}}
+{"timestamp":1771704472334,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.starting","nodeId":"49ca6c29-8b7a-41ff-8a78-1decab7aa049"}}
+{"timestamp":1771704472510,"type":"node.created","scope":"node","entityId":"49ca6c29-8b7a-41ff-8a78-1decab7aa049","details":{"role":"seed","ip":"172.20.0.2","containerId":"2ee684a413f38ce55400b6c3db8298db3c6cbd05283bf19dd510865928caea1f"}}
+{"timestamp":1771704472510,"type":"node.started","scope":"node","entityId":"49ca6c29-8b7a-41ff-8a78-1decab7aa049","details":{"role":"seed"}}
+{"timestamp":1771704472510,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.bootstrap.waiting","nodeId":"49ca6c29-8b7a-41ff-8a78-1decab7aa049"}}
+{"timestamp":1771704487056,"type":"capture-error","scope":"capture","entityId":null,"details":{"nodeId":"49ca6c29-8b7a-41ff-8a78-1decab7aa049","attempts":20,"elapsedMs":14546,"lastStatus":-1}}
+{"timestamp":1771704517080,"type":"capture-error","scope":"capture","entityId":null,"details":{"nodeId":"49ca6c29-8b7a-41ff-8a78-1decab7aa049","attempts":40,"elapsedMs":44570,"lastStatus":-1}}

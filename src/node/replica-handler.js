@@ -469,6 +469,7 @@ class ReplicaHandler extends EventEmitter {
         leaderAddress,
         replicaIds,
         peerAddresses,
+        existingReplicaCount,
       } = context;
 
       // Generate database path
@@ -477,7 +478,7 @@ class ReplicaHandler extends EventEmitter {
       // Determine if this replica is joining an existing Raft group
       // If peerAddresses are provided, this is a new replica joining existing peers
       // It should start as a learner to avoid disrupting existing leadership
-      const isJoiningExistingGroup = peerAddresses && peerAddresses.length > 0;
+      const isJoiningExistingGroup = existingReplicaCount > 0;
 
       this.updateReplicaCreationProgress(progress, {
         peerTotal: Array.isArray(replicaIds) ?
@@ -1261,6 +1262,7 @@ class ReplicaHandler extends EventEmitter {
     const replicaIds = [];
     const peerAddresses = [];
     const seenReplicaIds = new Set();
+    const activeExistingReplicaIds = new Set();
 
     for (const service of services) {
       const serviceReplicaId = service.service_id || service.replica_id;
@@ -1270,6 +1272,10 @@ class ReplicaHandler extends EventEmitter {
       if (!seenReplicaIds.has(serviceReplicaId)) {
         seenReplicaIds.add(serviceReplicaId);
         replicaIds.push(serviceReplicaId);
+      }
+      if (service.status !== ReplicaStatus.REMOVED &&
+          service.status !== ReplicaStatus.FAILED) {
+        activeExistingReplicaIds.add(serviceReplicaId);
       }
 
       const peerAddress = service.address ||
@@ -1313,6 +1319,7 @@ class ReplicaHandler extends EventEmitter {
       leaderAddress,
       replicaIds,
       peerAddresses,
+      existingReplicaCount: activeExistingReplicaIds.size,
     };
   }
 

@@ -118,6 +118,37 @@ function createSeededCache(options = {}) {
 }
 
 /**
+ * Seed a cache with table/partition metadata but no partition services.
+ * @param {Object} options - Seed options.
+ * @return {SystemTableCache} Seeded cache.
+ */
+function createMetadataOnlyCache(options = {}) {
+  const cache = new SystemTableCache();
+  const tableId = options.tableId || 'table-1';
+  const tableName = options.tableName || 'test_table';
+  const partitionId = options.partitionId || 'partition-1';
+  const schema = options.schema || {
+    columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+  };
+
+  cache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+    table_id: tableId,
+    table_name: tableName,
+    schema_definition: JSON.stringify(schema),
+  });
+
+  cache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+    partition_id: partitionId,
+    table_id: tableId,
+    partition_key_start: null,
+    partition_key_end: null,
+    leader_node_id: null,
+  });
+
+  return cache;
+}
+
+/**
  * Seed a replica operation row.
  * @param {SystemTableCache} cache - Cache to update.
  * @param {string} operationId - Operation ID.
@@ -366,6 +397,57 @@ test('ReplicaHandler', async (t) => {
         'lifecycle logs are suppressed for dynamic replica creation');
       t.equal(typeof capturedOptions.onInitializationStage, 'function',
         'stage callback is passed to partition service factory');
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
+    'handleCreateReplica - first replica should not be treated as joining existing group',
+    async (t) => {
+      const cache = createMetadataOnlyCache();
+      seedReplicaOperation(cache, 'op-1');
+      const mockCDC = createMockCDCService(cache);
+      let capturedOptions = null;
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: async (options) => {
+          capturedOptions = options;
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+      });
+
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        partitionId: 'partition-1',
+        replicaId: 'replica-1',
+      });
+      await created;
+
+      t.ok(capturedOptions, 'partition factory should receive create options');
+      t.equal(
+        capturedOptions.isJoiningExistingGroup,
+        false,
+        'first replica should bootstrap leadership instead of learner join mode',
+      );
 
       handler.shutdown();
     },

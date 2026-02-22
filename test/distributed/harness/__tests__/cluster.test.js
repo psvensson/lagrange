@@ -93,6 +93,11 @@ import {
   PORTS,
   RAFT_PROVIDER_DEFAULTS,
 } from '../constants.js';
+import {ENTRYPOINT_ENV} from '../../../../src/constants/entrypoint.js';
+
+const LOAD_STOP_DISPATCH_SETTLE_MS = 25;
+const LOAD_STOP_WAIT_TIMEOUT_MS = 250;
+const ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS = 150;
 
 /**
  * Unit: createCluster returns object with all required methods (Req 2.4)
@@ -200,6 +205,69 @@ test('Unit: startLoad emits progress and completion playback events', async () =
       completed[0].details.metrics,
     'load.completed should include final metrics',
   );
+});
+
+test('Unit: Cluster.stop cancels active load runs', async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  const mockProvider = {
+    stopContainer: async () => {},
+    removeContainer: async () => {},
+  };
+  const node = {
+    id: 'n1',
+    role: NODE_ROLES.SEED,
+    containerId: 'container-1',
+    _dockerProvider: mockProvider,
+    closeQueryConnection: () => {},
+    async query(_sql) {
+      return new Promise(() => {});
+    },
+  };
+
+  cluster._nodes.set(node.id, node);
+  cluster._providers = [mockProvider];
+  cluster._hostAssignment = [0];
+  cluster._logCollector.collectFinalSnapshot = async () => [];
+  cluster._logCollector.stopSubscription = async () => {};
+  cluster._playbackRecorder = {
+    suspendPolling: () => {},
+    stop: async () => null,
+    recordEvent: () => {},
+  };
+
+  const run = cluster.startLoad({
+    opsPerSec: 100,
+    duration: 60000,
+    maxInFlight: 1,
+  });
+  let timeoutId = null;
+
+  try {
+    await new Promise((resolve) =>
+      setTimeout(resolve, LOAD_STOP_DISPATCH_SETTLE_MS),
+    );
+    await cluster.stop();
+
+    const metrics = await Promise.race([
+      run.waitComplete(),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('waitComplete did not resolve during cluster stop'));
+        }, LOAD_STOP_WAIT_TIMEOUT_MS);
+      }),
+    ]);
+    assert.strictEqual(typeof metrics.total, 'number');
+  } finally {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+    run.cancel();
+  }
 });
 
 /**
@@ -813,6 +881,464 @@ test('Unit: _isNodeActive matches active status case-insensitively', async () =>
   );
 });
 
+test('Unit: _waitForBootstrapApi succeeds after transient non-2xx statuses',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {nodeStartup: 200, bootstrapReadyStableWindowMs: 0},
+    });
+
+    const bootstrapStatuses = [503, -1, 200];
+    let bootstrapCallCount = 0;
+    cluster._httpRequest = async () => {
+      const status = bootstrapStatuses[Math.min(
+        bootstrapCallCount,
+        bootstrapStatuses.length - 1,
+      )];
+      bootstrapCallCount += 1;
+      return status;
+    };
+    cluster._sleep = async () => {};
+    cluster._collectFailureLogs = async () => {
+      throw new Error('should not collect failure logs on success');
+    };
+
+    await cluster._waitForBootstrapApi({
+      id: '00000000-0000-4000-8000-000000000001',
+      ip: '127.0.0.1',
+    });
+    assert.strictEqual(
+      bootstrapCallCount,
+      bootstrapStatuses.length,
+      'should poll until bootstrap API returns a join-ready 2xx response',
+    );
+  });
+
+test('Unit: _waitForBootstrapApi waits for bootstrap join readiness probe',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {nodeStartup: 200, bootstrapReadyStableWindowMs: 0},
+    });
+
+    const bootstrapStatuses = [503, 503, 200];
+    let bootstrapCallCount = 0;
+    cluster._httpRequest = async () => {
+      const status = bootstrapStatuses[Math.min(
+        bootstrapCallCount,
+        bootstrapStatuses.length - 1,
+      )];
+      bootstrapCallCount += 1;
+      return status;
+    };
+    cluster._sleep = async () => {};
+    cluster._collectFailureLogs = async () => {
+      throw new Error('should not collect failure logs on success');
+    };
+
+    await cluster._waitForBootstrapApi({
+      id: '00000000-0000-4000-8000-000000000001',
+      ip: '127.0.0.1',
+    });
+    assert.strictEqual(
+      bootstrapCallCount,
+      bootstrapStatuses.length,
+      'should wait for bootstrap probe success readiness',
+    );
+  });
+
+test('Unit: _waitForBootstrapApi probes lightweight bootstrap readiness endpoint',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {nodeStartup: 200, bootstrapReadyStableWindowMs: 0},
+    });
+
+    const probeCalls = [];
+    cluster._httpRequest = async (request) => {
+      probeCalls.push(request);
+      return {
+        status: 200,
+        body: {
+          ready: true,
+          scope: 'bootstrap_join',
+        },
+      };
+    };
+    cluster._sleep = async () => {};
+    cluster._collectFailureLogs = async () => {
+      throw new Error('should not collect failure logs on success');
+    };
+
+    await cluster._waitForBootstrapApi({
+      id: '00000000-0000-4000-8000-000000000001',
+      ip: '127.0.0.1',
+    });
+
+    assert.strictEqual(
+      probeCalls.length,
+      1,
+      'startup gate should probe readiness endpoint exactly once on immediate success',
+    );
+    assert.strictEqual(
+      probeCalls[0].method,
+      'GET',
+      'startup gate should use GET readiness probe',
+    );
+    assert.ok(
+      probeCalls[0].url.endsWith('/bootstrap/ready'),
+      'startup gate should target lightweight /bootstrap/ready endpoint',
+    );
+  });
+
+test('Unit: _waitForBootstrapApi requires stable success window before proceeding',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {
+        nodeStartup: 200,
+        bootstrapReadyStableWindowMs: 2,
+      },
+    });
+
+    const bootstrapStatuses = [503, 200, 503, 200, 200];
+    let bootstrapCallCount = 0;
+    cluster._httpRequest = async () => {
+      const status = bootstrapStatuses[Math.min(
+        bootstrapCallCount,
+        bootstrapStatuses.length - 1,
+      )];
+      bootstrapCallCount += 1;
+      return status;
+    };
+    cluster._sleep = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    };
+    cluster._collectFailureLogs = async () => {
+      throw new Error('should not collect failure logs on success');
+    };
+
+    await cluster._waitForBootstrapApi({
+      id: '00000000-0000-4000-8000-000000000001',
+      ip: '127.0.0.1',
+    });
+
+    assert.ok(
+      bootstrapCallCount > 2,
+      'should keep probing until join-ready status stays stable',
+    );
+  });
+
+test('Unit: _waitForBootstrapApi requires sustained success across stable window',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {
+        nodeStartup: 200,
+        bootstrapReadyStableWindowMs: 2,
+      },
+    });
+
+    let bootstrapCallCount = 0;
+    cluster._httpRequest = async () => {
+      bootstrapCallCount += 1;
+      if (bootstrapCallCount === 1) {
+        return 503;
+      }
+      return 200;
+    };
+    cluster._sleep = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    };
+    cluster._collectFailureLogs = async () => {
+      throw new Error('should not collect failure logs on success');
+    };
+
+    await cluster._waitForBootstrapApi({
+      id: '00000000-0000-4000-8000-000000000001',
+      ip: '127.0.0.1',
+    });
+
+    assert.ok(
+      bootstrapCallCount >= 3,
+      'should keep probing until join-ready status remains stable',
+    );
+  });
+
+test('Unit: _waitForBootstrapApi exposes diagnostic status summary on timeout',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {nodeStartup: 40, bootstrapReadyStableWindowMs: 0},
+    });
+
+    const bootstrapStatuses = [503, 503, -1, 503];
+    let bootstrapCallCount = 0;
+    cluster._httpRequest = async () => {
+      const status = bootstrapStatuses[Math.min(
+        bootstrapCallCount,
+        bootstrapStatuses.length - 1,
+      )];
+      bootstrapCallCount += 1;
+      return status;
+    };
+    cluster._sleep = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    };
+
+    let collected = false;
+    cluster._collectFailureLogs = async () => {
+      collected = true;
+    };
+
+    await assert.rejects(
+      async () => cluster._waitForBootstrapApi({
+        id: '00000000-0000-4000-8000-000000000001',
+        ip: '127.0.0.1',
+      }),
+      (error) => {
+        assert.ok(collected, 'should collect failure logs before throwing');
+        assert.match(error.message, /attempts=/, 'should include attempt count');
+        assert.match(error.message, /lastStatus=/, 'should include last status');
+        assert.match(error.message, /statusCounts=/, 'should include status histogram');
+        return true;
+      },
+    );
+    assert.ok(bootstrapCallCount > 0, 'should execute bootstrap readiness probes');
+  });
+
+test('Unit: _waitForBootstrapApi timeout diagnostics include readiness reasons and histograms',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {nodeStartup: 40, bootstrapReadyStableWindowMs: 0},
+    });
+
+    const probeResponses = [
+      {
+        status: 503,
+        body: {
+          ready: false,
+          phase: 'CONTROL_READY',
+          state: 'bootstrapping',
+          reasons: ['BOOTSTRAP_PHASE_INCOMPLETE'],
+        },
+      },
+      {
+        status: 503,
+        body: {
+          ready: false,
+          phase: 'JOIN_READY',
+          state: 'warming',
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+        },
+      },
+      {status: -1, body: null},
+    ];
+    let bootstrapCallCount = 0;
+    cluster._httpRequest = async () => {
+      const response = probeResponses[Math.min(
+        bootstrapCallCount,
+        probeResponses.length - 1,
+      )];
+      bootstrapCallCount += 1;
+      return response;
+    };
+    cluster._sleep = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    };
+
+    let collected = false;
+    cluster._collectFailureLogs = async () => {
+      collected = true;
+    };
+
+    await assert.rejects(
+      async () => cluster._waitForBootstrapApi({
+        id: '00000000-0000-4000-8000-000000000001',
+        ip: '127.0.0.1',
+      }),
+      (error) => {
+        assert.ok(collected, 'should collect failure logs before throwing');
+        assert.match(error.message, /statusCounts=/, 'should include status histogram');
+        assert.match(error.message, /phaseCounts=/, 'should include phase histogram');
+        assert.match(error.message, /lastPhase=/, 'should include last phase');
+        assert.match(error.message, /reasonCounts=/, 'should include reason histogram');
+        assert.match(error.message, /lastReasons=/, 'should include last blocker reasons');
+        return true;
+      },
+    );
+    assert.ok(bootstrapCallCount > 0, 'should execute readiness probes before timeout');
+  });
+
+test('Unit: _waitForBootstrapApi records periodic startup-stage diagnostics',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {nodeStartup: 200, bootstrapReadyStableWindowMs: 0},
+    });
+
+    const bootstrapStatuses = new Array(20).fill(503).concat([200]);
+    let bootstrapCallCount = 0;
+    cluster._httpRequest = async () => {
+      const status = bootstrapStatuses[Math.min(
+        bootstrapCallCount,
+        bootstrapStatuses.length - 1,
+      )];
+      bootstrapCallCount += 1;
+      return status;
+    };
+    cluster._sleep = async () => {};
+    cluster._collectFailureLogs = async () => {
+      throw new Error('should not collect failure logs on success');
+    };
+
+    const stageEvents = [];
+    cluster._recordClusterStage = (stage, details = {}) => {
+      stageEvents.push({stage, details});
+    };
+
+    await cluster._waitForBootstrapApi({
+      id: '00000000-0000-4000-8000-000000000001',
+      ip: '127.0.0.1',
+    });
+
+    assert.strictEqual(
+      bootstrapCallCount,
+      bootstrapStatuses.length,
+      'should continue polling until join readiness succeeds',
+    );
+    assert.strictEqual(
+      stageEvents.length,
+      1,
+      'should emit one periodic waiting stage event at attempt 20',
+    );
+    assert.strictEqual(
+      stageEvents[0].stage,
+      'setup.seed.bootstrap.waiting',
+      'should emit bootstrap waiting stage',
+    );
+    assert.strictEqual(
+      stageEvents[0].details.nodeId,
+      '00000000-0000-4000-8000-000000000001',
+      'should include seed node id in waiting stage diagnostics',
+    );
+    assert.strictEqual(
+      stageEvents[0].details.attempts,
+      20,
+      'should report periodic waiting attempts',
+    );
+  });
+
+test('Unit: _waitForAllActive times out when a node status probe hangs',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {convergence: 40},
+    });
+
+    cluster._nodes.set('stuck-node', {
+      id: 'stuck-node',
+      role: NODE_ROLES.SEED,
+      async getStatus() {
+        return new Promise(() => {});
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+    cluster._sleep = async () => {};
+    cluster._collectFailureLogs = async () => {};
+
+    let timeoutId = null;
+    try {
+      await assert.rejects(
+        async () => {
+          await Promise.race([
+            cluster._waitForAllActive(),
+            new Promise((_, reject) => {
+              timeoutId = setTimeout(() => {
+                reject(new Error('waitForAllActive hung'));
+              }, ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS);
+            }),
+          ]);
+        },
+        (error) => {
+          assert.match(
+            error.message,
+            /Not all nodes reached ACTIVE state within/,
+          );
+          return true;
+        },
+      );
+    } finally {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    }
+  });
+
+test('Unit: _waitForAllActive exposes diagnostic summary on timeout',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {convergence: 30},
+    });
+
+    cluster._nodes.set('joining-node', {
+      id: 'joining-node',
+      role: NODE_ROLES.JOINER,
+      async getStatus() {
+        return {rows: [{status: 'joining'}]};
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+    cluster._sleep = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    };
+
+    let collected = false;
+    cluster._collectFailureLogs = async () => {
+      collected = true;
+    };
+
+    await assert.rejects(
+      async () => cluster._waitForAllActive(),
+      (error) => {
+        assert.ok(collected, 'should collect failure logs before throwing');
+        assert.match(error.message, /attempts=/, 'should include attempt count');
+        assert.match(
+          error.message,
+          /nodeDiagnostics=/,
+          'should include node-level diagnostics',
+        );
+        return true;
+      },
+    );
+  });
+
 test('Unit: Cluster.start generates UUID node IDs', async () => {
   const cluster = createCluster({
     size: 3,
@@ -854,6 +1380,56 @@ test('Unit: Cluster.start generates UUID node IDs', async () => {
 
   await cluster.stop();
 });
+
+test('Unit: Cluster.start records unified startup gate state transitions',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const mockProvider = {
+      createNetwork: async () => ({id: 'net-2', name: 'net-2'}),
+      removeNetwork: async () => {},
+      stopContainer: async () => {},
+      removeContainer: async () => {},
+    };
+    cluster._providers = [mockProvider];
+    cluster._hostAssignment = [0, 0];
+
+    const stageEvents = [];
+    cluster._recordClusterStage = (stage, details = {}) => {
+      stageEvents.push({stage, details});
+    };
+
+    const generatedIds = [];
+    cluster._startNode = async (nodeId, role, _seedIp, _nodeIndex) => {
+      generatedIds.push(nodeId);
+      const containerId = 'container-stage-' + generatedIds.length;
+      const ip = '10.0.1.' + generatedIds.length;
+      return new NodeHandle(nodeId, containerId, ip, role, mockProvider);
+    };
+    cluster._waitForBootstrapApi = async () => {};
+    cluster._waitForAllActive = async () => {};
+    cluster._logCollector.startLiveSubscription = async () => {};
+    cluster._logCollector.collectFinalSnapshot = async () => [];
+    cluster._logCollector.stopSubscription = async () => {};
+
+    await cluster.start();
+
+    const startupStates = stageEvents
+      .filter((event) => event.details && event.details.startupGateState)
+      .map((event) => event.details.startupGateState);
+
+    assert.deepStrictEqual(
+      startupStates,
+      ['seed_live', 'seed_join_ready', 'seed_join_ready', 'cluster_active'],
+      'startup gate should move through deterministic readiness states',
+    );
+
+    await cluster.stop();
+  });
 
 test('Unit: _startNode sets NODE_ADDRESS to routable host:port', async () => {
   const cluster = createCluster({
@@ -900,6 +1476,55 @@ test('Unit: _startNode sets NODE_ADDRESS to routable host:port', async () => {
     env[RAFT_PROVIDER_DEFAULTS.envKey],
     RAFT_PROVIDER_DEFAULTS.provider,
     'raft provider env should default to liferaft',
+  );
+});
+
+test('Unit: _startNode sets joiner timeout env overrides', async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+    timeouts: {
+      joiningHttpTimeoutMs: 45000,
+      joiningLeadershipWaitTimeoutMs: 180000,
+    },
+  });
+
+  cluster._networkName = 'test-net';
+
+  let capturedCreateOptions = null;
+  const provider = cluster._providers[0];
+  provider.createContainer = async (options) => {
+    capturedCreateOptions = options;
+    return {
+      containerId: 'container-joiner-1',
+      ip: '10.0.0.11',
+      name: options.name,
+    };
+  };
+
+  await cluster._startNode(
+    'joiner-node-id',
+    NODE_ROLES.JOINER,
+    '10.0.0.2',
+    0,
+  );
+
+  const env = capturedCreateOptions.env;
+  assert.strictEqual(
+    env[CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS],
+    '10.0.0.2:' + PORTS.REST,
+    'joiner should receive seed address',
+  );
+  assert.strictEqual(
+    env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
+    '45000',
+    'joiner should receive overridden HTTP timeout',
+  );
+  assert.strictEqual(
+    env[ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS],
+    '180000',
+    'joiner should receive overridden leadership wait timeout',
   );
 });
 
@@ -1004,6 +1629,9 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
       Config: {
         Env: [
           `NODE_ID=${reuseNodeId}`,
+          'DATA_DIR=/data',
+          'NODE_ADDRESS=ddb-test-reuse-1-1:8080',
+          'TRANSPORT_WS_HOST=0.0.0.0',
           `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
         ],
         Entrypoint: ['sh', '-lc'],
@@ -1060,6 +1688,209 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
   assert.strictEqual(node.containerId, 'existing-container-id');
   assert.strictEqual(node.ip, '10.0.0.44');
 });
+
+test('Unit: _startNode recreates reusable joiner container on timeout env mismatch',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {
+        socketPath: '/var/run/docker.sock',
+        reuseContainers: true,
+      },
+      image: 'distributed-db:test',
+      timeouts: {
+        joiningHttpTimeoutMs: 45000,
+        joiningLeadershipWaitTimeoutMs: 180000,
+      },
+    });
+
+    cluster._networkName = 'ddb-test-net-reuse-local-2';
+    cluster._networkId = 'net-reuse-2';
+
+    const joinerId = cluster._buildNodeId(1);
+    const provider = cluster._providers[0];
+    let removeContainerId = null;
+    let createContainerOptions = null;
+    provider.inspectContainerIfExists = async () => ({
+      Id: 'existing-joiner-container-id',
+      State: {Status: 'exited'},
+      Config: {
+        Env: [
+          `NODE_ID=${joinerId}`,
+          'DATA_DIR=/data',
+          'NODE_ADDRESS=ddb-test-reuse-2-2:8080',
+          'TRANSPORT_WS_HOST=0.0.0.0',
+          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
+          `${CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS}=10.0.0.1:8080`,
+          `${ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS}=10000`,
+          `${ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS}=30000`,
+        ],
+        Entrypoint: ['sh', '-lc'],
+        Cmd: ['rm -rf /data/* && exec node --max-old-space-size=1536 /app/src/index.js'],
+      },
+    });
+    provider.removeContainer = async (containerId) => {
+      removeContainerId = containerId;
+    };
+    provider.createContainer = async (options) => {
+      createContainerOptions = options;
+      return {
+        containerId: 'new-joiner-container-id',
+        ip: '10.0.0.52',
+        name: options.name,
+      };
+    };
+
+    const node = await cluster._startNode(
+      joinerId,
+      NODE_ROLES.JOINER,
+      '10.0.0.1',
+      1,
+    );
+
+    assert.strictEqual(
+      removeContainerId,
+      'existing-joiner-container-id',
+      'mismatched reusable joiner env should force container recreation',
+    );
+    assert.ok(
+      createContainerOptions,
+      'recreated reusable joiner should be created with updated env',
+    );
+    assert.strictEqual(
+      createContainerOptions.env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
+      '45000',
+    );
+    assert.strictEqual(
+      createContainerOptions.env[ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS],
+      '180000',
+    );
+    assert.strictEqual(node.containerId, 'new-joiner-container-id');
+    assert.strictEqual(node.ip, '10.0.0.52');
+  });
+
+test('Unit: Cluster.start quiesces reusable containers before startup sequence',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {
+        socketPath: '/var/run/docker.sock',
+        reuseContainers: true,
+        keepRunningContainers: true,
+      },
+      image: 'distributed-db:test',
+    });
+
+    const provider = {
+      ensureNetwork: async () => ({id: 'net-reuse-3', name: 'net-reuse-3'}),
+      removeNetwork: async () => {},
+    };
+    cluster._providers = [provider];
+    cluster._hostAssignment = [0, 0];
+    cluster._logCollector.startLiveSubscription = async () => {};
+    cluster._logCollector.collectFinalSnapshot = async () => [];
+    cluster._logCollector.stopSubscription = async () => {};
+    cluster._waitForBootstrapApi = async () => {};
+    cluster._waitForAllActive = async () => {};
+
+    const containerStateByName = new Map();
+    const containerIpByName = new Map();
+    const seedNodeId = cluster._buildNodeId(0);
+    const joinerNodeId = cluster._buildNodeId(1);
+    const seedContainerName = 'ddb-test-reuse-2-1';
+    const joinerContainerName = 'ddb-test-reuse-2-2';
+    const seedContainerId = 'reuse-container-seed';
+    const joinerContainerId = 'reuse-container-joiner';
+    containerStateByName.set(seedContainerName, 'running');
+    containerStateByName.set(joinerContainerName, 'running');
+    containerIpByName.set(seedContainerName, '10.0.2.1');
+    containerIpByName.set(joinerContainerName, '10.0.2.2');
+    const stoppedContainers = [];
+
+    provider.inspectContainerIfExists = async (name) => {
+      if (!containerStateByName.has(name)) {
+        return null;
+      }
+      const env = [
+        `NODE_ID=${name === seedContainerName ? seedNodeId : joinerNodeId}`,
+        'DATA_DIR=/data',
+        `NODE_ADDRESS=${name}:8080`,
+        'TRANSPORT_WS_HOST=0.0.0.0',
+        `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
+      ];
+      if (name === joinerContainerName) {
+        env.push(
+          `${CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS}=10.0.2.1:8080`,
+          `${ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS}=30000`,
+          `${ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS}=120000`,
+        );
+      }
+      return {
+        Id: name === seedContainerName ?
+          seedContainerId :
+          joinerContainerId,
+        State: {Status: containerStateByName.get(name)},
+        Config: {
+          Env: env,
+          Entrypoint: ['sh', '-lc'],
+          Cmd: ['rm -rf /data/* && exec node --max-old-space-size=1536 /app/src/index.js'],
+        },
+        NetworkSettings: {
+          Networks: {
+            'ddb-test-net-reuse-local-2': {
+              IPAddress: containerIpByName.get(name),
+            },
+          },
+        },
+      };
+    };
+    provider.stopContainer = async (containerId) => {
+      stoppedContainers.push(containerId);
+      if (containerId === seedContainerId) {
+        containerStateByName.set(seedContainerName, 'exited');
+      } else if (containerId === joinerContainerId) {
+        containerStateByName.set(joinerContainerName, 'exited');
+      }
+    };
+    provider.startContainer = async (containerId) => {
+      if (containerId === seedContainerId) {
+        containerStateByName.set(seedContainerName, 'running');
+      } else if (containerId === joinerContainerId) {
+        containerStateByName.set(joinerContainerName, 'running');
+      }
+    };
+    provider.restartContainer = async () => {
+      throw new Error('start() should quiesce before startup, not restart');
+    };
+    provider.inspectContainer = async (containerId) => {
+      const name = containerId === seedContainerId ?
+        seedContainerName :
+        joinerContainerName;
+      return {
+        NetworkSettings: {
+          Networks: {
+            [cluster._networkName]: {
+              IPAddress: containerIpByName.get(name),
+            },
+          },
+        },
+      };
+    };
+    provider.connectToNetwork = async () => {};
+    provider.createContainer = async () => {
+      throw new Error('reusable containers should be reused in this test');
+    };
+
+    await cluster.start();
+
+    assert.deepStrictEqual(
+      stoppedContainers,
+      [seedContainerId, joinerContainerId],
+      'reusable containers should be quiesced before startup',
+    );
+
+    await cluster.stop();
+  });
 
 test('Unit: _startNode propagates configured raft provider env', async () => {
   const cluster = createCluster({

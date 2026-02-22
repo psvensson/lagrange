@@ -668,24 +668,122 @@ class LoggingService {
    * @param {Function} writeCallback - Callback to write entries to logs table.
    * @return {Promise<number>} Number of entries flushed.
    */
-  async onLogsTableReady(writeCallback) {
+  async onLogsTableReady(writeCallback, options = {}) {
+    return this.onLogsTableReadyWithOptions(writeCallback, options);
+  }
+
+  /**
+   * Mark logs table ready and flush buffered entries.
+   * @param {Function} writeCallback - Callback to write entries to logs table.
+   * @param {Object} [options] - Flush options.
+   * @param {'sync'|'background'} [options.flushMode='sync'] - Flush mode.
+   * @param {number} [options.chunkSize=100] - Background chunk size.
+   * @param {number} [options.yieldMs=0] - Delay between background chunks.
+   * @return {Promise<number>} Number of entries scheduled/flushed.
+   */
+  async onLogsTableReadyWithOptions(writeCallback, options = {}) {
     this.logsTableReady = true;
     this.flushCallback = writeCallback;
 
+    const flushMode = options.flushMode === 'background' ?
+      'background' :
+      'sync';
+    const bufferedEntries = this.buffer.length;
+
     this.info(LOGGING_LOG_MSG.LOGS_TABLE_READY, {
-      bufferedEntries: this.buffer.length,
+      bufferedEntries,
+      flushMode,
     });
 
-    // Flush buffered entries
-    const flushedCount = this.buffer.length;
-    for (const entry of this.buffer) {
+    // Detach current buffer snapshot to avoid blocking bootstrap pathways.
+    // New entries are routed through flushCallback because logsTableReady=true.
+    const entriesToFlush = this.buffer;
+    this.buffer = [];
+
+    const flushedCount = entriesToFlush.length;
+    if (flushMode === 'background' && flushedCount > 0 && writeCallback) {
+      this.flushBufferedEntriesInBackground(writeCallback, entriesToFlush, options);
+      return flushedCount;
+    }
+
+    for (const entry of entriesToFlush) {
       if (writeCallback) {
         await writeCallback(entry);
       }
     }
 
-    this.buffer = [];
     return flushedCount;
+  }
+
+  /**
+   * Flush buffered entries asynchronously in chunks.
+   * @param {Function} writeCallback
+   * @param {Array<Object>} entries
+   * @param {Object} options
+   * @private
+   */
+  flushBufferedEntriesInBackground(writeCallback, entries, options = {}) {
+    const chunkSize = Number.isFinite(options.chunkSize) && options.chunkSize > 0 ?
+      Math.floor(options.chunkSize) : 100;
+    const yieldMs = Number.isFinite(options.yieldMs) && options.yieldMs >= 0 ?
+      Math.floor(options.yieldMs) : 0;
+    const startedAt = Date.now();
+    let index = 0;
+    let nextProgressMark = chunkSize * 10;
+
+    this.info('metrics.logging.buffer_flush.background.started', {
+      bufferedEntries: entries.length,
+      chunkSize,
+      yieldMs,
+    });
+
+    const scheduleNext = () => {
+      const timer = setTimeout(() => {
+        void processChunk();
+      }, yieldMs);
+      if (typeof timer.unref === 'function') {
+        timer.unref();
+      }
+    };
+
+    const processChunk = async () => {
+      try {
+        let processedInChunk = 0;
+        while (index < entries.length && processedInChunk < chunkSize) {
+          await writeCallback(entries[index]);
+          index++;
+          processedInChunk++;
+        }
+
+        if (index >= nextProgressMark && index < entries.length) {
+          this.debug('metrics.logging.buffer_flush.background.progress', {
+            processedEntries: index,
+            totalEntries: entries.length,
+            durationMs: Date.now() - startedAt,
+          });
+          nextProgressMark += chunkSize * 10;
+        }
+
+        if (index < entries.length) {
+          scheduleNext();
+          return;
+        }
+
+        this.info('metrics.logging.buffer_flush.background.completed', {
+          bufferedEntries: entries.length,
+          durationMs: Date.now() - startedAt,
+        });
+      } catch (error) {
+        this.error('Background logs buffer flush failed', {
+          error: error.message,
+          processedEntries: index,
+          totalEntries: entries.length,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+    };
+
+    scheduleNext();
   }
 
   /**

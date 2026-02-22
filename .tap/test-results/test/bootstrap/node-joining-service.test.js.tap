@@ -5,7 +5,7 @@ TAP version 14
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 1 - NodeJoiningService - initialization # time=41.084ms
+ok 1 - NodeJoiningService - initialization # time=43.684ms
 
 # Subtest: NodeJoiningService - getStatus
     ok 1 - should be equal
@@ -13,27 +13,70 @@ ok 1 - NodeJoiningService - initialization # time=41.084ms
     ok 3 - should be equal
     ok 4 - should be equal
     1..4
-ok 2 - NodeJoiningService - getStatus # time=23.133ms
+ok 2 - NodeJoiningService - getStatus # time=24.094ms
+
+# Subtest: NodeJoiningService - executePhase routes work through class A scheduler
+    ok 1 - joining phase execution should run through class A scheduler
+    1..1
+ok 3 - NodeJoiningService - executePhase routes work through class A scheduler # time=17.086ms
+
+# Subtest: NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_READY
+    ok 1 - should retry bootstrap request after bootstrap-not-ready response
+    ok 2 - should capture seed node id after retry
+    ok 3 - should capture seed node websocket address after retry
+    ok 4 - should store bootstrap response after retry succeeds
+    1..4
+ok 4 - NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_READY # time=23.866ms
+
+# Subtest: NodeJoiningService - retries bootstrap when seed request times out
+    ok 1 - should retry bootstrap request after timeout
+    ok 2 - should still complete seed contact after retry
+    1..2
+ok 5 - NodeJoiningService - retries bootstrap when seed request times out # time=23.69ms
+
+# Subtest: NodeJoiningService - retries generic HTTP 503 and honors retry hints with jitter
+    ok 1 - should retry after HTTP 503 response class
+    ok 2 - should wait exactly once before retry
+    ok 3 - should honor retryAfterMs lower bound
+    ok 4 - should apply positive jitter on top of retry hint
+    1..4
+ok 6 - NodeJoiningService - retries generic HTTP 503 and honors retry hints with jitter # time=14.133ms
+
+# Subtest: NodeJoiningService - treats bootstrap validation/conflict failures as terminal
+{"level":50,"time":"2026-02-22T10:24:28.813Z","nodeId":"test-node","pid":233616,"subsystem":"node-joining","nodeId":"test-node","bootstrapUrl":"http://localhost:8080/bootstrap","error":"HTTP 409: {\"error\":\"Node ID already registered\"}","msg":"Failed to contact seed node"}
+    ok 1 - should fail immediately on conflict/validation classes
+    ok 2 - should not retry terminal conflict response
+    ok 3 - should not wait/backoff for terminal errors
+    1..3
+ok 7 - NodeJoiningService - treats bootstrap validation/conflict failures as terminal # time=15.409ms
+
+# Subtest: NodeJoiningService - retry diagnostics include attempt, elapsed, code, and next delay
+    ok 1 - should emit retry diagnostics for first retryable failure
+    ok 2 - retry diagnostics should include elapsedMs
+    ok 3 - retry diagnostics should include nextDelayMs
+    ok 4 - retry diagnostics should report computed delay
+    1..4
+ok 8 - NodeJoiningService - retry diagnostics include attempt, elapsed, code, and next delay # time=13.123ms
 
 # Subtest: NodeJoiningService - resolves control plane target from services metadata first
     ok 1 - should use authoritative services metadata target instead of stale cached target
     1..1
-ok 3 - NodeJoiningService - resolves control plane target from services metadata first # time=17.961ms
+ok 9 - NodeJoiningService - resolves control plane target from services metadata first # time=16.052ms
 
 # Subtest: NodeJoiningService - falls back to bootstrap hints when authoritative target missing
     ok 1 - should use non-moved bootstrap hint when metadata is unavailable
     1..1
-ok 4 - NodeJoiningService - falls back to bootstrap hints when authoritative target missing # time=15.846ms
+ok 10 - NodeJoiningService - falls back to bootstrap hints when authoritative target missing # time=14.744ms
 
-{"level":50,"time":"2026-02-21T09:17:50.310Z","nodeId":"test-node","pid":3750058,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":1,"error":"Seed node address is required","stack":"Error: Seed node address is required\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:534:13)\n    at Object.contactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/owners/join-phase-owners.js:40:20)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:19:44\n    at NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:490:13)\n    at Object.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:17:28)\n    at StartupPipelineRunner.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/startup-pipeline-runner.js:45:21)\n    at NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:328:35)\n    at Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/node-joining-service.test.js:178:32)\n    at TapWrap.runInAsyncScope (node:async_hooks:214:14)\n    at Test.cb (/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/@tapjs/core/src/test-base.ts:332:17)","msg":"Joining phase failed"}
 # Subtest: NodeJoiningService - fails without seed node address
     ok 1 - should be equal
     ok 2 - should be equal
     ok 3 - should be equal
     1..3
-ok 5 - NodeJoiningService - fails without seed node address # time=16.666ms
+ok 11 - NodeJoiningService - fails without seed node address # time=14.127ms
 
-{"level":50,"time":"2026-02-21T09:17:50.311Z","nodeId":"test-node","pid":3750058,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":2,"error":"Seed node address is required","stack":"Error: Seed node address is required\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:534:13)\n    at Object.contactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/owners/join-phase-owners.js:40:20)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:19:44\n    at NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:490:13)\n    at Object.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:17:28)\n    at StartupPipelineRunner.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/startup-pipeline-runner.js:45:21)\n    at NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:328:35)\n    at Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/node-joining-service.test.js:178:32)\n    at TapWrap.runInAsyncScope (node:async_hooks:214:14)\n    at Test.cb (/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/node_modules/@tapjs/core/src/test-base.ts:332:17)","msg":"Node joining failed"}
+{"level":50,"time":"2026-02-22T10:24:28.872Z","nodeId":"test-node","pid":233616,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":0,"error":"Seed node address is required","stack":"Error: Seed node address is required\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:566:13)\n    at Object.contactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/owners/join-phase-owners.js:40:20)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:19:44\n    at Object.task (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:521:15)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/runtime/work-class-scheduler.js:206:25","msg":"Joining phase failed"}
+{"level":50,"time":"2026-02-22T10:24:28.872Z","nodeId":"test-node","pid":233616,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":1,"error":"Seed node address is required","stack":"Error: Seed node address is required\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:566:13)\n    at Object.contactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/owners/join-phase-owners.js:40:20)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:19:44\n    at Object.task (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:521:15)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/runtime/work-class-scheduler.js:206:25","msg":"Node joining failed"}
 # Subtest: NodeJoiningService - full join with CREATE_SELF_HOSTED
     ok 1 - join should succeed
     ok 2 - phase should be complete
@@ -45,7 +88,7 @@ ok 5 - NodeJoiningService - fails without seed node address # time=16.666ms
     ok 8 - should have waited for leadership
     ok 9 - should have queried state
     1..9
-ok 6 - NodeJoiningService - full join with CREATE_SELF_HOSTED # time=73.719ms
+ok 12 - NodeJoiningService - full join with CREATE_SELF_HOSTED # time=74.075ms
 
 # Subtest: NodeJoiningService - signals readiness after querying state
     ok 1 - join should succeed
@@ -53,9 +96,9 @@ ok 6 - NodeJoiningService - full join with CREATE_SELF_HOSTED # time=73.719ms
     ok 3 - should signal readiness
     ok 4 - should signal readiness after state query
     1..4
-ok 7 - NodeJoiningService - signals readiness after querying state # time=13.801ms
+ok 13 - NodeJoiningService - signals readiness after querying state # time=14.593ms
 
-{"level":50,"time":"2026-02-21T09:17:50.442Z","nodeId":"test-node","pid":3750058,"subsystem":"node-joining","nodeId":"test-node","phase":"waiting_leadership","duration":0,"error":"leadership timeout (test)","stack":"Error: leadership timeout (test)\n    at service.phaseWaitForLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/node-joining-service.test.js:508:13)\n    at Object.waitForLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/owners/join-phase-owners.js:40:20)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:53:44\n    at NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:490:13)\n    at Object.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:51:28)\n    at StartupPipelineRunner.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/startup-pipeline-runner.js:45:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:338:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/node-joining-service.test.js:511:20)","msg":"Joining phase failed"}
+{"level":50,"time":"2026-02-22T10:24:29.002Z","nodeId":"test-node","pid":233616,"subsystem":"node-joining","nodeId":"test-node","phase":"waiting_leadership","duration":1,"error":"leadership timeout (test)","stack":"Error: leadership timeout (test)\n    at service.phaseWaitForLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/node-joining-service.test.js:770:13)\n    at Object.waitForLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/owners/join-phase-owners.js:40:20)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:53:44\n    at Object.task (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:521:15)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/runtime/work-class-scheduler.js:206:25\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","msg":"Joining phase failed"}
 # Subtest: NodeJoiningService - full join with MOVE_REPLICA
     ok 1 - join fails with mock peers
     ok 2 - error should mention leadership
@@ -63,12 +106,12 @@ ok 7 - NodeJoiningService - signals readiness after querying state # time=13.801
     ok 4 - should use MOVE_REPLICA strategy
     ok 5 - should target existing group
     1..5
-ok 8 - NodeJoiningService - full join with MOVE_REPLICA # time=44.373ms
+ok 14 - NodeJoiningService - full join with MOVE_REPLICA # time=41.281ms
 
 # Subtest: NodeJoiningService - hasOperationalMessageGroup
     ok 1 - should be equal
     1..1
-ok 9 - NodeJoiningService - hasOperationalMessageGroup # time=16.812ms
+ok 15 - NodeJoiningService - hasOperationalMessageGroup # time=13.07ms
 
 # Subtest: NodeJoiningService - cleanup on failure
     ok 1 - should be equal
@@ -76,18 +119,18 @@ ok 9 - NodeJoiningService - hasOperationalMessageGroup # time=16.812ms
     ok 3 - should have cleaned up services
     ok 4 - should have cleaned up transport
     1..4
-ok 10 - NodeJoiningService - cleanup on failure # time=26.601ms
+ok 16 - NodeJoiningService - cleanup on failure # time=25.611ms
 
-{"level":50,"time":"2026-02-21T09:17:50.442Z","nodeId":"test-node","pid":3750058,"subsystem":"node-joining","nodeId":"test-node","phase":"waiting_leadership","duration":27,"error":"leadership timeout (test)","stack":"Error: leadership timeout (test)\n    at service.phaseWaitForLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/node-joining-service.test.js:508:13)\n    at Object.waitForLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/owners/join-phase-owners.js:40:20)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:53:44\n    at NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:490:13)\n    at Object.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:51:28)\n    at StartupPipelineRunner.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/startup-pipeline-runner.js:45:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:338:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/node-joining-service.test.js:511:20)","msg":"Node joining failed"}
-{"level":50,"time":"2026-02-21T09:17:50.487Z","nodeId":"test-node","pid":3750058,"subsystem":"node-joining","nodeId":"test-node","bootstrapUrl":"http://localhost:99999/bootstrap","error":"Failed to parse URL from http://localhost:99999/bootstrap","msg":"Failed to contact seed node"}
-{"level":50,"time":"2026-02-21T09:17:50.487Z","nodeId":"test-node","pid":3750058,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":13,"error":"Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap","stack":"Error: Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:638:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:490:7)\n    at async StartupPipelineRunner.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/startup-pipeline-runner.js:45:9)\n    at async NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:328:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/node-joining-service.test.js:571:18)","msg":"Joining phase failed"}
-{"level":50,"time":"2026-02-21T09:17:50.487Z","nodeId":"test-node","pid":3750058,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":13,"error":"Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap","stack":"Error: Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:638:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:490:7)\n    at async StartupPipelineRunner.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/startup-pipeline-runner.js:45:9)\n    at async NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:328:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/node-joining-service.test.js:571:18)","msg":"Node joining failed"}
+{"level":50,"time":"2026-02-22T10:24:29.002Z","nodeId":"test-node","pid":233616,"subsystem":"node-joining","nodeId":"test-node","phase":"waiting_leadership","duration":26,"error":"leadership timeout (test)","stack":"Error: leadership timeout (test)\n    at service.phaseWaitForLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/bootstrap/node-joining-service.test.js:770:13)\n    at Object.waitForLeadership (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/owners/join-phase-owners.js:40:20)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/join-startup-plan.js:53:44\n    at Object.task (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:521:15)\n    at file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/runtime/work-class-scheduler.js:206:25\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","msg":"Node joining failed"}
+{"level":50,"time":"2026-02-22T10:24:29.041Z","nodeId":"test-node","pid":233616,"subsystem":"node-joining","nodeId":"test-node","bootstrapUrl":"http://localhost:99999/bootstrap","error":"Failed to parse URL from http://localhost:99999/bootstrap","msg":"Failed to contact seed node"}
+{"level":50,"time":"2026-02-22T10:24:29.041Z","nodeId":"test-node","pid":233616,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":12,"error":"Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap","stack":"Error: Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:697:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Object.task (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:521:9)","msg":"Joining phase failed"}
+{"level":50,"time":"2026-02-22T10:24:29.041Z","nodeId":"test-node","pid":233616,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":12,"error":"Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap","stack":"Error: Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:697:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Object.task (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:521:9)","msg":"Node joining failed"}
 # Subtest: NodeJoiningService - emits events
     ok 1 - should emit events
     ok 2 - should emit phaseStart
     ok 3 - should emit phaseComplete
     ok 4 - should emit complete
     1..4
-ok 11 - NodeJoiningService - emits events # time=41.622ms
+ok 17 - NodeJoiningService - emits events # time=41.093ms
 
-1..11
+1..17

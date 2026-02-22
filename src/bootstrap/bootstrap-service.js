@@ -104,6 +104,14 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
 import {
+  WORK_CLASS,
+  WorkClassScheduler,
+} from '../runtime/work-class-scheduler.js';
+import {
+  CONTROL_PLANE_ROLLOUT_REQUIRED,
+  assertRequiredControlPlaneRollout,
+} from '../runtime/control-plane-rollout-controls.js';
+import {
   registerBuiltInMetaServiceDefinitions,
   registerBuiltInMetaServiceEndpoints,
 } from './shared/meta-service-definition-registration.js';
@@ -171,6 +179,23 @@ const BOOTSTRAP_UNIFIED_RECONCILE = Object.freeze({
   RUNTIME_KIND: RUNTIME_KIND.NATIVE_JS,
 });
 const DEFAULT_CACHE_SYNC_TABLES = new Set(CACHE_HYDRATION_TABLES);
+const BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL = 10;
+const BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA = 4;
+const BOOTSTRAP_REPLICA_REGISTRATION_TRACE = Object.freeze({
+  PREFIX: '[bootstrap replica registration]',
+  SCOPE_PARTITION: 'partition',
+  SCOPE_STATE: 'state',
+  EVENT_START: 'start',
+  EVENT_CALL_BEGIN: 'call_begin',
+  EVENT_CALL_END: 'call_end',
+  EVENT_ATTEMPT: 'attempt',
+  EVENT_TRANSITION_BEGIN: 'transition_begin',
+  EVENT_TRANSITION_END: 'transition_end',
+  EVENT_SUCCESS: 'success',
+  EVENT_ERROR: 'error',
+  EVENT_COMPLETE: 'complete',
+  EVENT_SKIP_MISSING_PARTITION: 'skip_missing_partition',
+});
 
 /**
  * Maps BOOTSTRAP_PHASE values to BOOTSTRAP_SUB_PHASE values
@@ -228,6 +253,11 @@ class BootstrapService extends EventEmitter {
   constructor(options = {}) {
     super();
 
+    this.rolloutControls = assertRequiredControlPlaneRollout({
+      owner: 'BootstrapService',
+      controls: options.rolloutControls,
+      required: CONTROL_PLANE_ROLLOUT_REQUIRED.BOOTSTRAP_SERVICE,
+    });
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
     this.wsPort = options.wsPort || null;
@@ -240,12 +270,19 @@ class BootstrapService extends EventEmitter {
     ) ?
       Math.max(NUM.ONE, Math.floor(this.config.maxConcurrentServiceActions)) :
       BOOTSTRAP_DEFAULT.maxConcurrentServiceActions;
+    this.config.replicaRegistrationTraceEnabled =
+      this.config.replicaRegistrationTraceEnabled === true;
     this.nodeReadyRebalanceDelayMs = Number.isFinite(
       this.config.nodeReadyRebalanceDelayMs,
     ) ?
       Math.max(NUM.ZERO, this.config.nodeReadyRebalanceDelayMs) :
       BOOTSTRAP_REBALANCE_DELAY_MS;
     this.dataDirectoryManager = options.dataDirectoryManager || null;
+    this.workClassScheduler = options.workClassScheduler ||
+      new WorkClassScheduler({
+        maxConcurrent: this.config.maxConcurrentServiceActions,
+        reservedClassASlots: NUM.ONE,
+      });
 
     // Services created during bootstrap
     this.messageGroupServices = new Map();
@@ -367,17 +404,65 @@ class BootstrapService extends EventEmitter {
         phases: seedPlan.phases,
       });
 
+      this.logger.info('metrics.bootstrap.post_pipeline.start', {
+        nodeId: this.nodeId,
+      });
+
       // Initialize replica handler after all services are ready
+      const replicaHandlerStartMs = Date.now();
       this.initializeReplicaHandler();
+      this.logger.info('metrics.bootstrap.post_pipeline.replica_handler', {
+        nodeId: this.nodeId,
+        durationMs: Date.now() - replicaHandlerStartMs,
+      });
 
       // Initialize control plane service after cache and handlers are ready
+      const controlPlaneStartMs = Date.now();
       await this.initializeControlPlaneService();
+      this.logger.info('metrics.bootstrap.post_pipeline.control_plane', {
+        nodeId: this.nodeId,
+        durationMs: Date.now() - controlPlaneStartMs,
+      });
+
+      const registerSeedStartMs = Date.now();
       await this.registerSeedNodeWithControlPlane();
-      this.startLatencyTopologyLifecycle();
+      this.logger.info('metrics.bootstrap.post_pipeline.seed_registration', {
+        nodeId: this.nodeId,
+        durationMs: Date.now() - registerSeedStartMs,
+      });
+
+      // Start latency topology lifecycle asynchronously so REST bootstrap API
+      // can come up without being blocked by topology/rebalancer warm-up.
+      const topologyStartMs = Date.now();
+      const startTopologyAsync = () => {
+        try {
+          this.startLatencyTopologyLifecycle();
+          this.logger.info('metrics.bootstrap.post_pipeline.latency_topology', {
+            nodeId: this.nodeId,
+            durationMs: Date.now() - topologyStartMs,
+            deferred: true,
+          });
+        } catch (error) {
+          this.logger.warn('Deferred latency topology lifecycle start failed', {
+            nodeId: this.nodeId,
+            error: error.message,
+          });
+        }
+      };
+      if (typeof setImmediate === 'function') {
+        setImmediate(startTopologyAsync);
+      } else {
+        setTimeout(startTopologyAsync, 0);
+      }
 
       // Initialize runtime service handler AFTER control-plane readiness.
       // PG wire startup failure is isolated and does not abort bootstrap.
+      const runtimeHandlerStartMs = Date.now();
       this.initializeRuntimeServiceHandler();
+      this.logger.info('metrics.bootstrap.post_pipeline.runtime_handler', {
+        nodeId: this.nodeId,
+        durationMs: Date.now() - runtimeHandlerStartMs,
+      });
 
       // Bootstrap complete
       const currentState = this.lifecycleStateMachine.getState();
@@ -460,7 +545,9 @@ class BootstrapService extends EventEmitter {
     });
 
     try {
-      await phaseFunction();
+      await this.workClassScheduler.enqueue(WORK_CLASS.A, async () => {
+        await phaseFunction();
+      });
 
       const phaseDuration = Date.now() - this.phaseStartTime;
 
@@ -1896,11 +1983,19 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   async subscribeToCDC(tableName, partitionId, replicaIds) {
-    this.logger.info(BootstrapLog.CDC_SUBSCRIPTION_START, {
+    this.logger.debug(BootstrapLog.CDC_SUBSCRIPTION_START, {
       tableName,
       partitionId,
       replicaIds,
     });
+
+    const messageGroups = [...this.messageGroupServices.values()];
+
+    // Subscribe each message-group CDC handler once per table.
+    // Replicas still register per-replica partition listeners below.
+    for (const messageGroup of messageGroups) {
+      await messageGroup.subscribeToCDC(tableName);
+    }
 
     // Subscribe to ALL replicas since any could become leader
     // and the query executor routes to the current leader
@@ -1914,10 +2009,8 @@ class BootstrapService extends EventEmitter {
         continue;
       }
 
-      // Subscribe all message group replicas to CDC from this partition replica
-      for (const messageGroup of this.messageGroupServices.values()) {
-        await messageGroup.subscribeToCDC(tableName);
-
+      // Register partition CDC callback for each message-group replica.
+      for (const messageGroup of messageGroups) {
         // Register CDC handler on this partition replica
         partition.subscribeToCDC(async (cdcEvent) => {
           if (cdcEvent.tableName === tableName) {
@@ -1966,7 +2059,7 @@ class BootstrapService extends EventEmitter {
         });
       }
 
-      this.logger.info(BootstrapLog.CDC_SUBSCRIPTION_REGISTERED, {
+      this.logger.debug(BootstrapLog.CDC_SUBSCRIPTION_REGISTERED, {
         tableName,
         partitionId,
         replicaId,
@@ -2659,20 +2752,51 @@ class BootstrapService extends EventEmitter {
       nodeId: this.nodeId,
     });
 
+    const phaseStepStartedAt = Date.now();
     const result = await this.hydrateFromLocalPartitions(
       systemTableCache,
       leaderMessageGroup,
     );
+    this.logger.info('Cache hydration step complete', {
+      nodeId: this.nodeId,
+      step: 'hydrateFromLocalPartitions',
+      durationMs: Date.now() - phaseStepStartedAt,
+    });
 
     // Verify cache contains complete cluster state
+    const verifyStartedAt = Date.now();
     this.verifyCacheHydration(systemTableCache, result);
+    this.logger.info('Cache hydration step complete', {
+      nodeId: this.nodeId,
+      step: 'verifyCacheHydration',
+      durationMs: Date.now() - verifyStartedAt,
+    });
 
     // Strict gate: all leaders must have complete routing metadata before
     // switching out of bootstrap writer/routing mode.
+    const leaderWaitStartedAt = Date.now();
     await this.waitForSystemServiceLeadersInCache();
-    this.ensureLatencyTopologyOwners();
+    this.logger.info('Cache hydration step complete', {
+      nodeId: this.nodeId,
+      step: 'waitForSystemServiceLeadersInCache',
+      durationMs: Date.now() - leaderWaitStartedAt,
+    });
 
+    const latencyOwnersStartedAt = Date.now();
+    this.ensureLatencyTopologyOwners();
+    this.logger.info('Cache hydration step complete', {
+      nodeId: this.nodeId,
+      step: 'ensureLatencyTopologyOwners',
+      durationMs: Date.now() - latencyOwnersStartedAt,
+    });
+
+    const subscribeStartedAt = Date.now();
     await this.subscribeToInitialSystemTableCDC();
+    this.logger.info('Cache hydration step complete', {
+      nodeId: this.nodeId,
+      step: 'subscribeToInitialSystemTableCDC',
+      durationMs: Date.now() - subscribeStartedAt,
+    });
 
     // Gate: verify CDC pipeline is fully wired before proceeding.
     // Requirements 2.4, 2.5 — node must not transition to READY with
@@ -2683,6 +2807,7 @@ class BootstrapService extends EventEmitter {
     });
     const cdcReadinessTimeoutMs = this.config.cdcPipelineReadinessTimeoutMs ||
       CDC_PIPELINE_READINESS_TIMEOUT_MS;
+    const readinessStartedAt = Date.now();
     await cdcReadinessGate.waitForReady(
       {
         partitionServices: this.partitionServices,
@@ -2690,6 +2815,11 @@ class BootstrapService extends EventEmitter {
       },
       cdcReadinessTimeoutMs,
     );
+    this.logger.info('Cache hydration step complete', {
+      nodeId: this.nodeId,
+      step: 'cdcReadinessGate.waitForReady',
+      durationMs: Date.now() - readinessStartedAt,
+    });
 
     // Now that cache is populated, update CDC integration service to use cache
     // This switches from bootstrap mode (direct writes) to normal mode (cache-based routing)
@@ -2698,8 +2828,10 @@ class BootstrapService extends EventEmitter {
       systemCache: systemTableCache,
       messageRouter: this.messageRouter,
       nodeId: this.nodeId,
+      rebalanceCoordinator: this.rebalanceCoordinator,
     });
 
+    const cdcUpgradeStartedAt = Date.now();
     if (!this.cdcIntegrationService) {
       this.cdcIntegrationService = CDCIntegrationSetup.createForNormal({
         nodeId: this.nodeId,
@@ -2726,6 +2858,11 @@ class BootstrapService extends EventEmitter {
         owner: 'CDCIntegrationSetup',
       });
     }
+    this.logger.info('Cache hydration step complete', {
+      nodeId: this.nodeId,
+      step: 'configureCdcIntegrationForNormalMode',
+      durationMs: Date.now() - cdcUpgradeStartedAt,
+    });
 
     if (this.epochManager) {
       this.cdcIntegrationService.setEpochManager(this.epochManager);
@@ -2751,18 +2888,33 @@ class BootstrapService extends EventEmitter {
     }
 
     // Set system table cache and CDC integration service on all partition services
+    const partitionWiringStartedAt = Date.now();
     for (const partition of this.partitionServices.values()) {
-      partition.setSystemTableCache(systemTableCache);
-      partition.setCdcIntegrationService(cdcIntegrationService);
-      partition.setTablePolicyService(this.tablePolicyService);
-      partition.setSqlQueryEngine(cdcQueryEngine);
+      // Keep cache-hydration critical path lightweight by wiring references
+      // directly. Rebalancer/bootstrap follow-up paths can perform any
+      // heavier initialization once the node is reachable.
+      partition.systemTableCache = systemTableCache;
+      partition.cdcIntegrationService = cdcIntegrationService;
+      partition.tablePolicyService = this.tablePolicyService;
+      partition.sqlQueryEngine = cdcQueryEngine;
     }
+    this.logger.info('Cache hydration step complete', {
+      nodeId: this.nodeId,
+      step: 'wirePartitionServicesForNormalMode',
+      durationMs: Date.now() - partitionWiringStartedAt,
+      partitionServiceCount: this.partitionServices.size,
+    });
 
+    const messageGroupWiringStartedAt = Date.now();
     for (const messageGroup of this.messageGroupServices.values()) {
-      if (messageGroup.setCdcIntegrationService) {
-        messageGroup.setCdcIntegrationService(cdcIntegrationService);
-      }
+      messageGroup.cdcIntegrationService = cdcIntegrationService;
     }
+    this.logger.info('Cache hydration step complete', {
+      nodeId: this.nodeId,
+      step: 'wireMessageGroupServicesForNormalMode',
+      durationMs: Date.now() - messageGroupWiringStartedAt,
+      messageGroupServiceCount: this.messageGroupServices.size,
+    });
 
     this.logger.info(BootstrapLog.CACHE_HYDRATION_COMPLETE, {
       success: result.success,
@@ -2954,6 +3106,28 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
+   * Emit best-effort bootstrap replica registration diagnostics.
+   * @param {string} scope - Partition or state registration scope.
+   * @param {string} event - Trace event name.
+   * @param {Object} details - Structured trace details.
+   * @private
+   */
+  writeBootstrapReplicaRegistrationTrace(scope, event, details = {}) {
+    if (!this.config.replicaRegistrationTraceEnabled) {
+      return;
+    }
+
+    this.logger.debug(
+      `${BOOTSTRAP_REPLICA_REGISTRATION_TRACE.PREFIX} ` +
+      `scope=${scope} event=${event}`,
+      {
+        nodeId: this.nodeId,
+        ...details,
+      },
+    );
+  }
+
+  /**
    * Initialize the ReplicaHandler to handle CREATE_REPLICA/REMOVE_REPLICA.
    * @private
    */
@@ -3064,8 +3238,79 @@ class BootstrapService extends EventEmitter {
     this.replicaHandler = replicaHandler;
     this.replicaStateMachine = replicaStateMachine;
 
-    this.registerPartitionsWithReplicaHandler(this.replicaHandler, this.partitionServices);
-    this.registerReplicasWithStateMachine(this.replicaStateMachine, this.partitionServices);
+    const partitionRegistrationStartedAt = Date.now();
+    this.writeBootstrapReplicaRegistrationTrace(
+      BOOTSTRAP_REPLICA_REGISTRATION_TRACE.SCOPE_PARTITION,
+      BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_CALL_BEGIN,
+      {
+        nodeId: this.nodeId,
+        totalPartitions: this.partitionServices.size,
+      },
+    );
+    const partitionRegistrationSummary =
+      this.registerPartitionsWithReplicaHandler(
+        this.replicaHandler,
+        this.partitionServices,
+      );
+    this.writeBootstrapReplicaRegistrationTrace(
+      BOOTSTRAP_REPLICA_REGISTRATION_TRACE.SCOPE_PARTITION,
+      BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_CALL_END,
+      {
+        nodeId: this.nodeId,
+        durationMs: Date.now() - partitionRegistrationStartedAt,
+        attemptedCount: partitionRegistrationSummary.attemptedCount,
+        registeredCount: partitionRegistrationSummary.registeredCount,
+        skippedCount: partitionRegistrationSummary.skippedCount,
+        totalPartitions: partitionRegistrationSummary.totalPartitions,
+      },
+    );
+    this.logger.info('Bootstrap replica-handler partition registration summary', {
+      nodeId: this.nodeId,
+      durationMs: Date.now() - partitionRegistrationStartedAt,
+      attemptedCount: partitionRegistrationSummary.attemptedCount,
+      registeredCount: partitionRegistrationSummary.registeredCount,
+      skippedCount: partitionRegistrationSummary.skippedCount,
+      totalPartitions: partitionRegistrationSummary.totalPartitions,
+    });
+
+    const stateRegistrationStartedAt = Date.now();
+    this.writeBootstrapReplicaRegistrationTrace(
+      BOOTSTRAP_REPLICA_REGISTRATION_TRACE.SCOPE_STATE,
+      BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_CALL_BEGIN,
+      {
+        nodeId: this.nodeId,
+        totalPartitions: this.partitionServices.size,
+      },
+    );
+    const stateRegistrationSummary =
+      this.registerReplicasWithStateMachine(
+        this.replicaStateMachine,
+        this.partitionServices,
+      );
+    this.writeBootstrapReplicaRegistrationTrace(
+      BOOTSTRAP_REPLICA_REGISTRATION_TRACE.SCOPE_STATE,
+      BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_CALL_END,
+      {
+        nodeId: this.nodeId,
+        durationMs: Date.now() - stateRegistrationStartedAt,
+        attemptedCount: stateRegistrationSummary.attemptedCount,
+        registeredCount: stateRegistrationSummary.registeredCount,
+        skippedCount: stateRegistrationSummary.skippedCount,
+        pendingPersistCount: stateRegistrationSummary.pendingPersistCount,
+        expectedPersistCount: stateRegistrationSummary.expectedPersistCount,
+        persistErrorCount: stateRegistrationSummary.persistErrorCount,
+      },
+    );
+    this.logger.info('Bootstrap replica-handler state registration summary', {
+      nodeId: this.nodeId,
+      durationMs: Date.now() - stateRegistrationStartedAt,
+      attemptedCount: stateRegistrationSummary.attemptedCount,
+      registeredCount: stateRegistrationSummary.registeredCount,
+      skippedCount: stateRegistrationSummary.skippedCount,
+      pendingPersistCount: stateRegistrationSummary.pendingPersistCount,
+      expectedPersistCount: stateRegistrationSummary.expectedPersistCount,
+      persistErrorCount: stateRegistrationSummary.persistErrorCount,
+    });
 
     this.logger.info(BootstrapLog.REPLICA_HANDLER_READY, {
       nodeId: this.nodeId,
@@ -3078,16 +3323,67 @@ class BootstrapService extends EventEmitter {
    * Register bootstrap-created partitions with ReplicaHandler.
    * @param {ReplicaHandler} replicaHandler - Handler instance.
    * @param {Map<string, PartitionService>} partitions - Created partitions.
+   * @return {Object} Registration summary.
    */
   registerPartitionsWithReplicaHandler(replicaHandler, partitions) {
     if (!replicaHandler) {
       this.logger.warn(BootstrapLog.REPLICA_HANDLER_MISSING);
-      return;
+      return {
+        attemptedCount: NUM.ZERO,
+        registeredCount: NUM.ZERO,
+        skippedCount: partitions?.size || NUM.ZERO,
+        totalPartitions: partitions?.size || NUM.ZERO,
+      };
     }
 
+    const startedAt = Date.now();
+    const totalPartitions = partitions.size;
     let registeredCount = NUM.ZERO;
+    let attemptedCount = NUM.ZERO;
+    let skippedCount = NUM.ZERO;
+    const writeRegistrationTrace = (event, details = {}) => {
+      this.writeBootstrapReplicaRegistrationTrace(
+        BOOTSTRAP_REPLICA_REGISTRATION_TRACE.SCOPE_PARTITION,
+        event,
+        details,
+      );
+    };
+    this.logger.info('Starting bootstrap partition registration with replica handler', {
+      nodeId: this.nodeId,
+      totalPartitions,
+    });
+    writeRegistrationTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_START, {
+      nodeId: this.nodeId,
+      totalPartitions,
+    });
+
     for (const [replicaId, partition] of partitions) {
+      attemptedCount++;
+      if (!partition || typeof partition !== 'object') {
+        skippedCount++;
+        writeRegistrationTrace(
+          BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_SKIP_MISSING_PARTITION,
+          {
+          nodeId: this.nodeId,
+          attemptedCount,
+          replicaId,
+          },
+        );
+        this.logger.error(BootstrapLog.REPLICA_HANDLER_REGISTER_FAILED, {
+          replicaId,
+          partitionId: null,
+          error: 'Partition service missing during replica-handler registration',
+        });
+        continue;
+      }
+
       try {
+        writeRegistrationTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_ATTEMPT, {
+          nodeId: this.nodeId,
+          attemptedCount,
+          replicaId,
+          partitionId: partition.partitionId || null,
+        });
         replicaHandler.registerExistingReplica({
           replicaId: replicaId,
           partitionId: partition.partitionId,
@@ -3096,11 +3392,35 @@ class BootstrapService extends EventEmitter {
           service: partition,
         });
         registeredCount++;
+        writeRegistrationTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_SUCCESS, {
+          nodeId: this.nodeId,
+          attemptedCount,
+          replicaId,
+        });
       } catch (error) {
+        writeRegistrationTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_ERROR, {
+          nodeId: this.nodeId,
+          attemptedCount,
+          replicaId,
+          error: error.message,
+        });
         this.logger.error(BootstrapLog.REPLICA_HANDLER_REGISTER_FAILED, {
           replicaId,
-          partitionId: partition.partitionId,
+          partitionId: partition?.partitionId || null,
           error: error.message,
+        });
+      }
+
+      if (attemptedCount % BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL ===
+        NUM.ZERO) {
+        this.logger.info('Bootstrap partition registration progress', {
+          nodeId: this.nodeId,
+          attemptedCount,
+          registeredCount,
+          skippedCount,
+          totalPartitions,
+          latestReplicaId: replicaId,
+          elapsedMs: Date.now() - startedAt,
         });
       }
     }
@@ -3110,6 +3430,28 @@ class BootstrapService extends EventEmitter {
       totalPartitions: partitions.size,
       nodeId: this.nodeId,
     });
+    this.logger.info('Completed bootstrap partition registration with replica handler', {
+      nodeId: this.nodeId,
+      attemptedCount,
+      registeredCount,
+      skippedCount,
+      totalPartitions,
+      durationMs: Date.now() - startedAt,
+    });
+    writeRegistrationTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_COMPLETE, {
+      nodeId: this.nodeId,
+      attemptedCount,
+      registeredCount,
+      skippedCount,
+      totalPartitions,
+      durationMs: Date.now() - startedAt,
+    });
+    return {
+      attemptedCount,
+      registeredCount,
+      skippedCount,
+      totalPartitions,
+    };
   }
 
   /**
@@ -3286,65 +3628,236 @@ class BootstrapService extends EventEmitter {
    *
    * @param {ReplicaStateMachine} stateMachine - State machine instance.
    * @param {Map<string, PartitionService>} partitions - Created partitions.
+   * @return {Object} Registration summary.
    */
   registerReplicasWithStateMachine(stateMachine, partitions) {
     assertCritical(stateMachine, bootstrapError.STATE_MACHINE_MISSING);
 
+    const startedAt = Date.now();
+    const totalPartitions = partitions.size;
     let registeredCount = NUM.ZERO;
+    let attemptedCount = NUM.ZERO;
+    let skippedCount = NUM.ZERO;
+    let persistErrorCount = NUM.ZERO;
+    const persistSettles = [];
+    const writeStateTrace = (event, details = {}) => {
+      this.writeBootstrapReplicaRegistrationTrace(
+        BOOTSTRAP_REPLICA_REGISTRATION_TRACE.SCOPE_STATE,
+        event,
+        details,
+      );
+    };
+
+    const trackTransitionPersistence = (result, replicaId, targetState) => {
+      if (!result || typeof result.then !== 'function') {
+        return;
+      }
+      const tracked = result.catch((error) => {
+        persistErrorCount++;
+        this.logger.error('Replica state persistence rejected during bootstrap registration', {
+          nodeId: this.nodeId,
+          replicaId,
+          targetState,
+          error: error.message,
+        });
+        return false;
+      });
+      persistSettles.push(tracked);
+    };
+    const transitionReplicaState = (
+      replicaId,
+      partitionId,
+      targetState,
+      currentAttempt,
+    ) => {
+      writeStateTrace(
+        BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_TRANSITION_BEGIN,
+        {
+          nodeId: this.nodeId,
+          attemptedCount: currentAttempt,
+          replicaId,
+          partitionId,
+          targetState,
+        },
+      );
+      const transitionResult = stateMachine.transition(
+        replicaId,
+        targetState,
+        {
+          partitionId,
+          nodeId: this.nodeId,
+          reason: BOOTSTRAP_REPLICA_REGISTRATION_REASON.BOOTSTRAP_REGISTRATION,
+          serviceId: replicaId,
+        },
+      );
+      writeStateTrace(
+        BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_TRANSITION_END,
+        {
+          nodeId: this.nodeId,
+          attemptedCount: currentAttempt,
+          replicaId,
+          partitionId,
+          targetState,
+        },
+      );
+      trackTransitionPersistence(transitionResult, replicaId, targetState);
+    };
+
+    this.logger.info('Starting bootstrap replica registration with state machine', {
+      nodeId: this.nodeId,
+      totalPartitions,
+    });
+    writeStateTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_START, {
+      nodeId: this.nodeId,
+      totalPartitions,
+    });
+
     for (const [replicaId, partition] of partitions) {
-      try {
-        // Transition from null (new) to pending, then through to active
-        // For bootstrap replicas, we directly set them as active
-        // First transition: null -> pending
-        stateMachine.transition(replicaId, ReplicaState.PENDING, {
-          partitionId: partition.partitionId,
-          nodeId: this.nodeId,
-          reason: BOOTSTRAP_REPLICA_REGISTRATION_REASON.BOOTSTRAP_REGISTRATION,
-          serviceId: replicaId,
-        });
-
-        // Second transition: pending -> creating
-        stateMachine.transition(replicaId, ReplicaState.CREATING, {
-          partitionId: partition.partitionId,
-          nodeId: this.nodeId,
-          reason: BOOTSTRAP_REPLICA_REGISTRATION_REASON.BOOTSTRAP_REGISTRATION,
-          serviceId: replicaId,
-        });
-
-        // Third transition: creating -> syncing
-        stateMachine.transition(replicaId, ReplicaState.SYNCING, {
-          partitionId: partition.partitionId,
-          nodeId: this.nodeId,
-          reason: BOOTSTRAP_REPLICA_REGISTRATION_REASON.BOOTSTRAP_REGISTRATION,
-          serviceId: replicaId,
-        });
-
-        // Fourth transition: syncing -> active
-        stateMachine.transition(replicaId, ReplicaState.ACTIVE, {
-          partitionId: partition.partitionId,
-          nodeId: this.nodeId,
-          reason: BOOTSTRAP_REPLICA_REGISTRATION_REASON.BOOTSTRAP_REGISTRATION,
-          serviceId: replicaId,
-        });
-
-        registeredCount++;
-      } catch (error) {
+      attemptedCount++;
+      writeStateTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_ATTEMPT, {
+        nodeId: this.nodeId,
+        attemptedCount,
+        replicaId,
+        partitionId: partition?.partitionId || null,
+      });
+      if (!partition || typeof partition !== 'object') {
+        skippedCount++;
+        writeStateTrace(
+          BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_SKIP_MISSING_PARTITION,
+          {
+            nodeId: this.nodeId,
+            attemptedCount,
+            replicaId,
+          },
+        );
         this.logger.error(BootstrapLog.STATE_MACHINE_REGISTER_FAILED, {
           replicaId,
+          partitionId: null,
+          error: 'Partition service missing during state-machine registration',
+        });
+        continue;
+      }
+
+      try {
+        transitionReplicaState(
+          replicaId,
+          partition.partitionId,
+          ReplicaState.PENDING,
+          attemptedCount,
+        );
+        transitionReplicaState(
+          replicaId,
+          partition.partitionId,
+          ReplicaState.CREATING,
+          attemptedCount,
+        );
+        transitionReplicaState(
+          replicaId,
+          partition.partitionId,
+          ReplicaState.SYNCING,
+          attemptedCount,
+        );
+        transitionReplicaState(
+          replicaId,
+          partition.partitionId,
+          ReplicaState.ACTIVE,
+          attemptedCount,
+        );
+
+        registeredCount++;
+        writeStateTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_SUCCESS, {
+          nodeId: this.nodeId,
+          attemptedCount,
+          replicaId,
           partitionId: partition.partitionId,
+        });
+      } catch (error) {
+        writeStateTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_ERROR, {
+          nodeId: this.nodeId,
+          attemptedCount,
+          replicaId,
+          partitionId: partition?.partitionId || null,
           error: error.message,
+        });
+        this.logger.error(BootstrapLog.STATE_MACHINE_REGISTER_FAILED, {
+          replicaId,
+          partitionId: partition?.partitionId || null,
+          error: error.message,
+        });
+      }
+
+      if (attemptedCount % BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL ===
+        NUM.ZERO) {
+        this.logger.info('Bootstrap state-machine registration progress', {
+          nodeId: this.nodeId,
+          attemptedCount,
+          registeredCount,
+          skippedCount,
+          persistErrorCount,
+          pendingPersistCount: persistSettles.length,
+          totalPartitions,
+          latestReplicaId: replicaId,
+          elapsedMs: Date.now() - startedAt,
         });
       }
     }
 
+    const expectedPersistCount =
+      registeredCount * BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA;
     this.logger.debug(BootstrapLog.STATE_MACHINE_REGISTERED, {
       registeredCount,
       totalPartitions: partitions.size,
       nodeId: this.nodeId,
       stateCounts: stateMachine.getStateCounts(),
     });
-  }
+    this.logger.info('Completed bootstrap replica registration with state machine', {
+      nodeId: this.nodeId,
+      attemptedCount,
+      registeredCount,
+      skippedCount,
+      persistErrorCount,
+      pendingPersistCount: persistSettles.length,
+      expectedPersistCount,
+      totalPartitions,
+      durationMs: Date.now() - startedAt,
+    });
+    writeStateTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_COMPLETE, {
+      nodeId: this.nodeId,
+      attemptedCount,
+      registeredCount,
+      skippedCount,
+      persistErrorCount,
+      pendingPersistCount: persistSettles.length,
+      expectedPersistCount,
+      totalPartitions,
+      durationMs: Date.now() - startedAt,
+    });
 
+    if (persistSettles.length > NUM.ZERO) {
+      void Promise.all(persistSettles).then(() => {
+        this.logger.info('Bootstrap state-machine registration persistence settled', {
+          nodeId: this.nodeId,
+          attemptedCount,
+          registeredCount,
+          skippedCount,
+          persistErrorCount,
+          expectedPersistCount,
+          settledPersistCount: persistSettles.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+      });
+    }
+
+    return {
+      attemptedCount,
+      registeredCount,
+      skippedCount,
+      pendingPersistCount: persistSettles.length,
+      expectedPersistCount,
+      persistErrorCount,
+      totalPartitions,
+    };
+  }
 
   /**
    * Get the leader partition for a system table.

@@ -57,12 +57,29 @@ import {
   BOOTSTRAP_API_HANDOFF_OPERATION,
   BOOTSTRAP_API_HANDOFF_PHASE,
   BOOTSTRAP_API_HANDOFF_STATUS,
+  BOOTSTRAP_API_LIVENESS,
   BOOTSTRAP_API_LOG_MSG,
+  BOOTSTRAP_API_PROBE_REASON,
+  BOOTSTRAP_API_PROBE_SCOPE,
   BOOTSTRAP_API_ROUTE,
   BOOTSTRAP_API_SQL,
   BOOTSTRAP_API_SUBSYSTEM,
 } from './bootstrap-api-constants.js';
 import {MessageGroupAssignment} from './message-group-assignment.js';
+import {
+  BootstrapReadinessState,
+} from './bootstrap-readiness-state.js';
+import {
+  READINESS_DEPENDENCY,
+} from './bootstrap-readiness-state-constants.js';
+import {
+  LIFECYCLE_PHASE,
+  LIFECYCLE_REASON,
+} from './lifecycle-controller-constants.js';
+import {
+  CONTROL_PLANE_ROLLOUT_REQUIRED,
+  assertRequiredControlPlaneRollout,
+} from '../runtime/control-plane-rollout-controls.js';
 
 /**
  * Bootstrap response strategies.
@@ -89,6 +106,12 @@ const REJOIN_TERMINAL_STATES = Object.freeze(new Set([
   NODE_STATE.SHUTTING_DOWN,
 ]));
 
+const READINESS_DEPENDENCY_NAME = Object.freeze({
+  SQL_ENGINE_READY: 'sql_engine_ready',
+  LEADER_METADATA_READY: 'leader_metadata_ready',
+  RUNTIME_WIRING_READY: 'runtime_wiring_ready',
+});
+
 /**
  * BootstrapAPI provides REST endpoints for node bootstrap and discovery.
  */
@@ -108,6 +131,11 @@ class BootstrapAPI {
    * @param {Object} [options.epochManager] - Assignment epoch manager.
    */
   constructor(options = {}) {
+    this.rolloutControls = assertRequiredControlPlaneRollout({
+      owner: 'BootstrapAPI',
+      controls: options.rolloutControls,
+      required: CONTROL_PLANE_ROLLOUT_REQUIRED.BOOTSTRAP_API,
+    });
     this.systemTableCache = options.systemTableCache || null;
     this.seedNodeId = options.seedNodeId || null;
     this.seedNodeAddress = options.seedNodeAddress || null;
@@ -120,6 +148,12 @@ class BootstrapAPI {
     this.bootstrapService = options.bootstrapService || null;
     this.epochManager = options.epochManager || null;
     this.messageRouter = options.messageRouter || null;
+    this.readinessState = options.readinessState ||
+      new BootstrapReadinessState({
+        readyStableWindowMs: options.readyStableWindowMs,
+        demotionFailureThreshold: options.demotionFailureThreshold,
+        retryAfterMs: options.retryAfterMs,
+      });
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -198,16 +232,45 @@ class BootstrapAPI {
    * @private
    */
   registerRoutes() {
+    // Process liveness probe (does not assert join readiness).
+    this.fastify.get(BOOTSTRAP_API_ROUTE.LIVEZ, async (_request, reply) => {
+      return this.handleLivenessProbeRequest(reply);
+    });
+
+    // One-time startup completion probe.
+    this.fastify.get(BOOTSTRAP_API_ROUTE.STARTUPZ, async (_request, reply) => {
+      return this.handleStartupProbeRequest(reply);
+    });
+
+    // Readiness probe for join/admin traffic.
+    this.fastify.get(BOOTSTRAP_API_ROUTE.READYZ, async (_request, reply) => {
+      return this.handleReadinessProbeRequest(reply);
+    });
+
+    // Lightweight bootstrap-join readiness probe.
+    this.fastify.get(BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY, async (_request, reply) => {
+      return this.handleBootstrapReadinessProbeRequest(reply);
+    });
+
     // Health check endpoint
     this.fastify.get(BOOTSTRAP_API_ROUTE.HEALTH, async (_request, reply) => {
       if (!this.sqlQueryEngine) {
-        reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
+        this.logger.debug('metrics.bootstrap_api.health.initializing', {
+          seedNodeId: this.seedNodeId,
+          sqlEngineReady: false,
+        });
+        reply.code(HTTP_STATUS.OK);
         return {
           status: BOOTSTRAP_API_HEALTH_STATUS_INITIALIZING,
           nodeId: this.seedNodeId,
+          ready: false,
         };
       }
-      return {status: BOOTSTRAP_API_HEALTH_STATUS, nodeId: this.seedNodeId};
+      return {
+        status: BOOTSTRAP_API_HEALTH_STATUS,
+        nodeId: this.seedNodeId,
+        ready: true,
+      };
     });
 
     // Bootstrap endpoint for new node registration
@@ -224,6 +287,379 @@ class BootstrapAPI {
     this.fastify.get(BOOTSTRAP_API_ROUTE.CLUSTER_STATE, async (_request, _reply) => {
       return this.getClusterState();
     });
+  }
+
+  /**
+   * Handle process liveness probe.
+   * @param {Object} reply - Fastify reply.
+   * @return {Object} Probe payload.
+   */
+  handleLivenessProbeRequest(reply) {
+    const statusCode = HTTP_STATUS.OK;
+    const response = {
+      alive: BOOTSTRAP_API_LIVENESS.ALIVE,
+      state: BOOTSTRAP_API_LIVENESS.STATE_RUNNING,
+      nodeId: this.seedNodeId,
+      timestamp: Date.now(),
+    };
+    this.recordReadinessProbeResult(BOOTSTRAP_API_ROUTE.LIVEZ, statusCode);
+    reply.code(statusCode);
+    return response;
+  }
+
+  /**
+   * Handle startup completion probe.
+   * @param {Object} reply - Fastify reply.
+   * @return {Object} Probe payload.
+   */
+  handleStartupProbeRequest(reply) {
+    const snapshot = this.evaluateReadinessSnapshot();
+    const started = this.isStartupComplete();
+    const statusCode = started ?
+      HTTP_STATUS.OK :
+      HTTP_STATUS.SERVICE_UNAVAILABLE;
+    const reasons = this.getStartupProbeReasons(snapshot, started);
+    const response = {
+      started,
+      phase: typeof snapshot.phase === TYPEOF.STRING ?
+        snapshot.phase :
+        LIFECYCLE_PHASE.INIT,
+      state: snapshot.state,
+      reasons,
+      timestamp: snapshot.timestamp,
+    };
+
+    if (!started) {
+      response.retryAfterMs = snapshot.retryAfterMs;
+    }
+
+    this.recordReadinessProbeResult(BOOTSTRAP_API_ROUTE.STARTUPZ, statusCode);
+    reply.code(statusCode);
+    return response;
+  }
+
+  /**
+   * Handle general readiness probe.
+   * @param {Object} reply - Fastify reply.
+   * @return {Object} Probe payload.
+   */
+  handleReadinessProbeRequest(reply) {
+    const snapshot = this.evaluateReadinessSnapshot();
+    const statusCode = snapshot.ready ?
+      HTTP_STATUS.OK :
+      HTTP_STATUS.SERVICE_UNAVAILABLE;
+    const response = this.buildReadinessProbeResponse(snapshot);
+
+    this.recordReadinessProbeResult(BOOTSTRAP_API_ROUTE.READYZ, statusCode);
+    reply.code(statusCode);
+    return response;
+  }
+
+  /**
+   * Handle lightweight bootstrap-join readiness probe.
+   * @param {Object} reply - Fastify reply.
+   * @return {Object} Probe payload.
+   */
+  handleBootstrapReadinessProbeRequest(reply) {
+    const snapshot = this.evaluateReadinessSnapshot();
+    const statusCode = snapshot.ready ?
+      HTTP_STATUS.OK :
+      HTTP_STATUS.SERVICE_UNAVAILABLE;
+    const response = this.buildReadinessProbeResponse(snapshot, {
+      scope: BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
+    });
+
+    this.recordReadinessProbeResult(
+      BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY,
+      statusCode,
+    );
+    reply.code(statusCode);
+    return response;
+  }
+
+  /**
+   * Build canonical readiness probe response body.
+   * @param {Object} snapshot - Current readiness snapshot.
+   * @param {Object} options
+   * @param {string} [options.scope] - Optional readiness scope.
+   * @return {Object}
+   */
+  buildReadinessProbeResponse(snapshot, options = {}) {
+    const response = {
+      ready: snapshot.ready === true,
+      phase: typeof snapshot.phase === TYPEOF.STRING ?
+        snapshot.phase :
+        LIFECYCLE_PHASE.INIT,
+      state: snapshot.state,
+      reasons: Array.isArray(snapshot.reasons) ? snapshot.reasons : [],
+      timestamp: snapshot.timestamp,
+    };
+    if (snapshot.draining === true) {
+      response.draining = true;
+    }
+    if (Number.isFinite(snapshot.drainDeadlineMs)) {
+      response.drainDeadlineMs = Math.floor(snapshot.drainDeadlineMs);
+    }
+    if (Number.isFinite(snapshot.retryAfterMs)) {
+      response.retryAfterMs = snapshot.retryAfterMs;
+    }
+    if (typeof options.scope === TYPEOF.STRING && options.scope.length > NUM.ZERO) {
+      response.scope = options.scope;
+    }
+    return response;
+  }
+
+  /**
+   * Evaluate readiness owner after updating dependency signals.
+   * @return {Object} Current readiness snapshot.
+   */
+  evaluateReadinessSnapshot() {
+    if (!this.readinessState || typeof this.readinessState.setDependency !== TYPEOF.FUNCTION) {
+      if (typeof this.readinessState?.evaluate === TYPEOF.FUNCTION) {
+        return this.readinessState.evaluate();
+      }
+      if (typeof this.readinessState?.getSnapshot === TYPEOF.FUNCTION) {
+        return this.readinessState.getSnapshot();
+      }
+      return {
+        ready: false,
+        phase: LIFECYCLE_PHASE.INIT,
+        state: BOOTSTRAP_PHASE.NOT_STARTED,
+        reasons: [BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE],
+        retryAfterMs: NUM.ZERO,
+        timestamp: Date.now(),
+      };
+    }
+
+    const startupComplete = this.isStartupComplete();
+    this.readinessState.setDependency(
+      READINESS_DEPENDENCY.STARTUP_COMPLETE,
+      startupComplete,
+      {
+        reasonCode: BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+        details: {
+          phase: this.bootstrapService?.phase || null,
+        },
+      },
+    );
+
+    this.readinessState.setDependency(
+      READINESS_DEPENDENCY_NAME.SQL_ENGINE_READY,
+      this.isSqlEngineDependencyReady(),
+      {
+        reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE,
+      },
+    );
+
+    const leaderStatus = this.getLeaderReadinessStatusForProbe();
+    this.readinessState.setDependency(
+      READINESS_DEPENDENCY_NAME.LEADER_METADATA_READY,
+      leaderStatus.ready === true,
+      {
+        reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+        details: leaderStatus,
+      },
+    );
+
+    this.readinessState.setDependency(
+      READINESS_DEPENDENCY_NAME.RUNTIME_WIRING_READY,
+      this.isRuntimeWiringReady(),
+      {
+        reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+      },
+    );
+
+    return this.readinessState.evaluate();
+  }
+
+  /**
+   * Build startup-probe reasons from readiness snapshot.
+   * @param {Object} snapshot
+   * @param {boolean} started
+   * @return {string[]}
+   */
+  getStartupProbeReasons(snapshot, started) {
+    if (started) {
+      return [];
+    }
+
+    const reasons = Array.isArray(snapshot?.reasons) ?
+      [...snapshot.reasons] :
+      [];
+    if (!reasons.includes(BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE)) {
+      reasons.unshift(BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE);
+    }
+    return reasons;
+  }
+
+  /**
+   * Determine whether startup bootstrap has completed.
+   * @return {boolean}
+   */
+  isStartupComplete() {
+    if (!this.bootstrapService) {
+      return true;
+    }
+    return this.bootstrapService.phase === BOOTSTRAP_PHASE.COMPLETE;
+  }
+
+  /**
+   * Determine whether runtime wiring is available for join-safe traffic.
+   * @return {boolean}
+   */
+  isRuntimeWiringReady() {
+    if (!this.bootstrapService) {
+      return true;
+    }
+    return Boolean(this.messageRouter || this.bootstrapService?.messageRouter);
+  }
+
+  /**
+   * Determine whether SQL dependency is available for bootstrap operations.
+   * @return {boolean}
+   */
+  isSqlEngineDependencyReady() {
+    if (!this.bootstrapService) {
+      return true;
+    }
+    return Boolean(this.sqlQueryEngine);
+  }
+
+  /**
+   * Build current leader-readiness status for probe projection.
+   * @return {Object}
+   */
+  getLeaderReadinessStatusForProbe() {
+    if (!this.systemTableCache) {
+      return {ready: false};
+    }
+
+    const missing = this.normalizeLeaderStatusForBootstrap(
+      this.getMissingServiceLeaders(),
+    );
+    const missingCount = this.countMissingLeaderInfo(missing);
+    return {
+      ready: missingCount === NUM.ZERO,
+      ...missing,
+    };
+  }
+
+  /**
+   * Record one probe response in readiness metrics when owner supports it.
+   * @param {string} endpoint
+   * @param {number} statusCode
+   */
+  recordReadinessProbeResult(endpoint, statusCode) {
+    if (typeof this.readinessState?.recordProbeResult !== TYPEOF.FUNCTION) {
+      return;
+    }
+    this.readinessState.recordProbeResult(endpoint, statusCode);
+  }
+
+  /**
+   * Mark lifecycle readiness as draining and immediately non-ready.
+   * @param {Object} [options]
+   * @param {number} [options.drainDeadlineMs]
+   * @param {string} [options.reasonCode]
+   * @return {Object}
+   */
+  markDraining(options = {}) {
+    if (typeof this.readinessState?.beginDrain === TYPEOF.FUNCTION) {
+      return this.readinessState.beginDrain({
+        drainDeadlineMs: options.drainDeadlineMs,
+        reasonCode: options.reasonCode || LIFECYCLE_REASON.NODE_DRAINING,
+      });
+    }
+
+    if (typeof this.readinessState?.transitionTo === TYPEOF.FUNCTION) {
+      return this.readinessState.transitionTo('DEGRADED', {
+        ready: false,
+        reasons: [options.reasonCode || LIFECYCLE_REASON.NODE_DRAINING],
+      });
+    }
+
+    return this.getReadinessSnapshotForDiagnostics();
+  }
+
+  /**
+   * Build standardized not-ready payload for POST /bootstrap responses.
+   * Keeps compatibility fields while adding retry guidance.
+   * @param {Object} options
+   * @param {string} options.error
+   * @param {string} options.code
+   * @param {string} [options.phase]
+   * @param {string} [options.reasonCode]
+   * @return {Object}
+   */
+  buildBootstrapNotReadyResponse(options = {}) {
+    const snapshot = this.getReadinessSnapshotForDiagnostics();
+    const reasons = this.mergeReadinessReasons(
+      snapshot.reasons,
+      options.reasonCode,
+    );
+    const response = {
+      success: false,
+      error: options.error,
+      code: options.code,
+      reasons,
+      retryAfterMs: Number.isFinite(snapshot.retryAfterMs) ?
+        snapshot.retryAfterMs :
+        NUM.ZERO,
+    };
+
+    if (typeof options.phase === TYPEOF.STRING && options.phase.length > NUM.ZERO) {
+      response.phase = options.phase;
+    }
+
+    if (typeof snapshot.state === TYPEOF.STRING && snapshot.state.length > NUM.ZERO) {
+      response.state = snapshot.state;
+    }
+
+    return response;
+  }
+
+  /**
+   * Return best-effort readiness snapshot for operation diagnostics.
+   * @return {Object}
+   */
+  getReadinessSnapshotForDiagnostics() {
+    try {
+      return this.evaluateReadinessSnapshot();
+    } catch (_error) {
+      const fallbackSnapshot = typeof this.readinessState?.getSnapshot === TYPEOF.FUNCTION ?
+        this.readinessState.getSnapshot() :
+        null;
+      if (fallbackSnapshot) {
+        return fallbackSnapshot;
+      }
+      return {
+        ready: false,
+        phase: LIFECYCLE_PHASE.INIT,
+        state: BOOTSTRAP_PHASE.NOT_STARTED,
+        reasons: [],
+        retryAfterMs: NUM.ZERO,
+        timestamp: Date.now(),
+      };
+    }
+  }
+
+  /**
+   * Merge readiness reasons with one required reason code.
+   * @param {Array<string>} reasons
+   * @param {string} reasonCode
+   * @return {Array<string>}
+   */
+  mergeReadinessReasons(reasons, reasonCode) {
+    const merged = Array.isArray(reasons) ?
+      [...reasons] :
+      [];
+    if (typeof reasonCode !== TYPEOF.STRING || reasonCode.length === NUM.ZERO) {
+      return merged;
+    }
+    if (!merged.includes(reasonCode)) {
+      merged.push(reasonCode);
+    }
+    return merged;
   }
 
   /**
@@ -253,6 +689,17 @@ class BootstrapAPI {
       return {error: validationError};
     }
 
+    if (this.bootstrapService &&
+        this.bootstrapService.phase !== BOOTSTRAP_PHASE.COMPLETE) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
+      return this.buildBootstrapNotReadyResponse({
+        error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+        code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+        phase: this.bootstrapService.phase,
+        reasonCode: BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+      });
+    }
+
     // Check for conflicts
     const conflictError = this.checkForConflicts(nodeId, nodeAddress);
     if (conflictError) {
@@ -263,17 +710,6 @@ class BootstrapAPI {
       });
       reply.code(HTTP_STATUS.CONFLICT);
       return {error: conflictError};
-    }
-
-    if (this.bootstrapService &&
-        this.bootstrapService.phase !== BOOTSTRAP_PHASE.COMPLETE) {
-      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
-      return {
-        success: false,
-        error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
-        code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
-        phase: this.bootstrapService.phase,
-      };
     }
 
     try {
@@ -288,9 +724,11 @@ class BootstrapAPI {
         });
         reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
         return {
-          success: false,
-          error: BOOTSTRAP_API_ERROR.RAFT_LEADERS_NOT_READY,
-          code: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+          ...this.buildBootstrapNotReadyResponse({
+            error: BOOTSTRAP_API_ERROR.RAFT_LEADERS_NOT_READY,
+            code: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+            reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+          }),
           missingPartitionLeaders: leaderStatus.missingPartitionLeaders,
           missingMessageGroupLeaders: leaderStatus.missingMessageGroupLeaders,
           missingPartitionLeaderNodes: leaderStatus.missingPartitionLeaderNodes,
@@ -1586,65 +2024,25 @@ class BootstrapAPI {
    * @private
    */
   async waitForServiceLeaders() {
-    const hasLiveServices = (this.partitionServices &&
-        this.partitionServices.size > NUM.ZERO) ||
-      (this.messageGroupServices && this.messageGroupServices.size > NUM.ZERO);
-    if (!hasLiveServices) {
-      const missing = this.normalizeLeaderStatusForBootstrap(
-        this.getMissingServiceLeaders(),
-      );
-      const missingCount = this.countMissingLeaderInfo(missing);
-      return {ready: missingCount === NUM.ZERO, ...missing};
-    }
-
-    const configuredTimeoutMs =
-      this.bootstrapService?.config?.leadershipWaitTimeoutMs;
-    const timeoutMs = Math.min(
-      configuredTimeoutMs || BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS,
-      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS,
-    );
-    let delay = this.bootstrapService?.config?.leadershipWaitInitialDelayMs ||
-      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.INITIAL_DELAY_MS;
-    const maxDelay = this.bootstrapService?.config?.leadershipWaitMaxDelayMs ||
-      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.MAX_DELAY_MS;
-    const backoff = this.bootstrapService?.config?.leadershipWaitBackoffMultiplier ||
-      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.BACKOFF_MULTIPLIER;
-    const start = Date.now();
-
-    while (Date.now() - start < timeoutMs) {
-      const missing = this.normalizeLeaderStatusForBootstrap(
-        this.getMissingServiceLeaders(),
-      );
-      const missingCount = this.countMissingLeaderInfo(missing);
-
-      if (missingCount === NUM.ZERO) {
-        this.logger.info(BOOTSTRAP_API_LOG_MSG.LEADERS_READY || 'All service leaders ready', {
-          seedNodeId: this.seedNodeId,
-          elapsedMs: Date.now() - start,
-        });
-        return {ready: true, ...missing};
-      }
-
-      this.logger.debug('Waiting for service leaders', {
-        missingCount,
-        missingPartitionLeaders: missing.missingPartitionLeaders,
-        missingPartitionLeaderAddresses: missing.missingPartitionLeaderAddresses,
-        missingPartitionLeaderNodes: missing.missingPartitionLeaderNodes,
-        elapsedMs: Date.now() - start,
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      delay = Math.min(delay * backoff, maxDelay);
-    }
-
     const missing = this.normalizeLeaderStatusForBootstrap(
       this.getMissingServiceLeaders(),
     );
-    this.logger.warn('Timeout waiting for service leaders', {
+    const missingCount = this.countMissingLeaderInfo(missing);
+
+    if (missingCount === NUM.ZERO) {
+      this.logger.info(BOOTSTRAP_API_LOG_MSG.LEADERS_READY || 'All service leaders ready', {
+        seedNodeId: this.seedNodeId,
+        elapsedMs: NUM.ZERO,
+      });
+      return {ready: true, ...missing};
+    }
+
+    this.logger.debug(BOOTSTRAP_API_LOG_MSG.LEADERS_NOT_READY, {
       seedNodeId: this.seedNodeId,
-      timeoutMs,
+      missingCount,
       ...missing,
     });
+
     return {ready: false, ...missing};
   }
 

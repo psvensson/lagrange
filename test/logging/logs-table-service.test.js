@@ -7,6 +7,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {LogsTableService, LOGS_TABLE_DEFAULT} from '../../src/logging/logs-table-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
 
 // Initialize configuration before tests
 test('setup', async (t) => {
@@ -51,6 +52,42 @@ test('LogsTableService default config', async (t) => {
   t.equal(LOGS_TABLE_DEFAULT.MAX_RETRIES, 3, 'should have default max retries');
   t.equal(LOGS_TABLE_DEFAULT.RETRY_DELAY_MS, 1000, 'should have default retry delay');
 });
+
+test('LogsTableService flush routes write work through class C scheduler when configured',
+  async (t) => {
+    LogsTableService.resetInstance();
+    const scheduledClasses = [];
+    const scheduler = {
+      enqueue: async (workClass, task) => {
+        scheduledClasses.push(workClass);
+        return task();
+      },
+    };
+    const mockCdcService = {
+      insertSystemTableRow: async () => {},
+    };
+    const service = new LogsTableService({
+      cdcIntegrationService: mockCdcService,
+      workClassScheduler: scheduler,
+      batchSize: 100,
+    });
+    service.initialize();
+
+    await service.writeLogEntry({
+      logId: 'log-scheduler',
+      timestamp: Date.now(),
+      level: 'INFO',
+      nodeId: 'test-node',
+      message: 'message',
+      createdAt: Date.now(),
+    });
+
+    await service.flush();
+
+    t.same(scheduledClasses, [WORK_CLASS.C],
+      'flush should schedule execution under class C');
+    await service.shutdown();
+  });
 
 test('LogsTableService writeLogEntry queues entries', async (t) => {
   LogsTableService.resetInstance();
@@ -333,10 +370,18 @@ test('LogsTableService connectToLoggingService flushes buffer', async (t) => {
   t.ok(loggingService.isLogsTableReady(), 'logs table should be marked ready');
   t.equal(loggingService.getBufferSize(), 0, 'buffer should be empty');
 
-  // The entries are queued during flush callback, need to flush them
-  // Note: there's also a "Logs table ready" message that gets logged
-  const stats = service.getStats();
-  t.ok(stats.pendingWrites >= 2, 'should have pending writes queued');
+  // The entries are queued in the background flush callback.
+  // Note: there's also a "Logs table ready" message that gets logged.
+  let pendingObserved = 0;
+  const waitDeadline = Date.now() + 200;
+  while (Date.now() < waitDeadline) {
+    pendingObserved = service.getStats().pendingWrites;
+    if (pendingObserved >= 2) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  t.ok(pendingObserved >= 2, 'should queue buffered entries via background flush');
 
   await service.flush();
 

@@ -113,6 +113,16 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Distributed operation failed due to participant failures',
   EXPLAIN_DISTRIBUTED_REQUIRES_STATEMENT:
     'EXPLAIN DISTRIBUTED requires a SQL statement',
+  TABLE_PARTITION_PROVISION_COORDINATOR_REQUIRED:
+    'Table partition provisioning requires a rebalance coordinator',
+  TABLE_PARTITION_PROVISION_PARTITION_ID_REQUIRED:
+    'Table partition provisioning requires partitionId',
+  TABLE_PARTITION_METADATA_TIMEOUT_PREFIX:
+    'Timed out waiting for table partition metadata for partition ',
+  TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX:
+    'Timed out waiting for routable partition service for partition ',
+  TABLE_PARTITION_PROVISION_DISPATCH_FAILED:
+    'Failed to dispatch initial table partition replica creation',
 });
 
 const QUERY_ROUTER_ERROR_MSG = Object.freeze({
@@ -164,6 +174,9 @@ const QUERY_LOG_MSG = Object.freeze({
   TABLE_CREATE_START: 'Creating table',
   TABLE_EXISTS_SKIP: 'Table already exists, skipping creation',
   TABLE_CREATED_SUCCESS: 'Table created successfully',
+  TABLE_PARTITION_PROVISION_START: 'Provisioning initial table partition replica',
+  TABLE_PARTITION_PROVISION_SUCCESS: 'Initial table partition provisioning completed',
+  TABLE_PARTITION_PROVISION_FAILED: 'Initial table partition provisioning failed',
   TABLE_SPLIT_MERGE_EVAL_FAILED:
     'Split/merge evaluation after table create failed',
   FOLLOWING_LEADER_REDIRECT: 'Following leader redirect',
@@ -309,6 +322,8 @@ const QUERY_DEFAULTS = Object.freeze({
   LEADER_RETRY_ATTEMPTS: NUM.FIVE,
   LEADER_RETRY_DELAY_MS: NUM.FIVE * NUM.TEN,
   NO_SERVICE_WARN_THROTTLE_MS: TIME_MS.SECOND * NUM.FIVE,
+  TABLE_CREATE_PROVISION_TIMEOUT_MS: TIME_MS.SECOND * NUM.TEN * NUM.THREE,
+  TABLE_CREATE_PROVISION_POLL_INTERVAL_MS: NUM.FIVE * NUM.TEN,
 
   COORDINATOR_MAX_PARALLEL_PARTITIONS: NUM.THOUSAND,
   COORDINATOR_MAX_CONCURRENT_CONNECTIONS: NUM.THOUSAND * NUM.TEN,

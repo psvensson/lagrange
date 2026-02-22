@@ -127,3 +127,59 @@ test(
     t.end();
   },
 );
+
+test(
+  'subscribeToCDC subscribes each message group once per table',
+  async (t) => {
+    setupEnvironment();
+
+    const service = new BootstrapService({nodeId: 'node-a'});
+
+    let mgSubscribeCalls = 0;
+    let partitionSubscriberRegistrations = 0;
+
+    const makePartition = () => ({
+      subscribeToCDC: () => {
+        partitionSubscriberRegistrations += 1;
+      },
+      isLeader: false,
+    });
+
+    const makeMessageGroup = () => ({
+      subscribeToCDC: async () => {
+        mgSubscribeCalls += 1;
+      },
+      isLeaderReplica: () => true,
+    });
+
+    service.partitionServices = new Map([
+      ['tables-p1-r1', makePartition()],
+      ['tables-p1-r2', makePartition()],
+      ['tables-p1-r3', makePartition()],
+    ]);
+    service.messageGroupServices = new Map([
+      ['mg-1-r1', makeMessageGroup()],
+      ['mg-1-r2', makeMessageGroup()],
+    ]);
+
+    await service.subscribeToCDC('tables', 'tables-p1', [
+      'tables-p1-r1',
+      'tables-p1-r2',
+      'tables-p1-r3',
+    ]);
+
+    assert.equal(
+      mgSubscribeCalls,
+      2,
+      'should subscribe each message group once for the table',
+    );
+    assert.equal(
+      partitionSubscriberRegistrations,
+      6,
+      'should still register callbacks for each partition replica x message group',
+    );
+
+    teardownEnvironment();
+    t.end();
+  },
+);

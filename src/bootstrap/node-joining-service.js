@@ -82,6 +82,14 @@ import {
   JOINING_LOG_MSG,
 } from './node-joining-constants.js';
 import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
+import {
+  WORK_CLASS,
+  WorkClassScheduler,
+} from '../runtime/work-class-scheduler.js';
+import {
+  CONTROL_PLANE_ROLLOUT_REQUIRED,
+  assertRequiredControlPlaneRollout,
+} from '../runtime/control-plane-rollout-controls.js';
 import {RPCClient} from '../transport/rpc-client.js';
 import {
   ControlPlaneMessageType,
@@ -95,6 +103,7 @@ import {
   COLUMN,
   ENTITY_TYPE,
   ENDPOINT_STATUS,
+  HTTP_STATUS,
   NUM,
   PROTOCOL,
   RUNTIME_KIND,
@@ -189,6 +198,11 @@ class NodeJoiningService extends EventEmitter {
   constructor(options = {}) {
     super();
 
+    this.rolloutControls = assertRequiredControlPlaneRollout({
+      owner: 'NodeJoiningService',
+      controls: options.rolloutControls,
+      required: CONTROL_PLANE_ROLLOUT_REQUIRED.NODE_JOINING_SERVICE,
+    });
     this.nodeId = options.nodeId || uuidv4();
     this.nodeAddress = options.nodeAddress || null;
     this.seedNodeAddress = options.seedNodeAddress || null;
@@ -204,6 +218,22 @@ class NodeJoiningService extends EventEmitter {
     this.config.heartbeatIntervalMs = Number.isFinite(this.config.heartbeatIntervalMs) ?
       Math.max(NUM.HUNDRED, this.config.heartbeatIntervalMs) :
       JOINING_DEFAULT.heartbeatIntervalMs;
+    this.config.leadershipWaitJitterRatio = Number.isFinite(
+      this.config.leadershipWaitJitterRatio,
+    ) ?
+      Math.min(
+        NUM.ONE,
+        Math.max(NUM.ZERO, this.config.leadershipWaitJitterRatio),
+      ) :
+      JOINING_DEFAULT.leadershipWaitJitterRatio;
+    this.workClassScheduler = options.workClassScheduler ||
+      new WorkClassScheduler();
+    this.random = typeof options.random === TYPEOF.FUNCTION ?
+      options.random :
+      Math.random;
+    this.sleep = typeof options.sleep === TYPEOF.FUNCTION ?
+      options.sleep :
+      (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
 
     // Allow tests to bypass real network I/O by providing an in-process HTTP POST.
     this.httpPostImpl = typeof options.httpPost === TYPEOF.FUNCTION ?
@@ -487,7 +517,9 @@ class NodeJoiningService extends EventEmitter {
     });
 
     try {
-      await phaseFunction();
+      await this.workClassScheduler.enqueue(WORK_CLASS.A, async () => {
+        await phaseFunction();
+      });
 
       const phaseDuration = Date.now() - this.phaseStartTime;
 
@@ -556,9 +588,15 @@ class NodeJoiningService extends EventEmitter {
       this.config.leadershipWaitBackoffMultiplier :
       NUM.TWO;
     const startTime = Date.now();
+    let attempt = 0;
     let lastBootstrapError = null;
+    let lastRetryableSeedContactError = null;
+    const retryableTimeoutErrorMessage = JOINING_ERROR_MSG.httpTimeout(
+      this.config.httpTimeoutMs,
+    );
 
     while (Date.now() - startTime < retryTimeoutMs) {
+      attempt += 1;
       try {
         const response = await this.httpPostImpl(bootstrapUrl, {
           nodeId: this.nodeId,
@@ -584,32 +622,53 @@ class NodeJoiningService extends EventEmitter {
         });
         return;
       } catch (error) {
-        const parsedError = error.bootstrapResponse || this.parseBootstrapError(error);
+        const classification = this.classifySeedContactFailure(
+          error,
+          retryableTimeoutErrorMessage,
+        );
+        const parsedError = classification.parsedError;
         const elapsedMs = Date.now() - startTime;
-        const retryableBootstrapError = parsedError &&
-          (
-            parsedError.code ===
-              BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE ||
-            parsedError.code ===
-              BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY
-          );
-
-        if (retryableBootstrapError && elapsedMs < retryTimeoutMs) {
-          lastBootstrapError = parsedError;
-          this.logger.debug('Seed bootstrap not ready, retrying bootstrap request', {
+        if (classification.retryable && elapsedMs < retryTimeoutMs) {
+          if (classification.retryableCode) {
+            lastBootstrapError = parsedError;
+          }
+          if (classification.retryableTimeout) {
+            lastRetryableSeedContactError = error.message;
+          }
+          const nextDelayMs = this.computeSeedContactRetryDelayMs({
+            baseDelayMs: delayMs,
+            maxDelayMs,
+            retryAfterMs: classification.retryAfterMs,
+          });
+          this.logger.debug(JOINING_LOG_MSG.SEED_CONTACT_RETRYING, {
             nodeId: this.nodeId,
             bootstrapUrl,
-            code: parsedError.code,
+            attempt,
             elapsedMs,
-            retryDelayMs: delayMs,
+            lastCode: classification.code,
+            lastStatusCode: classification.statusCode,
+            retryAfterMs: classification.retryAfterMs,
+            nextDelayMs,
             retryTimeoutMs,
           });
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          await this.sleep(nextDelayMs);
           delayMs = Math.min(
             Math.floor(delayMs * backoffMultiplier),
             maxDelayMs,
           );
           continue;
+        }
+
+        if (classification.terminalValidationOrConflict) {
+          this.logger.warn(JOINING_LOG_MSG.SEED_CONTACT_TERMINAL, {
+            nodeId: this.nodeId,
+            bootstrapUrl,
+            attempt,
+            elapsedMs,
+            statusCode: classification.statusCode,
+            code: classification.code,
+            error: error.message,
+          });
         }
 
         if (parsedError) {
@@ -655,9 +714,126 @@ class NodeJoiningService extends EventEmitter {
       );
     }
 
+    if (lastRetryableSeedContactError) {
+      throw new Error(
+        JOINING_ERROR_MSG.contactSeedFailed(lastRetryableSeedContactError),
+      );
+    }
+
     throw new Error(JOINING_ERROR_MSG.contactSeedFailed(
       `seed readiness timeout after ${retryTimeoutMs}ms`,
     ));
+  }
+
+  /**
+   * Classify one seed contact failure for retry/backoff behavior.
+   * @param {Error} error
+   * @param {string} retryableTimeoutErrorMessage
+   * @return {Object}
+   * @private
+   */
+  classifySeedContactFailure(error, retryableTimeoutErrorMessage) {
+    const parsedError = error.bootstrapResponse || this.parseBootstrapError(error);
+    const statusCode = Number.isFinite(error?.statusCode) ?
+      Math.floor(error.statusCode) :
+      (Number.isFinite(parsedError?.statusCode) ?
+        Math.floor(parsedError.statusCode) :
+        null);
+    const code = typeof parsedError?.code === TYPEOF.STRING ?
+      parsedError.code :
+      null;
+    const retryableCode = code === BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE ||
+      code === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
+    const retryableTimeout = error?.message === retryableTimeoutErrorMessage;
+    const retryableStatus = statusCode === HTTP_STATUS.SERVICE_UNAVAILABLE;
+    const terminalValidationOrConflict = statusCode === HTTP_STATUS.BAD_REQUEST ||
+      statusCode === HTTP_STATUS.CONFLICT;
+
+    return {
+      parsedError,
+      statusCode,
+      code,
+      retryAfterMs: this.resolveSeedContactRetryAfterMs(error, parsedError),
+      retryableCode,
+      retryableTimeout,
+      retryableStatus,
+      retryable: retryableCode || retryableTimeout || retryableStatus,
+      terminalValidationOrConflict,
+    };
+  }
+
+  /**
+   * Compute retry delay using bootstrap hints + bounded jitter.
+   * @param {Object} options
+   * @param {number} options.baseDelayMs
+   * @param {number} options.maxDelayMs
+   * @param {number|null} options.retryAfterMs
+   * @return {number}
+   * @private
+   */
+  computeSeedContactRetryDelayMs(options = {}) {
+    const baseDelayMs = Math.max(NUM.ONE, Number(options.baseDelayMs) || NUM.ZERO);
+    const maxDelayMs = Math.max(baseDelayMs, Number(options.maxDelayMs) || baseDelayMs);
+    const retryAfterMs = Number.isFinite(options.retryAfterMs) ?
+      Math.max(NUM.ZERO, Math.floor(options.retryAfterMs)) :
+      null;
+    const candidateDelayMs = retryAfterMs === null ?
+      baseDelayMs :
+      Math.min(maxDelayMs, Math.max(baseDelayMs, retryAfterMs));
+    const jitteredDelayMs = this.applySeedContactRetryJitter(
+      candidateDelayMs,
+      maxDelayMs,
+    );
+    if (retryAfterMs === null) {
+      return jitteredDelayMs;
+    }
+    return Math.max(retryAfterMs, jitteredDelayMs);
+  }
+
+  /**
+   * Apply bounded symmetric jitter to one retry delay.
+   * @param {number} delayMs
+   * @param {number} maxDelayMs
+   * @return {number}
+   * @private
+   */
+  applySeedContactRetryJitter(delayMs, maxDelayMs) {
+    const jitterRatio = Number.isFinite(this.config.leadershipWaitJitterRatio) ?
+      this.config.leadershipWaitJitterRatio :
+      JOINING_DEFAULT.leadershipWaitJitterRatio;
+    if (jitterRatio <= NUM.ZERO) {
+      return Math.min(maxDelayMs, Math.max(NUM.ONE, Math.floor(delayMs)));
+    }
+
+    const jitterRangeMs = delayMs * jitterRatio;
+    const centeredRandom = (this.random() * NUM.TWO) - NUM.ONE;
+    const jitterOffsetMs = Math.round(centeredRandom * jitterRangeMs);
+    return Math.min(
+      maxDelayMs,
+      Math.max(NUM.ONE, Math.floor(delayMs + jitterOffsetMs)),
+    );
+  }
+
+  /**
+   * Resolve retry hint (ms) from parsed body and transport metadata.
+   * @param {Error} error
+   * @param {Object|null} parsedError
+   * @return {number|null}
+   * @private
+   */
+  resolveSeedContactRetryAfterMs(error, parsedError) {
+    const hintCandidates = [
+      error?.retryAfterMs,
+      parsedError?.retryAfterMs,
+      parsedError?.retry_after_ms,
+    ];
+    for (const hint of hintCandidates) {
+      if (!Number.isFinite(hint)) {
+        continue;
+      }
+      return Math.max(NUM.ZERO, Math.floor(hint));
+    }
+    return null;
   }
 
   /**
@@ -667,19 +843,46 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   parseBootstrapError(error) {
-    if (!error || typeof error.message !== TYPEOF.STRING) {
+    if (!error) {
       return null;
     }
 
-    const match = error.message.match(/^HTTP \\d+:\\s*(.*)$/s);
+    if (error.responseJson &&
+        typeof error.responseJson === TYPEOF.OBJECT) {
+      const parsedFromJson = {...error.responseJson};
+      if (Number.isFinite(error.statusCode) &&
+          !Number.isFinite(parsedFromJson.statusCode)) {
+        parsedFromJson.statusCode = Math.floor(error.statusCode);
+      }
+      if (Number.isFinite(error.retryAfterMs) &&
+          !Number.isFinite(parsedFromJson.retryAfterMs)) {
+        parsedFromJson.retryAfterMs = Math.floor(error.retryAfterMs);
+      }
+      return parsedFromJson;
+    }
+
+    if (typeof error.message !== TYPEOF.STRING) {
+      return null;
+    }
+
+    const match = error.message.match(/^HTTP (\d+):\s*(.*)$/s);
     if (!match) {
       return null;
     }
 
+    const statusCode = Number.parseInt(match[1], 10);
     try {
-      return JSON.parse(match[1]);
+      const parsed = JSON.parse(match[2]);
+      if (Number.isFinite(statusCode) &&
+          !Number.isFinite(parsed.statusCode)) {
+        parsed.statusCode = statusCode;
+      }
+      return parsed;
     } catch (_parseError) {
-      return null;
+      if (!Number.isFinite(statusCode)) {
+        return null;
+      }
+      return {statusCode};
     }
   }
 
@@ -2671,9 +2874,33 @@ class NodeJoiningService extends EventEmitter {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        const retryAfterHeader =
+          response.headers.get(JOINING_HTTP.HEADER_RETRY_AFTER);
         const errorBody = await response.text();
+        let parsedBody = null;
+        try {
+          parsedBody = JSON.parse(errorBody);
+        } catch (_parseError) {
+          parsedBody = null;
+        }
         const httpStatusError = JOINING_ERROR_MSG.httpStatus;
-        throw new Error(httpStatusError(response.status, errorBody));
+        const error = new Error(httpStatusError(response.status, errorBody));
+        error.statusCode = response.status;
+        error.responseBody = errorBody;
+        error.responseJson = parsedBody;
+
+        const retryAfterHintMs = this.parseRetryAfterHeaderMs(
+          retryAfterHeader,
+        );
+        if (Number.isFinite(retryAfterHintMs)) {
+          error.retryAfterMs = retryAfterHintMs;
+        }
+        if (Number.isFinite(parsedBody?.retryAfterMs)) {
+          error.retryAfterMs = Number.isFinite(error.retryAfterMs) ?
+            Math.max(error.retryAfterMs, Math.floor(parsedBody.retryAfterMs)) :
+            Math.floor(parsedBody.retryAfterMs);
+        }
+        throw error;
       }
 
       return await response.json();
@@ -2687,6 +2914,32 @@ class NodeJoiningService extends EventEmitter {
 
       throw error;
     }
+  }
+
+  /**
+   * Parse Retry-After header into milliseconds when possible.
+   * Supports delta-seconds and HTTP date formats.
+   * @param {string|null} retryAfterHeader
+   * @return {number|null}
+   * @private
+   */
+  parseRetryAfterHeaderMs(retryAfterHeader) {
+    if (typeof retryAfterHeader !== TYPEOF.STRING ||
+        retryAfterHeader.length === NUM.ZERO) {
+      return null;
+    }
+
+    const deltaSeconds = Number(retryAfterHeader);
+    if (Number.isFinite(deltaSeconds) && deltaSeconds >= NUM.ZERO) {
+      return Math.floor(deltaSeconds * TIME_MS.SECOND);
+    }
+
+    const retryAtMs = Date.parse(retryAfterHeader);
+    if (!Number.isFinite(retryAtMs)) {
+      return null;
+    }
+
+    return Math.max(NUM.ZERO, retryAtMs - Date.now());
   }
 
   /**
@@ -3504,6 +3757,7 @@ class NodeJoiningService extends EventEmitter {
       systemCache: systemTableCache,
       messageRouter: this.messageRouter,
       nodeId: this.nodeId,
+      rebalanceCoordinator: this.rebalanceCoordinator,
     });
 
     const cdcIntegrationService = CDCIntegrationSetup.createForNormal({

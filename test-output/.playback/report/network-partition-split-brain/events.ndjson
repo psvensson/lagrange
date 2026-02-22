@@ -1,12 +1,11 @@
-{"timestamp":1771430781556,"type":"cluster.start","scope":"cluster","entityId":"cluster","details":{"scenarioName":"network-partition-split-brain"}}
-{"timestamp":1771430781556,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.creating","networkName":"ddb-test-net-reuse-local-5"}}
-{"timestamp":1771430781557,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.created","networkName":"ddb-test-net-reuse-local-5","networkId":"707ccef3437f40964922e4418f63e74b317923edbe6a89d10aa79bd25eb57003"}}
-{"timestamp":1771430781557,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.starting","nodeId":"7493b0ab-a054-5fad-a91b-5e331db29304"}}
-{"timestamp":1771430791873,"type":"node.created","scope":"node","entityId":"7493b0ab-a054-5fad-a91b-5e331db29304","details":{"role":"seed","ip":"172.19.0.2","containerId":"1412e206bff07a4ea07bff0a5e319c24dda9e6fe2a034536e560a009ac8142c7"}}
-{"timestamp":1771430791873,"type":"node.started","scope":"node","entityId":"7493b0ab-a054-5fad-a91b-5e331db29304","details":{"role":"seed"}}
-{"timestamp":1771430791873,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.bootstrap.waiting","nodeId":"7493b0ab-a054-5fad-a91b-5e331db29304"}}
-{"timestamp":1771430815574,"type":"capture.warning","scope":"capture","entityId":"stats-capture-failed-7493b0ab-a054-5fad-a91b-5e331db29304","details":{"message":"Failed to capture container stats for node 7493b0ab-a054-5fad-a91b-5e331db29304: (HTTP code 404) no such container - No such container: 1412e206bff07a4ea07bff0a5e319c24dda9e6fe2a034536e560a009ac8142c7 "}}
-{"timestamp":1771430822411,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.starting","nodeCount":1}}
-{"timestamp":1771430848130,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.complete","nodeCount":1}}
-{"timestamp":1771430848130,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.capture.finalizing"}}
-{"timestamp":1771430848130,"type":"cluster.stop","scope":"cluster","entityId":"cluster","details":{"clusterId":"ec4698df-a694-448f-b360-695094547c66","nodeCount":1}}
+{"timestamp":1771750514837,"type":"cluster.start","scope":"cluster","entityId":"cluster","details":{"scenarioName":"network-partition-split-brain"}}
+{"timestamp":1771750514837,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.creating","networkName":"ddb-test-net-reuse-local-5"}}
+{"timestamp":1771750514838,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.created","networkName":"ddb-test-net-reuse-local-5","networkId":"e3f57c2e28cf187458a24976f667ba0d33eaf00df9a599e6150e201ceed8d278"}}
+{"timestamp":1771750514838,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.starting","nodeId":"7493b0ab-a054-5fad-a91b-5e331db29304"}}
+{"timestamp":1771750525278,"type":"node.created","scope":"node","entityId":"7493b0ab-a054-5fad-a91b-5e331db29304","details":{"role":"seed","ip":"172.19.0.2","containerId":"3831c7320b60b0b0ee29397f87bbd34497d3b649910b6811adb83a77a19e1a25"}}
+{"timestamp":1771750525278,"type":"node.started","scope":"node","entityId":"7493b0ab-a054-5fad-a91b-5e331db29304","details":{"role":"seed"}}
+{"timestamp":1771750525278,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.bootstrap.waiting","nodeId":"7493b0ab-a054-5fad-a91b-5e331db29304","startupGateState":"seed_live"}}
+{"timestamp":1771750559267,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.starting","nodeCount":1}}
+{"timestamp":1771750563858,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.complete","nodeCount":1}}
+{"timestamp":1771750563858,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"teardown.capture.finalizing"}}
+{"timestamp":1771750563858,"type":"cluster.stop","scope":"cluster","entityId":"cluster","details":{"clusterId":"7630712a-392e-4518-bb32-b212e5c58a1b","nodeCount":1}}

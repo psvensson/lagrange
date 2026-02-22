@@ -1,8 +1,8 @@
 {
   "scenarioName": "examples-catalog",
-  "startedAt": 1771430682031,
-  "endedAt": 1771430781553,
-  "durationMs": 99522,
+  "startedAt": 1771750460780,
+  "endedAt": 1771750514805,
+  "durationMs": 54025,
   "files": {
     "events": "test-output/.playback/report/examples-catalog/events.ndjson",
     "samples": "test-output/.playback/report/examples-catalog/samples.ndjson",
@@ -11,124 +11,9 @@
     "viewer": "test-output/.playback/report/examples-catalog/playback-viewer.html"
   },
   "counts": {
-    "events": 14,
-    "samples": 30,
+    "events": 11,
+    "samples": 39,
     "snapshots": 0
   },
-  "warnings": [
-    {
-      "code": "stats-capture-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
-      "message": "Failed to capture container stats for node 7493b0ab-a054-5fad-a91b-5e331db29304: (HTTP code 404) no such container - No such container: c633340cdbd061cd74b259625ddee2bb89042a6e0cf8b386fbbca8c74085b44e ",
-      "timestamp": 1771430716051,
-      "details": null
-    },
-    {
-      "code": "service-query-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
-      "message": "Failed to query services on node 7493b0ab-a054-5fad-a91b-5e331db29304: Admin API query connection closed for node 7493b0ab-a054-5fad-a91b-5e331db29304",
-      "timestamp": 1771430781553,
-      "details": {
-        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
-        "error": "Admin API query connection closed for node 7493b0ab-a054-5fad-a91b-5e331db29304",
-        "reachability": {
-          "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
-          "timestamp": 1771430715049,
-          "reachable": true,
-          "adminReady": true,
-          "reachableBy": "admin_ws",
-          "bootstrapHealth": {
-            "attempted": true,
-            "ok": false,
-            "statusCode": -1,
-            "error": "http_status_-1",
-            "url": "http://172.19.0.2:8080/health",
-            "endpoint": null,
-            "query": null
-          },
-          "adminHealth": {
-            "attempted": true,
-            "ok": false,
-            "statusCode": -1,
-            "error": "http_status_-1",
-            "url": "http://172.19.0.2:8081/health",
-            "endpoint": null,
-            "query": null
-          },
-          "adminWs": {
-            "attempted": true,
-            "ok": true,
-            "statusCode": null,
-            "error": null,
-            "url": null,
-            "endpoint": "ws://172.19.0.2:8081/api/admin/stream",
-            "query": null
-          },
-          "sqlProbe": {
-            "attempted": false,
-            "ok": false,
-            "statusCode": null,
-            "error": null,
-            "url": null,
-            "endpoint": null,
-            "query": "SELECT node_id FROM nodes LIMIT 1"
-          },
-          "lastError": null
-        }
-      }
-    },
-    {
-      "code": "topology-capture-failed",
-      "message": "Failed to capture topology snapshot: Admin API query connection closed for node 7493b0ab-a054-5fad-a91b-5e331db29304",
-      "timestamp": 1771430781553,
-      "details": {
-        "anchorNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
-        "error": "Admin API query connection closed for node 7493b0ab-a054-5fad-a91b-5e331db29304",
-        "reachability": [
-          {
-            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
-            "timestamp": 1771430715049,
-            "reachable": true,
-            "adminReady": true,
-            "reachableBy": "admin_ws",
-            "bootstrapHealth": {
-              "attempted": true,
-              "ok": false,
-              "statusCode": -1,
-              "error": "http_status_-1",
-              "url": "http://172.19.0.2:8080/health",
-              "endpoint": null,
-              "query": null
-            },
-            "adminHealth": {
-              "attempted": true,
-              "ok": false,
-              "statusCode": -1,
-              "error": "http_status_-1",
-              "url": "http://172.19.0.2:8081/health",
-              "endpoint": null,
-              "query": null
-            },
-            "adminWs": {
-              "attempted": true,
-              "ok": true,
-              "statusCode": null,
-              "error": null,
-              "url": null,
-              "endpoint": "ws://172.19.0.2:8081/api/admin/stream",
-              "query": null
-            },
-            "sqlProbe": {
-              "attempted": false,
-              "ok": false,
-              "statusCode": null,
-              "error": null,
-              "url": null,
-              "endpoint": null,
-              "query": "SELECT node_id FROM nodes LIMIT 1"
-            },
-            "lastError": null
-          }
-        ]
-      }
-    }
-  ]
+  "warnings": []
 }

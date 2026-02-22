@@ -242,8 +242,10 @@ class LoadRun {
     this._nextDispatchAtMs = null;
     this._schedulingStopped = false;
     this._durationTimeoutId = null;
+    this._drainTimerId = null;
     this._completePromise = null;
     this._resolveComplete = null;
+    this._completedMetrics = null;
   }
 
   /**
@@ -356,6 +358,9 @@ class LoadRun {
    * @param {string} sql
    */
   async _executeWithFailover(sql) {
+    if (this._cancelled || this._completedMetrics) {
+      return;
+    }
     const startTs = Date.now();
     const nodeCount = this._availableNodes.length;
     if (nodeCount === ZERO) {
@@ -368,20 +373,32 @@ class LoadRun {
       (this._nextNodeIndex + ONE) % nodeCount;
 
     for (let attempt = ZERO; attempt < nodeCount; attempt++) {
+      if (this._cancelled || this._completedMetrics) {
+        return;
+      }
       const nodeIndex = (startIndex + attempt) % nodeCount;
       const node = this._availableNodes[nodeIndex];
       try {
         await node.query(sql);
+        if (this._cancelled || this._completedMetrics) {
+          return;
+        }
         const latency = Date.now() - startTs;
         this._latencies.push(latency);
         this._successCount++;
         return;
       } catch (err) {
+        if (this._cancelled || this._completedMetrics) {
+          return;
+        }
         this._errorCount++;
         this._captureErrorMessage(err);
       }
     }
 
+    if (this._cancelled || this._completedMetrics) {
+      return;
+    }
     this._failedCount++;
   }
 
@@ -405,20 +422,74 @@ class LoadRun {
   /**
    * Finish the load run.
    */
-  _finish() {
+  _finish(force = false) {
+    if (this._completedMetrics) {
+      return;
+    }
     this._clearDispatchTimer();
     if (this._durationTimeoutId !== null) {
       clearTimeout(this._durationTimeoutId);
       this._durationTimeoutId = null;
     }
-    if (this._inFlight > ZERO) {
-      setTimeout(() => this._finish(), DRAIN_WAIT_MS);
+    if (!force && this._inFlight > ZERO) {
+      this._scheduleDrainCheck();
       return;
     }
+
+    this._clearDrainTimer();
+    this._completedMetrics = this._computeCurrentMetrics();
+
     if (this._resolveComplete) {
-      this._resolveComplete(this.getMetrics());
+      this._resolveComplete(this._completedMetrics);
       this._resolveComplete = null;
     }
+  }
+
+  /**
+   * Schedule the next in-flight drain check.
+   * @private
+   */
+  _scheduleDrainCheck() {
+    if (this._drainTimerId !== null) {
+      return;
+    }
+    this._drainTimerId = setTimeout(() => {
+      this._drainTimerId = null;
+      this._finish();
+    }, DRAIN_WAIT_MS);
+    if (typeof this._drainTimerId.unref === 'function') {
+      this._drainTimerId.unref();
+    }
+  }
+
+  /**
+   * Clear pending in-flight drain checks.
+   * @private
+   */
+  _clearDrainTimer() {
+    if (this._drainTimerId !== null) {
+      clearTimeout(this._drainTimerId);
+      this._drainTimerId = null;
+    }
+  }
+
+  /**
+   * Build current metrics snapshot.
+   * @returns {Object}
+   * @private
+   */
+  _computeCurrentMetrics() {
+    const elapsed = this._startTime ?
+      Date.now() - this._startTime :
+      ZERO;
+    return computeMetrics(
+      this._latencies,
+      this._successCount,
+      this._failedCount,
+      this._errorCount,
+      elapsed,
+      this._distinctErrors,
+    );
   }
 
   /**
@@ -437,17 +508,10 @@ class LoadRun {
    * @returns {Object} Metrics
    */
   getMetrics() {
-    const elapsed = this._startTime ?
-      Date.now() - this._startTime :
-      ZERO;
-    return computeMetrics(
-      this._latencies,
-      this._successCount,
-      this._failedCount,
-      this._errorCount,
-      elapsed,
-      this._distinctErrors,
-    );
+    if (this._completedMetrics) {
+      return this._completedMetrics;
+    }
+    return this._computeCurrentMetrics();
   }
 
   /**
@@ -456,7 +520,7 @@ class LoadRun {
   cancel() {
     this._cancelled = true;
     this._schedulingStopped = true;
-    this._finish();
+    this._finish(true);
   }
 }
 

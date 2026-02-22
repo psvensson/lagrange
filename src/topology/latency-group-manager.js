@@ -782,7 +782,21 @@ class LatencyGroupManager extends EventEmitter {
     if (typeof hasFn !== TYPEOF.FUNCTION) {
       return false;
     }
-    return hasFn.call(this.systemTableCache, TABLES.LATENCY_GROUPS, groupId);
+    const hasResult = hasFn.call(
+      this.systemTableCache,
+      TABLES.LATENCY_GROUPS,
+      groupId,
+    );
+
+    // Some runtime cache implementations (for example proxy-backed caches)
+    // expose async `has()` methods that return a Promise. `buildGroupId()` is
+    // synchronous and cannot await here, so treat async responses as
+    // non-colliding to avoid blocking in a synchronous retry loop.
+    if (hasResult && typeof hasResult.then === TYPEOF.FUNCTION) {
+      return false;
+    }
+
+    return Boolean(hasResult);
   }
 
   /**

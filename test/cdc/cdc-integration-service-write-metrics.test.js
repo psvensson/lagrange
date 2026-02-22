@@ -38,6 +38,14 @@ function createMockSqlEngine() {
   };
 }
 
+function createFailingSqlEngine() {
+  return {
+    async executeQuery() {
+      return {success: false, error: 'forced write failure'};
+    },
+  };
+}
+
 function createService(sqlEngine) {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
@@ -53,6 +61,16 @@ function collectInfoCalls(service) {
   service.logger.info = function(tag, data) {
     calls.push({tag, data});
     return originalInfo(tag, data);
+  };
+  return calls;
+}
+
+function collectErrorCalls(service) {
+  const calls = [];
+  const originalError = service.logger.error.bind(service.logger);
+  service.logger.error = function(tag, data) {
+    calls.push({tag, data});
+    return originalError(tag, data);
   };
   return calls;
 }
@@ -273,6 +291,47 @@ test('insertSystemTableRow does not emit metrics.cdc.write for logs table',
       (c) => c.tag === METRICS_LOG_TAG.CDC_WRITE,
     );
     t.notOk(metric, 'no metrics.cdc.write for logs table inserts');
+    t.end();
+  });
+
+test('insertSystemTableRow suppresses error logs for logs table write failures',
+  async (t) => {
+    const service = createService(createFailingSqlEngine());
+    const errorCalls = collectErrorCalls(service);
+
+    try {
+      await service.insertSystemTableRow(
+        SystemTableName.LOGS, makeLogData(),
+      );
+      t.fail('insert should fail when SQL engine reports failure');
+    } catch (error) {
+      t.match(error.message, /forced write failure/,
+        'should surface underlying write failure');
+    }
+
+    t.equal(errorCalls.length, 0,
+      'should not emit logger error for logs table write failures');
+    t.end();
+  });
+
+test('insertSystemTableRow logs errors for non-logs table write failures',
+  async (t) => {
+    const service = createService(createFailingSqlEngine());
+    const errorCalls = collectErrorCalls(service);
+
+    try {
+      await service.insertSystemTableRow(
+        SystemTableName.SERVICES, makeServiceData(),
+      );
+      t.fail('insert should fail when SQL engine reports failure');
+    } catch (error) {
+      t.match(error.message, /forced write failure/,
+        'should surface underlying write failure');
+    }
+
+    t.ok(errorCalls.length > 0, 'should emit logger error for non-logs tables');
+    t.match(errorCalls[0].tag, /Failed to insert/,
+      'should emit standard insert failure log message');
     t.end();
   });
 

@@ -1,0 +1,164 @@
+{
+  "timestamp": "2026-02-22T09:11:55.367Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 69352
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 1,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 69352,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-22T09:01:30.157Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/postgres-baseline-size3-fastlocal-diagnose-20260222T090012Z.report.json",
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 73285,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": -3933,
+          "durationRatio": -0.05366718973869141,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 69352,
+      "clusterSize": 3,
+      "startedAt": "2026-02-22T09:10:45.328Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Seed node bootstrap API did not become join-ready within 60000ms (attempts=78, lastStatus=-1, lastState=unknown, lastReasons=none, stableWindowMs=10000, elapsedMs=69205, statusCounts=-1:5, 503:73, reasonCounts=BOOTSTRAP_PHASE_INCOMPLETE:73, SQL_ENGINE_UNAVAILABLE:73, LEADER_METADATA_INCOMPLETE:73)",
+      "stackTrace": "Error: Seed node bootstrap API did not become join-ready within 60000ms (attempts=78, lastStatus=-1, lastState=unknown, lastReasons=none, stableWindowMs=10000, elapsedMs=69205, statusCounts=-1:5, 503:73, reasonCounts=BOOTSTRAP_PHASE_INCOMPLETE:73, SQL_ENGINE_UNAVAILABLE:73, LEADER_METADATA_INCOMPLETE:73)\n    at Cluster._waitForBootstrapApi (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:2260:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async StartupGate.waitForSeedJoinReady (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1113:5)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster.js:1372:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:880:7)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1419:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1771751445330,
+        "endedAt": 1771751515361,
+        "durationMs": 70031,
+        "files": {
+          "events": "test-output/.playback/postgres-baseline-size3-fastlocal-logsfix-20260222T091045Z/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/.playback/postgres-baseline-size3-fastlocal-logsfix-20260222T091045Z/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/.playback/postgres-baseline-size3-fastlocal-logsfix-20260222T091045Z/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/.playback/postgres-baseline-size3-fastlocal-logsfix-20260222T091045Z/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/.playback/postgres-baseline-size3-fastlocal-logsfix-20260222T091045Z/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 14,
+          "samples": 69,
+          "snapshots": 0
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": true,
+    "status": "skipped",
+    "reason": "baseline-missing",
+    "settings": {
+      "enabled": true,
+      "maxThroughputRegressionRatio": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|default"
+      }
+    ],
+    "comparisons": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}
