@@ -16,6 +16,7 @@ const ADMIN_ROUTE = Object.freeze({
   TEST_RUN_STOP: '/api/admin/test-runs/:runId/stop',
   TEST_RUN_STREAM: '/api/admin/test-runs/:runId/stream',
   SERVICE_DIAGNOSTICS: '/api/admin/diagnostics/services',
+  CONTROL_SNAPSHOT: '/api/admin/control-snapshot',
   DEBUG_SESSIONS: '/api/admin/debug/sessions',
   DEBUG_SESSION_BY_ID: '/api/admin/debug/sessions/:sessionId',
   DEBUG_SESSION_ATTACH: '/api/admin/debug/sessions/:sessionId/attach',
@@ -194,6 +195,10 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
   SERVICE_DISPATCH_OPERATION_UNSUPPORTED:
     'Unsupported admin service-dispatch operation',
   SYSTEM_CACHE_EMPTY: 'System table cache is empty',
+  CONTROL_SNAPSHOT_SCOPE_UNSUPPORTED:
+    'Control snapshot scope must be "local"',
+  CONTROL_SNAPSHOT_UNAVAILABLE:
+    'Control snapshot unavailable because system cache is not configured',
   LIVE_QUERY_MANAGER_UNAVAILABLE:
     'Live query manager not available',
   LIVE_QUERY_MISSING_SUBSCRIPTION_ID:
@@ -265,6 +270,19 @@ const ADMIN_QUERY_RESULT = Object.freeze({
   AFFECTED_ROWS_DEFAULT: NUM.ZERO,
 });
 
+const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
+  QUERY_SQL: 'SELECT * FROM control_snapshot_local()',
+  QUERY_SCOPE_KEY: 'scope',
+  QUERY_SCOPE_LOCAL: 'local',
+  SCHEMA_VERSION: 1,
+  TABLE_NAME: 'control_snapshot_local',
+  IN_FLIGHT_EXCLUDED_STATUSES: Object.freeze([
+    'active',
+    'removed',
+    'failed',
+  ]),
+});
+
 export {
   ADMIN_CONTENT_TYPE,
   ADMIN_CONFIG_KEY,
@@ -283,6 +301,7 @@ export {
   ADMIN_MESSAGE_TYPE,
   ADMIN_HEADER,
   ADMIN_QUERY_RESULT,
+  ADMIN_CONTROL_SNAPSHOT,
   ADMIN_ROUTE,
   ADMIN_STATUS,
   ADMIN_SUBSYSTEM,

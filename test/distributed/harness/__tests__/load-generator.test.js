@@ -306,6 +306,165 @@ test('node failover records failure and retries', async () => {
   }
 });
 
+test('circuit breaker suppresses retries on repeatedly failing nodes', async () => {
+  let failingNodeCalls = ZERO;
+  let healthyNodeCalls = ZERO;
+  const nodes = [
+    {
+      id: 'flaky-node',
+      async query(_sql) {
+        failingNodeCalls++;
+        throw new Error('flaky node unavailable');
+      },
+    },
+    {
+      id: 'healthy-node',
+      async query(_sql) {
+        healthyNodeCalls++;
+        return {rows: []};
+      },
+    },
+  ];
+
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 120,
+    duration: 200,
+    nodeFailureThreshold: 2,
+    nodeFailureCooldownMs: 1000,
+  });
+  const run = gen.start();
+  try {
+    const metrics = await run.waitComplete();
+    assert.ok(metrics.success > ZERO, 'expected successful operations');
+    assert.ok(metrics.errors > ZERO, 'expected at least one failed attempt');
+    assert.ok(
+      failingNodeCalls <= 6,
+      `expected failing node calls <= 6, got ${failingNodeCalls}`,
+    );
+    assert.ok(
+      healthyNodeCalls > failingNodeCalls,
+      'expected healthy node to handle most load after circuit open',
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
+test('circuit breaker allows node recovery after cooldown', async () => {
+  const recoverAfterMs = 80;
+  const startMs = Date.now();
+  let recoveredSuccessCalls = ZERO;
+  const nodes = [
+    {
+      id: 'recovering-node',
+      async query(_sql) {
+        if (Date.now() - startMs < recoverAfterMs) {
+          throw new Error('recovering node warming');
+        }
+        recoveredSuccessCalls++;
+        return {rows: []};
+      },
+    },
+    createMockNode('always-healthy'),
+  ];
+
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 100,
+    duration: 300,
+    nodeFailureThreshold: 1,
+    nodeFailureCooldownMs: 20,
+  });
+  const run = gen.start();
+  try {
+    const metrics = await run.waitComplete();
+    assert.ok(metrics.success > ZERO, 'expected successful operations');
+    assert.ok(
+      recoveredSuccessCalls > ZERO,
+      'expected recovering node to rejoin load after cooldown',
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
+test('load path uses queryWithTimeout when node supports timeout-aware query',
+  async () => {
+    const capturedTimeouts = [];
+    const nodes = [{
+      id: 'n1',
+      async queryWithTimeout(_sql, _params, options = {}) {
+        capturedTimeouts.push(options.timeoutMs);
+        return {rows: []};
+      },
+      async query(_sql) {
+        throw new Error('query() should not be used when queryWithTimeout exists');
+      },
+    }];
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 80,
+      duration: 100,
+      queryTimeoutMs: 321,
+    });
+    const run = gen.start();
+    try {
+      await run.waitComplete();
+      assert.ok(
+        capturedTimeouts.length > ZERO,
+        'expected at least one timeout-aware load query',
+      );
+      assert.ok(
+        capturedTimeouts.every((timeoutMs) => timeoutMs === 321),
+        'expected all timeout-aware queries to use configured timeout',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('per-node in-flight bulkhead limits stalled node fanout', async () => {
+  let stalledCalls = ZERO;
+  let healthyCalls = ZERO;
+  const nodes = [
+    {
+      id: 'stalled-node',
+      async query(_sql) {
+        stalledCalls++;
+        return new Promise(() => {});
+      },
+    },
+    {
+      id: 'healthy-node',
+      async query(_sql) {
+        healthyCalls++;
+        return {rows: []};
+      },
+    },
+  ];
+
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 500,
+    duration: 200,
+    maxInFlight: 20,
+    nodeMaxInFlight: 2,
+  });
+  const run = gen.start();
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    run.cancel();
+    await run.waitComplete();
+    assert.ok(
+      stalledCalls <= 2,
+      `expected stalled node calls <= 2, got ${stalledCalls}`,
+    );
+    assert.ok(
+      healthyCalls > stalledCalls,
+      'expected healthy node to receive more traffic once stalled node bulkhead is full',
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
 test('cancel stops the load run immediately', async () => {
   const nodes = [createMockNode('n1')];
   const gen = new LoadGenerator(nodes, {

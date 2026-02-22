@@ -21,6 +21,9 @@ const IN_FLIGHT_PER_NODE = 2;
 const DRAIN_WAIT_MS = 10;
 const MAX_DISPATCHES_PER_TICK = 64;
 const MAX_DISTINCT_ERROR_MESSAGES = 10;
+const NODE_FAILURE_THRESHOLD_DEFAULT = 3;
+const NODE_FAILURE_COOLDOWN_MS_DEFAULT = 5000;
+const QUERY_TIMEOUT_MS_DEFAULT = 2000;
 
 const LOAD_TABLE_NAME = 'logs';
 const LOAD_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
@@ -207,6 +210,14 @@ class LoadRun {
    * @param {number} [options.maxInFlight] - Optional in-flight cap
    * @param {string} [options.tableName]
    * @param {string} [options.workloadProfile]
+   * @param {number} [options.nodeFailureThreshold] - Consecutive
+   *   failures before a node is temporarily ejected.
+   * @param {number} [options.nodeFailureCooldownMs] - Circuit-breaker
+   *   cooldown duration.
+   * @param {number} [options.queryTimeoutMs] - Load query timeout
+   *   for timeout-aware node handles.
+   * @param {number} [options.nodeMaxInFlight] - Per-node in-flight
+   *   cap to prevent one node from monopolizing global concurrency.
    */
   constructor(nodes, options) {
     this._nodes = [...nodes];
@@ -219,6 +230,21 @@ class LoadRun {
       options.workloadProfile || WORKLOAD_PROFILE_DEFAULT;
     this._maxInFlight = options.maxInFlight ||
       this._availableNodes.length * IN_FLIGHT_PER_NODE;
+    this._nodeFailureThreshold =
+      Number.isInteger(options.nodeFailureThreshold) &&
+      options.nodeFailureThreshold > ZERO ?
+        options.nodeFailureThreshold :
+        NODE_FAILURE_THRESHOLD_DEFAULT;
+    this._nodeFailureCooldownMs =
+      Number.isInteger(options.nodeFailureCooldownMs) &&
+      options.nodeFailureCooldownMs > ZERO ?
+        options.nodeFailureCooldownMs :
+        NODE_FAILURE_COOLDOWN_MS_DEFAULT;
+    this._queryTimeoutMs =
+      Number.isInteger(options.queryTimeoutMs) &&
+      options.queryTimeoutMs > ZERO ?
+        options.queryTimeoutMs :
+        QUERY_TIMEOUT_MS_DEFAULT;
     this._dispatchIntervalMs = this._opsPerSec > ZERO ?
       MS_PER_SECOND / this._opsPerSec :
       MS_PER_SECOND;
@@ -246,6 +272,28 @@ class LoadRun {
     this._completePromise = null;
     this._resolveComplete = null;
     this._completedMetrics = null;
+    this._nodeHealthKeys = [];
+    this._nodeHealthByKey = new Map();
+    this._nodeInFlightByKey = new Map();
+    const derivedNodeMaxInFlight = this._availableNodes.length > ZERO ?
+      Math.max(ONE, Math.ceil(this._maxInFlight / this._availableNodes.length)) :
+      ONE;
+    this._nodeMaxInFlight =
+      Number.isInteger(options.nodeMaxInFlight) &&
+      options.nodeMaxInFlight > ZERO ?
+        options.nodeMaxInFlight :
+        derivedNodeMaxInFlight;
+    for (let index = ZERO; index < this._availableNodes.length; index++) {
+      const node = this._availableNodes[index];
+      const nodeId = String(node?.id || 'unknown');
+      const key = 'node-' + String(index) + '-' + nodeId;
+      this._nodeHealthKeys.push(key);
+      this._nodeHealthByKey.set(key, {
+        consecutiveFailures: ZERO,
+        openUntilMs: ZERO,
+      });
+      this._nodeInFlightByKey.set(key, ZERO);
+    }
   }
 
   /**
@@ -322,6 +370,7 @@ class LoadRun {
       now >= this._nextDispatchAtMs &&
       this._inFlight < this._maxInFlight &&
       this._counter < this._targetOperationCount &&
+      this._hasDispatchCapacity(now) &&
       dispatchedThisTick < MAX_DISPATCHES_PER_TICK
     ) {
       const opIndex = this._counter % this._operations.length;
@@ -368,21 +417,37 @@ class LoadRun {
       return;
     }
 
-    const startIndex = this._nextNodeIndex;
+    let candidates = this._buildAvailableNodeCandidates(Date.now());
+    if (candidates.length === ZERO) {
+      candidates = this._buildRecoveryNodeCandidate(Date.now());
+    }
+    if (candidates.length === ZERO) {
+      return;
+    }
+
+    const startIndex = this._nextNodeIndex % candidates.length;
     this._nextNodeIndex =
       (this._nextNodeIndex + ONE) % nodeCount;
+    let attemptedNodes = false;
 
-    for (let attempt = ZERO; attempt < nodeCount; attempt++) {
+    for (let attempt = ZERO; attempt < candidates.length; attempt++) {
       if (this._cancelled || this._completedMetrics) {
         return;
       }
-      const nodeIndex = (startIndex + attempt) % nodeCount;
-      const node = this._availableNodes[nodeIndex];
+      const candidateIndex = (startIndex + attempt) % candidates.length;
+      const candidate = candidates[candidateIndex];
+      const node = candidate.node;
+      const nodeHealthKey = candidate.healthKey;
+      if (!this._tryAcquireNodeSlot(nodeHealthKey)) {
+        continue;
+      }
+      attemptedNodes = true;
       try {
-        await node.query(sql);
+        await this._queryNode(node, sql);
         if (this._cancelled || this._completedMetrics) {
           return;
         }
+        this._recordNodeSuccess(nodeHealthKey);
         const latency = Date.now() - startTs;
         this._latencies.push(latency);
         this._successCount++;
@@ -391,15 +456,130 @@ class LoadRun {
         if (this._cancelled || this._completedMetrics) {
           return;
         }
+        this._recordNodeFailure(nodeHealthKey);
         this._errorCount++;
         this._captureErrorMessage(err);
+      } finally {
+        this._releaseNodeSlot(nodeHealthKey);
       }
     }
 
     if (this._cancelled || this._completedMetrics) {
       return;
     }
-    this._failedCount++;
+    if (attemptedNodes) {
+      this._failedCount++;
+    }
+  }
+
+  _queryNode(node, sql) {
+    if (typeof node?.queryWithTimeout === 'function') {
+      return node.queryWithTimeout(sql, [], {
+        timeoutMs: this._queryTimeoutMs,
+      });
+    }
+    return node.query(sql);
+  }
+
+  _hasDispatchCapacity(nowMs) {
+    if (this._availableNodes.length === ZERO) {
+      return false;
+    }
+    if (this._buildAvailableNodeCandidates(nowMs).length > ZERO) {
+      return true;
+    }
+    return this._buildRecoveryNodeCandidate(nowMs).length > ZERO;
+  }
+
+  _buildAvailableNodeCandidates(nowMs) {
+    const candidates = [];
+    for (let index = ZERO; index < this._availableNodes.length; index++) {
+      const node = this._availableNodes[index];
+      const healthKey = this._nodeHealthKeys[index];
+      const state = this._nodeHealthByKey.get(healthKey);
+      if ((!state || state.openUntilMs <= nowMs) &&
+          this._getNodeInFlight(healthKey) < this._nodeMaxInFlight) {
+        candidates.push({
+          node,
+          healthKey,
+        });
+      }
+    }
+    return candidates;
+  }
+
+  _buildRecoveryNodeCandidate(nowMs) {
+    let selectedIndex = null;
+    let selectedOpenUntil = Number.POSITIVE_INFINITY;
+    for (let index = ZERO; index < this._availableNodes.length; index++) {
+      const healthKey = this._nodeHealthKeys[index];
+      const state = this._nodeHealthByKey.get(healthKey);
+      if (this._getNodeInFlight(healthKey) >= this._nodeMaxInFlight) {
+        continue;
+      }
+      const openUntil = Number(state?.openUntilMs || ZERO);
+      if (openUntil <= nowMs) {
+        return [{
+          node: this._availableNodes[index],
+          healthKey: this._nodeHealthKeys[index],
+        }];
+      }
+      if (openUntil < selectedOpenUntil) {
+        selectedOpenUntil = openUntil;
+        selectedIndex = index;
+      }
+    }
+    if (selectedIndex === null) {
+      return [];
+    }
+    return [{
+      node: this._availableNodes[selectedIndex],
+      healthKey: this._nodeHealthKeys[selectedIndex],
+    }];
+  }
+
+  _getNodeInFlight(healthKey) {
+    return Number(this._nodeInFlightByKey.get(healthKey) || ZERO);
+  }
+
+  _tryAcquireNodeSlot(healthKey) {
+    const current = this._getNodeInFlight(healthKey);
+    if (current >= this._nodeMaxInFlight) {
+      return false;
+    }
+    this._nodeInFlightByKey.set(healthKey, current + ONE);
+    return true;
+  }
+
+  _releaseNodeSlot(healthKey) {
+    const current = this._getNodeInFlight(healthKey);
+    if (current <= ZERO) {
+      this._nodeInFlightByKey.set(healthKey, ZERO);
+      return;
+    }
+    this._nodeInFlightByKey.set(healthKey, current - ONE);
+  }
+
+  _recordNodeSuccess(healthKey) {
+    const state = this._nodeHealthByKey.get(healthKey);
+    if (!state) {
+      return;
+    }
+    state.consecutiveFailures = ZERO;
+    state.openUntilMs = ZERO;
+  }
+
+  _recordNodeFailure(healthKey) {
+    const state = this._nodeHealthByKey.get(healthKey);
+    if (!state) {
+      return;
+    }
+    state.consecutiveFailures += ONE;
+    if (state.consecutiveFailures < this._nodeFailureThreshold) {
+      return;
+    }
+    state.consecutiveFailures = ZERO;
+    state.openUntilMs = Date.now() + this._nodeFailureCooldownMs;
   }
 
   /**
@@ -538,6 +718,14 @@ class LoadGenerator {
    * @param {number} [options.maxInFlight] - Optional in-flight cap
    * @param {string} [options.tableName] - Target table name
    * @param {string} [options.workloadProfile] - SQL workload profile
+   * @param {number} [options.nodeFailureThreshold] - Consecutive
+   *   failures before a node is temporarily ejected.
+   * @param {number} [options.nodeFailureCooldownMs] - Circuit-breaker
+   *   cooldown duration.
+   * @param {number} [options.queryTimeoutMs] - Load query timeout
+   *   for timeout-aware node handles.
+   * @param {number} [options.nodeMaxInFlight] - Per-node in-flight
+   *   cap to prevent one node from monopolizing global concurrency.
    */
   constructor(nodes, options = {}) {
     this._nodes = nodes;
@@ -556,6 +744,26 @@ class LoadGenerator {
       options.maxInFlight > ZERO ?
       options.maxInFlight :
       null;
+    this._nodeFailureThreshold =
+      Number.isInteger(options.nodeFailureThreshold) &&
+      options.nodeFailureThreshold > ZERO ?
+        options.nodeFailureThreshold :
+        NODE_FAILURE_THRESHOLD_DEFAULT;
+    this._nodeFailureCooldownMs =
+      Number.isInteger(options.nodeFailureCooldownMs) &&
+      options.nodeFailureCooldownMs > ZERO ?
+        options.nodeFailureCooldownMs :
+        NODE_FAILURE_COOLDOWN_MS_DEFAULT;
+    this._queryTimeoutMs =
+      Number.isInteger(options.queryTimeoutMs) &&
+      options.queryTimeoutMs > ZERO ?
+        options.queryTimeoutMs :
+        QUERY_TIMEOUT_MS_DEFAULT;
+    this._nodeMaxInFlight =
+      Number.isInteger(options.nodeMaxInFlight) &&
+      options.nodeMaxInFlight > ZERO ?
+        options.nodeMaxInFlight :
+        null;
     this._tableName = normalizeTableName(
       options.tableName,
       this._workloadProfile === WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
@@ -576,6 +784,12 @@ class LoadGenerator {
       operations: this._operations,
       tableName: this._tableName,
       workloadProfile: this._workloadProfile,
+      nodeFailureThreshold: this._nodeFailureThreshold,
+      nodeFailureCooldownMs: this._nodeFailureCooldownMs,
+      queryTimeoutMs: this._queryTimeoutMs,
+      ...(this._nodeMaxInFlight !== null ?
+        {nodeMaxInFlight: this._nodeMaxInFlight} :
+        {}),
       ...(this._maxInFlight !== null ?
         {maxInFlight: this._maxInFlight} :
         {}),

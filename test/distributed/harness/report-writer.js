@@ -14,6 +14,13 @@ const ZERO = 0;
 const ONE = 1;
 const STANDARD_SUMMARY_SIMILARITY_FALLBACK = 'default';
 const STANDARD_SUMMARY_BASELINE_ENGINE = 'postgres';
+const BENCHMARK_DETAILS_KEY_BENCHMARK = 'benchmark';
+const BENCHMARK_DETAILS_KEY_BASELINE = 'baseline';
+const BENCHMARK_DETAILS_KEY_COMPARISON = 'comparison';
+const BENCHMARK_DETAILS_KEY_VERIFICATION = 'verification';
+const BENCHMARK_DETAILS_KEY_POLICY = 'policy';
+const BENCHMARK_DETAILS_KEY_PHASE_TIMELINE = 'phaseTimeline';
+const BENCHMARK_DETAILS_KEY_CHANNEL_METRICS = 'channelMetrics';
 const CLUSTER_SIZE_PATH_REGEX = /(?:^|[^a-z0-9])size(\d+)(?:[^0-9]|$)/i;
 const WRITE_PATH_TOP_PHASE_LIMIT = 3;
 const WRITE_PATH_SUMMARY_PHASE_LIMIT = 5;
@@ -374,12 +381,40 @@ function buildOptimizationPriorities(scenarioEntry) {
   return deduplicated.slice(ZERO, MAX_OPTIMIZATION_ITEMS_PER_SCENARIO);
 }
 
-function resolveBenchmarkDetails(details) {
+function isBenchmarkDetailsShape(details) {
   if (!details || typeof details !== 'object') {
+    return false;
+  }
+  const hasBenchmarkEnvelope =
+    details[BENCHMARK_DETAILS_KEY_BENCHMARK] &&
+    details[BENCHMARK_DETAILS_KEY_BASELINE] &&
+    details[BENCHMARK_DETAILS_KEY_COMPARISON];
+  if (hasBenchmarkEnvelope) {
+    return true;
+  }
+  if (details[BENCHMARK_DETAILS_KEY_VERIFICATION] &&
+      details[BENCHMARK_DETAILS_KEY_POLICY]) {
+    return true;
+  }
+  if (Array.isArray(details[BENCHMARK_DETAILS_KEY_PHASE_TIMELINE]) &&
+      details[BENCHMARK_DETAILS_KEY_CHANNEL_METRICS] &&
+      typeof details[BENCHMARK_DETAILS_KEY_CHANNEL_METRICS] === 'object') {
+    return true;
+  }
+  return false;
+}
+
+function resolveBenchmarkDetails(details) {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
     return null;
   }
-  if (details.details && typeof details.details === 'object') {
+  if (details.details &&
+      typeof details.details === 'object' &&
+      !Array.isArray(details.details)) {
     return details.details;
+  }
+  if (isBenchmarkDetailsShape(details)) {
+    return details;
   }
   return null;
 }

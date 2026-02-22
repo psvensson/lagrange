@@ -225,6 +225,10 @@ const BENCHMARK_LOAD_DURATION = '30s';
 const BENCHMARK_LOAD_MAX_IN_FLIGHT = 128;
 const BENCHMARK_READY_TIMEOUT_MS = 30000;
 const BENCHMARK_READY_POLL_INTERVAL_MS = 500;
+const BENCHMARK_QUIESCENT_STABLE_WINDOW_MS = 2000;
+const BENCHMARK_LOAD_QUERY_TIMEOUT_MS = 2000;
+const BENCHMARK_CONSISTENCY_ASSERT_MAX_ATTEMPTS = 3;
+const BENCHMARK_CONSISTENCY_ASSERT_RETRY_DELAY_MS = 2000;
 const BENCHMARK_TABLE_NAME = 'benchmark_events';
 const BENCHMARK_REPLICATION_FACTOR = 3;
 const BENCHMARK_SYNC_REPLICA_ACKS = 1;
@@ -251,6 +255,10 @@ const BENCHMARK_DEFAULTS = Object.freeze({
   loadMaxInFlight: BENCHMARK_LOAD_MAX_IN_FLIGHT,
   readyTimeoutMs: BENCHMARK_READY_TIMEOUT_MS,
   readyPollIntervalMs: BENCHMARK_READY_POLL_INTERVAL_MS,
+  quiescentStableWindowMs: BENCHMARK_QUIESCENT_STABLE_WINDOW_MS,
+  loadQueryTimeoutMs: BENCHMARK_LOAD_QUERY_TIMEOUT_MS,
+  consistencyAssertMaxAttempts: BENCHMARK_CONSISTENCY_ASSERT_MAX_ATTEMPTS,
+  consistencyAssertRetryDelayMs: BENCHMARK_CONSISTENCY_ASSERT_RETRY_DELAY_MS,
   tableName: BENCHMARK_TABLE_NAME,
   replicationFactor: BENCHMARK_REPLICATION_FACTOR,
   syncReplicaAcks: BENCHMARK_SYNC_REPLICA_ACKS,
@@ -266,6 +274,308 @@ const BENCHMARK_GATE_DEFAULTS = Object.freeze({
   baselineProvider: BENCHMARK_REGRESSION_BASELINE_PROVIDER,
   failIfBaselineMissing: BENCHMARK_REGRESSION_FAIL_IF_BASELINE_MISSING,
   approvedMitigationId: BENCHMARK_REGRESSION_APPROVED_MITIGATION_ID,
+});
+
+// --- Node Client Channel Policies ---
+const NODE_CLIENT_CHANNEL_LOAD = 'load';
+const NODE_CLIENT_CHANNEL_CONTROL = 'control';
+const NODE_CLIENT_CHANNEL_PROBE = 'probe';
+const NODE_CLIENT_CHANNEL_SNAPSHOT = 'snapshot';
+
+const NODE_CLIENT_CHANNEL = Object.freeze({
+  LOAD: NODE_CLIENT_CHANNEL_LOAD,
+  CONTROL: NODE_CLIENT_CHANNEL_CONTROL,
+  PROBE: NODE_CLIENT_CHANNEL_PROBE,
+  SNAPSHOT: NODE_CLIENT_CHANNEL_SNAPSHOT,
+});
+
+const NODE_CLIENT_ERROR_CODE_TIMEOUT = 'timeout';
+const NODE_CLIENT_ERROR_CODE_OPERATION = 'operation_error';
+const NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN = 'circuit_open';
+const NODE_CLIENT_ERROR_CODE_BUDGET_EXHAUSTED = 'budget_exhausted';
+
+const NODE_CLIENT_ERROR_CODES = Object.freeze({
+  TIMEOUT: NODE_CLIENT_ERROR_CODE_TIMEOUT,
+  OPERATION: NODE_CLIENT_ERROR_CODE_OPERATION,
+  CIRCUIT_OPEN: NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN,
+  BUDGET_EXHAUSTED: NODE_CLIENT_ERROR_CODE_BUDGET_EXHAUSTED,
+});
+
+const NODE_CLIENT_TIMEOUT_CLASS_TIMEOUT = 'timeout';
+const NODE_CLIENT_TIMEOUT_CLASS_NON_TIMEOUT = 'non_timeout';
+const NODE_CLIENT_TIMEOUT_CLASS_NONE = 'none';
+
+const NODE_CLIENT_TIMEOUT_CLASS = Object.freeze({
+  TIMEOUT: NODE_CLIENT_TIMEOUT_CLASS_TIMEOUT,
+  NON_TIMEOUT: NODE_CLIENT_TIMEOUT_CLASS_NON_TIMEOUT,
+  NONE: NODE_CLIENT_TIMEOUT_CLASS_NONE,
+});
+
+const NODE_CLIENT_CONTROL_QUERY_TIMEOUT_MS = 15000;
+const NODE_CLIENT_PROBE_TIMEOUT_MS = 1000;
+const NODE_CLIENT_SNAPSHOT_TIMEOUT_MS = 2000;
+const NODE_CLIENT_LOAD_MAX_IN_FLIGHT_PER_NODE = 2;
+const NODE_CLIENT_CONTROL_MAX_IN_FLIGHT_PER_NODE = 4;
+const NODE_CLIENT_PROBE_MAX_IN_FLIGHT_PER_NODE = 2;
+const NODE_CLIENT_SNAPSHOT_MAX_IN_FLIGHT_PER_NODE = 2;
+const NODE_CLIENT_LOAD_RETRY_BUDGET = 0;
+const NODE_CLIENT_CONTROL_RETRY_BUDGET = 1;
+const NODE_CLIENT_PROBE_RETRY_BUDGET = 0;
+const NODE_CLIENT_SNAPSHOT_RETRY_BUDGET = 1;
+const NODE_CLIENT_LOAD_BREAKER_THRESHOLD = 1;
+const NODE_CLIENT_CONTROL_BREAKER_THRESHOLD = 3;
+const NODE_CLIENT_PROBE_BREAKER_THRESHOLD = 1;
+const NODE_CLIENT_SNAPSHOT_BREAKER_THRESHOLD = 2;
+const NODE_CLIENT_BREAKER_COOLDOWN_MS = 5000;
+const NODE_CLIENT_CONTROL_SNAPSHOT_SCHEMA_VERSION = 1;
+const NODE_CLIENT_CONTROL_SNAPSHOT_SQL = 'SELECT * FROM control_snapshot_local()';
+
+const NODE_CLIENT_DEFAULT_CHANNEL_POLICIES = Object.freeze({
+  [NODE_CLIENT_CHANNEL_LOAD]: Object.freeze({
+    timeoutMs: BENCHMARK_LOAD_QUERY_TIMEOUT_MS,
+    maxInFlightPerNode: NODE_CLIENT_LOAD_MAX_IN_FLIGHT_PER_NODE,
+    retryBudget: NODE_CLIENT_LOAD_RETRY_BUDGET,
+    circuitBreakerThreshold: NODE_CLIENT_LOAD_BREAKER_THRESHOLD,
+    cooldownMs: NODE_CLIENT_BREAKER_COOLDOWN_MS,
+  }),
+  [NODE_CLIENT_CHANNEL_CONTROL]: Object.freeze({
+    timeoutMs: NODE_CLIENT_CONTROL_QUERY_TIMEOUT_MS,
+    maxInFlightPerNode: NODE_CLIENT_CONTROL_MAX_IN_FLIGHT_PER_NODE,
+    retryBudget: NODE_CLIENT_CONTROL_RETRY_BUDGET,
+    circuitBreakerThreshold: NODE_CLIENT_CONTROL_BREAKER_THRESHOLD,
+    cooldownMs: NODE_CLIENT_BREAKER_COOLDOWN_MS,
+  }),
+  [NODE_CLIENT_CHANNEL_PROBE]: Object.freeze({
+    timeoutMs: NODE_CLIENT_PROBE_TIMEOUT_MS,
+    maxInFlightPerNode: NODE_CLIENT_PROBE_MAX_IN_FLIGHT_PER_NODE,
+    retryBudget: NODE_CLIENT_PROBE_RETRY_BUDGET,
+    circuitBreakerThreshold: NODE_CLIENT_PROBE_BREAKER_THRESHOLD,
+    cooldownMs: NODE_CLIENT_BREAKER_COOLDOWN_MS,
+  }),
+  [NODE_CLIENT_CHANNEL_SNAPSHOT]: Object.freeze({
+    timeoutMs: NODE_CLIENT_SNAPSHOT_TIMEOUT_MS,
+    maxInFlightPerNode: NODE_CLIENT_SNAPSHOT_MAX_IN_FLIGHT_PER_NODE,
+    retryBudget: NODE_CLIENT_SNAPSHOT_RETRY_BUDGET,
+    circuitBreakerThreshold: NODE_CLIENT_SNAPSHOT_BREAKER_THRESHOLD,
+    cooldownMs: NODE_CLIENT_BREAKER_COOLDOWN_MS,
+  }),
+});
+
+const NODE_CLIENT_BENCHMARK_LOAD_TIMEOUT_KEY = 'loadQueryTimeoutMs';
+const NODE_CLIENT_BENCHMARK_CONTROL_TIMEOUT_KEY = 'controlQueryTimeoutMs';
+const NODE_CLIENT_BENCHMARK_LOAD_IN_FLIGHT_KEY = 'loadNodeMaxInFlight';
+const NODE_CLIENT_BENCHMARK_BREAKER_THRESHOLD_KEY = 'nodeFailureThreshold';
+const NODE_CLIENT_BENCHMARK_BREAKER_COOLDOWN_KEY = 'nodeFailureCooldownMs';
+const NODE_CLIENT_CHANNEL_POLICY_KEYS = Object.freeze({
+  timeoutMs: 'timeoutMs',
+  maxInFlightPerNode: 'maxInFlightPerNode',
+  retryBudget: 'retryBudget',
+  circuitBreakerThreshold: 'circuitBreakerThreshold',
+  cooldownMs: 'cooldownMs',
+});
+
+function isPositiveInteger(value) {
+  return Number.isInteger(value) && value > 0;
+}
+
+function isNonNegativeInteger(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
+function cloneNodeClientPolicies(sourcePolicies) {
+  const cloned = {};
+  const channels = Object.values(NODE_CLIENT_CHANNEL);
+  for (const channel of channels) {
+    cloned[channel] = {
+      ...sourcePolicies[channel],
+    };
+  }
+  return cloned;
+}
+
+function applyNodeClientPolicyOverrides(targetPolicies, overridePolicies) {
+  if (!overridePolicies || typeof overridePolicies !== 'object') {
+    return;
+  }
+  const channels = Object.values(NODE_CLIENT_CHANNEL);
+  for (const channel of channels) {
+    const channelOverride = overridePolicies[channel];
+    if (!channelOverride || typeof channelOverride !== 'object') {
+      continue;
+    }
+    const policy = targetPolicies[channel];
+    if (isPositiveInteger(channelOverride.timeoutMs)) {
+      policy[NODE_CLIENT_CHANNEL_POLICY_KEYS.timeoutMs] =
+        channelOverride.timeoutMs;
+    }
+    if (isPositiveInteger(channelOverride.maxInFlightPerNode)) {
+      policy[NODE_CLIENT_CHANNEL_POLICY_KEYS.maxInFlightPerNode] =
+        channelOverride.maxInFlightPerNode;
+    }
+    if (isNonNegativeInteger(channelOverride.retryBudget)) {
+      policy[NODE_CLIENT_CHANNEL_POLICY_KEYS.retryBudget] =
+        channelOverride.retryBudget;
+    }
+    if (isPositiveInteger(channelOverride.circuitBreakerThreshold)) {
+      policy[NODE_CLIENT_CHANNEL_POLICY_KEYS.circuitBreakerThreshold] =
+        channelOverride.circuitBreakerThreshold;
+    }
+    if (isPositiveInteger(channelOverride.cooldownMs)) {
+      policy[NODE_CLIENT_CHANNEL_POLICY_KEYS.cooldownMs] =
+        channelOverride.cooldownMs;
+    }
+  }
+}
+
+function applyNodeClientBenchmarkOverrides(targetPolicies, benchmarkConfig) {
+  if (!benchmarkConfig || typeof benchmarkConfig !== 'object') {
+    return;
+  }
+
+  const loadTimeoutMs = benchmarkConfig[NODE_CLIENT_BENCHMARK_LOAD_TIMEOUT_KEY];
+  if (isPositiveInteger(loadTimeoutMs)) {
+    targetPolicies[NODE_CLIENT_CHANNEL_LOAD].timeoutMs = loadTimeoutMs;
+  }
+
+  const controlTimeoutMs =
+    benchmarkConfig[NODE_CLIENT_BENCHMARK_CONTROL_TIMEOUT_KEY];
+  if (isPositiveInteger(controlTimeoutMs)) {
+    targetPolicies[NODE_CLIENT_CHANNEL_CONTROL].timeoutMs = controlTimeoutMs;
+  }
+
+  const loadInFlight = benchmarkConfig[NODE_CLIENT_BENCHMARK_LOAD_IN_FLIGHT_KEY];
+  if (isPositiveInteger(loadInFlight)) {
+    targetPolicies[NODE_CLIENT_CHANNEL_LOAD].maxInFlightPerNode = loadInFlight;
+  }
+
+  const breakerThreshold =
+    benchmarkConfig[NODE_CLIENT_BENCHMARK_BREAKER_THRESHOLD_KEY];
+  if (isPositiveInteger(breakerThreshold)) {
+    targetPolicies[NODE_CLIENT_CHANNEL_LOAD].circuitBreakerThreshold =
+      breakerThreshold;
+  }
+
+  const breakerCooldownMs =
+    benchmarkConfig[NODE_CLIENT_BENCHMARK_BREAKER_COOLDOWN_KEY];
+  if (isPositiveInteger(breakerCooldownMs)) {
+    targetPolicies[NODE_CLIENT_CHANNEL_LOAD].cooldownMs = breakerCooldownMs;
+  }
+}
+
+function resolveNodeClientChannelPolicies(options = {}) {
+  const resolved = cloneNodeClientPolicies(NODE_CLIENT_DEFAULT_CHANNEL_POLICIES);
+  applyNodeClientPolicyOverrides(resolved, options.channelPolicies);
+  applyNodeClientBenchmarkOverrides(resolved, options.benchmarkConfig);
+
+  return Object.freeze({
+    [NODE_CLIENT_CHANNEL_LOAD]: Object.freeze({
+      ...resolved[NODE_CLIENT_CHANNEL_LOAD],
+    }),
+    [NODE_CLIENT_CHANNEL_CONTROL]: Object.freeze({
+      ...resolved[NODE_CLIENT_CHANNEL_CONTROL],
+    }),
+    [NODE_CLIENT_CHANNEL_PROBE]: Object.freeze({
+      ...resolved[NODE_CLIENT_CHANNEL_PROBE],
+    }),
+    [NODE_CLIENT_CHANNEL_SNAPSHOT]: Object.freeze({
+      ...resolved[NODE_CLIENT_CHANNEL_SNAPSHOT],
+    }),
+  });
+}
+
+// --- Phase Orchestrator Defaults ---
+const PHASE_PRE_FLIGHT = 'preflight';
+const PHASE_CONVERGE = 'converge';
+const PHASE_PRE_LOAD_GATE = 'pre_load_gate';
+const PHASE_LOAD = 'load';
+const PHASE_POST_LOAD_DRAIN = 'post_load_drain';
+const PHASE_VERIFY = 'verify';
+const PHASE_TEARDOWN = 'teardown';
+
+const SCENARIO_PHASE = Object.freeze({
+  PRE_FLIGHT: PHASE_PRE_FLIGHT,
+  CONVERGE: PHASE_CONVERGE,
+  PRE_LOAD_GATE: PHASE_PRE_LOAD_GATE,
+  LOAD: PHASE_LOAD,
+  POST_LOAD_DRAIN: PHASE_POST_LOAD_DRAIN,
+  VERIFY: PHASE_VERIFY,
+  TEARDOWN: PHASE_TEARDOWN,
+});
+
+const SCENARIO_PHASE_SEQUENCE = Object.freeze([
+  PHASE_PRE_FLIGHT,
+  PHASE_CONVERGE,
+  PHASE_PRE_LOAD_GATE,
+  PHASE_LOAD,
+  PHASE_POST_LOAD_DRAIN,
+  PHASE_VERIFY,
+  PHASE_TEARDOWN,
+]);
+
+const PHASE_STATUS_OK = 'ok';
+const PHASE_STATUS_WARN = 'warn';
+const PHASE_STATUS_FAIL = 'fail';
+const PHASE_STATUS_SKIPPED = 'skipped';
+
+const PHASE_STATUS = Object.freeze({
+  OK: PHASE_STATUS_OK,
+  WARN: PHASE_STATUS_WARN,
+  FAIL: PHASE_STATUS_FAIL,
+  SKIPPED: PHASE_STATUS_SKIPPED,
+});
+
+const PHASE_EVENT_TYPE_START = 'phase.start';
+const PHASE_EVENT_TYPE_END = 'phase.end';
+
+const PHASE_EVENT_TYPE = Object.freeze({
+  START: PHASE_EVENT_TYPE_START,
+  END: PHASE_EVENT_TYPE_END,
+});
+
+// --- Gate Engine Result Modes ---
+const GATE_RESULT_MODE_ALL_READY = 'all_ready';
+const GATE_RESULT_MODE_SUBSET_READY = 'subset_ready';
+const GATE_RESULT_MODE_FAILED = 'failed';
+
+const GATE_RESULT_MODE = Object.freeze({
+  ALL_READY: GATE_RESULT_MODE_ALL_READY,
+  SUBSET_READY: GATE_RESULT_MODE_SUBSET_READY,
+  FAILED: GATE_RESULT_MODE_FAILED,
+});
+
+// --- Consistency Evaluator Verdicts ---
+const CONSISTENCY_VERDICT_CONSISTENT = 'consistent';
+const CONSISTENCY_VERDICT_INCONSISTENT = 'inconsistent';
+const CONSISTENCY_VERDICT_INSUFFICIENT_EVIDENCE = 'insufficient_evidence';
+
+const CONSISTENCY_VERDICT = Object.freeze({
+  CONSISTENT: CONSISTENCY_VERDICT_CONSISTENT,
+  INCONSISTENT: CONSISTENCY_VERDICT_INCONSISTENT,
+  INSUFFICIENT_EVIDENCE: CONSISTENCY_VERDICT_INSUFFICIENT_EVIDENCE,
+});
+
+const CONSISTENCY_MISMATCH_KIND = Object.freeze({
+  LEADER: 'leader_mismatch',
+  PARTITION_SET: 'partition_set_mismatch',
+  REPLICA_OPERATION: 'replica_operation_mismatch',
+});
+
+// --- Assertion Policy Defaults ---
+const ASSERTION_STATUS = Object.freeze({
+  PASSED: 'passed',
+  PASSED_WITH_WARNINGS: 'passed_with_warnings',
+  FAILED: 'failed',
+});
+
+const VERIFICATION_CONFIDENCE = Object.freeze({
+  HIGH: 'high',
+  MEDIUM: 'medium',
+  LOW: 'low',
+});
+
+const ASSERTION_POLICY = Object.freeze({
+  HARD: 'hard',
+  SOFT: 'soft',
 });
 
 // --- Raft Provider Harness Defaults ---
@@ -366,6 +676,23 @@ export {
   LEAK_DEFAULTS,
   BENCHMARK_DEFAULTS,
   BENCHMARK_GATE_DEFAULTS,
+  NODE_CLIENT_CHANNEL,
+  NODE_CLIENT_DEFAULT_CHANNEL_POLICIES,
+  NODE_CLIENT_ERROR_CODES,
+  NODE_CLIENT_TIMEOUT_CLASS,
+  NODE_CLIENT_CONTROL_SNAPSHOT_SCHEMA_VERSION,
+  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+  resolveNodeClientChannelPolicies,
+  SCENARIO_PHASE,
+  SCENARIO_PHASE_SEQUENCE,
+  PHASE_STATUS,
+  PHASE_EVENT_TYPE,
+  GATE_RESULT_MODE,
+  CONSISTENCY_VERDICT,
+  CONSISTENCY_MISMATCH_KIND,
+  ASSERTION_STATUS,
+  VERIFICATION_CONFIDENCE,
+  ASSERTION_POLICY,
   RAFT_PROVIDER_DEFAULTS,
   PLAYBACK,
   PLAYBACK_EVENT_TYPE,

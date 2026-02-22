@@ -33,7 +33,7 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {ERRNO, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, ERRNO, NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {TRANSPORT_EVENT} from '../constants/transport.js';
 import {createSqlRequest} from '../query/sql-request.js';
 import {EXECUTION_MODE} from '../query/sql-adapter-constants.js';
@@ -62,6 +62,7 @@ import {
 } from '../debug-runtime/debug-metadata-constants.js';
 import {
   ADMIN_CACHE_DUMP,
+  ADMIN_CONTROL_SNAPSHOT,
   ADMIN_CLIENT,
   ADMIN_CONTENT_TYPE,
   ADMIN_CONFIG_KEY,
@@ -109,6 +110,11 @@ const HTTP_HEADER_VALUE = Object.freeze({
 const SSE_FRAME_PREFIX = 'data: ';
 const SSE_FRAME_SUFFIX = '\n\n';
 const EMPTY_STRING = '';
+const SQL_NORMALIZE_WHITESPACE_PATTERN = /\s+/g;
+const SQL_TRAILING_SEMICOLON_PATTERN = /;\s*$/;
+const LEARNER_RAFT_ROLE = 'learner';
+const SERVICE_TYPE_PARTITION = 'partition';
+const STATUS_UNKNOWN = 'unknown';
 const ADMIN_LOCAL_DISPATCH = Object.freeze({
   TARGET_ADDRESS: 'local/admin-websocket-api',
 });
@@ -125,6 +131,28 @@ function createAdminOperationError(errorCode, message, hint = null) {
   error.adminErrorCode = errorCode;
   error.adminHint = hint;
   return error;
+}
+
+function normalizeSql(sql) {
+  return String(sql || EMPTY_STRING)
+    .trim()
+    .replace(SQL_TRAILING_SEMICOLON_PATTERN, EMPTY_STRING)
+    .replace(SQL_NORMALIZE_WHITESPACE_PATTERN, ' ')
+    .toLowerCase();
+}
+
+function uniqueSorted(values) {
+  return [...new Set(values)].sort();
+}
+
+function firstStringField(record, ...keys) {
+  for (const key of keys) {
+    const value = record?.[key];
+    if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+      return value;
+    }
+  }
+  return null;
 }
 
 /**
@@ -297,6 +325,9 @@ class AdminWebSocketAPI {
     });
     this.fastify.get(ADMIN_ROUTE.SERVICE_DIAGNOSTICS, async (_request, reply) => {
       return this.handleServiceDiagnostics(reply);
+    });
+    this.fastify.get(ADMIN_ROUTE.CONTROL_SNAPSHOT, async (request, reply) => {
+      return this.handleControlSnapshot(request, reply);
     });
 
     // Test administration endpoints.
@@ -1345,6 +1376,9 @@ class AdminWebSocketAPI {
         ADMIN_ERROR_HINT.MISSING_SQL,
       );
     }
+    if (this.isControlSnapshotQuery(sql)) {
+      return this.buildControlSnapshotQueryResult();
+    }
 
     const routed = guardedAdaptAdminAction(
       ADMIN_META_ACTION.EXECUTE_QUERY,
@@ -1758,6 +1792,179 @@ class AdminWebSocketAPI {
       timestamp: Date.now(),
       diagnostics: report,
     });
+  }
+
+  /**
+   * Handle local control snapshot route.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleControlSnapshot(request, reply) {
+    const scope = String(
+      request?.query?.[ADMIN_CONTROL_SNAPSHOT.QUERY_SCOPE_KEY] ||
+      ADMIN_CONTROL_SNAPSHOT.QUERY_SCOPE_LOCAL,
+    )
+      .trim()
+      .toLowerCase();
+    if (scope !== ADMIN_CONTROL_SNAPSHOT.QUERY_SCOPE_LOCAL) {
+      reply.code(HTTP_STATUS.BAD_REQUEST).send({
+        error: ADMIN_ERROR_MESSAGE.CONTROL_SNAPSHOT_SCOPE_UNSUPPORTED,
+      });
+      return;
+    }
+    try {
+      const snapshot = this.buildLocalControlSnapshot();
+      reply.code(HTTP_STATUS.OK).send(snapshot);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Determine whether one SQL statement requests local control snapshot.
+   * @param {string} sql
+   * @return {boolean}
+   * @private
+   */
+  isControlSnapshotQuery(sql) {
+    return normalizeSql(sql) ===
+      normalizeSql(ADMIN_CONTROL_SNAPSHOT.QUERY_SQL);
+  }
+
+  /**
+   * Build local control snapshot payload from system cache only.
+   * @return {Object}
+   * @private
+   */
+  buildLocalControlSnapshot() {
+    if (!this.systemTableCache ||
+      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      throw new Error(ADMIN_ERROR_MESSAGE.CONTROL_SNAPSHOT_UNAVAILABLE);
+    }
+
+    const nodeRows = this.systemTableCache.getAll(TABLES.NODES);
+    const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
+    const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
+    const replicaOperationRows =
+      this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS);
+
+    const nodeIds = uniqueSorted(nodeRows
+      .map((row) => firstStringField(row, COLUMN.NODE_ID, 'id'))
+      .filter(Boolean));
+    const partitionIds = uniqueSorted(partitionRows
+      .map((row) => firstStringField(row, COLUMN.PARTITION_ID, 'id'))
+      .filter(Boolean));
+
+    const leaders = this.buildControlSnapshotLeaders(serviceRows);
+    const replicaOperations =
+      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
+
+    return {
+      schemaVersion: ADMIN_CONTROL_SNAPSHOT.SCHEMA_VERSION,
+      nodeId: this.nodeId,
+      capturedAt: Date.now(),
+      nodes: nodeIds,
+      partitions: partitionIds,
+      leaders,
+      replicaOperations,
+    };
+  }
+
+  /**
+   * Build leader map from local services table rows.
+   * @param {Array<Object>} serviceRows
+   * @return {Object}
+   * @private
+   */
+  buildControlSnapshotLeaders(serviceRows = []) {
+    const leaders = {};
+    for (const serviceRow of serviceRows) {
+      const serviceType = firstStringField(
+        serviceRow,
+        COLUMN.SERVICE_TYPE,
+        'type',
+        'serviceType',
+      );
+      if (serviceType !== SERVICE_TYPE_PARTITION) {
+        continue;
+      }
+
+      const raftRole = firstStringField(
+        serviceRow,
+        COLUMN.RAFT_ROLE,
+        'raftRole',
+      );
+      if (raftRole === LEARNER_RAFT_ROLE) {
+        continue;
+      }
+
+      const partitionId = firstStringField(
+        serviceRow,
+        COLUMN.PARTITION_ID,
+        'partitionId',
+      );
+      if (!partitionId) {
+        continue;
+      }
+
+      const leaderAddress = firstStringField(
+        serviceRow,
+        COLUMN.ADDRESS,
+        COLUMN.LEADER_NODE_ID,
+        COLUMN.NODE_ID,
+        'nodeId',
+      );
+      if (!leaderAddress) {
+        continue;
+      }
+
+      leaders[partitionId] = leaderAddress;
+    }
+    return leaders;
+  }
+
+  /**
+   * Build replica operation in-flight summary.
+   * @param {Array<Object>} replicaOperationRows
+   * @return {Object}
+   * @private
+   */
+  buildControlSnapshotReplicaOperationSummary(replicaOperationRows = []) {
+    const statusHistogram = {};
+    let inFlightCount = NUM.ZERO;
+    for (const row of replicaOperationRows) {
+      const status = firstStringField(row, COLUMN.STATUS, 'status') ||
+        STATUS_UNKNOWN;
+      statusHistogram[status] = (statusHistogram[status] || NUM.ZERO) + NUM.ONE;
+      if (!ADMIN_CONTROL_SNAPSHOT.IN_FLIGHT_EXCLUDED_STATUSES.includes(status)) {
+        inFlightCount += NUM.ONE;
+      }
+    }
+
+    return {
+      inFlightCount,
+      statusHistogram,
+    };
+  }
+
+  /**
+   * Build canonical query_result payload for control snapshot query.
+   * @return {Object}
+   * @private
+   */
+  buildControlSnapshotQueryResult() {
+    const snapshot = this.buildLocalControlSnapshot();
+    return {
+      success: true,
+      rows: [snapshot],
+      count: NUM.ONE,
+      partitions: ADMIN_CACHE_DUMP.EMPTY,
+      tableName: ADMIN_CONTROL_SNAPSHOT.TABLE_NAME,
+    };
   }
 
   /**

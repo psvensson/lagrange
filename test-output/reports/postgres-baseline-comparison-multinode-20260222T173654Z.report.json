@@ -1,0 +1,619 @@
+{
+  "timestamp": "2026-02-22T17:40:01.014Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 180751
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 3,
+    "scenariosWithPriorities": 1,
+    "topComponents": [
+      {
+        "component": "tail_latency_path",
+        "count": 1,
+        "highestPriority": "critical",
+        "highestScore": 95
+      },
+      {
+        "component": "error_retry_path",
+        "count": 1,
+        "highestPriority": "high",
+        "highestScore": 80
+      },
+      {
+        "component": "convergence_control_plane",
+        "count": 1,
+        "highestPriority": "medium",
+        "highestScore": 60
+      }
+    ],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 1,
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 10,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|{\"workload\":\"benchmark_events_mixed\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+        "current": {
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 180751,
+          "opsPerSec": 21.58770191557077,
+          "p99LatencyMs": 20804,
+          "opsPerSecPerNode": 7.1959006385235895
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-22T17:16:52.805Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-multinode-20260222T171345Z.report.json",
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 182131,
+          "opsPerSec": 24.26638197189601,
+          "p99LatencyMs": 22050,
+          "opsPerSecPerNode": 8.088793990632004
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": -1380,
+          "durationRatio": -0.0075769638337240776,
+          "opsPerSec": -2.6786800563252413,
+          "opsPerSecRatio": -0.11038646220221628,
+          "opsPerSecPerNode": -0.8928933521084144,
+          "opsPerSecPerNodeRatio": -0.11038646220221635,
+          "p99LatencyMs": -1246,
+          "p99LatencyMsRatio": -0.05650793650793651
+        },
+        "postgresBaseline": {
+          "engine": "postgres",
+          "throughputRatioSutToBaseline": 0.17989751596308973,
+          "p99LatencyRatioSutToBaselineAvg": 30150.72463768116,
+          "sutOpsPerSec": 21.58770191557077,
+          "baselineTps": 120,
+          "sutP99LatencyMs": 20804,
+          "baselineLatencyAvgMs": 0.69,
+          "cache": {
+            "enabled": true,
+            "hit": false,
+            "key": "v3-828a323447039df4eee07de9a279d5861add28151f8da75758181af5e564a817",
+            "path": "test-output/reports/.playback/postgres-baseline-comparison-multinode-20260222T173654Z/postgres-baseline-cache/v3-828a323447039df4eee07de9a279d5861add28151f8da75758181af5e564a817.json",
+            "cachedAt": "2026-02-22T17:39:56.551Z",
+            "reason": "cache-stored"
+          }
+        },
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": true,
+      "duration": 180751,
+      "clusterSize": 3,
+      "startedAt": "2026-02-22T17:36:59.774Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1771781819776,
+        "endedAt": 1771782001008,
+        "durationMs": 181232,
+        "files": {
+          "events": "test-output/reports/.playback/postgres-baseline-comparison-multinode-20260222T173654Z/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/postgres-baseline-comparison-multinode-20260222T173654Z/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/postgres-baseline-comparison-multinode-20260222T173654Z/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/postgres-baseline-comparison-multinode-20260222T173654Z/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/postgres-baseline-comparison-multinode-20260222T173654Z/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 156,
+          "samples": 400,
+          "snapshots": 113
+        },
+        "warnings": [
+          {
+            "code": "service-query-failed-35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "message": "Failed to query services on node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7: Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 after 15000ms",
+            "timestamp": 1771781948829,
+            "details": {
+              "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "error": "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 after 15000ms",
+              "reachability": {
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "timestamp": 1771781933827,
+                "reachable": true,
+                "adminReady": true,
+                "reachableBy": "admin_health",
+                "bootstrapHealth": {
+                  "attempted": true,
+                  "ok": false,
+                  "statusCode": -1,
+                  "error": "http_status_-1",
+                  "url": "http://172.18.0.3:8080/health",
+                  "endpoint": null,
+                  "query": null
+                },
+                "adminHealth": {
+                  "attempted": true,
+                  "ok": true,
+                  "statusCode": 200,
+                  "error": null,
+                  "url": "http://172.18.0.3:8081/health",
+                  "endpoint": null,
+                  "query": null
+                },
+                "adminWs": {
+                  "attempted": false,
+                  "ok": false,
+                  "statusCode": null,
+                  "error": null,
+                  "url": null,
+                  "endpoint": "ws://172.18.0.3:8081/api/admin/stream",
+                  "query": null
+                },
+                "sqlProbe": {
+                  "attempted": false,
+                  "ok": false,
+                  "statusCode": null,
+                  "error": null,
+                  "url": null,
+                  "endpoint": null,
+                  "query": "SELECT node_id FROM nodes LIMIT 1"
+                },
+                "lastError": null
+              }
+            }
+          },
+          {
+            "code": "service-query-failed-11601fe0-72d6-5853-8590-ec2881853e72",
+            "message": "Failed to query services on node 11601fe0-72d6-5853-8590-ec2881853e72: Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 after 15000ms",
+            "timestamp": 1771781960956,
+            "details": {
+              "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+              "error": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 after 15000ms",
+              "reachability": {
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "timestamp": 1771781945828,
+                "reachable": true,
+                "adminReady": true,
+                "reachableBy": "admin_health",
+                "bootstrapHealth": {
+                  "attempted": true,
+                  "ok": false,
+                  "statusCode": -1,
+                  "error": "http_status_-1",
+                  "url": "http://172.18.0.4:8080/health",
+                  "endpoint": null,
+                  "query": null
+                },
+                "adminHealth": {
+                  "attempted": true,
+                  "ok": true,
+                  "statusCode": 200,
+                  "error": null,
+                  "url": "http://172.18.0.4:8081/health",
+                  "endpoint": null,
+                  "query": null
+                },
+                "adminWs": {
+                  "attempted": false,
+                  "ok": false,
+                  "statusCode": null,
+                  "error": null,
+                  "url": null,
+                  "endpoint": "ws://172.18.0.4:8081/api/admin/stream",
+                  "query": null
+                },
+                "sqlProbe": {
+                  "attempted": false,
+                  "ok": false,
+                  "statusCode": null,
+                  "error": null,
+                  "url": null,
+                  "endpoint": null,
+                  "query": "SELECT node_id FROM nodes LIMIT 1"
+                },
+                "lastError": null
+              }
+            }
+          },
+          {
+            "code": "topology-capture-failed",
+            "message": "Failed to capture topology snapshot: Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 after 15000ms",
+            "timestamp": 1771781984524,
+            "details": {
+              "anchorNodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "error": "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 after 15000ms",
+              "reachability": [
+                {
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "timestamp": 1771781968835,
+                  "reachable": true,
+                  "adminReady": false,
+                  "reachableBy": "bootstrap_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.2:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": "http://172.18.0.2:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.2:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "timestamp": 1771781969519,
+                  "reachable": true,
+                  "adminReady": true,
+                  "reachableBy": "admin_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": -1,
+                    "error": "http_status_-1",
+                    "url": "http://172.18.0.3:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.3:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.3:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "timestamp": 1771781969523,
+                  "reachable": true,
+                  "adminReady": true,
+                  "reachableBy": "admin_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": -1,
+                    "error": "http_status_-1",
+                    "url": "http://172.18.0.4:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.4:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.4:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "loadMetrics": {
+          "total": 719,
+          "success": 719,
+          "failed": 0,
+          "errors": 124,
+          "latency": {
+            "avg": 5769.410292072323,
+            "p50": 1910,
+            "p95": 19491,
+            "p99": 20804
+          },
+          "opsPerSec": 21.58770191557077,
+          "distinctErrors": [
+            "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 after 15000ms"
+          ]
+        },
+        "details": {
+          "benchmark": {
+            "tool": "shared-load-generator",
+            "workload": "benchmark_events_mixed",
+            "durationSeconds": 30,
+            "clients": 8,
+            "sutEligibleLoadNodeCount": 3,
+            "sutLoadNodeCount": 2,
+            "sutExcludedLoadNodeIds": [
+              "11601fe0-72d6-5853-8590-ec2881853e72"
+            ],
+            "jobs": 4,
+            "loadTargetOpsPerSec": 120,
+            "loadDuration": "30s",
+            "loadMaxInFlight": 128,
+            "nodeFailureThreshold": 1,
+            "nodeFailureCooldownMs": 5000,
+            "quiescentTimeoutMs": 30000,
+            "quiescentPollIntervalMs": 500,
+            "quiescentStableWindowMs": 2000,
+            "consistencyAssertMaxAttempts": 3,
+            "consistencyAssertRetryDelayMs": 2000,
+            "consistencyAssertionAttempts": 1,
+            "operations": [
+              "INSERT",
+              "SELECT"
+            ],
+            "tableName": "benchmark_events"
+          },
+          "baseline": {
+            "engine": "postgres",
+            "image": "postgres:16",
+            "containerIp": "172.18.0.5",
+            "replicaContainerIps": [
+              "172.18.0.6",
+              "172.18.0.7"
+            ],
+            "replicationFactor": 3,
+            "syncReplicaAcks": 1,
+            "loadNodeCount": 8,
+            "poolMaxConnections": 128,
+            "cache": {
+              "enabled": true,
+              "hit": false,
+              "key": "v3-828a323447039df4eee07de9a279d5861add28151f8da75758181af5e564a817",
+              "path": "test-output/reports/.playback/postgres-baseline-comparison-multinode-20260222T173654Z/postgres-baseline-cache/v3-828a323447039df4eee07de9a279d5861add28151f8da75758181af5e564a817.json",
+              "cachedAt": "2026-02-22T17:39:56.551Z",
+              "reason": "cache-stored"
+            },
+            "metrics": {
+              "total": 3600,
+              "success": 3600,
+              "failed": 0,
+              "errors": 0,
+              "latency": {
+                "avg": 0.69,
+                "p50": 1,
+                "p95": 1,
+                "p99": 2
+              },
+              "opsPerSec": 120
+            }
+          },
+          "systemUnderTest": {
+            "seedNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "metrics": {
+              "opsPerSec": 21.58770191557077,
+              "latency": {
+                "avg": 5769.410292072323,
+                "p50": 1910,
+                "p95": 19491,
+                "p99": 20804
+              },
+              "total": 719,
+              "success": 719,
+              "failed": 0,
+              "errors": 124,
+              "loadTargetOpsPerSec": 120,
+              "loadMaxInFlight": 128
+            }
+          },
+          "comparison": {
+            "sutOpsPerSec": 21.58770191557077,
+            "sutP99LatencyMs": 20804,
+            "baselineTps": 120,
+            "baselineLatencyAvgMs": 0.69,
+            "throughputRatioSutToBaseline": 0.17989751596308973,
+            "p99LatencyRatioSutToBaselineAvg": 30150.72463768116
+          },
+          "convergence": {
+            "settledAfterMs": 5066,
+            "leaderChanges": 0,
+            "maxOverTargetMs": 0
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": {
+        "total": 719,
+        "success": 719,
+        "failed": 0,
+        "errors": 124,
+        "latency": {
+          "avg": 5769.410292072323,
+          "p50": 1910,
+          "p95": 19491,
+          "p99": 20804
+        },
+        "opsPerSec": 21.58770191557077
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": [
+        {
+          "component": "tail_latency_path",
+          "signal": "baseline_latency_gap",
+          "priority": "critical",
+          "score": 95,
+          "reason": "Tail latency is significantly higher than baseline and dominates user-visible delays.",
+          "evidence": {
+            "p99LatencyRatioSutToBaselineAvg": 30150.72463768116,
+            "sutP99LatencyMs": 20804,
+            "baselineLatencyAvgMs": 0.69
+          }
+        },
+        {
+          "component": "error_retry_path",
+          "signal": "load_failure_rate",
+          "priority": "high",
+          "score": 80,
+          "reason": "Observed request failures suggest expensive retries or transient routing instability.",
+          "evidence": {
+            "total": 719,
+            "failed": 0,
+            "errors": 124,
+            "failureRate": 0.17246175243393602
+          }
+        },
+        {
+          "component": "convergence_control_plane",
+          "signal": "convergence_settle_time",
+          "priority": "medium",
+          "score": 60,
+          "reason": "Convergence delay suggests extra work in replica movement, promotion, or membership updates.",
+          "evidence": {
+            "settledAfterMs": 5066,
+            "leaderChanges": 0
+          }
+        }
+      ]
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": true,
+    "status": "failed",
+    "reason": "throughput-regression",
+    "settings": {
+      "enabled": true,
+      "maxThroughputRegressionRatio": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 1,
+    "failedScenarioCount": 1,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|{\"workload\":\"benchmark_events_mixed\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+        "currentOpsPerSec": 21.58770191557077,
+        "baselineOpsPerSec": 24.26638197189601,
+        "throughputRegressionRatio": 0.11038646220221628,
+        "threshold": 0.1,
+        "regressedBeyondThreshold": true,
+        "mitigationApplied": false,
+        "approvedMitigationId": null,
+        "baselineReportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-multinode-20260222T171345Z.report.json",
+        "baselineReportTimestamp": "2026-02-22T17:16:52.805Z"
+      }
+    ]
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

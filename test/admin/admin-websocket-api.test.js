@@ -11,6 +11,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
 import {TraceCollector} from '../../src/debug/trace-collector.js';
+import {TABLES} from '../../src/constants/index.js';
 
 // Initialize services for tests
 ConfigurationManager.getInstance().initialize();
@@ -750,6 +751,118 @@ test('AdminWebSocketAPI - health endpoint', async (t) => {
 
   await api.shutdown();
 });
+
+test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation',
+  async (t) => {
+    let executeRequestCalls = 0;
+    const cache = createPopulatedCache();
+    cache.applySystemTableChange('replica_operations', 'INSERT', {
+      operation_id: 'op-1',
+      status: 'creating',
+    });
+    cache.applySystemTableChange('replica_operations', 'INSERT', {
+      operation_id: 'op-2',
+      status: 'active',
+    });
+    const beforeCounts = {
+      nodes: cache.count(TABLES.NODES),
+      partitions: cache.count(TABLES.PARTITIONS),
+      services: cache.count(TABLES.SERVICES),
+      replicaOperations: cache.count(TABLES.REPLICA_OPERATIONS),
+    };
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: {
+        executeRequest: async () => {
+          executeRequestCalls++;
+          return {success: true, rows: []};
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const startedAt = Date.now();
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/control-snapshot?scope=local',
+    });
+    const elapsedMs = Date.now() - startedAt;
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200 for local snapshot');
+    t.equal(elapsedMs < 100, true, 'should respond within local snapshot bound');
+    t.equal(payload.schemaVersion, 1, 'should expose schema version');
+    t.equal(payload.nodeId, 'test-node', 'should include current node id');
+    t.equal(Array.isArray(payload.nodes), true, 'should include nodes array');
+    t.equal(Array.isArray(payload.partitions), true, 'should include partitions array');
+    t.equal(typeof payload.leaders, 'object', 'should include leaders map');
+    t.equal(typeof payload.replicaOperations, 'object',
+      'should include replica operation summary');
+    t.equal(
+      Number.isInteger(payload.replicaOperations.inFlightCount),
+      true,
+      'should include in-flight operation count',
+    );
+    t.equal(
+      typeof payload.replicaOperations.statusHistogram,
+      'object',
+      'should include status histogram',
+    );
+    t.equal(executeRequestCalls, 0,
+      'local snapshot endpoint should not execute SQL query engine requests');
+
+    t.equal(cache.count(TABLES.NODES), beforeCounts.nodes, 'should not mutate nodes table');
+    t.equal(cache.count(TABLES.PARTITIONS), beforeCounts.partitions,
+      'should not mutate partitions table');
+    t.equal(cache.count(TABLES.SERVICES), beforeCounts.services,
+      'should not mutate services table');
+    t.equal(cache.count(TABLES.REPLICA_OPERATIONS), beforeCounts.replicaOperations,
+      'should not mutate replica operations table');
+
+    await api.shutdown();
+  });
+
+test('AdminWebSocketAPI - local control snapshot query avoids distributed fanout',
+  async (t) => {
+    let executeRequestCalls = 0;
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createPopulatedCache(),
+      sqlQueryEngine: {
+        executeRequest: async () => {
+          executeRequestCalls++;
+          return {success: true, rows: [{id: 'unexpected'}]};
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    const {ws} = await connectAndReceive(api);
+
+    const startedAt = Date.now();
+    ws.send(JSON.stringify({
+      type: MessageType.QUERY,
+      queryId: 'q-control-snapshot',
+      sql: 'SELECT * FROM control_snapshot_local()',
+    }));
+
+    const response = await waitForMessage(ws);
+    const elapsedMs = Date.now() - startedAt;
+
+    t.equal(response.type, MessageType.QUERY_RESULT, 'should return query_result');
+    t.equal(response.queryId, 'q-control-snapshot', 'should preserve query id');
+    t.equal(elapsedMs < 100, true, 'query should complete within local bound');
+    t.equal(Array.isArray(response.results), true, 'query result should include rows');
+    t.equal(response.results.length, 1, 'query should return one snapshot row');
+    t.equal(response.results[0].schemaVersion, 1, 'query should expose snapshot schema');
+    t.equal(executeRequestCalls, 0,
+      'local control snapshot query should not execute distributed SQL requests');
+
+    ws.close();
+    await api.shutdown();
+  });
 
 test('AdminWebSocketAPI - cleanup on disconnect', async (t) => {
   const api = new AdminWebSocketAPI({

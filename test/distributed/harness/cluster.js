@@ -46,6 +46,7 @@ const FETCH_TIMEOUT_MS = 1000;
 const BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS = 10000;
 const BOOTSTRAP_READY_STABLE_WINDOW_MS = 10000;
 const ADMIN_QUERY_TIMEOUT_MS = 15000;
+const REQUEST_TIMEOUT_OPTION_DEFAULT_MS = ADMIN_QUERY_TIMEOUT_MS;
 const LOG_COLLECTION_TIMEOUT_MS = 1000;
 const LOG_TAIL_LINES = 50;
 const BOOTSTRAP_HEALTH_PATH = '/health';
@@ -539,6 +540,20 @@ class NodeHandle {
    * returns results.
    */
   async query(sql, params = []) {
+    return this.queryWithTimeout(sql, params, {
+      timeoutMs: ADMIN_QUERY_TIMEOUT_MS,
+    });
+  }
+
+  /**
+   * Query the Admin API via WebSocket with request timeout override.
+   * @param {string} sql
+   * @param {Array<*>} [params]
+   * @param {Object} [options]
+   * @param {number} [options.timeoutMs]
+   * @returns {Promise<Object>}
+   */
+  async queryWithTimeout(sql, params = [], options = {}) {
     return this._sendAdminRequest(
       {
         type: QUERY_MESSAGE_TYPE,
@@ -546,6 +561,7 @@ class NodeHandle {
         params: Array.isArray(params) ? params : [],
       },
       'query',
+      options,
     );
   }
 
@@ -588,8 +604,17 @@ class NodeHandle {
    * @returns {Promise<Object>}
    * @private
    */
-  async _sendAdminRequest(requestPayload, operationLabel) {
-    const ws = await this._getAdminSocket();
+  async _sendAdminRequest(requestPayload, operationLabel, options = {}) {
+    const requestTimeoutMs = resolvePositiveTimeoutMs(
+      options.timeoutMs,
+      REQUEST_TIMEOUT_OPTION_DEFAULT_MS,
+    );
+    const ws = await withTimeout(
+      this._getAdminSocket(),
+      requestTimeoutMs,
+      'Admin API ' + operationLabel + ' timed out for node ' +
+        this.id + ' after ' + requestTimeoutMs + 'ms',
+    );
     const queryId = this._nextQueryId();
 
     return new Promise((resolve, reject) => {
@@ -597,9 +622,9 @@ class NodeHandle {
         this._pendingQueries.delete(queryId);
         reject(new Error(
           'Admin API ' + operationLabel + ' timed out for node ' +
-          this.id + ' after ' + ADMIN_QUERY_TIMEOUT_MS + 'ms',
+          this.id + ' after ' + requestTimeoutMs + 'ms',
         ));
-      }, ADMIN_QUERY_TIMEOUT_MS);
+      }, requestTimeoutMs);
 
       this._pendingQueries.set(queryId, {
         resolve,

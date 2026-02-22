@@ -695,6 +695,72 @@ describe('ReportWriter', () => {
       assert.equal(summary.scaleEfficiencySummary.comparableGroupCount, 0);
       assert.deepEqual(summary.scenarios, []);
     });
+
+    it('accepts additive observability fields in flat detail payloads', () => {
+      const scenarios = [{
+        scenario: 'postgres-baseline-comparison',
+        passed: true,
+        duration: 1000,
+        details: {
+          benchmark: {
+            loadTargetOpsPerSec: 80,
+          },
+          baseline: {
+            engine: 'postgres',
+            metrics: {
+              opsPerSec: 100,
+              latency: {
+                avg: 10,
+              },
+            },
+          },
+          comparison: {
+            sutOpsPerSec: 84,
+            baselineTps: 100,
+            throughputRatioSutToBaseline: 0.84,
+            p99LatencyRatioSutToBaselineAvg: 1.2,
+          },
+          phaseTimeline: [{
+            phase: 'load',
+            status: 'ok',
+            durationMs: 10,
+          }],
+          phaseDecisions: [{
+            phase: 'post_load_drain',
+            status: 'warn',
+            policy: {insufficientEvidencePolicy: 'soft'},
+            reasons: ['in_flight_replica_operations:1'],
+          }],
+          channelMetrics: {
+            load: {
+              requests: 10,
+              errors: 0,
+            },
+          },
+        },
+        loadMetrics: {
+          total: 100,
+          success: 100,
+          failed: 0,
+          errors: 0,
+          latency: {
+            p50: 1,
+            p95: 2,
+            p99: 12,
+          },
+          opsPerSec: 84,
+        },
+      }];
+
+      const summary = computeStandardSummary(scenarios, []);
+      assert.equal(
+        summary.scenariosComparedToPostgresBaseline,
+        1,
+        'flat details with additive fields should still be baseline-comparable',
+      );
+      assert.ok(summary.scenarios[0].postgresBaseline);
+      assert.equal(summary.scenarios[0].postgresBaseline.baselineTps, 100);
+    });
   });
 
   describe('JSON_INDENT constant', () => {
