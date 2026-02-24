@@ -8,6 +8,10 @@ const JOINING_DEFAULT = Object.freeze({
   leadershipWaitMaxDelayMs: 5000,
   leadershipWaitBackoffMultiplier: 2,
   leadershipWaitJitterRatio: 0.2,
+  readySignalMaxAttempts: 6,
+  readySignalRetryDelayMs: 1000,
+  readySignalRetryMaxDelayMs: 5000,
+  readySignalRetryBackoffMultiplier: 2,
   replicaStaggerDelayMs: DEFAULT_REPLICA_STAGGER_DELAY_MS,
   heartbeatIntervalMs: DEFAULT_HEARTBEAT_INTERVAL_MS,
   wsPort: null,
@@ -20,7 +24,10 @@ const JOINING_LOG_MSG = Object.freeze({
   READY_SIGNAL_TARGET_MISSING: 'No control plane target address available for readiness',
   READY_SIGNAL_SUCCESS: 'Signaled readiness to seed node',
   READY_SIGNAL_NOT_ACK: 'Seed node did not acknowledge readiness',
+  READY_SIGNAL_RETRYING: 'Retrying readiness signal to seed node',
   READY_SIGNAL_FAILED: 'Failed to signal readiness to seed node',
+  CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE:
+    'Control plane background writers activated for joining node',
   HEARTBEAT_FAILED: 'Failed to send heartbeat to control plane',
   CONTROL_PLANE_TARGET_UPDATED: 'Control plane target address updated on leadership change',
   PHASE_STARTING: 'Starting joining phase',
@@ -49,6 +56,7 @@ const JOINING_LOG_MSG = Object.freeze({
   REGISTERING_MESSAGE_GROUP_SERVICE: 'Registering message group service in cluster',
   MESSAGE_GROUP_REGISTER_NON_SUCCESS: 'Message group service registration returned non-success',
   MESSAGE_GROUP_REGISTERED: 'Message group service registered in cluster',
+  MESSAGE_GROUP_REGISTER_RETRYING: 'Retrying message group service registration in cluster',
   MESSAGE_GROUP_REGISTER_FAILED: 'Failed to register message group service in cluster',
   WAITING_LEADERSHIP: 'Waiting for message group leadership',
   LEADERSHIP_ESTABLISHED: 'Message group leadership established',
@@ -143,6 +151,8 @@ const JOINING_ERROR_MSG = Object.freeze({
   leaderMetadataIncomplete: (details) => `Leader metadata incomplete: ${details}`,
   bootstrapNotReady: (phase) =>
     `Seed bootstrap not ready${phase ? ` (phase: ${phase})` : ''}`,
+  registerServiceTimeout: (serviceId, timeoutMs) =>
+    `Register-service timed out for ${serviceId} after ${timeoutMs}ms`,
   READY_SIGNAL_NOT_ACK: 'Control plane did not acknowledge ready signal',
   controlPlaneMessageFailed: (message) => `Control plane message failed: ${message}`,
   controlPlaneCdcSubscribeFailed: (tableName, message) =>

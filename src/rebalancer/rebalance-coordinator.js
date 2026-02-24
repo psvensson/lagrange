@@ -214,6 +214,7 @@ class RebalanceCoordinator extends EventEmitter {
 
     // Timeout checking interval
     this.timeoutCheckInterval = null;
+    this.timeoutCheckInFlight = false;
     this.timeoutCheckIntervalMs = REBALANCER_DEFAULT.COORDINATOR.TIMEOUT_CHECK_INTERVAL_MS;
 
     // Logging
@@ -274,12 +275,20 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     this.timeoutCheckInterval = setInterval(() => {
-      this.checkTimeouts().catch((error) => {
-        this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED, {
-          error: error.message,
-          nodeId: this.nodeId,
+      if (this.isShuttingDown || this.timeoutCheckInFlight === true) {
+        return;
+      }
+      this.timeoutCheckInFlight = true;
+      void this.checkTimeouts()
+        .catch((error) => {
+          this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED, {
+            error: error.message,
+            nodeId: this.nodeId,
+          });
+        })
+        .finally(() => {
+          this.timeoutCheckInFlight = false;
         });
-      });
     }, this.timeoutCheckIntervalMs);
     // Unref to allow process exit when this is the only timer
     this.timeoutCheckInterval.unref();
@@ -294,6 +303,7 @@ class RebalanceCoordinator extends EventEmitter {
       clearInterval(this.timeoutCheckInterval);
       this.timeoutCheckInterval = null;
     }
+    this.timeoutCheckInFlight = false;
   }
 
   /**

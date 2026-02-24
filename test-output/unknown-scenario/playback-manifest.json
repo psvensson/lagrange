@@ -1,7 +1,7 @@
 {
   "scenarioName": "unknown-scenario",
-  "startedAt": 1771786952039,
-  "endedAt": 1771786952040,
+  "startedAt": 1771912924073,
+  "endedAt": 1771912924074,
   "durationMs": 1,
   "files": {
     "events": "test-output/unknown-scenario/events.ndjson",

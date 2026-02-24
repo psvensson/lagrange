@@ -16,6 +16,7 @@ import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SERVICE_STATUS, SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
+import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -261,6 +262,111 @@ test('BootstrapAPI - exposes explicit liveness, startup, and readiness probes', 
 
   await api.shutdown();
 });
+
+test('BootstrapAPI - bootstrap join readiness tolerates isolated leader metadata blockers',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'CONTROL_READY',
+      state: 'warming',
+      reasons: [BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE],
+      retryAfterMs: 250,
+      timestamp: Date.now(),
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      readinessState,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const strictReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(strictReadyResponse.statusCode, 503,
+      'strict readiness should stay blocked on missing leader metadata');
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should allow CONTROL_READY leader metadata lag');
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, true,
+      'bootstrap join readiness should project ready=true for startup gate');
+    t.same(bootstrapReadyBody.reasons, [],
+      'bootstrap join readiness should clear tolerated blocker reasons');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - bootstrap join readiness keeps blocking when additional blockers exist',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'CONTROL_READY',
+      state: 'warming',
+      reasons: [
+        BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+        BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+      ],
+      retryAfterMs: 250,
+      timestamp: Date.now(),
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      readinessState,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 503,
+      'bootstrap join readiness should remain blocked when other blockers exist');
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, false,
+      'bootstrap join readiness should expose ready=false with hard blockers');
+    t.same(
+      bootstrapReadyBody.reasons.sort(),
+      readinessSnapshot.reasons.sort(),
+      'bootstrap join readiness should preserve blocking reasons',
+    );
+
+    await api.shutdown();
+  });
 
 test('BootstrapAPI - readiness stays gated until startup dependencies and stable window complete',
   async (t) => {
@@ -524,6 +630,58 @@ test('BootstrapAPI - bootstrap validation', async (t) => {
 
   await api.shutdown();
 });
+
+test('BootstrapAPI - liveness remains true while readiness degrades on repeated control writes',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        messageRouter: {},
+      },
+      readinessState: new BootstrapReadinessState(),
+      controlPlaneWriteHealthProvider: () => ({
+        healthy: false,
+        reasonCode: LIFECYCLE_REASON.OBSERVABILITY_BACKLOG,
+        details: {
+          source: 'heartbeat_service',
+          consecutiveFailures: 5,
+          failureThreshold: 3,
+        },
+      }),
+    });
+
+    await api.initialize(0, {listen: false});
+    api.setSqlQueryEngine({executeQuery: async () => ({success: true})});
+    api.getLeaderReadinessStatusForProbe = () => ({ready: true});
+
+    const liveResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/livez',
+    });
+    t.equal(liveResponse.statusCode, 200,
+      'liveness should stay green despite control-plane write degradation');
+
+    const readyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(readyResponse.statusCode, 503,
+      'readiness should degrade when control-plane write failures persist');
+    const readyBody = JSON.parse(readyResponse.body);
+    t.equal(readyBody.ready, false, 'readyz should expose degraded readiness');
+    t.ok(
+      Array.isArray(readyBody.reasons) &&
+        readyBody.reasons.includes(LIFECYCLE_REASON.OBSERVABILITY_BACKLOG),
+      'readiness should include structured control-plane degradation reason',
+    );
+
+    await api.shutdown();
+  });
 
 test('BootstrapAPI - bootstrap conflict detection', async (t) => {
   initializeTestEnvironment();

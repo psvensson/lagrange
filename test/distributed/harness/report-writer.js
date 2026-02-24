@@ -21,6 +21,9 @@ const BENCHMARK_DETAILS_KEY_VERIFICATION = 'verification';
 const BENCHMARK_DETAILS_KEY_POLICY = 'policy';
 const BENCHMARK_DETAILS_KEY_PHASE_TIMELINE = 'phaseTimeline';
 const BENCHMARK_DETAILS_KEY_CHANNEL_METRICS = 'channelMetrics';
+const LOAD_METRICS_FIELD_ATTEMPT_ERRORS = 'attemptErrors';
+const LOAD_METRICS_FIELD_QUEUE_DELAY = 'queueDelay';
+const LOAD_METRICS_FIELD_DISTINCT_ERRORS = 'distinctErrors';
 const CLUSTER_SIZE_PATH_REGEX = /(?:^|[^a-z0-9])size(\d+)(?:[^0-9]|$)/i;
 const WRITE_PATH_TOP_PHASE_LIMIT = 3;
 const WRITE_PATH_SUMMARY_PHASE_LIMIT = 5;
@@ -125,14 +128,7 @@ function buildScenarioEntry(scenarioName, result) {
   }
 
   if (result.loadMetrics) {
-    entry.loadMetrics = {
-      total: result.loadMetrics.total || 0,
-      success: result.loadMetrics.success || 0,
-      failed: result.loadMetrics.failed || 0,
-      errors: result.loadMetrics.errors || 0,
-      latency: result.loadMetrics.latency || null,
-      opsPerSec: result.loadMetrics.opsPerSec || 0,
-    };
+    entry.loadMetrics = buildLoadMetricsEntry(result.loadMetrics);
   } else {
     entry.loadMetrics = null;
   }
@@ -141,6 +137,37 @@ function buildScenarioEntry(scenarioName, result) {
   entry.optimizationPriorities = buildOptimizationPriorities(entry);
 
   return entry;
+}
+
+/**
+ * Normalize load metrics while preserving additive observability fields.
+ * @param {Object} loadMetrics
+ * @returns {Object}
+ */
+function buildLoadMetricsEntry(loadMetrics) {
+  const normalized = {
+    total: normalizeFiniteNumber(loadMetrics?.total) || ZERO,
+    success: normalizeFiniteNumber(loadMetrics?.success) || ZERO,
+    failed: normalizeFiniteNumber(loadMetrics?.failed) || ZERO,
+    errors: normalizeFiniteNumber(loadMetrics?.errors) || ZERO,
+    latency: loadMetrics?.latency || null,
+    opsPerSec: normalizeFiniteNumber(loadMetrics?.opsPerSec) || ZERO,
+  };
+  const attemptErrors = normalizeFiniteNumber(
+    loadMetrics?.[LOAD_METRICS_FIELD_ATTEMPT_ERRORS],
+  );
+  if (attemptErrors !== null) {
+    normalized[LOAD_METRICS_FIELD_ATTEMPT_ERRORS] = attemptErrors;
+  }
+  const queueDelay = loadMetrics?.[LOAD_METRICS_FIELD_QUEUE_DELAY];
+  if (queueDelay && typeof queueDelay === 'object') {
+    normalized[LOAD_METRICS_FIELD_QUEUE_DELAY] = queueDelay;
+  }
+  const distinctErrors = loadMetrics?.[LOAD_METRICS_FIELD_DISTINCT_ERRORS];
+  if (Array.isArray(distinctErrors)) {
+    normalized[LOAD_METRICS_FIELD_DISTINCT_ERRORS] = [...distinctErrors];
+  }
+  return normalized;
 }
 
 /**

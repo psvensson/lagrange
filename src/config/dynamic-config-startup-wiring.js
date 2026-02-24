@@ -29,6 +29,90 @@ const DYNAMIC_CONFIG_STARTUP_LOG_MSG = Object.freeze({
   ADAPTIVE_CONTROLLER_SHUTDOWN_FAILED:
     'Failed to shutdown raft adaptive timing controller',
 });
+const DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS = 300;
+const DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS = 300;
+
+/**
+ * Resolve startup read timeout for initial dynamic-config hydration.
+ * @param {Object} options
+ * @return {number}
+ */
+function resolveInitialReadTimeoutMs(options = {}) {
+  const timeoutMs = Number(options.initialReadTimeoutMs);
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    return Math.floor(timeoutMs);
+  }
+  return DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS;
+}
+
+/**
+ * Resolve startup timeout for adaptive timing controller initialization.
+ * @param {Object} options
+ * @return {number}
+ */
+function resolveControllerInitTimeoutMs(options = {}) {
+  const timeoutMs = Number(options.controllerInitTimeoutMs);
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    return Math.floor(timeoutMs);
+  }
+  return DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS;
+}
+
+/**
+ * Apply timeout to a promise.
+ * @param {Promise<*>} promise
+ * @param {number} timeoutMs
+ * @param {string} errorMessage
+ * @return {Promise<*>}
+ */
+function withTimeout(promise, timeoutMs, errorMessage) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(new Error(errorMessage));
+    }, timeoutMs);
+    if (typeof timer.unref === TYPEOF.FUNCTION) {
+      timer.unref();
+    }
+    Promise.resolve(promise)
+      .then((result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
+/**
+ * Read one dynamic-config key with bounded startup latency.
+ * @param {Object} dynamicConfigService
+ * @param {string} key
+ * @param {number} timeoutMs
+ * @return {Promise<*>}
+ */
+async function readStartupConfigValue(dynamicConfigService, key, timeoutMs) {
+  return withTimeout(
+    dynamicConfigService.get(key),
+    timeoutMs,
+    'Timed out reading startup dynamic config key ' + key +
+      ' after ' + timeoutMs + 'ms',
+  );
+}
 
 /**
  * Normalize service collection to a flat array.
@@ -147,6 +231,7 @@ function writeRaftTimingConfig(configManager, raftTimingConfig) {
  * @param {Map<string, Object>|Array<Object>|Object} [options.messageGroupServices]
  * @param {Map<string, Object>|Array<Object>|Object} [options.partitionServices]
  * @param {Object|null} [options.runtimeOwner]
+ * @param {number} [options.initialReadTimeoutMs]
  * @return {Promise<{
  *   dynamicConfigService: DynamicConfigService,
   *   shutdown: Function
@@ -170,6 +255,8 @@ async function createDynamicConfigStartupWiring(options = {}) {
     ...normalizeServicesCollection(options.partitionServices),
   ];
   const watcherUnsubscribers = [];
+  const initialReadTimeoutMs = resolveInitialReadTimeoutMs(options);
+  const controllerInitTimeoutMs = resolveControllerInitTimeoutMs(options);
 
   const raftTimingConfig = getRaftTimingConfig(configManager);
 
@@ -284,36 +371,49 @@ async function createDynamicConfigStartupWiring(options = {}) {
     ));
   }
 
+  const initialReadTasks = [];
   for (const entry of loggingDynamicAppliers) {
-    try {
-      const value = await dynamicConfigService.get(entry.key);
-      entry.apply(value);
-    } catch (error) {
-      logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
-        key: entry.key,
-        error: error.message,
-      });
-    }
+    initialReadTasks.push((async () => {
+      try {
+        const value = await readStartupConfigValue(
+          dynamicConfigService,
+          entry.key,
+          initialReadTimeoutMs,
+        );
+        entry.apply(value);
+      } catch (error) {
+        logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
+          key: entry.key,
+          error: error.message,
+        });
+      }
+    })());
   }
-
   for (const key of DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEYS) {
-    try {
-      const value = await dynamicConfigService.get(key);
-      if (!Number.isFinite(value)) {
-        continue;
+    initialReadTasks.push((async () => {
+      try {
+        const value = await readStartupConfigValue(
+          dynamicConfigService,
+          key,
+          initialReadTimeoutMs,
+        );
+        if (!Number.isFinite(value)) {
+          return;
+        }
+        const field = DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD[key];
+        if (!field) {
+          return;
+        }
+        raftTimingConfig[field] = value;
+      } catch (error) {
+        logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
+          key,
+          error: error.message,
+        });
       }
-      const field = DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD[key];
-      if (!field) {
-        continue;
-      }
-      raftTimingConfig[field] = value;
-    } catch (error) {
-      logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
-        key,
-        error: error.message,
-      });
-    }
+    })());
   }
+  await Promise.all(initialReadTasks);
   applyRaftTimingConfig(raftTimingConfig);
 
   let adaptiveTimingController = null;
@@ -323,7 +423,12 @@ async function createDynamicConfigStartupWiring(options = {}) {
       nodeId: options.nodeId || null,
       owner: options.runtimeOwner || null,
     });
-    await adaptiveTimingController.initialize();
+    await withTimeout(
+      adaptiveTimingController.initialize(),
+      controllerInitTimeoutMs,
+      'Timed out initializing adaptive timing controller after ' +
+        controllerInitTimeoutMs + 'ms',
+    );
   } catch (error) {
     adaptiveTimingController = null;
     logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.ADAPTIVE_CONTROLLER_INIT_FAILED, {

@@ -185,3 +185,51 @@ test('HeartbeatService throttles endpoint upserts but refreshes after interval',
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
+
+test('HeartbeatService does not overlap heartbeat writes when a tick is still in-flight',
+  async (t) => {
+    initEnv();
+
+    let inFlightWrites = 0;
+    let maxInFlightWrites = 0;
+    const releaseWrites = [];
+    const service = new HeartbeatService({
+      nodeId: 'node-d',
+      nodeAddress: '10.0.0.4:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          inFlightWrites += 1;
+          maxInFlightWrites = Math.max(maxInFlightWrites, inFlightWrites);
+          return new Promise((resolve) => {
+            releaseWrites.push(() => {
+              inFlightWrites -= 1;
+              resolve({success: true});
+            });
+          });
+        },
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      systemTableCache: createMockCache(),
+    });
+    service.initialize();
+    service.heartbeatIntervalMs = 5;
+    service.start();
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      t.equal(
+        maxInFlightWrites,
+        1,
+        'heartbeat loop should keep at most one in-flight write',
+      );
+    } finally {
+      service.stop();
+      while (releaseWrites.length > 0) {
+        const release = releaseWrites.shift();
+        release();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });

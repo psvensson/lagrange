@@ -24,6 +24,10 @@ const MAX_DISTINCT_ERROR_MESSAGES = 10;
 const NODE_FAILURE_THRESHOLD_DEFAULT = 3;
 const NODE_FAILURE_COOLDOWN_MS_DEFAULT = 5000;
 const QUERY_TIMEOUT_MS_DEFAULT = 2000;
+const ADMISSION_BACKOFF_MS_DEFAULT = 250;
+const NODE_BREAKER_OWNER_NODE_CLIENT = 'node-client';
+const NODE_CLIENT_ADMISSION_ERROR_CIRCUIT_OPEN = 'circuit_open';
+const NODE_CLIENT_ADMISSION_ERROR_BUDGET_EXHAUSTED = 'budget_exhausted';
 
 const LOAD_TABLE_NAME = 'logs';
 const LOAD_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
@@ -163,14 +167,15 @@ function percentile(sorted, percentile) {
  * @param {Array<number>} latencies - Raw latency values in ms
  * @param {number} successCount
  * @param {number} failedCount
- * @param {number} errorCount
+ * @param {number} operationErrorCount
  * @param {number} durationMs - Total run duration in ms
  * @param {Array<string>} [distinctErrors] - Distinct error messages
+ * @param {number} [attemptErrorCount] - Transient per-attempt failures
  * @returns {Object} Metrics snapshot
  */
 function computeMetrics(
-  latencies, successCount, failedCount, errorCount, durationMs,
-  distinctErrors,
+  latencies, successCount, failedCount, operationErrorCount, durationMs,
+  distinctErrors, attemptErrorCount = ZERO, queueDelays = [],
 ) {
   const sorted = [...latencies].sort((a, b) => a - b);
   const total = successCount + failedCount;
@@ -179,7 +184,7 @@ function computeMetrics(
     total,
     success: successCount,
     failed: failedCount,
-    errors: errorCount,
+    errors: operationErrorCount,
     latency: {
       avg: sorted.length > ZERO ?
         sorted.reduce((sum, value) => sum + value, ZERO) / sorted.length :
@@ -190,6 +195,20 @@ function computeMetrics(
     },
     opsPerSec: (total / elapsed) * MS_PER_SECOND,
   };
+  if (attemptErrorCount > ZERO) {
+    metrics.attemptErrors = attemptErrorCount;
+  }
+  if (Array.isArray(queueDelays) && queueDelays.length > ZERO) {
+    const sortedQueueDelays = [...queueDelays].sort((a, b) => a - b);
+    metrics.queueDelay = {
+      avg: sortedQueueDelays.reduce((sum, value) => sum + value, ZERO) /
+        sortedQueueDelays.length,
+      p50: percentile(sortedQueueDelays, PERCENTILE_P50),
+      p95: percentile(sortedQueueDelays, PERCENTILE_P95),
+      p99: percentile(sortedQueueDelays, PERCENTILE_P99),
+      max: sortedQueueDelays[sortedQueueDelays.length - ONE],
+    };
+  }
   if (Array.isArray(distinctErrors) && distinctErrors.length > ZERO) {
     metrics.distinctErrors = distinctErrors;
   }
@@ -240,6 +259,11 @@ class LoadRun {
       options.nodeFailureCooldownMs > ZERO ?
         options.nodeFailureCooldownMs :
         NODE_FAILURE_COOLDOWN_MS_DEFAULT;
+    this._admissionBackoffMs =
+      Number.isInteger(options.admissionBackoffMs) &&
+      options.admissionBackoffMs > ZERO ?
+        options.admissionBackoffMs :
+        ADMISSION_BACKOFF_MS_DEFAULT;
     this._queryTimeoutMs =
       Number.isInteger(options.queryTimeoutMs) &&
       options.queryTimeoutMs > ZERO ?
@@ -256,9 +280,11 @@ class LoadRun {
     this._latencies = [];
     this._successCount = ZERO;
     this._failedCount = ZERO;
-    this._errorCount = ZERO;
+    this._operationErrorCount = ZERO;
+    this._attemptErrorCount = ZERO;
     this._distinctErrorSet = new Set();
     this._distinctErrors = [];
+    this._queueDelaySamples = [];
     this._counter = ZERO;
     this._nextNodeIndex = ZERO;
     this._inFlight = ZERO;
@@ -291,9 +317,18 @@ class LoadRun {
       this._nodeHealthByKey.set(key, {
         consecutiveFailures: ZERO,
         openUntilMs: ZERO,
+        localBreakerOwner: this._resolveNodeBreakerOwner(node),
+        admissionBlockedUntilMs: ZERO,
       });
       this._nodeInFlightByKey.set(key, ZERO);
     }
+  }
+
+  _resolveNodeBreakerOwner(node) {
+    const breakerOwner = String(node?.breakerOwner || '').trim().toLowerCase();
+    return breakerOwner === NODE_BREAKER_OWNER_NODE_CLIENT ?
+      NODE_BREAKER_OWNER_NODE_CLIENT :
+      '';
   }
 
   /**
@@ -373,6 +408,11 @@ class LoadRun {
       this._hasDispatchCapacity(now) &&
       dispatchedThisTick < MAX_DISPATCHES_PER_TICK
     ) {
+      const queueDelayMs = Math.max(
+        ZERO,
+        Date.now() - this._nextDispatchAtMs,
+      );
+      this._queueDelaySamples.push(queueDelayMs);
       const opIndex = this._counter % this._operations.length;
       const operation = this._operations[opIndex];
       const sql = buildSqlStatement(operation, this._counter, {
@@ -429,6 +469,7 @@ class LoadRun {
     this._nextNodeIndex =
       (this._nextNodeIndex + ONE) % nodeCount;
     let attemptedNodes = false;
+    let hasNonAdmissionFailures = false;
 
     for (let attempt = ZERO; attempt < candidates.length; attempt++) {
       if (this._cancelled || this._completedMetrics) {
@@ -456,8 +497,11 @@ class LoadRun {
         if (this._cancelled || this._completedMetrics) {
           return;
         }
-        this._recordNodeFailure(nodeHealthKey);
-        this._errorCount++;
+        this._recordNodeFailure(nodeHealthKey, err);
+        this._attemptErrorCount++;
+        if (!this._isAdmissionSignalError(err)) {
+          hasNonAdmissionFailures = true;
+        }
         this._captureErrorMessage(err);
       } finally {
         this._releaseNodeSlot(nodeHealthKey);
@@ -467,8 +511,9 @@ class LoadRun {
     if (this._cancelled || this._completedMetrics) {
       return;
     }
-    if (attemptedNodes) {
+    if (attemptedNodes && hasNonAdmissionFailures) {
       this._failedCount++;
+      this._operationErrorCount++;
     }
   }
 
@@ -497,7 +542,7 @@ class LoadRun {
       const node = this._availableNodes[index];
       const healthKey = this._nodeHealthKeys[index];
       const state = this._nodeHealthByKey.get(healthKey);
-      if ((!state || state.openUntilMs <= nowMs) &&
+      if (this._isNodeDispatchReady(state, nowMs) &&
           this._getNodeInFlight(healthKey) < this._nodeMaxInFlight) {
         candidates.push({
           node,
@@ -517,15 +562,15 @@ class LoadRun {
       if (this._getNodeInFlight(healthKey) >= this._nodeMaxInFlight) {
         continue;
       }
-      const openUntil = Number(state?.openUntilMs || ZERO);
-      if (openUntil <= nowMs) {
+      const blockedUntil = this._resolveNodeBlockedUntilMs(state);
+      if (blockedUntil <= nowMs) {
         return [{
           node: this._availableNodes[index],
           healthKey: this._nodeHealthKeys[index],
         }];
       }
-      if (openUntil < selectedOpenUntil) {
-        selectedOpenUntil = openUntil;
+      if (blockedUntil < selectedOpenUntil) {
+        selectedOpenUntil = blockedUntil;
         selectedIndex = index;
       }
     }
@@ -565,13 +610,23 @@ class LoadRun {
     if (!state) {
       return;
     }
+    state.admissionBlockedUntilMs = ZERO;
+    if (state.localBreakerOwner === NODE_BREAKER_OWNER_NODE_CLIENT) {
+      return;
+    }
     state.consecutiveFailures = ZERO;
     state.openUntilMs = ZERO;
   }
 
-  _recordNodeFailure(healthKey) {
+  _recordNodeFailure(healthKey, error) {
     const state = this._nodeHealthByKey.get(healthKey);
     if (!state) {
+      return;
+    }
+    if (this._isAdmissionSignalError(error)) {
+      state.admissionBlockedUntilMs = Date.now() + this._admissionBackoffMs;
+    }
+    if (state.localBreakerOwner === NODE_BREAKER_OWNER_NODE_CLIENT) {
       return;
     }
     state.consecutiveFailures += ONE;
@@ -580,6 +635,33 @@ class LoadRun {
     }
     state.consecutiveFailures = ZERO;
     state.openUntilMs = Date.now() + this._nodeFailureCooldownMs;
+  }
+
+  _isAdmissionSignalError(error) {
+    const code = String(error?.code || '').toLowerCase();
+    if (code === NODE_CLIENT_ADMISSION_ERROR_CIRCUIT_OPEN ||
+        code === NODE_CLIENT_ADMISSION_ERROR_BUDGET_EXHAUSTED) {
+      return true;
+    }
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('circuit breaker is open');
+  }
+
+  _resolveNodeBlockedUntilMs(state) {
+    if (!state) {
+      return ZERO;
+    }
+    if (state.localBreakerOwner === NODE_BREAKER_OWNER_NODE_CLIENT) {
+      return Number(state.admissionBlockedUntilMs || ZERO);
+    }
+    return Math.max(
+      Number(state.openUntilMs || ZERO),
+      Number(state.admissionBlockedUntilMs || ZERO),
+    );
+  }
+
+  _isNodeDispatchReady(state, nowMs) {
+    return this._resolveNodeBlockedUntilMs(state) <= nowMs;
   }
 
   /**
@@ -666,9 +748,11 @@ class LoadRun {
       this._latencies,
       this._successCount,
       this._failedCount,
-      this._errorCount,
+      this._operationErrorCount,
       elapsed,
       this._distinctErrors,
+      this._attemptErrorCount,
+      this._queueDelaySamples,
     );
   }
 

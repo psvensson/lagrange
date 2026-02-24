@@ -208,6 +208,10 @@ const CONFIG_KEY = Object.freeze({
 
   REBALANCER_PERIODIC_CHECK_INTERVAL_MS: 'rebalancer.periodicCheckIntervalMs',
   REBALANCER_MAX_CONCURRENT_MOVES: 'rebalancer.maxConcurrentMoves',
+  REBALANCER_SYSTEM_PARTITION_START_DELAY_MS:
+    'rebalancer.systemPartitionStartDelayMs',
+  REBALANCER_USER_PARTITION_START_DELAY_MS:
+    'rebalancer.userPartitionStartDelayMs',
 
   QUERY_TIMEOUT_MS: 'query.timeoutMs',
   QUERY_MAX_PARALLEL_PARTITIONS: 'query.maxParallelPartitions',
@@ -474,6 +478,8 @@ const CONFIG_SCHEMA = {
         nodeMemoryThreshold: {type: 'number', minimum: 0, maximum: 1},
         nodeDiskThreshold: {type: 'number', minimum: 0, maximum: 1},
         stabilizationPeriodMs: {type: 'number', minimum: 1000, maximum: 10000},
+        systemPartitionStartDelayMs: {type: 'number', minimum: 0},
+        userPartitionStartDelayMs: {type: 'number', minimum: 0},
         storageSoftPressurePercent: {
           type: 'number', minimum: 1, maximum: 100,
         },
@@ -672,6 +678,8 @@ const DEFAULT_CONFIG = {
     nodeMemoryThreshold: 0.8, // 80% memory threshold
     nodeDiskThreshold: 0.9, // 90% disk threshold
     stabilizationPeriodMs: 1000, // 1 second stabilization period (Req 2.1)
+    systemPartitionStartDelayMs: 600000, // 10 minutes for system partitions
+    userPartitionStartDelayMs: 0, // user partitions can rebalance immediately
     storageSoftPressurePercent: 70,
     storageHardPressurePercent: 85,
     storageReservationTtlMs: 300000, // 5 minutes
@@ -740,6 +748,10 @@ const ENV_MAPPINGS = {
   RAFT_TICK_INTERVAL_MS: CONFIG_KEY.RAFT_TICK_INTERVAL_MS,
   REBALANCER_PERIODIC_CHECK_INTERVAL_MS: CONFIG_KEY.REBALANCER_PERIODIC_CHECK_INTERVAL_MS,
   REBALANCER_MAX_CONCURRENT_MOVES: CONFIG_KEY.REBALANCER_MAX_CONCURRENT_MOVES,
+  REBALANCER_SYSTEM_PARTITION_START_DELAY_MS:
+    CONFIG_KEY.REBALANCER_SYSTEM_PARTITION_START_DELAY_MS,
+  REBALANCER_USER_PARTITION_START_DELAY_MS:
+    CONFIG_KEY.REBALANCER_USER_PARTITION_START_DELAY_MS,
   MESSAGE_GROUP_REPLICA_COUNT: CONFIG_KEY.MESSAGE_GROUP_REPLICA_COUNT,
   PARTITION_DEFAULT_REPLICA_COUNT: CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT,
   WORKER_MIN_THREADS: CONFIG_KEY.WORKER_MIN_THREADS,
@@ -1020,6 +1032,20 @@ const CONFIG_DEFINITIONS = {
     type: CONFIG_VALUE_TYPE.NUMBER,
     requiresRestart: false,
     description: 'Maximum concurrent replica moves',
+  },
+  [CONFIG_KEY.REBALANCER_SYSTEM_PARTITION_START_DELAY_MS]: {
+    defaultValue: DEFAULT_CONFIG.rebalancer.systemPartitionStartDelayMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description:
+      'Startup delay before rebalancing system table partitions (milliseconds)',
+  },
+  [CONFIG_KEY.REBALANCER_USER_PARTITION_START_DELAY_MS]: {
+    defaultValue: DEFAULT_CONFIG.rebalancer.userPartitionStartDelayMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description:
+      'Startup delay before rebalancing non-system partitions (milliseconds)',
   },
 
   // Storage capacity rebalancer configuration

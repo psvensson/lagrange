@@ -62,6 +62,8 @@ const REBALANCER_CONFIG_KEY = Object.freeze({
   READINESS_PING_ENABLED: 'rebalancer.readinessPingEnabled',
   READINESS_PING_TIMEOUT_MS: 'rebalancer.readinessPingTimeoutMs',
   STABILIZATION_PERIOD_MS: 'rebalancer.stabilizationPeriodMs',
+  SYSTEM_PARTITION_START_DELAY_MS: 'rebalancer.systemPartitionStartDelayMs',
+  USER_PARTITION_START_DELAY_MS: 'rebalancer.userPartitionStartDelayMs',
 });
 
 const REBALANCER_DEFAULT = Object.freeze({
@@ -93,6 +95,8 @@ const REBALANCER_DEFAULT = Object.freeze({
     MIN_STABILIZATION_MS: 1000,
     MAX_STABILIZATION_MS: 10000,
     DEFAULT_STABILIZATION_MS: 1000,
+    SYSTEM_PARTITION_START_DELAY_MS: 10 * 60 * 1000,
+    USER_PARTITION_START_DELAY_MS: 0,
   }),
 });
 
@@ -172,6 +176,7 @@ const REBALANCER_LOG_MSG = Object.freeze({
   SCHEDULE_NEXT: 'Scheduled next rebalance check',
   CACHE_UNAVAILABLE: 'System table cache not available, skipping rebalance check',
   WAIT_STABILIZATION: 'Waiting for stabilization period to complete',
+  WAIT_START_DELAY: 'Waiting for partition rebalance start delay to elapse',
   REBALANCE_ERROR: 'Error during rebalance check',
   EVALUATING_STATE: 'Evaluating rebalancing state',
   CRITICAL_STATE: 'Critical rebalancing state detected',
@@ -294,6 +299,7 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   STABILIZING: 'stabilizing',
   NO_NODES: 'no_nodes',
   CACHE_UNAVAILABLE: 'cache_unavailable',
+  START_DELAY: 'start_delay',
   SAFETY_BLOCKED: 'safety_blocked',
   OPERATION_ALREADY_EXECUTING: 'operation_already_executing',
   AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',

@@ -54,6 +54,13 @@ import {AdminTestRunService} from './admin-test-run-service.js';
 import {DebugMetadataStore} from '../debug-runtime/debug-metadata-service.js';
 import {TraceCollector} from '../debug/trace-collector.js';
 import {
+  ENDPOINT_SYNC_HEALTH,
+  ENDPOINT_SYNC_BOOLEAN,
+  ENDPOINT_SYNC_UNHEALTHY_POLICY,
+} from '../runtime/endpoint-sync-constants.js';
+import {buildServiceDiscoveryCatalog} from
+  '../runtime/service-discovery-catalog.js';
+import {
   DEBUG_METADATA_ERROR_CODE as DEBUG_METADATA_CODE,
   DEBUG_METADATA_ERROR_MSG as DEBUG_METADATA_ERR,
 } from '../debug-runtime/debug-metadata-service-constants.js';
@@ -78,6 +85,7 @@ import {
   ADMIN_LOG_MSG,
   ADMIN_MESSAGE_TYPE,
   ADMIN_QUERY_RESULT,
+  ADMIN_SERVICE_DISCOVERY,
   ADMIN_ROUTE,
   ADMIN_STATUS,
   ADMIN_SUBSYSTEM,
@@ -113,8 +121,20 @@ const EMPTY_STRING = '';
 const SQL_NORMALIZE_WHITESPACE_PATTERN = /\s+/g;
 const SQL_TRAILING_SEMICOLON_PATTERN = /;\s*$/;
 const LEARNER_RAFT_ROLE = 'learner';
+const LEADER_RAFT_ROLE = 'leader';
 const SERVICE_TYPE_PARTITION = 'partition';
+const STATUS_ACTIVE = 'active';
 const STATUS_UNKNOWN = 'unknown';
+const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const SERVICE_DISCOVERY_SQL_WITH_TABLE_PATTERN =
+  /^select \* from service_discovery_local\(\s*'([a-z_][a-z0-9_]*)'\s*\)$/;
+const SERVICE_DISCOVERY_READINESS_REASON = Object.freeze({
+  ROUTING_NOT_READY: 'routing_not_ready',
+  SCHEMA_TABLE_MISSING: 'schema_table_missing',
+  SCHEMA_PARTITION_UNAVAILABLE: 'schema_partition_unavailable',
+  REPLICA_OPERATIONS_IN_FLIGHT: 'replica_operations_in_flight',
+  LEADERSHIP_UNSTABLE: 'leadership_unstable',
+});
 const ADMIN_LOCAL_DISPATCH = Object.freeze({
   TARGET_ADDRESS: 'local/admin-websocket-api',
 });
@@ -153,6 +173,114 @@ function firstStringField(record, ...keys) {
     }
   }
   return null;
+}
+
+/**
+ * Parse one comma-separated query parameter into sorted unique values.
+ *
+ * @param {*} rawValue
+ * @return {Array<string>}
+ */
+function parseDiscoveryListQuery(rawValue) {
+  const values = [];
+
+  const collectValues = (inputValue) => {
+    if (Array.isArray(inputValue)) {
+      for (const item of inputValue) {
+        collectValues(item);
+      }
+      return;
+    }
+    if (typeof inputValue !== TYPEOF.STRING) {
+      return;
+    }
+
+    for (const value of inputValue.split(',')) {
+      const trimmedValue = value.trim();
+      if (trimmedValue.length > NUM.ZERO) {
+        values.push(trimmedValue);
+      }
+    }
+  };
+
+  collectValues(rawValue);
+  return uniqueSorted(values);
+}
+
+/**
+ * Parse optional boolean query value with fallback.
+ *
+ * @param {*} rawValue
+ * @param {boolean} fallback
+ * @return {boolean}
+ */
+function parseDiscoveryBooleanQuery(rawValue, fallback) {
+  if (typeof rawValue === TYPEOF.BOOLEAN) {
+    return rawValue;
+  }
+  if (typeof rawValue !== TYPEOF.STRING) {
+    return fallback;
+  }
+
+  const normalizedValue = rawValue.trim().toLowerCase();
+  if (normalizedValue === ENDPOINT_SYNC_BOOLEAN.TRUE ||
+    normalizedValue === ENDPOINT_SYNC_BOOLEAN.ONE) {
+    return true;
+  }
+  if (normalizedValue === ENDPOINT_SYNC_BOOLEAN.FALSE ||
+    normalizedValue === ENDPOINT_SYNC_BOOLEAN.ZERO) {
+    return false;
+  }
+  return fallback;
+}
+
+/**
+ * Normalize identifier-like values used in discovery scope.
+ *
+ * @param {*} value
+ * @return {string|null}
+ */
+function normalizeIdentifier(value) {
+  if (typeof value !== TYPEOF.STRING) {
+    return null;
+  }
+  const trimmedValue = value.trim();
+  if (trimmedValue.length === NUM.ZERO) {
+    return null;
+  }
+  if (!IDENTIFIER_PATTERN.test(trimmedValue)) {
+    return null;
+  }
+  return trimmedValue;
+}
+
+/**
+ * Parse local service-discovery SQL with optional tableName argument.
+ *
+ * @param {string} sql
+ * @return {{isQuery: boolean, tableName: (string|null)}}
+ */
+function parseServiceDiscoverySqlQuery(sql) {
+  const normalizedSql = normalizeSql(sql);
+  if (normalizedSql === normalizeSql(ADMIN_SERVICE_DISCOVERY.QUERY_SQL)) {
+    return {
+      isQuery: true,
+      tableName: null,
+    };
+  }
+
+  const match = normalizedSql.match(SERVICE_DISCOVERY_SQL_WITH_TABLE_PATTERN);
+  if (!match) {
+    return {
+      isQuery: false,
+      tableName: null,
+    };
+  }
+
+  return {
+    isQuery: true,
+    tableName: normalizeIdentifier(match[1]),
+  };
 }
 
 /**
@@ -328,6 +456,9 @@ class AdminWebSocketAPI {
     });
     this.fastify.get(ADMIN_ROUTE.CONTROL_SNAPSHOT, async (request, reply) => {
       return this.handleControlSnapshot(request, reply);
+    });
+    this.fastify.get(ADMIN_ROUTE.SERVICE_DISCOVERY, async (request, reply) => {
+      return this.handleServiceDiscovery(request, reply);
     });
 
     // Test administration endpoints.
@@ -1379,6 +1510,12 @@ class AdminWebSocketAPI {
     if (this.isControlSnapshotQuery(sql)) {
       return this.buildControlSnapshotQueryResult();
     }
+    const serviceDiscoveryQuery = parseServiceDiscoverySqlQuery(sql);
+    if (serviceDiscoveryQuery.isQuery) {
+      return this.buildServiceDiscoveryQueryResult({
+        tableName: serviceDiscoveryQuery.tableName,
+      });
+    }
 
     const routed = guardedAdaptAdminAction(
       ADMIN_META_ACTION.EXECUTE_QUERY,
@@ -1825,6 +1962,58 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Handle local service-discovery route.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleServiceDiscovery(request, reply) {
+    const protocolAllowlist = parseDiscoveryListQuery(
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_PROTOCOL_KEY],
+    );
+    const serviceIdAllowlist = parseDiscoveryListQuery(
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_SERVICE_ID_KEY],
+    );
+    const nodeIdAllowlist = parseDiscoveryListQuery(
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_NODE_ID_KEY],
+    );
+    const healthyOnly = parseDiscoveryBooleanQuery(
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_HEALTHY_ONLY_KEY],
+      false,
+    );
+    const unhealthyPolicyRaw =
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_UNHEALTHY_POLICY_KEY];
+    const unhealthyPolicy =
+      String(unhealthyPolicyRaw || ENDPOINT_SYNC_UNHEALTHY_POLICY.NOT_READY)
+        .trim()
+        .toLowerCase();
+    const tableName = normalizeIdentifier(
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_TABLE_NAME_KEY],
+    );
+    const resolvedUnhealthyPolicy =
+      unhealthyPolicy === ENDPOINT_SYNC_UNHEALTHY_POLICY.EXCLUDE ?
+        ENDPOINT_SYNC_UNHEALTHY_POLICY.EXCLUDE :
+        ENDPOINT_SYNC_UNHEALTHY_POLICY.NOT_READY;
+
+    try {
+      const snapshot = this.buildLocalServiceDiscoverySnapshot({
+        protocolAllowlist,
+        serviceIdAllowlist,
+        nodeIdAllowlist,
+        tableName,
+        healthyOnly,
+        unhealthyPolicy: resolvedUnhealthyPolicy,
+      });
+      reply.code(HTTP_STATUS.OK).send(snapshot);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
    * Determine whether one SQL statement requests local control snapshot.
    * @param {string} sql
    * @return {boolean}
@@ -1833,6 +2022,360 @@ class AdminWebSocketAPI {
   isControlSnapshotQuery(sql) {
     return normalizeSql(sql) ===
       normalizeSql(ADMIN_CONTROL_SNAPSHOT.QUERY_SQL);
+  }
+
+  /**
+   * Determine whether one SQL statement requests local service discovery.
+   * @param {string} sql
+   * @return {boolean}
+   * @private
+   */
+  isServiceDiscoveryQuery(sql) {
+    return parseServiceDiscoverySqlQuery(sql).isQuery;
+  }
+
+  /**
+   * Build local service-discovery snapshot from system cache only.
+   * @param {Object} [options={}]
+   * @return {Object}
+   * @private
+   */
+  buildLocalServiceDiscoverySnapshot(options = {}) {
+    if (!this.systemTableCache ||
+      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      throw new Error(ADMIN_ERROR_MESSAGE.SERVICE_DISCOVERY_UNAVAILABLE);
+    }
+
+    const endpointRows = this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS);
+    const definitionRows =
+      this.systemTableCache.getAll(TABLES.SERVICE_DEFINITIONS);
+    const readinessContext = this.buildServiceDiscoveryReadinessContext(options);
+    const discoveredServices = buildServiceDiscoveryCatalog(endpointRows, {
+      protocolAllowlist: options.protocolAllowlist || ADMIN_CACHE_DUMP.EMPTY,
+      serviceIdAllowlist: options.serviceIdAllowlist || ADMIN_CACHE_DUMP.EMPTY,
+      nodeIdAllowlist: options.nodeIdAllowlist || ADMIN_CACHE_DUMP.EMPTY,
+      healthyOnly: options.healthyOnly === true,
+      unhealthyPolicy: options.unhealthyPolicy,
+      definitionRows,
+    });
+    const services = discoveredServices.map((service) => ({
+      ...service,
+      replicas: service.replicas.map((replica) => ({
+        ...replica,
+        readiness: this.buildServiceDiscoveryReplicaReadiness(
+          replica,
+          readinessContext,
+        ),
+      })),
+    }));
+    const replicaCount = services.reduce((count, service) =>
+      count + service.observedReplicaCount, NUM.ZERO);
+
+    return {
+      schemaVersion: ADMIN_SERVICE_DISCOVERY.SCHEMA_VERSION,
+      nodeId: this.nodeId,
+      capturedAt: Date.now(),
+      serviceCount: services.length,
+      replicaCount,
+      services,
+    };
+  }
+
+  /**
+   * Build per-replica readiness context from local cache state.
+   * @param {Object} [options={}]
+   * @return {Object}
+   * @private
+   */
+  buildServiceDiscoveryReadinessContext(options = {}) {
+    const tableName = normalizeIdentifier(options.tableName);
+    const nodeRows = this.systemTableCache.getAll(TABLES.NODES);
+    const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
+    const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
+    const tableRows = this.systemTableCache.getAll(TABLES.TABLES);
+    const replicaOperationRows =
+      this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS);
+
+    const activeNodeIds = new Set(nodeRows
+      .map((row) => ({
+        nodeId: firstStringField(row, COLUMN.NODE_ID, 'node_id', 'nodeId', 'id'),
+        status: firstStringField(row, COLUMN.STATUS, 'status'),
+      }))
+      .filter((entry) =>
+        entry.nodeId &&
+        String(entry.status || '').toLowerCase() === STATUS_ACTIVE)
+      .map((entry) => entry.nodeId));
+
+    const tablePartitionContext = this.resolveDiscoveryTablePartitionContext(
+      tableName,
+      partitionRows,
+      tableRows,
+    );
+    const schemaReadyNodeIds = this.resolveDiscoverySchemaReadyNodeIds(
+      tablePartitionContext.partitionIds,
+      serviceRows,
+    );
+    const leadershipStable = this.resolveDiscoveryLeadershipStable(
+      tablePartitionContext.partitionIds,
+      serviceRows,
+    );
+    const replicaOperationSummary =
+      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
+
+    return {
+      tableName,
+      tableFound: tablePartitionContext.tableFound,
+      activeNodeIds,
+      schemaReadyNodeIds,
+      leadershipStable,
+      replicaOpsInFlight: replicaOperationSummary.inFlightCount,
+    };
+  }
+
+  /**
+   * Resolve partition context for optional table-scoped readiness.
+   * @param {string|null} tableName
+   * @param {Array<Object>} partitionRows
+   * @param {Array<Object>} tableRows
+   * @return {{tableFound: boolean, partitionIds: Set<string>}}
+   * @private
+   */
+  resolveDiscoveryTablePartitionContext(tableName, partitionRows, tableRows) {
+    if (!tableName) {
+      return {
+        tableFound: true,
+        partitionIds: new Set(),
+      };
+    }
+
+    const tableIds = new Set();
+    for (const tableRow of tableRows) {
+      const rowTableName = firstStringField(
+        tableRow,
+        COLUMN.TABLE_NAME,
+        'table_name',
+        'tableName',
+        'name',
+      );
+      if (rowTableName !== tableName) {
+        continue;
+      }
+      const tableId = firstStringField(
+        tableRow,
+        COLUMN.TABLE_ID,
+        'table_id',
+        'tableId',
+        'id',
+      );
+      if (tableId) {
+        tableIds.add(tableId);
+      }
+    }
+
+    const partitionIds = new Set();
+    for (const partitionRow of partitionRows) {
+      const partitionId = firstStringField(
+        partitionRow,
+        COLUMN.PARTITION_ID,
+        'partition_id',
+        'partitionId',
+        'id',
+      );
+      if (!partitionId) {
+        continue;
+      }
+      const rowTableName = firstStringField(
+        partitionRow,
+        COLUMN.TABLE_NAME,
+        'table_name',
+        'tableName',
+        'name',
+      );
+      const rowTableId = firstStringField(
+        partitionRow,
+        COLUMN.TABLE_ID,
+        'table_id',
+        'tableId',
+      );
+      if (rowTableName === tableName || (rowTableId && tableIds.has(rowTableId))) {
+        partitionIds.add(partitionId);
+      }
+    }
+
+    return {
+      tableFound: partitionIds.size > NUM.ZERO,
+      partitionIds,
+    };
+  }
+
+  /**
+   * Resolve nodes with active partition replicas for target partitions.
+   * @param {Set<string>} partitionIds
+   * @param {Array<Object>} serviceRows
+   * @return {Set<string>}
+   * @private
+   */
+  resolveDiscoverySchemaReadyNodeIds(partitionIds, serviceRows) {
+    const schemaReadyNodeIds = new Set();
+    if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
+      return schemaReadyNodeIds;
+    }
+
+    for (const serviceRow of serviceRows) {
+      const serviceType = firstStringField(
+        serviceRow,
+        COLUMN.SERVICE_TYPE,
+        'service_type',
+        'serviceType',
+        'type',
+      );
+      if (serviceType !== SERVICE_TYPE_PARTITION) {
+        continue;
+      }
+      const partitionId = firstStringField(
+        serviceRow,
+        COLUMN.PARTITION_ID,
+        'partition_id',
+        'partitionId',
+        'id',
+      );
+      if (!partitionId || !partitionIds.has(partitionId)) {
+        continue;
+      }
+      const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
+      if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
+        continue;
+      }
+      const nodeId = firstStringField(
+        serviceRow,
+        COLUMN.NODE_ID,
+        'node_id',
+        'nodeId',
+      );
+      if (nodeId) {
+        schemaReadyNodeIds.add(nodeId);
+      }
+    }
+
+    return schemaReadyNodeIds;
+  }
+
+  /**
+   * Resolve leader-coverage stability for target partitions.
+   * @param {Set<string>} partitionIds
+   * @param {Array<Object>} serviceRows
+   * @return {boolean}
+   * @private
+   */
+  resolveDiscoveryLeadershipStable(partitionIds, serviceRows) {
+    if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
+      return true;
+    }
+
+    const partitionsWithLeaders = new Set();
+    for (const serviceRow of serviceRows) {
+      const serviceType = firstStringField(
+        serviceRow,
+        COLUMN.SERVICE_TYPE,
+        'service_type',
+        'serviceType',
+        'type',
+      );
+      if (serviceType !== SERVICE_TYPE_PARTITION) {
+        continue;
+      }
+      const partitionId = firstStringField(
+        serviceRow,
+        COLUMN.PARTITION_ID,
+        'partition_id',
+        'partitionId',
+        'id',
+      );
+      if (!partitionId || !partitionIds.has(partitionId)) {
+        continue;
+      }
+      const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
+      if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
+        continue;
+      }
+      const raftRole = firstStringField(
+        serviceRow,
+        COLUMN.RAFT_ROLE,
+        'raft_role',
+        'raftRole',
+      );
+      if (String(raftRole || '').toLowerCase() !== LEADER_RAFT_ROLE) {
+        continue;
+      }
+      partitionsWithLeaders.add(partitionId);
+    }
+
+    return partitionsWithLeaders.size === partitionIds.size;
+  }
+
+  /**
+   * Build additive canonical readiness block for one discovery replica.
+   * @param {Object} replica
+   * @param {Object} readinessContext
+   * @return {Object}
+   * @private
+   */
+  buildServiceDiscoveryReplicaReadiness(replica, readinessContext) {
+    const nodeId = String(replica?.nodeId || '');
+    const healthyEndpoint =
+      String(replica?.healthStatus || '').toLowerCase() ===
+      ENDPOINT_SYNC_HEALTH.HEALTHY;
+    const routingReady = healthyEndpoint &&
+      readinessContext.activeNodeIds.has(nodeId);
+    const schemaReady = readinessContext.tableName ?
+      (readinessContext.tableFound &&
+        readinessContext.schemaReadyNodeIds.has(nodeId)) :
+      true;
+    const topologyReady = readinessContext.replicaOpsInFlight === NUM.ZERO &&
+      readinessContext.leadershipStable === true;
+    const workloadReady = routingReady && schemaReady && topologyReady;
+    const reasons = [];
+
+    if (!routingReady) {
+      reasons.push({
+        code: SERVICE_DISCOVERY_READINESS_REASON.ROUTING_NOT_READY,
+        detail: 'endpoint unhealthy or node not ACTIVE',
+      });
+    }
+    if (readinessContext.tableName && !readinessContext.tableFound) {
+      reasons.push({
+        code: SERVICE_DISCOVERY_READINESS_REASON.SCHEMA_TABLE_MISSING,
+        detail: 'table "' + readinessContext.tableName + '" not found',
+      });
+    } else if (readinessContext.tableName && !schemaReady) {
+      reasons.push({
+        code: SERVICE_DISCOVERY_READINESS_REASON.SCHEMA_PARTITION_UNAVAILABLE,
+        detail: 'table "' + readinessContext.tableName +
+          '" not query-ready on node',
+      });
+    }
+    if (readinessContext.replicaOpsInFlight > NUM.ZERO) {
+      reasons.push({
+        code: SERVICE_DISCOVERY_READINESS_REASON.REPLICA_OPERATIONS_IN_FLIGHT,
+        detail: String(readinessContext.replicaOpsInFlight),
+      });
+    }
+    if (!readinessContext.leadershipStable) {
+      reasons.push({
+        code: SERVICE_DISCOVERY_READINESS_REASON.LEADERSHIP_UNSTABLE,
+        detail: 'leader coverage incomplete for readiness scope',
+      });
+    }
+
+    return {
+      workloadReady,
+      routingReady,
+      schemaReady,
+      replicaOpsInFlight: readinessContext.replicaOpsInFlight,
+      leadershipStable: readinessContext.leadershipStable,
+      tableName: readinessContext.tableName,
+      reasons,
+    };
   }
 
   /**
@@ -1860,6 +2403,7 @@ class AdminWebSocketAPI {
       .filter(Boolean));
 
     const leaders = this.buildControlSnapshotLeaders(serviceRows);
+    const voterCounts = this.buildControlSnapshotVoterCounts(serviceRows);
     const replicaOperations =
       this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
 
@@ -1870,6 +2414,7 @@ class AdminWebSocketAPI {
       nodes: nodeIds,
       partitions: partitionIds,
       leaders,
+      voterCounts,
       replicaOperations,
     };
   }
@@ -1898,7 +2443,7 @@ class AdminWebSocketAPI {
         COLUMN.RAFT_ROLE,
         'raftRole',
       );
-      if (raftRole === LEARNER_RAFT_ROLE) {
+      if (String(raftRole || '').toLowerCase() !== LEADER_RAFT_ROLE) {
         continue;
       }
 
@@ -1928,6 +2473,59 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Build voter-count map per partition from local services rows.
+   * @param {Array<Object>} serviceRows
+   * @return {Object}
+   * @private
+   */
+  buildControlSnapshotVoterCounts(serviceRows = []) {
+    const voterCounts = {};
+    for (const serviceRow of serviceRows) {
+      const serviceType = firstStringField(
+        serviceRow,
+        COLUMN.SERVICE_TYPE,
+        'type',
+        'serviceType',
+      );
+      if (serviceType !== SERVICE_TYPE_PARTITION) {
+        continue;
+      }
+
+      const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
+      if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
+        continue;
+      }
+
+      const raftRole = firstStringField(serviceRow, COLUMN.RAFT_ROLE, 'raftRole');
+      const normalizedRaftRole = String(raftRole || '').toLowerCase();
+      if (!normalizedRaftRole || normalizedRaftRole === LEARNER_RAFT_ROLE) {
+        continue;
+      }
+
+      const address = firstStringField(
+        serviceRow,
+        COLUMN.ADDRESS,
+        'address',
+      );
+      if (!address) {
+        continue;
+      }
+
+      const partitionId = firstStringField(
+        serviceRow,
+        COLUMN.PARTITION_ID,
+        'partitionId',
+      );
+      if (!partitionId) {
+        continue;
+      }
+
+      voterCounts[partitionId] = (voterCounts[partitionId] || NUM.ZERO) + NUM.ONE;
+    }
+    return voterCounts;
+  }
+
+  /**
    * Build replica operation in-flight summary.
    * @param {Array<Object>} replicaOperationRows
    * @return {Object}
@@ -1936,18 +2534,30 @@ class AdminWebSocketAPI {
   buildControlSnapshotReplicaOperationSummary(replicaOperationRows = []) {
     const statusHistogram = {};
     let inFlightCount = NUM.ZERO;
+    const partitionGroupInFlight = {};
     for (const row of replicaOperationRows) {
       const status = firstStringField(row, COLUMN.STATUS, 'status') ||
         STATUS_UNKNOWN;
       statusHistogram[status] = (statusHistogram[status] || NUM.ZERO) + NUM.ONE;
       if (!ADMIN_CONTROL_SNAPSHOT.IN_FLIGHT_EXCLUDED_STATUSES.includes(status)) {
         inFlightCount += NUM.ONE;
+        const partitionGroupId = firstStringField(
+          row,
+          COLUMN.PARTITION_ID,
+          'partition_id',
+          'partitionId',
+          'entity_id',
+          'entityId',
+        ) || STATUS_UNKNOWN;
+        partitionGroupInFlight[partitionGroupId] =
+          (partitionGroupInFlight[partitionGroupId] || NUM.ZERO) + NUM.ONE;
       }
     }
 
     return {
       inFlightCount,
       statusHistogram,
+      partitionGroupInFlight,
     };
   }
 
@@ -1964,6 +2574,23 @@ class AdminWebSocketAPI {
       count: NUM.ONE,
       partitions: ADMIN_CACHE_DUMP.EMPTY,
       tableName: ADMIN_CONTROL_SNAPSHOT.TABLE_NAME,
+    };
+  }
+
+  /**
+   * Build canonical query_result payload for local service discovery query.
+   * @param {Object} [options={}]
+   * @return {Object}
+   * @private
+   */
+  buildServiceDiscoveryQueryResult(options = {}) {
+    const snapshot = this.buildLocalServiceDiscoverySnapshot(options);
+    return {
+      success: true,
+      rows: [snapshot],
+      count: NUM.ONE,
+      partitions: ADMIN_CACHE_DUMP.EMPTY,
+      tableName: ADMIN_SERVICE_DISCOVERY.TABLE_NAME,
     };
   }
 

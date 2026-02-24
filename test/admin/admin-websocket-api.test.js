@@ -120,6 +120,51 @@ function createPopulatedCache() {
 }
 
 /**
+ * Add runtime service-definition and service-endpoint rows for discovery tests.
+ * @param {SystemTableCache} cache
+ */
+function seedServiceDiscoveryRows(cache) {
+  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
+    service_id: 'sys-postgres-wire',
+    service_name: 'sys-postgres-wire',
+    replica_count: 3,
+    runtime_kind: 'native_js',
+  });
+
+  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    endpoint_id: 'sys-postgres-wire-ep-node-1',
+    service_id: 'sys-postgres-wire',
+    node_id: 'node-1',
+    protocol: 'postgresql',
+    address: '10.0.0.1',
+    port: 5432,
+    health_status: 'healthy',
+    metadata: JSON.stringify({
+      service_name: 'sys-postgres-wire',
+      protocol: 'postgresql',
+      version: '1.0.0',
+    }),
+    updated_at: Date.now(),
+  });
+
+  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    endpoint_id: 'sys-postgres-wire-ep-node-2',
+    service_id: 'sys-postgres-wire',
+    node_id: 'node-2',
+    protocol: 'postgresql',
+    address: '10.0.0.2',
+    port: 5432,
+    health_status: 'unhealthy',
+    metadata: JSON.stringify({
+      service_name: 'sys-postgres-wire',
+      protocol: 'postgresql',
+      version: '1.0.0',
+    }),
+    updated_at: Date.now(),
+  });
+}
+
+/**
  * Connect to AdminWebSocketAPI in-process and wait for first message.
  * Avoids binding TCP ports (not permitted in some test sandboxes).
  * @param {AdminWebSocketAPI} api - Admin API instance.
@@ -798,6 +843,7 @@ test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation
     t.equal(Array.isArray(payload.nodes), true, 'should include nodes array');
     t.equal(Array.isArray(payload.partitions), true, 'should include partitions array');
     t.equal(typeof payload.leaders, 'object', 'should include leaders map');
+    t.equal(typeof payload.voterCounts, 'object', 'should include voter-count map');
     t.equal(typeof payload.replicaOperations, 'object',
       'should include replica operation summary');
     t.equal(
@@ -809,6 +855,16 @@ test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation
       typeof payload.replicaOperations.statusHistogram,
       'object',
       'should include status histogram',
+    );
+    t.equal(
+      typeof payload.replicaOperations.partitionGroupInFlight,
+      'object',
+      'should include partition-group in-flight summary',
+    );
+    t.equal(
+      payload.replicaOperations.partitionGroupInFlight.unknown,
+      1,
+      'creating operation without explicit partition id should be grouped',
     );
     t.equal(executeRequestCalls, 0,
       'local snapshot endpoint should not execute SQL query engine requests');
@@ -857,10 +913,160 @@ test('AdminWebSocketAPI - local control snapshot query avoids distributed fanout
     t.equal(Array.isArray(response.results), true, 'query result should include rows');
     t.equal(response.results.length, 1, 'query should return one snapshot row');
     t.equal(response.results[0].schemaVersion, 1, 'query should expose snapshot schema');
+    t.equal(typeof response.results[0].voterCounts, 'object',
+      'query result should include voter-count map');
     t.equal(executeRequestCalls, 0,
       'local control snapshot query should not execute distributed SQL requests');
 
     ws.close();
+    await api.shutdown();
+  });
+
+test('AdminWebSocketAPI - local service discovery endpoint shape and filtering',
+  async (t) => {
+    let executeRequestCalls = 0;
+    const cache = createPopulatedCache();
+    seedServiceDiscoveryRows(cache);
+    const beforeCounts = {
+      serviceDefinitions: cache.count(TABLES.SERVICE_DEFINITIONS),
+      serviceEndpoints: cache.count(TABLES.SERVICE_ENDPOINTS),
+    };
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: {
+        executeRequest: async () => {
+          executeRequestCalls++;
+          return {success: true, rows: []};
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&nodeId=node-1&healthyOnly=true',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    t.equal(payload.schemaVersion, 2, 'should expose schema version');
+    t.equal(payload.nodeId, 'test-node', 'should include current node id');
+    t.equal(payload.serviceCount, 1, 'should return one logical discovery group');
+    t.equal(payload.replicaCount, 1, 'should include filtered replica count');
+    t.equal(Array.isArray(payload.services), true, 'should include services array');
+    t.equal(payload.services.length, 1, 'should include one service row');
+    t.equal(payload.services[0].serviceKey,
+      'sys-postgres-wire|postgresql', 'should expose endpoint-sync service key');
+    t.equal(payload.services[0].observedReplicaCount, 1,
+      'should honor discovery filters');
+    t.equal(payload.services[0].desiredReplicaCount, 3,
+      'should include desired replica count from definitions');
+    t.equal(payload.services[0].replicas.length, 1,
+      'should include filtered replica rows');
+    t.equal(payload.services[0].replicas[0].nodeId, 'node-1',
+      'should keep only requested node replica');
+    t.equal(
+      payload.services[0].replicas[0].readiness.workloadReady,
+      true,
+      'should include canonical workload readiness',
+    );
+    t.equal(
+      payload.services[0].replicas[0].readiness.schemaReady,
+      true,
+      'default discovery scope should mark schema readiness true',
+    );
+    t.equal(executeRequestCalls, 0,
+      'service discovery endpoint should not execute distributed SQL requests');
+
+    t.equal(cache.count(TABLES.SERVICE_DEFINITIONS),
+      beforeCounts.serviceDefinitions,
+      'should not mutate service definitions table');
+    t.equal(cache.count(TABLES.SERVICE_ENDPOINTS), beforeCounts.serviceEndpoints,
+      'should not mutate service endpoints table');
+
+    await api.shutdown();
+  });
+
+test('AdminWebSocketAPI - local service discovery query avoids distributed fanout',
+  async (t) => {
+    let executeRequestCalls = 0;
+    const cache = createPopulatedCache();
+    seedServiceDiscoveryRows(cache);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: {
+        executeRequest: async () => {
+          executeRequestCalls++;
+          return {success: true, rows: [{id: 'unexpected'}]};
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    const {ws} = await connectAndReceive(api);
+
+    ws.send(JSON.stringify({
+      type: MessageType.QUERY,
+      queryId: 'q-service-discovery',
+      sql: 'SELECT * FROM service_discovery_local()',
+    }));
+
+    const response = await waitForMessage(ws);
+
+    t.equal(response.type, MessageType.QUERY_RESULT, 'should return query_result');
+    t.equal(response.queryId, 'q-service-discovery', 'should preserve query id');
+    t.equal(Array.isArray(response.results), true, 'query result should include rows');
+    t.equal(response.results.length, 1, 'query should return one snapshot row');
+    t.equal(response.results[0].schemaVersion, 2,
+      'query should expose discovery schema version');
+    t.equal(Array.isArray(response.results[0].services), true,
+      'query snapshot should include services array');
+    t.equal(response.results[0].serviceCount, 1,
+      'query snapshot should include grouped service count');
+    t.equal(
+      response.results[0].services[0].replicas[0].readiness.workloadReady,
+      true,
+      'query snapshot should include readiness block',
+    );
+    t.equal(executeRequestCalls, 0,
+      'local service discovery query should not execute distributed SQL requests');
+
+    ws.close();
+    await api.shutdown();
+  });
+
+test('AdminWebSocketAPI - table-scoped discovery readiness marks missing schema',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedServiceDiscoveryRows(cache);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const readiness = payload.services[0].replicas[0].readiness;
+    t.equal(readiness.schemaReady, false, 'missing table should mark schema not ready');
+    t.equal(readiness.workloadReady, false, 'missing table should block workload readiness');
+    t.equal(
+      readiness.reasons.some((reason) => reason.code === 'schema_table_missing'),
+      true,
+      'readiness reasons should include schema_table_missing',
+    );
+
     await api.shutdown();
   });
 

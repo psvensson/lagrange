@@ -107,6 +107,10 @@ const MEMORY_ASSERTION_ERROR_PREFIX = 'Memory leak assertion failed: ';
 const MEMORY_ASSERTION_SAMPLES_MISSING = 'memory samples unavailable';
 const MEMORY_ASSERTION_LEAK_DETECTED_PREFIX =
   'memory leak detected on nodes: ';
+const MEMORY_ASSERTION_ANALYSIS_INSUFFICIENT =
+  'memory analysis window insufficient for leak verdict';
+const MEMORY_ANALYSIS_WARNING_SAMPLES_PATH_MISSING = 'samples-path-missing';
+const MEMORY_ANALYSIS_WARNING_SAMPLES_READ_FAILED = 'samples-read-failed';
 const SCENARIO_FILTER_ALL = 'all';
 const BENCHMARK_GATE_STATUS = Object.freeze({
   PASSED: 'passed',
@@ -1194,6 +1198,13 @@ function evaluateMemoryLeakAssertions(memoryLeakAnalysis, memoryLeakConfig) {
   const leakingNodes = Array.isArray(memoryLeakAnalysis?.leakingNodes) ?
     memoryLeakAnalysis.leakingNodes :
     [];
+  const warnings = Array.isArray(memoryLeakAnalysis?.warnings) ?
+    memoryLeakAnalysis.warnings.map((warning) => String(warning)) :
+    [];
+  const sampleCount = Number(memoryLeakAnalysis?.sampleCount || 0);
+  const samplesUnavailable = sampleCount <= 0 ||
+    warnings.includes(MEMORY_ANALYSIS_WARNING_SAMPLES_PATH_MISSING) ||
+    warnings.includes(MEMORY_ANALYSIS_WARNING_SAMPLES_READ_FAILED);
   const assertion = {
     enabled: true,
     required: memoryLeakConfig.failOnDetection === true ||
@@ -1202,14 +1213,21 @@ function evaluateMemoryLeakAssertions(memoryLeakAnalysis, memoryLeakConfig) {
     leakDetected: memoryLeakAnalysis?.leakDetected === true,
     leakingNodeCount: Number(memoryLeakAnalysis?.leakingNodeCount || 0),
     leakingNodes,
+    sampleCount,
     passed: true,
     error: null,
   };
 
   if (memoryLeakConfig.requireSamples === true &&
       assertion.analyzed !== true) {
-    assertion.passed = false;
-    assertion.error = MEMORY_ASSERTION_SAMPLES_MISSING;
+    if (samplesUnavailable) {
+      assertion.passed = false;
+      assertion.error = MEMORY_ASSERTION_SAMPLES_MISSING;
+      return assertion;
+    }
+    assertion.sampleCoverage = 'present';
+    assertion.analysisDeferred = true;
+    assertion.warning = MEMORY_ASSERTION_ANALYSIS_INSUFFICIENT;
     return assertion;
   }
 

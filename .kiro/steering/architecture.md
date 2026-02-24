@@ -1848,6 +1848,9 @@ Primary modules:
    reconcile duration/failures and exported object counts.
 10. `src/runtime/endpoint-sync-k8s-client.js` — in-cluster Kubernetes API
     adapter implementing Service/EndpointSlice/Lease/Event operations.
+11. `src/runtime/service-discovery-catalog.js` — reusable discovery catalog
+    builder that reuses endpoint-sync normalization/filtering/grouping for
+    non-Kubernetes consumers.
 
 ### Endpoint Sync Safety and Observability
 
@@ -1873,3 +1876,15 @@ Managed Kubernetes objects are identified by labels:
 3. `endpointsync.system/service-key=<logical-service|protocol>`
 
 Garbage collection is scoped strictly to resources carrying managed labels.
+
+### General Service Discovery Surface
+
+The endpoint-sync discovery model is also exposed for general consumers:
+
+1. `AdminWebSocketAPI` serves `GET /api/admin/discovery/services` from local
+   `SystemTableCache` rows only (no distributed query fanout).
+2. `SELECT * FROM service_discovery_local()` is intercepted as a local-only
+   admin query shortcut for compatibility clients on `/api/admin/stream`.
+3. Both surfaces return the same catalog shape: logical service key
+   (`logicalServiceName|protocol`), observed replicas, per-replica endpoint
+   details, and desired replica counts sourced from `service_definitions`.

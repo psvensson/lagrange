@@ -1,0 +1,1356 @@
+{
+  "timestamp": "2026-02-24T06:32:39.490Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 172742
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 3,
+    "scenariosWithPriorities": 1,
+    "topComponents": [
+      {
+        "component": "tail_latency_path",
+        "count": 1,
+        "highestPriority": "critical",
+        "highestScore": 95
+      },
+      {
+        "component": "convergence_control_plane",
+        "count": 1,
+        "highestPriority": "medium",
+        "highestScore": 60
+      },
+      {
+        "component": "replication_write_path",
+        "count": 1,
+        "highestPriority": "medium",
+        "highestScore": 60
+      }
+    ],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 1,
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 7,
+      "comparableGroupCount": 1,
+      "groups": [
+        {
+          "similarityKey": "postgres-baseline-comparison|{\"workload\":\"benchmark_events_mixed\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+          "scenario": "postgres-baseline-comparison",
+          "observationCount": 2,
+          "baselineClusterSize": 3,
+          "targetClusterSize": 7,
+          "baselineOpsPerSec": 28.373183920776597,
+          "targetOpsPerSec": 11.73701137230198,
+          "baselineOpsPerSecPerNode": 9.457727973592199,
+          "targetOpsPerSecPerNode": 1.6767159103288543,
+          "observedThroughputScale": 0.41366564306191295,
+          "expectedThroughputScale": 2.3333333333333335,
+          "throughputScaleEfficiency": 0.17728527559796267,
+          "p99LatencyScale": 0.9369627507163324,
+          "baselineReportTimestamp": "2026-02-24T05:39:59.203Z",
+          "baselineReportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-rerun-20260224T053734Z.report.json",
+          "targetReportTimestamp": null,
+          "targetReportPath": null
+        }
+      ],
+      "topOpportunities": [
+        {
+          "similarityKey": "postgres-baseline-comparison|{\"workload\":\"benchmark_events_mixed\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+          "scenario": "postgres-baseline-comparison",
+          "observationCount": 2,
+          "baselineClusterSize": 3,
+          "targetClusterSize": 7,
+          "baselineOpsPerSec": 28.373183920776597,
+          "targetOpsPerSec": 11.73701137230198,
+          "baselineOpsPerSecPerNode": 9.457727973592199,
+          "targetOpsPerSecPerNode": 1.6767159103288543,
+          "observedThroughputScale": 0.41366564306191295,
+          "expectedThroughputScale": 2.3333333333333335,
+          "throughputScaleEfficiency": 0.17728527559796267,
+          "p99LatencyScale": 0.9369627507163324,
+          "baselineReportTimestamp": "2026-02-24T05:39:59.203Z",
+          "baselineReportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-rerun-20260224T053734Z.report.json",
+          "targetReportTimestamp": null,
+          "targetReportPath": null
+        }
+      ]
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|{\"workload\":\"benchmark_events_mixed\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+        "current": {
+          "passed": true,
+          "clusterSize": 7,
+          "durationMs": 172742,
+          "opsPerSec": 11.73701137230198,
+          "p99LatencyMs": 981,
+          "opsPerSecPerNode": 1.6767159103288543
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-24T06:29:16.877Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-acceptance-phase6.report.json",
+          "passed": true,
+          "clusterSize": 7,
+          "durationMs": 181782,
+          "opsPerSec": 11.797271469056879,
+          "p99LatencyMs": 1133,
+          "opsPerSecPerNode": 1.685324495579554
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": -9040,
+          "durationRatio": -0.049729896249353624,
+          "opsPerSec": -0.06026009675489874,
+          "opsPerSecRatio": -0.0051079689835870305,
+          "opsPerSecPerNode": -0.008608585250699852,
+          "opsPerSecPerNodeRatio": -0.0051079689835870495,
+          "p99LatencyMs": -152,
+          "p99LatencyMsRatio": -0.13415710503089143
+        },
+        "postgresBaseline": {
+          "engine": "postgres",
+          "throughputRatioSutToBaseline": 0.0978084281025165,
+          "p99LatencyRatioSutToBaselineAvg": 1279.1017747193046,
+          "sutOpsPerSec": 11.73701137230198,
+          "baselineTps": 120,
+          "sutP99LatencyMs": 981,
+          "baselineLatencyAvgMs": 0.7669444444444444,
+          "cache": {
+            "enabled": true,
+            "hit": false,
+            "key": "v3-828a323447039df4eee07de9a279d5861add28151f8da75758181af5e564a817",
+            "path": "test-output/reports/.playback/postgres-baseline-7node-acceptance-phase6b/postgres-baseline-cache/v3-828a323447039df4eee07de9a279d5861add28151f8da75758181af5e564a817.json",
+            "cachedAt": "2026-02-24T06:32:33.920Z",
+            "reason": "cache-stored"
+          }
+        },
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": true,
+      "duration": 172742,
+      "clusterSize": 7,
+      "startedAt": "2026-02-24T06:29:46.721Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1771914586723,
+        "endedAt": 1771914759487,
+        "durationMs": 172764,
+        "files": {
+          "events": "test-output/reports/.playback/postgres-baseline-7node-acceptance-phase6b/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/postgres-baseline-7node-acceptance-phase6b/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/postgres-baseline-7node-acceptance-phase6b/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/postgres-baseline-7node-acceptance-phase6b/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/postgres-baseline-7node-acceptance-phase6b/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 44,
+          "samples": 543,
+          "snapshots": 1
+        },
+        "warnings": [
+          {
+            "code": "query-node-unavailable",
+            "message": "No admin-ready reachable node available for topology snapshot query",
+            "timestamp": 1771914721854,
+            "details": {
+              "reachability": [
+                {
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "timestamp": 1771914721788,
+                  "reachable": true,
+                  "adminReady": false,
+                  "reachableBy": "bootstrap_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.2:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": "http://172.18.0.2:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.2:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "timestamp": 1771914721851,
+                  "reachable": true,
+                  "adminReady": false,
+                  "reachableBy": "bootstrap_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.3:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": "http://172.18.0.3:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.3:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "timestamp": 1771914721852,
+                  "reachable": true,
+                  "adminReady": false,
+                  "reachableBy": "bootstrap_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.4:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": "http://172.18.0.4:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.4:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+                  "timestamp": 1771914721852,
+                  "reachable": true,
+                  "adminReady": false,
+                  "reachableBy": "bootstrap_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.5:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": "http://172.18.0.5:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.5:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+                  "timestamp": 1771914721852,
+                  "reachable": true,
+                  "adminReady": false,
+                  "reachableBy": "bootstrap_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.6:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": "http://172.18.0.6:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.6:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "ff60df70-c157-50cb-bfdf-f617df0e5cb4",
+                  "timestamp": 1771914721853,
+                  "reachable": true,
+                  "adminReady": false,
+                  "reachableBy": "bootstrap_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.7:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": "http://172.18.0.7:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.7:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+                  "timestamp": 1771914721853,
+                  "reachable": true,
+                  "adminReady": false,
+                  "reachableBy": "bootstrap_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.8:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": "http://172.18.0.8:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.8:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "loadMetrics": {
+          "total": 354,
+          "success": 354,
+          "failed": 0,
+          "errors": 0,
+          "latency": {
+            "avg": 169.72316384180792,
+            "p50": 140,
+            "p95": 263,
+            "p99": 981
+          },
+          "opsPerSec": 11.73701137230198,
+          "queueDelay": {
+            "avg": 12322.62170823954,
+            "p50": 11593.34765625,
+            "p95": 24844.694091796875,
+            "p99": 25486.028564453125,
+            "max": 27041.6953125
+          }
+        },
+        "details": {
+          "benchmark": {
+            "tool": "shared-load-generator",
+            "workload": "benchmark_events_mixed",
+            "durationSeconds": 30,
+            "clients": 8,
+            "sutEligibleLoadNodeCount": 1,
+            "sutLoadNodeCount": 1,
+            "sutExcludedLoadNodeIds": [],
+            "jobs": 4,
+            "loadTargetOpsPerSec": 120,
+            "loadDuration": "30s",
+            "loadMaxInFlight": 128,
+            "loadQueryTimeoutMs": 4000,
+            "loadNodeMaxInFlight": 2,
+            "nodeFailureThreshold": 3,
+            "nodeFailureCooldownMs": 1500,
+            "quiescentTimeoutMs": 90000,
+            "quiescentPollIntervalMs": 500,
+            "quiescentStableWindowMs": 2000,
+            "quiescentNoProgressTimeoutMs": 30000,
+            "consistencyAssertMaxAttempts": 3,
+            "consistencyAssertRetryDelayMs": 2000,
+            "consistencyAssertionAttempts": 1,
+            "sutLoadDiscovery": {
+              "attempts": 1,
+              "timedOut": false,
+              "discoveredNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "candidateNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "reachableNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "sourceResults": [
+                {
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "status": "discovered",
+                  "discoveredNodeIds": [
+                    "7493b0ab-a054-5fad-a91b-5e331db29304"
+                  ],
+                  "selection": "postgres-wire",
+                  "serviceId": "sys-postgres-wire",
+                  "protocol": "postgresql",
+                  "excludedReadinessByNodeId": {}
+                }
+              ],
+              "elapsedMs": 3
+            },
+            "sutLoadDiscoveryExcludedReadinessByNodeId": {},
+            "insufficientEvidencePolicy": "soft",
+            "postLoadDrainStatus": "ok",
+            "postLoadDrainMode": "all_ready",
+            "postLoadDrainAttempts": 9,
+            "postLoadDrainStableElapsedMs": 2040,
+            "postLoadDrainNoProgressTimeoutMs": 30000,
+            "postLoadDrainError": null,
+            "postLoadDrainReasonHistogram": {
+              "in_flight_replica_operations:1": 1,
+              "leadership_unstable:0": 1,
+              "leadership_unstable:502": 1,
+              "leadership_unstable:1337": 1,
+              "leadership_unstable:1847": 1
+            },
+            "postLoadDrainPartitionGroupInFlight": {},
+            "postLoadDrainIncludedNodeIds": [
+              "7493b0ab-a054-5fad-a91b-5e331db29304"
+            ],
+            "postLoadDrainExcludedNodeIds": [],
+            "operations": [
+              "INSERT",
+              "SELECT"
+            ],
+            "tableName": "benchmark_events"
+          },
+          "baseline": {
+            "engine": "postgres",
+            "image": "postgres:16",
+            "containerIp": "172.18.0.9",
+            "replicaContainerIps": [
+              "172.18.0.10",
+              "172.18.0.11"
+            ],
+            "replicationFactor": 3,
+            "syncReplicaAcks": 1,
+            "loadNodeCount": 8,
+            "poolMaxConnections": 128,
+            "cache": {
+              "enabled": true,
+              "hit": false,
+              "key": "v3-828a323447039df4eee07de9a279d5861add28151f8da75758181af5e564a817",
+              "path": "test-output/reports/.playback/postgres-baseline-7node-acceptance-phase6b/postgres-baseline-cache/v3-828a323447039df4eee07de9a279d5861add28151f8da75758181af5e564a817.json",
+              "cachedAt": "2026-02-24T06:32:33.920Z",
+              "reason": "cache-stored"
+            },
+            "metrics": {
+              "total": 3600,
+              "success": 3600,
+              "failed": 0,
+              "errors": 0,
+              "latency": {
+                "avg": 0.7669444444444444,
+                "p50": 1,
+                "p95": 2,
+                "p99": 2
+              },
+              "opsPerSec": 120,
+              "queueDelay": {
+                "avg": 0.8181103515625,
+                "p50": 0.7431640625,
+                "p95": 1.84033203125,
+                "p99": 1.9384765625,
+                "max": 5.24267578125
+              }
+            }
+          },
+          "systemUnderTest": {
+            "seedNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "metrics": {
+              "opsPerSec": 11.73701137230198,
+              "latency": {
+                "avg": 169.72316384180792,
+                "p50": 140,
+                "p95": 263,
+                "p99": 981
+              },
+              "total": 354,
+              "success": 354,
+              "failed": 0,
+              "errors": 0,
+              "attemptErrors": 0,
+              "loadTargetOpsPerSec": 120,
+              "loadMaxInFlight": 128
+            }
+          },
+          "comparison": {
+            "sutOpsPerSec": 11.73701137230198,
+            "sutP99LatencyMs": 981,
+            "baselineTps": 120,
+            "baselineLatencyAvgMs": 0.7669444444444444,
+            "throughputRatioSutToBaseline": 0.0978084281025165,
+            "p99LatencyRatioSutToBaselineAvg": 1279.1017747193046
+          },
+          "convergence": {
+            "settledAfterMs": 5032,
+            "leaderChanges": 0,
+            "maxOverTargetMs": 0
+          },
+          "verification": {
+            "verdict": "consistent",
+            "confidence": "high",
+            "hardFailures": [],
+            "softWarnings": [],
+            "coverage": {
+              "reachableNodes": 1,
+              "snapshotNodes": 1
+            },
+            "mismatches": [],
+            "evidenceWarnings": [],
+            "verificationNodeIds": [
+              "7493b0ab-a054-5fad-a91b-5e331db29304"
+            ],
+            "verificationExcludedNodeIds": []
+          },
+          "policy": {
+            "insufficientEvidence": "soft",
+            "assertionStatus": "passed"
+          },
+          "phaseTimeline": [
+            {
+              "phase": "preflight",
+              "status": "ok",
+              "durationMs": 89,
+              "startedAtMs": 1771914681549,
+              "endedAtMs": 1771914681638,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "converge",
+              "status": "ok",
+              "durationMs": 5034,
+              "startedAtMs": 1771914681638,
+              "endedAtMs": 1771914686672,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "pre_load_gate",
+              "status": "ok",
+              "durationMs": 4350,
+              "startedAtMs": 1771914686672,
+              "endedAtMs": 1771914691022,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "load",
+              "status": "ok",
+              "durationMs": 63743,
+              "startedAtMs": 1771914691022,
+              "endedAtMs": 1771914754765,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "post_load_drain",
+              "status": "ok",
+              "durationMs": 4606,
+              "startedAtMs": 1771914754765,
+              "endedAtMs": 1771914759371,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "verify",
+              "status": "ok",
+              "durationMs": 79,
+              "startedAtMs": 1771914759371,
+              "endedAtMs": 1771914759450,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "teardown",
+              "status": "ok",
+              "durationMs": 0,
+              "startedAtMs": 1771914759450,
+              "endedAtMs": 1771914759450,
+              "warnings": [],
+              "errors": []
+            }
+          ],
+          "phaseArtifacts": {
+            "preflight": {
+              "benchmarkTableName": "benchmark_events",
+              "sutLoadNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "sutLoadDiscovery": {
+                "attempts": 1,
+                "timedOut": false,
+                "discoveredNodeIds": [
+                  "7493b0ab-a054-5fad-a91b-5e331db29304"
+                ],
+                "candidateNodeIds": [
+                  "7493b0ab-a054-5fad-a91b-5e331db29304"
+                ],
+                "reachableNodeIds": [
+                  "7493b0ab-a054-5fad-a91b-5e331db29304"
+                ],
+                "sourceResults": [
+                  {
+                    "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "status": "discovered",
+                    "discoveredNodeIds": [
+                      "7493b0ab-a054-5fad-a91b-5e331db29304"
+                    ],
+                    "selection": "postgres-wire",
+                    "serviceId": "sys-postgres-wire",
+                    "protocol": "postgresql",
+                    "excludedReadinessByNodeId": {}
+                  }
+                ],
+                "elapsedMs": 3
+              }
+            },
+            "converge": {
+              "convergence": {
+                "settledAfterMs": 5032,
+                "leaderChanges": 0,
+                "maxOverTargetMs": 0
+              }
+            },
+            "pre_load_gate": {
+              "mode": "all_ready",
+              "attempts": 9,
+              "stableElapsedMs": 2320,
+              "includedNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "excludedNodeIds": [],
+              "partitionGroupInFlight": {},
+              "reasonHistogram": {
+                "leadership_unstable:0": 1,
+                "leadership_unstable:504": 1,
+                "leadership_unstable:1016": 1,
+                "leadership_unstable:1525": 1
+              }
+            },
+            "load": {
+              "sutLoadNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "loadMetrics": {
+                "total": 354,
+                "success": 354,
+                "failed": 0,
+                "errors": 0,
+                "latency": {
+                  "avg": 169.72316384180792,
+                  "p50": 140,
+                  "p95": 263,
+                  "p99": 981
+                },
+                "opsPerSec": 11.73701137230198,
+                "queueDelay": {
+                  "avg": 12322.62170823954,
+                  "p50": 11593.34765625,
+                  "p95": 24844.694091796875,
+                  "p99": 25486.028564453125,
+                  "max": 27041.6953125
+                }
+              },
+              "baselineCache": {
+                "enabled": true,
+                "hit": false,
+                "key": "v3-828a323447039df4eee07de9a279d5861add28151f8da75758181af5e564a817",
+                "path": "test-output/reports/.playback/postgres-baseline-7node-acceptance-phase6b/postgres-baseline-cache/v3-828a323447039df4eee07de9a279d5861add28151f8da75758181af5e564a817.json",
+                "cachedAt": "2026-02-24T06:32:33.920Z",
+                "reason": "cache-stored"
+              },
+              "baselineOpsPerSec": 120
+            },
+            "post_load_drain": {
+              "status": "ok",
+              "mode": "all_ready",
+              "attempts": 9,
+              "stableElapsedMs": 2040,
+              "error": null,
+              "reasonHistogram": {
+                "in_flight_replica_operations:1": 1,
+                "leadership_unstable:0": 1,
+                "leadership_unstable:502": 1,
+                "leadership_unstable:1337": 1,
+                "leadership_unstable:1847": 1
+              },
+              "partitionGroupInFlight": {},
+              "includedNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "excludedNodeIds": []
+            },
+            "verify": {
+              "consistencyVerdict": "consistent",
+              "coverage": {
+                "reachableNodes": 1,
+                "snapshotNodes": 1
+              },
+              "mismatches": [],
+              "evidenceWarnings": [],
+              "verificationNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "verificationExcludedNodeIds": [],
+              "consistencyAssertionAttempts": 1,
+              "assertionStatus": "passed"
+            },
+            "teardown": {
+              "complete": true
+            }
+          },
+          "phaseReasonSummary": {
+            "dominantWarnings": [],
+            "dominantErrors": []
+          },
+          "phaseDecisions": [
+            {
+              "phase": "preflight",
+              "phaseClass": "startup",
+              "status": "ok",
+              "policy": {},
+              "reasons": [],
+              "reasonClassHistogram": {},
+              "includedNodeIds": [],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "converge",
+              "phaseClass": "discovery",
+              "status": "ok",
+              "policy": {},
+              "reasons": [],
+              "reasonClassHistogram": {},
+              "includedNodeIds": [],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "pre_load_gate",
+              "phaseClass": "topology",
+              "status": "ok",
+              "policy": {
+                "timeoutMs": 90000,
+                "pollIntervalMs": 500,
+                "stableWindowMs": 2000
+              },
+              "reasons": [
+                "leadership_unstable:0",
+                "leadership_unstable:504",
+                "leadership_unstable:1016",
+                "leadership_unstable:1525"
+              ],
+              "reasonClassHistogram": {
+                "topology": 4
+              },
+              "includedNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "load",
+              "phaseClass": "load",
+              "status": "ok",
+              "policy": {
+                "loadOpsPerSec": 120,
+                "loadDuration": "30s",
+                "loadMaxInFlight": 128,
+                "loadQueryTimeoutMs": 4000,
+                "loadNodeMaxInFlight": 2
+              },
+              "reasons": [],
+              "reasonClassHistogram": {},
+              "includedNodeIds": [],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "post_load_drain",
+              "phaseClass": "topology",
+              "status": "ok",
+              "policy": {
+                "timeoutMs": 90000,
+                "pollIntervalMs": 500,
+                "stableWindowMs": 2000,
+                "insufficientEvidencePolicy": "soft"
+              },
+              "reasons": [
+                "in_flight_replica_operations:1",
+                "leadership_unstable:0",
+                "leadership_unstable:502",
+                "leadership_unstable:1337",
+                "leadership_unstable:1847"
+              ],
+              "reasonClassHistogram": {
+                "topology": 5
+              },
+              "includedNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "verify",
+              "phaseClass": "verify",
+              "status": "ok",
+              "policy": {
+                "consistencyAssertMaxAttempts": 3,
+                "consistencyAssertRetryDelayMs": 2000,
+                "insufficientEvidencePolicy": "soft"
+              },
+              "reasons": [],
+              "reasonClassHistogram": {},
+              "includedNodeIds": [],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "teardown",
+              "phaseClass": "teardown",
+              "status": "ok",
+              "policy": {},
+              "reasons": [],
+              "reasonClassHistogram": {},
+              "includedNodeIds": [],
+              "excludedNodeIds": []
+            }
+          ],
+          "startupDecisionRecord": {
+            "schemaVersion": 1,
+            "phaseCount": 7,
+            "phaseDecisions": [
+              {
+                "phase": "preflight",
+                "phaseClass": "startup",
+                "status": "ok",
+                "policy": {},
+                "reasons": [],
+                "reasonClassHistogram": {},
+                "includedNodeIds": [],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "converge",
+                "phaseClass": "discovery",
+                "status": "ok",
+                "policy": {},
+                "reasons": [],
+                "reasonClassHistogram": {},
+                "includedNodeIds": [],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "pre_load_gate",
+                "phaseClass": "topology",
+                "status": "ok",
+                "policy": {
+                  "timeoutMs": 90000,
+                  "pollIntervalMs": 500,
+                  "stableWindowMs": 2000
+                },
+                "reasons": [
+                  "leadership_unstable:0",
+                  "leadership_unstable:504",
+                  "leadership_unstable:1016",
+                  "leadership_unstable:1525"
+                ],
+                "reasonClassHistogram": {
+                  "topology": 4
+                },
+                "includedNodeIds": [
+                  "7493b0ab-a054-5fad-a91b-5e331db29304"
+                ],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "load",
+                "phaseClass": "load",
+                "status": "ok",
+                "policy": {
+                  "loadOpsPerSec": 120,
+                  "loadDuration": "30s",
+                  "loadMaxInFlight": 128,
+                  "loadQueryTimeoutMs": 4000,
+                  "loadNodeMaxInFlight": 2
+                },
+                "reasons": [],
+                "reasonClassHistogram": {},
+                "includedNodeIds": [],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "post_load_drain",
+                "phaseClass": "topology",
+                "status": "ok",
+                "policy": {
+                  "timeoutMs": 90000,
+                  "pollIntervalMs": 500,
+                  "stableWindowMs": 2000,
+                  "insufficientEvidencePolicy": "soft"
+                },
+                "reasons": [
+                  "in_flight_replica_operations:1",
+                  "leadership_unstable:0",
+                  "leadership_unstable:502",
+                  "leadership_unstable:1337",
+                  "leadership_unstable:1847"
+                ],
+                "reasonClassHistogram": {
+                  "topology": 5
+                },
+                "includedNodeIds": [
+                  "7493b0ab-a054-5fad-a91b-5e331db29304"
+                ],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "verify",
+                "phaseClass": "verify",
+                "status": "ok",
+                "policy": {
+                  "consistencyAssertMaxAttempts": 3,
+                  "consistencyAssertRetryDelayMs": 2000,
+                  "insufficientEvidencePolicy": "soft"
+                },
+                "reasons": [],
+                "reasonClassHistogram": {},
+                "includedNodeIds": [],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "teardown",
+                "phaseClass": "teardown",
+                "status": "ok",
+                "policy": {},
+                "reasons": [],
+                "reasonClassHistogram": {},
+                "includedNodeIds": [],
+                "excludedNodeIds": []
+              }
+            ],
+            "reasonClassHistogram": {
+              "topology": 9
+            }
+          },
+          "phaseEvents": [
+            {
+              "type": "phase.start",
+              "phase": "preflight",
+              "timestampMs": 1771914681549
+            },
+            {
+              "type": "phase.end",
+              "phase": "preflight",
+              "status": "ok",
+              "durationMs": 89,
+              "timestampMs": 1771914681638
+            },
+            {
+              "type": "phase.start",
+              "phase": "converge",
+              "timestampMs": 1771914681638
+            },
+            {
+              "type": "phase.end",
+              "phase": "converge",
+              "status": "ok",
+              "durationMs": 5034,
+              "timestampMs": 1771914686672
+            },
+            {
+              "type": "phase.start",
+              "phase": "pre_load_gate",
+              "timestampMs": 1771914686672
+            },
+            {
+              "type": "phase.end",
+              "phase": "pre_load_gate",
+              "status": "ok",
+              "durationMs": 4350,
+              "timestampMs": 1771914691022
+            },
+            {
+              "type": "phase.start",
+              "phase": "load",
+              "timestampMs": 1771914691022
+            },
+            {
+              "type": "phase.end",
+              "phase": "load",
+              "status": "ok",
+              "durationMs": 63743,
+              "timestampMs": 1771914754765
+            },
+            {
+              "type": "phase.start",
+              "phase": "post_load_drain",
+              "timestampMs": 1771914754765
+            },
+            {
+              "type": "phase.end",
+              "phase": "post_load_drain",
+              "status": "ok",
+              "durationMs": 4606,
+              "timestampMs": 1771914759371
+            },
+            {
+              "type": "phase.start",
+              "phase": "verify",
+              "timestampMs": 1771914759371
+            },
+            {
+              "type": "phase.end",
+              "phase": "verify",
+              "status": "ok",
+              "durationMs": 79,
+              "timestampMs": 1771914759450
+            },
+            {
+              "type": "phase.start",
+              "phase": "teardown",
+              "timestampMs": 1771914759450
+            },
+            {
+              "type": "phase.end",
+              "phase": "teardown",
+              "status": "ok",
+              "durationMs": 0,
+              "timestampMs": 1771914759450
+            }
+          ],
+          "channelMetrics": {
+            "load": {
+              "requests": 354,
+              "successes": 354,
+              "errors": 0,
+              "timeouts": 0,
+              "retries": 0,
+              "breakerOpens": 0,
+              "budgetDenials": 0,
+              "timeoutBudgetMismatches": 0,
+              "timedOutInFlight": 0
+            },
+            "control": {
+              "requests": 22,
+              "successes": 22,
+              "errors": 0,
+              "timeouts": 0,
+              "retries": 0,
+              "breakerOpens": 0,
+              "budgetDenials": 0,
+              "timeoutBudgetMismatches": 0,
+              "timedOutInFlight": 0
+            },
+            "probe": {
+              "requests": 1,
+              "successes": 1,
+              "errors": 0,
+              "timeouts": 0,
+              "retries": 0,
+              "breakerOpens": 0,
+              "budgetDenials": 0,
+              "timeoutBudgetMismatches": 0,
+              "timedOutInFlight": 0
+            },
+            "snapshot": {
+              "requests": 20,
+              "successes": 20,
+              "errors": 0,
+              "timeouts": 0,
+              "retries": 0,
+              "breakerOpens": 0,
+              "budgetDenials": 0,
+              "timeoutBudgetMismatches": 0,
+              "timedOutInFlight": 0
+            }
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": {
+        "total": 354,
+        "success": 354,
+        "failed": 0,
+        "errors": 0,
+        "latency": {
+          "avg": 169.72316384180792,
+          "p50": 140,
+          "p95": 263,
+          "p99": 981
+        },
+        "opsPerSec": 11.73701137230198,
+        "queueDelay": {
+          "avg": 12322.62170823954,
+          "p50": 11593.34765625,
+          "p95": 24844.694091796875,
+          "p99": 25486.028564453125,
+          "max": 27041.6953125
+        }
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": [
+        {
+          "component": "tail_latency_path",
+          "signal": "baseline_latency_gap",
+          "priority": "critical",
+          "score": 95,
+          "reason": "Tail latency is significantly higher than baseline and dominates user-visible delays.",
+          "evidence": {
+            "p99LatencyRatioSutToBaselineAvg": 1279.1017747193046,
+            "sutP99LatencyMs": 981,
+            "baselineLatencyAvgMs": 0.7669444444444444
+          }
+        },
+        {
+          "component": "convergence_control_plane",
+          "signal": "convergence_settle_time",
+          "priority": "medium",
+          "score": 60,
+          "reason": "Convergence delay suggests extra work in replica movement, promotion, or membership updates.",
+          "evidence": {
+            "settledAfterMs": 5032,
+            "leaderChanges": 0
+          }
+        },
+        {
+          "component": "replication_write_path",
+          "signal": "baseline_throughput_gap",
+          "priority": "medium",
+          "score": 60,
+          "reason": "System throughput is significantly below baseline under identical workload.",
+          "evidence": {
+            "throughputRatioSutToBaseline": 0.0978084281025165,
+            "sutOpsPerSec": 11.73701137230198,
+            "baselineTps": 120
+          }
+        }
+      ]
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-7node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

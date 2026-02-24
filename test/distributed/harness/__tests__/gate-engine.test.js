@@ -31,7 +31,6 @@ test('GateEngine returns all_ready after required stability window', async () =>
     timeoutMs: 30,
     pollIntervalMs: POLL_INTERVAL_MS,
     stableWindowMs: 10,
-    allowSubsetFallback: false,
     probeNode: async (node) => {
       attempt += 1;
       if (attempt < 3 && node.id === 'n2') {
@@ -57,7 +56,7 @@ test('GateEngine returns all_ready after required stability window', async () =>
   assert.ok(result.stableElapsedMs >= 10);
 });
 
-test('GateEngine returns subset_ready fallback with last-known-good nodes',
+test('GateEngine fails closed when gate times out after transient subset readiness',
   async () => {
     const clock = createManualClock();
     const engine = new GateEngine({
@@ -75,7 +74,6 @@ test('GateEngine returns subset_ready fallback with last-known-good nodes',
       timeoutMs: 15,
       pollIntervalMs: POLL_INTERVAL_MS,
       stableWindowMs: 10,
-      allowSubsetFallback: true,
       probeNode: async (node) => {
         if (attempt === ZERO && node.id !== 'n3') {
           return {
@@ -103,9 +101,9 @@ test('GateEngine returns subset_ready fallback with last-known-good nodes',
       },
     });
 
-    assert.equal(result.mode, 'subset_ready');
-    assert.deepEqual(result.includedNodeIds, ['n1', 'n2']);
-    assert.deepEqual(result.excludedNodeIds, ['n3']);
+    assert.equal(result.mode, 'failed');
+    assert.deepEqual(result.includedNodeIds, []);
+    assert.deepEqual(result.excludedNodeIds, ['n1', 'n2', 'n3']);
   });
 
 test('GateEngine reports reason histogram and included/excluded nodes on failure',
@@ -124,7 +122,6 @@ test('GateEngine reports reason histogram and included/excluded nodes on failure
       timeoutMs: 10,
       pollIntervalMs: POLL_INTERVAL_MS,
       stableWindowMs: 5,
-      allowSubsetFallback: false,
       probeNode: async (node) => {
         if (node.id === 'n1') {
           return {
@@ -150,3 +147,44 @@ test('GateEngine reports reason histogram and included/excluded nodes on failure
     assert.ok(result.reasonHistogram.table_not_ready > 0);
     assert.ok(result.reasonHistogram.in_flight_replica_ops > 0);
   });
+
+test('GateEngine aborts early when abort condition is met', async () => {
+  const clock = createManualClock();
+  const engine = new GateEngine({
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  const result = await engine.waitForGate({
+    nodes: [
+      {id: 'n1'},
+      {id: 'n2'},
+    ],
+    timeoutMs: 500,
+    pollIntervalMs: POLL_INTERVAL_MS,
+    stableWindowMs: 0,
+    probeNode: async () => ({
+      ready: true,
+      reasons: [],
+    }),
+    evaluateGlobalCondition: async () => ({
+      ready: false,
+      reasons: ['in_flight_replica_operations:5'],
+    }),
+    abortIf: ({attempts}) => {
+      if (attempts >= 3) {
+        return {
+          abort: true,
+          reason: 'stalled_no_progress:15',
+        };
+      }
+      return null;
+    },
+  });
+
+  assert.equal(result.mode, 'failed');
+  assert.equal(result.aborted, true);
+  assert.equal(result.abortReason, 'stalled_no_progress:15');
+  assert.ok(result.attempts < 10);
+  assert.ok(result.reasonHistogram['stalled_no_progress:15'] > 0);
+});

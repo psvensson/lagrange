@@ -30,10 +30,17 @@ import {
   PLAYBACK_EVENT_TYPE,
   LOG_SUBSCRIPTION_CAPABILITY,
   RAFT_PROVIDER_DEFAULTS,
+  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
+  NODE_CLIENT_SERVICE_ID_ADMIN_META,
 } from './constants.js';
 
 const BOOTSTRAP_POLL_INTERVAL_MS = 500;
 const ACTIVE_POLL_INTERVAL_MS = 1000;
+const ACTIVE_WAIT_MIN_CLUSTER_SIZE = 1;
+const ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_PER_EXTRA_NODE = 15;
+const ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_DENOMINATOR = 100;
+const ACTIVE_WAIT_TIMEOUT_MAX_MULTIPLIER = 3;
 const ACTIVE_STATE = 'ACTIVE';
 const INACTIVE_STATE = 'inactive';
 const UNKNOWN_STATE = 'unknown';
@@ -43,6 +50,7 @@ const MIN_TIMEOUT_MS = 1;
 const HTTP_OK_LOWER = 200;
 const HTTP_OK_UPPER = 299;
 const FETCH_TIMEOUT_MS = 1000;
+const CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS = 3000;
 const BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS = 10000;
 const BOOTSTRAP_READY_STABLE_WINDOW_MS = 10000;
 const ADMIN_QUERY_TIMEOUT_MS = 15000;
@@ -96,6 +104,14 @@ const PLAYBACK_SCOPE_LOAD = 'load';
 const PLAYBACK_ENTITY_CLUSTER = 'cluster';
 const LOAD_RUN_ENTITY = 'load-run';
 const LOAD_PROGRESS_INTERVAL_MS = 1000;
+const CONTROL_SNAPSHOT_NODES_FIELD = 'nodes';
+const SERVICE_DISCOVERY_SERVICES_FIELD = 'services';
+const SERVICE_DISCOVERY_SERVICE_IDS_FIELD = 'serviceIds';
+const SERVICE_DISCOVERY_REPLICAS_FIELD = 'replicas';
+const SERVICE_DISCOVERY_REPLICA_NODE_ID_FIELD = 'nodeId';
+const SERVICE_DISCOVERY_REPLICA_SERVICE_ID_FIELD = 'serviceId';
+const SERVICE_DISCOVERY_REPLICA_READINESS_FIELD = 'readiness';
+const SERVICE_DISCOVERY_READINESS_ROUTING_READY_FIELD = 'routingReady';
 const CLUSTER_STAGE_SETUP_NETWORK_CREATING = 'setup.network.creating';
 const CLUSTER_STAGE_SETUP_NETWORK_CREATED = 'setup.network.created';
 const CLUSTER_STAGE_SETUP_SEED_STARTING = 'setup.seed.starting';
@@ -149,6 +165,9 @@ const REUSE_START_COMMAND =
 const REUSE_START_COMMAND_ARGS = Object.freeze([REUSE_START_COMMAND]);
 const CONTAINER_STOP_NOT_RUNNING_PATTERN = 'is not running';
 const CONTAINER_STOP_NOT_FOUND_PATTERN = 'no such container';
+const ADMIN_SOCKET_LANE_DEFAULT = 'default';
+const ADMIN_SOCKET_LANE_PROBE = 'probe';
+const ADMIN_SOCKET_LANE_SNAPSHOT = 'snapshot';
 
 /**
  * Simple HTTP request with timeout using node:http.
@@ -334,6 +353,20 @@ function formatNodeDiagnostics(nodeDiagnostics = []) {
       return nodeId + '=' + stateValue;
     })
     .join(', ');
+}
+
+/**
+ * Format control snapshot coverage summary.
+ * @param {Object|null} snapshotCoverage
+ * @returns {string}
+ */
+function formatSnapshotCoverage(snapshotCoverage) {
+  if (!snapshotCoverage || typeof snapshotCoverage !== 'object') {
+    return 'none';
+  }
+  const expectedNodeCount = Number(snapshotCoverage.expectedNodeCount) || 0;
+  const bestCoverageNodeCount = Number(snapshotCoverage.bestCoverageNodeCount) || 0;
+  return String(bestCoverageNodeCount) + '/' + String(expectedNodeCount);
 }
 
 /**
@@ -526,10 +559,10 @@ class NodeHandle {
     this.role = role;
     this._dockerProvider = dockerProvider;
     this._adminApiPort = adminApiPort;
-    this._adminSocket = null;
-    this._adminSocketReady = null;
-    this._pendingAdminSocket = null;
-    this._pendingQueries = new Map();
+    this._adminSocketByLane = new Map();
+    this._adminSocketReadyByLane = new Map();
+    this._pendingAdminSocketByLane = new Map();
+    this._pendingQueriesByLane = new Map();
     this._logStreamListeners = new Set();
     this._lastReachabilityDiagnostics = null;
   }
@@ -554,6 +587,7 @@ class NodeHandle {
    * @returns {Promise<Object>}
    */
   async queryWithTimeout(sql, params = [], options = {}) {
+    const lane = this._resolveAdminLane(options);
     return this._sendAdminRequest(
       {
         type: QUERY_MESSAGE_TYPE,
@@ -561,7 +595,10 @@ class NodeHandle {
         params: Array.isArray(params) ? params : [],
       },
       'query',
-      options,
+      {
+        ...options,
+        lane,
+      },
     );
   }
 
@@ -597,6 +634,20 @@ class NodeHandle {
     );
   }
 
+  _resolveAdminLane(options = {}) {
+    const lane = typeof options?.lane === 'string' ?
+      options.lane.trim() :
+      '';
+    return lane.length > 0 ? lane : ADMIN_SOCKET_LANE_DEFAULT;
+  }
+
+  _getPendingQueries(lane) {
+    if (!this._pendingQueriesByLane.has(lane)) {
+      this._pendingQueriesByLane.set(lane, new Map());
+    }
+    return this._pendingQueriesByLane.get(lane);
+  }
+
   /**
    * Send one request over the shared admin socket and await query_result.
    * @param {Object} requestPayload
@@ -609,24 +660,26 @@ class NodeHandle {
       options.timeoutMs,
       REQUEST_TIMEOUT_OPTION_DEFAULT_MS,
     );
+    const lane = this._resolveAdminLane(options);
     const ws = await withTimeout(
-      this._getAdminSocket(),
+      this._getAdminSocket(lane),
       requestTimeoutMs,
       'Admin API ' + operationLabel + ' timed out for node ' +
-        this.id + ' after ' + requestTimeoutMs + 'ms',
+        this.id + ' on lane ' + lane + ' after ' + requestTimeoutMs + 'ms',
     );
     const queryId = this._nextQueryId();
+    const pendingQueries = this._getPendingQueries(lane);
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        this._pendingQueries.delete(queryId);
+        pendingQueries.delete(queryId);
         reject(new Error(
           'Admin API ' + operationLabel + ' timed out for node ' +
-          this.id + ' after ' + requestTimeoutMs + 'ms',
+          this.id + ' on lane ' + lane + ' after ' + requestTimeoutMs + 'ms',
         ));
       }, requestTimeoutMs);
 
-      this._pendingQueries.set(queryId, {
+      pendingQueries.set(queryId, {
         resolve,
         reject,
         timeout,
@@ -639,9 +692,9 @@ class NodeHandle {
           queryId,
         }));
       } catch (err) {
-        this._pendingQueries.delete(queryId);
+        pendingQueries.delete(queryId);
         clearTimeout(timeout);
-        this._resetAdminSocket();
+        this._resetAdminSocket(lane);
         try {
           ws.close();
         } catch (_closeErr) {
@@ -649,7 +702,7 @@ class NodeHandle {
         }
         reject(new Error(
           'Admin API ' + operationLabel + ' failed for node ' +
-          this.id + ': ' + err.message,
+          this.id + ' on lane ' + lane + ': ' + err.message,
         ));
       }
     });
@@ -674,16 +727,18 @@ class NodeHandle {
       this.id,
     );
     this._logStreamListeners.clear();
-    if (this._adminSocket) {
+    for (const socket of this._adminSocketByLane.values()) {
       try {
-        this._adminSocket.close();
+        socket.close();
       } catch (_err) {
         // Best-effort cleanup
       }
     }
-    if (this._pendingAdminSocket &&
-      this._pendingAdminSocket.readyState === WS_READY_STATE_CONNECTING) {
-      closeWebSocketSafely(this._pendingAdminSocket);
+    for (const pendingSocket of this._pendingAdminSocketByLane.values()) {
+      if (pendingSocket &&
+        pendingSocket.readyState === WS_READY_STATE_CONNECTING) {
+        closeWebSocketSafely(pendingSocket);
+      }
     }
     this._resetAdminSocket();
   }
@@ -727,13 +782,15 @@ class NodeHandle {
     };
   }
 
-  async _getAdminSocket() {
-    if (this._adminSocket &&
-        this._adminSocket.readyState === WS_READY_STATE_OPEN) {
-      return this._adminSocket;
+  async _getAdminSocket(lane = ADMIN_SOCKET_LANE_DEFAULT) {
+    const existingSocket = this._adminSocketByLane.get(lane);
+    if (existingSocket &&
+        existingSocket.readyState === WS_READY_STATE_OPEN) {
+      return existingSocket;
     }
-    if (this._adminSocketReady) {
-      return this._adminSocketReady;
+    const pendingReadyPromise = this._adminSocketReadyByLane.get(lane);
+    if (pendingReadyPromise) {
+      return pendingReadyPromise;
     }
 
     const {default: WebSocket} = await import('ws');
@@ -741,9 +798,9 @@ class NodeHandle {
       'ws://' + this.ip + ':' + this._adminApiPort +
       '/api/admin/stream';
 
-    this._adminSocketReady = new Promise((resolve, reject) => {
+    const readyPromise = new Promise((resolve, reject) => {
       const ws = new WebSocket(url);
-      this._pendingAdminSocket = ws;
+      this._pendingAdminSocketByLane.set(lane, ws);
       let settled = false;
       const connectTimeout = setTimeout(() => {
         if (settled) {
@@ -753,10 +810,10 @@ class NodeHandle {
         ws.off('open', onOpen);
         ws.off('error', onOpenError);
         closeWebSocketSafely(ws);
-        this._resetAdminSocket();
+        this._resetAdminSocket(lane);
         reject(new Error(
           'Admin API query failed for node ' +
-          this.id + ': connection timed out',
+          this.id + ' on lane ' + lane + ': connection timed out',
         ));
       }, ADMIN_QUERY_TIMEOUT_MS);
       if (typeof connectTimeout.unref === 'function') {
@@ -770,9 +827,9 @@ class NodeHandle {
         settled = true;
         clearTimeout(connectTimeout);
         ws.off('error', onOpenError);
-        this._pendingAdminSocket = null;
-        this._bindAdminSocketHandlers(ws);
-        this._adminSocket = ws;
+        this._pendingAdminSocketByLane.delete(lane);
+        this._bindAdminSocketHandlers(ws, lane);
+        this._adminSocketByLane.set(lane, ws);
         resolve(ws);
       };
 
@@ -783,31 +840,32 @@ class NodeHandle {
         settled = true;
         clearTimeout(connectTimeout);
         ws.off('open', onOpen);
-        this._pendingAdminSocket = null;
-        this._resetAdminSocket();
+        this._pendingAdminSocketByLane.delete(lane);
+        this._resetAdminSocket(lane);
         reject(new Error(
           'Admin API query failed for node ' +
-          this.id + ': ' + err.message,
+          this.id + ' on lane ' + lane + ': ' + err.message,
         ));
       };
 
       ws.once('open', onOpen);
       ws.once('error', onOpenError);
     });
+    this._adminSocketReadyByLane.set(lane, readyPromise);
 
     try {
-      return await this._adminSocketReady;
+      return await readyPromise;
     } catch (err) {
-      this._resetAdminSocket();
+      this._resetAdminSocket(lane);
       throw err;
     }
   }
 
-  _bindAdminSocketHandlers(ws) {
+  _bindAdminSocketHandlers(ws, lane) {
     ws.on('message', (data) => {
       try {
         const parsed = JSON.parse(data.toString());
-        this._handleAdminSocketMessage(parsed);
+        this._handleAdminSocketMessage(parsed, lane);
       } catch (_err) {
         // Ignore malformed frames and continue.
       }
@@ -816,49 +874,52 @@ class NodeHandle {
     ws.on('error', (err) => {
       this._rejectPendingQueries(
         'Admin API query failed for node ' +
-        this.id + ': ' + err.message,
+        this.id + ' on lane ' + lane + ': ' + err.message,
+        lane,
       );
-      this._resetAdminSocket();
+      this._resetAdminSocket(lane);
     });
 
     ws.on('close', () => {
       this._rejectPendingQueries(
         'Admin API query connection closed before response ' +
-        'for node ' + this.id,
+        'for node ' + this.id + ' on lane ' + lane,
+        lane,
       );
-      this._resetAdminSocket();
+      this._resetAdminSocket(lane);
     });
   }
 
-  _handleAdminSocketMessage(parsed) {
+  _handleAdminSocketMessage(parsed, lane) {
     if (!parsed || typeof parsed !== 'object') {
       return;
     }
     if (parsed.type === QUERY_RESULT_MESSAGE_TYPE) {
-      this._resolvePendingQuery(parsed);
+      this._resolvePendingQuery(parsed, lane);
       return;
     }
     this._handleStreamedLogMessage(parsed);
   }
 
-  _resolvePendingQuery(parsed) {
+  _resolvePendingQuery(parsed, lane) {
     const queryId = parsed.queryId;
     if (!queryId) {
       return;
     }
 
-    const pending = this._pendingQueries.get(queryId);
+    const pendingQueries = this._getPendingQueries(lane);
+    const pending = pendingQueries.get(queryId);
     if (!pending) {
       return;
     }
-    this._pendingQueries.delete(queryId);
+    pendingQueries.delete(queryId);
     clearTimeout(pending.timeout);
 
     if (parsed.error) {
       pending.reject(new Error(
         'Admin API ' + (pending.operationLabel || 'request') +
         ' failed for node ' +
-        this.id + ': ' + parsed.error,
+        this.id + ' on lane ' + lane + ': ' + parsed.error,
       ));
       return;
     }
@@ -930,25 +991,192 @@ class NodeHandle {
     }
   }
 
-  _rejectPendingQueries(message) {
-    for (const pending of this._pendingQueries.values()) {
-      clearTimeout(pending.timeout);
-      pending.reject(new Error(message));
+  _rejectPendingQueries(message, lane = null) {
+    if (lane !== null) {
+      const pendingQueries = this._pendingQueriesByLane.get(lane);
+      if (!pendingQueries) {
+        return;
+      }
+      for (const pending of pendingQueries.values()) {
+        clearTimeout(pending.timeout);
+        pending.reject(new Error(message));
+      }
+      pendingQueries.clear();
+      return;
     }
-    this._pendingQueries.clear();
+    for (const pendingQueries of this._pendingQueriesByLane.values()) {
+      for (const pending of pendingQueries.values()) {
+        clearTimeout(pending.timeout);
+        pending.reject(new Error(message));
+      }
+      pendingQueries.clear();
+    }
   }
 
-  _resetAdminSocket() {
-    this._adminSocket = null;
-    this._adminSocketReady = null;
-    this._pendingAdminSocket = null;
+  _resetAdminSocket(lane = null) {
+    if (lane !== null) {
+      this._adminSocketByLane.delete(lane);
+      this._adminSocketReadyByLane.delete(lane);
+      this._pendingAdminSocketByLane.delete(lane);
+      return;
+    }
+    this._adminSocketByLane.clear();
+    this._adminSocketReadyByLane.clear();
+    this._pendingAdminSocketByLane.clear();
+    this._pendingQueriesByLane.clear();
   }
 
   /** Get node status from Admin API. */
-  async getStatus() {
-    const sql = 'SELECT * FROM nodes WHERE node_id = \'' +
-      this.id + '\'';
-    return this.query(sql);
+  async getStatus(options = {}) {
+    const lane = typeof options?.lane === 'string' ?
+      options.lane :
+      ADMIN_SOCKET_LANE_PROBE;
+    const timeoutMs = resolvePositiveTimeoutMs(
+      options?.timeoutMs,
+      ADMIN_QUERY_TIMEOUT_MS,
+    );
+    const discoverySnapshot = await this.queryWithTimeout(
+      NODE_CLIENT_SERVICE_DISCOVERY_SQL,
+      [],
+      {
+        lane,
+        timeoutMs,
+      },
+    );
+    const routingReady = this._resolveAdminRoutingReadiness(
+      discoverySnapshot,
+    );
+    return {
+      rows: [{
+        status: routingReady ? STATUS_ACTIVE_LOWER : INACTIVE_STATE,
+      }],
+    };
+  }
+
+  /** Get local control snapshot from Admin API cache projection. */
+  async getControlSnapshot(options = {}) {
+    const lane = typeof options?.lane === 'string' ?
+      options.lane :
+      ADMIN_SOCKET_LANE_SNAPSHOT;
+    const timeoutMs = resolvePositiveTimeoutMs(
+      options?.timeoutMs,
+      ADMIN_QUERY_TIMEOUT_MS,
+    );
+    return this.queryWithTimeout(
+      NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+      [],
+      {
+        lane,
+        timeoutMs,
+      },
+    );
+  }
+
+  /**
+   * Probe lightweight bootstrap readiness.
+   * @param {Object} [options]
+   * @param {number} [options.timeoutMs]
+   * @returns {Promise<Object>}
+   */
+  async probeBootstrapReadiness(options = {}) {
+    const timeoutMs = resolvePositiveTimeoutMs(
+      options?.timeoutMs,
+      BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS,
+    );
+    const bootstrapJoinReadyUrl =
+      'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_JOIN_READY_PATH;
+    const probeResponse = await httpRequest({
+      url: bootstrapJoinReadyUrl,
+      timeoutMs,
+      method: HTTP_METHOD_GET,
+      includeBody: true,
+    });
+
+    const normalized = {
+      status: HTTP_ERROR_STATUS,
+      phase: null,
+      state: null,
+      reasons: [],
+      retryAfterMs: null,
+    };
+
+    if (typeof probeResponse === 'number') {
+      normalized.status = probeResponse;
+      return normalized;
+    }
+
+    if (!probeResponse || typeof probeResponse !== 'object') {
+      return normalized;
+    }
+
+    normalized.status = Number.isFinite(probeResponse.status) ?
+      Math.floor(probeResponse.status) :
+      HTTP_ERROR_STATUS;
+
+    const body = probeResponse.body;
+    if (!body || typeof body !== 'object') {
+      return normalized;
+    }
+
+    normalized.phase = typeof body.phase === 'string' ? body.phase : null;
+    normalized.state = typeof body.state === 'string' ? body.state : null;
+    normalized.reasons = Array.isArray(body.reasons) ?
+      body.reasons.map((reason) => String(reason)) :
+      [];
+    normalized.retryAfterMs = Number.isFinite(body.retryAfterMs) ?
+      Math.floor(body.retryAfterMs) :
+      null;
+    return normalized;
+  }
+
+  _resolveAdminRoutingReadiness(discoverySnapshot) {
+    const rows = Array.isArray(discoverySnapshot?.rows) ?
+      discoverySnapshot.rows :
+      [];
+    const firstRow = rows.length > 0 &&
+      rows[0] &&
+      typeof rows[0] === 'object' ?
+      rows[0] :
+      null;
+    if (!firstRow) {
+      return false;
+    }
+    const services = Array.isArray(firstRow[SERVICE_DISCOVERY_SERVICES_FIELD]) ?
+      firstRow[SERVICE_DISCOVERY_SERVICES_FIELD] :
+      [];
+    for (const service of services) {
+      if (!service || typeof service !== 'object') {
+        continue;
+      }
+      const serviceIds = Array.isArray(service[SERVICE_DISCOVERY_SERVICE_IDS_FIELD]) ?
+        service[SERVICE_DISCOVERY_SERVICE_IDS_FIELD] :
+        [];
+      if (!serviceIds.includes(NODE_CLIENT_SERVICE_ID_ADMIN_META)) {
+        continue;
+      }
+      const replicas = Array.isArray(service[SERVICE_DISCOVERY_REPLICAS_FIELD]) ?
+        service[SERVICE_DISCOVERY_REPLICAS_FIELD] :
+        [];
+      for (const replica of replicas) {
+        if (!replica || typeof replica !== 'object') {
+          continue;
+        }
+        const replicaNodeId =
+          String(replica[SERVICE_DISCOVERY_REPLICA_NODE_ID_FIELD] || '');
+        const replicaServiceId =
+          String(replica[SERVICE_DISCOVERY_REPLICA_SERVICE_ID_FIELD] || '');
+        if (replicaNodeId !== this.id ||
+            replicaServiceId !== NODE_CLIENT_SERVICE_ID_ADMIN_META) {
+          continue;
+        }
+        const readiness = replica[SERVICE_DISCOVERY_REPLICA_READINESS_FIELD];
+        if (!readiness || typeof readiness !== 'object') {
+          return false;
+        }
+        return readiness[SERVICE_DISCOVERY_READINESS_ROUTING_READY_FIELD] === true;
+      }
+    }
+    return false;
   }
 
   /** Get container logs. */
@@ -963,7 +1191,11 @@ class NodeHandle {
    * Probe node reachability with detailed diagnostics.
    * @returns {Promise<Object>}
    */
-  async getReachabilityDiagnostics() {
+  async getReachabilityDiagnostics(options = {}) {
+    const probeTimeoutMs = resolvePositiveTimeoutMs(
+      options.timeoutMs,
+      FETCH_TIMEOUT_MS,
+    );
     const bootstrapUrl =
       'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_HEALTH_PATH;
     const adminUrl =
@@ -974,6 +1206,7 @@ class NodeHandle {
     const diagnostics = {
       nodeId: this.id,
       timestamp: Date.now(),
+      probeTimeoutMs,
       reachable: false,
       reachableBy: null,
       adminReady: false,
@@ -992,7 +1225,7 @@ class NodeHandle {
       lastError: null,
     };
 
-    const bootstrapStatus = await httpGet(bootstrapUrl, FETCH_TIMEOUT_MS);
+    const bootstrapStatus = await httpGet(bootstrapUrl, probeTimeoutMs);
     diagnostics.bootstrapHealth = buildHealthProbeResult(
       bootstrapUrl,
       bootstrapStatus,
@@ -1005,7 +1238,7 @@ class NodeHandle {
     }
     diagnostics.lastError = diagnostics.bootstrapHealth.error;
 
-    const adminStatus = await httpGet(adminUrl, FETCH_TIMEOUT_MS);
+    const adminStatus = await httpGet(adminUrl, probeTimeoutMs);
     diagnostics.adminHealth = buildHealthProbeResult(
       adminUrl,
       adminStatus,
@@ -1044,7 +1277,14 @@ class NodeHandle {
     }
 
     try {
-      await this.query(REACHABILITY_PROBE_SQL);
+      await this.queryWithTimeout(
+        REACHABILITY_PROBE_SQL,
+        [],
+        {
+          timeoutMs: probeTimeoutMs,
+          lane: ADMIN_SOCKET_LANE_PROBE,
+        },
+      );
       diagnostics.sqlProbe = createProbeResult({
         attempted: true,
         ok: true,
@@ -2394,48 +2634,201 @@ class Cluster {
   }
 
   async _probeClusterActiveState(deadline) {
-    const nodeDiagnostics = [];
-
-    for (const node of this._nodes.values()) {
+    const nodes = [...this._nodes.values()];
+    const nodeDiagnostics = await Promise.all(nodes.map(async (node) => {
       const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
       const probeTimeoutMs = Math.min(
         ADMIN_QUERY_TIMEOUT_MS,
         remainingMs,
       );
       try {
-        const status = await withTimeout(
-          node.getStatus(),
-          probeTimeoutMs,
-          'Node status probe timed out for ' + node.id,
-        );
-        const active = this._isNodeActive(status);
-        nodeDiagnostics.push({
+        let active = false;
+        let state = INACTIVE_STATE;
+        let phase = null;
+        let reasons = [];
+
+        if (typeof node.probeBootstrapReadiness === 'function') {
+          const readiness = await withTimeout(
+            node.probeBootstrapReadiness({
+              timeoutMs: probeTimeoutMs,
+            }),
+            probeTimeoutMs,
+            'Node readiness probe timed out for ' + node.id,
+          );
+          active = readiness.status >= HTTP_OK_LOWER &&
+            readiness.status <= HTTP_OK_UPPER;
+          phase = typeof readiness.phase === 'string' ?
+            readiness.phase :
+            null;
+          reasons = Array.isArray(readiness.reasons) ?
+            readiness.reasons :
+            [];
+          if (active) {
+            state = ACTIVE_STATE.toLowerCase();
+          } else if (typeof readiness.state === 'string' &&
+              readiness.state.length > 0) {
+            state = readiness.state.toLowerCase();
+          } else if (phase && phase.length > 0) {
+            state = phase.toLowerCase();
+          }
+        } else {
+          const status = await withTimeout(
+            node.getStatus({
+              timeoutMs: probeTimeoutMs,
+              lane: ADMIN_SOCKET_LANE_PROBE,
+            }),
+            probeTimeoutMs,
+            'Node status probe timed out for ' + node.id,
+          );
+          active = this._isNodeActive(status);
+          state = active ?
+            ACTIVE_STATE.toLowerCase() :
+            (this._extractNodeState(status) || INACTIVE_STATE);
+        }
+
+        return {
           nodeId: node.id,
           active,
-          state: active ?
-            ACTIVE_STATE.toLowerCase() :
-            (this._extractNodeState(status) || INACTIVE_STATE),
+          state,
+          phase,
+          reasons,
           error: null,
-        });
+        };
       } catch (error) {
-        nodeDiagnostics.push({
+        return {
           nodeId: node.id,
           active: false,
           state: INACTIVE_STATE,
           error: normalizeProbeError(error),
-        });
+        };
       }
-    }
+    }));
+    const activeByStatus = nodeDiagnostics.every(
+      (diagnostic) => diagnostic.active === true,
+    );
+    const snapshotCoverage = await this._probeControlSnapshotCoverage(
+      deadline,
+      nodes.map((node) => node.id),
+    );
 
     return {
-      allActive: nodeDiagnostics.every((diagnostic) => diagnostic.active === true),
+      allActive: activeByStatus && snapshotCoverage.completeCoverage === true,
       nodeDiagnostics,
+      snapshotCoverage,
     };
   }
 
-  async _waitForAllActive() {
-    const timeout = this._config.timeouts?.convergence ||
+  _extractControlSnapshotNodes(snapshotResult) {
+    const rows = Array.isArray(snapshotResult?.rows) ?
+      snapshotResult.rows :
+      [];
+    if (rows.length === 0) {
+      return [];
+    }
+    const row = rows[0];
+    const nodes = Array.isArray(row?.[CONTROL_SNAPSHOT_NODES_FIELD]) ?
+      row[CONTROL_SNAPSHOT_NODES_FIELD] :
+      [];
+    return nodes
+      .map((nodeId) => String(nodeId))
+      .filter((nodeId) => nodeId.length > 0);
+  }
+
+  async _probeControlSnapshotCoverage(deadline, expectedNodeIds = []) {
+    const expectedNodeSet = new Set(
+      expectedNodeIds.map((nodeId) => String(nodeId)),
+    );
+    const nodes = [...this._nodes.values()];
+    nodes.sort((left, right) => {
+      const leftRank = left.role === NODE_ROLES.SEED ? 0 : 1;
+      const rightRank = right.role === NODE_ROLES.SEED ? 0 : 1;
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank;
+      }
+      return String(left.id).localeCompare(String(right.id));
+    });
+
+    const snapshotProbeResults = [];
+    for (const node of nodes) {
+      const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
+      const snapshotTimeoutMs = Math.min(
+        CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
+        remainingMs,
+      );
+      try {
+        const snapshotResult = await node.getControlSnapshot({
+          timeoutMs: snapshotTimeoutMs,
+          lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+        });
+        const observedNodeIds = this._extractControlSnapshotNodes(snapshotResult);
+        const observedNodeSet = new Set(observedNodeIds);
+        let missingExpectedNodeCount = 0;
+        for (const expectedNodeId of expectedNodeSet) {
+          if (!observedNodeSet.has(expectedNodeId)) {
+            missingExpectedNodeCount += 1;
+          }
+        }
+        snapshotProbeResults.push({
+          nodeId: node.id,
+          error: null,
+          observedNodeCount: observedNodeSet.size,
+          missingExpectedNodeCount,
+        });
+        if (missingExpectedNodeCount === 0) {
+          break;
+        }
+      } catch (error) {
+        snapshotProbeResults.push({
+          nodeId: node.id,
+          error: normalizeProbeError(error),
+          observedNodeCount: 0,
+          missingExpectedNodeCount: expectedNodeSet.size,
+        });
+      }
+    }
+    const bestCoverageNodeCount = snapshotProbeResults.reduce(
+      (maxCoverage, result) => Math.max(maxCoverage, result.observedNodeCount),
+      0,
+    );
+    const completeCoverage = snapshotProbeResults.some(
+      (result) => result.missingExpectedNodeCount === 0,
+    );
+    return {
+      completeCoverage,
+      expectedNodeCount: expectedNodeSet.size,
+      bestCoverageNodeCount,
+    };
+  }
+
+  _resolveActiveWaitTimeoutMs() {
+    const baseTimeout = this._config.timeouts?.convergence ||
       TIMEOUTS.CONVERGENCE;
+    const configuredClusterSize = Number.isInteger(this._config?.size) ?
+      this._config.size :
+      0;
+    const expectedNodeCount = Math.max(
+      ACTIVE_WAIT_MIN_CLUSTER_SIZE,
+      configuredClusterSize,
+      this._nodes.size,
+    );
+    const extraNodeCount = Math.max(
+      0,
+      expectedNodeCount - ACTIVE_WAIT_MIN_CLUSTER_SIZE,
+    );
+    if (extraNodeCount === 0) {
+      return baseTimeout;
+    }
+    const scaledTimeout = baseTimeout + Math.floor(
+      (baseTimeout * extraNodeCount *
+        ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_PER_EXTRA_NODE) /
+      ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_DENOMINATOR,
+    );
+    const maxScaledTimeout = baseTimeout * ACTIVE_WAIT_TIMEOUT_MAX_MULTIPLIER;
+    return Math.min(scaledTimeout, maxScaledTimeout);
+  }
+
+  async _waitForAllActive() {
+    const timeout = this._resolveActiveWaitTimeoutMs();
     const deadline = Date.now() + timeout;
     const inactiveSummaryCounts = new Map();
     const pollResult = await pollUntilCondition({
@@ -2466,6 +2859,7 @@ class Cluster {
           },
           {
             nodeDiagnostics: lastResult.nodeDiagnostics || [],
+            snapshotCoverage: lastResult.snapshotCoverage || null,
           },
         );
       },
@@ -2480,12 +2874,16 @@ class Cluster {
       pollResult.lastResult?.nodeDiagnostics || [],
     );
     const inactiveSummary = formatCountSummary(inactiveSummaryCounts);
+    const snapshotCoverageSummary = formatSnapshotCoverage(
+      pollResult.lastResult?.snapshotCoverage || null,
+    );
     throw new Error(
       'Not all nodes reached ' + ACTIVE_STATE +
       ' state within ' + timeout + 'ms' +
       ' (attempts=' + pollResult.attempts +
       ', elapsedMs=' + pollResult.elapsedMs +
       ', nodeDiagnostics=' + (nodeDiagnosticsSummary || 'none') +
+      ', snapshotCoverage=' + snapshotCoverageSummary +
       ', inactiveSummary=' + (inactiveSummary || 'none') +
       ')',
     );

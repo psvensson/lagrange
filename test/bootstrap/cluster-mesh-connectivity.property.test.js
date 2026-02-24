@@ -186,10 +186,22 @@ test('cluster mesh - all ready nodes get connection attempts', async (t) => {
 
 test('WS_PORT_OFFSET is correctly applied', async (t) => {
   const testCases = [
-    {nodeAddress: 'localhost:8080', expectedWsPort: 9080},
-    {nodeAddress: 'localhost:8082', expectedWsPort: 9082},
-    {nodeAddress: 'localhost:8084', expectedWsPort: 9084},
-    {nodeAddress: '192.168.1.1:3000', expectedWsPort: 4000},
+    {
+      nodeAddress: 'localhost:8080',
+      expectedWsPort: 8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET,
+    },
+    {
+      nodeAddress: 'localhost:8082',
+      expectedWsPort: 8082 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET,
+    },
+    {
+      nodeAddress: 'localhost:8084',
+      expectedWsPort: 8084 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET,
+    },
+    {
+      nodeAddress: '192.168.1.1:3000',
+      expectedWsPort: 3000 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET,
+    },
   ];
 
   for (const {nodeAddress, expectedWsPort} of testCases) {

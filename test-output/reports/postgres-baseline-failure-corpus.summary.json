@@ -1,0 +1,656 @@
+{
+  "generatedAt": "2026-02-24T05:49:40.585Z",
+  "scenario": "postgres-baseline-comparison",
+  "reportDir": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports",
+  "profiles": {
+    "3node": {
+      "latestPassing": {
+        "reportId": "postgres-baseline-3node-rerun-20260224T053734Z",
+        "fileName": "postgres-baseline-3node-rerun-20260224T053734Z.report.json",
+        "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-rerun-20260224T053734Z.report.json",
+        "mtimeMs": 1771911599199.81,
+        "timestamp": "2026-02-24T05:37:36.578Z",
+        "passed": true,
+        "error": null,
+        "configPath": "test/distributed/config/local-benchmark-3node.json",
+        "scenarioName": "postgres-baseline-comparison"
+      },
+      "latestFailing": {
+        "reportId": "postgres-baseline-3node-consolidated-acceptance",
+        "fileName": "postgres-baseline-3node-consolidated-acceptance.report.json",
+        "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-consolidated-acceptance.report.json",
+        "mtimeMs": 1771872607727.84,
+        "timestamp": "2026-02-23T18:48:17.636Z",
+        "passed": false,
+        "error": "Not all nodes reached ACTIVE state within 78000ms (attempts=71, elapsedMs=78169, nodeDiagnostics=7493b0ab-a054-5fad-a91b-5e331db29304=active, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=inactive, 11601fe0-72d6-5853-8590-ec2881853e72=inactive, snapshotCoverage=3/3, inactiveSummary=state:inactive:142)",
+        "configPath": "test/distributed/config/local-benchmark-3node.json",
+        "scenarioName": "postgres-baseline-comparison",
+        "failureClass": "active_timeout"
+      },
+      "passingReports": [
+        {
+          "reportId": "postgres-baseline-3node-rerun-20260224T053734Z",
+          "fileName": "postgres-baseline-3node-rerun-20260224T053734Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-rerun-20260224T053734Z.report.json",
+          "mtimeMs": 1771911599199.81,
+          "timestamp": "2026-02-24T05:37:36.578Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "postgres-baseline-3node-current",
+          "fileName": "postgres-baseline-3node-current.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-current.report.json",
+          "mtimeMs": 1771875946187.5576,
+          "timestamp": "2026-02-23T19:44:03.822Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "postgres-baseline-3node-acceptance",
+          "fileName": "postgres-baseline-3node-acceptance.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-acceptance.report.json",
+          "mtimeMs": 1771861500879.156,
+          "timestamp": "2026-02-23T15:43:10.025Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-3node-timeout180",
+          "fileName": "postgres-baseline-comparison-3node-timeout180.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-3node-timeout180.report.json",
+          "mtimeMs": 1771757024327.607,
+          "timestamp": "2026-02-22T10:41:23.767Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout180.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "benchmark-3node-post-fix",
+          "fileName": "benchmark-3node-post-fix.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/benchmark-3node-post-fix.report.json",
+          "mtimeMs": 1771445649255.1536,
+          "timestamp": "2026-02-18T20:12:26.082Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "benchmark-3node-with-fix",
+          "fileName": "benchmark-3node-with-fix.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/benchmark-3node-with-fix.report.json",
+          "mtimeMs": 1771444305097.0317,
+          "timestamp": "2026-02-18T19:49:57.095Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison"
+        }
+      ],
+      "failingReports": [
+        {
+          "reportId": "postgres-baseline-3node-consolidated-acceptance",
+          "fileName": "postgres-baseline-3node-consolidated-acceptance.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-consolidated-acceptance.report.json",
+          "mtimeMs": 1771872607727.84,
+          "timestamp": "2026-02-23T18:48:17.636Z",
+          "passed": false,
+          "error": "Not all nodes reached ACTIVE state within 78000ms (attempts=71, elapsedMs=78169, nodeDiagnostics=7493b0ab-a054-5fad-a91b-5e331db29304=active, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=inactive, 11601fe0-72d6-5853-8590-ec2881853e72=inactive, snapshotCoverage=3/3, inactiveSummary=state:inactive:142)",
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "active_timeout"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-3node",
+          "fileName": "postgres-baseline-comparison-3node.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-3node.report.json",
+          "mtimeMs": 1771700735576.7368,
+          "timestamp": "2026-02-21T19:04:17.844Z",
+          "passed": false,
+          "error": "Not all nodes reached ACTIVE state within 60000ms",
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "active_timeout"
+        },
+        {
+          "reportId": "benchmark-3node-cdc-fix",
+          "fileName": "benchmark-3node-cdc-fix.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/benchmark-3node-cdc-fix.report.json",
+          "mtimeMs": 1771479498128.7363,
+          "timestamp": "2026-02-19T05:35:01.213Z",
+          "passed": false,
+          "error": "Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7: Distributed operation failed due to participant failures",
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "other"
+        },
+        {
+          "reportId": "benchmark-3node-post-optimizations",
+          "fileName": "benchmark-3node-post-optimizations.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/benchmark-3node-post-optimizations.report.json",
+          "mtimeMs": 1771443584523.1829,
+          "timestamp": "2026-02-18T19:38:15.121Z",
+          "passed": false,
+          "error": "Not all nodes reached ACTIVE state within 60000ms",
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "active_timeout"
+        },
+        {
+          "reportId": "benchmark-3node-provisioning-check-after-fix",
+          "fileName": "benchmark-3node-provisioning-check-after-fix.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/benchmark-3node-provisioning-check-after-fix.report.json",
+          "mtimeMs": 1771433472228.5,
+          "timestamp": "2026-02-18T16:50:10.343Z",
+          "passed": false,
+          "error": "Seed node bootstrap API did not become available within 60000ms",
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "other"
+        },
+        {
+          "reportId": "benchmark-3node-provisioning-check",
+          "fileName": "benchmark-3node-provisioning-check.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/benchmark-3node-provisioning-check.report.json",
+          "mtimeMs": 1771432957016.7446,
+          "timestamp": "2026-02-18T16:41:38.002Z",
+          "passed": false,
+          "error": "Benchmark table \"benchmark_events\" was not ready within 30000ms: partition metadata for table \"benchmark_events\" not visible yet",
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "other"
+        }
+      ],
+      "failureClassHistogram": {
+        "other": 3,
+        "active_timeout": 3
+      },
+      "seedMatrix": {
+        "latestPassing": {
+          "reportId": "postgres-baseline-3node-rerun-20260224T053734Z",
+          "fileName": "postgres-baseline-3node-rerun-20260224T053734Z.report.json",
+          "timestamp": "2026-02-24T05:37:36.578Z",
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "command": "node test/distributed/run.js --config test/distributed/config/local-benchmark-3node.json --scenario postgres-baseline-comparison --output test-output/reports/postgres-baseline-3node-rerun-20260224T053734Z.report.json"
+        },
+        "latestFailing": {
+          "reportId": "postgres-baseline-3node-consolidated-acceptance",
+          "fileName": "postgres-baseline-3node-consolidated-acceptance.report.json",
+          "timestamp": "2026-02-23T18:48:17.636Z",
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "command": "node test/distributed/run.js --config test/distributed/config/local-benchmark-3node.json --scenario postgres-baseline-comparison --output test-output/reports/postgres-baseline-3node-consolidated-acceptance.report.json"
+        }
+      }
+    },
+    "7node": {
+      "latestPassing": {
+        "reportId": "postgres-baseline-7node-rerun-20260224T054003Z",
+        "fileName": "postgres-baseline-7node-rerun-20260224T054003Z.report.json",
+        "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-rerun-20260224T054003Z.report.json",
+        "mtimeMs": 1771911766849.1306,
+        "timestamp": "2026-02-24T05:40:03.460Z",
+        "passed": true,
+        "error": null,
+        "configPath": "test/distributed/config/local-memory-soak.json",
+        "scenarioName": "postgres-baseline-comparison"
+      },
+      "latestFailing": {
+        "reportId": "postgres-baseline-7node-smoke-after-cdc-delivery-catch",
+        "fileName": "postgres-baseline-7node-smoke-after-cdc-delivery-catch.report.json",
+        "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-smoke-after-cdc-delivery-catch.report.json",
+        "mtimeMs": 1771870388596.1882,
+        "timestamp": "2026-02-23T18:07:28.577Z",
+        "passed": false,
+        "error": "Not all nodes reached ACTIVE state within 228000ms (attempts=67, elapsedMs=229001, nodeDiagnostics=7493b0ab-a054-5fad-a91b-5e331db29304=error:Node status probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=inactive, 11601fe0-72d6-5853-8590-ec2881853e72=active, ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=active, 8be8d30f-4499-5eed-865c-71b4d529a67a=inactive, ff60df70-c157-50cb-bfdf-f617df0e5cb4=inactive, 37ab9190-8bcc-5378-ac57-9d012e3bf838=inactive, snapshotCoverage=0/7, inactiveSummary=error:Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: connect ECONNREFUSED 172.18.0.3:8081:13, error:Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: connect ECONNREFUSED 172.18.0.4:8081:13, error:Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: connect ECONNREFUSED 172.18.0.5:8081:18, error:Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane default: connect ECONNREFUSED 172.18.0.6:8081:12, error:Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane default: connect ECONNREFUSED 172.18.0.7:8081:12, error:Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane default: connect ECONNREFUSED 172.18.0.8:8081:11, state:inactive:225, error:Node status probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304:1)",
+        "configPath": "/tmp/local-benchmark-7node-smoke.json",
+        "scenarioName": "postgres-baseline-comparison",
+        "failureClass": "active_timeout"
+      },
+      "passingReports": [
+        {
+          "reportId": "postgres-baseline-7node-rerun-20260224T054003Z",
+          "fileName": "postgres-baseline-7node-rerun-20260224T054003Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-rerun-20260224T054003Z.report.json",
+          "mtimeMs": 1771911766849.1306,
+          "timestamp": "2026-02-24T05:40:03.460Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-memory-soak.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "postgres-baseline-7node-current",
+          "fileName": "postgres-baseline-7node-current.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-current.report.json",
+          "mtimeMs": 1771875682733.4294,
+          "timestamp": "2026-02-23T19:35:14.749Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-memory-soak.json",
+          "scenarioName": "postgres-baseline-comparison"
+        }
+      ],
+      "failingReports": [
+        {
+          "reportId": "postgres-baseline-7node-smoke-after-cdc-delivery-catch",
+          "fileName": "postgres-baseline-7node-smoke-after-cdc-delivery-catch.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-smoke-after-cdc-delivery-catch.report.json",
+          "mtimeMs": 1771870388596.1882,
+          "timestamp": "2026-02-23T18:07:28.577Z",
+          "passed": false,
+          "error": "Not all nodes reached ACTIVE state within 228000ms (attempts=67, elapsedMs=229001, nodeDiagnostics=7493b0ab-a054-5fad-a91b-5e331db29304=error:Node status probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=inactive, 11601fe0-72d6-5853-8590-ec2881853e72=active, ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=active, 8be8d30f-4499-5eed-865c-71b4d529a67a=inactive, ff60df70-c157-50cb-bfdf-f617df0e5cb4=inactive, 37ab9190-8bcc-5378-ac57-9d012e3bf838=inactive, snapshotCoverage=0/7, inactiveSummary=error:Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: connect ECONNREFUSED 172.18.0.3:8081:13, error:Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: connect ECONNREFUSED 172.18.0.4:8081:13, error:Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: connect ECONNREFUSED 172.18.0.5:8081:18, error:Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane default: connect ECONNREFUSED 172.18.0.6:8081:12, error:Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane default: connect ECONNREFUSED 172.18.0.7:8081:12, error:Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane default: connect ECONNREFUSED 172.18.0.8:8081:11, state:inactive:225, error:Node status probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304:1)",
+          "configPath": "/tmp/local-benchmark-7node-smoke.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "active_timeout"
+        },
+        {
+          "reportId": "postgres-baseline-7node-smoke-after-cdc-safe-fanout",
+          "fileName": "postgres-baseline-7node-smoke-after-cdc-safe-fanout.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-smoke-after-cdc-safe-fanout.report.json",
+          "mtimeMs": 1771869723631.0225,
+          "timestamp": "2026-02-23T17:56:20.978Z",
+          "passed": false,
+          "error": "Not all nodes reached ACTIVE state within 228000ms (attempts=59, elapsedMs=229002, nodeDiagnostics=7493b0ab-a054-5fad-a91b-5e331db29304=error:Node status probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=inactive, 11601fe0-72d6-5853-8590-ec2881853e72=inactive, ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=active, 8be8d30f-4499-5eed-865c-71b4d529a67a=inactive, ff60df70-c157-50cb-bfdf-f617df0e5cb4=inactive, 37ab9190-8bcc-5378-ac57-9d012e3bf838=inactive, snapshotCoverage=3/7, inactiveSummary=error:Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: connect ECONNREFUSED 172.18.0.3:8081:14, error:Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: connect ECONNREFUSED 172.18.0.4:8081:17, error:Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: connect ECONNREFUSED 172.18.0.5:8081:9, error:Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane default: connect ECONNREFUSED 172.18.0.6:8081:16, error:Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane default: connect ECONNREFUSED 172.18.0.7:8081:17, error:Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane default: connect ECONNREFUSED 172.18.0.8:8081:19, state:inactive:212, error:Node status probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304:1)",
+          "configPath": "/tmp/local-benchmark-7node-smoke.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "active_timeout"
+        },
+        {
+          "reportId": "postgres-baseline-7node-smoke-after-discovery-status",
+          "fileName": "postgres-baseline-7node-smoke-after-discovery-status.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-smoke-after-discovery-status.report.json",
+          "mtimeMs": 1771869128862.2139,
+          "timestamp": "2026-02-23T17:46:21.982Z",
+          "passed": false,
+          "error": "Not all nodes reached ACTIVE state within 228000ms (attempts=53, elapsedMs=229002, nodeDiagnostics=7493b0ab-a054-5fad-a91b-5e331db29304=error:Node status probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=active, 11601fe0-72d6-5853-8590-ec2881853e72=inactive, ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=inactive, 8be8d30f-4499-5eed-865c-71b4d529a67a=inactive, ff60df70-c157-50cb-bfdf-f617df0e5cb4=inactive, 37ab9190-8bcc-5378-ac57-9d012e3bf838=inactive, snapshotCoverage=5/7, inactiveSummary=error:Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: connect ECONNREFUSED 172.18.0.3:8081:15, error:Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: connect ECONNREFUSED 172.18.0.4:8081:14, error:Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: connect ECONNREFUSED 172.18.0.5:8081:27, error:Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane default: connect ECONNREFUSED 172.18.0.6:8081:13, error:Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane default: connect ECONNREFUSED 172.18.0.7:8081:12, error:Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane default: connect ECONNREFUSED 172.18.0.8:8081:14, state:inactive:196, error:Node status probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304:4)",
+          "configPath": "/tmp/local-benchmark-7node-smoke.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "active_timeout"
+        },
+        {
+          "reportId": "postgres-baseline-7node-smoke-after-dynconfig-timeout",
+          "fileName": "postgres-baseline-7node-smoke-after-dynconfig-timeout.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-smoke-after-dynconfig-timeout.report.json",
+          "mtimeMs": 1771868425380.2285,
+          "timestamp": "2026-02-23T17:34:36.963Z",
+          "passed": false,
+          "error": "Not all nodes reached ACTIVE state within 228000ms (attempts=26, elapsedMs=229002, nodeDiagnostics=7493b0ab-a054-5fad-a91b-5e331db29304=error:Node status probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=error:Node status probe timed out for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, 11601fe0-72d6-5853-8590-ec2881853e72=error:Node status probe timed out for 11601fe0-72d6-5853-8590-ec2881853e72, ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=error:Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: Distributed operation failed due to participant failures, 8be8d30f-4499-5eed-865c-71b4d529a67a=error:Node status probe timed out for 8be8d30f-4499-5eed-865c-71b4d529a67a, ff60df70-c157-50cb-bfdf-f617df0e5cb4=error:Node status probe timed out for ff60df70-c157-50cb-bfdf-f617df0e5cb4, 37ab9190-8bcc-5378-ac57-9d012e3bf838=error:Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane default: Distributed operation failed due to participant failures, snapshotCoverage=6/7, inactiveSummary=error:Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: connect ECONNREFUSED 172.18.0.3:8081:14, error:Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: connect ECONNREFUSED 172.18.0.4:8081:14, error:Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: connect ECONNREFUSED 172.18.0.5:8081:13, error:Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane default: connect ECONNREFUSED 172.18.0.6:8081:15, error:Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane default: connect ECONNREFUSED 172.18.0.7:8081:14, error:Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane default: connect ECONNREFUSED 172.18.0.8:8081:14, error:Node status probe timed out for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7:12, error:Node status probe timed out for ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:3, error:Node status probe timed out for 8be8d30f-4499-5eed-865c-71b4d529a67a:11, error:Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Distributed operation failed due to participant failures:4, error:Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: Distributed operation failed due to participant failures:9, error:Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane default: Distributed operation failed due to participant failures:9, error:Node status probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304:8, error:Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane default: Distributed operation failed due to participant failures:5, error:Node status probe timed out for 11601fe0-72d6-5853-8590-ec2881853e72:5, error:Node status probe timed out for ff60df70-c157-50cb-bfdf-f617df0e5cb4:2)",
+          "configPath": "/tmp/local-benchmark-7node-smoke.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "active_timeout"
+        },
+        {
+          "reportId": "postgres-baseline-7node-acceptance",
+          "fileName": "postgres-baseline-7node-acceptance.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-acceptance.report.json",
+          "mtimeMs": 1771867588033.26,
+          "timestamp": "2026-02-23T17:22:03.048Z",
+          "passed": false,
+          "error": "Not all nodes reached ACTIVE state within 228000ms (attempts=47, elapsedMs=229001, nodeDiagnostics=7493b0ab-a054-5fad-a91b-5e331db29304=active, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=error:Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: connect ECONNREFUSED 172.18.0.3:8081, 11601fe0-72d6-5853-8590-ec2881853e72=error:Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: connect ECONNREFUSED 172.18.0.4:8081, ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=error:Node status probe timed out for ebc4aa0b-06c6-506d-93ea-1dd2deca3f58, 8be8d30f-4499-5eed-865c-71b4d529a67a=error:Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane default: connect ECONNREFUSED 172.18.0.6:8081, ff60df70-c157-50cb-bfdf-f617df0e5cb4=error:Node status probe timed out for ff60df70-c157-50cb-bfdf-f617df0e5cb4, 37ab9190-8bcc-5378-ac57-9d012e3bf838=active, snapshotCoverage=0/7, inactiveSummary=error:Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: connect ECONNREFUSED 172.18.0.3:8081:47, error:Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: connect ECONNREFUSED 172.18.0.4:8081:47, error:Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: connect ECONNREFUSED 172.18.0.5:8081:27, error:Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane default: connect ECONNREFUSED 172.18.0.6:8081:47, error:Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane default: connect ECONNREFUSED 172.18.0.7:8081:19, error:Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane default: connect ECONNREFUSED 172.18.0.8:8081:20, error:Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: Distributed operation failed due to participant failures:7, error:Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane default: Distributed operation failed due to participant failures:4, error:Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane default: Distributed operation failed due to participant failures:6, error:Node status probe timed out for ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:1, error:Node status probe timed out for ff60df70-c157-50cb-bfdf-f617df0e5cb4:1)",
+          "configPath": "test/distributed/config/local-memory-soak.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "active_timeout"
+        },
+        {
+          "reportId": "postgres-baseline-7node-acceptance-tmp",
+          "fileName": "postgres-baseline-7node-acceptance-tmp.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-acceptance-tmp.report.json",
+          "mtimeMs": 1771862903278.3801,
+          "timestamp": "2026-02-23T16:05:16.579Z",
+          "passed": false,
+          "error": "postgres-baseline-comparison failed in phase pre_load_gate: SUT load nodes did not reach quiescent state within 120000ms (inFlightQueryError=in_flight_query_error:NodeClient fetchControlSnapshot failed (node=7493b0ab-a054-5fad-a91b-5e331db29304, channel=snapshot, timeoutClass=timeout, code=timeout): Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 2000ms, inFlightReplicaOperations=in_flight_replica_operations:2,in_flight_replica_operations:4,in_flight_replica_operations:9,in_flight_replica_operations:16,in_flight_replica_operations:52,in_flight_replica_operations:45,in_flight_replica_operations:26,in_flight_replica_operations:32,in_flight_replica_operations:30,in_flight_replica_operations:29,in_flight_replica_operations:28,in_flight_replica_operations:25, leadershipStability=leadership_unstable:0,leadership_unstable:1810, readyLoadNodes=1)",
+          "configPath": "/tmp/local-memory-soak-acceptance.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "phase_failure"
+        },
+        {
+          "reportId": "postgres-baseline-7node-fast-discovery-fallback",
+          "fileName": "postgres-baseline-7node-fast-discovery-fallback.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-fast-discovery-fallback.report.json",
+          "mtimeMs": 1771849607073.3103,
+          "timestamp": "2026-02-23T12:20:54.648Z",
+          "passed": false,
+          "error": "postgres-baseline-comparison failed in phase converge: Convergence timeout after 120000ms. Leader changes: 0. Max over-target: 0ms. Snapshot node: unknown. Expected partitions: []. Voter counts: {}. Leaders: {}. In-flight replica operations: 0. In-flight statuses: {}. Over-target durations: {}. Replica membership: none. Operation history: unavailable(Admin API query timed out for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 after 15000ms)",
+          "configPath": "test/distributed/config/local-memory-soak.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "convergence_timeout"
+        },
+        {
+          "reportId": "postgres-baseline-7node-fast-discovery-retry",
+          "fileName": "postgres-baseline-7node-fast-discovery-retry.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-fast-discovery-retry.report.json",
+          "mtimeMs": 1771848712406.1038,
+          "timestamp": "2026-02-23T12:09:32.003Z",
+          "passed": false,
+          "error": "postgres-baseline-comparison failed in phase preflight: No discovered reachable sys-postgres-wire nodes available for benchmark load (attempts=30, timedOut=true, discovered=none, sources=7493b0ab-a054-5fad-a91b-5e331db29304:empty;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:error=NodeClient fetchServiceDiscovery failed (node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7, channel=snapshot, timeoutClass=none, code=circuit_open): circuit breaker is ;11601fe0-72d6-5853-8590-ec2881853e72:error=NodeClient fetchServiceDiscovery failed (node=11601fe0-72d6-5853-8590-ec2881853e72, channel=snapshot, timeoutClass=none, code=circuit_open): circuit breaker is ;ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:error=NodeClient fetchServiceDiscovery failed (node=ebc4aa0b-06c6-506d-93ea-1dd2deca3f58, channel=snapshot, timeoutClass=none, code=circuit_open): circuit breaker is ;8be8d30f-4499-5eed-865c-71b4d529a67a:empty;ff60df70-c157-50cb-bfdf-f617df0e5cb4:empty;37ab9190-8bcc-5378-ac57-9d012e3bf838:empty)",
+          "configPath": "test/distributed/config/local-memory-soak.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "discovery_empty"
+        },
+        {
+          "reportId": "postgres-baseline-7node-fast-discovery",
+          "fileName": "postgres-baseline-7node-fast-discovery.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-fast-discovery.report.json",
+          "mtimeMs": 1771847920575.4692,
+          "timestamp": "2026-02-23T11:57:06.744Z",
+          "passed": false,
+          "error": "postgres-baseline-comparison failed in phase preflight: No discovered reachable sys-postgres-wire nodes available for benchmark load",
+          "configPath": "test/distributed/config/local-memory-soak.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "discovery_empty"
+        },
+        {
+          "reportId": "postgres-baseline-7node-fast-gatesnap",
+          "fileName": "postgres-baseline-7node-fast-gatesnap.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-fast-gatesnap.report.json",
+          "mtimeMs": 1771847611604.6687,
+          "timestamp": "2026-02-23T11:51:12.321Z",
+          "passed": false,
+          "error": "postgres-baseline-comparison failed in phase preflight: No discovered reachable sys-postgres-wire nodes available for benchmark load",
+          "configPath": "/tmp/local-benchmark-7node-fast.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "discovery_empty"
+        }
+      ],
+      "failureClassHistogram": {
+        "phase_failure": 1,
+        "active_timeout": 11,
+        "convergence_timeout": 1,
+        "discovery_empty": 3
+      },
+      "seedMatrix": {
+        "latestPassing": {
+          "reportId": "postgres-baseline-7node-rerun-20260224T054003Z",
+          "fileName": "postgres-baseline-7node-rerun-20260224T054003Z.report.json",
+          "timestamp": "2026-02-24T05:40:03.460Z",
+          "configPath": "test/distributed/config/local-memory-soak.json",
+          "command": "node test/distributed/run.js --config test/distributed/config/local-memory-soak.json --scenario postgres-baseline-comparison --output test-output/reports/postgres-baseline-7node-rerun-20260224T054003Z.report.json"
+        },
+        "latestFailing": {
+          "reportId": "postgres-baseline-7node-smoke-after-cdc-delivery-catch",
+          "fileName": "postgres-baseline-7node-smoke-after-cdc-delivery-catch.report.json",
+          "timestamp": "2026-02-23T18:07:28.577Z",
+          "configPath": "/tmp/local-benchmark-7node-smoke.json",
+          "command": "node test/distributed/run.js --config /tmp/local-benchmark-7node-smoke.json --scenario postgres-baseline-comparison --output test-output/reports/postgres-baseline-7node-smoke-after-cdc-delivery-catch.report.json"
+        }
+      }
+    },
+    "unknown": {
+      "latestPassing": {
+        "reportId": "postgres-baseline-comparison-orchestrator-latest",
+        "fileName": "postgres-baseline-comparison-orchestrator-latest.report.json",
+        "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-orchestrator-latest.report.json",
+        "mtimeMs": 1771787258572.0122,
+        "timestamp": "2026-02-22T19:04:45.701Z",
+        "passed": true,
+        "error": null,
+        "configPath": "test/distributed/config/local-benchmark-3node.json",
+        "scenarioName": "postgres-baseline-comparison"
+      },
+      "latestFailing": {
+        "reportId": "postgres-baseline-comparison-multinode-20260222T175555Z",
+        "fileName": "postgres-baseline-comparison-multinode-20260222T175555Z.report.json",
+        "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-multinode-20260222T175555Z.report.json",
+        "mtimeMs": 1771783244145.5596,
+        "timestamp": "2026-02-22T17:55:59.735Z",
+        "passed": false,
+        "error": "Cluster consistency assertion failed after 3 attempts: Cannot assert consistency: fewer than 2 queryable nodes (found 0). Reachability: 7493b0ab-a054-5fad-a91b-5e331db29304[unreachable,source=unknown,error=Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 after 15000ms], 35a891b8-c1a0-5064-9c6e-2acfba61c2a7[reachable,source=admin_health,error=none], 11601fe0-72d6-5853-8590-ec2881853e72[reachable,source=admin_health,error=none]. Query failures: 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7: Distributed operation failed due to participant failures; 11601fe0-72d6-5853-8590-ec2881853e72=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72: Distributed operation failed due to participant failures",
+        "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+        "scenarioName": "postgres-baseline-comparison",
+        "failureClass": "consistency_queryable"
+      },
+      "passingReports": [
+        {
+          "reportId": "postgres-baseline-comparison-orchestrator-latest",
+          "fileName": "postgres-baseline-comparison-orchestrator-latest.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-orchestrator-latest.report.json",
+          "mtimeMs": 1771787258572.0122,
+          "timestamp": "2026-02-22T19:04:45.701Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-multinode-20260222T173654Z",
+          "fileName": "postgres-baseline-comparison-multinode-20260222T173654Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-multinode-20260222T173654Z.report.json",
+          "mtimeMs": 1771782001013.559,
+          "timestamp": "2026-02-22T17:36:59.774Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-multinode-20260222T171345Z",
+          "fileName": "postgres-baseline-comparison-multinode-20260222T171345Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-multinode-20260222T171345Z.report.json",
+          "mtimeMs": 1771780612798.7808,
+          "timestamp": "2026-02-22T17:13:50.352Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-multinode-20260222T164933Z",
+          "fileName": "postgres-baseline-comparison-multinode-20260222T164933Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-multinode-20260222T164933Z.report.json",
+          "mtimeMs": 1771779142926.258,
+          "timestamp": "2026-02-22T16:49:33.903Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-clean-20260222T163316Z",
+          "fileName": "postgres-baseline-comparison-clean-20260222T163316Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-clean-20260222T163316Z.report.json",
+          "mtimeMs": 1771778146937.7688,
+          "timestamp": "2026-02-22T16:33:17.117Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-clean-20260222T155645Z",
+          "fileName": "postgres-baseline-comparison-clean-20260222T155645Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-clean-20260222T155645Z.report.json",
+          "mtimeMs": 1771775948585.192,
+          "timestamp": "2026-02-22T15:56:45.822Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-clean-20260222T154247Z",
+          "fileName": "postgres-baseline-comparison-clean-20260222T154247Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-clean-20260222T154247Z.report.json",
+          "mtimeMs": 1771775108039.0322,
+          "timestamp": "2026-02-22T15:42:47.800Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout180.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-clean-20260222T153720Z",
+          "fileName": "postgres-baseline-comparison-clean-20260222T153720Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-clean-20260222T153720Z.report.json",
+          "mtimeMs": 1771774776928.641,
+          "timestamp": "2026-02-22T15:37:20.439Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout180.json",
+          "scenarioName": "postgres-baseline-comparison"
+        },
+        {
+          "reportId": "pg-baseline-run7",
+          "fileName": "pg-baseline-run7.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/pg-baseline-run7.report.json",
+          "mtimeMs": 1771518559152.4866,
+          "timestamp": "2026-02-19T16:27:33.134Z",
+          "passed": true,
+          "error": null,
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison"
+        }
+      ],
+      "failingReports": [
+        {
+          "reportId": "postgres-baseline-comparison-multinode-20260222T175555Z",
+          "fileName": "postgres-baseline-comparison-multinode-20260222T175555Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-multinode-20260222T175555Z.report.json",
+          "mtimeMs": 1771783244145.5596,
+          "timestamp": "2026-02-22T17:55:59.735Z",
+          "passed": false,
+          "error": "Cluster consistency assertion failed after 3 attempts: Cannot assert consistency: fewer than 2 queryable nodes (found 0). Reachability: 7493b0ab-a054-5fad-a91b-5e331db29304[unreachable,source=unknown,error=Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 after 15000ms], 35a891b8-c1a0-5064-9c6e-2acfba61c2a7[reachable,source=admin_health,error=none], 11601fe0-72d6-5853-8590-ec2881853e72[reachable,source=admin_health,error=none]. Query failures: 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7: Distributed operation failed due to participant failures; 11601fe0-72d6-5853-8590-ec2881853e72=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72: Distributed operation failed due to participant failures",
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "consistency_queryable"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-multinode-20260222T175107Z",
+          "fileName": "postgres-baseline-comparison-multinode-20260222T175107Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-multinode-20260222T175107Z.report.json",
+          "mtimeMs": 1771782933641.65,
+          "timestamp": "2026-02-22T17:51:12.226Z",
+          "passed": false,
+          "error": "Cluster consistency assertion failed after 3 attempts: Cannot assert consistency: fewer than 2 queryable nodes (found 0). Reachability: 7493b0ab-a054-5fad-a91b-5e331db29304[unreachable,source=unknown,error=Admin API query failed for node 7493b0ab-a054-5fad-a91b-5e331db29304: connect EHOSTUNREACH 172.18.0.2:8081], 35a891b8-c1a0-5064-9c6e-2acfba61c2a7[reachable,source=admin_health,error=none], 11601fe0-72d6-5853-8590-ec2881853e72[reachable,source=admin_health,error=none]. Query failures: 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7: Distributed operation failed due to participant failures; 11601fe0-72d6-5853-8590-ec2881853e72=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72: Distributed operation failed due to participant failures",
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "consistency_queryable"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-multinode-20260222T173105Z",
+          "fileName": "postgres-baseline-comparison-multinode-20260222T173105Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-multinode-20260222T173105Z.report.json",
+          "mtimeMs": 1771781703398.3992,
+          "timestamp": "2026-02-22T17:31:09.537Z",
+          "passed": false,
+          "error": "Cannot assert consistency: fewer than 2 queryable nodes (found 0). Reachability: 7493b0ab-a054-5fad-a91b-5e331db29304[unreachable,source=unknown,error=Admin API query failed for node 7493b0ab-a054-5fad-a91b-5e331db29304: connection timed out], 35a891b8-c1a0-5064-9c6e-2acfba61c2a7[reachable,source=admin_health,error=none], 11601fe0-72d6-5853-8590-ec2881853e72[reachable,source=admin_health,error=none]. Query failures: 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7: Distributed operation failed due to participant failures; 11601fe0-72d6-5853-8590-ec2881853e72=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72: Distributed operation failed due to participant failures",
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "consistency_queryable"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-multinode-20260222T172646Z",
+          "fileName": "postgres-baseline-comparison-multinode-20260222T172646Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-multinode-20260222T172646Z.report.json",
+          "mtimeMs": 1771781351258.657,
+          "timestamp": "2026-02-22T17:26:50.721Z",
+          "passed": false,
+          "error": "SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=7493b0ab-a054-5fad-a91b-5e331db29304=Admin API query failed for node 7493b0ab-a054-5fad-a91b-5e331db29304: connection timed out; 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7: Table not found: benchmark_events; 11601fe0-72d6-5853-8590-ec2881853e72=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72: Distributed operation failed due to participant failures, inFlightQueryError=Admin API query failed for node 7493b0ab-a054-5fad-a91b-5e331db29304: connection timed out)",
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "other"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-multinode-20260222T172200Z",
+          "fileName": "postgres-baseline-comparison-multinode-20260222T172200Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-multinode-20260222T172200Z.report.json",
+          "mtimeMs": 1771781037227.3147,
+          "timestamp": "2026-02-22T17:22:05.820Z",
+          "passed": false,
+          "error": "SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=11601fe0-72d6-5853-8590-ec2881853e72=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72: Table not found: benchmark_events, inFlightReplicaOperations=0)",
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "other"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-clean-20260222T162629Z",
+          "fileName": "postgres-baseline-comparison-clean-20260222T162629Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-clean-20260222T162629Z.report.json",
+          "mtimeMs": 1771777749142.4792,
+          "timestamp": "2026-02-22T16:26:29.300Z",
+          "passed": false,
+          "error": "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 after 15000ms",
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "other"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-clean-20260222T162036Z",
+          "fileName": "postgres-baseline-comparison-clean-20260222T162036Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-clean-20260222T162036Z.report.json",
+          "mtimeMs": 1771777391847.8408,
+          "timestamp": "2026-02-22T16:20:38.375Z",
+          "passed": false,
+          "error": "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 after 5000ms",
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "other"
+        },
+        {
+          "reportId": "postgres-baseline-comparison-clean-20260222T161428Z",
+          "fileName": "postgres-baseline-comparison-clean-20260222T161428Z.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison-clean-20260222T161428Z.report.json",
+          "mtimeMs": 1771777020221.0967,
+          "timestamp": "2026-02-22T16:14:28.697Z",
+          "passed": false,
+          "error": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 after 5000ms",
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "other"
+        },
+        {
+          "reportId": "postgres-baseline-comparison",
+          "fileName": "postgres-baseline-comparison.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-comparison.report.json",
+          "mtimeMs": 1771667679332.5784,
+          "timestamp": "2026-02-21T09:53:39.013Z",
+          "passed": false,
+          "error": "Seed node bootstrap API did not become available within 60000ms",
+          "configPath": "test/distributed/config/local-benchmark.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "other"
+        },
+        {
+          "reportId": "pg-baseline-run8",
+          "fileName": "pg-baseline-run8.report.json",
+          "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/pg-baseline-run8.report.json",
+          "mtimeMs": 1771519133389.9404,
+          "timestamp": "2026-02-19T16:37:45.057Z",
+          "passed": false,
+          "error": "Seed node bootstrap API did not become available within 60000ms",
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "scenarioName": "postgres-baseline-comparison",
+          "failureClass": "other"
+        }
+      ],
+      "failureClassHistogram": {
+        "active_timeout": 1,
+        "other": 7,
+        "consistency_queryable": 3
+      },
+      "seedMatrix": {
+        "latestPassing": {
+          "reportId": "postgres-baseline-comparison-orchestrator-latest",
+          "fileName": "postgres-baseline-comparison-orchestrator-latest.report.json",
+          "timestamp": "2026-02-22T19:04:45.701Z",
+          "configPath": "test/distributed/config/local-benchmark-3node.json",
+          "command": "node test/distributed/run.js --config test/distributed/config/local-benchmark-3node.json --scenario postgres-baseline-comparison --output test-output/reports/postgres-baseline-comparison-orchestrator-latest.report.json"
+        },
+        "latestFailing": {
+          "reportId": "postgres-baseline-comparison-multinode-20260222T175555Z",
+          "fileName": "postgres-baseline-comparison-multinode-20260222T175555Z.report.json",
+          "timestamp": "2026-02-22T17:55:59.735Z",
+          "configPath": "test/distributed/config/local-benchmark-3node-timeout600.json",
+          "command": "node test/distributed/run.js --config test/distributed/config/local-benchmark-3node-timeout600.json --scenario postgres-baseline-comparison --output test-output/reports/postgres-baseline-comparison-multinode-20260222T175555Z.report.json"
+        }
+      }
+    }
+  }
+}

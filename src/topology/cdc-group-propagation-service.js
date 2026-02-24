@@ -28,6 +28,8 @@ import {
 const CDC_GROUP_PROPAGATION_MESSAGE = Object.freeze({
   STATUS_DELIVERED: 'delivered',
 });
+const MESSAGE_GROUP_REPLICA_SUFFIX = '-r';
+const DELIVERY_ERROR_UNKNOWN = 'unknown delivery error';
 
 class CDCGroupPropagationService extends EventEmitter {
   /**
@@ -182,31 +184,13 @@ class CDCGroupPropagationService extends EventEmitter {
 
     await sourceMessageGroupService.applyCDCEvent(tableName, operation, data);
 
-    const deliveryFailures = [];
-    for (const target of groupedContext.targets) {
-      const payload = {
-        type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION,
-        tableName,
-        operation,
-        data,
-        sourceNodeId: this.nodeId,
-        sourceGroupId: groupedContext.sourceGroupId,
-        targetGroupId: target.groupId,
-      };
-      const result = await this.messageRouter.deliver(
-        target.address,
-        payload,
-        {targetNodeId: target.coordinatorNodeId},
-      );
-      if (!result?.acknowledged) {
-        deliveryFailures.push({
-          targetGroupId: target.groupId,
-          coordinatorNodeId: target.coordinatorNodeId,
-          address: target.address,
-          error: result?.error || null,
-        });
-      }
-    }
+    const deliveryFailures = await this.deliverToTargets({
+      tableName,
+      operation,
+      data,
+      sourceGroupId: groupedContext.sourceGroupId,
+      targets: groupedContext.targets,
+    });
 
     const timestamp = this.now();
     this.stats.groupedCount += NUM.ONE;
@@ -259,12 +243,24 @@ class CDCGroupPropagationService extends EventEmitter {
       options.data,
     );
 
+    const sourceGroupId = this.resolveSourceMessageGroupId(
+      options.sourceMessageGroupService,
+    );
+    const safeTargets = this.buildSafeTargets(sourceGroupId);
+    const deliveryFailures = await this.deliverToTargets({
+      tableName: options.tableName,
+      operation: options.operation,
+      data: options.data,
+      sourceGroupId,
+      targets: safeTargets,
+    });
+
     const timestamp = this.now();
     this.stats.safeCount += NUM.ONE;
     this.stats.lastMode = CDC_GROUP_PROPAGATION_STATUS.SAFE;
     this.stats.lastFallbackReason = options.fallbackReason || null;
     this.stats.lastPropagationAt = timestamp;
-    this.stats.lastTargetGroupCount = NUM.ZERO;
+    this.stats.lastTargetGroupCount = safeTargets.length;
 
     if (options.fallbackReason) {
       this.stats.fallbackCount += NUM.ONE;
@@ -293,9 +289,12 @@ class CDCGroupPropagationService extends EventEmitter {
     });
 
     return {
-      success: true,
+      success: deliveryFailures.length === NUM.ZERO,
       mode: CDC_GROUP_PROPAGATION_STATUS.SAFE,
       status: CDC_GROUP_PROPAGATION_MESSAGE.STATUS_DELIVERED,
+      sourceGroupId,
+      targetGroupCount: safeTargets.length,
+      deliveryFailures,
       fallbackReason: options.fallbackReason || null,
       timestamp,
     };
@@ -394,18 +393,66 @@ class CDCGroupPropagationService extends EventEmitter {
    * @private
    */
   resolveCoordinatorAddress(coordinatorNodeId) {
-    const services = this.systemTableCache.filter(TABLES.SERVICES, (serviceRow) => {
-      return serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
-        serviceRow?.[COLUMN.NODE_ID] === coordinatorNodeId &&
-        serviceRow?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
-        typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-        serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
+    const services = this.resolveActiveMessageGroupServices((serviceRow) => {
+      return serviceRow?.[COLUMN.NODE_ID] === coordinatorNodeId;
     });
     if (services.length === NUM.ZERO) {
       return null;
     }
 
-    const sorted = [...services].sort((left, right) => {
+    const sorted = this.sortCoordinatorCandidates(services);
+
+    return sorted[NUM.ZERO]?.[COLUMN.ADDRESS] || null;
+  }
+
+  /**
+   * Resolve source message-group id from message-group service owner.
+   * @param {Object} sourceMessageGroupService
+   * @return {string|null}
+   * @private
+   */
+  resolveSourceMessageGroupId(sourceMessageGroupService) {
+    const groupId = sourceMessageGroupService?.groupId;
+    if (typeof groupId !== TYPEOF.STRING || groupId.length === NUM.ZERO) {
+      return null;
+    }
+    return groupId;
+  }
+
+  /**
+   * Resolve active message-group service rows from cache.
+   * @param {Function|null} predicate
+   * @return {Array<Object>}
+   * @private
+   */
+  resolveActiveMessageGroupServices(predicate = null) {
+    const rowPredicate = typeof predicate === TYPEOF.FUNCTION ? predicate : null;
+    return this.systemTableCache.filter(TABLES.SERVICES, (serviceRow) => {
+      const isMessageGroup =
+        serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
+      const isActive = serviceRow?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE;
+      const hasAddress =
+        typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
+        serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
+      if (!isMessageGroup || !isActive || !hasAddress) {
+        return false;
+      }
+      if (!rowPredicate) {
+        return true;
+      }
+      return rowPredicate(serviceRow) === true;
+    });
+  }
+
+  /**
+   * Deterministically sort coordinator candidates.
+   * Prefers leaders then lexical service id.
+   * @param {Array<Object>} services
+   * @return {Array<Object>}
+   * @private
+   */
+  sortCoordinatorCandidates(services) {
+    return [...services].sort((left, right) => {
       const leftLeader = left?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
       const rightLeader = right?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
       if (leftLeader && !rightLeader) {
@@ -424,8 +471,129 @@ class CDCGroupPropagationService extends EventEmitter {
       }
       return NUM.ZERO;
     });
+  }
 
-    return sorted[NUM.ZERO]?.[COLUMN.ADDRESS] || null;
+  /**
+   * Resolve message-group id from services row.
+   * @param {Object} serviceRow
+   * @return {string|null}
+   * @private
+   */
+  resolveMessageGroupId(serviceRow) {
+    const explicitGroupId = serviceRow?.[COLUMN.GROUP_ID];
+    if (typeof explicitGroupId === TYPEOF.STRING &&
+      explicitGroupId.length > NUM.ZERO) {
+      return explicitGroupId;
+    }
+    const serviceId = serviceRow?.[COLUMN.SERVICE_ID];
+    if (typeof serviceId !== TYPEOF.STRING || serviceId.length === NUM.ZERO) {
+      return null;
+    }
+    const replicaSuffixIndex = serviceId.lastIndexOf(
+      MESSAGE_GROUP_REPLICA_SUFFIX,
+    );
+    if (replicaSuffixIndex <= NUM.ZERO) {
+      return null;
+    }
+    return serviceId.slice(NUM.ZERO, replicaSuffixIndex);
+  }
+
+  /**
+   * Build safe propagation targets from active message-group leaders.
+   * @param {string|null} sourceGroupId
+   * @return {Array<Object>}
+   * @private
+   */
+  buildSafeTargets(sourceGroupId) {
+    const services = this.resolveActiveMessageGroupServices();
+    const servicesByGroupId = new Map();
+    for (const serviceRow of services) {
+      const groupId = this.resolveMessageGroupId(serviceRow);
+      if (!groupId) {
+        continue;
+      }
+      if (!servicesByGroupId.has(groupId)) {
+        servicesByGroupId.set(groupId, []);
+      }
+      servicesByGroupId.get(groupId).push(serviceRow);
+    }
+
+    const orderedGroupIds = [...servicesByGroupId.keys()]
+      .sort((left, right) => left.localeCompare(right));
+    const targets = [];
+    for (const groupId of orderedGroupIds) {
+      if (sourceGroupId && groupId === sourceGroupId) {
+        continue;
+      }
+      const selectedService =
+        this.sortCoordinatorCandidates(servicesByGroupId.get(groupId))[NUM.ZERO];
+      if (!selectedService) {
+        continue;
+      }
+      targets.push({
+        groupId,
+        coordinatorNodeId: selectedService[COLUMN.NODE_ID] || null,
+        address: selectedService[COLUMN.ADDRESS],
+      });
+    }
+    return targets;
+  }
+
+  /**
+   * Deliver CDC payload to target coordinators.
+   * @param {Object} options
+   * @return {Promise<Array<Object>>}
+   * @private
+   */
+  async deliverToTargets(options) {
+    const deliveryFailures = [];
+    for (const target of options.targets) {
+      if (!this.messageRouter ||
+        typeof this.messageRouter.deliver !== TYPEOF.FUNCTION) {
+        deliveryFailures.push({
+          targetGroupId: target.groupId,
+          coordinatorNodeId: target.coordinatorNodeId,
+          address: target.address,
+          error: CDC_GROUP_PROPAGATION_REASON.MESSAGE_ROUTER_UNAVAILABLE,
+        });
+        continue;
+      }
+
+      const payload = {
+        type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION,
+        tableName: options.tableName,
+        operation: options.operation,
+        data: options.data,
+        sourceNodeId: this.nodeId,
+        sourceGroupId: options.sourceGroupId,
+        targetGroupId: target.groupId,
+      };
+      let result = null;
+      try {
+        result = await this.messageRouter.deliver(
+          target.address,
+          payload,
+          {targetNodeId: target.coordinatorNodeId},
+        );
+      } catch (error) {
+        deliveryFailures.push({
+          targetGroupId: target.groupId,
+          coordinatorNodeId: target.coordinatorNodeId,
+          address: target.address,
+          error: String(error?.message || error || DELIVERY_ERROR_UNKNOWN),
+        });
+        continue;
+      }
+      if (!result?.acknowledged) {
+        deliveryFailures.push({
+          targetGroupId: target.groupId,
+          coordinatorNodeId: target.coordinatorNodeId,
+          address: target.address,
+          error: result?.error || null,
+        });
+      }
+    }
+    return deliveryFailures;
   }
 
   /**

@@ -27,6 +27,21 @@ function createMockSqlQueryEngine(rowsByKey = {}) {
 }
 
 /**
+ * Build a SQL engine mock that never resolves config lookups.
+ * @return {{executeQuery: Function}}
+ */
+function createNeverResolvingConfigSqlQueryEngine() {
+  return {
+    async executeQuery(sql, _params = []) {
+      if (sql.includes('WHERE config_key = ?')) {
+        return new Promise(() => {});
+      }
+      return {rows: []};
+    },
+  };
+}
+
+/**
  * Wait for queued async CDC handling to complete.
  * @return {Promise<void>}
  */
@@ -100,6 +115,43 @@ test('Dynamic config startup wiring applies initial metrics persistence setting'
   wiring.shutdown();
   LoggingService.resetInstance();
 });
+
+test('Dynamic config startup wiring does not block startup on stalled config reads',
+  async (t) => {
+    LoggingService.resetInstance();
+    const loggingService = LoggingService.getInstance();
+    loggingService.initialize({
+      nodeId: 'test-node',
+      persistMetricsLogs: true,
+    });
+
+    const messageGroupService = new EventEmitter();
+    const sqlQueryEngine = createNeverResolvingConfigSqlQueryEngine();
+
+    const startAt = Date.now();
+    const wiring = await Promise.race([
+      createDynamicConfigStartupWiring({
+        nodeId: 'test-node',
+        sqlQueryEngine,
+        messageGroupServices: new Map([['group-1', messageGroupService]]),
+      }),
+      new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('startup wiring creation timed out'));
+        }, 1000);
+      }),
+    ]);
+    const elapsedMs = Date.now() - startAt;
+
+    t.ok(wiring, 'startup wiring should still resolve');
+    t.ok(
+      elapsedMs < 1000,
+      'startup wiring should not block on initial config read stalls',
+    );
+
+    wiring.shutdown();
+    LoggingService.resetInstance();
+  });
 
 test('Dynamic config startup wiring applies initial metrics policy settings', async (t) => {
   LoggingService.resetInstance();

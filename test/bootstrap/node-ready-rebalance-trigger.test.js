@@ -308,6 +308,68 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
   });
 
   await t.test(
+    'does not reschedule node-ready rebalance after transient lease flap',
+    async (t) => {
+      const nodeId = 'node-flap';
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
+        },
+      });
+      setReadyNodeCache(bootstrapService, [
+        createNodeEvent(nodeId, LEASE_VALID_MS).data,
+      ]);
+
+      const reasons = [];
+      bootstrapService.triggerRebalancingOnAllPartitions = (reason) => {
+        reasons.push(reason);
+      };
+
+      const firstScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        createNodeEvent(nodeId, LEASE_VALID_MS, STATE.DISCONNECTED),
+        createPreviousNodeRow(nodeId, LEASE_EXPIRED_MS),
+      );
+      t.equal(firstScheduled, true, 'first not-ready to ready transition should schedule');
+
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
+      t.same(
+        reasons,
+        [BOOTSTRAP_REBALANCE_REASON.NODE_READY],
+        'first transition should trigger exactly one rebalance',
+      );
+
+      const transientNotReadyScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        createNodeEvent(nodeId, LEASE_EXPIRED_MS, STATE.DISCONNECTED),
+        createPreviousNodeRow(nodeId, LEASE_VALID_MS),
+      );
+      t.equal(
+        transientNotReadyScheduled,
+        false,
+        'not-ready update should not schedule a rebalance',
+      );
+
+      const secondReadyScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        createNodeEvent(nodeId, LEASE_VALID_MS, STATE.DISCONNECTED),
+        createPreviousNodeRow(nodeId, LEASE_EXPIRED_MS),
+      );
+      t.equal(
+        secondReadyScheduled,
+        false,
+        'dedupe should prevent repeated node_ready trigger after lease flap',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
+      t.equal(
+        reasons.length,
+        1,
+        'lease flap should not create additional node_ready rebalance triggers',
+      );
+    },
+  );
+
+  await t.test(
     'waitForReadyNodeInCache should not require connection_state readiness',
     async (t) => {
       const nodeId = 'node-ready';

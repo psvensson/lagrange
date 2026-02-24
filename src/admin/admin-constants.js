@@ -17,6 +17,7 @@ const ADMIN_ROUTE = Object.freeze({
   TEST_RUN_STREAM: '/api/admin/test-runs/:runId/stream',
   SERVICE_DIAGNOSTICS: '/api/admin/diagnostics/services',
   CONTROL_SNAPSHOT: '/api/admin/control-snapshot',
+  SERVICE_DISCOVERY: '/api/admin/discovery/services',
   DEBUG_SESSIONS: '/api/admin/debug/sessions',
   DEBUG_SESSION_BY_ID: '/api/admin/debug/sessions/:sessionId',
   DEBUG_SESSION_ATTACH: '/api/admin/debug/sessions/:sessionId/attach',
@@ -199,6 +200,8 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
     'Control snapshot scope must be "local"',
   CONTROL_SNAPSHOT_UNAVAILABLE:
     'Control snapshot unavailable because system cache is not configured',
+  SERVICE_DISCOVERY_UNAVAILABLE:
+    'Service discovery unavailable because system cache is not configured',
   LIVE_QUERY_MANAGER_UNAVAILABLE:
     'Live query manager not available',
   LIVE_QUERY_MISSING_SUBSCRIPTION_ID:
@@ -283,6 +286,18 @@ const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
   ]),
 });
 
+const ADMIN_SERVICE_DISCOVERY = Object.freeze({
+  QUERY_SQL: 'SELECT * FROM service_discovery_local()',
+  SCHEMA_VERSION: 2,
+  TABLE_NAME: 'service_discovery_local',
+  QUERY_PROTOCOL_KEY: 'protocol',
+  QUERY_SERVICE_ID_KEY: 'serviceId',
+  QUERY_NODE_ID_KEY: 'nodeId',
+  QUERY_TABLE_NAME_KEY: 'tableName',
+  QUERY_HEALTHY_ONLY_KEY: 'healthyOnly',
+  QUERY_UNHEALTHY_POLICY_KEY: 'unhealthyPolicy',
+});
+
 export {
   ADMIN_CONTENT_TYPE,
   ADMIN_CONFIG_KEY,
@@ -302,6 +317,7 @@ export {
   ADMIN_HEADER,
   ADMIN_QUERY_RESULT,
   ADMIN_CONTROL_SNAPSHOT,
+  ADMIN_SERVICE_DISCOVERY,
   ADMIN_ROUTE,
   ADMIN_STATUS,
   ADMIN_SUBSYSTEM,

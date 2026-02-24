@@ -117,6 +117,38 @@ describe('ReportWriter', () => {
       });
     });
 
+    it('preserves additive load diagnostics for observability compatibility', () => {
+      const writer = new ReportWriter(outputPath);
+      writer.addResult('postgres-baseline-comparison', {
+        passed: true,
+        duration: 30000,
+        loadMetrics: {
+          total: 5000,
+          success: 4998,
+          failed: 2,
+          errors: 2,
+          attemptErrors: 12,
+          latency: {p50: 12, p95: 45, p99: 120},
+          queueDelay: {p50: 3, p95: 9, p99: 15, max: 20},
+          distinctErrors: ['timeout'],
+          opsPerSec: 166.5,
+        },
+      });
+
+      const entry = writer.scenarios[0];
+      assert.deepEqual(entry.loadMetrics, {
+        total: 5000,
+        success: 4998,
+        failed: 2,
+        errors: 2,
+        attemptErrors: 12,
+        latency: {p50: 12, p95: 45, p99: 120},
+        queueDelay: {p50: 3, p95: 9, p99: 15, max: 20},
+        distinctErrors: ['timeout'],
+        opsPerSec: 166.5,
+      });
+    });
+
     it('sets loadMetrics to null when not provided', () => {
       const writer = new ReportWriter(outputPath);
       writer.addResult('no-load', {passed: true, duration: 1000});

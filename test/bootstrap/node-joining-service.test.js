@@ -17,7 +17,11 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
+import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {URL} from 'url';
+
+const DEFAULT_SEED_WS_ADDRESS =
+  `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -120,7 +124,7 @@ test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_RE
         return {
           success: true,
           seedNodeId: 'seed-node-1',
-          seedNodeWsAddress: 'ws://localhost:9080',
+          seedNodeWsAddress: DEFAULT_SEED_WS_ADDRESS,
           messageGroupAssignment: {
             strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           },
@@ -132,7 +136,7 @@ test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_RE
 
     t.equal(attempts, 2, 'should retry bootstrap request after bootstrap-not-ready response');
     t.equal(service.seedNodeId, 'seed-node-1', 'should capture seed node id after retry');
-    t.equal(service.seedNodeWsAddress, 'ws://localhost:9080',
+    t.equal(service.seedNodeWsAddress, DEFAULT_SEED_WS_ADDRESS,
       'should capture seed node websocket address after retry');
     t.equal(
       service.bootstrapResponse?.messageGroupAssignment?.strategy,
@@ -164,7 +168,7 @@ test('NodeJoiningService - retries bootstrap when seed request times out',
         return {
           success: true,
           seedNodeId: 'seed-node-1',
-          seedNodeWsAddress: 'ws://localhost:9080',
+          seedNodeWsAddress: DEFAULT_SEED_WS_ADDRESS,
           messageGroupAssignment: {
             strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           },
@@ -177,6 +181,49 @@ test('NodeJoiningService - retries bootstrap when seed request times out',
     t.equal(attempts, 2, 'should retry bootstrap request after timeout');
     t.equal(service.seedNodeId, 'seed-node-1',
       'should still complete seed contact after retry');
+  });
+
+test('NodeJoiningService - retries register-service request after timeout',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let attempts = 0;
+    const retryDelays = [];
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440104',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      config: {
+        httpTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 200,
+        leadershipWaitInitialDelayMs: 10,
+        leadershipWaitMaxDelayMs: 10,
+        leadershipWaitBackoffMultiplier: 2,
+        leadershipWaitJitterRatio: 0,
+      },
+      sleep: async (delayMs) => {
+        retryDelays.push(delayMs);
+      },
+      httpPost: async (url) => {
+        if (!url.endsWith('/register-service')) {
+          throw new Error('unexpected URL in register-service retry test');
+        }
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error('Request timeout after 1000ms');
+        }
+        return {success: true};
+      },
+    });
+
+    await service.registerMessageGroupService(
+      'mg-1',
+      'mg-1-r0',
+      {getRole: () => 'leader'},
+    );
+
+    t.equal(attempts, 2, 'should retry register-service once after timeout');
+    t.same(retryDelays, [10], 'should apply configured retry delay before retry');
   });
 
 test('NodeJoiningService - retries generic HTTP 503 and honors retry hints with jitter',
@@ -215,7 +262,7 @@ test('NodeJoiningService - retries generic HTTP 503 and honors retry hints with 
         return {
           success: true,
           seedNodeId: 'seed-node-1',
-          seedNodeWsAddress: 'ws://localhost:9080',
+          seedNodeWsAddress: DEFAULT_SEED_WS_ADDRESS,
           messageGroupAssignment: {
             strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           },
@@ -297,7 +344,7 @@ test('NodeJoiningService - retry diagnostics include attempt, elapsed, code, and
         return {
           success: true,
           seedNodeId: 'seed-node-1',
-          seedNodeWsAddress: 'ws://localhost:9080',
+          seedNodeWsAddress: DEFAULT_SEED_WS_ADDRESS,
           messageGroupAssignment: {
             strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           },

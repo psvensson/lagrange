@@ -4,9 +4,9 @@ import {evaluateAssertionPolicy} from '../assertion-policy.js';
 
 const SAMPLE_LOAD_METRICS = Object.freeze({
   total: 100,
-  success: 99,
-  failed: 1,
-  errors: 1,
+  success: 100,
+  failed: 0,
+  errors: 0,
   latency: {
     avg: 3,
     p50: 2,
@@ -64,3 +64,67 @@ test('assertion policy can escalate insufficient evidence to hard failure', asyn
     entry.code === 'insufficient_evidence',
   ));
 });
+
+test('assertion policy hard-fails non-zero load operation errors', async () => {
+  const result = evaluateAssertionPolicy({
+    consistencyVerdict: 'consistent',
+    loadMetrics: {
+      ...SAMPLE_LOAD_METRICS,
+      failed: 3,
+      errors: 3,
+    },
+    policy: {
+      insufficientEvidence: 'soft',
+    },
+  });
+
+  assert.equal(result.passed, false);
+  assert.equal(result.status, 'failed');
+  assert.equal(result.verificationConfidence, 'low');
+  assert.ok(result.hardFailures.some((entry) =>
+    entry.code === 'load_operation_errors',
+  ));
+});
+
+test('assertion policy hard-fails non-zero failed operations explicitly', async () => {
+  const result = evaluateAssertionPolicy({
+    consistencyVerdict: 'consistent',
+    loadMetrics: {
+      ...SAMPLE_LOAD_METRICS,
+      failed: 2,
+      errors: 0,
+      attemptErrors: 5,
+    },
+    policy: {
+      insufficientEvidence: 'soft',
+    },
+  });
+
+  assert.equal(result.passed, false);
+  assert.equal(result.status, 'failed');
+  assert.equal(result.verificationConfidence, 'low');
+  assert.ok(result.hardFailures.some((entry) =>
+    entry.code === 'load_failed_operations',
+  ));
+});
+
+test('assertion policy preserves attempt-level diagnostics as non-hard failures',
+  async () => {
+    const result = evaluateAssertionPolicy({
+      consistencyVerdict: 'consistent',
+      loadMetrics: {
+        ...SAMPLE_LOAD_METRICS,
+        failed: 0,
+        errors: 0,
+        attemptErrors: 7,
+      },
+      policy: {
+        insufficientEvidence: 'soft',
+      },
+    });
+
+    assert.equal(result.passed, true);
+    assert.equal(result.status, 'passed');
+    assert.equal(result.verificationConfidence, 'high');
+    assert.equal(result.hardFailures.length, 0);
+  });

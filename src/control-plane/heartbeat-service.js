@@ -102,6 +102,7 @@ class HeartbeatService extends EventEmitter {
     this.heartbeatConsecutiveFailures = NUM.ZERO;
     this.heartbeatCount = NUM.ZERO;
     this.state = HEARTBEAT_STATE.CREATED;
+    this.heartbeatInFlight = false;
     this.lastEndpointUpsertAt = null;
     this.lastEndpointUpsertSignature = null;
 
@@ -177,38 +178,44 @@ class HeartbeatService extends EventEmitter {
     this.state = HEARTBEAT_STATE.RUNNING;
 
     const sendHeartbeat = async () => {
-      if (this.state !== HEARTBEAT_STATE.RUNNING) {
+      if (this.state !== HEARTBEAT_STATE.RUNNING ||
+          this.heartbeatInFlight === true) {
         return;
       }
-
-      let stats = options.stats;
-      if (options.getStats) {
-        try {
-          stats = await options.getStats();
-        } catch (error) {
-          this.recordFailure('stats', error.message);
-          return;
-        }
-      }
+      this.heartbeatInFlight = true;
 
       try {
-        await this.sendHeartbeat(stats, options.capabilities);
-        this.heartbeatCount++;
-
-        if (this.heartbeatConsecutiveFailures > NUM.ZERO) {
-          this.logger.info(HEARTBEAT_LOG_MSG.HEARTBEAT_RECOVERED, {
-            nodeId: this.nodeId,
-            previousFailures: this.heartbeatConsecutiveFailures,
-          });
-          this.heartbeatConsecutiveFailures = NUM.ZERO;
+        let stats = options.stats;
+        if (options.getStats) {
+          try {
+            stats = await options.getStats();
+          } catch (error) {
+            this.recordFailure('stats', error.message);
+            return;
+          }
         }
 
-        this.emit(HEARTBEAT_EVENT.HEARTBEAT_SENT, {
-          nodeId: this.nodeId,
-          count: this.heartbeatCount,
-        });
-      } catch (error) {
-        this.recordFailure('register', error.message);
+        try {
+          await this.sendHeartbeat(stats, options.capabilities);
+          this.heartbeatCount++;
+
+          if (this.heartbeatConsecutiveFailures > NUM.ZERO) {
+            this.logger.info(HEARTBEAT_LOG_MSG.HEARTBEAT_RECOVERED, {
+              nodeId: this.nodeId,
+              previousFailures: this.heartbeatConsecutiveFailures,
+            });
+            this.heartbeatConsecutiveFailures = NUM.ZERO;
+          }
+
+          this.emit(HEARTBEAT_EVENT.HEARTBEAT_SENT, {
+            nodeId: this.nodeId,
+            count: this.heartbeatCount,
+          });
+        } catch (error) {
+          this.recordFailure('register', error.message);
+        }
+      } finally {
+        this.heartbeatInFlight = false;
       }
     };
 

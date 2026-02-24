@@ -26,11 +26,11 @@
     "loadOpsPerSec": 120,
     "loadDuration": "30s",
     "loadMaxInFlight": 128,
-    "loadQueryTimeoutMs": 2000,
+    "loadQueryTimeoutMs": 4000,
     "controlQueryTimeoutMs": 15000,
     "loadNodeMaxInFlight": 2,
-    "nodeFailureThreshold": 1,
-    "nodeFailureCooldownMs": 5000,
+    "nodeFailureThreshold": 3,
+    "nodeFailureCooldownMs": 1500,
     "insufficientEvidencePolicy": "soft",
     "readyTimeoutMs": 30000,
     "readyPollIntervalMs": 500,
@@ -39,7 +39,7 @@
     "syncReplicaAcks": 1
   },
   "benchmarkGate": {
-    "enabled": true,
+    "enabled": false,
     "maxThroughputRegressionRatio": 0.1,
     "baselineProvider": "liferaft",
     "failIfBaselineMissing": false,

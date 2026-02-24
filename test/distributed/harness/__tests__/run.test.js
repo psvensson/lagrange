@@ -294,6 +294,21 @@ describe('evaluateMemoryLeakAssertions', () => {
     assert.equal(result.error, 'memory samples unavailable');
   });
 
+  it('passes when samples exist but memory analysis window is insufficient', () => {
+    const result = evaluateMemoryLeakAssertions(
+      {
+        analyzed: false,
+        leakDetected: false,
+        sampleCount: 42,
+        warnings: [],
+      },
+      {enabled: true, requireSamples: true, failOnDetection: false},
+    );
+    assert.equal(result.enabled, true);
+    assert.equal(result.passed, true);
+    assert.equal(result.error, null);
+  });
+
   it('fails when leak detection is enabled and leak is found', () => {
     const result = evaluateMemoryLeakAssertions(
       {

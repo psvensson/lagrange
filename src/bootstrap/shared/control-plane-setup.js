@@ -9,7 +9,6 @@
  * - Creating decomposed control plane services directly
  * - Initializing the services
  * - Attaching message group services
- * - Starting the lease sweep
  * - Registering the node with the control plane
  * - Starting the local heartbeat
  *
@@ -46,7 +45,6 @@ const LOG_MSG = Object.freeze({
   CREATED: 'Control plane services created successfully',
   COORDINATOR_CREATED: 'RebalanceCoordinator created',
   ATTACHING_MESSAGE_GROUPS: 'Attaching message group services',
-  LEASE_SWEEP_STARTED: 'Lease sweep started',
   REGISTERING_NODE: 'Registering node with control plane',
   NODE_REGISTERED: 'Node registered with control plane',
   HEARTBEAT_STARTED: 'Local heartbeat started',
@@ -213,11 +211,6 @@ class ControlPlaneSetup {
         leaseService.messageGroupServices.add(mgs);
       }
     }
-
-    // Start lease sweep for node health monitoring
-    leaseService.start();
-
-    logger.debug(LOG_MSG.LEASE_SWEEP_STARTED, {nodeId});
 
     logger.info(LOG_MSG.CREATED, {
       nodeId,

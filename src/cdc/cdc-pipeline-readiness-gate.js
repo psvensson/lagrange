@@ -74,26 +74,30 @@ class CDCPipelineReadinessGate {
    * @param {Object} context
    * @param {Map} context.partitionServices — partition replicas
    * @param {Map} context.messageGroupServices — message group replicas
+   * @param {boolean} [context.requirePropagationLeader=true] - When false,
+   * propagation-leader status is treated as non-blocking.
    * @return {{ready: boolean, unmetConditions: string[]}}
    */
   evaluate(context) {
+    const requirePropagationLeader =
+      context?.requirePropagationLeader !== false;
     const unmetConditions = [];
 
     if (!this._checkSubscriptionsActive(context)) {
       unmetConditions.push(
-        CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE
+        CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE,
       );
     }
 
-    if (!this._checkPropagationLeader(context)) {
+    if (requirePropagationLeader && !this._checkPropagationLeader(context)) {
       unmetConditions.push(
-        CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER
+        CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER,
       );
     }
 
     if (!this._pipelineProven) {
       unmetConditions.push(
-        CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN
+        CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN,
       );
     }
 
@@ -130,12 +134,12 @@ class CDCPipelineReadinessGate {
         if (Date.now() >= deadline) {
           this.logger.warn(
             CDC_LIFECYCLE_LOG_MSG.PIPELINE_READINESS_TIMEOUT,
-            {unmetConditions: result.unmetConditions, timeoutMs: timeout}
+            {unmetConditions: result.unmetConditions, timeoutMs: timeout},
           );
           const error = new Error(
             `${CDC_LIFECYCLE_LOG_MSG.PIPELINE_READINESS_TIMEOUT}: ` +
             `unmet=[${result.unmetConditions.join(', ')}] ` +
-            `timeout=${timeout}ms`
+            `timeout=${timeout}ms`,
           );
           error.unmetConditions = result.unmetConditions;
           error.timeoutMs = timeout;
@@ -218,6 +222,13 @@ class CDCPipelineReadinessGate {
           mg.isLeaderReplica()) {
         return true;
       }
+      if (typeof mg.getLeaderId === TYPEOF.FUNCTION) {
+        const leaderId = mg.getLeaderId();
+        if (typeof leaderId === TYPEOF.STRING &&
+            leaderId.length > NUM.ZERO) {
+          return true;
+        }
+      }
     }
 
     return false;
@@ -244,7 +255,6 @@ class CDCPipelineReadinessGate {
     }
     return false;
   }
-
 }
 
 export {CDCPipelineReadinessGate};

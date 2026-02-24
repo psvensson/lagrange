@@ -10,6 +10,8 @@ import {ControlPlaneSetup} from
   '../../../src/bootstrap/shared/control-plane-setup.js';
 import {DependencyError} from
   '../../../src/bootstrap/bootstrap-errors.js';
+import {LEASE_STATE} from
+  '../../../src/control-plane/lease-service-constants.js';
 
 describe('ControlPlaneSetup', () => {
   let mockMessageRouter;
@@ -233,6 +235,26 @@ describe('ControlPlaneSetup', () => {
         assert.ok(result.endpointService);
         assert.ok(result.dispatchService);
         assert.ok(result.rebalanceCoordinator);
+      });
+
+    it('should keep lease sweep frozen until activation barrier',
+      async () => {
+        const result = await ControlPlaneSetup.create({
+          nodeId: 'test-node',
+          nodeAddress: 'localhost:8080',
+          messageRouter: mockMessageRouter,
+          cdcIntegrationService: mockCdcIntegrationService,
+          systemTableCache: mockSystemTableCache,
+          tablePolicyService: mockTablePolicyService,
+        });
+
+        createdServices.push(result);
+
+        assert.strictEqual(
+          result.leaseService.getState(),
+          LEASE_STATE.INITIALIZED,
+        );
+        assert.strictEqual(result.leaseService.sweepTimer, null);
       });
 
     it('should use existing rebalanceCoordinator if provided',

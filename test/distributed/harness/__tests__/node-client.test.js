@@ -1,13 +1,20 @@
 import assert from 'node:assert/strict';
 import {test} from '../../../../src/test-helpers/tap.js';
 import {NodeClient} from '../node-client.js';
-import {NODE_CLIENT_CONTROL_SNAPSHOT_SQL} from '../constants.js';
+import {
+  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+  NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
+  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+} from '../constants.js';
 
 const ZERO = 0;
 const ONE = 1;
-const DEFAULT_LOAD_TIMEOUT_MS = 2000;
+const DEFAULT_LOAD_TIMEOUT_MS = 4000;
 const DEFAULT_CONTROL_TIMEOUT_MS = 15000;
-const DEFAULT_SNAPSHOT_TIMEOUT_MS = 2000;
+const DEFAULT_SNAPSHOT_TIMEOUT_MS = 15000;
+const DISCOVERY_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
 
 function createRecordingNode(options = {}) {
   const queryResponses = Array.isArray(options.queryResponses) ?
@@ -69,7 +76,46 @@ test('NodeClient routes load/control/probe/snapshot to expected NodeHandle metho
             replicaOperations: {
               inFlightCount: 0,
               statusHistogram: {},
+              partitionGroupInFlight: {},
             },
+          }],
+        },
+        {
+          rows: [{
+            schemaVersion: NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+            nodeId: 'node-1',
+            capturedAt: 1,
+            serviceCount: 1,
+            replicaCount: 1,
+            services: [{
+              serviceKey:
+                NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE +
+                '|' +
+                NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              logicalServiceName: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+              protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+              desiredReplicaCount: 1,
+              desiredReplicaCountByServiceId: {
+                [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE]: 1,
+              },
+              observedReplicaCount: 1,
+              healthyReplicaCount: 1,
+              unhealthyReplicaCount: 0,
+              health: 'healthy',
+              nodeCount: 1,
+              nodes: ['node-1'],
+              replicas: [{
+                endpointId: 'sys-postgres-wire-ep-node-1',
+                serviceId: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+                nodeId: 'node-1',
+                address: '127.0.0.1',
+                port: 5432,
+                healthStatus: 'healthy',
+                updatedAt: 1,
+                metadata: {},
+              }],
+            }],
           }],
         },
       ],
@@ -80,14 +126,22 @@ test('NodeClient routes load/control/probe/snapshot to expected NodeHandle metho
     await client.queryControl(recorder.node, 'SELECT 2');
     await client.probeReadiness(recorder.node, 'preflight');
     await client.fetchControlSnapshot(recorder.node);
+    await client.fetchServiceDiscovery(recorder.node);
 
     const calls = recorder.getRecordedQueryCalls();
-    assert.equal(calls.length, 3, 'expected load/control/snapshot query calls');
+    assert.equal(calls.length, 4, 'expected load/control/snapshot query calls');
     assert.equal(calls[0].sql, 'SELECT 1');
     assert.equal(calls[0].queryOptions.timeoutMs, DEFAULT_LOAD_TIMEOUT_MS);
+    assert.equal(calls[0].queryOptions.lane, 'load');
     assert.equal(calls[1].sql, 'SELECT 2');
     assert.equal(calls[1].queryOptions.timeoutMs, DEFAULT_CONTROL_TIMEOUT_MS);
+    assert.equal(calls[1].queryOptions.lane, 'control');
+    assert.equal(calls[2].sql, NODE_CLIENT_CONTROL_SNAPSHOT_SQL);
     assert.equal(calls[2].queryOptions.timeoutMs, DEFAULT_SNAPSHOT_TIMEOUT_MS);
+    assert.equal(calls[2].queryOptions.lane, 'snapshot');
+    assert.equal(calls[3].sql, NODE_CLIENT_SERVICE_DISCOVERY_SQL);
+    assert.equal(calls[3].queryOptions.timeoutMs, DEFAULT_SNAPSHOT_TIMEOUT_MS);
+    assert.equal(calls[3].queryOptions.lane, 'snapshot');
     assert.equal(recorder.getReadinessCalls(), ONE);
   });
 
@@ -102,6 +156,7 @@ test('NodeClient fetchControlSnapshot uses local snapshot query path only', asyn
     replicaOperations: {
       inFlightCount: 0,
       statusHistogram: {},
+      partitionGroupInFlight: {},
     },
   };
   let localSnapshotCalls = ZERO;
@@ -147,6 +202,7 @@ test('NodeClient fetchControlSnapshot validates snapshot schema version', async 
           replicaOperations: {
             inFlightCount: 0,
             statusHistogram: {},
+            partitionGroupInFlight: {},
           },
         }],
       };
@@ -167,6 +223,290 @@ test('NodeClient fetchControlSnapshot validates snapshot schema version', async 
     },
   );
 });
+
+test('NodeClient fetchControlSnapshot requires query_result rows envelope',
+  async () => {
+    const node = {
+      id: 'node-local',
+      async queryWithTimeout() {
+        return {
+          schemaVersion: 1,
+          nodeId: 'node-local',
+          capturedAt: 1,
+          nodes: ['node-local'],
+          partitions: [],
+          leaders: {},
+          replicaOperations: {
+            inFlightCount: 0,
+            statusHistogram: {},
+            partitionGroupInFlight: {},
+          },
+        };
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+    const client = new NodeClient();
+
+    await assert.rejects(
+      client.fetchControlSnapshot(node),
+      (error) => {
+        assert.equal(error.channel, 'snapshot');
+        assert.equal(error.operation, 'fetchControlSnapshot');
+        assert.match(error.message, /row payload/i);
+        return true;
+      },
+    );
+  });
+
+test('NodeClient fetchServiceDiscovery uses local discovery query path only',
+  async () => {
+    const expectedDiscovery = {
+      schemaVersion: NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+      nodeId: 'node-local',
+      capturedAt: 1,
+      serviceCount: 1,
+      replicaCount: 1,
+      services: [{
+        serviceKey:
+          NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE +
+          '|' +
+          NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+        logicalServiceName: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+        protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+        serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+        desiredReplicaCount: 1,
+        desiredReplicaCountByServiceId: {
+          [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE]: 1,
+        },
+        observedReplicaCount: 1,
+        healthyReplicaCount: 1,
+        unhealthyReplicaCount: 0,
+        health: 'healthy',
+        nodeCount: 1,
+        nodes: ['node-local'],
+        replicas: [{
+          endpointId: 'sys-postgres-wire-ep-node-local',
+          serviceId: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+          nodeId: 'node-local',
+          address: '127.0.0.1',
+          port: 5432,
+          healthStatus: 'healthy',
+          updatedAt: 1,
+          metadata: {},
+        }],
+      }],
+    };
+    let localDiscoveryCalls = ZERO;
+    let distributedFanoutCalls = ZERO;
+    const node = {
+      id: 'node-local',
+      async queryWithTimeout(sql, _params, _queryOptions) {
+        localDiscoveryCalls += ONE;
+        assert.equal(sql, NODE_CLIENT_SERVICE_DISCOVERY_SQL);
+        return {
+          rows: [expectedDiscovery],
+        };
+      },
+      async query(_sql) {
+        distributedFanoutCalls += ONE;
+        throw new Error('distributed query must not be used for local discovery');
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+    const client = new NodeClient();
+
+    const discovery = await client.fetchServiceDiscovery(node);
+
+    assert.equal(localDiscoveryCalls, ONE);
+    assert.equal(distributedFanoutCalls, ZERO);
+    assert.deepEqual(discovery, expectedDiscovery);
+  });
+
+test('NodeClient fetchServiceDiscovery requires query_result rows envelope',
+  async () => {
+    const node = {
+      id: 'node-local',
+      async queryWithTimeout() {
+        return {
+          schemaVersion: NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+          nodeId: 'node-local',
+          capturedAt: 1,
+          serviceCount: 0,
+          replicaCount: 0,
+          services: [],
+        };
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+    const client = new NodeClient();
+
+    await assert.rejects(
+      client.fetchServiceDiscovery(node),
+      (error) => {
+        assert.equal(error.channel, 'snapshot');
+        assert.equal(error.operation, 'fetchServiceDiscovery');
+        assert.match(error.message, /row payload/i);
+        return true;
+      },
+    );
+  });
+
+test('NodeClient fetchServiceDiscovery validates snapshot schema version',
+  async () => {
+    const node = {
+      id: 'node-local',
+      async queryWithTimeout() {
+        return {
+          rows: [{
+            schemaVersion: 999,
+            nodeId: 'node-local',
+            capturedAt: 1,
+            serviceCount: 0,
+            replicaCount: 0,
+            services: [],
+          }],
+        };
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+    const client = new NodeClient();
+
+    await assert.rejects(
+      client.fetchServiceDiscovery(node),
+      (error) => {
+        assert.equal(error.channel, 'snapshot');
+        assert.equal(error.operation, 'fetchServiceDiscovery');
+        assert.match(error.message, /schemaVersion/i);
+        return true;
+      },
+    );
+  });
+
+test('NodeClient fetchServiceDiscovery supports table-scoped readiness queries',
+  async () => {
+    let capturedSql = '';
+    const node = {
+      id: 'node-local',
+      async queryWithTimeout(sql) {
+        capturedSql = String(sql);
+        return {
+          rows: [{
+            schemaVersion: NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+            nodeId: 'node-local',
+            capturedAt: 1,
+            serviceCount: 1,
+            replicaCount: 1,
+            services: [{
+              serviceKey:
+                NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE +
+                '|' +
+                NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              logicalServiceName: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+              protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+              nodes: ['node-local'],
+              replicas: [{
+                endpointId: 'sys-postgres-wire-ep-node-local',
+                serviceId: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+                nodeId: 'node-local',
+                address: '127.0.0.1',
+                port: 5432,
+                healthStatus: 'healthy',
+                updatedAt: 1,
+                metadata: {},
+                readiness: {
+                  workloadReady: true,
+                  routingReady: true,
+                  schemaReady: true,
+                  replicaOpsInFlight: 0,
+                  leadershipStable: true,
+                  tableName: DISCOVERY_TABLE_BENCHMARK_EVENTS,
+                  reasons: [],
+                },
+              }],
+            }],
+          }],
+        };
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+
+    const client = new NodeClient();
+    const discovery = await client.fetchServiceDiscovery(node, {
+      tableName: DISCOVERY_TABLE_BENCHMARK_EVENTS,
+      requireReadiness: true,
+    });
+    assert.equal(
+      capturedSql,
+      'SELECT * FROM service_discovery_local(\'' +
+        DISCOVERY_TABLE_BENCHMARK_EVENTS +
+        '\')',
+      'expected table-scoped local discovery SQL',
+    );
+    assert.equal(
+      discovery.services[0].replicas[0].readiness.schemaReady,
+      true,
+    );
+  });
+
+test('NodeClient fetchServiceDiscovery fails closed when readiness is required',
+  async () => {
+    const node = {
+      id: 'node-local',
+      async queryWithTimeout() {
+        return {
+          rows: [{
+            schemaVersion: NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+            nodeId: 'node-local',
+            capturedAt: 1,
+            serviceCount: 1,
+            replicaCount: 1,
+            services: [{
+              serviceKey:
+                NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE +
+                '|' +
+                NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              logicalServiceName: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+              protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+              nodes: ['node-local'],
+              replicas: [{
+                endpointId: 'sys-postgres-wire-ep-node-local',
+                serviceId: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+                nodeId: 'node-local',
+                address: '127.0.0.1',
+                port: 5432,
+                healthStatus: 'healthy',
+                updatedAt: 1,
+                metadata: {},
+              }],
+            }],
+          }],
+        };
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+
+    const client = new NodeClient();
+    await assert.rejects(
+      client.fetchServiceDiscovery(node, {
+        requireReadiness: true,
+      }),
+      /readiness/i,
+    );
+  });
 
 test('NodeClient normalizes errors with node/channel/operation/timeout metadata',
   async () => {
@@ -229,6 +569,11 @@ test('NodeClient applies benchmark config overrides to channel policies', async 
   assert.equal(policies.load.maxInFlightPerNode, 1);
   assert.equal(policies.load.circuitBreakerThreshold, 5);
   assert.equal(policies.load.cooldownMs, 444);
+  assert.equal(
+    policies.snapshot.timeoutMs,
+    9123,
+    'snapshot timeout should track control timeout benchmark override',
+  );
 });
 
 test('NodeClient load bulkhead prevents stalled node from consuming all load slots',
@@ -277,6 +622,111 @@ test('NodeClient load bulkhead prevents stalled node from consuming all load slo
     assert.equal(queryCalls, ONE, 'second call should not execute on the node');
   });
 
+test('NodeClient isolates load lane when control lane is saturated', async () => {
+  let releaseControl;
+  let loadCalls = ZERO;
+  const node = {
+    id: 'node-lane-isolation',
+    async queryWithTimeout(_sql, _params, queryOptions = {}) {
+      if (queryOptions.lane === 'control') {
+        return new Promise((resolve) => {
+          releaseControl = resolve;
+        });
+      }
+      if (queryOptions.lane === 'load') {
+        loadCalls += ONE;
+        return {rows: [{ok: true}]};
+      }
+      return {rows: []};
+    },
+    async getReachabilityDiagnostics() {
+      return {reachable: true};
+    },
+  };
+
+  const client = new NodeClient({
+    channelPolicies: {
+      control: {
+        maxInFlightPerNode: 1,
+        retryBudget: 0,
+      },
+      load: {
+        maxInFlightPerNode: 1,
+        retryBudget: 0,
+      },
+    },
+  });
+
+  const controlCall = client.queryControl(node, 'SELECT control');
+  await Promise.resolve();
+  const loadResult = await client.queryLoad(node, 'SELECT load');
+  assert.equal(loadResult.rows[0].ok, true);
+  assert.equal(loadCalls, ONE, 'load lane should continue while control is saturated');
+
+  releaseControl({rows: [{ok: true}]});
+  await controlCall;
+});
+
+test('NodeClient isolates snapshot lane when load lane is saturated', async () => {
+  let releaseLoad;
+  let snapshotCalls = ZERO;
+  const node = {
+    id: 'node-snapshot-lane',
+    async queryWithTimeout(sql, _params, queryOptions = {}) {
+      if (queryOptions.lane === 'load') {
+        return new Promise((resolve) => {
+          releaseLoad = resolve;
+        });
+      }
+      if (queryOptions.lane === 'snapshot' &&
+          sql === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+        snapshotCalls += ONE;
+        return {
+          rows: [{
+            schemaVersion: 1,
+            nodeId: 'node-snapshot-lane',
+            capturedAt: 1,
+            nodes: ['node-snapshot-lane'],
+            partitions: ['p1'],
+            leaders: {p1: 'node-snapshot-lane'},
+            replicaOperations: {
+              inFlightCount: 0,
+              statusHistogram: {},
+              partitionGroupInFlight: {},
+            },
+          }],
+        };
+      }
+      return {rows: []};
+    },
+    async getReachabilityDiagnostics() {
+      return {reachable: true};
+    },
+  };
+
+  const client = new NodeClient({
+    channelPolicies: {
+      load: {
+        maxInFlightPerNode: 1,
+        retryBudget: 0,
+      },
+      snapshot: {
+        maxInFlightPerNode: 1,
+        retryBudget: 0,
+      },
+    },
+  });
+
+  const loadCall = client.queryLoad(node, 'SELECT load');
+  await Promise.resolve();
+  const snapshot = await client.fetchControlSnapshot(node);
+  assert.equal(snapshot.schemaVersion, 1);
+  assert.equal(snapshotCalls, ONE, 'snapshot lane should continue while load is saturated');
+
+  releaseLoad({rows: []});
+  await loadCall;
+});
+
 test('NodeClient isolates control channel breaker state from load failures',
   async () => {
     let loadCallCount = ZERO;
@@ -324,3 +774,58 @@ test('NodeClient isolates control channel breaker state from load failures',
     assert.equal(loadCallCount, ONE, 'breaker-open load call should be short-circuited');
     assert.equal(controlCallCount, ONE, 'control channel must remain healthy');
   });
+
+test('NodeClient tracks timeout budget mismatches for probe responses', async () => {
+  const node = {
+    id: 'probe-budget-node',
+    async queryWithTimeout() {
+      return {rows: []};
+    },
+    async getReachabilityDiagnostics() {
+      return {
+        reachable: true,
+        probeTimeoutMs: 999,
+      };
+    },
+  };
+
+  const client = new NodeClient();
+  await client.probeReadiness(node, 'preflight', {timeoutMs: 100});
+
+  const metrics = client.getMetricsSnapshot();
+  assert.equal(
+    metrics.probe.timeoutBudgetMismatches,
+    ONE,
+    'probe timeout budget mismatch should be counted',
+  );
+});
+
+test('NodeClient tracks timed-out operations still in-flight', async () => {
+  const node = {
+    id: 'probe-timeout-node',
+    async queryWithTimeout() {
+      return {rows: []};
+    },
+    async getReachabilityDiagnostics() {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({reachable: true});
+        }, 1000);
+      });
+    },
+  };
+
+  const client = new NodeClient();
+  await assert.rejects(
+    client.probeReadiness(node, 'preflight', {timeoutMs: 25}),
+    /timed out/i,
+  );
+
+  const metrics = client.getMetricsSnapshot();
+  assert.equal(metrics.probe.timeouts, ONE);
+  assert.equal(
+    metrics.probe.timedOutInFlight,
+    ONE,
+    'timed-out while in-flight counter should be incremented',
+  );
+});

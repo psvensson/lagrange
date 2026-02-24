@@ -3,7 +3,7 @@
  *
  * Property 3: For any valid node address in "hostname:port" format where port
  * is a positive integer, deriving the WebSocket address SHALL produce a valid
- * "ws://hostname:wsPort" URL where wsPort = port + WS_PORT_OFFSET (1000).
+ * "ws://hostname:wsPort" URL where wsPort = port + WS_PORT_OFFSET.
  *
  * **Validates: Requirements 3.8**
  *
@@ -18,6 +18,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {PROTOCOL, ADDRESS} from '../../src/constants/index.js';
+import {MAX_PORT} from '../../src/constants/runtime.js';
 
 /**
  * Initialize test environment with required singletons.
@@ -92,9 +93,12 @@ const hostnameArb = fc.oneof(
 /**
  * Arbitrary for generating valid port numbers.
  * Ports must be positive integers (1-65535).
- * We limit to 64535 to ensure wsPort (port + 1000) doesn't overflow.
+ * Limit the max to keep wsPort in valid bounds after applying offset.
  */
-const portArb = fc.integer({min: 1, max: 64535});
+const portArb = fc.integer({
+  min: 1,
+  max: MAX_PORT - ENTRYPOINT_DEFAULT.WS_PORT_OFFSET,
+});
 
 /**
  * Arbitrary for generating valid node addresses in "hostname:port" format.
@@ -113,7 +117,7 @@ const nodeAddressArb = fc.record({
  *
  * For any valid node address in "hostname:port" format where port is a
  * positive integer, deriving the WebSocket address SHALL produce a valid
- * "ws://hostname:wsPort" URL where wsPort = port + WS_PORT_OFFSET (1000).
+ * "ws://hostname:wsPort" URL where wsPort = port + WS_PORT_OFFSET.
  *
  * **Validates: Requirements 3.8**
  */
@@ -181,7 +185,7 @@ test('Property: WebSocket address starts with ws:// protocol', async (t) => {
  * Property: WebSocket port is exactly WS_PORT_OFFSET higher than REST port.
  *
  * For any valid node address with port P, the derived WebSocket address
- * SHALL have port P + WS_PORT_OFFSET (1000).
+ * SHALL have port P + WS_PORT_OFFSET.
  *
  * **Validates: Requirements 3.8**
  */
@@ -298,4 +302,3 @@ test('Property: Invalid addresses return null', async (t) => {
 
   t.pass('Invalid addresses return null');
 });
-

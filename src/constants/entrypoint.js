@@ -34,7 +34,7 @@ const ENTRYPOINT_ENV = Object.freeze({
 
 const ENTRYPOINT_DEFAULT = Object.freeze({
   REST_API_PORT: 8080,
-  WS_PORT_OFFSET: 1000,
+  WS_PORT_OFFSET: 2,
   READINESS_DRAIN_DEADLINE_MS: 10000,
   LOCALHOST: 'localhost',
   HTTP_PREFIX: 'http://',
@@ -88,7 +88,7 @@ const ENTRYPOINT_TEXT = Object.freeze({
   ENVIRONMENT_LINES: [
     '  NODE_ID          Override auto-generated node ID',
     '  LOG_LEVEL        Set logging level (error, warn, info, debug)',
-    '  PORT             HTTP/WebSocket port (default: 8080)',
+    '  PORT             REST API port (default: 8080); WS uses +2 offset',
     '  CONTROL_PLANE_LIFECYCLE_PROBES_REQUIRED',
     '                   Require lifecycle probe controls (default: true)',
     '  CONTROL_PLANE_WORK_CLASS_SCHEDULER_REQUIRED',

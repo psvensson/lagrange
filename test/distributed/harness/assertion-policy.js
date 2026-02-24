@@ -12,6 +12,8 @@ const HARD_FAILURE_CODE_INCONSISTENT = 'inconsistent';
 const HARD_FAILURE_CODE_INSUFFICIENT_EVIDENCE = 'insufficient_evidence';
 const HARD_FAILURE_CODE_INVALID_LOAD_METRICS = 'invalid_load_metrics';
 const HARD_FAILURE_CODE_ZERO_SUCCESS = 'zero_successful_operations';
+const HARD_FAILURE_CODE_LOAD_FAILED_OPERATIONS = 'load_failed_operations';
+const HARD_FAILURE_CODE_LOAD_OPERATION_ERRORS = 'load_operation_errors';
 
 function hasFiniteNumber(value) {
   return Number.isFinite(Number(value));
@@ -40,6 +42,8 @@ function evaluateAssertionPolicy(options = {}) {
   if (!loadMetrics || typeof loadMetrics !== 'object' ||
       !hasFiniteNumber(loadMetrics.total) ||
       !hasFiniteNumber(loadMetrics.success) ||
+      !hasFiniteNumber(loadMetrics.failed) ||
+      !hasFiniteNumber(loadMetrics.errors) ||
       !hasFiniteNumber(loadMetrics.opsPerSec)) {
     hardFailures.push({
       code: HARD_FAILURE_CODE_INVALID_LOAD_METRICS,
@@ -50,6 +54,19 @@ function evaluateAssertionPolicy(options = {}) {
       code: HARD_FAILURE_CODE_ZERO_SUCCESS,
       message: 'load run completed with zero successful operations',
     });
+  } else {
+    if (Number(loadMetrics.failed) > ZERO) {
+      hardFailures.push({
+        code: HARD_FAILURE_CODE_LOAD_FAILED_OPERATIONS,
+        message: 'load run completed with failed operations',
+      });
+    }
+    if (Number(loadMetrics.errors) > ZERO) {
+      hardFailures.push({
+        code: HARD_FAILURE_CODE_LOAD_OPERATION_ERRORS,
+        message: 'load run completed with operation errors',
+      });
+    }
   }
 
   const consistencyVerdict = String(

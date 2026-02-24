@@ -377,9 +377,9 @@ class LogsTableService extends EventEmitter {
       created_at: entry.createdAt || Date.now(),
     };
 
-    // Try CDC integration service first (preferred)
+    // Use UPSERT so duplicate log_id replays remain idempotent.
     if (this.cdcIntegrationService) {
-      await this.cdcIntegrationService.insertSystemTableRow(
+      await this.cdcIntegrationService.upsertSystemTableRow(
         SystemTableName.LOGS,
         row,
       );

@@ -1598,6 +1598,81 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       'interval should reset when actionable moves execute',
     );
   });
+
+  await t.test('checkRebalance defers system partitions until start delay elapses',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.systemPartitionStartDelayMs = 600000;
+      rebalancer.userPartitionStartDelayMs = 0;
+      rebalancer.rebalanceStartAtMs = Date.now();
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return true;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'system partition should not evaluate rebalancing before start delay',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'start-delay gate should schedule a delayed recheck',
+      );
+      t.ok(
+        scheduledDelayMs >= 599000,
+        'scheduled delay should be close to configured system start delay',
+      );
+    });
+
+  await t.test('checkRebalance does not defer user partitions with zero start delay',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.systemPartitionStartDelayMs = 600000;
+      rebalancer.userPartitionStartDelayMs = 0;
+      rebalancer.rebalanceStartAtMs = Date.now();
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+      rebalancer.scheduleNextCheck = () => {};
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'user partition should evaluate immediately when start delay is zero',
+      );
+    });
 });
 
 

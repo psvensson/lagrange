@@ -107,9 +107,16 @@ function createGroupRow(groupId, coordinatorNodeId) {
   };
 }
 
-function createMessageGroupServiceRow(serviceId, nodeId, address, raftRole) {
+function createMessageGroupServiceRow(
+  serviceId,
+  nodeId,
+  address,
+  raftRole,
+  groupId = null,
+) {
   return {
     [COLUMN.SERVICE_ID]: serviceId,
+    [COLUMN.GROUP_ID]: groupId,
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
@@ -274,7 +281,7 @@ test('CDCGroupPropagationService falls back when coordinator address is missing'
       }],
       groups: [
         createGroupRow('g-1', 'node-a'),
-        createGroupRow('g-2', 'node-b'),
+        createGroupRow('g-2', 'node-missing'),
       ],
       services: [],
     });
@@ -391,3 +398,130 @@ test('CDCGroupPropagationService reports grouped delivery failures', async (t) =
   teardownConfig();
   t.end();
 });
+
+test('CDCGroupPropagationService safe fallback still fans out to active group leaders',
+  async (t) => {
+    setupConfig(LATENCY_PROPAGATION_MODE.GROUPED);
+    const cache = createTopologyCache({
+      nodes: [{
+        [COLUMN.NODE_ID]: 'node-a',
+        [COLUMN.LATENCY_GROUP_ID]: 'g-1',
+      }],
+      groups: [
+        createGroupRow('g-1', 'node-a'),
+        createGroupRow('g-2', 'node-missing'),
+      ],
+      services: [
+        createMessageGroupServiceRow(
+          'mg-node-b',
+          'node-b',
+          'node-b/message-group/mg-node-b',
+          RAFT_ROLE.LEADER,
+          'g-2',
+        ),
+      ],
+    });
+    const source = createSourceMessageGroupService();
+    source.groupId = 'g-1';
+    const router = createMessageRouter([{acknowledged: true}]);
+    const tree = {
+      getRoutingOrder: () => ['g-1', 'g-2'],
+    };
+    const service = new CDCGroupPropagationService({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      messageRouter: router,
+      latencyTreeService: tree,
+      nowFn: () => 5000,
+    });
+    service.initialize();
+    service.start();
+
+    const result = await service.propagateCDCEvent({
+      tableName: TABLES.NODES,
+      operation: 'UPDATE',
+      data: {[COLUMN.NODE_ID]: 'node-fallback'},
+      sourceMessageGroupService: source,
+    });
+
+    assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
+    assert.equal(
+      result.fallbackReason,
+      CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_ADDRESS,
+    );
+    assert.equal(source.calls.length, 1);
+    assert.equal(router.calls.length, 1);
+    assert.equal(router.calls[0].payload.targetGroupId, 'g-2');
+
+    service.stop();
+    teardownConfig();
+    t.end();
+  });
+
+test('CDCGroupPropagationService treats thrown delivery errors as failures without throwing',
+  async (t) => {
+    setupConfig(LATENCY_PROPAGATION_MODE.GROUPED);
+    const cache = createTopologyCache({
+      nodes: [{
+        [COLUMN.NODE_ID]: 'node-a',
+        [COLUMN.LATENCY_GROUP_ID]: 'g-1',
+      }],
+      groups: [
+        createGroupRow('g-1', 'node-a'),
+        createGroupRow('g-2', 'node-missing'),
+      ],
+      services: [
+        createMessageGroupServiceRow(
+          'mg-node-b-r0',
+          'node-b',
+          'node-b/message-group/mg-node-b',
+          RAFT_ROLE.LEADER,
+          'g-2',
+        ),
+      ],
+    });
+    const source = createSourceMessageGroupService();
+    source.groupId = 'g-1';
+    const router = {
+      calls: [],
+      async deliver(address, payload, options) {
+        router.calls.push({address, payload, options});
+        throw new Error('delivery failed');
+      },
+    };
+    const tree = {
+      getRoutingOrder: () => ['g-1', 'g-2'],
+    };
+    const service = new CDCGroupPropagationService({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      messageRouter: router,
+      latencyTreeService: tree,
+      nowFn: () => 6000,
+    });
+    service.initialize();
+    service.start();
+
+    let result = null;
+    await assert.doesNotReject(async () => {
+      result = await service.propagateCDCEvent({
+        tableName: TABLES.NODES,
+        operation: 'UPDATE',
+        data: {[COLUMN.NODE_ID]: 'node-safe'},
+        sourceMessageGroupService: source,
+      });
+    });
+
+    assert.ok(result);
+    assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
+    assert.equal(result.success, false);
+    assert.equal(result.deliveryFailures.length, 1);
+    assert.equal(result.deliveryFailures[0].targetGroupId, 'g-2');
+    assert.equal(result.deliveryFailures[0].error, 'delivery failed');
+    assert.equal(source.calls.length, 1);
+    assert.equal(router.calls.length, 1);
+
+    service.stop();
+    teardownConfig();
+    t.end();
+  });

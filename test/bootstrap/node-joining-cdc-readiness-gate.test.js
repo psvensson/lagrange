@@ -221,9 +221,9 @@ test('phaseQuerySystemState timeout error lists unmet conditions',
         err.unmetConditions.includes('subscriptionsActive'),
         'unmetConditions should include subscriptionsActive',
       );
-      t.ok(
+      t.notOk(
         err.unmetConditions.includes('propagationLeader'),
-        'unmetConditions should include propagationLeader',
+        'join-time readiness should not block on propagationLeader',
       );
     }
   });

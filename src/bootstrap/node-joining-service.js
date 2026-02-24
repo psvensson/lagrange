@@ -132,6 +132,9 @@ import {
   RuntimeServiceHandlerSetup,
 } from './shared/runtime-service-handler-setup.js';
 import {
+  registerBuiltInMetaServiceEndpoints,
+} from './shared/meta-service-definition-registration.js';
+import {
   MessageGroupServiceAdapter,
   RuntimeServiceAdapter,
   ServiceLifecycleManager,
@@ -268,6 +271,8 @@ class NodeJoiningService extends EventEmitter {
     this.endpointService = null;
     this.dispatchService = null;
     this.rebalanceCoordinator = null;
+    this.controlPlaneBackgroundWritersActivated = false;
+    this.controlPlaneHeartbeatStartOptions = null;
 
     // Unified runtime ownership wiring.
     const runtimeWiring = createRuntimeStartupWiring({
@@ -403,11 +408,12 @@ class NodeJoiningService extends EventEmitter {
       });
 
       await this.signalReadyForReplicas();
-      this.startLatencyTopologyLifecycle();
 
       // Transition to READY state
       // Requirements: 2.10 - READY state for accepting traffic
       this.lifecycleStateMachine.transition(NodeState.READY);
+      this.activateControlPlaneBackgroundWriters();
+      this.startLatencyTopologyLifecycle();
 
       // Joining complete
       this.phase = JoiningPhase.COMPLETE;
@@ -461,38 +467,100 @@ class NodeJoiningService extends EventEmitter {
     const nodeService = NodeService.getInstance();
     const capabilities = this.getNodeCapabilities();
     const stats = await nodeService.getNodeStats();
+    const heartbeatPayload = {
+      cpu: {
+        count: stats.cpu?.count,
+        usagePercent: stats.cpu?.usagePercent,
+      },
+      memory: {
+        totalBytes: stats.memory?.totalBytes,
+        usagePercent: stats.memory?.usagePercent,
+      },
+      diskGb: stats.diskGb,
+      diskUsagePercent: stats.diskUsagePercent,
+    };
+    const maxAttempts = Number.isFinite(this.config.readySignalMaxAttempts) ?
+      Math.max(NUM.ONE, Math.floor(this.config.readySignalMaxAttempts)) :
+      JOINING_DEFAULT.readySignalMaxAttempts;
+    const maxDelayMs = Number.isFinite(this.config.readySignalRetryMaxDelayMs) ?
+      Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryMaxDelayMs)) :
+      JOINING_DEFAULT.readySignalRetryMaxDelayMs;
+    const backoffMultiplier =
+      Number.isFinite(this.config.readySignalRetryBackoffMultiplier) &&
+      this.config.readySignalRetryBackoffMultiplier > NUM.ZERO ?
+        this.config.readySignalRetryBackoffMultiplier :
+        JOINING_DEFAULT.readySignalRetryBackoffMultiplier;
+    let delayMs = Number.isFinite(this.config.readySignalRetryDelayMs) ?
+      Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryDelayMs)) :
+      JOINING_DEFAULT.readySignalRetryDelayMs;
+    let lastError = null;
 
-    try {
-      await heartbeat.sendHeartbeat(
-        {
-          cpu: {
-            count: stats.cpu?.count,
-            usagePercent: stats.cpu?.usagePercent,
-          },
-          memory: {
-            totalBytes: stats.memory?.totalBytes,
-            usagePercent: stats.memory?.usagePercent,
-          },
-          diskGb: stats.diskGb,
-          diskUsagePercent: stats.diskUsagePercent,
-        },
-        capabilities,
-      );
-      heartbeat.start({
-        getStats: () => nodeService.getNodeStats(),
-        capabilities,
-      });
+    for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
+      try {
+        await heartbeat.sendHeartbeat(heartbeatPayload, capabilities);
+        this.controlPlaneHeartbeatStartOptions = {
+          getStats: () => nodeService.getNodeStats(),
+          capabilities,
+        };
 
-      this.logger.info(JOINING_LOG_MSG.READY_SIGNAL_SUCCESS, {
-        nodeId: this.nodeId,
-      });
-    } catch (error) {
-      this.logger.error(JOINING_LOG_MSG.READY_SIGNAL_FAILED, {
-        nodeId: this.nodeId,
-        error: error.message,
-      });
-      throw error;
+        this.logger.info(JOINING_LOG_MSG.READY_SIGNAL_SUCCESS, {
+          nodeId: this.nodeId,
+          attempt,
+          maxAttempts,
+        });
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt >= maxAttempts) {
+          break;
+        }
+
+        this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
+          nodeId: this.nodeId,
+          attempt,
+          maxAttempts,
+          nextDelayMs: delayMs,
+          error: error.message,
+        });
+        await this.sleep(delayMs);
+        delayMs = Math.min(
+          Math.floor(delayMs * backoffMultiplier),
+          maxDelayMs,
+        );
+      }
     }
+
+    this.logger.error(JOINING_LOG_MSG.READY_SIGNAL_FAILED, {
+      nodeId: this.nodeId,
+      attempts: maxAttempts,
+      error: lastError?.message || STRING.UNKNOWN,
+    });
+    throw lastError;
+  }
+
+  /**
+   * Activate non-critical periodic control-plane writers once the joining
+   * node reaches READY.
+   * @return {void}
+   * @private
+   */
+  activateControlPlaneBackgroundWriters() {
+    if (this.controlPlaneBackgroundWritersActivated) {
+      return;
+    }
+
+    if (this.leaseService) {
+      this.leaseService.start();
+    }
+
+    if (this.heartbeatService && this.controlPlaneHeartbeatStartOptions) {
+      this.heartbeatService.start(this.controlPlaneHeartbeatStartOptions);
+    }
+
+    this.controlPlaneBackgroundWritersActivated = true;
+    this.logger.info(JOINING_LOG_MSG.CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE, {
+      nodeId: this.nodeId,
+    });
   }
 
   /**
@@ -574,19 +642,11 @@ class NodeJoiningService extends EventEmitter {
       bootstrapUrl,
     });
 
-    const retryTimeoutMs = Number.isFinite(this.config.leadershipWaitTimeoutMs) ?
-      Math.max(this.config.leadershipWaitTimeoutMs, this.config.httpTimeoutMs) :
-      this.config.httpTimeoutMs;
-    let delayMs = Number.isFinite(this.config.leadershipWaitInitialDelayMs) ?
-      Math.max(NUM.TEN, this.config.leadershipWaitInitialDelayMs) :
-      NUM.HUNDRED;
-    const maxDelayMs = Number.isFinite(this.config.leadershipWaitMaxDelayMs) ?
-      Math.max(delayMs, this.config.leadershipWaitMaxDelayMs) :
-      delayMs;
-    const backoffMultiplier = Number.isFinite(this.config.leadershipWaitBackoffMultiplier) &&
-      this.config.leadershipWaitBackoffMultiplier > NUM.ONE ?
-      this.config.leadershipWaitBackoffMultiplier :
-      NUM.TWO;
+    const retryPolicy = this.resolveJoinRetryPolicy();
+    const retryTimeoutMs = retryPolicy.retryTimeoutMs;
+    let delayMs = retryPolicy.initialDelayMs;
+    const maxDelayMs = retryPolicy.maxDelayMs;
+    const backoffMultiplier = retryPolicy.backoffMultiplier;
     const startTime = Date.now();
     let attempt = 0;
     let lastBootstrapError = null;
@@ -723,6 +783,33 @@ class NodeJoiningService extends EventEmitter {
     throw new Error(JOINING_ERROR_MSG.contactSeedFailed(
       `seed readiness timeout after ${retryTimeoutMs}ms`,
     ));
+  }
+
+  /**
+   * Resolve bounded retry policy for join-time HTTP operations.
+   * @return {Object}
+   * @private
+   */
+  resolveJoinRetryPolicy() {
+    const retryTimeoutMs = Number.isFinite(this.config.leadershipWaitTimeoutMs) ?
+      Math.max(this.config.leadershipWaitTimeoutMs, this.config.httpTimeoutMs) :
+      this.config.httpTimeoutMs;
+    const initialDelayMs = Number.isFinite(this.config.leadershipWaitInitialDelayMs) ?
+      Math.max(NUM.TEN, this.config.leadershipWaitInitialDelayMs) :
+      NUM.HUNDRED;
+    const maxDelayMs = Number.isFinite(this.config.leadershipWaitMaxDelayMs) ?
+      Math.max(initialDelayMs, this.config.leadershipWaitMaxDelayMs) :
+      initialDelayMs;
+    const backoffMultiplier = Number.isFinite(this.config.leadershipWaitBackoffMultiplier) &&
+      this.config.leadershipWaitBackoffMultiplier > NUM.ONE ?
+      this.config.leadershipWaitBackoffMultiplier :
+      NUM.TWO;
+    return {
+      retryTimeoutMs,
+      initialDelayMs,
+      maxDelayMs,
+      backoffMultiplier,
+    };
   }
 
   /**
@@ -1492,17 +1579,32 @@ class NodeJoiningService extends EventEmitter {
       registerUrl,
     });
 
-    try {
-      const response = await this.httpPostImpl(registerUrl, serviceData);
+    const retryPolicy = this.resolveJoinRetryPolicy();
+    const retryTimeoutMs = retryPolicy.retryTimeoutMs;
+    let delayMs = retryPolicy.initialDelayMs;
+    const maxDelayMs = retryPolicy.maxDelayMs;
+    const backoffMultiplier = retryPolicy.backoffMultiplier;
+    const retryableTimeoutErrorMessage = JOINING_ERROR_MSG.httpTimeout(
+      this.config.httpTimeoutMs,
+    );
+    const startTime = Date.now();
+    let attempt = NUM.ZERO;
+    let lastError = null;
 
-      if (!response.success) {
-        this.logger.error(JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_NON_SUCCESS, {
-          nodeId: this.nodeId,
-          replicaId,
-          error: response.error,
-        });
-        throw new Error(response.error || JOINING_ERROR_MSG.BOOTSTRAP_REQUEST_FAILED);
-      } else {
+    while (Date.now() - startTime < retryTimeoutMs) {
+      attempt += 1;
+      try {
+        const response = await this.httpPostImpl(registerUrl, serviceData);
+
+        if (!response.success) {
+          this.logger.error(JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_NON_SUCCESS, {
+            nodeId: this.nodeId,
+            replicaId,
+            error: response.error,
+          });
+          throw new Error(response.error || JOINING_ERROR_MSG.BOOTSTRAP_REQUEST_FAILED);
+        }
+
         const systemTableCache = NodeService.getInstance().getSystemTableCache();
         if (systemTableCache) {
           // Bootstrap timing exception: local cache seeding is required here because
@@ -1521,16 +1623,58 @@ class NodeJoiningService extends EventEmitter {
           nodeId: this.nodeId,
           replicaId,
           groupId,
+          attempt,
         });
+        return;
+      } catch (error) {
+        lastError = error;
+        const elapsedMs = Date.now() - startTime;
+        const classification = this.classifySeedContactFailure(
+          error,
+          retryableTimeoutErrorMessage,
+        );
+        if (classification.retryable && elapsedMs < retryTimeoutMs) {
+          const nextDelayMs = this.computeSeedContactRetryDelayMs({
+            baseDelayMs: delayMs,
+            maxDelayMs,
+            retryAfterMs: classification.retryAfterMs,
+          });
+          this.logger.warn(JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_RETRYING, {
+            nodeId: this.nodeId,
+            replicaId,
+            groupId,
+            attempt,
+            elapsedMs,
+            error: error.message,
+            lastCode: classification.code,
+            lastStatusCode: classification.statusCode,
+            retryAfterMs: classification.retryAfterMs,
+            nextDelayMs,
+            retryTimeoutMs,
+          });
+          await this.sleep(nextDelayMs);
+          delayMs = Math.min(
+            Math.floor(delayMs * backoffMultiplier),
+            maxDelayMs,
+          );
+          continue;
+        }
+        break;
       }
-    } catch (error) {
-      this.logger.error(JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_FAILED, {
-        nodeId: this.nodeId,
-        replicaId,
-        error: error.message,
-      });
-      throw error;
     }
+
+    const error = lastError || new Error(
+      JOINING_ERROR_MSG.registerServiceTimeout(replicaId, retryTimeoutMs),
+    );
+    this.logger.error(JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_FAILED, {
+      nodeId: this.nodeId,
+      replicaId,
+      groupId,
+      attempts: attempt,
+      elapsedMs: Date.now() - startTime,
+      error: error.message,
+    });
+    throw error;
   }
 
   /**
@@ -2214,7 +2358,7 @@ class NodeJoiningService extends EventEmitter {
 
       // Derive WebSocket address from node address
       // node_address format: "hostname:port" (e.g., "localhost:8082")
-      // WebSocket port = REST port + WS_PORT_OFFSET (1000)
+      // WebSocket port = REST port + WS_PORT_OFFSET (2)
       const wsAddress = this.deriveWsAddressFromNodeAddress(nodeAddress);
       if (!wsAddress) {
         this.logger.warn(JOINING_LOG_MSG.CLUSTER_NODE_CONNECT_FAILED, {
@@ -2574,6 +2718,9 @@ class NodeJoiningService extends EventEmitter {
           partitionServices: this.partitionServices,
           messageGroupServices: this.messageGroupServices,
           cdcSubscriptionsActive: this.cdcSubscriptionsActive === true,
+          // Join-time leader rows can lag while replica placement settles.
+          // Keep this gate focused on subscription/pipeline wiring.
+          requirePropagationLeader: false,
         },
         cdcReadinessTimeoutMs,
       );
@@ -2673,6 +2820,7 @@ class NodeJoiningService extends EventEmitter {
       // Register WebSocket endpoint in node_endpoints table
       // Requirements: 8.2 - Node registration creates endpoint
       await this.registerNodeEndpoint(now);
+      await this.registerMetaServiceEndpoints();
     } catch (error) {
       const wrappedError = new Error(`Failed to register node: ${error.message}`);
       this.logger.error('Failed to register node in cluster', {
@@ -2728,6 +2876,31 @@ class NodeJoiningService extends EventEmitter {
       });
     } catch (error) {
       this.logger.error(JOINING_LOG_MSG.ENDPOINT_REGISTER_FAILED, {
+        nodeId: this.nodeId,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Register built-in meta service endpoints for this joining node.
+   * Ensures canonical discovery includes websocket and postgres-wire
+   * endpoints for every joined participant.
+   * @return {Promise<void>}
+   * @private
+   */
+  async registerMetaServiceEndpoints() {
+    try {
+      await registerBuiltInMetaServiceEndpoints({
+        upsertRow: async (tableName, row) =>
+          this.upsertSystemTableRow(tableName, row),
+        nodeId: this.nodeId,
+        nodeAddress: this.nodeAddress,
+        wsPort: this.wsPort,
+      });
+    } catch (error) {
+      this.logger.error('Failed to register built-in meta service endpoints', {
         nodeId: this.nodeId,
         error: error.message,
       });

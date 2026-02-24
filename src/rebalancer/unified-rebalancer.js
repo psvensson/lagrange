@@ -226,6 +226,15 @@ class UnifiedRebalancer extends EventEmitter {
     this.stabilizationPeriodMs = this.clampStabilizationPeriod(
       configuredStabilization ?? this.defaultStabilizationMs,
     );
+    this.systemPartitionStartDelayMs = this.resolveNonNegativeMs(
+      config.get(REBALANCER_CONFIG_KEY.SYSTEM_PARTITION_START_DELAY_MS),
+      REBALANCER_DEFAULT.UNIFIED.SYSTEM_PARTITION_START_DELAY_MS,
+    );
+    this.userPartitionStartDelayMs = this.resolveNonNegativeMs(
+      config.get(REBALANCER_CONFIG_KEY.USER_PARTITION_START_DELAY_MS),
+      REBALANCER_DEFAULT.UNIFIED.USER_PARTITION_START_DELAY_MS,
+    );
+    this.rebalanceStartAtMs = Date.now();
 
     // Stabilization state
     // Initialize to current time so rebalancer waits for stabilization period
@@ -389,6 +398,57 @@ class UnifiedRebalancer extends EventEmitter {
       return this.defaultStabilizationMs;
     }
     return Math.max(this.minStabilizationMs, Math.min(this.maxStabilizationMs, value));
+  }
+
+  /**
+   * Resolve non-negative millisecond value with fallback.
+   * @param {*} value - Candidate config value.
+   * @param {number} fallback - Fallback milliseconds.
+   * @return {number} Non-negative milliseconds.
+   */
+  resolveNonNegativeMs(value, fallback) {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+      return Math.floor(value);
+    }
+    return fallback;
+  }
+
+  /**
+   * Whether this rebalancer manages a system table partition.
+   * @return {boolean}
+   */
+  isSystemPartitionEntity() {
+    return this.entityType === EntityType.PARTITION &&
+      CRITICAL_SYSTEM_PARTITION_IDS.has(this.entityId);
+  }
+
+  /**
+   * Resolve start delay before rebalancing is eligible.
+   * @return {number} Delay in milliseconds.
+   */
+  getRebalanceStartDelayMs() {
+    if (this.entityType !== EntityType.PARTITION) {
+      return 0;
+    }
+    if (this.isSystemPartitionEntity()) {
+      return this.systemPartitionStartDelayMs;
+    }
+    return this.userPartitionStartDelayMs;
+  }
+
+  /**
+   * Milliseconds remaining until this entity is eligible for rebalancing.
+   * @param {number} [nowMs=Date.now()] - Current timestamp.
+   * @return {number} Remaining milliseconds, or 0 if eligible.
+   */
+  getTimeUntilRebalanceStartEligible(nowMs = Date.now()) {
+    const delayMs = this.getRebalanceStartDelayMs();
+    if (delayMs <= 0) {
+      return 0;
+    }
+    const elapsed = nowMs - this.rebalanceStartAtMs;
+    const remaining = delayMs - elapsed;
+    return remaining > 0 ? remaining : 0;
   }
 
   /**
@@ -1312,14 +1372,21 @@ class UnifiedRebalancer extends EventEmitter {
   /**
    * Schedule the next periodic check.
    */
-  scheduleNextCheck() {
+  scheduleNextCheck(overrideDelayMs = null) {
     if (!this.isLeader || this.isShuttingDown) {
       return;
     }
 
-    // Add jitter: ±25% of interval to spread load
-    const jitter = this.periodicCheckJitterMs * (Math.random() - 0.5) * 2;
-    const delay = Math.max(1000, this.currentInterval + jitter);
+    let delay = null;
+    if (typeof overrideDelayMs === 'number' &&
+        Number.isFinite(overrideDelayMs) &&
+        overrideDelayMs > 0) {
+      delay = Math.max(1000, Math.floor(overrideDelayMs));
+    } else {
+      // Add jitter: ±25% of interval to spread load
+      const jitter = this.periodicCheckJitterMs * (Math.random() - 0.5) * 2;
+      delay = Math.max(1000, this.currentInterval + jitter);
+    }
 
     this.scheduledCheck = setTimeout(() => {
       // Avoid unhandled rejections from timer-triggered checks during shutdown races.
@@ -1391,6 +1458,19 @@ class UnifiedRebalancer extends EventEmitter {
             return;
           }
         }
+      }
+
+      const timeUntilRebalanceEligibleMs =
+        this.getTimeUntilRebalanceStartEligible();
+      if (timeUntilRebalanceEligibleMs > 0) {
+        this.logger.debug(REBALANCER_LOG_MSG.WAIT_START_DELAY, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          remainingMs: timeUntilRebalanceEligibleMs,
+          isSystemPartition: this.isSystemPartitionEntity(),
+        });
+        this.scheduleNextCheck(timeUntilRebalanceEligibleMs);
+        return;
       }
 
       // Check if we're still in stabilization period (Requirements 2.2, 2.3)

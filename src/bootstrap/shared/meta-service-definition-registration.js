@@ -14,13 +14,18 @@ import {
   createPostgresWireDefinition,
 } from '../../wasm-service/meta-service-factory.js';
 import {serializeServiceDefinition} from '../../wasm-service/wasm-service-models.js';
-import {buildMetaServiceEndpoints} from '../../admin/admin-meta-endpoint-builder.js';
+import {
+  META_ENDPOINT_VERSION,
+  buildMetaServiceEndpoints,
+} from '../../admin/admin-meta-endpoint-builder.js';
+import {buildEndpointRecord} from '../../wasm-service/service-endpoint-builder.js';
 
 const META_SERVICE_DEFINITION_REGISTRATION_ERROR = Object.freeze({
   UPSERT_REQUIRED: 'Meta service definition registration requires upsertRow function',
   NODE_ID_REQUIRED: 'Meta service endpoint registration requires nodeId',
   ENDPOINT_PORT_REQUIRED: 'Meta service endpoint registration requires a valid port',
 });
+const POSTGRES_WIRE_DEFAULT_PORT = 5432;
 
 /**
  * Register built-in meta service definitions in service_definitions.
@@ -58,7 +63,7 @@ async function registerBuiltInMetaServiceDefinitions(options = {}) {
  * @return {Promise<string[]>} Registered endpoint IDs.
  */
 async function registerBuiltInMetaServiceEndpoints(options = {}) {
-  const {upsertRow, nodeId, nodeAddress, wsPort} = options;
+  const {upsertRow, nodeId, nodeAddress, wsPort, postgresPort} = options;
   if (typeof upsertRow !== TYPEOF.FUNCTION) {
     throw new Error(META_SERVICE_DEFINITION_REGISTRATION_ERROR.UPSERT_REQUIRED);
   }
@@ -77,8 +82,19 @@ async function registerBuiltInMetaServiceEndpoints(options = {}) {
     endpointAddress,
     endpointPort,
   );
+  const resolvedPostgresPort =
+    Number.isInteger(postgresPort) && postgresPort > 0 ?
+      postgresPort :
+      POSTGRES_WIRE_DEFAULT_PORT;
+  const postgresWireEndpoint = buildEndpointRecord({
+    serviceDefinition: createPostgresWireDefinition(),
+    nodeId,
+    address: endpointAddress,
+    port: resolvedPostgresPort,
+    version: META_ENDPOINT_VERSION,
+  });
 
-  const endpoints = [wasmMetaEndpoint, adminMetaEndpoint];
+  const endpoints = [wasmMetaEndpoint, adminMetaEndpoint, postgresWireEndpoint];
   for (const endpoint of endpoints) {
     await upsertRow(SystemTableName.SERVICE_ENDPOINTS, endpoint);
   }

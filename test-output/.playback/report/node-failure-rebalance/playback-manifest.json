@@ -1,8 +1,8 @@
 {
   "scenarioName": "node-failure-rebalance",
-  "startedAt": 1771430848132,
-  "endedAt": 1771430912909,
-  "durationMs": 64777,
+  "startedAt": 1771839212142,
+  "endedAt": 1771839243425,
+  "durationMs": 31283,
   "files": {
     "events": "test-output/.playback/report/node-failure-rebalance/events.ndjson",
     "samples": "test-output/.playback/report/node-failure-rebalance/samples.ndjson",
@@ -11,8 +11,8 @@
     "viewer": "test-output/.playback/report/node-failure-rebalance/playback-viewer.html"
   },
   "counts": {
-    "events": 29,
-    "samples": 225,
+    "events": 13,
+    "samples": 29,
     "snapshots": 0
   },
   "warnings": []

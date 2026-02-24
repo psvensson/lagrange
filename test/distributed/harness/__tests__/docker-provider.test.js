@@ -11,7 +11,7 @@ import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
 import fc from 'fast-check';
 import {DockerProvider, parseContainerStats} from '../docker-provider.js';
-import {CONTAINER_ENV_KEYS} from '../constants.js';
+import {CONTAINER_ENV_KEYS, PORTS} from '../constants.js';
 
 test('Property 2: Container Environment Configuration', async (t) => {
   await t.test(
@@ -162,8 +162,8 @@ test('Unit: createContainer passes correct env vars to Docker', async (t) => {
 
       const env = {
         [CONTAINER_ENV_KEYS.NODE_ID]: 'node-1',
-        [CONTAINER_ENV_KEYS.NODE_ADDRESS]: '172.18.0.2:9080',
-        [CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS]: '172.18.0.1:9080',
+        [CONTAINER_ENV_KEYS.NODE_ADDRESS]: `172.18.0.2:${PORTS.WS_TRANSPORT}`,
+        [CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS]: `172.18.0.1:${PORTS.WS_TRANSPORT}`,
         [CONTAINER_ENV_KEYS.DATA_DIR]: '/data/node-1',
       };
 
@@ -179,8 +179,8 @@ test('Unit: createContainer passes correct env vars to Docker', async (t) => {
 
       const expectedEntries = [
         'NODE_ID=node-1',
-        'NODE_ADDRESS=172.18.0.2:9080',
-        'SEED_NODE_ADDRESS=172.18.0.1:9080',
+        `NODE_ADDRESS=172.18.0.2:${PORTS.WS_TRANSPORT}`,
+        `SEED_NODE_ADDRESS=172.18.0.1:${PORTS.WS_TRANSPORT}`,
         'DATA_DIR=/data/node-1',
       ];
       for (const entry of expectedEntries) {

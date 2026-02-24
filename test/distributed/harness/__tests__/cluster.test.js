@@ -92,6 +92,8 @@ import {
   CONTAINER_ENV_KEYS,
   PORTS,
   RAFT_PROVIDER_DEFAULTS,
+  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
+  NODE_CLIENT_SERVICE_ID_ADMIN_META,
 } from '../constants.js';
 import {ENTRYPOINT_ENV} from '../../../../src/constants/entrypoint.js';
 
@@ -464,7 +466,7 @@ test('Unit: NodeHandle.isReachable falls back to admin query when HTTP probes ar
     const originalGet = http.get;
     let queryProbeCount = 0;
     const calledUrls = [];
-    const originalQuery = node.query;
+    const originalQueryWithTimeout = node.queryWithTimeout;
     const originalGetAdminSocket = node._getAdminSocket;
     http.get = (url, _options, _callback) => {
       calledUrls.push(String(url));
@@ -479,7 +481,7 @@ test('Unit: NodeHandle.isReachable falls back to admin query when HTTP probes ar
       };
       return req;
     };
-    node.query = async (sql) => {
+    node.queryWithTimeout = async (sql) => {
       if (sql === 'SELECT node_id FROM nodes LIMIT 1') {
         queryProbeCount += 1;
       }
@@ -498,7 +500,7 @@ test('Unit: NodeHandle.isReachable falls back to admin query when HTTP probes ar
         'should attempt both bootstrap and admin HTTP health probes');
     } finally {
       http.get = originalGet;
-      node.query = originalQuery;
+      node.queryWithTimeout = originalQueryWithTimeout;
       node._getAdminSocket = originalGetAdminSocket;
     }
   });
@@ -514,7 +516,7 @@ test('Unit: NodeHandle.getReachabilityDiagnostics reports all probe stages on fa
     );
 
     const originalGet = http.get;
-    const originalQuery = node.query;
+    const originalQueryWithTimeout = node.queryWithTimeout;
     const originalGetAdminSocket = node._getAdminSocket;
     http.get = (_url, _options, callback) => {
       const req = {
@@ -532,7 +534,7 @@ test('Unit: NodeHandle.getReachabilityDiagnostics reports all probe stages on fa
     node._getAdminSocket = async () => {
       throw new Error('admin ws unavailable');
     };
-    node.query = async () => {
+    node.queryWithTimeout = async () => {
       throw new Error('sql probe failed');
     };
 
@@ -550,7 +552,7 @@ test('Unit: NodeHandle.getReachabilityDiagnostics reports all probe stages on fa
       assert.strictEqual(diagnostics.lastError, 'sql probe failed');
     } finally {
       http.get = originalGet;
-      node.query = originalQuery;
+      node.queryWithTimeout = originalQueryWithTimeout;
       node._getAdminSocket = originalGetAdminSocket;
     }
   });
@@ -765,6 +767,84 @@ test('Unit: NodeHandle.query reuses one Admin API connection', async () => {
     });
   }
 });
+
+test('Unit: NodeHandle.getStatus derives ACTIVE state from local discovery readiness',
+  async () => {
+    const server = new WebSocketServer({
+      host: '127.0.0.1',
+      port: 0,
+    });
+    await new Promise((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+
+    const address = server.address();
+    assert.ok(address && typeof address === 'object',
+      'server should expose listen address');
+    const adminApiPort = address.port;
+
+    let capturedQuery = null;
+    server.on('connection', (socket) => {
+      socket.send(JSON.stringify({
+        type: 'cache_dump',
+        data: {},
+      }));
+      socket.once('message', (data) => {
+        capturedQuery = JSON.parse(data.toString());
+        socket.send(JSON.stringify({
+          type: 'query_result',
+          queryId: capturedQuery.queryId,
+          results: [{
+            services: [{
+              serviceIds: [NODE_CLIENT_SERVICE_ID_ADMIN_META],
+              replicas: [{
+                nodeId: 'node-1',
+                serviceId: NODE_CLIENT_SERVICE_ID_ADMIN_META,
+                readiness: {
+                  routingReady: true,
+                },
+              }],
+            }],
+          }],
+        }));
+      });
+    });
+
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.SEED,
+      {getContainerLogs: async () => ''},
+      adminApiPort,
+    );
+
+    try {
+      const result = await node.getStatus();
+      assert.strictEqual(
+        capturedQuery.sql,
+        NODE_CLIENT_SERVICE_DISCOVERY_SQL,
+        'getStatus should query local service discovery snapshot',
+      );
+      assert.strictEqual(
+        result.rows[0].status,
+        'active',
+        'routing-ready admin replica should be treated as ACTIVE',
+      );
+    } finally {
+      node.closeQueryConnection();
+      await new Promise((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+  });
 
 test('Unit: NodeHandle.subscribeLogStream receives log CDC events', async () => {
   const server = new WebSocketServer({
@@ -1246,6 +1326,271 @@ test('Unit: _waitForBootstrapApi records periodic startup-stage diagnostics',
     );
   });
 
+test('Unit: _probeClusterActiveState probes node status in parallel',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    let releaseProbes;
+    const probeRelease = new Promise((resolve) => {
+      releaseProbes = resolve;
+    });
+    const startedNodeIds = [];
+
+    const createBlockingNode = (nodeId) => ({
+      id: nodeId,
+      role: NODE_ROLES.JOINER,
+      async getStatus() {
+        startedNodeIds.push(nodeId);
+        await probeRelease;
+        return {rows: [{status: 'active'}]};
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            nodes: ['node-a', 'node-b'],
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+
+    cluster._nodes.set('node-a', createBlockingNode('node-a'));
+    cluster._nodes.set('node-b', createBlockingNode('node-b'));
+
+    const probePromise = cluster._probeClusterActiveState(Date.now() + 1000);
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.strictEqual(
+      startedNodeIds.length,
+      2,
+      'all node status probes should start before any probe resolves',
+    );
+
+    releaseProbes();
+
+    const probeResult = await probePromise;
+    assert.strictEqual(probeResult.allActive, true);
+  });
+
+test('Unit: _probeClusterActiveState prefers lightweight bootstrap readiness probe',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    let bootstrapProbeCalls = 0;
+    let getStatusCalls = 0;
+    const createNode = (nodeId) => ({
+      id: nodeId,
+      role: nodeId === 'node-a' ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
+      async probeBootstrapReadiness(_options) {
+        bootstrapProbeCalls += 1;
+        return {
+          status: 200,
+          phase: 'TRAFFIC_READY',
+          state: 'join_ready',
+          reasons: [],
+        };
+      },
+      async getStatus() {
+        getStatusCalls += 1;
+        return {rows: [{status: 'active'}]};
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            nodes: ['node-a', 'node-b'],
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+
+    cluster._nodes.set('node-a', createNode('node-a'));
+    cluster._nodes.set('node-b', createNode('node-b'));
+
+    const probeResult = await cluster._probeClusterActiveState(Date.now() + 1000);
+    assert.strictEqual(
+      probeResult.allActive,
+      true,
+      'bootstrap readiness probe should satisfy ACTIVE gate when snapshot coverage is complete',
+    );
+    assert.strictEqual(
+      bootstrapProbeCalls,
+      2,
+      'bootstrap readiness should be queried per node',
+    );
+    assert.strictEqual(
+      getStatusCalls,
+      0,
+      'legacy status query path should not be used when bootstrap readiness probe exists',
+    );
+  });
+
+test('Unit: _probeClusterActiveState requires control snapshot coverage even when ACTIVE',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const createNode = (nodeId) => ({
+      id: nodeId,
+      role: NODE_ROLES.JOINER,
+      async getStatus() {
+        return {rows: [{status: 'active'}]};
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            nodes: ['node-a'],
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+
+    cluster._nodes.set('node-a', createNode('node-a'));
+    cluster._nodes.set('node-b', createNode('node-b'));
+
+    const probeResult = await cluster._probeClusterActiveState(Date.now() + 1000);
+    assert.strictEqual(
+      probeResult.allActive,
+      false,
+      'ACTIVE gate should stay closed until snapshot coverage includes all nodes',
+    );
+    assert.ok(
+      probeResult.snapshotCoverage,
+      'startup probe should include snapshot coverage diagnostics',
+    );
+  });
+
+test('Unit: _probeClusterActiveState does not bypass ACTIVE status with snapshot coverage',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const expectedNodeIds = ['node-a', 'node-b', 'node-c'];
+    const createNode = (nodeId, snapshotNodes) => ({
+      id: nodeId,
+      role: NODE_ROLES.JOINER,
+      async getStatus() {
+        throw new Error('Admin API query failed for node ' + nodeId);
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            nodes: snapshotNodes,
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+
+    cluster._nodes.set('node-a', createNode('node-a', expectedNodeIds));
+    cluster._nodes.set('node-b', createNode('node-b', []));
+    cluster._nodes.set('node-c', createNode('node-c', []));
+
+    const probeResult = await cluster._probeClusterActiveState(Date.now() + 1000);
+    assert.strictEqual(
+      probeResult.allActive,
+      false,
+      'snapshot coverage should not bypass non-ACTIVE node status',
+    );
+  });
+
+test('Unit: _probeControlSnapshotCoverage short-circuits after complete coverage',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const probeCalls = [];
+    const createNode = (nodeId, role, observedNodes) => ({
+      id: nodeId,
+      role,
+      async getStatus() {
+        return {rows: [{status: 'active'}]};
+      },
+      async getControlSnapshot(options) {
+        probeCalls.push({
+          nodeId,
+          options,
+        });
+        return {
+          rows: [{
+            nodes: observedNodes,
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+
+    cluster._nodes.set('node-a', createNode(
+      'node-a',
+      NODE_ROLES.SEED,
+      ['node-a', 'node-b', 'node-c'],
+    ));
+    cluster._nodes.set('node-b', createNode(
+      'node-b',
+      NODE_ROLES.JOINER,
+      ['node-a'],
+    ));
+    cluster._nodes.set('node-c', createNode(
+      'node-c',
+      NODE_ROLES.JOINER,
+      ['node-a'],
+    ));
+
+    const coverage = await cluster._probeControlSnapshotCoverage(
+      Date.now() + 5000,
+      ['node-a', 'node-b', 'node-c'],
+    );
+    assert.strictEqual(
+      coverage.completeCoverage,
+      true,
+      'single complete coverage snapshot should satisfy startup gate coverage',
+    );
+    assert.strictEqual(
+      probeCalls.length,
+      1,
+      'snapshot probing should short-circuit after first complete coverage result',
+    );
+    assert.strictEqual(
+      probeCalls[0].options.lane,
+      'snapshot',
+      'control snapshot probe should use snapshot lane',
+    );
+    assert.ok(
+      Number.isInteger(probeCalls[0].options.timeoutMs) &&
+      probeCalls[0].options.timeoutMs > 0,
+      'control snapshot probe should pass explicit timeout budget to node query',
+    );
+  });
+
 test('Unit: _waitForAllActive times out when a node status probe hangs',
   async () => {
     const cluster = createCluster({
@@ -1294,6 +1639,56 @@ test('Unit: _waitForAllActive times out when a node status probe hangs',
         clearTimeout(timeoutId);
       }
     }
+  });
+
+test('Unit: _waitForAllActive scales timeout budget for larger clusters',
+  async () => {
+    const cluster = createCluster({
+      size: 7,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {convergence: 40},
+    });
+
+    cluster._nodes.set('stuck-node', {
+      id: 'stuck-node',
+      role: NODE_ROLES.JOINER,
+      async getStatus() {
+        return new Promise(() => {});
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+    cluster._sleep = async () => {};
+    cluster._collectFailureLogs = async () => {};
+
+    const startedAt = Date.now();
+    let timeoutId = null;
+    try {
+      await assert.rejects(
+        async () => {
+          await Promise.race([
+            cluster._waitForAllActive(),
+            new Promise((_, reject) => {
+              timeoutId = setTimeout(() => {
+                reject(new Error('waitForAllActive hung'));
+              }, ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS);
+            }),
+          ]);
+        },
+        /Not all nodes reached ACTIVE state within/,
+      );
+    } finally {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    }
+    const elapsedMs = Date.now() - startedAt;
+    assert.ok(
+      elapsedMs >= 70,
+      'scaled timeout should keep ACTIVE gate open longer for larger clusters',
+    );
   });
 
 test('Unit: _waitForAllActive exposes diagnostic summary on timeout',

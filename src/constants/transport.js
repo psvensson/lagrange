@@ -7,6 +7,7 @@ import {
   STRING,
   TYPEOF,
 } from './index.js';
+import {ENTRYPOINT_DEFAULT} from './entrypoint.js';
 
 const CONNECTION_STATE = Object.freeze({
   DISCONNECTED: 'disconnected',
@@ -51,7 +52,7 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
 });
 
 const TRANSPORT_DEFAULT = Object.freeze({
-  WS_PORT: 8080,
+  WS_PORT: ENTRYPOINT_DEFAULT.REST_API_PORT + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET,
   WS_HOST: HOST.LOCALHOST,
   WS_PROTOCOL: PROTOCOL.WS,
   LOCAL_ADDRESS_PREFIX: 'ws-',

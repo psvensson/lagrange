@@ -20,11 +20,11 @@ describe('meta-service-endpoint-registration', () => {
       wsPort: 18080,
     });
 
-    assert.equal(endpointIds.length, 2);
+    assert.equal(endpointIds.length, 3);
     const endpointUpserts = upserts.filter(
       (entry) => entry.tableName === SystemTableName.SERVICE_ENDPOINTS,
     );
-    assert.equal(endpointUpserts.length, 2);
+    assert.equal(endpointUpserts.length, 3);
 
     assert.ok(endpointUpserts.some((entry) => {
       return entry.row.service_id === META_SERVICE_ID.WASM_META &&
@@ -38,6 +38,13 @@ describe('meta-service-endpoint-registration', () => {
         entry.row.node_id === 'node-1' &&
         entry.row.address === '127.0.0.1' &&
         entry.row.port === 18080;
+    }));
+
+    assert.ok(endpointUpserts.some((entry) => {
+      return entry.row.service_id === META_SERVICE_ID.POSTGRES_WIRE &&
+        entry.row.node_id === 'node-1' &&
+        entry.row.address === '127.0.0.1' &&
+        entry.row.port === 5432;
     }));
   });
 
@@ -54,11 +61,23 @@ describe('meta-service-endpoint-registration', () => {
     const endpointUpserts = upserts.filter(
       (entry) => entry.tableName === SystemTableName.SERVICE_ENDPOINTS,
     );
-    assert.equal(endpointUpserts.length, 2);
+    assert.equal(endpointUpserts.length, 3);
     for (const endpoint of endpointUpserts) {
       assert.equal(endpoint.row.address, 'localhost');
-      assert.equal(endpoint.row.port, 19090);
     }
+
+    assert.ok(endpointUpserts.some((entry) =>
+      entry.row.service_id === META_SERVICE_ID.WASM_META &&
+      entry.row.port === 19090,
+    ));
+    assert.ok(endpointUpserts.some((entry) =>
+      entry.row.service_id === META_SERVICE_ID.ADMIN_META &&
+      entry.row.port === 19090,
+    ));
+    assert.ok(endpointUpserts.some((entry) =>
+      entry.row.service_id === META_SERVICE_ID.POSTGRES_WIRE &&
+      entry.row.port === 5432,
+    ));
   });
 
   it('fails when endpoint port cannot be resolved', async () => {

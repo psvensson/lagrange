@@ -313,6 +313,7 @@ class BootstrapService extends EventEmitter {
     this.endpointService = null;
     this.dispatchService = null;
     this.rebalanceCoordinator = null;
+    this.controlPlaneBackgroundWritersActivated = false;
 
     // Unified runtime ownership wiring.
     const runtimeWiring = createRuntimeStartupWiring({
@@ -472,6 +473,7 @@ class BootstrapService extends EventEmitter {
         this.lifecycleStateMachine.transition(NodeState.CONNECTING);
       }
       this.phase = BootstrapPhase.COMPLETE;
+      this.activateControlPlaneBackgroundWriters();
       const duration = Date.now() - this.startTime;
 
       this.logger.info(BootstrapLog.COMPLETED, {
@@ -2156,8 +2158,10 @@ class BootstrapService extends EventEmitter {
       if (existingTimer) {
         clearTimeout(existingTimer);
         this.pendingNodeReadyRebalanceTimers.delete(nodeId);
+        // The scheduled trigger did not fire; allow a future true transition
+        // to schedule once the node becomes ready again.
+        this.rebalanceTriggeredNodeIds.delete(nodeId);
       }
-      this.rebalanceTriggeredNodeIds.delete(nodeId);
       return false;
     }
 
@@ -3607,10 +3611,6 @@ class BootstrapService extends EventEmitter {
           diskUsagePercent: stats.diskUsagePercent,
         },
       );
-      this.heartbeatService.start({
-        nodeAddress: this.nodeAddress,
-        getStats: () => NodeService.getInstance().getNodeStats(),
-      });
       await this.waitForReadyNodeInCache(this.nodeId);
     } catch (error) {
       this.logger.error(BootstrapLog.CONTROL_PLANE_REGISTER_FAILED, {
@@ -3619,6 +3619,33 @@ class BootstrapService extends EventEmitter {
       });
       throw error;
     }
+  }
+
+  /**
+   * Activate non-critical periodic control-plane writers after bootstrap
+   * reaches the active startup barrier.
+   * @return {void}
+   * @private
+   */
+  activateControlPlaneBackgroundWriters() {
+    if (this.controlPlaneBackgroundWritersActivated) {
+      return;
+    }
+
+    if (this.leaseService) {
+      this.leaseService.start();
+    }
+    if (this.heartbeatService) {
+      this.heartbeatService.start({
+        nodeAddress: this.nodeAddress,
+        getStats: () => NodeService.getInstance().getNodeStats(),
+      });
+    }
+
+    this.controlPlaneBackgroundWritersActivated = true;
+    this.logger.info(BootstrapLog.CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE, {
+      nodeId: this.nodeId,
+    });
   }
 
   /**

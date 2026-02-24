@@ -17,7 +17,8 @@ const SERVICES_QUERY =
 const NODES_QUERY =
   'SELECT * FROM nodes WHERE status = \'active\'';
 const PARTITIONS_QUERY = 'SELECT * FROM partitions';
-const REPLICA_OPERATIONS_QUERY = 'SELECT * FROM replica_operations';
+const CONTROL_SNAPSHOT_REQUIRED_ERROR_PREFIX =
+  'Control snapshot API is required for convergence assertions on node ';
 
 // --- Service row field values ---
 const RAFT_ROLE_LEARNER = 'learner';
@@ -81,15 +82,14 @@ const OPERATION_FIELD_CANDIDATE_TIMESTAMPS = Object.freeze([
   'created_at',
   'timestamp',
 ]);
-const REPLICA_OPERATION_STATUS_ACTIVE = 'active';
-const REPLICA_OPERATION_STATUS_REMOVED = 'removed';
-const REPLICA_OPERATION_STATUS_FAILED = 'failed';
-const REPLICA_OPERATION_STATUS_UNKNOWN = 'unknown';
-const REPLICA_OPERATION_TERMINAL_STATUSES = new Set([
-  REPLICA_OPERATION_STATUS_ACTIVE,
-  REPLICA_OPERATION_STATUS_REMOVED,
-  REPLICA_OPERATION_STATUS_FAILED,
-]);
+const CONTROL_SNAPSHOT_FIELD_PARTITIONS = 'partitions';
+const CONTROL_SNAPSHOT_FIELD_LEADERS = 'leaders';
+const CONTROL_SNAPSHOT_FIELD_VOTER_COUNTS = 'voterCounts';
+const CONTROL_SNAPSHOT_FIELD_REPLICA_OPERATIONS = 'replicaOperations';
+const CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT = 'inFlightCount';
+const CONTROL_SNAPSHOT_FIELD_STATUS_HISTOGRAM = 'statusHistogram';
+const CONTROL_SNAPSHOT_FIELD_ROWS = 'rows';
+const CONTROL_SNAPSHOT_FIELD_PARTITION_MEMBERSHIP = 'partitionMembership';
 
 /**
  * Probe reachability with structured diagnostics when available.
@@ -125,7 +125,7 @@ async function probeNodeReachability(node) {
       nodeId: String(node?.id || 'unknown'),
       reachable: result === true,
       reachableBy: null,
-      lastError: result === true ? null : 'legacy reachability probe failed',
+      lastError: result === true ? null : 'reachability probe failed',
       diagnostics: null,
     };
   }
@@ -283,6 +283,180 @@ function finalizeOverTargetState(state, endTimeMs) {
   }
 }
 
+function normalizeStatusCountMap(statusHistogram) {
+  const statusCounts = new Map();
+  if (!statusHistogram ||
+    typeof statusHistogram !== 'object' ||
+    Array.isArray(statusHistogram)) {
+    return statusCounts;
+  }
+  for (const [status, count] of Object.entries(statusHistogram)) {
+    if (!Number.isFinite(count) || count <= 0) {
+      continue;
+    }
+    statusCounts.set(String(status), Math.floor(count));
+  }
+  return statusCounts;
+}
+
+function normalizeVoterCountMap(voterCounts) {
+  const counts = new Map();
+  if (!voterCounts ||
+    typeof voterCounts !== 'object' ||
+    Array.isArray(voterCounts)) {
+    return counts;
+  }
+  for (const [partitionId, count] of Object.entries(voterCounts)) {
+    if (!Number.isFinite(count) || count < 0) {
+      continue;
+    }
+    counts.set(String(partitionId), Math.floor(count));
+  }
+  return counts;
+}
+
+function extractControlSnapshotPayload(result, nodeId) {
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  if (rows.length === 0 ||
+    !rows[0] ||
+    typeof rows[0] !== 'object' ||
+    Array.isArray(rows[0])) {
+    throw new Error(
+      'Control snapshot query returned no rows for node ' +
+      String(nodeId || VALUE_UNKNOWN),
+    );
+  }
+  return rows[0];
+}
+
+function extractControlSnapshotPartitionIds(snapshot) {
+  const partitionIds = new Set();
+  const partitions = Array.isArray(snapshot?.[CONTROL_SNAPSHOT_FIELD_PARTITIONS]) ?
+    snapshot[CONTROL_SNAPSHOT_FIELD_PARTITIONS] :
+    [];
+  for (const partitionId of partitions) {
+    const normalizedPartitionId = String(partitionId || '').trim();
+    if (normalizedPartitionId.length === 0) {
+      continue;
+    }
+    partitionIds.add(normalizedPartitionId);
+  }
+  return partitionIds;
+}
+
+function extractControlSnapshotLeaders(snapshot) {
+  const leaders = new Map();
+  const leaderMap = snapshot?.[CONTROL_SNAPSHOT_FIELD_LEADERS];
+  if (!leaderMap ||
+    typeof leaderMap !== 'object' ||
+    Array.isArray(leaderMap)) {
+    return leaders;
+  }
+
+  for (const [partitionId, leaderAddress] of Object.entries(leaderMap)) {
+    const normalizedPartitionId = String(partitionId || '').trim();
+    const normalizedLeaderAddress = String(leaderAddress || '').trim();
+    if (normalizedPartitionId.length === 0 ||
+      normalizedLeaderAddress.length === 0) {
+      continue;
+    }
+    leaders.set(normalizedPartitionId, normalizedLeaderAddress);
+  }
+  return leaders;
+}
+
+function extractControlSnapshotVoterCounts(snapshot) {
+  const voterCounts = normalizeVoterCountMap(
+    snapshot?.[CONTROL_SNAPSHOT_FIELD_VOTER_COUNTS],
+  );
+  if (voterCounts.size > 0) {
+    return voterCounts;
+  }
+
+  const partitionMembership = snapshot?.[CONTROL_SNAPSHOT_FIELD_PARTITION_MEMBERSHIP];
+  if (!partitionMembership ||
+    typeof partitionMembership !== 'object' ||
+    Array.isArray(partitionMembership)) {
+    return voterCounts;
+  }
+
+  for (const [partitionId, membership] of Object.entries(partitionMembership)) {
+    const normalizedPartitionId = String(partitionId || '').trim();
+    const voterCount = membership?.voterCount;
+    if (normalizedPartitionId.length === 0 ||
+      !Number.isFinite(voterCount) ||
+      voterCount < 0) {
+      continue;
+    }
+    voterCounts.set(normalizedPartitionId, Math.floor(voterCount));
+  }
+  return voterCounts;
+}
+
+function extractControlSnapshotInFlightSummary(snapshot) {
+  const replicaOperations = snapshot?.[CONTROL_SNAPSHOT_FIELD_REPLICA_OPERATIONS];
+  const inFlightCount = Number.isInteger(
+    replicaOperations?.[CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT],
+  ) &&
+  replicaOperations[CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT] >= 0 ?
+    replicaOperations[CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT] :
+    0;
+
+  const statusCounts = normalizeStatusCountMap(
+    replicaOperations?.[CONTROL_SNAPSHOT_FIELD_STATUS_HISTOGRAM],
+  );
+  return {
+    inFlightCount,
+    statusCounts,
+  };
+}
+
+function extractControlSnapshotOperationRows(snapshot) {
+  const replicaOperations = snapshot?.[CONTROL_SNAPSHOT_FIELD_REPLICA_OPERATIONS];
+  const operationRows = Array.isArray(
+    replicaOperations?.[CONTROL_SNAPSHOT_FIELD_ROWS],
+  ) ?
+    replicaOperations[CONTROL_SNAPSHOT_FIELD_ROWS] :
+    [];
+  return operationRows.filter((row) => row && typeof row === 'object');
+}
+
+function extractControlSnapshotPartitionMembership(snapshot) {
+  const partitionMembership = snapshot?.[CONTROL_SNAPSHOT_FIELD_PARTITION_MEMBERSHIP];
+  if (!partitionMembership ||
+    typeof partitionMembership !== 'object' ||
+    Array.isArray(partitionMembership)) {
+    return null;
+  }
+  return partitionMembership;
+}
+
+async function queryControlSnapshot(node) {
+  if (typeof node?.getControlSnapshot !== 'function') {
+    throw new Error(
+      CONTROL_SNAPSHOT_REQUIRED_ERROR_PREFIX +
+      String(node?.id || VALUE_UNKNOWN),
+    );
+  }
+
+  const result = await node.getControlSnapshot();
+  const snapshot = extractControlSnapshotPayload(result, node?.id);
+  const inFlightSummary = extractControlSnapshotInFlightSummary(snapshot);
+
+  return {
+    nodeId: String(node?.id || VALUE_UNKNOWN),
+    servicesRows: [],
+    expectedPartitionIds: extractControlSnapshotPartitionIds(snapshot),
+    operationRows: extractControlSnapshotOperationRows(snapshot),
+    error: null,
+    voterCounts: extractControlSnapshotVoterCounts(snapshot),
+    leaders: extractControlSnapshotLeaders(snapshot),
+    inFlightReplicaOperationCount: inFlightSummary.inFlightCount,
+    inFlightReplicaOperationStatuses: inFlightSummary.statusCounts,
+    partitionMembership: extractControlSnapshotPartitionMembership(snapshot),
+  };
+}
+
 /**
  * Query a single reachable node for cluster convergence state.
  * Uses one node snapshot to avoid counting the same cluster-wide
@@ -299,26 +473,7 @@ async function queryReachableClusterSnapshot(nodes) {
       if (!report.reachable) {
         continue;
       }
-      const [servicesResult, partitionsResult, operationsResult] =
-        await Promise.all([
-          node.query(SERVICES_QUERY),
-          node.query(PARTITIONS_QUERY),
-          node.query(REPLICA_OPERATIONS_QUERY),
-        ]);
-      const servicesRows = Array.isArray(servicesResult?.rows) ?
-        servicesResult.rows :
-        [];
-      const expectedPartitionIds = extractPartitionIds(partitionsResult?.rows);
-      const operationRows = Array.isArray(operationsResult?.rows) ?
-        operationsResult.rows :
-        [];
-      return {
-        nodeId: String(node?.id || VALUE_UNKNOWN),
-        servicesRows,
-        expectedPartitionIds,
-        operationRows,
-        error: null,
-      };
+      return await queryControlSnapshot(node);
     } catch (err) {
       lastError = err?.message || String(err);
     }
@@ -329,21 +484,12 @@ async function queryReachableClusterSnapshot(nodes) {
     expectedPartitionIds: new Set(),
     operationRows: [],
     error: lastError,
+    voterCounts: new Map(),
+    leaders: new Map(),
+    inFlightReplicaOperationCount: 0,
+    inFlightReplicaOperationStatuses: new Map(),
+    partitionMembership: null,
   };
-}
-
-function extractPartitionIds(rows) {
-  const partitionIds = new Set();
-  if (!Array.isArray(rows)) {
-    return partitionIds;
-  }
-  for (const row of rows) {
-    if (!row?.partition_id) {
-      continue;
-    }
-    partitionIds.add(String(row.partition_id));
-  }
-  return partitionIds;
 }
 
 /**
@@ -384,6 +530,7 @@ async function waitForConvergence(nodes, options = {}) {
   let latestOperationRows = [];
   let latestInFlightReplicaOperationCount = 0;
   let latestInFlightReplicaOperationStatuses = new Map();
+  let latestPartitionMembership = null;
   let latestSnapshotNodeId = null;
   let latestSnapshotError = null;
 
@@ -398,14 +545,13 @@ async function waitForConvergence(nodes, options = {}) {
     latestOperationRows = snapshot.operationRows;
     latestSnapshotNodeId = snapshot.nodeId;
     latestSnapshotError = snapshot.error;
-
-    latestCounts = countVotersPerPartition(latestRows);
-    latestLeaders = extractLeaders(latestRows);
-    const inFlightSummary = summarizeInFlightReplicaOperations(
-      latestOperationRows,
-    );
-    latestInFlightReplicaOperationCount = inFlightSummary.total;
-    latestInFlightReplicaOperationStatuses = inFlightSummary.statusCounts;
+    latestCounts = snapshot.voterCounts;
+    latestLeaders = snapshot.leaders;
+    latestInFlightReplicaOperationCount =
+      snapshot.inFlightReplicaOperationCount;
+    latestInFlightReplicaOperationStatuses =
+      snapshot.inFlightReplicaOperationStatuses;
+    latestPartitionMembership = snapshot.partitionMembership;
 
     // Detect leader changes.
     for (const [pid, addr] of latestLeaders) {
@@ -489,19 +635,19 @@ async function waitForConvergence(nodes, options = {}) {
   }
   const expectedPartitions = [...latestExpectedPartitionIds].sort();
 
-  const partitionMembership = buildPartitionMembership(
-    latestRows,
-    targetVoterCount,
-  );
+  const partitionMembership = latestPartitionMembership ||
+    buildPartitionMembership(
+      latestRows,
+      targetVoterCount,
+    );
   const membershipSnippet = formatPartitionMembershipSnippet(
     partitionMembership,
   );
-  const operationHistoryResult = await collectReplicaOperationHistory(
-    nodes,
+  const operationHistory = summarizeReplicaOperations(
+    latestOperationRows,
     OPERATION_HISTORY_LIMIT,
   );
-  const operationHistory = operationHistoryResult.rows;
-  const operationHistoryError = operationHistoryResult.error;
+  const operationHistoryError = latestSnapshotError;
   const operationHistorySnippet = formatOperationHistorySnippet(
     operationHistory,
     operationHistoryError,
@@ -542,30 +688,6 @@ async function waitForConvergence(nodes, options = {}) {
     elapsedMs: Date.now() - startMs,
   };
   throw err;
-}
-
-function summarizeInFlightReplicaOperations(rows) {
-  const statusCounts = new Map();
-  if (!Array.isArray(rows)) {
-    return {
-      total: 0,
-      statusCounts,
-    };
-  }
-  for (const row of rows) {
-    const status = String(
-      row?.status || row?.state || REPLICA_OPERATION_STATUS_UNKNOWN,
-    ).toLowerCase();
-    if (REPLICA_OPERATION_TERMINAL_STATUSES.has(status)) {
-      continue;
-    }
-    statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
-  }
-  return {
-    total: Array.from(statusCounts.values())
-      .reduce((sum, count) => sum + count, 0),
-    statusCounts,
-  };
 }
 
 function buildPartitionMembership(rows, targetVoterCount) {
@@ -681,30 +803,6 @@ function formatReplicaMembershipEntry(replica) {
   const role = replica?.raftRole || STATUS_UNKNOWN;
   const status = replica?.status || STATUS_UNKNOWN;
   return node + ':' + role + ':' + status;
-}
-
-async function collectReplicaOperationHistory(nodes, limit) {
-  let lastError = null;
-  for (const node of nodes) {
-    try {
-      const report = await probeNodeReachability(node);
-      if (!report.reachable) {
-        continue;
-      }
-      const result = await node.query(REPLICA_OPERATIONS_QUERY);
-      const rows = Array.isArray(result?.rows) ? result.rows : [];
-      return {
-        rows: summarizeReplicaOperations(rows, limit),
-        error: null,
-      };
-    } catch (err) {
-      lastError = err?.message || String(err);
-    }
-  }
-  return {
-    rows: [],
-    error: lastError,
-  };
 }
 
 function summarizeReplicaOperations(rows, limit) {

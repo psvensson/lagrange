@@ -14,6 +14,7 @@ import {BootstrapService} from './bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
 import {BootstrapReadinessState} from './bootstrap/bootstrap-readiness-state.js';
 import {READINESS_EVENT} from './bootstrap/bootstrap-readiness-state-constants.js';
+import {LIFECYCLE_REASON} from './bootstrap/lifecycle-controller-constants.js';
 import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
 import {ADMIN_DEFAULT} from './admin/admin-constants.js';
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
@@ -66,6 +67,7 @@ export * from './storage/index.js';
  * System version.
  */
 export const VERSION = ENTRYPOINT_VERSION;
+const CONTROL_PLANE_WRITE_FAILURE_THRESHOLD = 3;
 
 /**
  * Check for version flag.
@@ -187,6 +189,34 @@ function createServiceDiagnosticsProvider(owner) {
       lifecycle: lifecycleDiagnostics,
       reconciler: reconcilerDiagnostics,
       resources: resourceDiagnostics,
+    };
+  };
+}
+
+/**
+ * Build control-plane write health provider for readiness degradation.
+ * @param {Object|null} owner
+ * @param {Object} [options]
+ * @param {number} [options.failureThreshold]
+ * @return {Function}
+ */
+function createControlPlaneWriteHealthProvider(owner, options = {}) {
+  const failureThreshold = Number.isFinite(options.failureThreshold) &&
+    options.failureThreshold > 0 ?
+    Math.floor(options.failureThreshold) :
+    CONTROL_PLANE_WRITE_FAILURE_THRESHOLD;
+  return () => {
+    const consecutiveFailures = Number(
+      owner?.heartbeatService?.heartbeatConsecutiveFailures || 0,
+    );
+    return {
+      healthy: consecutiveFailures < failureThreshold,
+      reasonCode: LIFECYCLE_REASON.OBSERVABILITY_BACKLOG,
+      details: {
+        source: 'heartbeat_service',
+        consecutiveFailures,
+        failureThreshold,
+      },
     };
   };
 }
@@ -463,6 +493,45 @@ async function main() {
         joiningConfig :
         undefined,
     });
+    const joinReadinessState = new BootstrapReadinessState();
+    joinReadinessState.on(READINESS_EVENT.TRANSITION, (transition) => {
+      mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_TRANSITION, {
+        nodeId: config.get(CONFIG_KEY.NODE_ID),
+        previousState: transition.previousState,
+        previousReady: transition.previousReady,
+        state: transition.state,
+        ready: transition.ready,
+        reasons: transition.reasons,
+        timestamp: transition.timestamp,
+      });
+    });
+    joinReadinessState.on(READINESS_EVENT.BLOCKED_DURATION, (event) => {
+      mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_BLOCKED_DURATION, {
+        nodeId: config.get(CONFIG_KEY.NODE_ID),
+        reason: event.reason,
+        durationMs: event.durationMs,
+        totalDurationMs: event.totalDurationMs,
+        timestamp: event.timestamp,
+      });
+    });
+    const bootstrapAPI = new BootstrapAPI({
+      seedNodeId: config.get(CONFIG_KEY.NODE_ID),
+      seedNodeAddress: config.get(CONFIG_KEY.NODE_ADDRESS),
+      wsPort: wsPort,
+      messageGroupServices: nodeJoiningService.messageGroupServices,
+      partitionServices: nodeJoiningService.partitionServices,
+      replicaHandler: nodeJoiningService.replicaHandler,
+      systemTableCache: null,
+      bootstrapService: null,
+      epochManager: nodeJoiningService.epochManager,
+      messageRouter: nodeJoiningService.messageRouter,
+      readinessState: joinReadinessState,
+      controlPlaneWriteHealthProvider:
+        createControlPlaneWriteHealthProvider(nodeJoiningService),
+      rolloutControls,
+    });
+
+    await bootstrapAPI.initialize();
 
     const joinResult = await nodeJoiningService.join();
 
@@ -471,6 +540,7 @@ async function main() {
         error: joinResult.error,
         phase: joinResult.phase,
       });
+      await bootstrapAPI.shutdown();
       process.exit(1);
     }
 
@@ -495,6 +565,12 @@ async function main() {
       systemTableCache,
       ENTRYPOINT_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
     );
+    bootstrapAPI.systemTableCache = systemTableCache;
+    bootstrapAPI.messageGroupServices = joinResult.messageGroupServices;
+    bootstrapAPI.partitionServices = joinResult.partitionServices;
+    bootstrapAPI.replicaHandler = joinResult.replicaHandler;
+    bootstrapAPI.epochManager = nodeJoiningService.epochManager;
+    bootstrapAPI.messageRouter = joinResult.messageRouter;
 
     // Create SQL query engine for transparent query routing
     let sqlQueryEngine = null;
@@ -512,6 +588,7 @@ async function main() {
         wasmExecutor,
       });
     }
+    bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
 
     const joinDynamicConfigWiring = await startDynamicConfigWiring({
       nodeId: config.get(CONFIG_KEY.NODE_ID),
@@ -562,12 +639,24 @@ async function main() {
 
       mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
       try {
+        const drainDeadlineMs =
+          Date.now() + ENTRYPOINT_DEFAULT.READINESS_DRAIN_DEADLINE_MS;
+        const drainingSnapshot = bootstrapAPI.markDraining({
+          drainDeadlineMs,
+        });
+        mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_DRAINING, {
+          nodeId: config.get(CONFIG_KEY.NODE_ID),
+          phase: drainingSnapshot?.phase || null,
+          reasons: drainingSnapshot?.reasons || [],
+          drainDeadlineMs,
+        });
         const joinLogsTableService = joinLogsPersistence ?
           (joinLogsPersistence.getService() || await joinLogsPersistence.promise) :
           null;
         await shutdownLogsTablePersistence(joinLogsTableService, mainLogger);
         shutdownDynamicConfigWiring(joinDynamicConfigWiring, mainLogger);
         await nodeJoiningService.cleanup();
+        await bootstrapAPI.shutdown();
         await adminAPI.shutdown();
         liveQueryWiring.shutdown();
         process.exit(0);
@@ -643,6 +732,8 @@ async function main() {
       epochManager: bootstrapService.epochManager,
       messageRouter: bootstrapService.messageRouter,
       readinessState,
+      controlPlaneWriteHealthProvider:
+        createControlPlaneWriteHealthProvider(bootstrapService),
       rolloutControls,
     });
 

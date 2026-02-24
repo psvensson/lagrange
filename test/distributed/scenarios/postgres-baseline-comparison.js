@@ -22,6 +22,8 @@ import {
   BENCHMARK_DEFAULTS,
   CONSISTENCY_VERDICT,
   GATE_RESULT_MODE,
+  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
   PHASE_STATUS,
   SCENARIO_PHASE,
 } from '../harness/constants.js';
@@ -82,19 +84,29 @@ const BENCHMARK_WORKLOAD_OPERATIONS = Object.freeze([
 ]);
 const SUT_TABLE_PROBE_SQL_PREFIX = 'SELECT count(*) FROM ';
 const SUT_TABLE_PROBE_SQL_SUFFIX = ' WHERE 1 = 0';
-const IN_FLIGHT_REPLICA_OPERATIONS_SQL =
-  'SELECT * FROM replica_operations ' +
-  'WHERE status NOT IN (\'active\', \'removed\', \'failed\')';
 const QUIESCENCE_NODE_ERROR_SEPARATOR = '; ';
 const QUIESCENCE_NODE_ERROR_PREFIX = 'nodeProbeFailures=';
 const QUIESCENCE_IN_FLIGHT_ERROR_PREFIX = 'inFlightQueryError=';
 const QUIESCENCE_IN_FLIGHT_COUNT_PREFIX = 'inFlightReplicaOperations=';
 const QUIESCENCE_READY_NODE_COUNT_PREFIX = 'readyLoadNodes=';
+const QUIESCENCE_STALL_PREFIX = 'progressStall=';
 const QUIESCENCE_REASON_IN_FLIGHT_NOT_DRAINED_PREFIX =
   'in_flight_replica_operations:';
 const QUIESCENCE_REASON_IN_FLIGHT_QUERY_ERROR_PREFIX =
   'in_flight_query_error:';
 const QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX = 'node_probe_error:';
+const QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX =
+  'leadership_unstable:';
+const QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX =
+  'stalled_no_progress:';
+const QUIESCENCE_REASON_SNAPSHOT_QUERY_ERROR_PREFIX =
+  'control_snapshot_query_error:';
+const QUIESCENCE_REASON_NO_SNAPSHOT_CANDIDATE =
+  QUIESCENCE_REASON_SNAPSHOT_QUERY_ERROR_PREFIX + 'no_snapshot_candidates';
+const QUIESCENCE_SNAPSHOT_ERROR_SEPARATOR = '|';
+const QUIESCENCE_SNAPSHOT_ERROR_ASSIGN = '=';
+const QUIESCENCE_SNAPSHOT_ERROR_MORE_SUFFIX = '_more';
+const QUIESCENCE_SNAPSHOT_ERROR_MAX_ENTRIES = 3;
 const POST_LOAD_DRAIN_STATUS_OK = 'ok';
 const POST_LOAD_DRAIN_STATUS_FAILED = 'failed';
 const POST_LOAD_DRAIN_MODE_FAILED = 'failed';
@@ -113,6 +125,39 @@ const BENCHMARK_DDL_PRIMARY_KEY = 'PRIMARY KEY';
 const BENCHMARK_POOL_IDLE_TIMEOUT_MS = 30000;
 const BENCHMARK_POOL_CONNECTION_TIMEOUT_MS = 10000;
 const PHASE_REASON_SUMMARY_MAX_ENTRIES = 5;
+const STARTUP_DECISION_SCHEMA_VERSION = 1;
+const PHASE_CLASS_STARTUP = 'startup';
+const PHASE_CLASS_DISCOVERY = 'discovery';
+const PHASE_CLASS_TOPOLOGY = 'topology';
+const PHASE_CLASS_LOAD = 'load';
+const PHASE_CLASS_VERIFY = 'verify';
+const PHASE_CLASS_TEARDOWN = 'teardown';
+const PHASE_CLASS_UNKNOWN = 'unknown';
+const REASON_CLASS_STARTUP = 'startup';
+const REASON_CLASS_DISCOVERY = 'discovery';
+const REASON_CLASS_TOPOLOGY = 'topology';
+const REASON_CLASS_LOAD = 'load';
+const REASON_CLASS_VERIFY = 'verify';
+const REASON_CLASS_UNKNOWN = 'unknown';
+const DISCOVERY_FIELD_SERVICES = 'services';
+const DISCOVERY_SERVICE_FIELD_PROTOCOL = 'protocol';
+const DISCOVERY_SERVICE_FIELD_SERVICE_IDS = 'serviceIds';
+const DISCOVERY_SERVICE_FIELD_NODES = 'nodes';
+const DISCOVERY_SERVICE_FIELD_REPLICAS = 'replicas';
+const DISCOVERY_REPLICA_FIELD_NODE_ID = 'nodeId';
+const DISCOVERY_REPLICA_FIELD_READINESS = 'readiness';
+const DISCOVERY_READINESS_FIELD_WORKLOAD_READY = 'workloadReady';
+const DISCOVERY_READINESS_FIELD_SCHEMA_READY = 'schemaReady';
+const DISCOVERY_READINESS_FIELD_REASONS = 'reasons';
+const DISCOVERY_READINESS_REASON_FIELD_CODE = 'code';
+const DISCOVERY_READINESS_REASON_FIELD_DETAIL = 'detail';
+const DISCOVERY_SOURCE_STATUS_DISCOVERED = 'discovered';
+const DISCOVERY_SOURCE_STATUS_EMPTY = 'empty';
+const DISCOVERY_SOURCE_STATUS_ERROR = 'error';
+const DISCOVERY_UNKNOWN_NODE_ID = 'unknown';
+const DISCOVERY_ERROR_MESSAGE_MAX_CHARS = 160;
+const DISCOVERY_SELECTION_POSTGRES_WIRE = 'postgres-wire';
+const LOAD_BREAKER_OWNER_NODE_CLIENT = 'node-client';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -381,6 +426,7 @@ async function runSutSharedLoad({
 }) {
   const routedLoadNodes = loadNodes.map((node) => ({
     id: node.id,
+    breakerOwner: LOAD_BREAKER_OWNER_NODE_CLIENT,
     query: (sql) => nodeClient.queryLoad(
       node,
       sql,
@@ -428,48 +474,497 @@ function isNodeReachable(diagnostics) {
   return false;
 }
 
-async function resolveSutLoadNodes(nodeClient, nodes, seedNode) {
-  const candidates = Array.isArray(nodes) ?
-    nodes.filter((node) =>
-      typeof node?.queryWithTimeout === 'function' &&
-      typeof node?.getReachabilityDiagnostics === 'function',
-    ) :
+function isLoadNodeCandidate(node) {
+  return typeof node?.queryWithTimeout === 'function' &&
+    typeof node?.getReachabilityDiagnostics === 'function';
+}
+
+function summarizeDiscoveryReadinessReasons(readiness) {
+  const reasons = Array.isArray(readiness?.[DISCOVERY_READINESS_FIELD_REASONS]) ?
+    readiness[DISCOVERY_READINESS_FIELD_REASONS] :
     [];
-  if (candidates.length === ZERO) {
-    return seedNode &&
-      typeof seedNode.queryWithTimeout === 'function' &&
-      typeof seedNode.getReachabilityDiagnostics === 'function' ?
-      [seedNode] :
+  if (reasons.length === ZERO) {
+    return ['workload_not_ready'];
+  }
+  const summarized = [];
+  for (const reason of reasons) {
+    const code = typeof reason?.[DISCOVERY_READINESS_REASON_FIELD_CODE] === 'string' &&
+      reason[DISCOVERY_READINESS_REASON_FIELD_CODE].length > ZERO ?
+      reason[DISCOVERY_READINESS_REASON_FIELD_CODE] :
+      'unknown_reason';
+    const detail = typeof reason?.[DISCOVERY_READINESS_REASON_FIELD_DETAIL] === 'string' &&
+      reason[DISCOVERY_READINESS_REASON_FIELD_DETAIL].length > ZERO ?
+      reason[DISCOVERY_READINESS_REASON_FIELD_DETAIL] :
+      null;
+    summarized.push(detail ? code + '=' + detail : code);
+  }
+  return summarized;
+}
+
+function resolveServiceNodeIdsFromDiscovery(snapshot, serviceId, protocol) {
+  const services = Array.isArray(snapshot?.[DISCOVERY_FIELD_SERVICES]) ?
+    snapshot[DISCOVERY_FIELD_SERVICES] :
+    [];
+  const discoveredNodeIds = [];
+  const excludedReadinessByNodeId = {};
+  const seenNodeIds = new Set();
+  for (const service of services) {
+    if (!service || typeof service !== 'object') {
+      continue;
+    }
+    if (service[DISCOVERY_SERVICE_FIELD_PROTOCOL] !== protocol) {
+      continue;
+    }
+    const serviceIds = Array.isArray(service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS]) ?
+      service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS] :
       [];
+    if (!serviceIds.includes(serviceId)) {
+      continue;
+    }
+    const serviceReplicas = Array.isArray(service[DISCOVERY_SERVICE_FIELD_REPLICAS]) ?
+      service[DISCOVERY_SERVICE_FIELD_REPLICAS] :
+      [];
+    for (const replica of serviceReplicas) {
+      const nodeId = replica?.[DISCOVERY_REPLICA_FIELD_NODE_ID];
+      if (typeof nodeId !== 'string' || nodeId.length === ZERO) {
+        continue;
+      }
+      if (seenNodeIds.has(nodeId)) {
+        continue;
+      }
+      seenNodeIds.add(nodeId);
+      const readiness = replica?.[DISCOVERY_REPLICA_FIELD_READINESS];
+      if (!readiness || typeof readiness !== 'object') {
+        excludedReadinessByNodeId[nodeId] = ['readiness_missing'];
+        continue;
+      }
+      if (readiness[DISCOVERY_READINESS_FIELD_WORKLOAD_READY] !== true) {
+        excludedReadinessByNodeId[nodeId] =
+          summarizeDiscoveryReadinessReasons(readiness);
+        continue;
+      }
+      if (readiness[DISCOVERY_READINESS_FIELD_SCHEMA_READY] !== true) {
+        excludedReadinessByNodeId[nodeId] =
+          summarizeDiscoveryReadinessReasons(readiness);
+        continue;
+      }
+      discoveredNodeIds.push(nodeId);
+    }
+  }
+  return {
+    nodeIds: discoveredNodeIds,
+    excludedReadinessByNodeId,
+  };
+}
+
+function resolveSutLoadNodeSelectionFromDiscovery(snapshot) {
+  const postgresWireSelection = resolveServiceNodeIdsFromDiscovery(
+    snapshot,
+    NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+    NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+  );
+  if (postgresWireSelection.nodeIds.length > ZERO) {
+    return {
+      nodeIds: postgresWireSelection.nodeIds,
+      excludedReadinessByNodeId: postgresWireSelection.excludedReadinessByNodeId,
+      selection: DISCOVERY_SELECTION_POSTGRES_WIRE,
+      serviceId: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+      protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+    };
   }
 
-  const probeResults = await Promise.all(candidates.map(async (node) => {
-    try {
-      const diagnostics = await nodeClient.probeReadiness(node);
-      return isNodeReachable(diagnostics) ? node : null;
-    } catch (_error) {
-      return null;
-    }
-  }));
-  const queryable = probeResults.filter(Boolean);
-  if (queryable.length > ZERO) {
-    return queryable;
+  return {
+    nodeIds: [],
+    excludedReadinessByNodeId: {},
+    selection: null,
+    serviceId: null,
+    protocol: null,
+  };
+}
+
+function truncateDiscoveryErrorMessage(errorMessage) {
+  const text = String(errorMessage || '');
+  if (text.length <= DISCOVERY_ERROR_MESSAGE_MAX_CHARS) {
+    return text;
   }
-  return seedNode &&
-    typeof seedNode.queryWithTimeout === 'function' &&
-    typeof seedNode.getReachabilityDiagnostics === 'function' ?
-    [seedNode] :
+  return text.slice(
+    ZERO,
+    DISCOVERY_ERROR_MESSAGE_MAX_CHARS,
+  );
+}
+
+function buildSutLoadDiscoveryDiagnostics(options = {}) {
+  return {
+    attempts: Number.isInteger(options.attempts) ? options.attempts : ZERO,
+    timedOut: options.timedOut === true,
+    discoveredNodeIds: Array.isArray(options.discoveredNodeIds) ?
+      [...options.discoveredNodeIds] :
+      [],
+    candidateNodeIds: Array.isArray(options.candidateNodeIds) ?
+      [...options.candidateNodeIds] :
+      [],
+    reachableNodeIds: Array.isArray(options.reachableNodeIds) ?
+      [...options.reachableNodeIds] :
+      [],
+    sourceResults: Array.isArray(options.sourceResults) ?
+      options.sourceResults.map((sourceResult) => ({
+        ...sourceResult,
+        discoveredNodeIds: Array.isArray(sourceResult?.discoveredNodeIds) ?
+          [...sourceResult.discoveredNodeIds] :
+          [],
+        excludedReadinessByNodeId:
+          sourceResult?.excludedReadinessByNodeId &&
+          typeof sourceResult.excludedReadinessByNodeId === 'object' ?
+            Object.fromEntries(
+              Object.entries(sourceResult.excludedReadinessByNodeId)
+                .map(([nodeId, reasons]) => [
+                  String(nodeId),
+                  Array.isArray(reasons) ? reasons.map((reason) => String(reason)) : [],
+                ]),
+            ) :
+            {},
+      })) :
+      [],
+    elapsedMs: Number.isFinite(options.elapsedMs) ?
+      Math.max(ZERO, Math.floor(options.elapsedMs)) :
+      ZERO,
+  };
+}
+
+function aggregateDiscoveryReadinessExclusionsByNodeId(diagnostics) {
+  const aggregated = {};
+  const sourceResults = Array.isArray(diagnostics?.sourceResults) ?
+    diagnostics.sourceResults :
     [];
+  for (const sourceResult of sourceResults) {
+    const exclusions = sourceResult?.excludedReadinessByNodeId &&
+      typeof sourceResult.excludedReadinessByNodeId === 'object' ?
+      sourceResult.excludedReadinessByNodeId :
+      {};
+    for (const [nodeId, reasons] of Object.entries(exclusions)) {
+      if (!Object.prototype.hasOwnProperty.call(aggregated, nodeId)) {
+        aggregated[nodeId] = [];
+      }
+      const reasonList = Array.isArray(reasons) ?
+        reasons.map((reason) => String(reason)) :
+        [];
+      for (const reason of reasonList) {
+        if (!aggregated[nodeId].includes(reason)) {
+          aggregated[nodeId].push(reason);
+        }
+      }
+    }
+  }
+  return aggregated;
+}
+
+function formatSutLoadDiscoveryDiagnostics(diagnostics) {
+  if (!diagnostics || typeof diagnostics !== 'object') {
+    return '';
+  }
+  const attempts = Number.isInteger(diagnostics.attempts) ?
+    diagnostics.attempts :
+    ZERO;
+  const discoveredNodeIds = Array.isArray(diagnostics.discoveredNodeIds) ?
+    diagnostics.discoveredNodeIds :
+    [];
+  const sourceResults = Array.isArray(diagnostics.sourceResults) ?
+    diagnostics.sourceResults :
+    [];
+  const sourceSummary = sourceResults
+    .map((sourceResult) => {
+      const nodeId =
+        typeof sourceResult?.nodeId === 'string' &&
+        sourceResult.nodeId.length > ZERO ?
+          sourceResult.nodeId :
+          DISCOVERY_UNKNOWN_NODE_ID;
+      const status =
+        typeof sourceResult?.status === 'string' &&
+        sourceResult.status.length > ZERO ?
+          sourceResult.status :
+          DISCOVERY_SOURCE_STATUS_EMPTY;
+      const excludedReadiness = sourceResult?.excludedReadinessByNodeId &&
+        typeof sourceResult.excludedReadinessByNodeId === 'object' ?
+        Object.entries(sourceResult.excludedReadinessByNodeId)
+          .map(([nodeId, reasons]) => {
+            const reasonList = Array.isArray(reasons) && reasons.length > ZERO ?
+              reasons.join('|') :
+              'unknown';
+            return String(nodeId) + ':' + reasonList;
+          })
+          .join(',') :
+        '';
+      if (status === DISCOVERY_SOURCE_STATUS_ERROR) {
+        return nodeId + ':' + status +
+          '=' +
+          String(sourceResult?.error || 'unknown');
+      }
+      const sourceNodeIds = Array.isArray(sourceResult?.discoveredNodeIds) ?
+        sourceResult.discoveredNodeIds :
+        [];
+      if (sourceNodeIds.length > ZERO) {
+        const serviceId = typeof sourceResult?.serviceId === 'string' &&
+          sourceResult.serviceId.length > ZERO ?
+          sourceResult.serviceId :
+          'unknown-service';
+        const protocol = typeof sourceResult?.protocol === 'string' &&
+          sourceResult.protocol.length > ZERO ?
+          sourceResult.protocol :
+          'unknown-protocol';
+        const baseSummary = nodeId + ':' + status + '=' +
+          serviceId + '@' + protocol + ':' + sourceNodeIds.join('|');
+        if (excludedReadiness.length > ZERO) {
+          return baseSummary + '[excluded=' + excludedReadiness + ']';
+        }
+        return baseSummary;
+      }
+      if (excludedReadiness.length > ZERO) {
+        return nodeId + ':' + status + '[excluded=' + excludedReadiness + ']';
+      }
+      return nodeId + ':' + status;
+    })
+    .join(';');
+  const diagnosticsSummary = [
+    'attempts=' + String(attempts),
+    'timedOut=' + String(diagnostics.timedOut === true),
+    'discovered=' +
+      (discoveredNodeIds.length > ZERO ? discoveredNodeIds.join('|') : 'none'),
+  ];
+  if (sourceSummary.length > ZERO) {
+    diagnosticsSummary.push('sources=' + sourceSummary);
+  }
+  return diagnosticsSummary.join(', ');
+}
+
+function summarizeControlSnapshotErrors(errors) {
+  const normalizedErrors = Array.isArray(errors) ? errors : [];
+  if (normalizedErrors.length === ZERO) {
+    return QUIESCENCE_REASON_NO_SNAPSHOT_CANDIDATE;
+  }
+  const limitedErrors = normalizedErrors.slice(
+    ZERO,
+    QUIESCENCE_SNAPSHOT_ERROR_MAX_ENTRIES,
+  );
+  const errorSegments = limitedErrors.map((entry) =>
+    String(entry.nodeId || 'unknown') +
+      QUIESCENCE_SNAPSHOT_ERROR_ASSIGN +
+      String(entry.error || 'unknown'));
+  const remainingCount = normalizedErrors.length - limitedErrors.length;
+  if (remainingCount > ZERO) {
+    errorSegments.push(
+      String(remainingCount) + QUIESCENCE_SNAPSHOT_ERROR_MORE_SUFFIX,
+    );
+  }
+  return QUIESCENCE_REASON_SNAPSHOT_QUERY_ERROR_PREFIX +
+    errorSegments.join(QUIESCENCE_SNAPSHOT_ERROR_SEPARATOR);
+}
+
+function resolveControlSnapshotCandidates(seedNode, loadNodes) {
+  const nodes = [];
+  if (seedNode) {
+    nodes.push(seedNode);
+  }
+  if (Array.isArray(loadNodes)) {
+    nodes.push(...loadNodes);
+  }
+  const seenNodeIds = new Set();
+  const candidates = [];
+  for (const node of nodes) {
+    const nodeId = typeof node?.id === 'string' && node.id.length > ZERO ?
+      node.id :
+      null;
+    if (!nodeId) {
+      continue;
+    }
+    if (seenNodeIds.has(nodeId)) {
+      continue;
+    }
+    seenNodeIds.add(nodeId);
+    candidates.push(node);
+  }
+  return candidates;
+}
+
+async function fetchControlSnapshotFromCandidates(nodeClient, candidates) {
+  if (!Array.isArray(candidates) || candidates.length === ZERO) {
+    throw new Error(QUIESCENCE_REASON_NO_SNAPSHOT_CANDIDATE);
+  }
+  const errors = [];
+  for (const node of candidates) {
+    const nodeId = typeof node?.id === 'string' && node.id.length > ZERO ?
+      node.id :
+      'unknown';
+    try {
+      return await nodeClient.fetchControlSnapshot(node);
+    } catch (error) {
+      errors.push({
+        nodeId,
+        error: String(error?.message || error),
+      });
+    }
+  }
+  throw new Error(summarizeControlSnapshotErrors(errors));
+}
+
+async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
+  const candidates = Array.isArray(nodes) ?
+    nodes.filter((node) => isLoadNodeCandidate(node)) :
+    [];
+  if (candidates.length === ZERO || !isLoadNodeCandidate(seedNode)) {
+    return {
+      nodes: [],
+      diagnostics: buildSutLoadDiscoveryDiagnostics({
+        attempts: ZERO,
+      }),
+    };
+  }
+
+  const candidateById = new Map();
+  for (const node of candidates) {
+    if (typeof node?.id === 'string' && node.id.length > ZERO) {
+      candidateById.set(node.id, node);
+    }
+  }
+
+  const discoverySources = [seedNode];
+  for (const node of candidates) {
+    if (node.id !== seedNode.id) {
+      discoverySources.push(node);
+    }
+  }
+
+  const timeoutMs = Number.isInteger(options.timeoutMs) &&
+    options.timeoutMs > ZERO ?
+    options.timeoutMs :
+    BENCHMARK_DEFAULTS.readyTimeoutMs;
+  const pollIntervalMs = Number.isInteger(options.pollIntervalMs) &&
+    options.pollIntervalMs > ZERO ?
+    options.pollIntervalMs :
+    BENCHMARK_DEFAULTS.readyPollIntervalMs;
+  const readinessTableName =
+    typeof options.tableName === 'string' && options.tableName.length > ZERO ?
+      options.tableName :
+      null;
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
+  let attempts = ZERO;
+  let lastSourceResults = [];
+  let lastDiscoveredNodeIds = [];
+  let lastCandidateNodeIds = [];
+  let lastReachableNodeIds = [];
+
+  while (true) {
+    attempts += ONE;
+    let discoveredNodeIds = [];
+    const sourceResults = [];
+    for (const sourceNode of discoverySources) {
+      const sourceNodeId = typeof sourceNode?.id === 'string' &&
+        sourceNode.id.length > ZERO ?
+        sourceNode.id :
+        DISCOVERY_UNKNOWN_NODE_ID;
+      try {
+        const snapshot = await nodeClient.fetchServiceDiscovery(sourceNode, {
+          requireReadiness: true,
+          tableName: readinessTableName,
+        });
+        const discoverySelection =
+          resolveSutLoadNodeSelectionFromDiscovery(snapshot);
+        const snapshotNodeIds = discoverySelection.nodeIds;
+        if (snapshotNodeIds.length > ZERO) {
+          sourceResults.push({
+            nodeId: sourceNodeId,
+            status: DISCOVERY_SOURCE_STATUS_DISCOVERED,
+            discoveredNodeIds: snapshotNodeIds,
+            selection: discoverySelection.selection,
+            serviceId: discoverySelection.serviceId,
+            protocol: discoverySelection.protocol,
+            excludedReadinessByNodeId:
+              discoverySelection.excludedReadinessByNodeId,
+          });
+          discoveredNodeIds = snapshotNodeIds;
+          break;
+        }
+        sourceResults.push({
+          nodeId: sourceNodeId,
+          status: DISCOVERY_SOURCE_STATUS_EMPTY,
+          discoveredNodeIds: [],
+          excludedReadinessByNodeId:
+            discoverySelection.excludedReadinessByNodeId,
+        });
+      } catch (error) {
+        sourceResults.push({
+          nodeId: sourceNodeId,
+          status: DISCOVERY_SOURCE_STATUS_ERROR,
+          discoveredNodeIds: [],
+          error: truncateDiscoveryErrorMessage(error?.message || error),
+        });
+      }
+    }
+    lastSourceResults = sourceResults;
+    lastDiscoveredNodeIds = discoveredNodeIds;
+    if (discoveredNodeIds.length > ZERO) {
+      const discoveredNodeIdSet = new Set(discoveredNodeIds);
+      const discoveredCandidates = [...candidateById.values()].filter((node) =>
+        discoveredNodeIdSet.has(node.id),
+      );
+      lastCandidateNodeIds = discoveredCandidates.map((node) => node.id);
+      if (discoveredCandidates.length > ZERO) {
+        const probeResults = await Promise.all(
+          discoveredCandidates.map(async (node) => {
+            try {
+              const diagnostics = await nodeClient.probeReadiness(node);
+              return isNodeReachable(diagnostics) ? node : null;
+            } catch (_error) {
+              return null;
+            }
+          }),
+        );
+        const reachableCandidates = probeResults.filter(Boolean);
+        lastReachableNodeIds = reachableCandidates.map((node) => node.id);
+        if (reachableCandidates.length > ZERO) {
+          return {
+            nodes: reachableCandidates,
+            diagnostics: buildSutLoadDiscoveryDiagnostics({
+              attempts,
+              timedOut: false,
+              discoveredNodeIds,
+              candidateNodeIds: lastCandidateNodeIds,
+              reachableNodeIds: lastReachableNodeIds,
+              sourceResults,
+              elapsedMs: Date.now() - startedAt,
+            }),
+          };
+        }
+      }
+    }
+    if (Date.now() >= deadline) {
+      return {
+        nodes: [],
+        diagnostics: buildSutLoadDiscoveryDiagnostics({
+          attempts,
+          timedOut: true,
+          discoveredNodeIds: lastDiscoveredNodeIds,
+          candidateNodeIds: lastCandidateNodeIds,
+          reachableNodeIds: lastReachableNodeIds,
+          sourceResults: lastSourceResults,
+          elapsedMs: Date.now() - startedAt,
+        }),
+      };
+    }
+    await sleep(pollIntervalMs);
+  }
 }
 
 async function waitForSutLoadQuiescence({
   nodeClient,
   loadNodes,
   seedNode,
+  snapshotNodes,
   tableName,
   timeoutMs,
   pollIntervalMs,
   stableWindowMs,
+  noProgressTimeoutMs,
 }) {
   const tableProbeSql = buildSutTableProbeSql(tableName);
   const effectiveStableWindowMs = Math.max(
@@ -478,13 +973,31 @@ async function waitForSutLoadQuiescence({
       Math.floor(stableWindowMs) :
       QUIESCENCE_DEFAULT_STABLE_WINDOW_MS,
   );
+  const effectiveNoProgressTimeoutMs =
+    Number.isInteger(noProgressTimeoutMs) && noProgressTimeoutMs > ZERO ?
+      noProgressTimeoutMs :
+      null;
+  let lastLeaderSignature = null;
+  let lastLeaderChangeAtMs = Date.now();
+  let lastProgressAtMs = Date.now();
+  let lowestInFlightCount = Number.POSITIVE_INFINITY;
+  let maxLeaderQuietElapsedMs = ZERO;
+  let maxIncludedNodeCount = ZERO;
+  const gateProgressState = {
+    inFlightCount: null,
+    leaderQuietElapsedMs: ZERO,
+    partitionGroupInFlight: {},
+  };
   const gateEngine = new GateEngine();
+  const controlSnapshotCandidates = resolveControlSnapshotCandidates(
+    seedNode,
+    snapshotNodes,
+  );
   const gateResult = await gateEngine.waitForGate({
     nodes: loadNodes,
     timeoutMs,
     pollIntervalMs,
     stableWindowMs: effectiveStableWindowMs,
-    allowSubsetFallback: true,
     probeNode: async (node) => {
       try {
         await nodeClient.queryControl(node, tableProbeSql);
@@ -506,23 +1019,68 @@ async function waitForSutLoadQuiescence({
     },
     evaluateGlobalCondition: async () => {
       try {
-        const inFlightResult = await nodeClient.queryControl(
-          seedNode,
-          IN_FLIGHT_REPLICA_OPERATIONS_SQL,
+        const controlSnapshot = await fetchControlSnapshotFromCandidates(
+          nodeClient,
+          controlSnapshotCandidates,
         );
-        const inFlightCount = rowsFromQueryResult(inFlightResult).length;
-        if (inFlightCount === ZERO) {
-          return {
-            ready: true,
-            reasons: [],
-          };
+        const replicaOperations = controlSnapshot?.replicaOperations || {};
+        const inFlightCount = Number.isInteger(replicaOperations.inFlightCount) ?
+          replicaOperations.inFlightCount :
+          ZERO;
+        const partitionGroupInFlight =
+          replicaOperations.partitionGroupInFlight &&
+          typeof replicaOperations.partitionGroupInFlight === 'object' ?
+            Object.fromEntries(
+              Object.entries(replicaOperations.partitionGroupInFlight)
+                .filter((entry) => Number.isInteger(entry[1]) && entry[1] >= ZERO)
+                .map(([partitionGroupId, count]) => [
+                  String(partitionGroupId),
+                  Number(count),
+                ]),
+            ) :
+            {};
+        const leaders = controlSnapshot?.leaders &&
+          typeof controlSnapshot.leaders === 'object' ?
+          controlSnapshot.leaders :
+          {};
+        const leaderEntries = Object.entries(leaders)
+          .sort((left, right) => left[0].localeCompare(right[0]));
+        const leaderSignature = JSON.stringify(leaderEntries);
+        if (lastLeaderSignature !== null &&
+            lastLeaderSignature !== leaderSignature) {
+          lastLeaderChangeAtMs = Date.now();
         }
-        return {
-          ready: false,
-          reasons: [
+        if (lastLeaderSignature === null) {
+          lastLeaderChangeAtMs = Date.now();
+        }
+        lastLeaderSignature = leaderSignature;
+
+        const leaderCoverageReady = leaderEntries.length > ZERO;
+        const leaderQuietElapsedMs = Date.now() - lastLeaderChangeAtMs;
+        const leadershipStable = leaderCoverageReady &&
+          leaderQuietElapsedMs >= effectiveStableWindowMs;
+
+        const reasons = [];
+        if (inFlightCount > ZERO) {
+          reasons.push(
             QUIESCENCE_REASON_IN_FLIGHT_NOT_DRAINED_PREFIX +
               String(inFlightCount),
-          ],
+          );
+        }
+        if (!leadershipStable) {
+          reasons.push(
+            QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX +
+              String(leaderQuietElapsedMs),
+          );
+        }
+
+        gateProgressState.inFlightCount = inFlightCount;
+        gateProgressState.leaderQuietElapsedMs = leaderQuietElapsedMs;
+        gateProgressState.partitionGroupInFlight = partitionGroupInFlight;
+
+        return {
+          ready: reasons.length === ZERO,
+          reasons,
         };
       } catch (error) {
         return {
@@ -534,6 +1092,54 @@ async function waitForSutLoadQuiescence({
         };
       }
     },
+    abortIf: ({nowMs, includedNodeIds}) => {
+      if (effectiveNoProgressTimeoutMs === null) {
+        return null;
+      }
+
+      let progressObserved = false;
+      const inFlightCount = gateProgressState.inFlightCount;
+      if (Number.isInteger(inFlightCount) &&
+          inFlightCount < lowestInFlightCount) {
+        lowestInFlightCount = inFlightCount;
+        progressObserved = true;
+      }
+
+      const leaderQuietElapsedMs = Number.isFinite(
+        gateProgressState.leaderQuietElapsedMs,
+      ) ?
+        gateProgressState.leaderQuietElapsedMs :
+        ZERO;
+      if (inFlightCount === ZERO &&
+          leaderQuietElapsedMs > maxLeaderQuietElapsedMs) {
+        maxLeaderQuietElapsedMs = leaderQuietElapsedMs;
+        progressObserved = true;
+      }
+
+      const includedCount = Array.isArray(includedNodeIds) ?
+        includedNodeIds.length :
+        ZERO;
+      if (includedCount > maxIncludedNodeCount) {
+        maxIncludedNodeCount = includedCount;
+        progressObserved = true;
+      }
+
+      if (progressObserved) {
+        lastProgressAtMs = nowMs;
+        return null;
+      }
+
+      const stalledMs = nowMs - lastProgressAtMs;
+      if (stalledMs >= effectiveNoProgressTimeoutMs) {
+        return {
+          abort: true,
+          reason:
+            QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX +
+            String(stalledMs),
+        };
+      }
+      return null;
+    },
   });
 
   const includedNodeIds = new Set(gateResult.includedNodeIds || []);
@@ -542,8 +1148,7 @@ async function waitForSutLoadQuiescence({
     .map((node) => node.id)
     .filter((nodeId) => !includedNodeIds.has(nodeId));
 
-  if (gateResult.mode === GATE_RESULT_MODE.ALL_READY ||
-      gateResult.mode === GATE_RESULT_MODE.SUBSET_READY) {
+  if (gateResult.mode === GATE_RESULT_MODE.ALL_READY) {
     return {
       mode: gateResult.mode,
       attempts: gateResult.attempts,
@@ -551,6 +1156,9 @@ async function waitForSutLoadQuiescence({
       inFlightCount: ZERO,
       readyLoadNodes,
       excludedLoadNodeIds,
+      partitionGroupInFlight: {
+        ...gateProgressState.partitionGroupInFlight,
+      },
       reasonHistogram: gateResult.reasonHistogram || {},
       includedNodeIds: gateResult.includedNodeIds || [],
     };
@@ -565,6 +1173,12 @@ async function waitForSutLoadQuiescence({
   );
   const inFlightCountReasons = reasonKeys.filter((reason) =>
     reason.startsWith(QUIESCENCE_REASON_IN_FLIGHT_NOT_DRAINED_PREFIX),
+  );
+  const leadershipReasons = reasonKeys.filter((reason) =>
+    reason.startsWith(QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX),
+  );
+  const stallReasons = reasonKeys.filter((reason) =>
+    reason.startsWith(QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX),
   );
 
   const details = [];
@@ -584,22 +1198,35 @@ async function waitForSutLoadQuiescence({
       QUIESCENCE_IN_FLIGHT_COUNT_PREFIX + inFlightCountReasons.join(','),
     );
   }
+  if (leadershipReasons.length > ZERO) {
+    details.push('leadershipStability=' + leadershipReasons.join(','));
+  }
+  if (stallReasons.length > ZERO) {
+    details.push(QUIESCENCE_STALL_PREFIX + stallReasons.join(','));
+  }
   if (readyLoadNodes.length > ZERO) {
     details.push(
       QUIESCENCE_READY_NODE_COUNT_PREFIX + String(readyLoadNodes.length),
     );
   }
 
-  const error = new Error(
+  const errorPrefix = gateResult.aborted === true ?
+    'SUT load nodes did not reach quiescent state; gate aborted due to ' +
+      'stalled progress' :
     'SUT load nodes did not reach quiescent state within ' +
       timeoutMs +
-      'ms' +
+      'ms';
+  const error = new Error(
+    errorPrefix +
       (details.length > ZERO ?
         ' (' + details.join(', ') + ')' :
         ''),
   );
   error.gateResult = {
     ...gateResult,
+    partitionGroupInFlight: {
+      ...gateProgressState.partitionGroupInFlight,
+    },
     includedNodeIds: gateResult.includedNodeIds || [],
     excludedNodeIds: gateResult.excludedNodeIds || [],
     reasonHistogram: gateResult.reasonHistogram || {},
@@ -891,6 +1518,11 @@ function resolveBenchmarkConfig(cluster) {
         configured.quiescentStableWindowMs >= ZERO ?
         configured.quiescentStableWindowMs :
         QUIESCENCE_DEFAULT_STABLE_WINDOW_MS,
+    quiescentNoProgressTimeoutMs:
+      Number.isInteger(configured.quiescentNoProgressTimeoutMs) &&
+        configured.quiescentNoProgressTimeoutMs > ZERO ?
+        configured.quiescentNoProgressTimeoutMs :
+        null,
     postLoadDrainTimeoutMs:
       Number.isInteger(configured.postLoadDrainTimeoutMs) &&
         configured.postLoadDrainTimeoutMs > ZERO ?
@@ -919,6 +1551,14 @@ function resolveBenchmarkConfig(cluster) {
           configured.quiescentStableWindowMs >= ZERO ?
           configured.quiescentStableWindowMs :
           QUIESCENCE_DEFAULT_STABLE_WINDOW_MS),
+    postLoadDrainNoProgressTimeoutMs:
+      Number.isInteger(configured.postLoadDrainNoProgressTimeoutMs) &&
+        configured.postLoadDrainNoProgressTimeoutMs > ZERO ?
+        configured.postLoadDrainNoProgressTimeoutMs :
+        (Number.isInteger(configured.quiescentNoProgressTimeoutMs) &&
+          configured.quiescentNoProgressTimeoutMs > ZERO ?
+          configured.quiescentNoProgressTimeoutMs :
+          null),
     consistencyAssertMaxAttempts:
       Number.isInteger(configured.consistencyAssertMaxAttempts) &&
         configured.consistencyAssertMaxAttempts > ZERO ?
@@ -1147,6 +1787,7 @@ function createInitialPostLoadDrain(effectiveSutLoadNodes, excludedNodeIds) {
     stableElapsedMs: ZERO,
     error: null,
     reasonHistogram: {},
+    partitionGroupInFlight: {},
     includedNodeIds: effectiveSutLoadNodes.map((node) => node.id),
     excludedNodeIds: [...excludedNodeIds],
   };
@@ -1381,6 +2022,90 @@ function summarizeReasons(reasonHistogram) {
     }));
 }
 
+function resolvePhaseClass(phase) {
+  switch (phase) {
+  case SCENARIO_PHASE.PRE_FLIGHT:
+    return PHASE_CLASS_STARTUP;
+  case SCENARIO_PHASE.CONVERGE:
+    return PHASE_CLASS_DISCOVERY;
+  case SCENARIO_PHASE.PRE_LOAD_GATE:
+  case SCENARIO_PHASE.POST_LOAD_DRAIN:
+    return PHASE_CLASS_TOPOLOGY;
+  case SCENARIO_PHASE.LOAD:
+    return PHASE_CLASS_LOAD;
+  case SCENARIO_PHASE.VERIFY:
+    return PHASE_CLASS_VERIFY;
+  case SCENARIO_PHASE.TEARDOWN:
+    return PHASE_CLASS_TEARDOWN;
+  default:
+    return PHASE_CLASS_UNKNOWN;
+  }
+}
+
+function classifyReason(reason) {
+  const normalizedReason = String(reason || '').toLowerCase();
+  if (normalizedReason.includes('bootstrap') ||
+      normalizedReason.includes('startup') ||
+      normalizedReason.includes('active state')) {
+    return REASON_CLASS_STARTUP;
+  }
+  if (normalizedReason.includes('discovery') ||
+      normalizedReason.includes('schema') ||
+      normalizedReason.includes('readiness')) {
+    return REASON_CLASS_DISCOVERY;
+  }
+  if (normalizedReason.includes('in_flight') ||
+      normalizedReason.includes('leadership') ||
+      normalizedReason.includes('topology') ||
+      normalizedReason.includes('stalled_no_progress')) {
+    return REASON_CLASS_TOPOLOGY;
+  }
+  if (normalizedReason.includes('load') ||
+      normalizedReason.includes('circuit') ||
+      normalizedReason.includes('budget_exhausted') ||
+      normalizedReason.includes('operation')) {
+    return REASON_CLASS_LOAD;
+  }
+  if (normalizedReason.includes('consistency') ||
+      normalizedReason.includes('verification')) {
+    return REASON_CLASS_VERIFY;
+  }
+  return REASON_CLASS_UNKNOWN;
+}
+
+function buildReasonClassHistogram(reasons = []) {
+  const histogram = {};
+  for (const reason of reasons) {
+    const reasonClass = classifyReason(reason);
+    histogram[reasonClass] = (histogram[reasonClass] || ZERO) + ONE;
+  }
+  return histogram;
+}
+
+function mergeReasonClassHistograms(target = {}, source = {}) {
+  const merged = {...target};
+  for (const [reasonClass, count] of Object.entries(source)) {
+    merged[reasonClass] = (merged[reasonClass] || ZERO) + Number(count || ZERO);
+  }
+  return merged;
+}
+
+function buildStartupDecisionRecord(phaseDecisions = []) {
+  let reasonClassHistogram = {};
+  for (const phaseDecision of phaseDecisions) {
+    reasonClassHistogram = mergeReasonClassHistograms(
+      reasonClassHistogram,
+      phaseDecision.reasonClassHistogram || {},
+    );
+  }
+  return {
+    schemaVersion: STARTUP_DECISION_SCHEMA_VERSION,
+    phaseCount: phaseDecisions.length,
+    phaseDecisions,
+    reasonClassHistogram,
+  };
+}
+
 function buildPhaseReasonSummary(phaseResults) {
   const warningHistogram = {};
   const errorHistogram = {};
@@ -1406,14 +2131,12 @@ function resolvePhasePolicy(phase, benchmarkConfig) {
       timeoutMs: benchmarkConfig.quiescentTimeoutMs,
       pollIntervalMs: benchmarkConfig.quiescentPollIntervalMs,
       stableWindowMs: benchmarkConfig.quiescentStableWindowMs,
-      allowSubsetFallback: true,
     };
   case SCENARIO_PHASE.POST_LOAD_DRAIN:
     return {
       timeoutMs: benchmarkConfig.postLoadDrainTimeoutMs,
       pollIntervalMs: benchmarkConfig.postLoadDrainPollIntervalMs,
       stableWindowMs: benchmarkConfig.postLoadDrainStableWindowMs,
-      allowSubsetFallback: true,
       insufficientEvidencePolicy: benchmarkConfig.insufficientEvidencePolicy,
     };
   case SCENARIO_PHASE.LOAD:
@@ -1454,14 +2177,19 @@ function collectPhaseReasons(phaseResult) {
 }
 
 function buildPhaseDecisions(phaseResults, benchmarkConfig) {
-  return phaseResults.map((phaseResult) => ({
-    phase: phaseResult.phase,
-    status: phaseResult.status,
-    policy: resolvePhasePolicy(phaseResult.phase, benchmarkConfig),
-    reasons: collectPhaseReasons(phaseResult),
-    includedNodeIds: phaseResult.artifacts?.includedNodeIds || [],
-    excludedNodeIds: phaseResult.artifacts?.excludedNodeIds || [],
-  }));
+  return phaseResults.map((phaseResult) => {
+    const reasons = collectPhaseReasons(phaseResult);
+    return {
+      phase: phaseResult.phase,
+      phaseClass: resolvePhaseClass(phaseResult.phase),
+      status: phaseResult.status,
+      policy: resolvePhasePolicy(phaseResult.phase, benchmarkConfig),
+      reasons,
+      reasonClassHistogram: buildReasonClassHistogram(reasons),
+      includedNodeIds: phaseResult.artifacts?.includedNodeIds || [],
+      excludedNodeIds: phaseResult.artifacts?.excludedNodeIds || [],
+    };
+  });
 }
 
 function selectVerificationNodes(effectiveNodes, postLoadDrain) {
@@ -1509,6 +2237,7 @@ async function run(cluster) {
   const state = {
     convergence: null,
     sutLoadNodes: [],
+    sutLoadDiscovery: null,
     effectiveSutLoadNodes: [],
     excludedSutLoadNodeIds: [],
     quiescenceResult: null,
@@ -1537,6 +2266,8 @@ async function run(cluster) {
       loadMetrics: {
         total: ONE,
         success: ONE,
+        failed: ZERO,
+        errors: ZERO,
         opsPerSec: ONE,
       },
       policy: {
@@ -1563,10 +2294,27 @@ async function run(cluster) {
           pollIntervalMs: benchmarkConfig.readyPollIntervalMs,
         },
       );
-      const sutLoadNodes = await resolveSutLoadNodes(nodeClient, nodes, seedNode);
+      const sutLoadResolution = await resolveSutLoadNodes(
+        nodeClient,
+        nodes,
+        seedNode,
+        {
+          timeoutMs: benchmarkConfig.readyTimeoutMs,
+          pollIntervalMs: benchmarkConfig.readyPollIntervalMs,
+          tableName: benchmarkTableName,
+        },
+      );
+      const sutLoadNodes = sutLoadResolution.nodes;
+      state.sutLoadDiscovery = sutLoadResolution.diagnostics;
+      const discoveryDiagnostics = formatSutLoadDiscoveryDiagnostics(
+        state.sutLoadDiscovery,
+      );
       assert.ok(
         sutLoadNodes.length > ZERO,
-        'No queryable system-under-test nodes available for benchmark load',
+        'No discovered reachable load service nodes available for benchmark load' +
+          (discoveryDiagnostics.length > ZERO ?
+            ' (' + discoveryDiagnostics + ')' :
+            ''),
       );
       state.sutLoadNodes = sutLoadNodes;
       return {
@@ -1574,6 +2322,7 @@ async function run(cluster) {
         artifacts: {
           benchmarkTableName,
           sutLoadNodeIds: sutLoadNodes.map((node) => node.id),
+          sutLoadDiscovery: state.sutLoadDiscovery,
         },
       };
     },
@@ -1595,10 +2344,12 @@ async function run(cluster) {
         nodeClient,
         loadNodes: state.sutLoadNodes,
         seedNode,
+        snapshotNodes: state.sutLoadNodes,
         tableName: benchmarkTableName,
         timeoutMs: benchmarkConfig.quiescentTimeoutMs,
         pollIntervalMs: benchmarkConfig.quiescentPollIntervalMs,
         stableWindowMs: benchmarkConfig.quiescentStableWindowMs,
+        noProgressTimeoutMs: benchmarkConfig.quiescentNoProgressTimeoutMs,
       });
       state.quiescenceResult = quiescenceResult;
       state.effectiveSutLoadNodes = quiescenceResult.readyLoadNodes;
@@ -1619,6 +2370,7 @@ async function run(cluster) {
           stableElapsedMs: quiescenceResult.stableElapsedMs,
           includedNodeIds: quiescenceResult.readyLoadNodes.map((node) => node.id),
           excludedNodeIds: quiescenceResult.excludedLoadNodeIds,
+          partitionGroupInFlight: quiescenceResult.partitionGroupInFlight || {},
           reasonHistogram: quiescenceResult.reasonHistogram || {},
         },
       };
@@ -1678,10 +2430,13 @@ async function run(cluster) {
           nodeClient,
           loadNodes: state.effectiveSutLoadNodes,
           seedNode,
+          snapshotNodes: state.effectiveSutLoadNodes,
           tableName: benchmarkTableName,
           timeoutMs: benchmarkConfig.postLoadDrainTimeoutMs,
           pollIntervalMs: benchmarkConfig.postLoadDrainPollIntervalMs,
           stableWindowMs: benchmarkConfig.postLoadDrainStableWindowMs,
+          noProgressTimeoutMs:
+            benchmarkConfig.postLoadDrainNoProgressTimeoutMs,
         });
         state.postLoadDrain = {
           status: POST_LOAD_DRAIN_STATUS_OK,
@@ -1690,6 +2445,8 @@ async function run(cluster) {
           stableElapsedMs: postLoadDrainResult.stableElapsedMs,
           error: null,
           reasonHistogram: postLoadDrainResult.reasonHistogram || {},
+          partitionGroupInFlight:
+            postLoadDrainResult.partitionGroupInFlight || {},
           includedNodeIds:
             postLoadDrainResult.includedNodeIds ||
             postLoadDrainResult.readyLoadNodes.map((node) => node.id),
@@ -1710,6 +2467,7 @@ async function run(cluster) {
           stableElapsedMs: Number(gateResult.stableElapsedMs || ZERO),
           error: String(error?.message || error),
           reasonHistogram: gateResult.reasonHistogram || {},
+          partitionGroupInFlight: gateResult.partitionGroupInFlight || {},
           includedNodeIds: gateResult.includedNodeIds || [],
           excludedNodeIds: gateResult.excludedNodeIds || [],
         };
@@ -1864,6 +2622,13 @@ async function run(cluster) {
   }
 
   const comparison = buildComparison(state.loadMetrics, state.baselineMetrics);
+  const phaseDecisions = buildPhaseDecisions(
+    orchestrationResult.phases,
+    benchmarkConfig,
+  );
+  const startupDecisionRecord = buildStartupDecisionRecord(phaseDecisions);
+  const sutLoadDiscoveryExcludedReadinessByNodeId =
+    aggregateDiscoveryReadinessExclusionsByNodeId(state.sutLoadDiscovery);
 
   return {
     loadMetrics: state.loadMetrics,
@@ -1887,18 +2652,26 @@ async function run(cluster) {
         quiescentTimeoutMs: benchmarkConfig.quiescentTimeoutMs,
         quiescentPollIntervalMs: benchmarkConfig.quiescentPollIntervalMs,
         quiescentStableWindowMs: benchmarkConfig.quiescentStableWindowMs,
+        quiescentNoProgressTimeoutMs:
+          benchmarkConfig.quiescentNoProgressTimeoutMs,
         consistencyAssertMaxAttempts:
           benchmarkConfig.consistencyAssertMaxAttempts,
         consistencyAssertRetryDelayMs:
           benchmarkConfig.consistencyAssertRetryDelayMs,
         consistencyAssertionAttempts: state.consistencyResult.attempts,
+        sutLoadDiscovery: state.sutLoadDiscovery,
+        sutLoadDiscoveryExcludedReadinessByNodeId,
         insufficientEvidencePolicy: benchmarkConfig.insufficientEvidencePolicy,
         postLoadDrainStatus: state.postLoadDrain.status,
         postLoadDrainMode: state.postLoadDrain.mode,
         postLoadDrainAttempts: state.postLoadDrain.attempts,
         postLoadDrainStableElapsedMs: state.postLoadDrain.stableElapsedMs,
+        postLoadDrainNoProgressTimeoutMs:
+          benchmarkConfig.postLoadDrainNoProgressTimeoutMs,
         postLoadDrainError: state.postLoadDrain.error,
         postLoadDrainReasonHistogram: state.postLoadDrain.reasonHistogram,
+        postLoadDrainPartitionGroupInFlight:
+          state.postLoadDrain.partitionGroupInFlight,
         postLoadDrainIncludedNodeIds: state.postLoadDrain.includedNodeIds,
         postLoadDrainExcludedNodeIds: state.postLoadDrain.excludedNodeIds,
         operations: BENCHMARK_WORKLOAD_OPERATIONS,
@@ -1925,6 +2698,7 @@ async function run(cluster) {
           success: state.loadMetrics.success,
           failed: state.loadMetrics.failed,
           errors: state.loadMetrics.errors,
+          attemptErrors: Number(state.loadMetrics.attemptErrors || ZERO),
           loadTargetOpsPerSec: benchmarkConfig.loadOpsPerSec,
           loadMaxInFlight: benchmarkConfig.loadMaxInFlight,
         },
@@ -1949,10 +2723,8 @@ async function run(cluster) {
       phaseTimeline: mapPhaseTimeline(orchestrationResult.phases),
       phaseArtifacts: mapPhaseArtifacts(orchestrationResult.phases),
       phaseReasonSummary: buildPhaseReasonSummary(orchestrationResult.phases),
-      phaseDecisions: buildPhaseDecisions(
-        orchestrationResult.phases,
-        benchmarkConfig,
-      ),
+      phaseDecisions,
+      startupDecisionRecord,
       phaseEvents,
       channelMetrics: nodeClient.getMetricsSnapshot(),
     },

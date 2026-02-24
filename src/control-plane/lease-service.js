@@ -47,6 +47,7 @@ class LeaseService extends EventEmitter {
       LEASE_DEFAULT.SWEEP_INTERVAL_MS;
 
     this.sweepTimer = null;
+    this.sweepInFlight = false;
     this.state = LEASE_STATE.CREATED;
 
     const loggingService = LoggingService.getInstance();
@@ -89,10 +90,17 @@ class LeaseService extends EventEmitter {
     this.state = LEASE_STATE.RUNNING;
 
     this.sweepTimer = setInterval(() => {
+      if (this.state !== LEASE_STATE.RUNNING || this.sweepInFlight) {
+        return;
+      }
+      this.sweepInFlight = true;
+
       this.sweepExpiredLeases().catch((error) => {
         this.logger.error(LEASE_LOG_MSG.SWEEP_FAILED, {
           error: error.message,
         });
+      }).finally(() => {
+        this.sweepInFlight = false;
       });
     }, this.sweepIntervalMs);
     this.sweepTimer.unref();
@@ -109,6 +117,7 @@ class LeaseService extends EventEmitter {
       clearInterval(this.sweepTimer);
       this.sweepTimer = null;
     }
+    this.sweepInFlight = false;
     this.state = LEASE_STATE.STOPPED;
     this.logger.info(LEASE_LOG_MSG.STOPPED, {nodeId: this.nodeId});
   }

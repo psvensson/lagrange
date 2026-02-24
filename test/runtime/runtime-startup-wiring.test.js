@@ -1,8 +1,10 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createRuntimeStartupWiring} from
   '../../src/runtime/runtime-startup-wiring.js';
 import {RUNTIME_KIND} from '../../src/constants/runtime.js';
+import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 
@@ -31,11 +33,14 @@ describe('runtime startup wiring', () => {
 });
 
 describe('seed and joining startup integration', () => {
+  const seedRestPort = ENTRYPOINT_DEFAULT.REST_API_PORT;
+  const wsOffset = ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
+
   it('seed startup service initializes runtime ownership wiring', () => {
     const bootstrapService = new BootstrapService({
       nodeId: 'seed-node',
-      nodeAddress: '127.0.0.1:8080',
-      wsPort: 9080,
+      nodeAddress: `127.0.0.1:${seedRestPort}`,
+      wsPort: seedRestPort + wsOffset,
     });
 
     assert.ok(bootstrapService.runtimeDriverRegistry);
@@ -44,15 +49,32 @@ describe('seed and joining startup integration', () => {
   });
 
   it('joining startup service initializes runtime ownership wiring', () => {
+    const joiningRestPort = seedRestPort + 1;
     const joiningService = new NodeJoiningService({
       nodeId: 'join-node',
-      nodeAddress: '127.0.0.1:8081',
-      seedNodeAddress: 'http://127.0.0.1:8080',
-      wsPort: 9081,
+      nodeAddress: `127.0.0.1:${joiningRestPort}`,
+      seedNodeAddress: `http://127.0.0.1:${seedRestPort}`,
+      wsPort: joiningRestPort + wsOffset,
     });
 
     assert.ok(joiningService.runtimeDriverRegistry);
     assert.ok(joiningService.serviceRuntimeLifecycle);
     assert.equal(joiningService.runtimeDriverRegistry.frozen, true);
+  });
+
+  it('entrypoint initializes bootstrap readiness API for seed and joining nodes', () => {
+    const source = readFileSync('src/index.js', 'utf8');
+    const bootstrapApiCreates = source.match(/new BootstrapAPI\(/g) || [];
+    const bootstrapApiInitializations =
+      source.match(/await bootstrapAPI\.initialize\(\)/g) || [];
+    const bootstrapApiSqlEngineHandoffs =
+      source.match(/bootstrapAPI\.setSqlQueryEngine\(sqlQueryEngine\)/g) || [];
+    const bootstrapApiShutdowns =
+      source.match(/await bootstrapAPI\.shutdown\(\)/g) || [];
+
+    assert.equal(bootstrapApiCreates.length, 2);
+    assert.equal(bootstrapApiInitializations.length, 2);
+    assert.equal(bootstrapApiSqlEngineHandoffs.length, 2);
+    assert.ok(bootstrapApiShutdowns.length >= 2);
   });
 });

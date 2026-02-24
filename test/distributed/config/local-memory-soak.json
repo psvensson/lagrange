@@ -25,6 +25,19 @@
     "defaultOpsPerSec": 120,
     "defaultDuration": "1800s"
   },
+  "benchmark": {
+    "controlQueryTimeoutMs": 15000,
+    "readyTimeoutMs": 120000,
+    "readyPollIntervalMs": 1000,
+    "quiescentTimeoutMs": 300000,
+    "quiescentPollIntervalMs": 1000,
+    "quiescentStableWindowMs": 3000,
+    "quiescentNoProgressTimeoutMs": 90000,
+    "postLoadDrainTimeoutMs": 300000,
+    "postLoadDrainPollIntervalMs": 1000,
+    "postLoadDrainStableWindowMs": 3000,
+    "postLoadDrainNoProgressTimeoutMs": 90000
+  },
   "memoryLeak": {
     "enabled": true,
     "failOnDetection": true,

@@ -50,11 +50,15 @@ function createPartitionStub(tableName, subscriberCount) {
 /**
  * Create a minimal message group service stub.
  * @param {boolean} isLeader
+ * @param {string|null} leaderId
  */
-function createMessageGroupStub(isLeader) {
+function createMessageGroupStub(isLeader, leaderId = null) {
   return {
     isLeaderReplica() {
       return isLeader;
+    },
+    getLeaderId() {
+      return leaderId;
     },
   };
 }
@@ -104,13 +108,13 @@ test('CDCPipelineReadinessGate — no conditions met returns all unmet',
     t.equal(result.ready, false);
     t.equal(result.unmetConditions.length, 3);
     t.ok(result.unmetConditions.includes(
-      CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE
+      CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE,
     ));
     t.ok(result.unmetConditions.includes(
-      CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER
+      CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER,
     ));
     t.ok(result.unmetConditions.includes(
-      CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN
+      CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN,
     ));
     t.end();
   });
@@ -139,13 +143,13 @@ test('CDCPipelineReadinessGate — missing subscription for one table',
 
     t.equal(result.ready, false);
     t.ok(result.unmetConditions.includes(
-      CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE
+      CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE,
     ));
     t.notOk(result.unmetConditions.includes(
-      CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER
+      CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER,
     ));
     t.notOk(result.unmetConditions.includes(
-      CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN
+      CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN,
     ));
     t.end();
   });
@@ -172,10 +176,67 @@ test('CDCPipelineReadinessGate — no message group leader', (t) => {
 
   t.equal(result.ready, false);
   t.ok(result.unmetConditions.includes(
-    CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER
+    CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER,
   ));
   t.end();
 });
+
+test('CDCPipelineReadinessGate — optional propagation leader check can be disabled',
+  (t) => {
+    const cache = createCacheStub();
+    const gate = new CDCPipelineReadinessGate({
+      systemTableCache: cache,
+      cdcPropagatedTables: ['nodes'],
+    });
+
+    cache.fire('nodes', 'INSERT', {node_id: 'n1'});
+
+    const partitions = new Map();
+    partitions.set('p1', createPartitionStub('nodes', 1));
+
+    const messageGroups = new Map();
+    messageGroups.set('mg1', createMessageGroupStub(false));
+
+    const result = gate.evaluate({
+      partitionServices: partitions,
+      messageGroupServices: messageGroups,
+      requirePropagationLeader: false,
+    });
+
+    t.equal(result.ready, true);
+    t.notOk(result.unmetConditions.includes(
+      CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER,
+    ));
+    t.end();
+  });
+
+test('CDCPipelineReadinessGate — follower with known leader passes gate',
+  (t) => {
+    const cache = createCacheStub();
+    const gate = new CDCPipelineReadinessGate({
+      systemTableCache: cache,
+      cdcPropagatedTables: ['nodes'],
+    });
+
+    cache.fire('nodes', 'INSERT', {node_id: 'n1'});
+
+    const partitions = new Map();
+    partitions.set('p1', createPartitionStub('nodes', 1));
+
+    const messageGroups = new Map();
+    messageGroups.set('mg1', createMessageGroupStub(false, 'mg1-r2'));
+
+    const result = gate.evaluate({
+      partitionServices: partitions,
+      messageGroupServices: messageGroups,
+    });
+
+    t.equal(result.ready, true);
+    t.notOk(result.unmetConditions.includes(
+      CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER,
+    ));
+    t.end();
+  });
 
 test('CDCPipelineReadinessGate — pipeline not proven without cache event',
   (t) => {
@@ -200,7 +261,7 @@ test('CDCPipelineReadinessGate — pipeline not proven without cache event',
 
     t.equal(result.ready, false);
     t.ok(result.unmetConditions.includes(
-      CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN
+      CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN,
     ));
     t.end();
   });
@@ -243,7 +304,7 @@ test('CDCPipelineReadinessGate — partition with zero subscribers fails',
 
     t.equal(result.ready, false);
     t.ok(result.unmetConditions.includes(
-      CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE
+      CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE,
     ));
     t.end();
   });
@@ -359,13 +420,13 @@ test('CDCPipelineReadinessGate — timeout error includes unmet conditions',
       // Should include subscriptionsActive and pipelineProven but not
       // propagationLeader
       t.ok(err.unmetConditions.includes(
-        CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE
+        CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE,
       ));
       t.ok(err.unmetConditions.includes(
-        CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN
+        CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN,
       ));
       t.notOk(err.unmetConditions.includes(
-        CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER
+        CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER,
       ));
     }
     t.end();

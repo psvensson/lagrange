@@ -199,6 +199,8 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
   REPLICA_HANDLER_REGISTER_FAILED: 'Failed to register partition with replica handler',
   REPLICA_HANDLER_REGISTERED: 'Registered partitions with replica handler',
   CONTROL_PLANE_READY: 'Control plane service initialized',
+  CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE:
+    'Control plane background writers activated',
   LATENCY_TOPOLOGY_READY: 'Latency topology services initialized',
   LATENCY_TOPOLOGY_STARTED: 'Latency topology lifecycle started',
   CONTROL_PLANE_REGISTER_FAILED: 'Failed to register seed node via control plane',

@@ -1,6 +1,10 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
 import {assertConsistency} from '../assertions.js';
+import {PORTS} from '../constants.js';
+
+const TEST_WS_ADDRESS = `ws://node-2:${PORTS.WS_TRANSPORT}`;
+const TEST_LEADER_ADDRESS = `ws://node-1:${PORTS.WS_TRANSPORT}`;
 
 const NODE_ROWS = Object.freeze([
   {node_id: 'node-1'},
@@ -25,14 +29,14 @@ function buildServiceRows(leaderAddress) {
       service_type: 'partition',
       status: 'active',
       raft_role: 'follower',
-      address: 'ws://node-2:9080',
+      address: TEST_WS_ADDRESS,
       partition_id: 'p1',
       node_id: 'node-2',
     },
   ];
 }
 
-function buildQueryableNode(nodeId, leaderAddress = 'ws://node-1:9080') {
+function buildQueryableNode(nodeId, leaderAddress = TEST_LEADER_ADDRESS) {
   return {
     id: nodeId,
     async isReachable() {
@@ -99,8 +103,8 @@ test('assertConsistency fails when fewer than two nodes are queryable', async ()
 });
 
 test('assertConsistency still fails on real state disagreement', async () => {
-  const nodeA = buildQueryableNode('node-a', 'ws://node-1:9080');
-  const nodeB = buildQueryableNode('node-b', 'ws://node-9:9080');
+  const nodeA = buildQueryableNode('node-a', `ws://node-1:${PORTS.WS_TRANSPORT}`);
+  const nodeB = buildQueryableNode('node-b', `ws://node-9:${PORTS.WS_TRANSPORT}`);
 
   await assert.rejects(
     assertConsistency([nodeA, nodeB]),

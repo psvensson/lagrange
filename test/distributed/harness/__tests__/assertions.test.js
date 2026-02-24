@@ -13,13 +13,132 @@ import fc from 'fast-check';
 import {waitForConvergence} from '../assertions.js';
 import {CONVERGENCE_DEFAULTS} from '../constants.js';
 
+const CONTROL_SNAPSHOT_SCHEMA_VERSION = 1;
+const TERMINAL_OPERATION_STATUSES = new Set(['active', 'removed', 'failed']);
+
+function normalizeReplicaRowsByPartition(rows) {
+  const membership = {};
+  if (!Array.isArray(rows)) {
+    return membership;
+  }
+  for (const row of rows) {
+    if (!row || row.service_type !== 'partition' || !row.partition_id) {
+      continue;
+    }
+    const partitionId = String(row.partition_id);
+    if (!membership[partitionId]) {
+      membership[partitionId] = {
+        voterCount: 0,
+        leader: null,
+        replicas: [],
+      };
+    }
+    const raftRole = String(row.raft_role || '').toLowerCase();
+    const status = String(row.status || '').toLowerCase();
+    const address = String(row.address || '').trim();
+    membership[partitionId].replicas.push({
+      nodeId: row.node_id ? String(row.node_id) : null,
+      address: address || null,
+      status: row.status ? String(row.status) : null,
+      raftRole: row.raft_role ? String(row.raft_role) : null,
+    });
+    if (address.length > 0 &&
+      status === 'active' &&
+      raftRole.length > 0 &&
+      raftRole !== 'learner') {
+      membership[partitionId].voterCount += 1;
+    }
+    if (raftRole === 'leader' && address.length > 0) {
+      membership[partitionId].leader = address;
+    }
+  }
+
+  for (const details of Object.values(membership)) {
+    details.replicas.sort((left, right) => {
+      const leftKey = String(left.nodeId || left.address || '');
+      const rightKey = String(right.nodeId || right.address || '');
+      return leftKey.localeCompare(rightKey);
+    });
+  }
+  return membership;
+}
+
+function summarizeOperationStatuses(rows) {
+  const statusHistogram = {};
+  let inFlightCount = 0;
+  if (!Array.isArray(rows)) {
+    return {
+      inFlightCount,
+      statusHistogram,
+    };
+  }
+  for (const row of rows) {
+    const status = String(row?.status || row?.state || 'unknown').toLowerCase();
+    statusHistogram[status] = (statusHistogram[status] || 0) + 1;
+    if (!TERMINAL_OPERATION_STATUSES.has(status)) {
+      inFlightCount += 1;
+    }
+  }
+  return {
+    inFlightCount,
+    statusHistogram,
+  };
+}
+
+function buildControlSnapshotRecord(options = {}) {
+  const servicesRows = Array.isArray(options.servicesRows) ? options.servicesRows : [];
+  const operationRows = Array.isArray(options.operationRows) ?
+    options.operationRows :
+    [];
+  const explicitPartitionIds = Array.isArray(options.partitionIds) ?
+    options.partitionIds.map((partitionId) => String(partitionId)) :
+    [];
+  const partitionMembership = normalizeReplicaRowsByPartition(servicesRows);
+  const discoveredPartitionIds = Object.keys(partitionMembership);
+  const partitionIds = explicitPartitionIds.length > 0 ?
+    explicitPartitionIds :
+    discoveredPartitionIds;
+  const leaders = {};
+  const voterCounts = {};
+
+  for (const partitionId of partitionIds) {
+    const details = partitionMembership[partitionId];
+    if (details?.leader) {
+      leaders[partitionId] = details.leader;
+    }
+    if (Number.isInteger(details?.voterCount)) {
+      voterCounts[partitionId] = details.voterCount;
+    }
+    if (!partitionMembership[partitionId]) {
+      partitionMembership[partitionId] = {
+        voterCount: 0,
+        leader: null,
+        replicas: [],
+      };
+    }
+  }
+
+  const operationSummary = summarizeOperationStatuses(operationRows);
+  return {
+    schemaVersion: CONTROL_SNAPSHOT_SCHEMA_VERSION,
+    nodeId: String(options.nodeId || 'mock-node'),
+    capturedAt: Number.isFinite(options.capturedAt) ? options.capturedAt : Date.now(),
+    nodes: Array.isArray(options.nodes) ? options.nodes : [String(options.nodeId || 'mock-node')],
+    partitions: partitionIds,
+    leaders,
+    voterCounts,
+    partitionMembership,
+    replicaOperations: {
+      inFlightCount: operationSummary.inFlightCount,
+      statusHistogram: operationSummary.statusHistogram,
+      rows: operationRows,
+    },
+  };
+}
+
 /**
- * Build a mock node whose query() returns a converged state
- * for the given partition IDs and targetVoterCount.
- *
- * Each partition gets exactly targetVoterCount voter replicas
- * with one leader, so convergence conditions are immediately
- * satisfied.
+ * Build a mock node whose control snapshot is converged for the
+ * given partition IDs and targetVoterCount.
  */
 function buildConvergedMockNode(partitionIds, targetVoterCount) {
   const rows = [];
@@ -34,22 +153,31 @@ function buildConvergedMockNode(partitionIds, targetVoterCount) {
       });
     }
   }
+  const snapshot = buildControlSnapshotRecord({
+    nodeId: 'mock-node-1',
+    partitionIds,
+    servicesRows: rows,
+  });
   return {
     id: 'mock-node-1',
     isReachable: async () => true,
-    query: async () => ({rows}),
+    getControlSnapshot: async () => ({rows: [snapshot]}),
   };
 }
 
 /**
- * Build a mock node that never converges — returns no
- * partitions at all, so waitForConvergence will time out.
+ * Build a mock node that never converges.
  */
 function buildNonConvergingMockNode() {
+  const snapshot = buildControlSnapshotRecord({
+    nodeId: 'mock-node-nc',
+    partitionIds: [],
+    servicesRows: [],
+  });
   return {
     id: 'mock-node-nc',
     isReachable: async () => true,
-    query: async () => ({rows: []}),
+    getControlSnapshot: async () => ({rows: [snapshot]}),
   };
 }
 
@@ -78,29 +206,25 @@ function buildSequencedConvergenceNode(options = {}) {
   return {
     id: options.id || 'mock-sequence-node',
     isReachable: async () => true,
-    query: async (sql) => {
-      if (sql.includes('FROM partitions')) {
-        return {
-          rows: partitionIds.map((partitionId) => ({partition_id: partitionId})),
-        };
-      }
-      if (sql.includes('FROM services')) {
-        const boundedIndex = Math.min(
-          snapshotIndex,
-          Math.max(snapshots.length - 1, 0),
-        );
-        snapshotIndex += 1;
-        return {rows: snapshots[boundedIndex] || []};
-      }
-      if (sql.includes('FROM replica_operations')) {
-        const boundedIndex = Math.min(
-          operationSnapshotIndex,
-          Math.max(operationSnapshots.length - 1, 0),
-        );
-        operationSnapshotIndex += 1;
-        return {rows: operationSnapshots[boundedIndex] || []};
-      }
-      return {rows: []};
+    getControlSnapshot: async () => {
+      const serviceSnapshotIndex = Math.min(
+        snapshotIndex,
+        Math.max(snapshots.length - 1, 0),
+      );
+      const operationSnapshotBoundedIndex = Math.min(
+        operationSnapshotIndex,
+        Math.max(operationSnapshots.length - 1, 0),
+      );
+      snapshotIndex += 1;
+      operationSnapshotIndex += 1;
+
+      const snapshot = buildControlSnapshotRecord({
+        nodeId: options.id || 'mock-sequence-node',
+        partitionIds,
+        servicesRows: snapshots[serviceSnapshotIndex] || [],
+        operationRows: operationSnapshots[operationSnapshotBoundedIndex] || [],
+      });
+      return {rows: [snapshot]};
     },
   };
 }
@@ -397,10 +521,15 @@ test('countVotersPerPartition — skips rows without partition_id', async () => 
 // -------------------------------------------------------
 
 test('waitForConvergence — timeout throws descriptive error with diagnostics', async () => {
+  const snapshot = buildControlSnapshotRecord({
+    nodeId: 'mock-timeout-node',
+    partitionIds: [],
+    servicesRows: [],
+  });
   const node = {
     id: 'mock-timeout-node',
     isReachable: async () => true,
-    query: async () => ({rows: []}),
+    getControlSnapshot: async () => ({rows: [snapshot]}),
   };
 
   try {
@@ -443,15 +572,24 @@ test('waitForConvergence — timeout throws descriptive error with diagnostics',
 });
 
 test('waitForConvergence — timeout error includes voter counts from partial state', async () => {
+  const partialRows = [
+    {
+      service_type: 'partition',
+      status: 'ACTIVE',
+      raft_role: 'leader',
+      address: 'a',
+      partition_id: 'p1',
+    },
+  ];
+  const snapshot = buildControlSnapshotRecord({
+    nodeId: 'mock-partial-node',
+    partitionIds: ['p1'],
+    servicesRows: partialRows,
+  });
   const node = {
     id: 'mock-partial-node',
     isReachable: async () => true,
-    query: async () => ({
-      rows: [
-        {service_type: 'partition', status: 'ACTIVE',
-          raft_role: 'leader', address: 'a', partition_id: 'p1'},
-      ],
-    }),
+    getControlSnapshot: async () => ({rows: [snapshot]}),
   };
 
   try {
@@ -472,71 +610,70 @@ test('waitForConvergence — timeout error includes voter counts from partial st
 
 test('waitForConvergence — timeout diagnostics include membership and operation history',
   async () => {
+    const operationRows = [
+      {
+        operation_id: 'op-1',
+        partition_id: 'p1',
+        operation: 'add_replica',
+        status: 'pending',
+        from_node_id: 'seed',
+        to_node_id: 'joiner-1',
+        updated_at: '2026-02-17T00:00:00.000Z',
+      },
+      {
+        operation_id: 'op-2',
+        partition_id: 'p1',
+        operation: 'promote_learner',
+        status: 'running',
+        from_node_id: 'seed',
+        to_node_id: 'joiner-2',
+        updated_at: '2026-02-17T00:00:01.000Z',
+      },
+    ];
+    const membershipRows = [
+      {
+        service_type: 'partition',
+        status: 'ACTIVE',
+        raft_role: 'leader',
+        address: 'seed/p1/r1',
+        node_id: 'seed',
+        partition_id: 'p1',
+      },
+      {
+        service_type: 'partition',
+        status: 'ACTIVE',
+        raft_role: 'follower',
+        address: 'joiner-1/p1/r2',
+        node_id: 'joiner-1',
+        partition_id: 'p1',
+      },
+      {
+        service_type: 'partition',
+        status: 'ACTIVE',
+        raft_role: 'follower',
+        address: 'joiner-2/p1/r3',
+        node_id: 'joiner-2',
+        partition_id: 'p1',
+      },
+      {
+        service_type: 'partition',
+        status: 'ACTIVE',
+        raft_role: 'follower',
+        address: 'joiner-3/p1/r4',
+        node_id: 'joiner-3',
+        partition_id: 'p1',
+      },
+    ];
+    const snapshot = buildControlSnapshotRecord({
+      nodeId: 'mock-membership-node',
+      partitionIds: ['p1'],
+      servicesRows: membershipRows,
+      operationRows,
+    });
     const node = {
       id: 'mock-membership-node',
       isReachable: async () => true,
-      query: async (sql) => {
-        if (sql.includes('FROM replica_operations')) {
-          return {
-            rows: [
-              {
-                operation_id: 'op-1',
-                partition_id: 'p1',
-                operation: 'add_replica',
-                status: 'pending',
-                from_node_id: 'seed',
-                to_node_id: 'joiner-1',
-                updated_at: '2026-02-17T00:00:00.000Z',
-              },
-              {
-                operation_id: 'op-2',
-                partition_id: 'p1',
-                operation: 'promote_learner',
-                status: 'running',
-                from_node_id: 'seed',
-                to_node_id: 'joiner-2',
-                updated_at: '2026-02-17T00:00:01.000Z',
-              },
-            ],
-          };
-        }
-        return {
-          rows: [
-            {
-              service_type: 'partition',
-              status: 'ACTIVE',
-              raft_role: 'leader',
-              address: 'seed/p1/r1',
-              node_id: 'seed',
-              partition_id: 'p1',
-            },
-            {
-              service_type: 'partition',
-              status: 'ACTIVE',
-              raft_role: 'follower',
-              address: 'joiner-1/p1/r2',
-              node_id: 'joiner-1',
-              partition_id: 'p1',
-            },
-            {
-              service_type: 'partition',
-              status: 'ACTIVE',
-              raft_role: 'follower',
-              address: 'joiner-2/p1/r3',
-              node_id: 'joiner-2',
-              partition_id: 'p1',
-            },
-            {
-              service_type: 'partition',
-              status: 'ACTIVE',
-              raft_role: 'follower',
-              address: 'joiner-3/p1/r4',
-              node_id: 'joiner-3',
-              partition_id: 'p1',
-            },
-          ],
-        };
-      },
+      getControlSnapshot: async () => ({rows: [snapshot]}),
     };
 
     try {
@@ -597,21 +734,16 @@ test('waitForConvergence — does not double-count replicated services snapshots
         partition_id: 'p1',
       },
     ];
-    const partitionsRows = [{partition_id: 'p1'}];
-
     function createSnapshotNode(nodeId) {
+      const snapshot = buildControlSnapshotRecord({
+        nodeId,
+        partitionIds: ['p1'],
+        servicesRows,
+      });
       return {
         id: nodeId,
         isReachable: async () => true,
-        query: async (sql) => {
-          if (sql.includes('FROM services')) {
-            return {rows: servicesRows};
-          }
-          if (sql.includes('FROM partitions')) {
-            return {rows: partitionsRows};
-          }
-          return {rows: []};
-        },
+        getControlSnapshot: async () => ({rows: [snapshot]}),
       };
     }
 
@@ -628,46 +760,79 @@ test('waitForConvergence — does not double-count replicated services snapshots
     assert.ok(result.settledAfterMs >= 0);
   });
 
+test('waitForConvergence — uses control snapshot path only',
+  async () => {
+    const node = {
+      id: 'mock-control-snapshot-node',
+      isReachable: async () => true,
+      query: async () => {
+        throw new Error('SQL fanout should not run');
+      },
+      getControlSnapshot: async () => ({
+        rows: [{
+          schemaVersion: 1,
+          nodeId: 'mock-control-snapshot-node',
+          capturedAt: Date.now(),
+          nodes: ['mock-control-snapshot-node'],
+          partitions: ['p1'],
+          leaders: {
+            p1: 'mock-control-snapshot-node/p1/r0',
+          },
+          voterCounts: {
+            p1: 3,
+          },
+          replicaOperations: {
+            inFlightCount: 0,
+            statusHistogram: {},
+          },
+        }],
+      }),
+    };
+
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 80,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 80,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+    });
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+  });
+
 test('waitForConvergence — requires leader coverage for all partitions',
   async () => {
+    const snapshot = buildControlSnapshotRecord({
+      nodeId: 'mock-partitions-missing-leader',
+      partitionIds: ['p1', 'p2'],
+      servicesRows: [
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'leader',
+          address: 'node-a/p1/r0',
+          partition_id: 'p1',
+        },
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'follower',
+          address: 'node-b/p1/r1',
+          partition_id: 'p1',
+        },
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'follower',
+          address: 'node-c/p1/r2',
+          partition_id: 'p1',
+        },
+      ],
+    });
     const node = {
       id: 'mock-partitions-missing-leader',
       isReachable: async () => true,
-      query: async (sql) => {
-        if (sql.includes('FROM partitions')) {
-          return {
-            rows: [{partition_id: 'p1'}, {partition_id: 'p2'}],
-          };
-        }
-        if (sql.includes('FROM services')) {
-          return {
-            rows: [
-              {
-                service_type: 'partition',
-                status: 'ACTIVE',
-                raft_role: 'leader',
-                address: 'node-a/p1/r0',
-                partition_id: 'p1',
-              },
-              {
-                service_type: 'partition',
-                status: 'ACTIVE',
-                raft_role: 'follower',
-                address: 'node-b/p1/r1',
-                partition_id: 'p1',
-              },
-              {
-                service_type: 'partition',
-                status: 'ACTIVE',
-                raft_role: 'follower',
-                address: 'node-c/p1/r2',
-                partition_id: 'p1',
-              },
-            ],
-          };
-        }
-        return {rows: []};
-      },
+      getControlSnapshot: async () => ({rows: [snapshot]}),
     };
 
     try {
@@ -705,7 +870,13 @@ test('waitForConvergence — custom targetVoterCount of 5 converges with 5 voter
   const node = {
     id: 'mock-5voter',
     isReachable: async () => true,
-    query: async () => ({rows}),
+    getControlSnapshot: async () => ({
+      rows: [buildControlSnapshotRecord({
+        nodeId: 'mock-5voter',
+        partitionIds: ['p1'],
+        servicesRows: rows,
+      })],
+    }),
   };
 
   // With custom targetVoterCount=5, 5 voters should converge
@@ -734,7 +905,13 @@ test('waitForConvergence — 5 voters fails with default targetVoterCount of 3',
   const node = {
     id: 'mock-5voter-default',
     isReachable: async () => true,
-    query: async () => ({rows}),
+    getControlSnapshot: async () => ({
+      rows: [buildControlSnapshotRecord({
+        nodeId: 'mock-5voter-default',
+        partitionIds: ['p1'],
+        servicesRows: rows,
+      })],
+    }),
   };
 
   // With default targetVoterCount=3, 5 voters is over-target

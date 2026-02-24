@@ -73,6 +73,7 @@ import {
   READINESS_DEPENDENCY,
 } from './bootstrap-readiness-state-constants.js';
 import {
+  LIFECYCLE_DEPENDENCY_CLASS,
   LIFECYCLE_PHASE,
   LIFECYCLE_REASON,
 } from './lifecycle-controller-constants.js';
@@ -110,7 +111,12 @@ const READINESS_DEPENDENCY_NAME = Object.freeze({
   SQL_ENGINE_READY: 'sql_engine_ready',
   LEADER_METADATA_READY: 'leader_metadata_ready',
   RUNTIME_WIRING_READY: 'runtime_wiring_ready',
+  CONTROL_PLANE_WRITE_HEALTH: 'control_plane_write_health',
 });
+
+const BOOTSTRAP_JOIN_NON_BLOCKING_REASONS = Object.freeze([
+  BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+]);
 
 /**
  * BootstrapAPI provides REST endpoints for node bootstrap and discovery.
@@ -136,6 +142,10 @@ class BootstrapAPI {
       controls: options.rolloutControls,
       required: CONTROL_PLANE_ROLLOUT_REQUIRED.BOOTSTRAP_API,
     });
+    this.controlPlaneWriteHealthProvider =
+      typeof options.controlPlaneWriteHealthProvider === TYPEOF.FUNCTION ?
+        options.controlPlaneWriteHealthProvider :
+        null;
     this.systemTableCache = options.systemTableCache || null;
     this.seedNodeId = options.seedNodeId || null;
     this.seedNodeAddress = options.seedNodeAddress || null;
@@ -361,7 +371,10 @@ class BootstrapAPI {
    * @return {Object} Probe payload.
    */
   handleBootstrapReadinessProbeRequest(reply) {
-    const snapshot = this.evaluateReadinessSnapshot();
+    const snapshot = this.resolveReadinessSnapshotForScope(
+      this.evaluateReadinessSnapshot(),
+      BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
+    );
     const statusCode = snapshot.ready ?
       HTTP_STATUS.OK :
       HTTP_STATUS.SERVICE_UNAVAILABLE;
@@ -375,6 +388,62 @@ class BootstrapAPI {
     );
     reply.code(statusCode);
     return response;
+  }
+
+  /**
+   * Resolve readiness projection for one probe scope.
+   * @param {Object} snapshot
+   * @param {string} scope
+   * @return {Object}
+   */
+  resolveReadinessSnapshotForScope(snapshot, scope) {
+    if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+      return snapshot;
+    }
+    if (scope !== BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN ||
+        snapshot.ready === true) {
+      return snapshot;
+    }
+
+    const reasons = Array.isArray(snapshot.reasons) ? snapshot.reasons : [];
+    const blockingReasons = reasons.filter((reason) =>
+      !BOOTSTRAP_JOIN_NON_BLOCKING_REASONS.includes(reason),
+    );
+    const canProjectReady = this.canProjectBootstrapJoinReadiness(
+      snapshot,
+      reasons,
+      blockingReasons,
+    );
+    if (!canProjectReady) {
+      return snapshot;
+    }
+
+    return {
+      ...snapshot,
+      ready: true,
+      reasons: [],
+      retryAfterMs: NUM.ZERO,
+    };
+  }
+
+  /**
+   * Determine whether bootstrap join scope can project ready=true.
+   * @param {Object} snapshot
+   * @param {Array<string>} reasons
+   * @param {Array<string>} blockingReasons
+   * @return {boolean}
+   */
+  canProjectBootstrapJoinReadiness(snapshot, reasons, blockingReasons) {
+    if (snapshot.draining === true) {
+      return false;
+    }
+    if (snapshot.phase !== LIFECYCLE_PHASE.CONTROL_READY) {
+      return false;
+    }
+    if (reasons.length === NUM.ZERO) {
+      return false;
+    }
+    return blockingReasons.length === NUM.ZERO;
   }
 
   /**
@@ -469,7 +538,57 @@ class BootstrapAPI {
       },
     );
 
+    const controlPlaneWriteHealth = this.getControlPlaneWriteHealth();
+    this.readinessState.setDependency(
+      READINESS_DEPENDENCY_NAME.CONTROL_PLANE_WRITE_HEALTH,
+      controlPlaneWriteHealth.healthy === true,
+      {
+        reasonCode: controlPlaneWriteHealth.reasonCode,
+        details: controlPlaneWriteHealth.details,
+        classification: LIFECYCLE_DEPENDENCY_CLASS.HARD,
+      },
+    );
+
     return this.readinessState.evaluate();
+  }
+
+  /**
+   * Resolve health status of background control-plane writers.
+   * @return {{healthy: boolean, reasonCode: string, details: Object|null}}
+   */
+  getControlPlaneWriteHealth() {
+    if (typeof this.controlPlaneWriteHealthProvider !== TYPEOF.FUNCTION) {
+      return {
+        healthy: true,
+        reasonCode: LIFECYCLE_REASON.OBSERVABILITY_BACKLOG,
+        details: null,
+      };
+    }
+
+    try {
+      const health = this.controlPlaneWriteHealthProvider() || {};
+      const healthy = health.healthy !== false;
+      return {
+        healthy,
+        reasonCode:
+          typeof health.reasonCode === TYPEOF.STRING &&
+            health.reasonCode.length > NUM.ZERO ?
+            health.reasonCode :
+            LIFECYCLE_REASON.OBSERVABILITY_BACKLOG,
+        details:
+          health.details && typeof health.details === TYPEOF.OBJECT ?
+            health.details :
+            null,
+      };
+    } catch (error) {
+      return {
+        healthy: false,
+        reasonCode: LIFECYCLE_REASON.OBSERVABILITY_BACKLOG,
+        details: {
+          error: error?.message || String(error),
+        },
+      };
+    }
   }
 
   /**

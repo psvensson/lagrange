@@ -1,8 +1,8 @@
 {
   "scenarioName": "admin-query-smoke",
-  "startedAt": 1771787002132,
-  "endedAt": 1771787032479,
-  "durationMs": 30347,
+  "startedAt": 1771864704286,
+  "endedAt": 1771864734892,
+  "durationMs": 30606,
   "files": {
     "events": "test-output/.playback/report/admin-query-smoke/events.ndjson",
     "samples": "test-output/.playback/report/admin-query-smoke/samples.ndjson",

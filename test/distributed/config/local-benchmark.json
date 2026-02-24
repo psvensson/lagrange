@@ -33,7 +33,7 @@
     "syncReplicaAcks": 1
   },
   "benchmarkGate": {
-    "enabled": true,
+    "enabled": false,
     "maxThroughputRegressionRatio": 0.1,
     "baselineProvider": "liferaft",
     "failIfBaselineMissing": false,

@@ -64,7 +64,7 @@ test('LogsTableService flush routes write work through class C scheduler when co
       },
     };
     const mockCdcService = {
-      insertSystemTableRow: async () => {},
+      upsertSystemTableRow: async () => {},
     };
     const service = new LogsTableService({
       cdcIntegrationService: mockCdcService,
@@ -92,7 +92,7 @@ test('LogsTableService flush routes write work through class C scheduler when co
 test('LogsTableService writeLogEntry queues entries', async (t) => {
   LogsTableService.resetInstance();
   const mockCdcService = {
-    insertSystemTableRow: async () => {},
+    upsertSystemTableRow: async () => {},
   };
   const service = LogsTableService.getInstance();
   service.initialize({cdcIntegrationService: mockCdcService});
@@ -118,7 +118,7 @@ test('LogsTableService writeLogEntry queues entries', async (t) => {
 test('LogsTableService bounds pending queue and drops overflow', async (t) => {
   LogsTableService.resetInstance();
   const mockCdcService = {
-    insertSystemTableRow: async () => {},
+    upsertSystemTableRow: async () => {},
   };
   const service = new LogsTableService({
     cdcIntegrationService: mockCdcService,
@@ -163,7 +163,7 @@ test('LogsTableService prioritizes non-metrics entries when queue is full',
   async (t) => {
     LogsTableService.resetInstance();
     const mockCdcService = {
-      insertSystemTableRow: async () => {},
+      upsertSystemTableRow: async () => {},
     };
     const service = new LogsTableService({
       cdcIntegrationService: mockCdcService,
@@ -214,7 +214,7 @@ test('LogsTableService flush with mock CDC service', async (t) => {
 
   const writtenRows = [];
   const mockCdcService = {
-    insertSystemTableRow: async (tableName, row) => {
+    upsertSystemTableRow: async (tableName, row) => {
       writtenRows.push({tableName, row});
     },
   };
@@ -265,12 +265,53 @@ test('LogsTableService flush with mock CDC service', async (t) => {
   LogsTableService.resetInstance();
 });
 
+test('LogsTableService writes logs via upsert for idempotency', async (t) => {
+  LogsTableService.resetInstance();
+
+  let insertCalls = 0;
+  let upsertCalls = 0;
+  const mockCdcService = {
+    insertSystemTableRow: async () => {
+      insertCalls++;
+      throw new Error('UNIQUE constraint failed: logs.log_id');
+    },
+    upsertSystemTableRow: async () => {
+      upsertCalls++;
+    },
+  };
+
+  const service = new LogsTableService({
+    cdcIntegrationService: mockCdcService,
+  });
+  service.initialize();
+
+  await service.writeLogEntry({
+    logId: 'log-duplicate-safe',
+    timestamp: Date.now(),
+    level: 'INFO',
+    nodeId: 'test-node',
+    message: 'Duplicate-safe write',
+    createdAt: Date.now(),
+  });
+
+  const flushedCount = await service.flush();
+  const stats = service.getStats();
+
+  t.equal(flushedCount, 1, 'flush should succeed with one write');
+  t.equal(upsertCalls, 1, 'should call upsert for log writes');
+  t.equal(insertCalls, 0, 'should not call insert for log writes');
+  t.equal(stats.errorCount, 0, 'should not record write error for duplicate-safe upsert');
+
+  await service.shutdown();
+  LogsTableService.resetInstance();
+});
+
 test('LogsTableService handles write errors', async (t) => {
   LogsTableService.resetInstance();
 
   let callCount = 0;
   const mockCdcService = {
-    insertSystemTableRow: async () => {
+    upsertSystemTableRow: async () => {
       callCount++;
       throw new Error('Write failed');
     },
@@ -308,7 +349,7 @@ test('LogsTableService batch flush on size threshold', async (t) => {
 
   const writtenRows = [];
   const mockCdcService = {
-    insertSystemTableRow: async (tableName, row) => {
+    upsertSystemTableRow: async (tableName, row) => {
       writtenRows.push({tableName, row});
     },
   };
@@ -331,11 +372,17 @@ test('LogsTableService batch flush on size threshold', async (t) => {
     });
   }
 
-  // Should have auto-flushed
-  t.equal(writtenRows.length, 3, 'should auto-flush when batch size reached');
+  const waitForDrainDeadline = Date.now() + 500;
+  while (Date.now() < waitForDrainDeadline &&
+    (writtenRows.length < 3 || service.getStats().pendingWrites > 0)) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  // Auto-flush may drain in chunks; assert eventual completion.
+  t.equal(writtenRows.length, 3, 'should eventually flush all batched entries');
 
   const stats = service.getStats();
-  t.equal(stats.pendingWrites, 0, 'should have no pending writes');
+  t.equal(stats.pendingWrites, 0, 'should eventually drain pending writes');
 
   await service.shutdown();
 });
@@ -346,7 +393,7 @@ test('LogsTableService connectToLoggingService flushes buffer', async (t) => {
 
   const writtenRows = [];
   const mockCdcService = {
-    insertSystemTableRow: async (tableName, row) => {
+    upsertSystemTableRow: async (tableName, row) => {
       writtenRows.push({tableName, row});
     },
   };
@@ -397,7 +444,7 @@ test('LogsTableService shutdown flushes pending', async (t) => {
 
   const writtenRows = [];
   const mockCdcService = {
-    insertSystemTableRow: async (tableName, row) => {
+    upsertSystemTableRow: async (tableName, row) => {
       writtenRows.push({tableName, row});
     },
   };
@@ -442,7 +489,7 @@ test('LogsTableService drops logging-pipeline metrics to prevent recursion',
     LogsTableService.resetInstance();
     const writtenRows = [];
     const mockCdcService = {
-      insertSystemTableRow: async (tableName, row) => {
+      upsertSystemTableRow: async (tableName, row) => {
         writtenRows.push({tableName, row});
       },
     };

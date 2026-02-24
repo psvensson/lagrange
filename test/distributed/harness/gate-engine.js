@@ -7,6 +7,7 @@ const DEFAULT_POLL_INTERVAL_MS = 250;
 const DEFAULT_STABLE_WINDOW_MS = 0;
 const UNKNOWN_NODE_ID = 'unknown-node';
 const UNKNOWN_REASON = 'unknown_reason';
+const ABORT_REASON_UNKNOWN = 'gate_aborted';
 
 function normalizeNodeId(node) {
   if (typeof node?.id === 'string' && node.id.length > ZERO) {
@@ -97,13 +98,14 @@ class GateEngine {
       options.stableWindowMs,
       DEFAULT_STABLE_WINDOW_MS,
     );
-    const allowSubsetFallback = options.allowSubsetFallback === true;
+    const abortIf = typeof options.abortIf === 'function' ?
+      options.abortIf :
+      null;
 
     const reasonHistogram = {};
     const deadlineMs = this._now() + timeoutMs;
     let attempts = ZERO;
     let allReadySinceMs = null;
-    let lastKnownGoodSubset = null;
     let lastIncludedNodeIds = [];
 
     while (this._now() <= deadlineMs) {
@@ -160,14 +162,6 @@ class GateEngine {
       const excludedNodeIds = nodeIds.filter((nodeId) => !includedNodeSet.has(nodeId));
       lastIncludedNodeIds = includedNodeIds;
 
-      const hasUsableSubset = globalCondition.ready && includedNodeIds.length > ZERO;
-      if (hasUsableSubset) {
-        lastKnownGoodSubset = {
-          includedNodeIds,
-          excludedNodeIds,
-        };
-      }
-
       const allNodesReady = globalCondition.ready &&
         includedNodeIds.length === nodeIds.length;
       if (allNodesReady) {
@@ -189,21 +183,52 @@ class GateEngine {
         allReadySinceMs = null;
       }
 
+      if (abortIf) {
+        let abortDecision = null;
+        try {
+          abortDecision = abortIf({
+            attempts,
+            nowMs: this._now(),
+            includedNodeIds,
+            excludedNodeIds,
+            probeOutcomes: [...probeOutcomes],
+            globalCondition: {
+              ready: globalCondition.ready,
+              reasons: [...globalCondition.reasons],
+            },
+            reasonHistogram: {...reasonHistogram},
+          });
+        } catch (error) {
+          abortDecision = {
+            abort: true,
+            reason: normalizeErrorMessage(error),
+          };
+        }
+
+        if (abortDecision?.abort === true) {
+          const abortReason =
+            typeof abortDecision.reason === 'string' &&
+              abortDecision.reason.length > ZERO ?
+              abortDecision.reason :
+              ABORT_REASON_UNKNOWN;
+          incrementHistogram(reasonHistogram, [abortReason]);
+          return {
+            mode: GATE_RESULT_MODE.FAILED,
+            includedNodeIds,
+            excludedNodeIds,
+            attempts,
+            stableElapsedMs: ZERO,
+            reasonHistogram,
+            aborted: true,
+            abortReason,
+          };
+        }
+      }
+
       if (this._now() >= deadlineMs) {
         break;
       }
       await this._sleep(pollIntervalMs);
-    }
-
-    if (allowSubsetFallback && lastKnownGoodSubset) {
-      return {
-        mode: GATE_RESULT_MODE.SUBSET_READY,
-        includedNodeIds: lastKnownGoodSubset.includedNodeIds,
-        excludedNodeIds: lastKnownGoodSubset.excludedNodeIds,
-        attempts,
-        stableElapsedMs: ZERO,
-        reasonHistogram,
-      };
     }
 
     const includedNodeSet = new Set(lastIncludedNodeIds);

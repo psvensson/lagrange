@@ -10,35 +10,175 @@ import {
 } from '../../scenarios/postgres-baseline-comparison.js';
 import {
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+  NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
+  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
   SCENARIO_PHASE_SEQUENCE,
 } from '../constants.js';
 
 const PROBE_SQL = 'SELECT 1';
 const DEFAULT_PROBE_TIMEOUT_MS = 1000;
+const DEFAULT_DISCOVERY_HEALTH = 'healthy';
+const DEFAULT_DISCOVERY_REPLICA_PORT = 5432;
+const DISCOVERY_ADMIN_META_SERVICE_ID = 'sys-admin-meta';
+const DISCOVERY_ADMIN_META_PROTOCOL = 'websocket';
+const SERVICE_DISCOVERY_SQL_PREFIX = 'SELECT * FROM service_discovery_local(';
+const DEFAULT_DISCOVERY_TABLE_NAME = 'benchmark_events';
+
+function isRecord(value) {
+  return value !== null && typeof value === 'object';
+}
+
+function buildControlSnapshotPayload(nodeId, overrides = {}) {
+  const normalizedNodeId = String(nodeId || 'unknown');
+  const replicaOperations = {
+    inFlightCount: 0,
+    statusHistogram: {},
+    ...(isRecord(overrides.replicaOperations) ? overrides.replicaOperations : {}),
+  };
+  return {
+    schemaVersion: 1,
+    nodeId: normalizedNodeId,
+    capturedAt: Date.now(),
+    nodes: [normalizedNodeId],
+    partitions: ['p1'],
+    leaders: {p1: 'seed-1'},
+    ...overrides,
+    replicaOperations,
+  };
+}
+
+function hasValidControlSnapshotResult(result) {
+  const firstRow = Array.isArray(result?.rows) ? result.rows[0] : null;
+  return isRecord(firstRow) &&
+    firstRow.schemaVersion === 1 &&
+    typeof firstRow.nodeId === 'string' &&
+    firstRow.nodeId.length > 0 &&
+    Number.isFinite(firstRow.capturedAt) &&
+    Array.isArray(firstRow.nodes) &&
+    Array.isArray(firstRow.partitions) &&
+    isRecord(firstRow.leaders) &&
+    isRecord(firstRow.replicaOperations) &&
+    Number.isInteger(firstRow.replicaOperations.inFlightCount);
+}
+
+function hasValidServiceDiscoveryResult(result) {
+  const firstRow = Array.isArray(result?.rows) ? result.rows[0] : null;
+  return isRecord(firstRow) &&
+    firstRow.schemaVersion === NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION &&
+    Array.isArray(firstRow.services);
+}
+
+function buildServiceDiscoverySnapshot(adapted) {
+  const nodeId = String(adapted.id || 'unknown');
+  const discoveryNodeIds = Array.isArray(adapted._discoveryNodeIds) ?
+    [...new Set(adapted._discoveryNodeIds.map((value) => String(value)))] :
+    [nodeId];
+  const serviceId = typeof adapted._discoveryServiceId === 'string' &&
+    adapted._discoveryServiceId.length > 0 ?
+    adapted._discoveryServiceId :
+    NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE;
+  const protocol = typeof adapted._discoveryProtocol === 'string' &&
+    adapted._discoveryProtocol.length > 0 ?
+    adapted._discoveryProtocol :
+    NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL;
+  const serviceKey = serviceId + '|' + protocol;
+  const replicaCount = discoveryNodeIds.length;
+  const capturedAt = Date.now();
+
+  return {
+    schemaVersion: NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+    nodeId,
+    capturedAt,
+    serviceCount: 1,
+    replicaCount,
+    services: [{
+      serviceKey,
+      logicalServiceName: serviceId,
+      protocol,
+      serviceIds: [serviceId],
+      desiredReplicaCount: replicaCount,
+      desiredReplicaCountByServiceId: {
+        [serviceId]: replicaCount,
+      },
+      observedReplicaCount: replicaCount,
+      healthyReplicaCount: replicaCount,
+      unhealthyReplicaCount: 0,
+      health: DEFAULT_DISCOVERY_HEALTH,
+      nodeCount: replicaCount,
+      nodes: discoveryNodeIds,
+      replicas: discoveryNodeIds.map((replicaNodeId) => ({
+        endpointId: serviceId + '-ep-' + replicaNodeId,
+        serviceId,
+        nodeId: replicaNodeId,
+        address: '127.0.0.1',
+        port: DEFAULT_DISCOVERY_REPLICA_PORT,
+        healthStatus: DEFAULT_DISCOVERY_HEALTH,
+        updatedAt: capturedAt,
+        metadata: {},
+        readiness: {
+          workloadReady: true,
+          routingReady: true,
+          schemaReady: true,
+          replicaOpsInFlight: 0,
+          leadershipStable: true,
+          tableName: DEFAULT_DISCOVERY_TABLE_NAME,
+          reasons: [],
+        },
+      })),
+    }],
+  };
+}
 
 function asNodeHandle(node) {
   const adapted = {...node};
-  if (typeof adapted.queryWithTimeout !== 'function') {
-    adapted.queryWithTimeout = async (sql, params = [], _options = {}) => {
-      if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
-        return {
-          rows: [{
-            schemaVersion: 1,
-            nodeId: String(adapted.id || 'unknown'),
-            capturedAt: Date.now(),
-            nodes: [String(adapted.id || 'unknown')],
-            partitions: ['p1'],
-            leaders: {p1: 'seed-1'},
-            replicaOperations: {
-              inFlightCount: 0,
-              statusHistogram: {},
-            },
-          }],
-        };
-      }
-      return adapted.query(sql, params);
-    };
+  if (Array.isArray(node?.discoveryNodeIds)) {
+    adapted._discoveryNodeIds =
+      node.discoveryNodeIds.map((value) => String(value));
   }
+  if (typeof node?.discoveryServiceId === 'string') {
+    adapted._discoveryServiceId = node.discoveryServiceId;
+  }
+  if (typeof node?.discoveryProtocol === 'string') {
+    adapted._discoveryProtocol = node.discoveryProtocol;
+  }
+  const originalQueryWithTimeout =
+    typeof adapted.queryWithTimeout === 'function' ?
+      adapted.queryWithTimeout.bind(adapted) :
+      null;
+  adapted.queryWithTimeout = async (sql, params = [], options = {}) => {
+    const normalizedSql = String(sql);
+    if (normalizedSql === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+      if (originalQueryWithTimeout) {
+        const result = await originalQueryWithTimeout(sql, params, options);
+        if (hasValidControlSnapshotResult(result)) {
+          return result;
+        }
+      }
+      return {
+        rows: [buildControlSnapshotPayload(adapted.id)],
+      };
+    }
+
+    if (normalizedSql === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
+        normalizedSql.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
+      if (originalQueryWithTimeout) {
+        const result = await originalQueryWithTimeout(sql, params, options);
+        if (hasValidServiceDiscoveryResult(result)) {
+          return result;
+        }
+      }
+      return {
+        rows: [buildServiceDiscoverySnapshot(adapted)],
+      };
+    }
+
+    if (originalQueryWithTimeout) {
+      return originalQueryWithTimeout(sql, params, options);
+    }
+    return adapted.query(sql, params);
+  };
   if (typeof adapted.getReachabilityDiagnostics !== 'function') {
     adapted.getReachabilityDiagnostics = async () => {
       try {
@@ -64,7 +204,14 @@ function asNodeHandle(node) {
 }
 
 function asNodeHandles(nodes) {
-  return nodes.map((node) => asNodeHandle(node));
+  const adaptedNodes = nodes.map((node) => asNodeHandle(node));
+  const allNodeIds = adaptedNodes.map((node) => String(node.id || 'unknown'));
+  for (const node of adaptedNodes) {
+    if (!Array.isArray(node._discoveryNodeIds)) {
+      node._discoveryNodeIds = allNodeIds;
+    }
+  }
+  return adaptedNodes;
 }
 
 describe('postgres-baseline-comparison scenario', () => {
@@ -171,8 +318,9 @@ describe('postgres-baseline-comparison scenario', () => {
                     {
                       total: 120,
                       success: 118,
-                      failed: 2,
-                      errors: 2,
+                      failed: 0,
+                      errors: 0,
+                      attemptErrors: 2,
                       opsPerSec: 84,
                       latency: {
                         p50: 3,
@@ -494,8 +642,9 @@ describe('postgres-baseline-comparison scenario', () => {
                       {
                         total: 120,
                         success: 118,
-                        failed: 2,
-                        errors: 2,
+                        failed: 0,
+                        errors: 0,
+                        attemptErrors: 2,
                         opsPerSec: 84,
                         latency: {p50: 3, p95: 7, p99: 15},
                       }
@@ -552,7 +701,7 @@ describe('postgres-baseline-comparison scenario', () => {
       }
     });
 
-  it('uses all queryable SUT nodes for shared load generation', async () => {
+  it('uses discovered pg replica nodes for shared load generation', async () => {
     const loadCalls = [];
     const provider = {
       createContainer: async (_options) => ({
@@ -690,14 +839,684 @@ describe('postgres-baseline-comparison scenario', () => {
     assert.deepEqual(
       loadCalls[0],
       ['seed-1', 'joiner-1'],
-      'sut load should include all queryable nodes and skip failing probe node',
+      'sut load should include discovered replica nodes and skip failing probe node',
     );
     assert.equal(
       result.details.benchmark.sutLoadNodeCount,
       2,
-      'benchmark details should report queryable SUT load node count',
+      'benchmark details should report discovered reachable SUT load node count',
     );
   });
+
+  it('excludes reachable nodes that are not discovered pg replicas', async () => {
+    const loadCalls = [];
+    const provider = {
+      createContainer: async (_options) => ({
+        containerId: 'benchmark-postgres-1',
+        ip: '172.18.0.80',
+        name: 'benchmark-postgres-1',
+      }),
+      execInContainer: async (_containerId, cmd) => {
+        const command = String(cmd[2] || '');
+        if (command.includes('pg_isready')) {
+          return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+        }
+        if (command.includes('pg_stat_replication')) {
+          return {exitCode: 0, stdout: '0\n', stderr: ''};
+        }
+        return {exitCode: 0, stdout: '', stderr: ''};
+      },
+      stopContainer: async () => {},
+      removeContainer: async () => {},
+    };
+
+    const seedNode = {
+      id: 'seed-1',
+      role: 'seed',
+      discoveryNodeIds: ['seed-1', 'joiner-1'],
+      query: async (sql) => {
+        const statement = String(sql);
+        if (statement === 'SELECT 1') {
+          return {rows: [{value: 1}]};
+        }
+        if (statement.includes('FROM tables')) {
+          return {rows: [{table_id: 'tbl-benchmark'}]};
+        }
+        if (statement.startsWith('UPDATE partitions SET table_name')) {
+          return {rows: [], changes: 1};
+        }
+        if (statement.includes('FROM partitions')) {
+          return {rows: [{partition_id: 'p1'}]};
+        }
+        return {rows: []};
+      },
+    };
+    const joinerNode = {
+      id: 'joiner-1',
+      role: 'joiner',
+      query: async (sql) => {
+        if (String(sql) === 'SELECT 1') {
+          return {rows: [{value: 1}]};
+        }
+        return {rows: []};
+      },
+    };
+    const nonReplicaNode = {
+      id: 'joiner-2',
+      role: 'joiner',
+      query: async (sql) => {
+        if (String(sql) === 'SELECT 1') {
+          return {rows: [{value: 1}]};
+        }
+        return {rows: []};
+      },
+    };
+
+    const cluster = {
+      _config: {
+        benchmark: {
+          baselineImage: 'postgres:16',
+          durationSeconds: 5,
+          clients: 2,
+          jobs: 1,
+          loadOpsPerSec: 40,
+          loadDuration: '5s',
+          loadMaxInFlight: 64,
+          tableName: 'benchmark_events',
+          replicationFactor: 1,
+          syncReplicaAcks: 0,
+        },
+        convergence: {
+          settleTimeoutMs: 1000,
+          quietWindowMs: 100,
+          targetVoterCount: 3,
+        },
+        resourceLimits: {
+          memory: '1g',
+          cpus: '1.0',
+        },
+        timeouts: {
+          nodeStartup: 1000,
+        },
+      },
+      _scenarioOverrides: {
+        postgresBaselineComparison: {
+          createPostgresPool: () => ({
+            query: async () => ({rows: []}),
+            end: async () => {},
+          }),
+          createLoadGenerator: (nodes) => {
+            loadCalls.push(nodes.map((node) => node.id));
+            const isBaselineLoad =
+              String(nodes?.[0]?.id || '').startsWith(
+                'postgres-baseline-load-node-',
+              );
+            return {
+              start: () => ({
+                waitComplete: async () => (
+                  isBaselineLoad ?
+                    {
+                      total: 100,
+                      success: 100,
+                      failed: 0,
+                      errors: 0,
+                      opsPerSec: 100,
+                      latency: {avg: 1, p50: 1, p95: 2, p99: 2},
+                    } :
+                    {
+                      total: 100,
+                      success: 100,
+                      failed: 0,
+                      errors: 0,
+                      opsPerSec: 50,
+                      latency: {avg: 4, p50: 3, p95: 6, p99: 7},
+                    }
+                ),
+              }),
+            };
+          },
+        },
+      },
+      _providers: [provider],
+      _hostAssignment: [0],
+      _networkName: 'test-net',
+      getNodes: () => asNodeHandles([seedNode, joinerNode, nonReplicaNode]),
+      waitForConvergence: async () => ({settledAfterMs: 1}),
+      assertConsistency: async () => {},
+    };
+
+    const result = await run(cluster);
+    assert.deepEqual(
+      loadCalls[0],
+      ['seed-1', 'joiner-1'],
+      'sut load should include only discovered postgres replica nodes',
+    );
+    assert.equal(
+      result.details.benchmark.sutEligibleLoadNodeCount,
+      2,
+      'benchmark details should report eligible nodes from discovery snapshot',
+    );
+  });
+
+  it('fails discovery when readiness probes fail for discovered replicas',
+    async () => {
+      const loadCalls = [];
+      const benchmarkTableProbeSql =
+        'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
+      const provider = {
+        createContainer: async (_options) => ({
+          containerId: 'benchmark-postgres-1',
+          ip: '172.18.0.80',
+          name: 'benchmark-postgres-1',
+        }),
+        execInContainer: async (_containerId, cmd) => {
+          const command = String(cmd[2] || '');
+          if (command.includes('pg_isready')) {
+            return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+          }
+          if (command.includes('pg_stat_replication')) {
+            return {exitCode: 0, stdout: '0\n', stderr: ''};
+          }
+          return {exitCode: 0, stdout: '', stderr: ''};
+        },
+        stopContainer: async () => {},
+        removeContainer: async () => {},
+      };
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        discoveryNodeIds: ['seed-1', 'joiner-1'],
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            throw new Error('probe timeout');
+          }
+          if (statement === benchmarkTableProbeSql) {
+            return {rows: [{count: 0}]};
+          }
+          if (statement.includes('FROM replica_operations') &&
+            statement.includes('status NOT IN')) {
+            return {rows: []};
+          }
+          if (statement.includes('FROM tables')) {
+            return {rows: [{table_id: 'tbl-benchmark'}]};
+          }
+          if (statement.startsWith('UPDATE partitions SET table_name')) {
+            return {rows: [], changes: 1};
+          }
+          if (statement.includes('FROM partitions')) {
+            return {rows: [{partition_id: 'p1'}]};
+          }
+          return {rows: []};
+        },
+      };
+      const joinerNode = {
+        id: 'joiner-1',
+        role: 'joiner',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            throw new Error('probe timeout');
+          }
+          if (statement === benchmarkTableProbeSql) {
+            return {rows: [{count: 0}]};
+          }
+          return {rows: []};
+        },
+      };
+
+      const cluster = {
+        _config: {
+          benchmark: {
+            baselineImage: 'postgres:16',
+            durationSeconds: 5,
+            clients: 2,
+            jobs: 1,
+            loadOpsPerSec: 40,
+            loadDuration: '5s',
+            loadMaxInFlight: 64,
+            tableName: 'benchmark_events',
+            replicationFactor: 1,
+            syncReplicaAcks: 0,
+          },
+          convergence: {
+            settleTimeoutMs: 1000,
+            quietWindowMs: 100,
+            targetVoterCount: 3,
+          },
+          resourceLimits: {
+            memory: '1g',
+            cpus: '1.0',
+          },
+          timeouts: {
+            nodeStartup: 1000,
+          },
+        },
+        _scenarioOverrides: {
+          postgresBaselineComparison: {
+            createPostgresPool: () => ({
+              query: async () => ({rows: []}),
+              end: async () => {},
+            }),
+            createLoadGenerator: (nodes) => {
+              loadCalls.push(nodes.map((node) => node.id));
+              const isBaselineLoad =
+                String(nodes?.[0]?.id || '').startsWith(
+                  'postgres-baseline-load-node-',
+                );
+              return {
+                start: () => ({
+                  waitComplete: async () => (
+                    isBaselineLoad ?
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 100,
+                        latency: {avg: 1, p50: 1, p95: 2, p99: 2},
+                      } :
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 50,
+                        latency: {avg: 4, p50: 3, p95: 6, p99: 7},
+                      }
+                  ),
+                }),
+              };
+            },
+          },
+        },
+        _providers: [provider],
+        _hostAssignment: [0],
+        _networkName: 'test-net',
+        getNodes: () => asNodeHandles([seedNode, joinerNode]),
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        assertConsistency: async () => {},
+      };
+
+      await assert.rejects(
+        run(cluster),
+        /No discovered reachable load service nodes available for benchmark load/i,
+      );
+      assert.equal(
+        loadCalls.length,
+        0,
+        'scenario should not run load when discovered replicas fail readiness probes',
+      );
+    });
+
+  it('retries discovery snapshots until postgres replica nodes appear',
+    async () => {
+      const loadCalls = [];
+      const benchmarkTableProbeSql =
+        'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
+      let seedDiscoveryCalls = 0;
+      let joinerDiscoveryCalls = 0;
+      const provider = {
+        createContainer: async (_options) => ({
+          containerId: 'benchmark-postgres-1',
+          ip: '172.18.0.80',
+          name: 'benchmark-postgres-1',
+        }),
+        execInContainer: async (_containerId, cmd) => {
+          const command = String(cmd[2] || '');
+          if (command.includes('pg_isready')) {
+            return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+          }
+          if (command.includes('pg_stat_replication')) {
+            return {exitCode: 0, stdout: '0\n', stderr: ''};
+          }
+          return {exitCode: 0, stdout: '', stderr: ''};
+        },
+        stopContainer: async () => {},
+        removeContainer: async () => {},
+      };
+
+      const discoveryNodeIdsByCall = [
+        [],
+        ['seed-1', 'joiner-1'],
+      ];
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement === benchmarkTableProbeSql) {
+            return {rows: [{count: 0}]};
+          }
+          if (statement.includes('FROM replica_operations') &&
+            statement.includes('status NOT IN')) {
+            return {rows: []};
+          }
+          if (statement.includes('FROM tables')) {
+            return {rows: [{table_id: 'tbl-benchmark'}]};
+          }
+          if (statement.startsWith('UPDATE partitions SET table_name')) {
+            return {rows: [], changes: 1};
+          }
+          if (statement.includes('FROM partitions')) {
+            return {rows: [{partition_id: 'p1'}]};
+          }
+          return {rows: []};
+        },
+        queryWithTimeout: async function(sql, params = [], _options = {}) {
+          const statement = String(sql);
+          if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
+            statement.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
+            const index = Math.min(
+              seedDiscoveryCalls,
+              discoveryNodeIdsByCall.length - 1,
+            );
+            const nodeIds = discoveryNodeIdsByCall[index];
+            seedDiscoveryCalls++;
+            return {
+              rows: [buildServiceDiscoverySnapshot({
+                id: this.id,
+                _discoveryNodeIds: nodeIds,
+              })],
+            };
+          }
+          return this.query(sql, params);
+        },
+      };
+
+      const joinerNode = {
+        id: 'joiner-1',
+        role: 'joiner',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement === benchmarkTableProbeSql) {
+            return {rows: [{count: 0}]};
+          }
+          return {rows: []};
+        },
+        queryWithTimeout: async function(sql, params = [], _options = {}) {
+          const statement = String(sql);
+          if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
+            statement.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
+            const index = Math.min(
+              joinerDiscoveryCalls,
+              discoveryNodeIdsByCall.length - 1,
+            );
+            const nodeIds = discoveryNodeIdsByCall[index];
+            joinerDiscoveryCalls++;
+            return {
+              rows: [buildServiceDiscoverySnapshot({
+                id: this.id,
+                _discoveryNodeIds: nodeIds,
+              })],
+            };
+          }
+          return this.query(sql, params);
+        },
+      };
+
+      const cluster = {
+        _config: {
+          benchmark: {
+            baselineImage: 'postgres:16',
+            durationSeconds: 5,
+            clients: 2,
+            jobs: 1,
+            loadOpsPerSec: 40,
+            loadDuration: '5s',
+            loadMaxInFlight: 64,
+            tableName: 'benchmark_events',
+            replicationFactor: 1,
+            syncReplicaAcks: 0,
+            readyTimeoutMs: 100,
+            readyPollIntervalMs: 5,
+            quiescentTimeoutMs: 500,
+            quiescentPollIntervalMs: 5,
+            quiescentStableWindowMs: 0,
+          },
+          convergence: {
+            settleTimeoutMs: 1000,
+            quietWindowMs: 100,
+            targetVoterCount: 3,
+          },
+          resourceLimits: {
+            memory: '1g',
+            cpus: '1.0',
+          },
+          timeouts: {
+            nodeStartup: 1000,
+          },
+        },
+        _scenarioOverrides: {
+          postgresBaselineComparison: {
+            createPostgresPool: () => ({
+              query: async () => ({rows: []}),
+              end: async () => {},
+            }),
+            createLoadGenerator: (nodes) => {
+              loadCalls.push(nodes.map((node) => node.id));
+              const isBaselineLoad =
+                String(nodes?.[0]?.id || '').startsWith(
+                  'postgres-baseline-load-node-',
+                );
+              return {
+                start: () => ({
+                  waitComplete: async () => (
+                    isBaselineLoad ?
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 100,
+                        latency: {avg: 1, p50: 1, p95: 2, p99: 2},
+                      } :
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 50,
+                        latency: {avg: 4, p50: 3, p95: 6, p99: 7},
+                      }
+                  ),
+                }),
+              };
+            },
+          },
+        },
+        _providers: [provider],
+        _hostAssignment: [0],
+        _networkName: 'test-net',
+        getNodes: () => asNodeHandles([seedNode, joinerNode]),
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        assertConsistency: async () => {},
+      };
+
+      const result = await run(cluster);
+      assert.deepEqual(
+        loadCalls[0],
+        ['seed-1', 'joiner-1'],
+        'sut load should use discovered replicas after discovery retries',
+      );
+      assert.ok(
+        seedDiscoveryCalls + joinerDiscoveryCalls >= 3,
+        'discovery should retry when initial snapshots are empty',
+      );
+      assert.equal(
+        result.details.benchmark.sutEligibleLoadNodeCount,
+        2,
+        'benchmark details should report discovered nodes after retry',
+      );
+    });
+
+  it('fails discovery when postgres-wire replicas are unavailable',
+    async () => {
+      const loadCalls = [];
+      const benchmarkTableProbeSql =
+        'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
+      const provider = {
+        createContainer: async (_options) => ({
+          containerId: 'benchmark-postgres-1',
+          ip: '172.18.0.80',
+          name: 'benchmark-postgres-1',
+        }),
+        execInContainer: async (_containerId, cmd) => {
+          const command = String(cmd[2] || '');
+          if (command.includes('pg_isready')) {
+            return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+          }
+          if (command.includes('pg_stat_replication')) {
+            return {exitCode: 0, stdout: '0\n', stderr: ''};
+          }
+          return {exitCode: 0, stdout: '', stderr: ''};
+        },
+        stopContainer: async () => {},
+        removeContainer: async () => {},
+      };
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        discoveryServiceId: DISCOVERY_ADMIN_META_SERVICE_ID,
+        discoveryProtocol: DISCOVERY_ADMIN_META_PROTOCOL,
+        discoveryNodeIds: ['seed-1'],
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement === benchmarkTableProbeSql) {
+            return {rows: [{count: 0}]};
+          }
+          if (statement.includes('FROM replica_operations') &&
+            statement.includes('status NOT IN')) {
+            return {rows: []};
+          }
+          if (statement.includes('FROM tables')) {
+            return {rows: [{table_id: 'tbl-benchmark'}]};
+          }
+          if (statement.startsWith('UPDATE partitions SET table_name')) {
+            return {rows: [], changes: 1};
+          }
+          if (statement.includes('FROM partitions')) {
+            return {rows: [{partition_id: 'p1'}]};
+          }
+          return {rows: []};
+        },
+      };
+      const joinerNode = {
+        id: 'joiner-1',
+        role: 'joiner',
+        discoveryServiceId: DISCOVERY_ADMIN_META_SERVICE_ID,
+        discoveryProtocol: DISCOVERY_ADMIN_META_PROTOCOL,
+        discoveryNodeIds: ['seed-1'],
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement === benchmarkTableProbeSql) {
+            return {rows: [{count: 0}]};
+          }
+          return {rows: []};
+        },
+      };
+
+      const cluster = {
+        _config: {
+          benchmark: {
+            baselineImage: 'postgres:16',
+            durationSeconds: 5,
+            clients: 2,
+            jobs: 1,
+            loadOpsPerSec: 40,
+            loadDuration: '5s',
+            loadMaxInFlight: 64,
+            tableName: 'benchmark_events',
+            replicationFactor: 1,
+            syncReplicaAcks: 0,
+            quiescentTimeoutMs: 500,
+            quiescentPollIntervalMs: 5,
+            quiescentStableWindowMs: 0,
+          },
+          convergence: {
+            settleTimeoutMs: 1000,
+            quietWindowMs: 100,
+            targetVoterCount: 3,
+          },
+          resourceLimits: {
+            memory: '1g',
+            cpus: '1.0',
+          },
+          timeouts: {
+            nodeStartup: 1000,
+          },
+        },
+        _scenarioOverrides: {
+          postgresBaselineComparison: {
+            createPostgresPool: () => ({
+              query: async () => ({rows: []}),
+              end: async () => {},
+            }),
+            createLoadGenerator: (nodes) => {
+              loadCalls.push(nodes.map((node) => node.id));
+              const isBaselineLoad =
+                String(nodes?.[0]?.id || '').startsWith(
+                  'postgres-baseline-load-node-',
+                );
+              return {
+                start: () => ({
+                  waitComplete: async () => (
+                    isBaselineLoad ?
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 100,
+                        latency: {avg: 1, p50: 1, p95: 2, p99: 2},
+                      } :
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 50,
+                        latency: {avg: 4, p50: 3, p95: 6, p99: 7},
+                      }
+                  ),
+                }),
+              };
+            },
+          },
+        },
+        _providers: [provider],
+        _hostAssignment: [0],
+        _networkName: 'test-net',
+        getNodes: () => asNodeHandles([seedNode, joinerNode]),
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        assertConsistency: async () => {},
+      };
+
+      await assert.rejects(
+        run(cluster),
+        /No discovered reachable load service nodes available for benchmark load/i,
+      );
+      assert.equal(
+        loadCalls.length,
+        0,
+        'scenario should not run load when canonical postgres-wire discovery is empty',
+      );
+    });
 
   it('waits for benchmark table visibility on load nodes before SUT load',
     async () => {
@@ -859,7 +1678,7 @@ describe('postgres-baseline-comparison scenario', () => {
       );
     });
 
-  it('uses ready load-node subset when one node never reaches table visibility',
+  it('fails pre-load gate when no discovered node reaches table visibility',
     async () => {
       const loadCalls = [];
       const benchmarkTableProbeSql =
@@ -893,11 +1712,7 @@ describe('postgres-baseline-comparison scenario', () => {
             return {rows: [{value: 1}]};
           }
           if (statement === benchmarkTableProbeSql) {
-            return {rows: [{count: 0}]};
-          }
-          if (statement.includes('FROM replica_operations') &&
-            statement.includes('status NOT IN')) {
-            return {rows: []};
+            throw new Error('Table not found: benchmark_events');
           }
           if (statement.includes('FROM tables')) {
             return {rows: [{table_id: 'tbl-benchmark'}]};
@@ -920,7 +1735,7 @@ describe('postgres-baseline-comparison scenario', () => {
             return {rows: [{value: 1}]};
           }
           if (statement === benchmarkTableProbeSql) {
-            return {rows: [{count: 0}]};
+            throw new Error('Table not found: benchmark_events');
           }
           return {rows: []};
         },
@@ -1016,25 +1831,18 @@ describe('postgres-baseline-comparison scenario', () => {
         assertConsistency: async () => {},
       };
 
-      const result = await run(cluster);
-      assert.deepEqual(
-        loadCalls[0],
-        ['seed-1', 'joiner-1'],
-        'sut load should exclude nodes that fail benchmark table visibility probe',
-      );
+    await assert.rejects(
+      run(cluster),
+      /SUT load nodes did not reach quiescent state/i,
+    );
       assert.equal(
-        result.details.benchmark.sutEligibleLoadNodeCount,
-        3,
-        'benchmark details should include all initially queryable nodes',
-      );
-      assert.deepEqual(
-        result.details.benchmark.sutExcludedLoadNodeIds,
-        ['joiner-2'],
-        'benchmark details should report nodes excluded by quiescence readiness',
+        loadCalls.length,
+        0,
+        'scenario should not run SUT load when no selected node passes pre-load gate',
       );
     });
 
-  it('uses last known ready subset when quiescence ends on in-flight probe error',
+  it('fails pre-load gate when quiescence cannot confirm in-flight drain',
     async () => {
       const loadCalls = [];
       let inFlightProbeCount = 0;
@@ -1090,6 +1898,23 @@ describe('postgres-baseline-comparison scenario', () => {
           }
           return {rows: []};
         },
+        queryWithTimeout: async function(sql, params = [], _options = {}) {
+          if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+            inFlightProbeCount++;
+            if (inFlightProbeCount === 1) {
+              return {
+                rows: [buildControlSnapshotPayload(this.id, {
+                  replicaOperations: {
+                    inFlightCount: 1,
+                    statusHistogram: {creating: 1},
+                  },
+                })],
+              };
+            }
+            throw new Error('connection timed out');
+          }
+          return this.query(sql, params);
+        },
       };
       const joinerNode = {
         id: 'joiner-1',
@@ -1104,6 +1929,12 @@ describe('postgres-baseline-comparison scenario', () => {
           }
           return {rows: []};
         },
+        queryWithTimeout: async function(sql, params = [], _options = {}) {
+          if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+            throw new Error('connection timed out');
+          }
+          return this.query(sql, params);
+        },
       };
       const laggingNode = {
         id: 'joiner-2',
@@ -1117,6 +1948,12 @@ describe('postgres-baseline-comparison scenario', () => {
             throw new Error('Table not found: benchmark_events');
           }
           return {rows: []};
+        },
+        queryWithTimeout: async function(sql, params = [], _options = {}) {
+          if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+            throw new Error('connection timed out');
+          }
+          return this.query(sql, params);
         },
       };
 
@@ -1196,20 +2033,511 @@ describe('postgres-baseline-comparison scenario', () => {
         assertConsistency: async () => {},
       };
 
-      const result = await run(cluster);
+      await assert.rejects(
+        run(cluster),
+        /SUT load nodes did not reach quiescent state/i,
+      );
       assert.ok(
         inFlightProbeCount > 1,
         'scenario should continue polling after initial successful in-flight probe',
       );
-      assert.deepEqual(
-        loadCalls[0],
-        ['seed-1', 'joiner-1'],
-        'sut load should use last known ready subset when in-flight probe errors persist',
+    assert.equal(
+      loadCalls.length,
+      0,
+      'scenario should not run SUT load when quiescence cannot be proven',
+    );
+  });
+
+  it('fails pre-load gate early when quiescence makes no progress', async () => {
+    const loadCalls = [];
+    let inFlightProbeCount = 0;
+    const benchmarkTableProbeSql =
+      'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
+    const provider = {
+      createContainer: async (_options) => ({
+        containerId: 'benchmark-postgres-1',
+        ip: '172.18.0.80',
+        name: 'benchmark-postgres-1',
+      }),
+      execInContainer: async (_containerId, cmd) => {
+        const command = String(cmd[2] || '');
+        if (command.includes('pg_isready')) {
+          return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+        }
+        if (command.includes('pg_stat_replication')) {
+          return {exitCode: 0, stdout: '0\n', stderr: ''};
+        }
+        return {exitCode: 0, stdout: '', stderr: ''};
+      },
+      stopContainer: async () => {},
+      removeContainer: async () => {},
+    };
+
+    const seedNode = {
+      id: 'seed-1',
+      role: 'seed',
+      query: async (sql) => {
+        const statement = String(sql);
+        if (statement === 'SELECT 1') {
+          return {rows: [{value: 1}]};
+        }
+        if (statement === benchmarkTableProbeSql) {
+          return {rows: [{count: 0}]};
+        }
+        if (statement.includes('FROM tables')) {
+          return {rows: [{table_id: 'tbl-benchmark'}]};
+        }
+        if (statement.startsWith('UPDATE partitions SET table_name')) {
+          return {rows: [], changes: 1};
+        }
+        if (statement.includes('FROM partitions')) {
+          return {rows: [{partition_id: 'p1'}]};
+        }
+        return {rows: []};
+      },
+      queryWithTimeout: async function(sql, params = [], _options = {}) {
+        if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+          inFlightProbeCount++;
+          return {
+            rows: [buildControlSnapshotPayload(this.id, {
+              replicaOperations: {
+                inFlightCount: 5,
+                statusHistogram: {creating: 5},
+              },
+            })],
+          };
+        }
+        return this.query(sql, params);
+      },
+    };
+
+    const cluster = {
+      _config: {
+        benchmark: {
+          baselineImage: 'postgres:16',
+          durationSeconds: 5,
+          clients: 2,
+          jobs: 1,
+          loadOpsPerSec: 40,
+          loadDuration: '5s',
+          loadMaxInFlight: 64,
+          tableName: 'benchmark_events',
+          replicationFactor: 1,
+          syncReplicaAcks: 0,
+          quiescentTimeoutMs: 500,
+          quiescentPollIntervalMs: 5,
+          quiescentStableWindowMs: 0,
+          quiescentNoProgressTimeoutMs: 20,
+        },
+        convergence: {
+          settleTimeoutMs: 1000,
+          quietWindowMs: 100,
+          targetVoterCount: 3,
+        },
+        resourceLimits: {
+          memory: '1g',
+          cpus: '1.0',
+        },
+        timeouts: {
+          nodeStartup: 1000,
+        },
+      },
+      _scenarioOverrides: {
+        postgresBaselineComparison: {
+          createPostgresPool: () => ({
+            query: async () => ({rows: []}),
+            end: async () => {},
+          }),
+          createLoadGenerator: (nodes) => {
+            loadCalls.push(nodes.map((node) => node.id));
+            return {
+              start: () => ({
+                waitComplete: async () => ({
+                  total: 10,
+                  success: 10,
+                  failed: 0,
+                  errors: 0,
+                  opsPerSec: 10,
+                  latency: {avg: 1, p50: 1, p95: 2, p99: 2},
+                }),
+              }),
+            };
+          },
+        },
+      },
+      _providers: [provider],
+      _hostAssignment: [0],
+      _networkName: 'test-net',
+      getNodes: () => asNodeHandles([seedNode]),
+      waitForConvergence: async () => ({settledAfterMs: 1}),
+      assertConsistency: async () => {},
+    };
+
+    await assert.rejects(
+      run(cluster),
+      /gate aborted due to stalled progress/i,
+    );
+    assert.ok(
+      inFlightProbeCount >= 2,
+      'scenario should sample quiescence multiple times before aborting',
+    );
+    assert.ok(
+      inFlightProbeCount < 30,
+      'scenario should fail fast instead of exhausting full timeout budget',
+    );
+    assert.equal(
+      loadCalls.length,
+      0,
+      'scenario should not start load when quiescence is stalled',
+    );
+  });
+
+  it('uses alternate snapshot node when seed snapshot lane is timing out',
+    async () => {
+      const loadCalls = [];
+      const benchmarkTableProbeSql =
+        'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
+      const provider = {
+        createContainer: async (_options) => ({
+          containerId: 'benchmark-postgres-1',
+          ip: '172.18.0.80',
+          name: 'benchmark-postgres-1',
+        }),
+        execInContainer: async (_containerId, cmd) => {
+          const command = String(cmd[2] || '');
+          if (command.includes('pg_isready')) {
+            return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+          }
+          if (command.includes('pg_stat_replication')) {
+            return {exitCode: 0, stdout: '0\n', stderr: ''};
+          }
+          return {exitCode: 0, stdout: '', stderr: ''};
+        },
+        stopContainer: async () => {},
+        removeContainer: async () => {},
+      };
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement === benchmarkTableProbeSql) {
+            return {rows: [{count: 0}]};
+          }
+          if (statement.includes('FROM tables')) {
+            return {rows: [{table_id: 'tbl-benchmark'}]};
+          }
+          if (statement.startsWith('UPDATE partitions SET table_name')) {
+            return {rows: [], changes: 1};
+          }
+          if (statement.includes('FROM partitions')) {
+            return {rows: [{partition_id: 'p1'}]};
+          }
+          return {rows: []};
+        },
+        queryWithTimeout: async function(sql, params = [], _options = {}) {
+          if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+            throw new Error('seed snapshot timed out');
+          }
+          return this.query(sql, params);
+        },
+      };
+      const joinerNode = {
+        id: 'joiner-1',
+        role: 'joiner',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement === benchmarkTableProbeSql) {
+            return {rows: [{count: 0}]};
+          }
+          return {rows: []};
+        },
+        queryWithTimeout: async function(sql, params = [], _options = {}) {
+          if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+            return {
+              rows: [buildControlSnapshotPayload(this.id, {
+                leaders: {p1: 'seed-1'},
+                replicaOperations: {
+                  inFlightCount: 0,
+                  statusHistogram: {},
+                },
+              })],
+            };
+          }
+          return this.query(sql, params);
+        },
+      };
+
+      const cluster = {
+        _config: {
+          benchmark: {
+            baselineImage: 'postgres:16',
+            durationSeconds: 5,
+            clients: 2,
+            jobs: 1,
+            loadOpsPerSec: 40,
+            loadDuration: '5s',
+            loadMaxInFlight: 64,
+            tableName: 'benchmark_events',
+            replicationFactor: 1,
+            syncReplicaAcks: 0,
+            readyTimeoutMs: 150,
+            readyPollIntervalMs: 5,
+            quiescentTimeoutMs: 120,
+            quiescentPollIntervalMs: 5,
+            quiescentStableWindowMs: 0,
+          },
+          convergence: {
+            settleTimeoutMs: 1000,
+            quietWindowMs: 100,
+            targetVoterCount: 3,
+          },
+          resourceLimits: {
+            memory: '1g',
+            cpus: '1.0',
+          },
+          timeouts: {
+            nodeStartup: 1000,
+          },
+        },
+        _scenarioOverrides: {
+          postgresBaselineComparison: {
+            createPostgresPool: () => ({
+              query: async () => ({rows: []}),
+              end: async () => {},
+            }),
+            createLoadGenerator: (nodes) => {
+              loadCalls.push(nodes.map((node) => node.id));
+              const isBaselineLoad =
+                String(nodes?.[0]?.id || '').startsWith(
+                  'postgres-baseline-load-node-',
+                );
+              return {
+                start: () => ({
+                  waitComplete: async () => (
+                    isBaselineLoad ?
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 100,
+                        latency: {avg: 1, p50: 1, p95: 2, p99: 2},
+                      } :
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 50,
+                        latency: {avg: 4, p50: 3, p95: 6, p99: 7},
+                      }
+                  ),
+                }),
+              };
+            },
+          },
+        },
+        _providers: [provider],
+        _hostAssignment: [0],
+        _networkName: 'test-net',
+        getNodes: () => asNodeHandles([seedNode, joinerNode]),
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        assertConsistency: async () => {},
+      };
+
+      await run(cluster);
+      assert.ok(
+        loadCalls.length >= 1,
+        'scenario should proceed to load phase when alternate snapshot node is available',
       );
-      assert.deepEqual(
-        result.details.benchmark.sutExcludedLoadNodeIds,
-        ['joiner-2'],
-        'benchmark details should still report excluded lagging nodes',
+    });
+
+  it('fails pre-load gate when one discovered node remains persistently timed out',
+    async () => {
+      const loadCalls = [];
+      const benchmarkTableProbeSql =
+        'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
+      const provider = {
+        createContainer: async (_options) => ({
+          containerId: 'benchmark-postgres-1',
+          ip: '172.18.0.80',
+          name: 'benchmark-postgres-1',
+        }),
+        execInContainer: async (_containerId, cmd) => {
+          const command = String(cmd[2] || '');
+          if (command.includes('pg_isready')) {
+            return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+          }
+          if (command.includes('pg_stat_replication')) {
+            return {exitCode: 0, stdout: '0\n', stderr: ''};
+          }
+          return {exitCode: 0, stdout: '', stderr: ''};
+        },
+        stopContainer: async () => {},
+        removeContainer: async () => {},
+      };
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement === benchmarkTableProbeSql) {
+            return {rows: [{count: 0}]};
+          }
+          if (statement.includes('FROM tables')) {
+            return {rows: [{table_id: 'tbl-benchmark'}]};
+          }
+          if (statement.startsWith('UPDATE partitions SET table_name')) {
+            return {rows: [], changes: 1};
+          }
+          if (statement.includes('FROM partitions')) {
+            return {rows: [{partition_id: 'p1'}]};
+          }
+          return {rows: []};
+        },
+        queryWithTimeout: async function(sql, params = [], _options = {}) {
+          if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+            return {
+              rows: [buildControlSnapshotPayload(this.id, {
+                leaders: {p1: 'seed-1'},
+                replicaOperations: {
+                  inFlightCount: 0,
+                  statusHistogram: {},
+                },
+              })],
+            };
+          }
+          return this.query(sql, params);
+        },
+      };
+      const joinerNode = {
+        id: 'joiner-1',
+        role: 'joiner',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement === benchmarkTableProbeSql) {
+            return {rows: [{count: 0}]};
+          }
+          return {rows: []};
+        },
+      };
+      const laggingNode = {
+        id: 'joiner-2',
+        role: 'joiner',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement === benchmarkTableProbeSql) {
+            throw new Error('table probe timed out');
+          }
+          return {rows: []};
+        },
+      };
+
+      const cluster = {
+        _config: {
+          benchmark: {
+            baselineImage: 'postgres:16',
+            durationSeconds: 5,
+            clients: 2,
+            jobs: 1,
+            loadOpsPerSec: 40,
+            loadDuration: '5s',
+            loadMaxInFlight: 64,
+            tableName: 'benchmark_events',
+            replicationFactor: 1,
+            syncReplicaAcks: 0,
+            quiescentTimeoutMs: 80,
+            quiescentPollIntervalMs: 5,
+            quiescentStableWindowMs: 0,
+          },
+          convergence: {
+            settleTimeoutMs: 1000,
+            quietWindowMs: 100,
+            targetVoterCount: 3,
+          },
+          resourceLimits: {
+            memory: '1g',
+            cpus: '1.0',
+          },
+          timeouts: {
+            nodeStartup: 1000,
+          },
+        },
+        _scenarioOverrides: {
+          postgresBaselineComparison: {
+            createPostgresPool: () => ({
+              query: async () => ({rows: []}),
+              end: async () => {},
+            }),
+            createLoadGenerator: (nodes) => {
+              const nodeIds = nodes.map((node) => node.id);
+              const isBaselineLoad =
+                String(nodeIds[0] || '').startsWith(
+                  'postgres-baseline-load-node-',
+                );
+              if (!isBaselineLoad) {
+                loadCalls.push(nodeIds);
+              }
+              return {
+                start: () => ({
+                  waitComplete: async () => (
+                    isBaselineLoad ?
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 100,
+                        latency: {avg: 1, p50: 1, p95: 2, p99: 2},
+                      } :
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 50,
+                        latency: {avg: 4, p50: 3, p95: 6, p99: 7},
+                      }
+                  ),
+                }),
+              };
+            },
+          },
+        },
+        _providers: [provider],
+        _hostAssignment: [0],
+        _networkName: 'test-net',
+        getNodes: () => asNodeHandles([seedNode, joinerNode, laggingNode]),
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        assertConsistency: async () => {},
+      };
+
+      await assert.rejects(
+        run(cluster),
+        /phase pre_load_gate/i,
+      );
+      assert.equal(
+        loadCalls.length,
+        0,
+        'scenario should fail closed before SUT load when any discovered node stays unready',
       );
     });
 
@@ -1267,6 +2595,21 @@ describe('postgres-baseline-comparison scenario', () => {
           return {rows: [{partition_id: 'p1'}]};
         }
         return {rows: []};
+      },
+      queryWithTimeout: async function(sql, params = [], _options = {}) {
+        if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+          inFlightProbeCount++;
+          const inFlightCount = inFlightProbeCount < 3 ? 1 : 0;
+          return {
+            rows: [buildControlSnapshotPayload(this.id, {
+              replicaOperations: {
+                inFlightCount,
+                statusHistogram: inFlightCount > 0 ? {creating: 1} : {},
+              },
+            })],
+          };
+        }
+        return this.query(sql, params);
       },
     };
 
@@ -1557,6 +2900,31 @@ describe('postgres-baseline-comparison scenario', () => {
         }
         return {rows: []};
       },
+      queryWithTimeout: async function(sql, params = [], _options = {}) {
+        if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+          if (!loadCompleted) {
+            return {
+              rows: [buildControlSnapshotPayload(this.id, {
+                replicaOperations: {
+                  inFlightCount: 0,
+                  statusHistogram: {},
+                },
+              })],
+            };
+          }
+          postLoadDrainProbeCount++;
+          const inFlightCount = postLoadDrainProbeCount < 3 ? 1 : 0;
+          return {
+            rows: [buildControlSnapshotPayload(this.id, {
+              replicaOperations: {
+                inFlightCount,
+                statusHistogram: inFlightCount > 0 ? {creating: 1} : {},
+              },
+            })],
+          };
+        }
+        return this.query(sql, params);
+      },
     };
 
     const cluster = {
@@ -1709,6 +3077,29 @@ describe('postgres-baseline-comparison scenario', () => {
         }
         return {rows: []};
       },
+      queryWithTimeout: async function(sql, params = [], _options = {}) {
+        if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+          if (!loadCompleted) {
+            return {
+              rows: [buildControlSnapshotPayload(this.id, {
+                replicaOperations: {
+                  inFlightCount: 0,
+                  statusHistogram: {},
+                },
+              })],
+            };
+          }
+          return {
+            rows: [buildControlSnapshotPayload(this.id, {
+              replicaOperations: {
+                inFlightCount: 1,
+                statusHistogram: {creating: 1},
+              },
+            })],
+          };
+        }
+        return this.query(sql, params);
+      },
     };
 
     const cluster = {
@@ -1799,6 +3190,142 @@ describe('postgres-baseline-comparison scenario', () => {
     assert.equal(result.details.verification.verdict, 'insufficient_evidence');
     assert.equal(result.details.verification.confidence, 'medium');
     assert.equal(result.details.policy.assertionStatus, 'passed_with_warnings');
+  });
+
+  it('fails when SUT load reports operation-level errors', async () => {
+    let loadCompleted = false;
+    const benchmarkTableProbeSql = 'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
+    const provider = {
+      createContainer: async (_options) => ({
+        containerId: 'benchmark-postgres-1',
+        ip: '172.18.0.80',
+        name: 'benchmark-postgres-1',
+      }),
+      execInContainer: async (_containerId, cmd) => {
+        const command = String(cmd[2] || '');
+        if (command.includes('pg_isready')) {
+          return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+        }
+        if (command.includes('pg_stat_replication')) {
+          return {exitCode: 0, stdout: '0\\n', stderr: ''};
+        }
+        return {exitCode: 0, stdout: '', stderr: ''};
+      },
+      stopContainer: async () => {},
+      removeContainer: async () => {},
+    };
+
+    const seedNode = {
+      id: 'seed-1',
+      role: 'seed',
+      query: async (sql) => {
+        const statement = String(sql);
+        if (statement === 'SELECT 1') {
+          return {rows: [{value: 1}]};
+        }
+        if (statement === benchmarkTableProbeSql) {
+          return {rows: [{count: 0}]};
+        }
+        if (statement.includes('FROM replica_operations') &&
+          statement.includes('status NOT IN')) {
+          return {rows: []};
+        }
+        if (statement.includes('FROM tables')) {
+          return {rows: [{table_id: 'tbl-benchmark'}]};
+        }
+        if (statement.startsWith('UPDATE partitions SET table_name')) {
+          return {rows: [], changes: 1};
+        }
+        if (statement.includes('FROM partitions')) {
+          return {rows: [{partition_id: 'p1'}]};
+        }
+        return {rows: []};
+      },
+    };
+
+    const cluster = {
+      _config: {
+        benchmark: {
+          baselineImage: 'postgres:16',
+          durationSeconds: 5,
+          clients: 2,
+          jobs: 1,
+          loadOpsPerSec: 40,
+          loadDuration: '5s',
+          loadMaxInFlight: 64,
+          tableName: 'benchmark_events',
+          replicationFactor: 1,
+          syncReplicaAcks: 0,
+          quiescentTimeoutMs: 100,
+          quiescentPollIntervalMs: 5,
+          quiescentStableWindowMs: 0,
+          insufficientEvidencePolicy: 'soft',
+        },
+        convergence: {
+          settleTimeoutMs: 1000,
+          quietWindowMs: 100,
+          targetVoterCount: 3,
+        },
+        resourceLimits: {
+          memory: '1g',
+          cpus: '1.0',
+        },
+        timeouts: {
+          nodeStartup: 1000,
+        },
+      },
+      _scenarioOverrides: {
+        postgresBaselineComparison: {
+          createPostgresPool: () => ({
+            query: async () => ({rows: []}),
+            end: async () => {},
+          }),
+          createLoadGenerator: (nodes) => {
+            const isBaselineLoad =
+              String(nodes?.[0]?.id || '').startsWith('postgres-baseline-load-node-');
+            return {
+              start: () => ({
+                waitComplete: async () => {
+                  if (!isBaselineLoad) {
+                    loadCompleted = true;
+                  }
+                  return isBaselineLoad ?
+                    {
+                      total: 100,
+                      success: 100,
+                      failed: 0,
+                      errors: 0,
+                      opsPerSec: 100,
+                      latency: {avg: 1, p50: 1, p95: 2, p99: 2},
+                    } :
+                    {
+                      total: 100,
+                      success: 99,
+                      failed: 1,
+                      errors: 1,
+                      opsPerSec: 50,
+                      latency: {avg: 4, p50: 3, p95: 6, p99: 7},
+                    };
+                },
+              }),
+            };
+          },
+        },
+      },
+      _providers: [provider],
+      _hostAssignment: [0],
+      _networkName: 'test-net',
+      getNodes: () => asNodeHandles([seedNode]),
+      waitForConvergence: async () => ({settledAfterMs: 1}),
+      assertConsistency: async () => {
+        assert.equal(loadCompleted, true);
+      },
+    };
+
+    await assert.rejects(
+      run(cluster),
+      /load run completed with operation errors/i,
+    );
   });
 
   it('emits observability fields for phase and channel decisions', async () => {
@@ -1963,9 +3490,17 @@ describe('postgres-baseline-comparison scenario', () => {
     assert.ok(
       result.details.phaseDecisions.some((entry) =>
         entry.phase === 'post_load_drain' &&
+          typeof entry.phaseClass === 'string' &&
           typeof entry.policy === 'object' &&
-          Array.isArray(entry.reasons)),
-      'phase decisions should include policy and reason list',
+          Array.isArray(entry.reasons) &&
+          typeof entry.reasonClassHistogram === 'object'),
+      'phase decisions should include policy, phase class, and reason classes',
+    );
+    assert.ok(
+      result.details.startupDecisionRecord &&
+        result.details.startupDecisionRecord.schemaVersion === 1 &&
+        Array.isArray(result.details.startupDecisionRecord.phaseDecisions),
+      'report should include canonical startup decision record',
     );
   });
 
@@ -1998,7 +3533,7 @@ describe('postgres-baseline-comparison scenario', () => {
         role: 'seed',
         query: async (sql) => {
           directQueryCalls.push(String(sql));
-          throw new Error('legacy direct query path invoked');
+          throw new Error('direct query path invoked');
         },
         queryWithTimeout: async (sql) => {
           const statement = String(sql);
@@ -2032,6 +3567,56 @@ describe('postgres-baseline-comparison scenario', () => {
                   inFlightCount: 0,
                   statusHistogram: {},
                 },
+              }],
+            };
+          }
+          if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
+            statement.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
+            return {
+              rows: [{
+                schemaVersion: NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+                nodeId: 'seed-1',
+                capturedAt: Date.now(),
+                serviceCount: 1,
+                replicaCount: 1,
+                services: [{
+                  serviceKey:
+                    NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE +
+                    '|' +
+                    NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+                  logicalServiceName: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+                  protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+                  serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+                  desiredReplicaCount: 1,
+                  desiredReplicaCountByServiceId: {
+                    [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE]: 1,
+                  },
+                  observedReplicaCount: 1,
+                  healthyReplicaCount: 1,
+                  unhealthyReplicaCount: 0,
+                  health: DEFAULT_DISCOVERY_HEALTH,
+                  nodeCount: 1,
+                  nodes: ['seed-1'],
+                  replicas: [{
+                    endpointId: 'sys-postgres-wire-ep-seed-1',
+                    serviceId: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+                    nodeId: 'seed-1',
+                    address: '127.0.0.1',
+                    port: DEFAULT_DISCOVERY_REPLICA_PORT,
+                    healthStatus: DEFAULT_DISCOVERY_HEALTH,
+                    updatedAt: Date.now(),
+                    metadata: {},
+                    readiness: {
+                      workloadReady: true,
+                      routingReady: true,
+                      schemaReady: true,
+                      replicaOpsInFlight: 0,
+                      leadershipStable: true,
+                      tableName: DEFAULT_DISCOVERY_TABLE_NAME,
+                      reasons: [],
+                    },
+                  }],
+                }],
               }],
             };
           }

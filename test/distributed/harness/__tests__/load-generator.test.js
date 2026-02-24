@@ -174,8 +174,12 @@ test('Property 11: Load Metrics Accuracy', async (t) => {
 import {LoadGenerator} from '../load-generator.js';
 
 const ZERO = 0;
+const ONE = 1;
 const CANCEL_DISPATCH_SETTLE_MS = 25;
 const CANCEL_WAIT_TIMEOUT_MS = 200;
+const ADMISSION_BACKOFF_MS = 30;
+const BREAKER_OWNER_NODE_CLIENT = 'node-client';
+const NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN = 'circuit_open';
 
 /**
  * Create a mock node whose query method resolves immediately.
@@ -283,7 +287,7 @@ test('load dispatch is spread across nodes', async () => {
   }
 });
 
-test('node failover records failure and retries', async () => {
+test('node failover retries without counting operation-level errors', async () => {
   const failNode = createFailingNode('fail-1');
   const goodNode = createMockNode('good-1');
   const gen = new LoadGenerator([failNode, goodNode], {
@@ -293,9 +297,11 @@ test('node failover records failure and retries', async () => {
   const run = gen.start();
   try {
     const metrics = await run.waitComplete();
+    assert.strictEqual(metrics.errors, ZERO);
+    assert.strictEqual(metrics.failed, ZERO);
     assert.ok(
-      metrics.errors > ZERO,
-      `expected errors > 0, got ${metrics.errors}`,
+      metrics.attemptErrors > ZERO,
+      'expected failover attempts to be captured in attemptErrors',
     );
     assert.ok(
       metrics.success > ZERO,
@@ -336,7 +342,12 @@ test('circuit breaker suppresses retries on repeatedly failing nodes', async () 
   try {
     const metrics = await run.waitComplete();
     assert.ok(metrics.success > ZERO, 'expected successful operations');
-    assert.ok(metrics.errors > ZERO, 'expected at least one failed attempt');
+    assert.strictEqual(metrics.errors, ZERO);
+    assert.strictEqual(metrics.failed, ZERO);
+    assert.ok(
+      metrics.attemptErrors > ZERO,
+      'expected failed attempts to be captured in attemptErrors',
+    );
     assert.ok(
       failingNodeCalls <= 6,
       `expected failing node calls <= 6, got ${failingNodeCalls}`,
@@ -381,6 +392,141 @@ test('circuit breaker allows node recovery after cooldown', async () => {
     assert.ok(
       recoveredSuccessCalls > ZERO,
       'expected recovering node to rejoin load after cooldown',
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
+test('node-client breaker ownership disables local load-generator breaker transitions',
+  async () => {
+    let nodeClientFailCalls = ZERO;
+    let healthyCalls = ZERO;
+    const nodes = [
+      {
+        id: 'node-client-owned-breaker',
+        breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+        async query(_sql) {
+          nodeClientFailCalls++;
+          const error = new Error('circuit breaker is open');
+          error.code = NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN;
+          throw error;
+        },
+      },
+      {
+        id: 'healthy-node',
+        async query(_sql) {
+          healthyCalls++;
+          return {rows: []};
+        },
+      },
+    ];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 120,
+      duration: 180,
+      admissionBackoffMs: ADMISSION_BACKOFF_MS,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      const stateEntries = [...run._nodeHealthByKey.entries()];
+      const failingStateEntry = stateEntries.find(([key]) =>
+        key.includes('node-client-owned-breaker'));
+      assert.ok(failingStateEntry, 'expected failing node state to exist');
+      const failingState = failingStateEntry[1];
+      assert.equal(
+        failingState.localBreakerOwner,
+        BREAKER_OWNER_NODE_CLIENT,
+        'expected load-generator to treat node-client as breaker owner',
+      );
+      assert.equal(
+        failingState.openUntilMs,
+        ZERO,
+        'expected local breaker cooldown to stay disabled for node-client owned node',
+      );
+      assert.ok(
+        nodeClientFailCalls >= ONE,
+        'expected node-client-owned node to remain probeable after admission backoff',
+      );
+      assert.ok(healthyCalls > ZERO, 'expected healthy node to absorb load');
+      assert.equal(metrics.failed, ZERO);
+      assert.equal(metrics.errors, ZERO);
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('admission-control defers dispatch on circuit-open instead of counting operation failures',
+  async () => {
+    let admissionErrors = ZERO;
+    const nodes = [{
+      id: 'single-node-client-node',
+      breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+      async query(_sql) {
+        admissionErrors++;
+        const error = new Error('circuit breaker is open');
+        error.code = NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN;
+        throw error;
+      },
+    }];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 200,
+      duration: 140,
+      admissionBackoffMs: ADMISSION_BACKOFF_MS,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.ok(admissionErrors > ZERO, 'expected admission errors to be observed');
+      assert.equal(
+        metrics.failed,
+        ZERO,
+        'expected admission-only failures to avoid operation-level failure counts',
+      );
+      assert.equal(
+        metrics.errors,
+        ZERO,
+        'expected admission-only failures to avoid operation-level error counts',
+      );
+      assert.ok(
+        metrics.attemptErrors > ZERO,
+        'expected admission denials to be visible as attempt-level failures',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('queue-delay metrics are emitted when dispatch pacing falls behind', async () => {
+  const nodes = [{
+    id: 'slow-node',
+    async query(_sql) {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return {rows: []};
+    },
+  }];
+
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 200,
+    duration: 220,
+    maxInFlight: ONE,
+    nodeMaxInFlight: ONE,
+  });
+  const run = gen.start();
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    run.cancel();
+    const metrics = await run.waitComplete();
+    assert.ok(metrics.queueDelay, 'expected queueDelay metrics to be present');
+    assert.ok(
+      Number(metrics.queueDelay.avg) >= ZERO,
+      'expected queueDelay.avg to be numeric',
+    );
+    assert.ok(
+      Number(metrics.queueDelay.max) >= Number(metrics.queueDelay.p99),
+      'expected queueDelay max to be >= p99',
     );
   } finally {
     run.cancel();
