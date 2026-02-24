@@ -533,6 +533,71 @@ test('queue-delay metrics are emitted when dispatch pacing falls behind', async 
   }
 });
 
+test('dispatch accounting balances target, dispatched, and undispatched operations',
+  async () => {
+    const nodes = [{
+      id: 'slow-node',
+      async query(_sql) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return {rows: []};
+      },
+    }];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 200,
+      duration: 220,
+      maxInFlight: ONE,
+      nodeMaxInFlight: ONE,
+    });
+    const run = gen.start();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      run.cancel();
+      const metrics = await run.waitComplete();
+      assert.strictEqual(typeof metrics.targetOperations, 'number');
+      assert.strictEqual(typeof metrics.dispatchedOperations, 'number');
+      assert.strictEqual(typeof metrics.undispatchedOperations, 'number');
+      assert.strictEqual(
+        metrics.dispatchedOperations + metrics.undispatchedOperations,
+        metrics.targetOperations,
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('undispatched reason classes are populated when dispatch falls behind',
+  async () => {
+    const nodes = [{
+      id: 'slow-node',
+      async query(_sql) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return {rows: []};
+      },
+    }];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 200,
+      duration: 220,
+      maxInFlight: ONE,
+      nodeMaxInFlight: ONE,
+    });
+    const run = gen.start();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      const metrics = run.getMetrics();
+      assert.ok(metrics.undispatchedByReason);
+      assert.strictEqual(typeof metrics.undispatchedByReason.capacity, 'number');
+      assert.ok(
+        metrics.undispatchedByReason.capacity > ZERO,
+        'expected capacity reason class to account for undispatched operations',
+      );
+    } finally {
+      run.cancel();
+      await run.waitComplete();
+    }
+  });
+
 test('load path uses queryWithTimeout when node supports timeout-aware query',
   async () => {
     const capturedTimeouts = [];

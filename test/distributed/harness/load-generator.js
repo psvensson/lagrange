@@ -28,6 +28,12 @@ const ADMISSION_BACKOFF_MS_DEFAULT = 250;
 const NODE_BREAKER_OWNER_NODE_CLIENT = 'node-client';
 const NODE_CLIENT_ADMISSION_ERROR_CIRCUIT_OPEN = 'circuit_open';
 const NODE_CLIENT_ADMISSION_ERROR_BUDGET_EXHAUSTED = 'budget_exhausted';
+const UNDISPATCHED_REASON_CAPACITY = 'capacity';
+const UNDISPATCHED_REASON_DURATION_TIMEOUT = 'durationTimeout';
+const UNDISPATCHED_REASON_CANCELLED = 'cancelled';
+const DISPATCH_STOP_REASON_TARGET = 'target';
+const DISPATCH_STOP_REASON_DURATION = 'duration';
+const DISPATCH_STOP_REASON_CANCELLED = 'cancelled';
 
 const LOAD_TABLE_NAME = 'logs';
 const LOAD_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
@@ -176,6 +182,7 @@ function percentile(sorted, percentile) {
 function computeMetrics(
   latencies, successCount, failedCount, operationErrorCount, durationMs,
   distinctErrors, attemptErrorCount = ZERO, queueDelays = [],
+  dispatchAccounting = null, perNodeMetrics = null,
 ) {
   const sorted = [...latencies].sort((a, b) => a - b);
   const total = successCount + failedCount;
@@ -211,6 +218,35 @@ function computeMetrics(
   }
   if (Array.isArray(distinctErrors) && distinctErrors.length > ZERO) {
     metrics.distinctErrors = distinctErrors;
+  }
+  if (dispatchAccounting && typeof dispatchAccounting === 'object') {
+    const targetOperations = Number(dispatchAccounting.targetOperations);
+    const dispatchedOperations = Number(dispatchAccounting.dispatchedOperations);
+    const undispatchedOperations = Number(
+      dispatchAccounting.undispatchedOperations,
+    );
+    const normalizedUndispatchedByReason =
+      dispatchAccounting.undispatchedByReason &&
+      typeof dispatchAccounting.undispatchedByReason === 'object' ?
+        dispatchAccounting.undispatchedByReason :
+        null;
+    metrics.targetOperations = Number.isFinite(targetOperations) ?
+      Math.max(ZERO, Math.floor(targetOperations)) :
+      ZERO;
+    metrics.dispatchedOperations = Number.isFinite(dispatchedOperations) ?
+      Math.max(ZERO, Math.floor(dispatchedOperations)) :
+      ZERO;
+    metrics.undispatchedOperations = Number.isFinite(undispatchedOperations) ?
+      Math.max(ZERO, Math.floor(undispatchedOperations)) :
+      ZERO;
+    metrics.undispatchedByReason = normalizedUndispatchedByReason || {
+      [UNDISPATCHED_REASON_CAPACITY]: ZERO,
+      [UNDISPATCHED_REASON_DURATION_TIMEOUT]: ZERO,
+      [UNDISPATCHED_REASON_CANCELLED]: ZERO,
+    };
+  }
+  if (perNodeMetrics && typeof perNodeMetrics === 'object') {
+    metrics.perNode = perNodeMetrics;
   }
   return metrics;
 }
@@ -293,6 +329,7 @@ class LoadRun {
     this._dispatchTimerId = null;
     this._nextDispatchAtMs = null;
     this._schedulingStopped = false;
+    this._dispatchStoppedBy = '';
     this._durationTimeoutId = null;
     this._drainTimerId = null;
     this._completePromise = null;
@@ -301,6 +338,7 @@ class LoadRun {
     this._nodeHealthKeys = [];
     this._nodeHealthByKey = new Map();
     this._nodeInFlightByKey = new Map();
+    this._nodeMetricsByKey = new Map();
     const derivedNodeMaxInFlight = this._availableNodes.length > ZERO ?
       Math.max(ONE, Math.ceil(this._maxInFlight / this._availableNodes.length)) :
       ONE;
@@ -321,6 +359,13 @@ class LoadRun {
         admissionBlockedUntilMs: ZERO,
       });
       this._nodeInFlightByKey.set(key, ZERO);
+      this._nodeMetricsByKey.set(key, {
+        nodeId,
+        dispatched: ZERO,
+        success: ZERO,
+        attemptErrors: ZERO,
+        admissionSignals: ZERO,
+      });
     }
   }
 
@@ -346,6 +391,9 @@ class LoadRun {
 
     this._durationTimeoutId = setTimeout(() => {
       this._schedulingStopped = true;
+      if (!this._dispatchStoppedBy) {
+        this._dispatchStoppedBy = DISPATCH_STOP_REASON_DURATION;
+      }
       this._clearDispatchTimer();
       this._finish();
     }, this._durationMs);
@@ -388,6 +436,9 @@ class LoadRun {
     }
     if (this._counter >= this._targetOperationCount) {
       this._schedulingStopped = true;
+      if (!this._dispatchStoppedBy) {
+        this._dispatchStoppedBy = DISPATCH_STOP_REASON_TARGET;
+      }
       this._clearDispatchTimer();
       return;
     }
@@ -431,6 +482,9 @@ class LoadRun {
 
     if (this._counter >= this._targetOperationCount) {
       this._schedulingStopped = true;
+      if (!this._dispatchStoppedBy) {
+        this._dispatchStoppedBy = DISPATCH_STOP_REASON_TARGET;
+      }
       this._clearDispatchTimer();
       return;
     }
@@ -482,6 +536,7 @@ class LoadRun {
       if (!this._tryAcquireNodeSlot(nodeHealthKey)) {
         continue;
       }
+      this._recordNodeDispatchAttempt(nodeHealthKey);
       attemptedNodes = true;
       try {
         await this._queryNode(node, sql);
@@ -499,6 +554,7 @@ class LoadRun {
         }
         this._recordNodeFailure(nodeHealthKey, err);
         this._attemptErrorCount++;
+        this._recordNodeAttemptFailure(nodeHealthKey, err);
         if (!this._isAdmissionSignalError(err)) {
           hasNonAdmissionFailures = true;
         }
@@ -605,10 +661,33 @@ class LoadRun {
     this._nodeInFlightByKey.set(healthKey, current - ONE);
   }
 
+  _recordNodeDispatchAttempt(healthKey) {
+    const nodeMetrics = this._nodeMetricsByKey.get(healthKey);
+    if (!nodeMetrics) {
+      return;
+    }
+    nodeMetrics.dispatched += ONE;
+  }
+
+  _recordNodeAttemptFailure(healthKey, error) {
+    const nodeMetrics = this._nodeMetricsByKey.get(healthKey);
+    if (!nodeMetrics) {
+      return;
+    }
+    nodeMetrics.attemptErrors += ONE;
+    if (this._isAdmissionSignalError(error)) {
+      nodeMetrics.admissionSignals += ONE;
+    }
+  }
+
   _recordNodeSuccess(healthKey) {
     const state = this._nodeHealthByKey.get(healthKey);
     if (!state) {
       return;
+    }
+    const nodeMetrics = this._nodeMetricsByKey.get(healthKey);
+    if (nodeMetrics) {
+      nodeMetrics.success += ONE;
     }
     state.admissionBlockedUntilMs = ZERO;
     if (state.localBreakerOwner === NODE_BREAKER_OWNER_NODE_CLIENT) {
@@ -740,10 +819,67 @@ class LoadRun {
    * @returns {Object}
    * @private
    */
+  _buildDispatchAccounting() {
+    const targetOperations = Math.max(ZERO, this._targetOperationCount);
+    const dispatchedOperations = Math.max(ZERO, this._counter);
+    const undispatchedOperations = Math.max(
+      ZERO,
+      targetOperations - dispatchedOperations,
+    );
+    const undispatchedByReason = {
+      [UNDISPATCHED_REASON_CAPACITY]: ZERO,
+      [UNDISPATCHED_REASON_DURATION_TIMEOUT]: ZERO,
+      [UNDISPATCHED_REASON_CANCELLED]: ZERO,
+    };
+    if (undispatchedOperations > ZERO) {
+      if (this._dispatchStoppedBy === DISPATCH_STOP_REASON_CANCELLED) {
+        undispatchedByReason[UNDISPATCHED_REASON_CANCELLED] =
+          undispatchedOperations;
+      } else {
+        undispatchedByReason[UNDISPATCHED_REASON_CAPACITY] =
+          undispatchedOperations;
+        if (this._dispatchStoppedBy === DISPATCH_STOP_REASON_DURATION) {
+          undispatchedByReason[UNDISPATCHED_REASON_DURATION_TIMEOUT] =
+            undispatchedOperations;
+        }
+      }
+    }
+    return {
+      targetOperations,
+      dispatchedOperations,
+      undispatchedOperations,
+      undispatchedByReason,
+    };
+  }
+
+  _buildPerNodeMetricsSummary() {
+    const summary = {};
+    for (const nodeMetrics of this._nodeMetricsByKey.values()) {
+      const nodeId = String(nodeMetrics?.nodeId || 'unknown');
+      if (!summary[nodeId]) {
+        summary[nodeId] = {
+          dispatched: ZERO,
+          success: ZERO,
+          attemptErrors: ZERO,
+          admissionSignals: ZERO,
+        };
+      }
+      summary[nodeId].dispatched += Number(nodeMetrics?.dispatched || ZERO);
+      summary[nodeId].success += Number(nodeMetrics?.success || ZERO);
+      summary[nodeId].attemptErrors += Number(nodeMetrics?.attemptErrors || ZERO);
+      summary[nodeId].admissionSignals += Number(
+        nodeMetrics?.admissionSignals || ZERO,
+      );
+    }
+    return summary;
+  }
+
   _computeCurrentMetrics() {
     const elapsed = this._startTime ?
       Date.now() - this._startTime :
       ZERO;
+    const dispatchAccounting = this._buildDispatchAccounting();
+    const perNodeMetrics = this._buildPerNodeMetricsSummary();
     return computeMetrics(
       this._latencies,
       this._successCount,
@@ -753,6 +889,8 @@ class LoadRun {
       this._distinctErrors,
       this._attemptErrorCount,
       this._queueDelaySamples,
+      dispatchAccounting,
+      perNodeMetrics,
     );
   }
 
@@ -784,6 +922,7 @@ class LoadRun {
   cancel() {
     this._cancelled = true;
     this._schedulingStopped = true;
+    this._dispatchStoppedBy = DISPATCH_STOP_REASON_CANCELLED;
     this._finish(true);
   }
 }

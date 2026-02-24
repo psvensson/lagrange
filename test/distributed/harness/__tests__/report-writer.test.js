@@ -112,8 +112,70 @@ describe('ReportWriter', () => {
         success: 4998,
         failed: 2,
         errors: 0,
-        latency: {p50: 12, p95: 45, p99: 120},
+        latency: {avg: 0, p50: 12, p95: 45, p99: 120},
         opsPerSec: 166.5,
+        attemptErrors: 0,
+        queueDelay: {
+          avg: 0,
+          p50: 0,
+          p95: 0,
+          p99: 0,
+          max: 0,
+        },
+        distinctErrors: [],
+        targetOperations: 0,
+        dispatchedOperations: 0,
+        undispatchedOperations: 0,
+        undispatchedByReason: {
+          capacity: 0,
+          durationTimeout: 0,
+          cancelled: 0,
+        },
+        perNode: {},
+      });
+    });
+
+    it('defaults required optimization load fields when absent', () => {
+      const writer = new ReportWriter(outputPath);
+      writer.addResult('load-scenario', {
+        passed: true,
+        duration: 30000,
+        loadMetrics: {
+          total: 5000,
+          success: 5000,
+          failed: 0,
+          errors: 0,
+          latency: {p50: 12, p95: 45, p99: 120},
+          opsPerSec: 166.5,
+        },
+      });
+
+      const entry = writer.scenarios[0];
+      assert.deepEqual(entry.loadMetrics, {
+        total: 5000,
+        success: 5000,
+        failed: 0,
+        errors: 0,
+        latency: {avg: 0, p50: 12, p95: 45, p99: 120},
+        opsPerSec: 166.5,
+        attemptErrors: 0,
+        queueDelay: {
+          avg: 0,
+          p50: 0,
+          p95: 0,
+          p99: 0,
+          max: 0,
+        },
+        distinctErrors: [],
+        targetOperations: 0,
+        dispatchedOperations: 0,
+        undispatchedOperations: 0,
+        undispatchedByReason: {
+          capacity: 0,
+          durationTimeout: 0,
+          cancelled: 0,
+        },
+        perNode: {},
       });
     });
 
@@ -142,10 +204,95 @@ describe('ReportWriter', () => {
         failed: 2,
         errors: 2,
         attemptErrors: 12,
-        latency: {p50: 12, p95: 45, p99: 120},
-        queueDelay: {p50: 3, p95: 9, p99: 15, max: 20},
+        latency: {avg: 0, p50: 12, p95: 45, p99: 120},
+        queueDelay: {avg: 0, p50: 3, p95: 9, p99: 15, max: 20},
         distinctErrors: ['timeout'],
         opsPerSec: 166.5,
+        targetOperations: 0,
+        dispatchedOperations: 0,
+        undispatchedOperations: 0,
+        undispatchedByReason: {
+          capacity: 0,
+          durationTimeout: 0,
+          cancelled: 0,
+        },
+        perNode: {},
+      });
+    });
+
+    it('preserves additive dispatch accounting and per-node metrics fields', () => {
+      const writer = new ReportWriter(outputPath);
+      writer.addResult('postgres-baseline-comparison', {
+        passed: true,
+        duration: 30000,
+        loadMetrics: {
+          total: 5000,
+          success: 4998,
+          failed: 2,
+          errors: 2,
+          attemptErrors: 12,
+          latency: {p50: 12, p95: 45, p99: 120},
+          queueDelay: {p50: 3, p95: 9, p99: 15, max: 20},
+          distinctErrors: ['timeout'],
+          opsPerSec: 166.5,
+          targetOperations: 6000,
+          dispatchedOperations: 5000,
+          undispatchedOperations: 1000,
+          undispatchedByReason: {
+            capacity: 900,
+            durationTimeout: 100,
+            cancelled: 0,
+          },
+          perNode: {
+            n1: {
+              dispatched: 3000,
+              success: 2998,
+              attemptErrors: 2,
+              admissionSignals: 0,
+            },
+            n2: {
+              dispatched: 2000,
+              success: 2000,
+              attemptErrors: 0,
+              admissionSignals: 0,
+            },
+          },
+        },
+      });
+
+      const entry = writer.scenarios[0];
+      assert.deepEqual(entry.loadMetrics, {
+        total: 5000,
+        success: 4998,
+        failed: 2,
+        errors: 2,
+        attemptErrors: 12,
+        latency: {avg: 0, p50: 12, p95: 45, p99: 120},
+        queueDelay: {avg: 0, p50: 3, p95: 9, p99: 15, max: 20},
+        distinctErrors: ['timeout'],
+        opsPerSec: 166.5,
+        targetOperations: 6000,
+        dispatchedOperations: 5000,
+        undispatchedOperations: 1000,
+        undispatchedByReason: {
+          capacity: 900,
+          durationTimeout: 100,
+          cancelled: 0,
+        },
+        perNode: {
+          n1: {
+            dispatched: 3000,
+            success: 2998,
+            attemptErrors: 2,
+            admissionSignals: 0,
+          },
+          n2: {
+            dispatched: 2000,
+            success: 2000,
+            attemptErrors: 0,
+            admissionSignals: 0,
+          },
+        },
       });
     });
 
@@ -451,6 +598,89 @@ describe('ReportWriter', () => {
           item.component === 'memory_lifecycle' &&
           item.priority === 'critical',
         ),
+      );
+    });
+
+    it('prioritizes queue pressure when dispatch backlog dominates load completion', () => {
+      const entry = buildScenarioEntry('postgres-baseline-comparison', {
+        passed: true,
+        duration: 100,
+        loadMetrics: {
+          total: 1000,
+          success: 1000,
+          failed: 0,
+          errors: 0,
+          latency: {avg: 12, p50: 10, p95: 14, p99: 18},
+          opsPerSec: 50,
+          queueDelay: {avg: 120, p50: 100, p95: 240, p99: 320, max: 400},
+          targetOperations: 3000,
+          dispatchedOperations: 1000,
+          undispatchedOperations: 2000,
+          undispatchedByReason: {
+            capacity: 1900,
+            durationTimeout: 100,
+            cancelled: 0,
+          },
+        },
+      });
+
+      assert.ok(Array.isArray(entry.optimizationPriorities));
+      const queuePriority = entry.optimizationPriorities.find((item) =>
+        item.signal === 'dispatch_queue_pressure');
+      assert.ok(queuePriority, 'expected queue pressure priority signal');
+      assert.equal(
+        typeof queuePriority.evidence.undispatchedRatio,
+        'number',
+        'queue pressure evidence should include undispatched ratio',
+      );
+    });
+
+    it('prioritizes admission throttling when admission signals dominate retries', () => {
+      const entry = buildScenarioEntry('postgres-baseline-comparison', {
+        passed: true,
+        duration: 100,
+        loadMetrics: {
+          total: 1000,
+          success: 1000,
+          failed: 0,
+          errors: 0,
+          attemptErrors: 700,
+          latency: {avg: 12, p50: 10, p95: 14, p99: 18},
+          opsPerSec: 50,
+          perNode: {
+            n1: {
+              dispatched: 500,
+              success: 500,
+              attemptErrors: 350,
+              admissionSignals: 350,
+            },
+            n2: {
+              dispatched: 500,
+              success: 500,
+              attemptErrors: 350,
+              admissionSignals: 350,
+            },
+          },
+        },
+        details: {
+          details: {
+            effectiveAdmissionPolicy: {
+              resolved: {
+                loadMaxInFlightPerNode: 2,
+              },
+            },
+          },
+        },
+      });
+
+      assert.ok(Array.isArray(entry.optimizationPriorities));
+      const admissionPriority = entry.optimizationPriorities.find((item) =>
+        item.signal === 'admission_throttling_pressure');
+      assert.ok(admissionPriority, 'expected admission throttling priority signal');
+      assert.equal(
+        typeof admissionPriority.evidence.admissionSignalCount,
+        'number',
+        'admission throttling evidence should include admission signal count',
       );
     });
 

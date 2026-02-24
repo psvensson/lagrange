@@ -22,6 +22,7 @@ import {
   BENCHMARK_DEFAULTS,
   CONSISTENCY_VERDICT,
   GATE_RESULT_MODE,
+  NODE_CLIENT_CHANNEL,
   NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
   NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
   PHASE_STATUS,
@@ -118,6 +119,22 @@ const CONSISTENCY_ASSERT_RETRY_DELAY_MS_DEFAULT =
   BENCHMARK_DEFAULTS.consistencyAssertRetryDelayMs;
 const BASELINE_LOAD_NODE_PREFIX = 'postgres-baseline-load-node-';
 const BENCHMARK_EVENT_TABLE_FALLBACK = 'benchmark_events';
+const LOAD_PARITY_STATUS_MATCHED = 'matched';
+const LOAD_PARITY_STATUS_MISMATCHED = 'mismatched';
+const LOAD_PARITY_REASON_LOAD_FANOUT_MISMATCH = 'load_fanout_mismatch';
+const LOAD_PARITY_REASON_PER_NODE_BUDGET_MISMATCH = 'per_node_budget_mismatch';
+const LOAD_PARITY_REASON_TABLE_NAME_MISMATCH = 'table_name_mismatch';
+const ADMISSION_CONFLICT_LOAD_NODE_MAX_IN_FLIGHT =
+  'load_node_max_in_flight_conflict';
+const DIAGNOSTICS_COVERAGE_STATUS_AVAILABLE = 'available';
+const DIAGNOSTICS_COVERAGE_STATUS_UNAVAILABLE = 'unavailable';
+const DIAGNOSTICS_COVERAGE_REASON_NOT_REPORTED = 'not_reported';
+const DIAGNOSTICS_SAMPLE_KEY_RAFT_PROPOSE = 'raftPropose';
+const DIAGNOSTICS_SAMPLE_KEY_TRANSPORT_DELIVER = 'transportDeliver';
+const DIAGNOSTICS_SAMPLE_KEY_SQLITE = 'sqlite';
+const LOAD_METRIC_UNDISPATCHED_REASON_CAPACITY = 'capacity';
+const LOAD_METRIC_UNDISPATCHED_REASON_DURATION_TIMEOUT = 'durationTimeout';
+const LOAD_METRIC_UNDISPATCHED_REASON_CANCELLED = 'cancelled';
 const BENCHMARK_DDL_BIGINT_TYPE = 'BIGINT';
 const BENCHMARK_DDL_TEXT_TYPE = 'TEXT';
 const BENCHMARK_DDL_NOT_NULL = 'NOT NULL';
@@ -274,6 +291,14 @@ function resolveScenarioOverrides(cluster) {
     createPostgresPool,
     createLoadGenerator,
   };
+}
+
+function resolveNodeClientChannelPolicyOverrides(cluster) {
+  const channelPolicies = cluster?._config?.nodeClient?.channelPolicies;
+  if (!channelPolicies || typeof channelPolicies !== 'object') {
+    return null;
+  }
+  return channelPolicies;
 }
 
 async function ensureSutBenchmarkTable(nodeClient, seedNode, tableName) {
@@ -855,7 +880,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
 
   while (true) {
     attempts += ONE;
-    let discoveredNodeIds = [];
+    const discoveredNodeIds = [];
+    const discoveredNodeIdSet = new Set();
     const sourceResults = [];
     for (const sourceNode of discoverySources) {
       const sourceNodeId = typeof sourceNode?.id === 'string' &&
@@ -881,8 +907,14 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
             excludedReadinessByNodeId:
               discoverySelection.excludedReadinessByNodeId,
           });
-          discoveredNodeIds = snapshotNodeIds;
-          break;
+          for (const discoveredNodeId of snapshotNodeIds) {
+            if (discoveredNodeIdSet.has(discoveredNodeId)) {
+              continue;
+            }
+            discoveredNodeIdSet.add(discoveredNodeId);
+            discoveredNodeIds.push(discoveredNodeId);
+          }
+          continue;
         }
         sourceResults.push({
           nodeId: sourceNodeId,
@@ -1496,6 +1528,9 @@ function resolveBenchmarkConfig(cluster) {
     replicationFactor,
     syncReplicaAcks,
     baselineLoadNodeCount,
+    failOnLoadParityMismatch:
+      configured.failOnLoadParityMismatch === true ||
+      configured.failOnParityMismatch === true,
     cacheBaselineMetrics: configured.cacheBaselineMetrics !== false,
     refreshBaselineMetrics: configured.refreshBaselineMetrics === true,
     baselineCacheTtlMs,
@@ -1592,11 +1627,20 @@ function resolvePrimaryProvider(cluster) {
 }
 
 function resolveCacheBaseDir(cluster) {
-  const outputDir = cluster?._config?.outputDir;
-  if (typeof outputDir !== 'string' || outputDir.length === ZERO) {
+  const configuredOutputDir = cluster?._config?.outputDir;
+  if (typeof configuredOutputDir !== 'string' ||
+      configuredOutputDir.length === ZERO) {
     return null;
   }
-  return outputDir;
+  const normalizedPath = configuredOutputDir.trim();
+  if (normalizedPath.length === ZERO) {
+    return null;
+  }
+  const lowerPath = normalizedPath.toLowerCase();
+  if (lowerPath.endsWith('.json')) {
+    return dirname(normalizedPath);
+  }
+  return normalizedPath;
 }
 
 function resolveMachineProfile() {
@@ -1776,6 +1820,346 @@ function buildComparison(loadMetrics, baselineMetrics) {
     p99LatencyRatioSutToBaselineAvg: baselineLatencyAvgMs > ZERO ?
       sutP99LatencyMs / baselineLatencyAvgMs :
       null,
+  };
+}
+
+function normalizeLoadMetricNumber(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return ZERO;
+  }
+  return parsed;
+}
+
+function normalizeLoadMetrics(loadMetrics) {
+  const normalizedLoadMetrics =
+    loadMetrics && typeof loadMetrics === 'object' && !Array.isArray(loadMetrics) ?
+      {...loadMetrics} :
+      {};
+  const latency = normalizedLoadMetrics.latency &&
+    typeof normalizedLoadMetrics.latency === 'object' ?
+    normalizedLoadMetrics.latency :
+    {};
+  const queueDelay = normalizedLoadMetrics.queueDelay &&
+    typeof normalizedLoadMetrics.queueDelay === 'object' ?
+    normalizedLoadMetrics.queueDelay :
+    {};
+  const undispatchedByReason = normalizedLoadMetrics.undispatchedByReason &&
+    typeof normalizedLoadMetrics.undispatchedByReason === 'object' ?
+    normalizedLoadMetrics.undispatchedByReason :
+    {};
+
+  normalizedLoadMetrics.total = normalizeLoadMetricNumber(normalizedLoadMetrics.total);
+  normalizedLoadMetrics.success = normalizeLoadMetricNumber(
+    normalizedLoadMetrics.success,
+  );
+  normalizedLoadMetrics.failed = normalizeLoadMetricNumber(normalizedLoadMetrics.failed);
+  normalizedLoadMetrics.errors = normalizeLoadMetricNumber(normalizedLoadMetrics.errors);
+  normalizedLoadMetrics.attemptErrors = normalizeLoadMetricNumber(
+    normalizedLoadMetrics.attemptErrors,
+  );
+  normalizedLoadMetrics.opsPerSec = normalizeLoadMetricNumber(
+    normalizedLoadMetrics.opsPerSec,
+  );
+  normalizedLoadMetrics.latency = {
+    avg: normalizeLoadMetricNumber(latency.avg),
+    p50: normalizeLoadMetricNumber(latency.p50),
+    p95: normalizeLoadMetricNumber(latency.p95),
+    p99: normalizeLoadMetricNumber(latency.p99),
+  };
+  normalizedLoadMetrics.queueDelay = {
+    avg: normalizeLoadMetricNumber(queueDelay.avg),
+    p50: normalizeLoadMetricNumber(queueDelay.p50),
+    p95: normalizeLoadMetricNumber(queueDelay.p95),
+    p99: normalizeLoadMetricNumber(queueDelay.p99),
+    max: normalizeLoadMetricNumber(queueDelay.max),
+  };
+  normalizedLoadMetrics.targetOperations = normalizeLoadMetricNumber(
+    normalizedLoadMetrics.targetOperations,
+  );
+  normalizedLoadMetrics.dispatchedOperations = normalizeLoadMetricNumber(
+    normalizedLoadMetrics.dispatchedOperations,
+  );
+  normalizedLoadMetrics.undispatchedOperations = normalizeLoadMetricNumber(
+    normalizedLoadMetrics.undispatchedOperations,
+  );
+  normalizedLoadMetrics.undispatchedByReason = {
+    [LOAD_METRIC_UNDISPATCHED_REASON_CAPACITY]:
+      normalizeLoadMetricNumber(
+        undispatchedByReason[LOAD_METRIC_UNDISPATCHED_REASON_CAPACITY],
+      ),
+    [LOAD_METRIC_UNDISPATCHED_REASON_DURATION_TIMEOUT]:
+      normalizeLoadMetricNumber(
+        undispatchedByReason[LOAD_METRIC_UNDISPATCHED_REASON_DURATION_TIMEOUT],
+      ),
+    [LOAD_METRIC_UNDISPATCHED_REASON_CANCELLED]:
+      normalizeLoadMetricNumber(
+        undispatchedByReason[LOAD_METRIC_UNDISPATCHED_REASON_CANCELLED],
+      ),
+  };
+  normalizedLoadMetrics.perNode = normalizedLoadMetrics.perNode &&
+    typeof normalizedLoadMetrics.perNode === 'object' &&
+    !Array.isArray(normalizedLoadMetrics.perNode) ?
+    normalizedLoadMetrics.perNode :
+    {};
+
+  return normalizedLoadMetrics;
+}
+
+function normalizeDiagnosticsSampleCount(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return ZERO;
+  }
+  return Math.max(ZERO, Math.floor(parsed));
+}
+
+function resolveDiagnosticsCoverage(convergence) {
+  const sampleCounts =
+    convergence?.diagnostics?.writePath?.sampleCounts &&
+    typeof convergence.diagnostics.writePath.sampleCounts === 'object' ?
+      convergence.diagnostics.writePath.sampleCounts :
+      {};
+  const writePathSamples = {
+    [DIAGNOSTICS_SAMPLE_KEY_RAFT_PROPOSE]: normalizeDiagnosticsSampleCount(
+      sampleCounts[DIAGNOSTICS_SAMPLE_KEY_RAFT_PROPOSE],
+    ),
+    [DIAGNOSTICS_SAMPLE_KEY_TRANSPORT_DELIVER]: normalizeDiagnosticsSampleCount(
+      sampleCounts[DIAGNOSTICS_SAMPLE_KEY_TRANSPORT_DELIVER],
+    ),
+    [DIAGNOSTICS_SAMPLE_KEY_SQLITE]: normalizeDiagnosticsSampleCount(
+      sampleCounts[DIAGNOSTICS_SAMPLE_KEY_SQLITE],
+    ),
+  };
+  const sampleCount = (
+    writePathSamples[DIAGNOSTICS_SAMPLE_KEY_RAFT_PROPOSE] +
+    writePathSamples[DIAGNOSTICS_SAMPLE_KEY_TRANSPORT_DELIVER] +
+    writePathSamples[DIAGNOSTICS_SAMPLE_KEY_SQLITE]
+  );
+  if (sampleCount > ZERO) {
+    return {
+      status: DIAGNOSTICS_COVERAGE_STATUS_AVAILABLE,
+      reason: null,
+      sampleCount,
+      writePathSamples,
+    };
+  }
+  return {
+    status: DIAGNOSTICS_COVERAGE_STATUS_UNAVAILABLE,
+    reason: DIAGNOSTICS_COVERAGE_REASON_NOT_REPORTED,
+    sampleCount: ZERO,
+    writePathSamples,
+  };
+}
+
+function resolveSutPerNodeBudget(benchmarkConfig, nodeClientPolicySnapshot) {
+  if (Number.isInteger(benchmarkConfig.loadNodeMaxInFlight) &&
+      benchmarkConfig.loadNodeMaxInFlight > ZERO) {
+    return benchmarkConfig.loadNodeMaxInFlight;
+  }
+  const policyBudget = Number(
+    nodeClientPolicySnapshot?.[NODE_CLIENT_CHANNEL.LOAD]?.maxInFlightPerNode,
+  );
+  if (Number.isInteger(policyBudget) && policyBudget > ZERO) {
+    return policyBudget;
+  }
+  return null;
+}
+
+function resolveBaselinePerNodeBudget(baselineLoadNodeCount, baselinePoolMaxConnections) {
+  const loadNodeCount = Number.isInteger(baselineLoadNodeCount) &&
+    baselineLoadNodeCount > ZERO ?
+    baselineLoadNodeCount :
+    ONE;
+  const poolMaxConnections = Number.isInteger(baselinePoolMaxConnections) &&
+    baselinePoolMaxConnections > ZERO ?
+    baselinePoolMaxConnections :
+    ONE;
+  return Math.max(
+    ONE,
+    Math.ceil(poolMaxConnections / loadNodeCount),
+  );
+}
+
+function buildLoadParity({
+  benchmarkConfig,
+  benchmarkTableName,
+  sutLoadNodes,
+  baselineLoadNodeCount,
+  baselinePoolMaxConnections,
+  nodeClientPolicySnapshot,
+}) {
+  const effectiveSutLoadNodeCount = Array.isArray(sutLoadNodes) ?
+    sutLoadNodes.length :
+    ZERO;
+  const effectiveBaselineLoadNodeCount =
+    Number.isInteger(baselineLoadNodeCount) && baselineLoadNodeCount > ZERO ?
+      baselineLoadNodeCount :
+      ONE;
+  const sutPerNodeBudget = resolveSutPerNodeBudget(
+    benchmarkConfig,
+    nodeClientPolicySnapshot,
+  );
+  const baselinePerNodeBudget = resolveBaselinePerNodeBudget(
+    effectiveBaselineLoadNodeCount,
+    baselinePoolMaxConnections,
+  );
+
+  const configured = {
+    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
+    operations: BENCHMARK_WORKLOAD_OPERATIONS,
+    durationSeconds: parseDurationToMs(benchmarkConfig.loadDuration) / 1000,
+    targetOpsPerSec: benchmarkConfig.loadOpsPerSec,
+    loadNodeCount: benchmarkConfig.baselineLoadNodeCount,
+    loadMaxInFlight: benchmarkConfig.loadMaxInFlight,
+    loadNodeMaxInFlight: benchmarkConfig.loadNodeMaxInFlight,
+    tableName: benchmarkConfig.tableName,
+  };
+  const effective = {
+    sutLoadNodeCount: effectiveSutLoadNodeCount,
+    baselineLoadNodeCount: effectiveBaselineLoadNodeCount,
+    sutPerNodeBudget,
+    baselinePerNodeBudget,
+    tableName: benchmarkTableName,
+  };
+  const reasons = [];
+  if (effectiveSutLoadNodeCount !== effectiveBaselineLoadNodeCount) {
+    reasons.push({
+      code: LOAD_PARITY_REASON_LOAD_FANOUT_MISMATCH,
+      expected: effectiveBaselineLoadNodeCount,
+      actual: effectiveSutLoadNodeCount,
+    });
+  }
+  if (Number.isInteger(sutPerNodeBudget) &&
+      Number.isInteger(baselinePerNodeBudget) &&
+      sutPerNodeBudget !== baselinePerNodeBudget) {
+    reasons.push({
+      code: LOAD_PARITY_REASON_PER_NODE_BUDGET_MISMATCH,
+      expected: baselinePerNodeBudget,
+      actual: sutPerNodeBudget,
+    });
+  }
+  if (benchmarkConfig.tableName !== benchmarkTableName) {
+    reasons.push({
+      code: LOAD_PARITY_REASON_TABLE_NAME_MISMATCH,
+      expected: benchmarkTableName,
+      actual: benchmarkConfig.tableName,
+    });
+  }
+
+  return {
+    status: reasons.length === ZERO ?
+      LOAD_PARITY_STATUS_MATCHED :
+      LOAD_PARITY_STATUS_MISMATCHED,
+    reasons,
+    configured,
+    effective,
+  };
+}
+
+function formatLoadParityReasons(loadParity) {
+  const reasons = Array.isArray(loadParity?.reasons) ?
+    loadParity.reasons :
+    [];
+  if (reasons.length === ZERO) {
+    return 'unknown';
+  }
+  return reasons.map((reason) =>
+    String(reason?.code || 'unknown') +
+    '(expected=' + String(reason?.expected) +
+    ',actual=' + String(reason?.actual) + ')')
+    .join(', ');
+}
+
+function buildEffectiveAdmissionPolicy({
+  benchmarkConfig,
+  nodeClientPolicySnapshot,
+  nodeClientChannelPolicyOverrides,
+}) {
+  const loadPolicy = nodeClientPolicySnapshot?.[NODE_CLIENT_CHANNEL.LOAD] &&
+    typeof nodeClientPolicySnapshot[NODE_CLIENT_CHANNEL.LOAD] === 'object' ?
+    nodeClientPolicySnapshot[NODE_CLIENT_CHANNEL.LOAD] :
+    {};
+  const loadPolicyOverrides =
+    nodeClientChannelPolicyOverrides?.[NODE_CLIENT_CHANNEL.LOAD] &&
+    typeof nodeClientChannelPolicyOverrides[NODE_CLIENT_CHANNEL.LOAD] === 'object' ?
+      nodeClientChannelPolicyOverrides[NODE_CLIENT_CHANNEL.LOAD] :
+      {};
+  const benchmarkLoadNodeMaxInFlight =
+    Number.isInteger(benchmarkConfig.loadNodeMaxInFlight) &&
+      benchmarkConfig.loadNodeMaxInFlight > ZERO ?
+      benchmarkConfig.loadNodeMaxInFlight :
+      null;
+  const overrideLoadNodeMaxInFlight =
+    Number.isInteger(loadPolicyOverrides.maxInFlightPerNode) &&
+      loadPolicyOverrides.maxInFlightPerNode > ZERO ?
+      loadPolicyOverrides.maxInFlightPerNode :
+      null;
+  const conflicts = [];
+  if (Number.isInteger(benchmarkLoadNodeMaxInFlight) &&
+      Number.isInteger(overrideLoadNodeMaxInFlight) &&
+      benchmarkLoadNodeMaxInFlight !== overrideLoadNodeMaxInFlight) {
+    conflicts.push({
+      code: ADMISSION_CONFLICT_LOAD_NODE_MAX_IN_FLIGHT,
+      benchmarkValue: benchmarkLoadNodeMaxInFlight,
+      overrideValue: overrideLoadNodeMaxInFlight,
+    });
+  }
+  return {
+    sources: {
+      benchmark: {
+        loadNodeMaxInFlight: benchmarkLoadNodeMaxInFlight,
+        loadQueryTimeoutMs: benchmarkConfig.loadQueryTimeoutMs,
+        nodeFailureThreshold: benchmarkConfig.nodeFailureThreshold,
+        nodeFailureCooldownMs: benchmarkConfig.nodeFailureCooldownMs,
+      },
+      channelOverrides: {
+        loadMaxInFlightPerNode: overrideLoadNodeMaxInFlight,
+        loadTimeoutMs:
+          Number.isInteger(loadPolicyOverrides.timeoutMs) &&
+            loadPolicyOverrides.timeoutMs > ZERO ?
+            loadPolicyOverrides.timeoutMs :
+            null,
+        loadCircuitBreakerThreshold:
+          Number.isInteger(loadPolicyOverrides.circuitBreakerThreshold) &&
+            loadPolicyOverrides.circuitBreakerThreshold > ZERO ?
+            loadPolicyOverrides.circuitBreakerThreshold :
+            null,
+        loadCooldownMs:
+          Number.isInteger(loadPolicyOverrides.cooldownMs) &&
+            loadPolicyOverrides.cooldownMs > ZERO ?
+            loadPolicyOverrides.cooldownMs :
+            null,
+      },
+    },
+    resolved: {
+      loadMaxInFlightPerNode:
+        Number.isInteger(loadPolicy.maxInFlightPerNode) &&
+          loadPolicy.maxInFlightPerNode > ZERO ?
+          loadPolicy.maxInFlightPerNode :
+          null,
+      loadTimeoutMs:
+        Number.isInteger(loadPolicy.timeoutMs) &&
+          loadPolicy.timeoutMs > ZERO ?
+          loadPolicy.timeoutMs :
+          null,
+      loadCircuitBreakerThreshold:
+        Number.isInteger(loadPolicy.circuitBreakerThreshold) &&
+          loadPolicy.circuitBreakerThreshold > ZERO ?
+          loadPolicy.circuitBreakerThreshold :
+          null,
+      loadCooldownMs:
+        Number.isInteger(loadPolicy.cooldownMs) &&
+          loadPolicy.cooldownMs > ZERO ?
+          loadPolicy.cooldownMs :
+          null,
+      loadRetryBudget:
+        Number.isInteger(loadPolicy.retryBudget) &&
+          loadPolicy.retryBudget >= ZERO ?
+          loadPolicy.retryBudget :
+          null,
+    },
+    conflicts,
   };
 }
 
@@ -2228,10 +2612,16 @@ async function run(cluster) {
   const provider = resolvePrimaryProvider(cluster);
   const networkName = String(cluster?._networkName || '');
   assert.ok(networkName, 'Cluster network name is not available');
+  const nodeClientChannelPolicyOverrides =
+    resolveNodeClientChannelPolicyOverrides(cluster);
 
   const nodeClient = new NodeClient({
     benchmarkConfig,
+    ...(nodeClientChannelPolicyOverrides ?
+      {channelPolicies: nodeClientChannelPolicyOverrides} :
+      {}),
   });
+  const nodeClientPolicySnapshot = nodeClient.getPolicySnapshot();
   const consistencyEvaluator = new ConsistencyEvaluatorV2();
   const phaseEvents = [];
   const state = {
@@ -2248,6 +2638,13 @@ async function run(cluster) {
     baselineReplicaContainerIps: [],
     baselineLoadNodeCount: benchmarkConfig.baselineLoadNodeCount,
     baselinePoolMaxConnections: benchmarkConfig.loadMaxInFlight,
+    loadParity: null,
+    diagnosticsCoverage: resolveDiagnosticsCoverage(null),
+    effectiveAdmissionPolicy: buildEffectiveAdmissionPolicy({
+      benchmarkConfig,
+      nodeClientPolicySnapshot,
+      nodeClientChannelPolicyOverrides,
+    }),
     postLoadDrain: createInitialPostLoadDrain([], []),
     consistencyVerdict: CONSISTENCY_VERDICT.CONSISTENT,
     consistencyResult: {attempts: ZERO},
@@ -2332,10 +2729,12 @@ async function run(cluster) {
         quietWindowMs: cluster?._config?.convergence?.quietWindowMs,
         targetVoterCount: cluster?._config?.convergence?.targetVoterCount,
       });
+      state.diagnosticsCoverage = resolveDiagnosticsCoverage(state.convergence);
       return {
         status: PHASE_STATUS.OK,
         artifacts: {
           convergence: state.convergence,
+          diagnosticsCoverage: state.diagnosticsCoverage,
         },
       };
     },
@@ -2376,7 +2775,7 @@ async function run(cluster) {
       };
     },
     [SCENARIO_PHASE.LOAD]: async () => {
-      state.loadMetrics = await runSutSharedLoad({
+      state.loadMetrics = normalizeLoadMetrics(await runSutSharedLoad({
         nodeClient,
         loadNodes: state.effectiveSutLoadNodes,
         createLoadGenerator: scenarioOverrides.createLoadGenerator,
@@ -2388,7 +2787,7 @@ async function run(cluster) {
         tableName: benchmarkTableName,
         nodeFailureThreshold: benchmarkConfig.nodeFailureThreshold,
         nodeFailureCooldownMs: benchmarkConfig.nodeFailureCooldownMs,
-      });
+      }));
 
       const baseline = await resolveBaselineMetrics({
         cluster,
@@ -2404,6 +2803,20 @@ async function run(cluster) {
       state.baselineReplicaContainerIps = baseline.baselineReplicaContainerIps;
       state.baselineLoadNodeCount = baseline.baselineLoadNodeCount;
       state.baselinePoolMaxConnections = baseline.baselinePoolMaxConnections;
+      state.loadParity = buildLoadParity({
+        benchmarkConfig,
+        benchmarkTableName,
+        sutLoadNodes: state.effectiveSutLoadNodes,
+        baselineLoadNodeCount: state.baselineLoadNodeCount,
+        baselinePoolMaxConnections: state.baselinePoolMaxConnections,
+        nodeClientPolicySnapshot,
+      });
+      if (benchmarkConfig.failOnLoadParityMismatch &&
+          state.loadParity.status === LOAD_PARITY_STATUS_MISMATCHED) {
+        throw new Error(
+          'Load parity mismatch: ' + formatLoadParityReasons(state.loadParity),
+        );
+      }
 
       assert.ok(
         state.loadMetrics.total > ZERO,
@@ -2419,6 +2832,7 @@ async function run(cluster) {
         artifacts: {
           sutLoadNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
           loadMetrics: state.loadMetrics,
+          loadParity: state.loadParity,
           baselineCache: state.baselineCacheMetadata,
           baselineOpsPerSec: Number(state.baselineMetrics?.opsPerSec || ZERO),
         },
@@ -2647,6 +3061,7 @@ async function run(cluster) {
         loadMaxInFlight: benchmarkConfig.loadMaxInFlight,
         loadQueryTimeoutMs: benchmarkConfig.loadQueryTimeoutMs,
         loadNodeMaxInFlight: benchmarkConfig.loadNodeMaxInFlight,
+        failOnLoadParityMismatch: benchmarkConfig.failOnLoadParityMismatch,
         nodeFailureThreshold: benchmarkConfig.nodeFailureThreshold || null,
         nodeFailureCooldownMs: benchmarkConfig.nodeFailureCooldownMs || null,
         quiescentTimeoutMs: benchmarkConfig.quiescentTimeoutMs,
@@ -2677,6 +3092,8 @@ async function run(cluster) {
         operations: BENCHMARK_WORKLOAD_OPERATIONS,
         tableName: benchmarkTableName,
       },
+      parity: state.loadParity,
+      effectiveAdmissionPolicy: state.effectiveAdmissionPolicy,
       baseline: {
         engine: 'postgres',
         image: benchmarkConfig.baselineImage,
@@ -2720,6 +3137,7 @@ async function run(cluster) {
         insufficientEvidence: state.assertionPolicyResult.policy.insufficientEvidence,
         assertionStatus: state.assertionPolicyResult.status,
       },
+      diagnosticsCoverage: state.diagnosticsCoverage,
       phaseTimeline: mapPhaseTimeline(orchestrationResult.phases),
       phaseArtifacts: mapPhaseArtifacts(orchestrationResult.phases),
       phaseReasonSummary: buildPhaseReasonSummary(orchestrationResult.phases),

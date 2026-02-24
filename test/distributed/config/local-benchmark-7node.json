@@ -31,6 +31,7 @@
     "loadNodeMaxInFlight": 2,
     "nodeFailureThreshold": 3,
     "nodeFailureCooldownMs": 1500,
+    "failOnLoadParityMismatch": false,
     "insufficientEvidencePolicy": "soft",
     "readyTimeoutMs": 60000,
     "readyPollIntervalMs": 500,
@@ -49,7 +50,9 @@
   "benchmarkGate": {
     "enabled": false,
     "maxThroughputRegressionRatio": 0.1,
+    "minimumThroughputRatioSutToBaseline": 0.1,
     "baselineProvider": "liferaft",
+    "parityMismatchPolicy": "warn",
     "failIfBaselineMissing": false,
     "approvedMitigationId": null
   },

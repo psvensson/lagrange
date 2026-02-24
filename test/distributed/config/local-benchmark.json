@@ -26,6 +26,7 @@
     "loadOpsPerSec": 120,
     "loadDuration": "30s",
     "loadMaxInFlight": 128,
+    "failOnLoadParityMismatch": false,
     "readyTimeoutMs": 30000,
     "readyPollIntervalMs": 500,
     "tableName": "benchmark_events",
@@ -35,7 +36,9 @@
   "benchmarkGate": {
     "enabled": false,
     "maxThroughputRegressionRatio": 0.1,
+    "minimumThroughputRatioSutToBaseline": 0.1,
     "baselineProvider": "liferaft",
+    "parityMismatchPolicy": "warn",
     "failIfBaselineMissing": false,
     "approvedMitigationId": null
   },

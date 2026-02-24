@@ -21,9 +21,25 @@ const BENCHMARK_DETAILS_KEY_VERIFICATION = 'verification';
 const BENCHMARK_DETAILS_KEY_POLICY = 'policy';
 const BENCHMARK_DETAILS_KEY_PHASE_TIMELINE = 'phaseTimeline';
 const BENCHMARK_DETAILS_KEY_CHANNEL_METRICS = 'channelMetrics';
+const BENCHMARK_DETAILS_KEY_PARITY = 'parity';
+const BENCHMARK_DETAILS_KEY_EFFECTIVE_ADMISSION_POLICY =
+  'effectiveAdmissionPolicy';
+const BENCHMARK_DETAILS_KEY_DIAGNOSTICS_COVERAGE = 'diagnosticsCoverage';
 const LOAD_METRICS_FIELD_ATTEMPT_ERRORS = 'attemptErrors';
 const LOAD_METRICS_FIELD_QUEUE_DELAY = 'queueDelay';
 const LOAD_METRICS_FIELD_DISTINCT_ERRORS = 'distinctErrors';
+const LOAD_METRICS_FIELD_TARGET_OPERATIONS = 'targetOperations';
+const LOAD_METRICS_FIELD_DISPATCHED_OPERATIONS = 'dispatchedOperations';
+const LOAD_METRICS_FIELD_UNDISPATCHED_OPERATIONS = 'undispatchedOperations';
+const LOAD_METRICS_FIELD_UNDISPATCHED_BY_REASON = 'undispatchedByReason';
+const LOAD_METRICS_FIELD_PER_NODE = 'perNode';
+const LOAD_METRICS_UNDISPATCHED_REASON_CAPACITY = 'capacity';
+const LOAD_METRICS_UNDISPATCHED_REASON_DURATION_TIMEOUT = 'durationTimeout';
+const LOAD_METRICS_UNDISPATCHED_REASON_CANCELLED = 'cancelled';
+const DIAGNOSTICS_COVERAGE_STATUS_AVAILABLE = 'available';
+const PARITY_STATUS_UNKNOWN = 'unknown';
+const DIAGNOSTICS_COVERAGE_STATUS_UNAVAILABLE = 'unavailable';
+const DIAGNOSTICS_COVERAGE_REASON_NOT_REPORTED = 'not_reported';
 const CLUSTER_SIZE_PATH_REGEX = /(?:^|[^a-z0-9])size(\d+)(?:[^0-9]|$)/i;
 const WRITE_PATH_TOP_PHASE_LIMIT = 3;
 const WRITE_PATH_SUMMARY_PHASE_LIMIT = 5;
@@ -56,6 +72,8 @@ const SIGNAL_CONVERGENCE_SETTLE_TIME = 'convergence_settle_time';
 const SIGNAL_OVER_TARGET_VOTER_DURATION = 'over_target_voter_duration';
 const SIGNAL_PARTITION_HOTSPOTS = 'partition_hotspots';
 const SIGNAL_LOAD_FAILURE_RATE = 'load_failure_rate';
+const SIGNAL_DISPATCH_QUEUE_PRESSURE = 'dispatch_queue_pressure';
+const SIGNAL_ADMISSION_THROTTLING_PRESSURE = 'admission_throttling_pressure';
 const SIGNAL_MEMORY_LEAK = 'memory_leak';
 const SIGNAL_LOG_ANOMALIES = 'log_anomalies';
 
@@ -81,6 +99,17 @@ const OVER_TARGET_DURATION_HIGH_MS = 2000;
 const OVER_TARGET_DURATION_MEDIUM_MS = 500;
 const LOAD_FAILURE_RATE_HIGH = 0.01;
 const LOAD_FAILURE_RATE_MEDIUM = 0.001;
+const QUEUE_UNDISPATCHED_RATIO_CRITICAL = 0.6;
+const QUEUE_UNDISPATCHED_RATIO_HIGH = 0.3;
+const QUEUE_UNDISPATCHED_RATIO_MEDIUM = 0.1;
+const QUEUE_DELAY_P95_CRITICAL_MS = 750;
+const QUEUE_DELAY_P95_HIGH_MS = 250;
+const QUEUE_DELAY_P95_MEDIUM_MS = 75;
+const ADMISSION_SIGNAL_RATIO_CRITICAL = 0.5;
+const ADMISSION_SIGNAL_RATIO_HIGH = 0.2;
+const ADMISSION_SIGNAL_RATIO_MEDIUM = 0.05;
+const ADMISSION_SIGNAL_COUNT_HIGH = 500;
+const ADMISSION_SIGNAL_COUNT_MEDIUM = 100;
 const ANOMALY_COUNT_HIGH = 5;
 const ANOMALY_COUNT_MEDIUM = 1;
 
@@ -97,6 +126,7 @@ const SCORE_LOW = 40;
  * @returns {Object} Scenario entry for the report
  */
 function buildScenarioEntry(scenarioName, result) {
+  const normalizedDetails = normalizeScenarioDetails(result.details);
   const entry = {
     scenario: scenarioName,
     passed: Boolean(result.passed),
@@ -114,7 +144,7 @@ function buildScenarioEntry(scenarioName, result) {
     memoryLeak: result.memoryLeak || null,
     memoryLeakAssertion: result.memoryLeakAssertion || null,
     performanceDiagnostics: result.performanceDiagnostics || null,
-    details: result.details || null,
+    details: normalizedDetails,
   };
 
   if (result.exampleResults) {
@@ -139,35 +169,262 @@ function buildScenarioEntry(scenarioName, result) {
   return entry;
 }
 
+function normalizeScenarioDetails(details) {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
+    return details || null;
+  }
+  if (details.details &&
+      typeof details.details === 'object' &&
+      !Array.isArray(details.details)) {
+    return {
+      ...details,
+      details: normalizeBenchmarkDetailsEnvelope(details.details),
+    };
+  }
+  return normalizeBenchmarkDetailsEnvelope(details);
+}
+
+function normalizeBenchmarkDetailsEnvelope(details) {
+  if (!isBenchmarkDetailsShape(details)) {
+    return details;
+  }
+  return {
+    ...details,
+    [BENCHMARK_DETAILS_KEY_BENCHMARK]:
+      normalizeObject(details[BENCHMARK_DETAILS_KEY_BENCHMARK]),
+    [BENCHMARK_DETAILS_KEY_BASELINE]:
+      normalizeObject(details[BENCHMARK_DETAILS_KEY_BASELINE]),
+    [BENCHMARK_DETAILS_KEY_COMPARISON]:
+      normalizeObject(details[BENCHMARK_DETAILS_KEY_COMPARISON]),
+    [BENCHMARK_DETAILS_KEY_PHASE_TIMELINE]:
+      Array.isArray(details[BENCHMARK_DETAILS_KEY_PHASE_TIMELINE]) ?
+        [...details[BENCHMARK_DETAILS_KEY_PHASE_TIMELINE]] :
+        [],
+    [BENCHMARK_DETAILS_KEY_CHANNEL_METRICS]:
+      normalizeObject(details[BENCHMARK_DETAILS_KEY_CHANNEL_METRICS]),
+    [BENCHMARK_DETAILS_KEY_PARITY]:
+      normalizeParityDetails(details[BENCHMARK_DETAILS_KEY_PARITY]),
+    [BENCHMARK_DETAILS_KEY_EFFECTIVE_ADMISSION_POLICY]:
+      normalizeEffectiveAdmissionPolicy(
+        details[BENCHMARK_DETAILS_KEY_EFFECTIVE_ADMISSION_POLICY],
+      ),
+    [BENCHMARK_DETAILS_KEY_DIAGNOSTICS_COVERAGE]:
+      normalizeDiagnosticsCoverage(
+        details[BENCHMARK_DETAILS_KEY_DIAGNOSTICS_COVERAGE],
+      ),
+  };
+}
+
+function normalizeObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return {...value};
+}
+
+function normalizeParityDetails(parity) {
+  if (!parity || typeof parity !== 'object' || Array.isArray(parity)) {
+    return {
+      status: PARITY_STATUS_UNKNOWN,
+      reasons: [],
+      configured: {},
+      effective: {},
+    };
+  }
+  return {
+    ...parity,
+    status: typeof parity.status === 'string' && parity.status ?
+      parity.status :
+      PARITY_STATUS_UNKNOWN,
+    reasons: Array.isArray(parity.reasons) ?
+      [...parity.reasons] :
+      [],
+    configured: normalizeObject(parity.configured),
+    effective: normalizeObject(parity.effective),
+  };
+}
+
+function normalizeEffectiveAdmissionPolicy(policy) {
+  if (!policy || typeof policy !== 'object' || Array.isArray(policy)) {
+    return {
+      resolved: {},
+      sources: {},
+      conflicts: [],
+    };
+  }
+  return {
+    ...policy,
+    resolved: normalizeObject(policy.resolved),
+    sources: normalizeObject(policy.sources),
+    conflicts: Array.isArray(policy.conflicts) ?
+      [...policy.conflicts] :
+      [],
+  };
+}
+
+function normalizeDiagnosticsCoverage(coverage) {
+  if (!coverage || typeof coverage !== 'object' || Array.isArray(coverage)) {
+    return {
+      status: DIAGNOSTICS_COVERAGE_STATUS_UNAVAILABLE,
+      reason: DIAGNOSTICS_COVERAGE_REASON_NOT_REPORTED,
+      sampleCount: ZERO,
+    };
+  }
+  return {
+    ...coverage,
+    status: typeof coverage.status === 'string' && coverage.status ?
+      coverage.status :
+      DIAGNOSTICS_COVERAGE_STATUS_UNAVAILABLE,
+    reason: typeof coverage.reason === 'string' && coverage.reason ?
+      coverage.reason :
+      DIAGNOSTICS_COVERAGE_REASON_NOT_REPORTED,
+    sampleCount: normalizeFiniteNumber(coverage.sampleCount) || ZERO,
+  };
+}
+
 /**
  * Normalize load metrics while preserving additive observability fields.
  * @param {Object} loadMetrics
  * @returns {Object}
  */
 function buildLoadMetricsEntry(loadMetrics) {
+  const latency = normalizeLatencyMetrics(loadMetrics?.latency);
   const normalized = {
     total: normalizeFiniteNumber(loadMetrics?.total) || ZERO,
     success: normalizeFiniteNumber(loadMetrics?.success) || ZERO,
     failed: normalizeFiniteNumber(loadMetrics?.failed) || ZERO,
     errors: normalizeFiniteNumber(loadMetrics?.errors) || ZERO,
-    latency: loadMetrics?.latency || null,
+    latency,
     opsPerSec: normalizeFiniteNumber(loadMetrics?.opsPerSec) || ZERO,
+    [LOAD_METRICS_FIELD_ATTEMPT_ERRORS]:
+      normalizeFiniteNumber(loadMetrics?.[LOAD_METRICS_FIELD_ATTEMPT_ERRORS]) ||
+      ZERO,
+    [LOAD_METRICS_FIELD_QUEUE_DELAY]: normalizeQueueDelayMetrics(
+      loadMetrics?.[LOAD_METRICS_FIELD_QUEUE_DELAY],
+    ),
+    [LOAD_METRICS_FIELD_DISTINCT_ERRORS]: Array.isArray(
+      loadMetrics?.[LOAD_METRICS_FIELD_DISTINCT_ERRORS],
+    ) ?
+      [...loadMetrics[LOAD_METRICS_FIELD_DISTINCT_ERRORS]] :
+      [],
+    [LOAD_METRICS_FIELD_TARGET_OPERATIONS]:
+      normalizeFiniteNumber(loadMetrics?.[LOAD_METRICS_FIELD_TARGET_OPERATIONS]) ||
+      ZERO,
+    [LOAD_METRICS_FIELD_DISPATCHED_OPERATIONS]:
+      normalizeFiniteNumber(
+        loadMetrics?.[LOAD_METRICS_FIELD_DISPATCHED_OPERATIONS],
+      ) || ZERO,
+    [LOAD_METRICS_FIELD_UNDISPATCHED_OPERATIONS]:
+      normalizeFiniteNumber(
+        loadMetrics?.[LOAD_METRICS_FIELD_UNDISPATCHED_OPERATIONS],
+      ) || ZERO,
+    [LOAD_METRICS_FIELD_UNDISPATCHED_BY_REASON]:
+      normalizeUndispatchedReasonMetrics(
+        loadMetrics?.[LOAD_METRICS_FIELD_UNDISPATCHED_BY_REASON],
+      ),
+    [LOAD_METRICS_FIELD_PER_NODE]: normalizePerNodeMetrics(
+      loadMetrics?.[LOAD_METRICS_FIELD_PER_NODE],
+    ),
   };
-  const attemptErrors = normalizeFiniteNumber(
-    loadMetrics?.[LOAD_METRICS_FIELD_ATTEMPT_ERRORS],
-  );
-  if (attemptErrors !== null) {
-    normalized[LOAD_METRICS_FIELD_ATTEMPT_ERRORS] = attemptErrors;
-  }
-  const queueDelay = loadMetrics?.[LOAD_METRICS_FIELD_QUEUE_DELAY];
-  if (queueDelay && typeof queueDelay === 'object') {
-    normalized[LOAD_METRICS_FIELD_QUEUE_DELAY] = queueDelay;
-  }
-  const distinctErrors = loadMetrics?.[LOAD_METRICS_FIELD_DISTINCT_ERRORS];
-  if (Array.isArray(distinctErrors)) {
-    normalized[LOAD_METRICS_FIELD_DISTINCT_ERRORS] = [...distinctErrors];
+  if (loadMetrics && typeof loadMetrics === 'object') {
+    for (const [field, value] of Object.entries(loadMetrics)) {
+      if (Object.hasOwn(normalized, field)) {
+        continue;
+      }
+      if (value === undefined) {
+        continue;
+      }
+      normalized[field] = cloneAdditiveMetricValue(value);
+    }
   }
   return normalized;
+}
+
+function normalizeLatencyMetrics(latency) {
+  if (!latency || typeof latency !== 'object') {
+    return {
+      avg: ZERO,
+      p50: ZERO,
+      p95: ZERO,
+      p99: ZERO,
+    };
+  }
+  return {
+    avg: normalizeFiniteNumber(latency.avg) || ZERO,
+    p50: normalizeFiniteNumber(latency.p50) || ZERO,
+    p95: normalizeFiniteNumber(latency.p95) || ZERO,
+    p99: normalizeFiniteNumber(latency.p99) || ZERO,
+  };
+}
+
+function normalizeQueueDelayMetrics(queueDelay) {
+  if (!queueDelay || typeof queueDelay !== 'object') {
+    return {
+      avg: ZERO,
+      p50: ZERO,
+      p95: ZERO,
+      p99: ZERO,
+      max: ZERO,
+    };
+  }
+  return {
+    avg: normalizeFiniteNumber(queueDelay.avg) || ZERO,
+    p50: normalizeFiniteNumber(queueDelay.p50) || ZERO,
+    p95: normalizeFiniteNumber(queueDelay.p95) || ZERO,
+    p99: normalizeFiniteNumber(queueDelay.p99) || ZERO,
+    max: normalizeFiniteNumber(queueDelay.max) || ZERO,
+  };
+}
+
+function normalizeUndispatchedReasonMetrics(reasons) {
+  const normalized = {
+    [LOAD_METRICS_UNDISPATCHED_REASON_CAPACITY]: ZERO,
+    [LOAD_METRICS_UNDISPATCHED_REASON_DURATION_TIMEOUT]: ZERO,
+    [LOAD_METRICS_UNDISPATCHED_REASON_CANCELLED]: ZERO,
+  };
+  if (!reasons || typeof reasons !== 'object' || Array.isArray(reasons)) {
+    return normalized;
+  }
+  for (const [reasonKey, value] of Object.entries(reasons)) {
+    normalized[reasonKey] = normalizeFiniteNumber(value) || ZERO;
+  }
+  return normalized;
+}
+
+function normalizePerNodeMetrics(perNode) {
+  if (!perNode || typeof perNode !== 'object' || Array.isArray(perNode)) {
+    return {};
+  }
+  const normalized = {};
+  for (const [nodeId, nodeMetrics] of Object.entries(perNode)) {
+    if (!nodeMetrics || typeof nodeMetrics !== 'object' ||
+      Array.isArray(nodeMetrics)) {
+      normalized[nodeId] = {
+        dispatched: ZERO,
+        success: ZERO,
+        attemptErrors: ZERO,
+        admissionSignals: ZERO,
+      };
+      continue;
+    }
+    normalized[nodeId] = {
+      dispatched: normalizeFiniteNumber(nodeMetrics.dispatched) || ZERO,
+      success: normalizeFiniteNumber(nodeMetrics.success) || ZERO,
+      attemptErrors: normalizeFiniteNumber(nodeMetrics.attemptErrors) || ZERO,
+      admissionSignals: normalizeFiniteNumber(nodeMetrics.admissionSignals) || ZERO,
+    };
+  }
+  return normalized;
+}
+
+function cloneAdditiveMetricValue(value) {
+  if (Array.isArray(value)) {
+    return [...value];
+  }
+  if (value && typeof value === 'object') {
+    return {...value};
+  }
+  return value;
 }
 
 /**
@@ -331,6 +588,84 @@ function buildOptimizationPriorities(scenarioEntry) {
         },
       });
     }
+  }
+
+  const targetOperations = normalizeFiniteNumber(
+    loadMetrics?.targetOperations,
+  ) || ZERO;
+  const undispatchedOperations = normalizeFiniteNumber(
+    loadMetrics?.undispatchedOperations,
+  ) || ZERO;
+  const undispatchedRatio = targetOperations > ZERO ?
+    undispatchedOperations / targetOperations :
+    null;
+  const queueDelayP95Ms = normalizeFiniteNumber(loadMetrics?.queueDelay?.p95);
+  const queueDelayP99Ms = normalizeFiniteNumber(loadMetrics?.queueDelay?.p99);
+  if ((undispatchedRatio !== null &&
+      undispatchedRatio >= QUEUE_UNDISPATCHED_RATIO_MEDIUM) ||
+      (queueDelayP95Ms !== null &&
+      queueDelayP95Ms >= QUEUE_DELAY_P95_MEDIUM_MS)) {
+    const rating = scoreQueuePressure(
+      undispatchedRatio,
+      queueDelayP95Ms,
+    );
+    priorities.push({
+      component: COMPONENT_REPLICATION_WRITE_PATH,
+      signal: SIGNAL_DISPATCH_QUEUE_PRESSURE,
+      priority: rating.priority,
+      score: rating.score,
+      reason:
+        'Dispatch backlog and queue delay indicate scheduler pressure and insufficient load completion capacity.',
+      evidence: {
+        targetOperations,
+        undispatchedOperations,
+        undispatchedRatio,
+        queueDelayP95Ms,
+        queueDelayP99Ms,
+      },
+    });
+  }
+
+  let admissionSignalCount = ZERO;
+  const perNodeMetrics = loadMetrics?.perNode &&
+    typeof loadMetrics.perNode === 'object' ?
+    loadMetrics.perNode :
+    {};
+  for (const nodeMetrics of Object.values(perNodeMetrics)) {
+    admissionSignalCount += normalizeFiniteNumber(
+      nodeMetrics?.admissionSignals,
+    ) || ZERO;
+  }
+  const attemptErrors = normalizeFiniteNumber(loadMetrics?.attemptErrors) || ZERO;
+  const totalAttempts = (normalizeFiniteNumber(loadMetrics?.total) || ZERO) +
+    attemptErrors;
+  const admissionSignalRatio = totalAttempts > ZERO ?
+    admissionSignalCount / totalAttempts :
+    null;
+  if ((admissionSignalRatio !== null &&
+      admissionSignalRatio >= ADMISSION_SIGNAL_RATIO_MEDIUM) ||
+      admissionSignalCount >= ADMISSION_SIGNAL_COUNT_MEDIUM) {
+    const rating = scoreAdmissionPressure(
+      admissionSignalRatio,
+      admissionSignalCount,
+    );
+    priorities.push({
+      component: COMPONENT_ERROR_RETRY_PATH,
+      signal: SIGNAL_ADMISSION_THROTTLING_PRESSURE,
+      priority: rating.priority,
+      score: rating.score,
+      reason:
+        'Admission throttling signals dominate retries and cap realized throughput.',
+      evidence: {
+        admissionSignalCount,
+        admissionSignalRatio,
+        attemptErrors,
+        totalAttempts,
+        loadMaxInFlightPerNode: normalizeFiniteNumber(
+          benchmarkDetails?.effectiveAdmissionPolicy?.resolved?.loadMaxInFlightPerNode,
+        ),
+      },
+    });
   }
 
   const totalLoadOps = normalizeFiniteNumber(loadMetrics?.total) || ZERO;
@@ -635,6 +970,36 @@ function scoreInternalTailRatio(ratio) {
   return {priority: PRIORITY_LOW, score: SCORE_LOW};
 }
 
+function scoreQueuePressure(undispatchedRatio, queueDelayP95Ms) {
+  if ((undispatchedRatio !== null &&
+      undispatchedRatio >= QUEUE_UNDISPATCHED_RATIO_CRITICAL) ||
+      (queueDelayP95Ms !== null &&
+      queueDelayP95Ms >= QUEUE_DELAY_P95_CRITICAL_MS)) {
+    return {priority: PRIORITY_CRITICAL, score: SCORE_CRITICAL};
+  }
+  if ((undispatchedRatio !== null &&
+      undispatchedRatio >= QUEUE_UNDISPATCHED_RATIO_HIGH) ||
+      (queueDelayP95Ms !== null &&
+      queueDelayP95Ms >= QUEUE_DELAY_P95_HIGH_MS)) {
+    return {priority: PRIORITY_HIGH, score: SCORE_HIGH};
+  }
+  return {priority: PRIORITY_MEDIUM, score: SCORE_MEDIUM};
+}
+
+function scoreAdmissionPressure(admissionSignalRatio, admissionSignalCount) {
+  if ((admissionSignalRatio !== null &&
+      admissionSignalRatio >= ADMISSION_SIGNAL_RATIO_CRITICAL) ||
+      admissionSignalCount >= ADMISSION_SIGNAL_COUNT_HIGH) {
+    return {priority: PRIORITY_CRITICAL, score: SCORE_CRITICAL};
+  }
+  if ((admissionSignalRatio !== null &&
+      admissionSignalRatio >= ADMISSION_SIGNAL_RATIO_HIGH) ||
+      admissionSignalCount >= ADMISSION_SIGNAL_COUNT_MEDIUM) {
+    return {priority: PRIORITY_HIGH, score: SCORE_HIGH};
+  }
+  return {priority: PRIORITY_MEDIUM, score: SCORE_MEDIUM};
+}
+
 function compareOptimizationPriority(left, right) {
   const leftScore = normalizeFiniteNumber(left?.score) || ZERO;
   const rightScore = normalizeFiniteNumber(right?.score) || ZERO;
@@ -868,6 +1233,33 @@ function buildPostgresBaselineSnapshot(entry) {
   };
 }
 
+function buildParitySnapshot(entry) {
+  const benchmarkDetails = resolveBenchmarkDetails(entry?.details);
+  const parity = benchmarkDetails?.parity;
+  if (!parity || typeof parity !== 'object' || Array.isArray(parity)) {
+    return null;
+  }
+  const reasonCodes = Array.isArray(parity.reasons) ?
+    parity.reasons
+      .map((reason) => {
+        if (typeof reason === 'string') {
+          return reason;
+        }
+        if (reason && typeof reason === 'object') {
+          return String(reason.code || '');
+        }
+        return '';
+      })
+      .filter((code) => code.length > ZERO) :
+    [];
+  return {
+    status: typeof parity.status === 'string' && parity.status ?
+      parity.status :
+      PARITY_STATUS_UNKNOWN,
+    reasonCodes,
+  };
+}
+
 function computeAbsoluteDelta(currentValue, previousValue) {
   const current = normalizeFiniteNumber(currentValue);
   const previous = normalizeFiniteNumber(previousValue);
@@ -1049,6 +1441,53 @@ function computeWritePathAttributionSummary(scenarios) {
   return {
     scenariosWithDiagnostics,
     topPhases,
+  };
+}
+
+function computeDiagnosticsCoverageSummary(scenarios) {
+  let scenariosWithCoverage = ZERO;
+  let scenariosWithoutCoverage = ZERO;
+  let totalSamples = ZERO;
+  const scenarioCoverage = [];
+
+  for (const scenario of scenarios) {
+    const benchmarkDetails = resolveBenchmarkDetails(scenario?.details);
+    const diagnosticsCoverage = benchmarkDetails?.diagnosticsCoverage &&
+      typeof benchmarkDetails.diagnosticsCoverage === 'object' ?
+      benchmarkDetails.diagnosticsCoverage :
+      null;
+    const sampleCount = normalizeFiniteNumber(diagnosticsCoverage?.sampleCount) ||
+      ZERO;
+    const status =
+      String(diagnosticsCoverage?.status || DIAGNOSTICS_COVERAGE_STATUS_UNAVAILABLE);
+    const reason = status === DIAGNOSTICS_COVERAGE_STATUS_UNAVAILABLE ?
+      String(
+        diagnosticsCoverage?.reason || DIAGNOSTICS_COVERAGE_REASON_NOT_REPORTED,
+      ) :
+      (diagnosticsCoverage?.reason || null);
+    if (status === DIAGNOSTICS_COVERAGE_STATUS_AVAILABLE &&
+        sampleCount > ZERO) {
+      scenariosWithCoverage++;
+    } else {
+      scenariosWithoutCoverage++;
+    }
+    totalSamples += sampleCount;
+    scenarioCoverage.push({
+      scenario: String(scenario?.scenario || COMPONENT_UNKNOWN),
+      status,
+      reason,
+      sampleCount,
+    });
+  }
+
+  return {
+    scenariosWithCoverage,
+    scenariosWithoutCoverage,
+    totalSamples,
+    coverageRate: scenarios.length > ZERO ?
+      scenariosWithCoverage / scenarios.length :
+      ZERO,
+    scenarios: scenarioCoverage,
   };
 }
 
@@ -1257,6 +1696,7 @@ function computeStandardSummary(scenarios, historyReports) {
     const similarityKey = buildScenarioSimilarityKey(scenario);
     const currentSnapshot = buildScenarioSnapshot(scenario);
     const postgresBaseline = buildPostgresBaselineSnapshot(scenario);
+    const parity = buildParitySnapshot(scenario);
     const writePathTopPhases = buildWritePathTopPhases(scenario);
     if (postgresBaseline) {
       scenariosComparedToPostgresBaseline++;
@@ -1292,6 +1732,7 @@ function computeStandardSummary(scenarios, historyReports) {
       previousSimilarRun,
       deltaVsPrevious,
       postgresBaseline,
+      parity,
       writePathTopPhases,
     });
   }
@@ -1300,6 +1741,7 @@ function computeStandardSummary(scenarios, historyReports) {
     historicalReportsConsidered: normalizedHistory.length,
     scenariosComparedToPrevious,
     scenariosComparedToPostgresBaseline,
+    diagnosticsCoverageSummary: computeDiagnosticsCoverageSummary(scenarios),
     writePathAttributionSummary: computeWritePathAttributionSummary(
       scenarios,
     ),

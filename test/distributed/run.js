@@ -124,7 +124,14 @@ const BENCHMARK_GATE_SKIP_REASON = Object.freeze({
 });
 const BENCHMARK_GATE_FAIL_REASON = Object.freeze({
   THROUGHPUT_REGRESSION: 'throughput-regression',
+  THROUGHPUT_RATIO_BELOW_MINIMUM: 'throughput-ratio-below-minimum',
+  PARITY_MISMATCH: 'parity-mismatch',
   BASELINE_REQUIRED_MISSING: 'baseline-required-missing',
+});
+const BENCHMARK_GATE_PARITY_POLICY = Object.freeze({
+  IGNORE: 'ignore',
+  WARN: 'warn',
+  FAIL: 'fail',
 });
 const FAST_LOCAL_SOURCE_RELATIVE_PATH = 'src';
 const FAST_LOCAL_SOURCE_CONTAINER_PATH = '/app/src';
@@ -517,6 +524,29 @@ function resolveBenchmarkGateConfig(config) {
   const configuredMitigationId = String(
     configuredGate.approvedMitigationId || '',
   ).trim();
+  const configuredMinimumThroughputRatio = normalizeFiniteNumber(
+    configuredGate.minimumThroughputRatioSutToBaseline,
+  );
+  const configuredParityPolicy = String(
+    configuredGate.parityMismatchPolicy || '',
+  ).trim().toLowerCase();
+  const defaultMinimumThroughputRatio = normalizeFiniteNumber(
+    BENCHMARK_GATE_DEFAULTS.minimumThroughputRatioSutToBaseline,
+  );
+  const defaultParityPolicy = String(
+    BENCHMARK_GATE_DEFAULTS.parityMismatchPolicy ||
+      BENCHMARK_GATE_PARITY_POLICY.WARN,
+  ).trim().toLowerCase();
+  const parityMismatchPolicy = configuredParityPolicy ===
+    BENCHMARK_GATE_PARITY_POLICY.FAIL ||
+    configuredParityPolicy === BENCHMARK_GATE_PARITY_POLICY.WARN ||
+    configuredParityPolicy === BENCHMARK_GATE_PARITY_POLICY.IGNORE ?
+    configuredParityPolicy :
+    (defaultParityPolicy === BENCHMARK_GATE_PARITY_POLICY.FAIL ||
+      defaultParityPolicy === BENCHMARK_GATE_PARITY_POLICY.WARN ||
+      defaultParityPolicy === BENCHMARK_GATE_PARITY_POLICY.IGNORE ?
+      defaultParityPolicy :
+      BENCHMARK_GATE_PARITY_POLICY.WARN);
 
   return {
     enabled: configuredGate.enabled === true,
@@ -525,11 +555,20 @@ function resolveBenchmarkGateConfig(config) {
       configuredMaxRegression >= 0 ?
         configuredMaxRegression :
         BENCHMARK_GATE_DEFAULTS.maxThroughputRegressionRatio,
+    minimumThroughputRatioSutToBaseline:
+      configuredMinimumThroughputRatio !== null &&
+      configuredMinimumThroughputRatio >= 0 ?
+        configuredMinimumThroughputRatio :
+        (defaultMinimumThroughputRatio !== null &&
+          defaultMinimumThroughputRatio >= 0 ?
+          defaultMinimumThroughputRatio :
+          null),
     baselineProvider: configuredBaselineProvider ||
       BENCHMARK_GATE_DEFAULTS.baselineProvider,
     failIfBaselineMissing: configuredGate.failIfBaselineMissing === true ||
       BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing === true,
     approvedMitigationId: configuredMitigationId || null,
+    parityMismatchPolicy,
   };
 }
 
@@ -593,6 +632,9 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
     mitigatedScenarioCount: 0,
     missingBaselineScenarios: [],
     comparisons: [],
+    parityMismatchCount: 0,
+    lowThroughputRatioCount: 0,
+    warnings: [],
   };
 
   if (!gateConfig.enabled) {
@@ -626,8 +668,11 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
 
   let failedScenarioCount = 0;
   let mitigatedScenarioCount = 0;
+  let parityMismatchCount = 0;
+  let lowThroughputRatioCount = 0;
   const missingBaselineScenarios = [];
   const comparisons = [];
+  const warnings = [];
 
   for (const scenarioEntry of currentBenchmarkScenarios) {
     const similarityKey = String(scenarioEntry?.similarityKey || '').trim();
@@ -638,34 +683,103 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
       continue;
     }
 
+    const throughputRatioSutToBaseline = normalizeFiniteNumber(
+      scenarioEntry?.postgresBaseline?.throughputRatioSutToBaseline,
+    );
+    const throughputRatioBelowMinimum =
+      gateConfig.minimumThroughputRatioSutToBaseline !== null &&
+      throughputRatioSutToBaseline !== null &&
+      throughputRatioSutToBaseline <
+        gateConfig.minimumThroughputRatioSutToBaseline;
+    if (throughputRatioBelowMinimum) {
+      lowThroughputRatioCount += 1;
+    }
+
+    const parityStatus = String(
+      scenarioEntry?.parity?.status || '',
+    ).trim().toLowerCase();
+    const parityMismatch = parityStatus === 'mismatched';
+    if (parityMismatch) {
+      parityMismatchCount += 1;
+    }
+    const parityReasonsRaw = scenarioEntry?.parity?.reasons;
+    const parityReasonCodes = Array.isArray(parityReasonsRaw) ?
+      parityReasonsRaw
+        .map((reason) => {
+          if (typeof reason === 'string') {
+            return reason;
+          }
+          if (reason && typeof reason === 'object') {
+            return String(reason.code || '');
+          }
+          return '';
+        })
+        .filter((reasonCode) => reasonCode.length > 0) :
+      [];
+    const parityPolicyAction = parityMismatch ?
+      gateConfig.parityMismatchPolicy :
+      null;
+    if (parityMismatch &&
+        gateConfig.parityMismatchPolicy ===
+          BENCHMARK_GATE_PARITY_POLICY.WARN) {
+      const reasonSuffix = parityReasonCodes.length > 0 ?
+        ' reasons=' + parityReasonCodes.join(',') :
+        '';
+      warnings.push(
+        'parity mismatch for ' +
+          (scenarioEntry?.scenario || 'unknown-scenario') +
+          reasonSuffix,
+      );
+    }
+
     const baseline = baselineIndex.get(similarityKey);
+    let baselineOpsPerSec = null;
+    let throughputRegressionRatio = null;
+    let regressedBeyondThreshold = false;
+    let mitigationApplied = false;
     if (!baseline) {
       missingBaselineScenarios.push({
         scenario: scenarioEntry?.scenario || null,
         similarityKey,
       });
-      continue;
+    } else {
+      baselineOpsPerSec = normalizeFiniteNumber(baseline.opsPerSec);
     }
-
-    const baselineOpsPerSec = normalizeFiniteNumber(baseline.opsPerSec);
-    if (baselineOpsPerSec === null || baselineOpsPerSec <= 0) {
+    if (baseline &&
+        (baselineOpsPerSec === null || baselineOpsPerSec <= 0)) {
       missingBaselineScenarios.push({
         scenario: scenarioEntry?.scenario || null,
         similarityKey,
       });
-      continue;
+      baselineOpsPerSec = null;
+    }
+    if (baselineOpsPerSec !== null && baselineOpsPerSec > 0) {
+      throughputRegressionRatio =
+        (baselineOpsPerSec - currentOpsPerSec) / baselineOpsPerSec;
+      regressedBeyondThreshold =
+        throughputRegressionRatio > gateConfig.maxThroughputRegressionRatio;
+      mitigationApplied = regressedBeyondThreshold &&
+        Boolean(gateConfig.approvedMitigationId);
+      if (regressedBeyondThreshold && mitigationApplied) {
+        mitigatedScenarioCount += 1;
+      }
     }
 
-    const throughputRegressionRatio =
-      (baselineOpsPerSec - currentOpsPerSec) / baselineOpsPerSec;
-    const regressedBeyondThreshold =
-      throughputRegressionRatio > gateConfig.maxThroughputRegressionRatio;
-    const mitigationApplied = regressedBeyondThreshold &&
-      Boolean(gateConfig.approvedMitigationId);
+    const failureReasons = [];
     if (regressedBeyondThreshold && !mitigationApplied) {
+      failureReasons.push(BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_REGRESSION);
+    }
+    if (throughputRatioBelowMinimum) {
+      failureReasons.push(
+        BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_RATIO_BELOW_MINIMUM,
+      );
+    }
+    if (parityMismatch &&
+        gateConfig.parityMismatchPolicy === BENCHMARK_GATE_PARITY_POLICY.FAIL) {
+      failureReasons.push(BENCHMARK_GATE_FAIL_REASON.PARITY_MISMATCH);
+    }
+    if (failureReasons.length > 0) {
       failedScenarioCount += 1;
-    } else if (regressedBeyondThreshold && mitigationApplied) {
-      mitigatedScenarioCount += 1;
     }
 
     comparisons.push({
@@ -678,13 +792,25 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
       regressedBeyondThreshold,
       mitigationApplied,
       approvedMitigationId: gateConfig.approvedMitigationId,
-      baselineReportPath: baseline.reportPath,
-      baselineReportTimestamp: baseline.reportTimestamp,
+      baselineReportPath: baseline?.reportPath || null,
+      baselineReportTimestamp: baseline?.reportTimestamp || null,
+      throughputRatioSutToBaseline,
+      minimumThroughputRatioSutToBaseline:
+        gateConfig.minimumThroughputRatioSutToBaseline,
+      throughputRatioBelowMinimum,
+      parityStatus: parityStatus || null,
+      parityMismatch,
+      parityReasonCodes,
+      parityPolicyAction,
+      failureReasons,
     });
   }
 
+  const noUsableBaselines = comparisons.length > 0 &&
+    comparisons.every((entry) =>
+      normalizeFiniteNumber(entry?.baselineOpsPerSec) === null);
   const baselineMissingFailure = gateConfig.failIfBaselineMissing &&
-    comparisons.length === 0 &&
+    noUsableBaselines &&
     missingBaselineScenarios.length > 0;
   if (baselineMissingFailure) {
     return {
@@ -696,19 +822,46 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
       comparisons,
       failedScenarioCount: 1,
       mitigatedScenarioCount,
+      parityMismatchCount,
+      lowThroughputRatioCount,
+      warnings,
     };
   }
 
   if (failedScenarioCount > 0) {
+    const hasParityMismatchFailure = comparisons.some((entry) =>
+      Array.isArray(entry?.failureReasons) &&
+      entry.failureReasons.includes(BENCHMARK_GATE_FAIL_REASON.PARITY_MISMATCH),
+    );
+    const hasThroughputRatioFailure = comparisons.some((entry) =>
+      Array.isArray(entry?.failureReasons) &&
+      entry.failureReasons.includes(
+        BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_RATIO_BELOW_MINIMUM,
+      ),
+    );
+    const hasThroughputRegressionFailure = comparisons.some((entry) =>
+      Array.isArray(entry?.failureReasons) &&
+      entry.failureReasons.includes(BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_REGRESSION),
+    );
+    const failureReason = hasParityMismatchFailure ?
+      BENCHMARK_GATE_FAIL_REASON.PARITY_MISMATCH :
+      (hasThroughputRatioFailure ?
+        BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_RATIO_BELOW_MINIMUM :
+        (hasThroughputRegressionFailure ?
+          BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_REGRESSION :
+          BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_REGRESSION));
     return {
       ...baseResult,
       status: BENCHMARK_GATE_STATUS.FAILED,
-      reason: BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_REGRESSION,
+      reason: failureReason,
       comparedScenarioCount: comparisons.length,
       missingBaselineScenarios,
       comparisons,
       failedScenarioCount,
       mitigatedScenarioCount,
+      parityMismatchCount,
+      lowThroughputRatioCount,
+      warnings,
     };
   }
 
@@ -728,6 +881,9 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
     comparisons,
     failedScenarioCount: 0,
     mitigatedScenarioCount,
+    parityMismatchCount,
+    lowThroughputRatioCount,
+    warnings,
   };
 }
 

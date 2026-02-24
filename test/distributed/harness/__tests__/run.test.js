@@ -458,6 +458,164 @@ describe('benchmark regression gate helpers', () => {
       assert.equal(result.failedScenarioCount, 1);
       assert.equal(result.comparisons[0].regressedBeyondThreshold, true);
     });
+
+  it('evaluateBenchmarkRegressionGate fails when throughput ratio to postgres baseline is below minimum threshold',
+    () => {
+      const result = evaluateBenchmarkRegressionGate(
+        {
+          standardSummary: {
+            scenarios: [
+              {
+                scenario: 'postgres-baseline-comparison',
+                similarityKey: 'postgres-baseline-comparison|workload-a',
+                current: {
+                  opsPerSec: 90,
+                },
+                postgresBaseline: {
+                  throughputRatioSutToBaseline: 0.08,
+                },
+              },
+            ],
+          },
+        },
+        [],
+        {
+          raftProvider: 'raft_logic',
+          benchmarkGate: {
+            enabled: true,
+            baselineProvider: 'liferaft',
+            minimumThroughputRatioSutToBaseline: 0.1,
+          },
+        },
+      );
+
+      assert.equal(result.status, 'failed');
+      assert.equal(result.reason, 'throughput-ratio-below-minimum');
+      assert.equal(result.failedScenarioCount, 1);
+      assert.equal(result.comparisons[0].scenario, 'postgres-baseline-comparison');
+      assert.equal(result.comparisons[0].throughputRatioSutToBaseline, 0.08);
+      assert.equal(result.comparisons[0].minimumThroughputRatioSutToBaseline, 0.1);
+    });
+
+  it('evaluateBenchmarkRegressionGate fails on parity mismatch when parity policy is fail',
+    () => {
+      const result = evaluateBenchmarkRegressionGate(
+        {
+          standardSummary: {
+            scenarios: [
+              {
+                scenario: 'postgres-baseline-comparison',
+                similarityKey: 'postgres-baseline-comparison|workload-a',
+                current: {
+                  opsPerSec: 120,
+                },
+                postgresBaseline: {
+                  throughputRatioSutToBaseline: 0.4,
+                },
+                parity: {
+                  status: 'mismatched',
+                  reasons: [{code: 'load_fanout_mismatch'}],
+                },
+              },
+            ],
+          },
+        },
+        [
+          {
+            metadata: {raftProvider: 'liferaft'},
+            standardSummary: {
+              scenarios: [
+                {
+                  scenario: 'postgres-baseline-comparison',
+                  similarityKey: 'postgres-baseline-comparison|workload-a',
+                  current: {
+                    opsPerSec: 120,
+                  },
+                },
+              ],
+            },
+            path: '/tmp/liferaft-baseline.report.json',
+            timestamp: '2026-02-17T12:00:00.000Z',
+          },
+        ],
+        {
+          raftProvider: 'raft_logic',
+          benchmarkGate: {
+            enabled: true,
+            maxThroughputRegressionRatio: 0.1,
+            baselineProvider: 'liferaft',
+            parityMismatchPolicy: 'fail',
+          },
+        },
+      );
+
+      assert.equal(result.status, 'failed');
+      assert.equal(result.reason, 'parity-mismatch');
+      assert.equal(result.failedScenarioCount, 1);
+      assert.equal(result.parityMismatchCount, 1);
+    });
+
+  it('evaluateBenchmarkRegressionGate warns on parity mismatch when parity policy is warn',
+    () => {
+      const result = evaluateBenchmarkRegressionGate(
+        {
+          standardSummary: {
+            scenarios: [
+              {
+                scenario: 'postgres-baseline-comparison',
+                similarityKey: 'postgres-baseline-comparison|workload-a',
+                current: {
+                  opsPerSec: 120,
+                },
+                postgresBaseline: {
+                  throughputRatioSutToBaseline: 0.4,
+                },
+                parity: {
+                  status: 'mismatched',
+                  reasons: [{code: 'load_fanout_mismatch'}],
+                },
+              },
+            ],
+          },
+        },
+        [
+          {
+            metadata: {raftProvider: 'liferaft'},
+            standardSummary: {
+              scenarios: [
+                {
+                  scenario: 'postgres-baseline-comparison',
+                  similarityKey: 'postgres-baseline-comparison|workload-a',
+                  current: {
+                    opsPerSec: 120,
+                  },
+                },
+              ],
+            },
+            path: '/tmp/liferaft-baseline.report.json',
+            timestamp: '2026-02-17T12:00:00.000Z',
+          },
+        ],
+        {
+          raftProvider: 'raft_logic',
+          benchmarkGate: {
+            enabled: true,
+            maxThroughputRegressionRatio: 0.1,
+            baselineProvider: 'liferaft',
+            parityMismatchPolicy: 'warn',
+          },
+        },
+      );
+
+      assert.equal(result.status, 'passed');
+      assert.equal(result.reason, null);
+      assert.equal(result.parityMismatchCount, 1);
+      assert.ok(Array.isArray(result.warnings));
+      assert.ok(
+        result.warnings.some((warning) =>
+          String(warning).includes('parity mismatch')),
+      );
+    });
 });
 
 describe('buildImage', () => {
