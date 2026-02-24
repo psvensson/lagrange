@@ -164,6 +164,7 @@ const DISCOVERY_SERVICE_FIELD_REPLICAS = 'replicas';
 const DISCOVERY_REPLICA_FIELD_NODE_ID = 'nodeId';
 const DISCOVERY_REPLICA_FIELD_READINESS = 'readiness';
 const DISCOVERY_READINESS_FIELD_WORKLOAD_READY = 'workloadReady';
+const DISCOVERY_READINESS_FIELD_ROUTING_READY = 'routingReady';
 const DISCOVERY_READINESS_FIELD_SCHEMA_READY = 'schemaReady';
 const DISCOVERY_READINESS_FIELD_REASONS = 'reasons';
 const DISCOVERY_READINESS_REASON_FIELD_CODE = 'code';
@@ -174,6 +175,7 @@ const DISCOVERY_SOURCE_STATUS_ERROR = 'error';
 const DISCOVERY_UNKNOWN_NODE_ID = 'unknown';
 const DISCOVERY_ERROR_MESSAGE_MAX_CHARS = 160;
 const DISCOVERY_SELECTION_POSTGRES_WIRE = 'postgres-wire';
+const DISCOVERY_STALLED_ATTEMPT_THRESHOLD = 5;
 const LOAD_BREAKER_OWNER_NODE_CLIENT = 'node-client';
 
 function sleep(ms) {
@@ -568,7 +570,7 @@ function resolveServiceNodeIdsFromDiscovery(snapshot, serviceId, protocol) {
           summarizeDiscoveryReadinessReasons(readiness);
         continue;
       }
-      if (readiness[DISCOVERY_READINESS_FIELD_SCHEMA_READY] !== true) {
+      if (readiness[DISCOVERY_READINESS_FIELD_ROUTING_READY] !== true) {
         excludedReadinessByNodeId[nodeId] =
           summarizeDiscoveryReadinessReasons(readiness);
         continue;
@@ -810,6 +812,21 @@ function resolveControlSnapshotCandidates(seedNode, loadNodes) {
   return candidates;
 }
 
+function resolveRequiredReachableLoadNodeCount(options = {}, candidateCount) {
+  const boundedCandidateCount = Number.isInteger(candidateCount) &&
+    candidateCount > ZERO ?
+    candidateCount :
+    ONE;
+  const requestedMinimum = Number.isInteger(options.minReachableNodeCount) &&
+    options.minReachableNodeCount > ZERO ?
+    options.minReachableNodeCount :
+    ONE;
+  return Math.max(
+    ONE,
+    Math.min(boundedCandidateCount, requestedMinimum),
+  );
+}
+
 async function fetchControlSnapshotFromCandidates(nodeClient, candidates) {
   if (!Array.isArray(candidates) || candidates.length === ZERO) {
     throw new Error(QUIESCENCE_REASON_NO_SNAPSHOT_CANDIDATE);
@@ -843,6 +860,10 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
       }),
     };
   }
+  const requiredReachableNodeCount = resolveRequiredReachableLoadNodeCount(
+    options,
+    candidates.length,
+  );
 
   const candidateById = new Map();
   for (const node of candidates) {
@@ -877,6 +898,12 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
   let lastDiscoveredNodeIds = [];
   let lastCandidateNodeIds = [];
   let lastReachableNodeIds = [];
+  let bestReachableCandidates = [];
+  let bestSourceResults = [];
+  let bestDiscoveredNodeIds = [];
+  let bestCandidateNodeIds = [];
+  let bestReachableNodeIds = [];
+  let attemptsSinceBestReachableImprovement = ZERO;
 
   while (true) {
     attempts += ONE;
@@ -953,7 +980,18 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
         );
         const reachableCandidates = probeResults.filter(Boolean);
         lastReachableNodeIds = reachableCandidates.map((node) => node.id);
-        if (reachableCandidates.length > ZERO) {
+        if (reachableCandidates.length > bestReachableCandidates.length) {
+          bestReachableCandidates = [...reachableCandidates];
+          bestSourceResults = sourceResults;
+          bestDiscoveredNodeIds = [...discoveredNodeIds];
+          bestCandidateNodeIds = [...lastCandidateNodeIds];
+          bestReachableNodeIds = [...lastReachableNodeIds];
+          attemptsSinceBestReachableImprovement = ZERO;
+        } else if (bestReachableCandidates.length > ZERO &&
+            bestReachableCandidates.length < requiredReachableNodeCount) {
+          attemptsSinceBestReachableImprovement += ONE;
+        }
+        if (reachableCandidates.length >= requiredReachableNodeCount) {
           return {
             nodes: reachableCandidates,
             diagnostics: buildSutLoadDiscoveryDiagnostics({
@@ -967,18 +1005,50 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
             }),
           };
         }
+        if (bestReachableCandidates.length > ZERO &&
+            bestReachableCandidates.length < requiredReachableNodeCount &&
+            attemptsSinceBestReachableImprovement >=
+              DISCOVERY_STALLED_ATTEMPT_THRESHOLD) {
+          return {
+            nodes: bestReachableCandidates,
+            diagnostics: buildSutLoadDiscoveryDiagnostics({
+              attempts,
+              timedOut: true,
+              discoveredNodeIds: bestDiscoveredNodeIds,
+              candidateNodeIds: bestCandidateNodeIds,
+              reachableNodeIds: bestReachableNodeIds,
+              sourceResults: bestSourceResults,
+              elapsedMs: Date.now() - startedAt,
+            }),
+          };
+        }
       }
     }
     if (Date.now() >= deadline) {
+      const timedOutNodes = bestReachableCandidates.length > ZERO ?
+        bestReachableCandidates :
+        [];
+      const timedOutSourceResults = bestReachableCandidates.length > ZERO ?
+        bestSourceResults :
+        lastSourceResults;
+      const timedOutDiscoveredNodeIds = bestReachableCandidates.length > ZERO ?
+        bestDiscoveredNodeIds :
+        lastDiscoveredNodeIds;
+      const timedOutCandidateNodeIds = bestReachableCandidates.length > ZERO ?
+        bestCandidateNodeIds :
+        lastCandidateNodeIds;
+      const timedOutReachableNodeIds = bestReachableCandidates.length > ZERO ?
+        bestReachableNodeIds :
+        lastReachableNodeIds;
       return {
-        nodes: [],
+        nodes: timedOutNodes,
         diagnostics: buildSutLoadDiscoveryDiagnostics({
           attempts,
           timedOut: true,
-          discoveredNodeIds: lastDiscoveredNodeIds,
-          candidateNodeIds: lastCandidateNodeIds,
-          reachableNodeIds: lastReachableNodeIds,
-          sourceResults: lastSourceResults,
+          discoveredNodeIds: timedOutDiscoveredNodeIds,
+          candidateNodeIds: timedOutCandidateNodeIds,
+          reachableNodeIds: timedOutReachableNodeIds,
+          sourceResults: timedOutSourceResults,
           elapsedMs: Date.now() - startedAt,
         }),
       };
@@ -2622,6 +2692,19 @@ async function run(cluster) {
       {}),
   });
   const nodeClientPolicySnapshot = nodeClient.getPolicySnapshot();
+  const availableSutLoadCandidates = nodes.filter((node) =>
+    isLoadNodeCandidate(node),
+  ).length;
+  const requestedSutLoadNodeCount = Number.isInteger(
+    benchmarkConfig.baselineLoadNodeCount,
+  ) &&
+    benchmarkConfig.baselineLoadNodeCount > ZERO ?
+    benchmarkConfig.baselineLoadNodeCount :
+    ONE;
+  const targetSutLoadNodeCount = Math.max(
+    ONE,
+    Math.min(availableSutLoadCandidates, requestedSutLoadNodeCount),
+  );
   const consistencyEvaluator = new ConsistencyEvaluatorV2();
   const phaseEvents = [];
   const state = {
@@ -2673,6 +2756,19 @@ async function run(cluster) {
     }),
   };
 
+  async function ensureConvergenceResolved() {
+    if (state.convergence) {
+      return state.convergence;
+    }
+    state.convergence = await cluster.waitForConvergence({
+      settleTimeoutMs: cluster?._config?.convergence?.settleTimeoutMs,
+      quietWindowMs: cluster?._config?.convergence?.quietWindowMs,
+      targetVoterCount: cluster?._config?.convergence?.targetVoterCount,
+    });
+    state.diagnosticsCoverage = resolveDiagnosticsCoverage(state.convergence);
+    return state.convergence;
+  }
+
   const orchestrator = new PhaseOrchestrator({
     onEvent: (event) => {
       phaseEvents.push(event);
@@ -2681,6 +2777,7 @@ async function run(cluster) {
 
   const phaseHandlers = {
     [SCENARIO_PHASE.PRE_FLIGHT]: async () => {
+      await ensureConvergenceResolved();
       await ensureSutBenchmarkTable(nodeClient, seedNode, benchmarkTableName);
       await waitForSutBenchmarkTableReady(
         nodeClient,
@@ -2699,6 +2796,7 @@ async function run(cluster) {
           timeoutMs: benchmarkConfig.readyTimeoutMs,
           pollIntervalMs: benchmarkConfig.readyPollIntervalMs,
           tableName: benchmarkTableName,
+          minReachableNodeCount: targetSutLoadNodeCount,
         },
       );
       const sutLoadNodes = sutLoadResolution.nodes;
@@ -2724,12 +2822,7 @@ async function run(cluster) {
       };
     },
     [SCENARIO_PHASE.CONVERGE]: async () => {
-      state.convergence = await cluster.waitForConvergence({
-        settleTimeoutMs: cluster?._config?.convergence?.settleTimeoutMs,
-        quietWindowMs: cluster?._config?.convergence?.quietWindowMs,
-        targetVoterCount: cluster?._config?.convergence?.targetVoterCount,
-      });
-      state.diagnosticsCoverage = resolveDiagnosticsCoverage(state.convergence);
+      await ensureConvergenceResolved();
       return {
         status: PHASE_STATUS.OK,
         artifacts: {

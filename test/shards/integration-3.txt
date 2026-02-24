@@ -1,4 +1,5 @@
 test/integration/node-join-replica-activation.integration.test.js
+test/integration/message-group-multi-join-formation.integration.test.js
 test/integration/three-node-seed-rebalance.integration.test.js
 test/integration/seed-node-bootstrap.integration.test.js
 test/integration/cdc-propagation.integration.test.js
