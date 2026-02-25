@@ -1,43 +1,43 @@
 TAP version 14
 # Subtest: Multi-node cluster integration tests
-{"level":50,"time":"2026-02-21T09:24:14.265Z","nodeId":"test-node","pid":3759172,"subsystem":"node-joining","nodeId":"test-node","bootstrapUrl":"http://localhost:0/bootstrap","error":"HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","msg":"Failed to contact seed node"}
+{"level":50,"time":"2026-02-25T15:25:23.579Z","nodeId":"test-node","pid":2125372,"subsystem":"node-joining","nodeId":"test-node","bootstrapUrl":"http://localhost:0/bootstrap","error":"HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","msg":"Failed to contact seed node"}
     # Subtest: node joining - rejects duplicate node ID from cache
         ok 1 - join should fail for duplicate node ID
         ok 2 - phase should be failed
         ok 3 - error should mention already registered
         1..3
-    ok 1 - node joining - rejects duplicate node ID from cache # time=27.597ms
+    ok 1 - node joining - rejects duplicate node ID from cache # time=30.498ms
     
-{"level":50,"time":"2026-02-21T09:24:14.266Z","nodeId":"test-node","pid":3759172,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":8,"error":"Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","stack":"Error: Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:638:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:490:7)\n    at async StartupPipelineRunner.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/startup-pipeline-runner.js:45:9)\n    at async NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:328:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/multi-node-cluster.integration.test.js:83:20)","msg":"Joining phase failed"}
-{"level":50,"time":"2026-02-21T09:24:14.266Z","nodeId":"test-node","pid":3759172,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":9,"error":"Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","stack":"Error: Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:638:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async NodeJoiningService.executePhase (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:490:7)\n    at async StartupPipelineRunner.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/pipeline/startup-pipeline-runner.js:45:9)\n    at async NodeJoiningService.join (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:328:7)\n    at async Test.<anonymous> (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/integration/multi-node-cluster.integration.test.js:83:20)","msg":"Node joining failed"}
+{"level":50,"time":"2026-02-25T15:25:23.580Z","nodeId":"test-node","pid":2125372,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":9,"error":"Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","stack":"Error: Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:757:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Object.task (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:589:9)","msg":"Joining phase failed"}
+{"level":50,"time":"2026-02-25T15:25:23.580Z","nodeId":"test-node","pid":2125372,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":9,"error":"Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}","stack":"Error: Failed to contact seed node: HTTP 409: {\"error\":\"Node ID 550e8400-e29b-41d4-a716-446655440002 is already registered\"}\n    at NodeJoiningService.phaseContactSeed (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:757:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Object.task (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/bootstrap/node-joining-service.js:589:9)","msg":"Node joining failed"}
     # Subtest: node leaving - services are stopped and cleaned up
         ok 1 - should have 2 services
         ok 2 - should have MG replica
         ok 3 - should not be initialized
         ok 4 - should be stopped
         1..4
-    ok 2 - node leaving - services are stopped and cleaned up # time=495.759ms
+    ok 2 - node leaving - services are stopped and cleaned up # time=542.986ms
     
     # Subtest: replica rebalancing - triggers on node join
         ok 1 - bootstrap should succeed
         ok 2 - rebalance should succeed
         ok 3 - should have moves array
-{"level":50,"time":"2026-02-21T09:24:18.646Z","nodeId":"test-node","pid":3759172,"subsystem":"replica-handler","operationId":"0d237893-dc09-4771-bde7-c1263223bcfe","replicaId":"partition-1-r1","partitionId":"partition-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1229:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:463:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:418:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"test-node","msg":"Replica creation failed"}
-{"level":50,"time":"2026-02-21T09:24:18.648Z","nodeId":"test-node","pid":3759172,"subsystem":"query-executor","partitionId":"replica_operations-p1","address":"550e8400-e29b-41d4-a716-446655440020/partition/replica_operations-p1-r1","error":"Connection to node 550e8400-e29b-41d4-a716-446655440020 closed","nodeId":"test-node","msg":"Query routing failed"}
+{"level":50,"time":"2026-02-25T15:25:27.883Z","nodeId":"test-node","pid":2125372,"subsystem":"replica-handler","operationId":"11547524-36b8-409c-a982-965bc7906ac6","replicaId":"partition-1-r1","partitionId":"partition-1","error":"Partition metadata not found for partition-1","stack":"Error: Partition metadata not found for partition-1\n    at ReplicaHandler.resolveReplicaContext (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1230:13)\n    at ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:463:28)\n    at Immediate._onImmediate (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:418:12)\n    at process.processImmediate (node:internal/timers:485:21)","nodeId":"test-node","msg":"Replica creation failed"}
+{"level":50,"time":"2026-02-25T15:25:27.884Z","nodeId":"test-node","pid":2125372,"subsystem":"query-executor","partitionId":"replica_operations-p1","address":"550e8400-e29b-41d4-a716-446655440020/partition/replica_operations-p1-r1","error":"Connection to node 550e8400-e29b-41d4-a716-446655440020 closed","nodeId":"test-node","msg":"Query routing failed"}
         1..3
-    ok 3 - replica rebalancing - triggers on node join # time=3855.066ms
+    ok 3 - replica rebalancing - triggers on node join # time=3735.296ms
     
     # Subtest: message routing - local message delivery
         ok 1 - should have elected a leader
         ok 2 - should have message ID
         ok 3 - should have delivery status
         1..3
-    ok 4 - message routing - local message delivery # time=156.23ms
+    ok 4 - message routing - local message delivery # time=155.438ms
     
     # Subtest: message routing - cross-replica communication
         ok 1 - 3-replica group should elect a leader
         1..1
-    ok 5 - message routing - cross-replica communication # time=202.257ms
+    ok 5 - message routing - cross-replica communication # time=155.218ms
     
     # Subtest: rebalancer - maintains odd replica count
         ok 1 - bootstrap should succeed
@@ -46,7 +46,7 @@ TAP version 14
         ok 4 - should adjust 4 to odd
         ok 5 - should keep 5 as is
         1..5
-    ok 6 - rebalancer - maintains odd replica count # time=3964.457ms
+    ok 6 - rebalancer - maintains odd replica count # time=3373.879ms
     
     # Subtest: node service - tracks message group replicas
         ok 1 - should be equal
@@ -56,17 +56,17 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should still get MG replica
         1..6
-    ok 7 - node service - tracks message group replicas # time=711.221ms
+    ok 7 - node service - tracks message group replicas # time=719.592ms
     
     # Subtest: bootstrap API - validates node registration
         ok 1 - valid registration should succeed
         ok 2 - should have message group assignment
         1..2
-    ok 8 - bootstrap API - validates node registration # time=4.169ms
+    ok 8 - bootstrap API - validates node registration # time=4.374ms
     
     1..8
-ok 1 - Multi-node cluster integration tests # time=9637.514ms
+ok 1 - Multi-node cluster integration tests # time=8913.422ms
 
-{"level":"error","message":"Failed to update system table row","subsystem":"cdc-integration","tableName":"replica_operations","id":"0d237893-dc09-4771-bde7-c1263223bcfe","error":"Distributed operation failed due to participant failures","nodeId":"550e8400-e29b-41d4-a716-446655440020"}
-{"level":"error","message":"Async replica creation failed","subsystem":"replica-handler","operationId":"0d237893-dc09-4771-bde7-c1263223bcfe","replicaId":"partition-1-r1","error":"Distributed operation failed due to participant failures","stack":"Error: Distributed operation failed due to participant failures\n    at CDCIntegrationService.executeSQLViaQueryEngine (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/cdc/cdc-integration-service.js:565:17)\n    at async CDCIntegrationService.updateSystemTableRow (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/cdc/cdc-integration-service.js:1114:22)\n    at async ReplicaHandler.updateOperationStep (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1193:7)\n    at async ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:583:7)"}
+{"level":"error","message":"Failed to update system table row","subsystem":"cdc-integration","tableName":"replica_operations","id":"11547524-36b8-409c-a982-965bc7906ac6","error":"Distributed operation failed due to participant failures","nodeId":"550e8400-e29b-41d4-a716-446655440020"}
+{"level":"error","message":"Async replica creation failed","subsystem":"replica-handler","operationId":"11547524-36b8-409c-a982-965bc7906ac6","replicaId":"partition-1-r1","error":"Distributed operation failed due to participant failures","stack":"Error: Distributed operation failed due to participant failures\n    at CDCIntegrationService.executeSQLViaQueryEngine (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/cdc/cdc-integration-service.js:572:17)\n    at async CDCIntegrationService.updateSystemTableRow (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/cdc/cdc-integration-service.js:1130:22)\n    at async ReplicaHandler.updateOperationStep (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:1194:7)\n    at async ReplicaHandler.createReplicaAsync (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/node/replica-handler.js:584:7)"}
 1..1

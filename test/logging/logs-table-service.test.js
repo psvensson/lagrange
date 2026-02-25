@@ -471,6 +471,74 @@ test('LogsTableService shutdown flushes pending', async (t) => {
   LogsTableService.resetInstance();
 });
 
+test('LogsTableService shutdown drains queue while write is in-flight', async (t) => {
+  LogsTableService.resetInstance();
+
+  let resolveWrite;
+  const writeBlocked = new Promise((resolve) => {
+    resolveWrite = resolve;
+  });
+  const mockCdcService = {
+    upsertSystemTableRow: async () => {
+      await writeBlocked;
+    },
+  };
+
+  const service = LogsTableService.getInstance();
+  service.initialize({
+    cdcIntegrationService: mockCdcService,
+    flushChunkSize: 1,
+    flushYieldMs: 1,
+  });
+
+  await service.writeLogEntry({
+    logId: 'log-inflight-1',
+    timestamp: Date.now(),
+    level: 'INFO',
+    nodeId: 'test-node',
+    message: 'inflight message 1',
+    createdAt: Date.now(),
+  });
+  await service.writeLogEntry({
+    logId: 'log-inflight-2',
+    timestamp: Date.now(),
+    level: 'INFO',
+    nodeId: 'test-node',
+    message: 'inflight message 2',
+    createdAt: Date.now(),
+  });
+
+  // Start one direct flush to hold isWriting=true with one queued entry remaining.
+  const inFlightFlush = service.flush({
+    scheduleThroughWorkClass: false,
+    maxEntries: 1,
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  t.equal(service.getStats().isWriting, true, 'write should be in-flight before shutdown');
+  t.ok(
+    service.getStats().pendingWrites >= 1,
+    'queue should still contain pending entries while first write is blocked',
+  );
+
+  const shutdownPromise = service.shutdown();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  resolveWrite();
+
+  await Promise.race([
+    shutdownPromise,
+    new Promise((_resolve, reject) => setTimeout(() => {
+      reject(new Error('shutdown did not resolve while write was in-flight'));
+    }, 1000)),
+  ]);
+  await inFlightFlush;
+
+  t.equal(service.getStats().pendingWrites, 0, 'shutdown should drain pending writes');
+  t.equal(service.getStats().isWriting, false, 'shutdown should finish with no in-flight writes');
+
+  LogsTableService.resetInstance();
+});
+
 test('LogsTableService handles null entry', async (t) => {
   LogsTableService.resetInstance();
   const service = LogsTableService.getInstance();
@@ -521,6 +589,54 @@ test('LogsTableService drops logging-pipeline metrics to prevent recursion',
     await service.shutdown();
     LogsTableService.resetInstance();
   });
+
+test('LogsTableService resetInstance avoids async shutdown side effects', async (t) => {
+  LogsTableService.resetInstance();
+
+  const service = LogsTableService.getInstance();
+  service.initialize();
+  let shutdownCalls = 0;
+  service.shutdown = async () => {
+    shutdownCalls += 1;
+    return new Promise(() => {});
+  };
+
+  LogsTableService.resetInstance();
+
+  t.equal(shutdownCalls, 0, 'resetInstance should not start async shutdown work');
+  t.equal(LogsTableService.instance, null, 'resetInstance should clear singleton');
+});
+
+test('LogsTableService drops writes once shutdown has started', async (t) => {
+  LogsTableService.resetInstance();
+
+  const service = LogsTableService.getInstance();
+  service.initialize({
+    cdcIntegrationService: {
+      upsertSystemTableRow: async () => {},
+    },
+  });
+
+  service.isShuttingDown = true;
+  await service.writeLogEntry({
+    logId: 'log-after-shutdown-start',
+    timestamp: Date.now(),
+    level: 'INFO',
+    nodeId: 'test-node',
+    message: 'should not enqueue',
+    createdAt: Date.now(),
+  });
+
+  t.equal(
+    service.getStats().pendingWrites,
+    0,
+    'writeLogEntry should ignore writes after shutdown starts',
+  );
+
+  service.isShuttingDown = false;
+  await service.shutdown();
+  LogsTableService.resetInstance();
+});
 
 test('cleanup', async (t) => {
   LogsTableService.resetInstance();

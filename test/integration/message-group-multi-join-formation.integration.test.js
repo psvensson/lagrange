@@ -6,10 +6,12 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {request as httpRequest} from 'node:http';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {COLUMN, NODE_STATE, NUM, SERVICE_STATUS, SERVICE_TYPE, TABLES, TYPEOF}
@@ -30,6 +32,16 @@ const READY_WAIT_TIMEOUT_MS = 15000;
 const MESSAGE_GROUP_WAIT_TIMEOUT_MS = 10000;
 const POLL_INTERVAL_MS = 100;
 const MIN_LOCAL_MESSAGE_GROUPS = NUM.ONE;
+const ADMIN_HEALTH_WAIT_TIMEOUT_MS = 10000;
+const ADMIN_QUERY_TIMEOUT_MS = NUM.FIVE_THOUSAND;
+
+const HTTP_STATUS_OK = 200;
+const LOCALHOST = '127.0.0.1';
+const ADMIN_HEALTH_PATH = '/health';
+const ADMIN_STREAM_PATH = '/api/admin/stream';
+const ADMIN_MESSAGE_TYPE_QUERY = 'query';
+const ADMIN_MESSAGE_TYPE_QUERY_RESULT = 'query_result';
+const ADMIN_SMOKE_QUERY_SQL = 'SELECT node_id FROM nodes LIMIT 1';
 
 const SEED_NODE_ID = '550e8400-e29b-41d4-a716-446655440600';
 const JOINING_NODE_IDS = Object.freeze([
@@ -65,6 +77,168 @@ function hasHealthyLocalMessageGroup(service) {
   return Boolean(status?.initialized) && hasAddress;
 }
 
+function createQueryId() {
+  return 'q-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+}
+
+function resolveAdminApiPort(adminApi) {
+  const listenerAddress = adminApi?.getFastify?.()?.server?.address?.();
+  if (!listenerAddress || typeof listenerAddress !== 'object') {
+    return NUM.ZERO;
+  }
+  return Number.isInteger(listenerAddress.port) && listenerAddress.port > NUM.ZERO ?
+    listenerAddress.port :
+    NUM.ZERO;
+}
+
+async function probeAdminHealth(port) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const complete = (result) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(result);
+    };
+
+    const request = httpRequest({
+      host: LOCALHOST,
+      port,
+      path: ADMIN_HEALTH_PATH,
+      method: 'GET',
+      headers: {
+        Connection: 'close',
+      },
+      agent: false,
+    }, (response) => {
+      let rawBody = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => {
+        rawBody += chunk;
+      });
+      response.on('end', () => {
+        let parsedBody = null;
+        if (rawBody.length > NUM.ZERO) {
+          try {
+            parsedBody = JSON.parse(rawBody);
+          } catch {
+            parsedBody = null;
+          }
+        }
+        complete({
+          statusCode: Number.isInteger(response.statusCode) ?
+            response.statusCode :
+            null,
+          body: parsedBody,
+        });
+      });
+    });
+
+    request.on('error', () => {
+      complete({
+        statusCode: null,
+        body: null,
+      });
+    });
+
+    request.setTimeout(ADMIN_QUERY_TIMEOUT_MS, () => {
+      request.destroy();
+      complete({
+        statusCode: null,
+        body: null,
+      });
+    });
+
+    request.end();
+  });
+}
+
+async function queryAdminWebSocket(port, sql) {
+  const {default: WebSocket} = await import('ws');
+  const endpoint = 'ws://' + LOCALHOST + ':' + port + ADMIN_STREAM_PATH;
+  const queryId = createQueryId();
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const socket = new WebSocket(endpoint);
+    const timeoutId = setTimeout(() => {
+      finalize(new Error(
+        'timed out waiting for admin query response on port ' + port,
+      ));
+    }, ADMIN_QUERY_TIMEOUT_MS);
+    if (typeof timeoutId.unref === 'function') {
+      timeoutId.unref();
+    }
+
+    const finalize = (error, rows = []) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutId);
+      try {
+        socket.close();
+      } catch {
+        // Best-effort close.
+      }
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(rows);
+    };
+
+    socket.once('open', () => {
+      try {
+        socket.send(JSON.stringify({
+          type: ADMIN_MESSAGE_TYPE_QUERY,
+          queryId,
+          sql,
+          params: [],
+        }));
+      } catch (error) {
+        finalize(error);
+      }
+    });
+
+    socket.on('message', (data) => {
+      let payload = null;
+      try {
+        payload = JSON.parse(data.toString());
+      } catch {
+        payload = null;
+      }
+      if (!payload || typeof payload !== 'object') {
+        return;
+      }
+      if (payload.type !== ADMIN_MESSAGE_TYPE_QUERY_RESULT) {
+        return;
+      }
+      if (payload.queryId !== queryId) {
+        return;
+      }
+      if (typeof payload.error === 'string' && payload.error.length > NUM.ZERO) {
+        finalize(new Error(payload.error));
+        return;
+      }
+      finalize(null, Array.isArray(payload.results) ? payload.results : []);
+    });
+
+    socket.once('error', (error) => {
+      finalize(error);
+    });
+
+    socket.once('close', () => {
+      if (!settled) {
+        finalize(new Error(
+          'admin websocket closed before query result on port ' + port,
+        ));
+      }
+    });
+  });
+}
+
 test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_MS}, async (t) => {
   initializeTestEnvironment({
     rebalancer: {
@@ -84,8 +258,11 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
 
   let bootstrapResult = null;
   let seedApi = null;
+  let seedQueryEngine = null;
   const joiningServices = [];
+  const joiningServicesByNode = new Map();
   const joinResultsByNode = new Map();
+  const adminApis = [];
 
   try {
     bootstrapResult = await bootstrapService.bootstrap();
@@ -106,11 +283,12 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
       bootstrapService,
     });
     await seedApi.initialize(0, {listen: false});
-    seedApi.setSqlQueryEngine(new SQLQueryEngine({
+    seedQueryEngine = new SQLQueryEngine({
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       nodeId: SEED_NODE_ID,
-    }));
+    });
+    seedApi.setSqlQueryEngine(seedQueryEngine);
 
     const httpPost = createInProcHttpPost(seedApi);
     const expectedReadyNodeCount = JOINING_NODE_IDS.length + NUM.ONE;
@@ -130,6 +308,7 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
         httpPost,
       });
       joiningServices.push(joiningService);
+      joiningServicesByNode.set(joiningNodeId, joiningService);
 
       const joinResult = await joiningService.join();
       joinResultsByNode.set(joiningNodeId, joinResult);
@@ -217,7 +396,102 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
       totalLocalMessageGroups >= JOINING_NODE_IDS.length,
       'multi-join run should create at least one local message-group replica per joiner',
     );
+
+    const seedAdminApi = new AdminWebSocketAPI({
+      nodeId: SEED_NODE_ID,
+      systemTableCache,
+      sqlQueryEngine: seedQueryEngine,
+    });
+    await seedAdminApi.initialize(0, {
+      listen: true,
+      host: LOCALHOST,
+    });
+    adminApis.push({
+      nodeId: SEED_NODE_ID,
+      adminApi: seedAdminApi,
+    });
+
+    for (const joiningNodeId of JOINING_NODE_IDS) {
+      const joiningService = joiningServicesByNode.get(joiningNodeId);
+      const joiningSystemTableCache =
+        joiningService?.cdcIntegrationService?.systemTableCache;
+      const joiningSqlQueryEngine =
+        joiningService?.cdcIntegrationService?.sqlQueryEngine;
+      t.ok(
+        joiningSystemTableCache,
+        `${joiningNodeId} should expose a system table cache for admin API`,
+      );
+      t.ok(
+        joiningSqlQueryEngine,
+        `${joiningNodeId} should expose an SQL query engine for admin API`,
+      );
+      if (!joiningSystemTableCache || !joiningSqlQueryEngine) {
+        continue;
+      }
+
+      const joiningAdminApi = new AdminWebSocketAPI({
+        nodeId: joiningNodeId,
+        systemTableCache: joiningSystemTableCache,
+        sqlQueryEngine: joiningSqlQueryEngine,
+      });
+      await joiningAdminApi.initialize(0, {
+        listen: true,
+        host: LOCALHOST,
+      });
+      adminApis.push({
+        nodeId: joiningNodeId,
+        adminApi: joiningAdminApi,
+      });
+    }
+
+    for (const adminEntry of adminApis) {
+      const adminNodeId = adminEntry.nodeId;
+      const adminPort = resolveAdminApiPort(adminEntry.adminApi);
+      t.ok(
+        adminPort > NUM.ZERO,
+        `${adminNodeId} admin API should bind a network port`,
+      );
+      if (!(adminPort > NUM.ZERO)) {
+        continue;
+      }
+
+      const healthReady = await waitFor(async () => {
+        const probe = await probeAdminHealth(adminPort);
+        return probe.statusCode === HTTP_STATUS_OK &&
+          probe.body?.status === 'healthy';
+      }, ADMIN_HEALTH_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
+      t.equal(
+        healthReady,
+        true,
+        `${adminNodeId} admin API /health should be reachable`,
+      );
+
+      let queryRows = [];
+      let queryError = null;
+      try {
+        queryRows = await queryAdminWebSocket(
+          adminPort,
+          ADMIN_SMOKE_QUERY_SQL,
+        );
+      } catch (error) {
+        queryError = error;
+      }
+      t.equal(
+        queryError,
+        null,
+        `${adminNodeId} admin websocket query should succeed`,
+      );
+      if (!queryError) {
+        t.ok(
+          queryRows.length >= NUM.ONE,
+          `${adminNodeId} admin websocket should return node rows`,
+        );
+      }
+    }
   } finally {
+    for (let index = adminApis.length - NUM.ONE; index >= NUM.ZERO; index -= NUM.ONE) {
+      await adminApis[index].adminApi.shutdown().catch(() => {});
+    }
     for (let index = joiningServices.length - NUM.ONE; index >= NUM.ZERO; index -= NUM.ONE) {
       await gracefulJoiningShutdown(joiningServices[index]);
     }

@@ -1233,10 +1233,10 @@ class NodeHandle {
     if (diagnostics.bootstrapHealth.ok) {
       diagnostics.reachable = true;
       diagnostics.reachableBy = REACHABILITY_SOURCE_BOOTSTRAP_HEALTH;
-      this._lastReachabilityDiagnostics = diagnostics;
-      return diagnostics;
+      diagnostics.lastError = null;
+    } else {
+      diagnostics.lastError = diagnostics.bootstrapHealth.error;
     }
-    diagnostics.lastError = diagnostics.bootstrapHealth.error;
 
     const adminStatus = await httpGet(adminUrl, probeTimeoutMs);
     diagnostics.adminHealth = buildHealthProbeResult(

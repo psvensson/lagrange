@@ -396,6 +396,11 @@ const NODE_CLIENT_CHANNEL_POLICY_KEYS = Object.freeze({
   circuitBreakerThreshold: 'circuitBreakerThreshold',
   cooldownMs: 'cooldownMs',
 });
+const NODE_CLIENT_CONTEXT_KEY_TOLERATE_TRANSIENT_ERRORS =
+  'tolerateTransientErrors';
+const NODE_CLIENT_CONTEXT_KEYS = Object.freeze({
+  TOLERATE_TRANSIENT_ERRORS: NODE_CLIENT_CONTEXT_KEY_TOLERATE_TRANSIENT_ERRORS,
+});
 
 function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
@@ -700,6 +705,7 @@ export {
   BENCHMARK_GATE_DEFAULTS,
   NODE_CLIENT_CHANNEL,
   NODE_CLIENT_DEFAULT_CHANNEL_POLICIES,
+  NODE_CLIENT_CONTEXT_KEYS,
   NODE_CLIENT_ERROR_CODES,
   NODE_CLIENT_TIMEOUT_CLASS,
   NODE_CLIENT_CONTROL_SNAPSHOT_SCHEMA_VERSION,

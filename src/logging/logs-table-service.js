@@ -91,6 +91,7 @@ class LogsTableService extends EventEmitter {
     this.flushContinuationTimer = null;
     this.flushWorkScheduled = false;
     this.isWriting = false;
+    this.isShuttingDown = false;
     this.writeCount = 0;
     this.errorCount = 0;
     this.droppedWrites = 0;
@@ -115,9 +116,21 @@ class LogsTableService extends EventEmitter {
    * Reset the singleton instance (for testing).
    */
   static resetInstance() {
-    if (LogsTableService.instance) {
-      LogsTableService.instance.shutdown();
+    const instance = LogsTableService.instance;
+    if (!instance) {
+      return;
     }
+
+    // Reset must be synchronous for test teardown reliability.
+    // Avoid launching async shutdown work that can outlive the test process.
+    instance.isShuttingDown = true;
+    instance.stopFlushTimer();
+    instance.pendingWrites = [];
+    instance.flushWorkScheduled = false;
+    instance.isWriting = false;
+    instance.initialized = false;
+    instance.isShuttingDown = false;
+    instance.removeAllListeners();
     LogsTableService.instance = null;
   }
 
@@ -199,7 +212,7 @@ class LogsTableService extends EventEmitter {
    * @return {Promise<void>}
    */
   async writeLogEntry(entry) {
-    if (!entry) {
+    if (!entry || !this.initialized || this.isShuttingDown) {
       return;
     }
 
@@ -242,7 +255,9 @@ class LogsTableService extends EventEmitter {
    */
   async flush(options = {}) {
     const scheduleThroughWorkClass = options.scheduleThroughWorkClass !== false;
-    if (scheduleThroughWorkClass && this.workClassScheduler) {
+    if (scheduleThroughWorkClass &&
+      this.workClassScheduler &&
+      !this.isShuttingDown) {
       if (this.flushWorkScheduled) {
         return 0;
       }
@@ -534,14 +549,25 @@ class LogsTableService extends EventEmitter {
    * @return {Promise<void>}
    */
   async shutdown() {
+    this.isShuttingDown = true;
     this.stopFlushTimer();
 
-    // Final flush
-    while (this.pendingWrites.length > 0) {
-      await this.flush();
+    // Final drain. Avoid busy-spinning while an in-flight write is active.
+    // Use direct flush mode so shutdown does not depend on class-C scheduling.
+    while (this.pendingWrites.length > 0 || this.isWriting) {
+      if (this.isWriting) {
+        await this.sleep(Math.max(1, this.flushYieldMs));
+        continue;
+      }
+      await this.flush({
+        scheduleThroughWorkClass: false,
+        maxEntries: this.flushChunkSize,
+        yieldPending: false,
+      });
     }
 
     this.initialized = false;
+    this.isShuttingDown = false;
     this.removeAllListeners();
     this.logger.log(LOGGING_LOG_MSG.LOGS_TABLE_SERVICE_SHUTDOWN);
   }

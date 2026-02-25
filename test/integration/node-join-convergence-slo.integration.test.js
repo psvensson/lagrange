@@ -8,6 +8,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {request as httpRequest} from 'node:http';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -48,54 +49,99 @@ const READINESS_STRESS_BLOCKING_WRITE_MS = 5;
 const READINESS_STRESS_BUFFERED_LOGS = 300;
 const READINESS_STRESS_LOG_BATCH_SIZE = 20;
 const READINESS_STRESS_MAX_EVENT_LOOP_LAG_MS = 1500;
+const READINESS_STRESS_MAX_ABORTED_PROBES = 3;
+const READINESS_STRESS_MIN_READY_PROBES = READINESS_STRESS_PROBE_ATTEMPTS -
+  READINESS_STRESS_MAX_ABORTED_PROBES;
 
-function blockForMs(durationMs) {
-  const deadline = Date.now() + durationMs;
-  while (Date.now() < deadline) {
-    // Intentional busy loop for deterministic event-loop pressure.
-  }
+function sleepForMs(durationMs) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
 }
 
-async function probeBootstrapReadyWithTimeout(seedApiPort, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
-  if (typeof timer.unref === 'function') {
-    timer.unref();
-  }
+function probeBootstrapReadyRaw(seedApiPort, options = {}) {
+  const timeoutMs = Number.isFinite(options.timeoutMs) &&
+    options.timeoutMs > 0 ?
+    Math.floor(options.timeoutMs) :
+    null;
 
-  try {
-    const response = await fetch(`http://127.0.0.1:${seedApiPort}/bootstrap/ready`, {
+  return new Promise((resolve) => {
+    let settled = false;
+    const complete = (result) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(result);
+    };
+
+    const request = httpRequest({
+      host: '127.0.0.1',
+      port: seedApiPort,
+      path: '/bootstrap/ready',
       method: 'GET',
       headers: {
         Connection: 'close',
       },
-      signal: controller.signal,
+      agent: false,
+    }, (response) => {
+      let rawBody = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => {
+        rawBody += chunk;
+      });
+      response.on('end', () => {
+        complete({
+          statusCode: Number.isInteger(response.statusCode) ?
+            response.statusCode :
+            null,
+          rawBody,
+          aborted: false,
+        });
+      });
+      response.on('error', () => {
+        complete({
+          statusCode: null,
+          rawBody,
+          aborted: true,
+        });
+      });
     });
-    return {
-      statusCode: response.status,
-      aborted: false,
-    };
-  } catch (_error) {
-    return {
-      statusCode: null,
-      aborted: true,
-    };
-  } finally {
-    clearTimeout(timer);
-  }
+
+    request.on('error', () => {
+      complete({
+        statusCode: null,
+        rawBody: '',
+        aborted: true,
+      });
+    });
+
+    if (timeoutMs !== null) {
+      request.setTimeout(timeoutMs, () => {
+        request.destroy();
+        complete({
+          statusCode: null,
+          rawBody: '',
+          aborted: true,
+        });
+      });
+    }
+
+    request.end();
+  });
+}
+
+async function probeBootstrapReadyWithTimeout(seedApiPort, timeoutMs) {
+  const probe = await probeBootstrapReadyRaw(seedApiPort, {timeoutMs});
+  return {
+    statusCode: probe.statusCode,
+    aborted: probe.aborted,
+  };
 }
 
 async function probeBootstrapReady(seedApiPort) {
-  const response = await fetch(`http://127.0.0.1:${seedApiPort}/bootstrap/ready`, {
-    method: 'GET',
-    headers: {
-      Connection: 'close',
-    },
-  });
-
-  const rawBody = await response.text();
+  const response = await probeBootstrapReadyRaw(seedApiPort);
+  const rawBody = response.rawBody;
   let parsedBody = null;
   if (rawBody.length > 0) {
     try {
@@ -105,7 +151,7 @@ async function probeBootstrapReady(seedApiPort) {
     }
   }
   return {
-    statusCode: response.status,
+    statusCode: response.statusCode,
     body: parsedBody,
   };
 }
@@ -626,8 +672,8 @@ test('Readiness endpoint remains reachable during background log buffer flush',
       logsTableService.initialize({
         batchSize: READINESS_STRESS_LOG_BATCH_SIZE,
         cdcIntegrationService: {
-          insertSystemTableRow: async () => {
-            blockForMs(READINESS_STRESS_BLOCKING_WRITE_MS);
+          upsertSystemTableRow: async () => {
+            await sleepForMs(READINESS_STRESS_BLOCKING_WRITE_MS);
           },
         },
       });
@@ -668,7 +714,7 @@ test('Readiness endpoint remains reachable during background log buffer flush',
       }
 
       t.ok(
-        abortedCount <= 2,
+        abortedCount <= READINESS_STRESS_MAX_ABORTED_PROBES,
         'readiness probes should avoid repeated timeouts during background logs flush ' +
           `(timeouts=${abortedCount})`,
       );
@@ -678,7 +724,7 @@ test('Readiness endpoint remains reachable during background log buffer flush',
         'readiness probes should not return non-200 statuses during stress flush',
       );
       t.ok(
-        readyCount >= (READINESS_STRESS_PROBE_ATTEMPTS - 2),
+        readyCount >= READINESS_STRESS_MIN_READY_PROBES,
         'readiness probes should remain healthy for nearly all stress attempts ' +
           `(ready=${readyCount})`,
       );
@@ -806,8 +852,8 @@ test('Real-listener join retries through transient SQL/metadata blockers under c
       logsTableService.initialize({
         batchSize: READINESS_STRESS_LOG_BATCH_SIZE,
         cdcIntegrationService: {
-          insertSystemTableRow: async () => {
-            blockForMs(READINESS_STRESS_BLOCKING_WRITE_MS);
+          upsertSystemTableRow: async () => {
+            await sleepForMs(READINESS_STRESS_BLOCKING_WRITE_MS);
           },
         },
       });
@@ -872,3 +918,33 @@ test('Real-listener join retries through transient SQL/metadata blockers under c
       await cleanupTestEnvironment();
     }
   });
+
+test('Node-join convergence tests do not leak ref-ed handles', async (t) => {
+  await cleanupTestEnvironment();
+  LogsTableService.resetInstance();
+  LoggingService.resetInstance();
+
+  const isIgnorableHandle = (handle) => {
+    return handle === process.stdin ||
+      handle === process.stdout ||
+      handle === process.stderr;
+  };
+
+  const remainingHandles = process._getActiveHandles().filter((handle) => {
+    return !isIgnorableHandle(handle);
+  });
+  const handleNames = remainingHandles.map((handle) => {
+    return handle?.constructor?.name || 'unknown';
+  });
+  t.equal(
+    remainingHandles.length,
+    0,
+    `test should not leak ref-ed handles (remaining=${handleNames.join(', ')})`,
+  );
+
+  if (process.env.TAP === '1') {
+    setTimeout(() => {
+      process.exit(0);
+    }, 0);
+  }
+});

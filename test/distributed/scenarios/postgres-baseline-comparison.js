@@ -23,6 +23,7 @@ import {
   CONSISTENCY_VERDICT,
   GATE_RESULT_MODE,
   NODE_CLIENT_CHANNEL,
+  NODE_CLIENT_CONTEXT_KEYS,
   NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
   NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
   PHASE_STATUS,
@@ -159,7 +160,6 @@ const REASON_CLASS_UNKNOWN = 'unknown';
 const DISCOVERY_FIELD_SERVICES = 'services';
 const DISCOVERY_SERVICE_FIELD_PROTOCOL = 'protocol';
 const DISCOVERY_SERVICE_FIELD_SERVICE_IDS = 'serviceIds';
-const DISCOVERY_SERVICE_FIELD_NODES = 'nodes';
 const DISCOVERY_SERVICE_FIELD_REPLICAS = 'replicas';
 const DISCOVERY_REPLICA_FIELD_NODE_ID = 'nodeId';
 const DISCOVERY_REPLICA_FIELD_READINESS = 'readiness';
@@ -169,6 +169,13 @@ const DISCOVERY_READINESS_FIELD_SCHEMA_READY = 'schemaReady';
 const DISCOVERY_READINESS_FIELD_REASONS = 'reasons';
 const DISCOVERY_READINESS_REASON_FIELD_CODE = 'code';
 const DISCOVERY_READINESS_REASON_FIELD_DETAIL = 'detail';
+const DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID =
+  'probeReadinessByNodeId';
+const DISCOVERY_DIAGNOSTIC_PREFIX_PROBES = 'probes=';
+const DISCOVERY_PROBE_REASON_ADMIN_NOT_READY = 'admin_not_ready';
+const DISCOVERY_PROBE_REASON_REACHABLE_BY_PREFIX = 'reachable_by=';
+const DISCOVERY_PROBE_REASON_LAST_ERROR_PREFIX = 'last_error=';
+const DISCOVERY_PROBE_REASON_PROBE_ERROR_PREFIX = 'probe_error=';
 const DISCOVERY_SOURCE_STATUS_DISCOVERED = 'discovered';
 const DISCOVERY_SOURCE_STATUS_EMPTY = 'empty';
 const DISCOVERY_SOURCE_STATUS_ERROR = 'error';
@@ -177,6 +184,10 @@ const DISCOVERY_ERROR_MESSAGE_MAX_CHARS = 160;
 const DISCOVERY_SELECTION_POSTGRES_WIRE = 'postgres-wire';
 const DISCOVERY_STALLED_ATTEMPT_THRESHOLD = 5;
 const LOAD_BREAKER_OWNER_NODE_CLIENT = 'node-client';
+const NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME = 'tableName';
+const NODE_CLIENT_TRANSIENT_CONTEXT = Object.freeze({
+  [NODE_CLIENT_CONTEXT_KEYS.TOLERATE_TRANSIENT_ERRORS]: true,
+});
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -491,14 +502,11 @@ async function runSutSharedLoad({
   return loadRun.waitComplete();
 }
 
-function isNodeReachable(diagnostics) {
+function isNodeAdminReady(diagnostics) {
   if (!diagnostics || typeof diagnostics !== 'object') {
     return false;
   }
-  if (diagnostics.reachable === true || diagnostics.adminReady === true) {
-    return true;
-  }
-  return false;
+  return diagnostics.adminReady === true;
 }
 
 function isLoadNodeCandidate(node) {
@@ -526,6 +534,41 @@ function summarizeDiscoveryReadinessReasons(readiness) {
     summarized.push(detail ? code + '=' + detail : code);
   }
   return summarized;
+}
+
+function summarizeReadinessProbeReasons(options = {}) {
+  const reasons = [];
+  const errorMessage = typeof options.error === 'string' &&
+    options.error.length > ZERO ?
+    options.error :
+    null;
+  if (errorMessage) {
+    return [
+      DISCOVERY_PROBE_REASON_PROBE_ERROR_PREFIX +
+        truncateDiscoveryErrorMessage(errorMessage),
+    ];
+  }
+  const diagnostics = options.diagnostics;
+  if (!diagnostics || typeof diagnostics !== 'object') {
+    return [DISCOVERY_PROBE_REASON_ADMIN_NOT_READY];
+  }
+  if (typeof diagnostics.reachableBy === 'string' &&
+      diagnostics.reachableBy.length > ZERO) {
+    reasons.push(
+      DISCOVERY_PROBE_REASON_REACHABLE_BY_PREFIX + diagnostics.reachableBy,
+    );
+  }
+  if (typeof diagnostics.lastError === 'string' &&
+      diagnostics.lastError.length > ZERO) {
+    reasons.push(
+      DISCOVERY_PROBE_REASON_LAST_ERROR_PREFIX +
+        truncateDiscoveryErrorMessage(diagnostics.lastError),
+    );
+  }
+  if (reasons.length === ZERO) {
+    reasons.push(DISCOVERY_PROBE_REASON_ADMIN_NOT_READY);
+  }
+  return reasons;
 }
 
 function resolveServiceNodeIdsFromDiscovery(snapshot, serviceId, protocol) {
@@ -561,21 +604,19 @@ function resolveServiceNodeIdsFromDiscovery(snapshot, serviceId, protocol) {
       }
       seenNodeIds.add(nodeId);
       const readiness = replica?.[DISCOVERY_REPLICA_FIELD_READINESS];
+      let includeNodeId = true;
       if (!readiness || typeof readiness !== 'object') {
         excludedReadinessByNodeId[nodeId] = ['readiness_missing'];
-        continue;
-      }
-      if (readiness[DISCOVERY_READINESS_FIELD_WORKLOAD_READY] !== true) {
+      } else if (readiness[DISCOVERY_READINESS_FIELD_WORKLOAD_READY] !== true ||
+          readiness[DISCOVERY_READINESS_FIELD_ROUTING_READY] !== true ||
+          readiness[DISCOVERY_READINESS_FIELD_SCHEMA_READY] !== true) {
         excludedReadinessByNodeId[nodeId] =
           summarizeDiscoveryReadinessReasons(readiness);
-        continue;
+        includeNodeId = false;
       }
-      if (readiness[DISCOVERY_READINESS_FIELD_ROUTING_READY] !== true) {
-        excludedReadinessByNodeId[nodeId] =
-          summarizeDiscoveryReadinessReasons(readiness);
-        continue;
+      if (includeNodeId) {
+        discoveredNodeIds.push(nodeId);
       }
-      discoveredNodeIds.push(nodeId);
     }
   }
   return {
@@ -652,6 +693,20 @@ function buildSutLoadDiscoveryDiagnostics(options = {}) {
             {},
       })) :
       [],
+    [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
+      options[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] &&
+      typeof options[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] ===
+        'object' ?
+        Object.fromEntries(
+          Object.entries(
+            options[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID],
+          )
+            .map(([nodeId, reasons]) => [
+              String(nodeId),
+              Array.isArray(reasons) ? reasons.map((reason) => String(reason)) : [],
+            ]),
+        ) :
+        {},
     elapsedMs: Number.isFinite(options.elapsedMs) ?
       Math.max(ZERO, Math.floor(options.elapsedMs)) :
       ZERO,
@@ -698,6 +753,12 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
   const sourceResults = Array.isArray(diagnostics.sourceResults) ?
     diagnostics.sourceResults :
     [];
+  const probeReadinessByNodeId =
+    diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] &&
+    typeof diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] ===
+      'object' ?
+      diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] :
+      {};
   const sourceSummary = sourceResults
     .map((sourceResult) => {
       const nodeId =
@@ -751,6 +812,14 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
       return nodeId + ':' + status;
     })
     .join(';');
+  const probeSummary = Object.entries(probeReadinessByNodeId)
+    .map(([nodeId, reasons]) => {
+      const reasonList = Array.isArray(reasons) && reasons.length > ZERO ?
+        reasons.join('|') :
+        DISCOVERY_PROBE_REASON_ADMIN_NOT_READY;
+      return String(nodeId) + ':' + reasonList;
+    })
+    .join(';');
   const diagnosticsSummary = [
     'attempts=' + String(attempts),
     'timedOut=' + String(diagnostics.timedOut === true),
@@ -759,6 +828,11 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
   ];
   if (sourceSummary.length > ZERO) {
     diagnosticsSummary.push('sources=' + sourceSummary);
+  }
+  if (probeSummary.length > ZERO) {
+    diagnosticsSummary.push(
+      DISCOVERY_DIAGNOSTIC_PREFIX_PROBES + probeSummary,
+    );
   }
   return diagnosticsSummary.join(', ');
 }
@@ -827,7 +901,11 @@ function resolveRequiredReachableLoadNodeCount(options = {}, candidateCount) {
   );
 }
 
-async function fetchControlSnapshotFromCandidates(nodeClient, candidates) {
+async function fetchControlSnapshotFromCandidates(
+  nodeClient,
+  candidates,
+  context = {},
+) {
   if (!Array.isArray(candidates) || candidates.length === ZERO) {
     throw new Error(QUIESCENCE_REASON_NO_SNAPSHOT_CANDIDATE);
   }
@@ -837,7 +915,7 @@ async function fetchControlSnapshotFromCandidates(nodeClient, candidates) {
       node.id :
       'unknown';
     try {
-      return await nodeClient.fetchControlSnapshot(node);
+      return await nodeClient.fetchControlSnapshot(node, context);
     } catch (error) {
       errors.push({
         nodeId,
@@ -887,10 +965,13 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
     options.pollIntervalMs > ZERO ?
     options.pollIntervalMs :
     BENCHMARK_DEFAULTS.readyPollIntervalMs;
-  const readinessTableName =
-    typeof options.tableName === 'string' && options.tableName.length > ZERO ?
-      options.tableName :
-      null;
+  const discoveryTableName = normalizeTableName(options.tableName, '');
+  const discoveryContext = discoveryTableName.length > ZERO ?
+    {
+      ...NODE_CLIENT_TRANSIENT_CONTEXT,
+      [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME]: discoveryTableName,
+    } :
+    NODE_CLIENT_TRANSIENT_CONTEXT;
   const startedAt = Date.now();
   const deadline = startedAt + timeoutMs;
   let attempts = ZERO;
@@ -898,11 +979,13 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
   let lastDiscoveredNodeIds = [];
   let lastCandidateNodeIds = [];
   let lastReachableNodeIds = [];
+  let lastProbeReadinessByNodeId = {};
   let bestReachableCandidates = [];
   let bestSourceResults = [];
   let bestDiscoveredNodeIds = [];
   let bestCandidateNodeIds = [];
   let bestReachableNodeIds = [];
+  let bestProbeReadinessByNodeId = {};
   let attemptsSinceBestReachableImprovement = ZERO;
 
   while (true) {
@@ -916,10 +999,10 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
         sourceNode.id :
         DISCOVERY_UNKNOWN_NODE_ID;
       try {
-        const snapshot = await nodeClient.fetchServiceDiscovery(sourceNode, {
-          requireReadiness: true,
-          tableName: readinessTableName,
-        });
+        const snapshot = await nodeClient.fetchServiceDiscovery(
+          sourceNode,
+          discoveryContext,
+        );
         const discoverySelection =
           resolveSutLoadNodeSelectionFromDiscovery(snapshot);
         const snapshotNodeIds = discoverySelection.nodeIds;
@@ -968,17 +1051,40 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
       );
       lastCandidateNodeIds = discoveredCandidates.map((node) => node.id);
       if (discoveredCandidates.length > ZERO) {
-        const probeResults = await Promise.all(
+        const readinessProbeResults = await Promise.all(
           discoveredCandidates.map(async (node) => {
             try {
               const diagnostics = await nodeClient.probeReadiness(node);
-              return isNodeReachable(diagnostics) ? node : null;
+              return {
+                node,
+                diagnostics,
+                error: null,
+                adminReady: isNodeAdminReady(diagnostics),
+              };
             } catch (_error) {
-              return null;
+              return {
+                node,
+                diagnostics: null,
+                error: String(_error?.message || _error),
+                adminReady: false,
+              };
             }
           }),
         );
-        const reachableCandidates = probeResults.filter(Boolean);
+        const reachableCandidates = [];
+        const probeReadinessByNodeId = {};
+        for (const probeResult of readinessProbeResults) {
+          const nodeId = String(probeResult?.node?.id || DISCOVERY_UNKNOWN_NODE_ID);
+          if (probeResult?.adminReady === true) {
+            reachableCandidates.push(probeResult.node);
+            continue;
+          }
+          probeReadinessByNodeId[nodeId] = summarizeReadinessProbeReasons({
+            diagnostics: probeResult?.diagnostics,
+            error: probeResult?.error,
+          });
+        }
+        lastProbeReadinessByNodeId = probeReadinessByNodeId;
         lastReachableNodeIds = reachableCandidates.map((node) => node.id);
         if (reachableCandidates.length > bestReachableCandidates.length) {
           bestReachableCandidates = [...reachableCandidates];
@@ -986,6 +1092,9 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
           bestDiscoveredNodeIds = [...discoveredNodeIds];
           bestCandidateNodeIds = [...lastCandidateNodeIds];
           bestReachableNodeIds = [...lastReachableNodeIds];
+          bestProbeReadinessByNodeId = {
+            ...probeReadinessByNodeId,
+          };
           attemptsSinceBestReachableImprovement = ZERO;
         } else if (bestReachableCandidates.length > ZERO &&
             bestReachableCandidates.length < requiredReachableNodeCount) {
@@ -1001,6 +1110,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
               candidateNodeIds: lastCandidateNodeIds,
               reachableNodeIds: lastReachableNodeIds,
               sourceResults,
+              [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
+                lastProbeReadinessByNodeId,
               elapsedMs: Date.now() - startedAt,
             }),
           };
@@ -1018,6 +1129,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
               candidateNodeIds: bestCandidateNodeIds,
               reachableNodeIds: bestReachableNodeIds,
               sourceResults: bestSourceResults,
+              [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
+                bestProbeReadinessByNodeId,
               elapsedMs: Date.now() - startedAt,
             }),
           };
@@ -1040,6 +1153,9 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
       const timedOutReachableNodeIds = bestReachableCandidates.length > ZERO ?
         bestReachableNodeIds :
         lastReachableNodeIds;
+      const timedOutProbeReadinessByNodeId = bestReachableCandidates.length > ZERO ?
+        bestProbeReadinessByNodeId :
+        lastProbeReadinessByNodeId;
       return {
         nodes: timedOutNodes,
         diagnostics: buildSutLoadDiscoveryDiagnostics({
@@ -1049,6 +1165,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
           candidateNodeIds: timedOutCandidateNodeIds,
           reachableNodeIds: timedOutReachableNodeIds,
           sourceResults: timedOutSourceResults,
+          [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
+            timedOutProbeReadinessByNodeId,
           elapsedMs: Date.now() - startedAt,
         }),
       };
@@ -1102,7 +1220,12 @@ async function waitForSutLoadQuiescence({
     stableWindowMs: effectiveStableWindowMs,
     probeNode: async (node) => {
       try {
-        await nodeClient.queryControl(node, tableProbeSql);
+        await nodeClient.queryControl(
+          node,
+          tableProbeSql,
+          [],
+          NODE_CLIENT_TRANSIENT_CONTEXT,
+        );
         return {
           ready: true,
           reasons: [],
@@ -1124,6 +1247,7 @@ async function waitForSutLoadQuiescence({
         const controlSnapshot = await fetchControlSnapshotFromCandidates(
           nodeClient,
           controlSnapshotCandidates,
+          NODE_CLIENT_TRANSIENT_CONTEXT,
         );
         const replicaOperations = controlSnapshot?.replicaOperations || {};
         const inFlightCount = Number.isInteger(replicaOperations.inFlightCount) ?
@@ -2806,7 +2930,7 @@ async function run(cluster) {
       );
       assert.ok(
         sutLoadNodes.length > ZERO,
-        'No discovered reachable load service nodes available for benchmark load' +
+        'No discovered admin-ready load service nodes available for benchmark load' +
           (discoveryDiagnostics.length > ZERO ?
             ' (' + discoveryDiagnostics + ')' :
             ''),

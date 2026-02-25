@@ -505,6 +505,91 @@ test('Unit: NodeHandle.isReachable falls back to admin query when HTTP probes ar
     }
   });
 
+test(
+  'Unit: NodeHandle.getReachabilityDiagnostics checks admin readiness even when bootstrap health is reachable',
+  async () => {
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.JOINER,
+      {getContainerLogs: async () => ''},
+    );
+
+    const originalGet = http.get;
+    const originalQueryWithTimeout = node.queryWithTimeout;
+    const originalGetAdminSocket = node._getAdminSocket;
+    const calledUrls = [];
+    let sqlProbeCount = 0;
+    http.get = (url, _options, callback) => {
+      calledUrls.push(String(url));
+      const req = {
+        on: () => req,
+        destroy: () => {},
+      };
+      process.nextTick(() => {
+        callback({
+          statusCode: String(url).includes(':8080/health') ? 200 : 503,
+          resume: () => {},
+        });
+      });
+      return req;
+    };
+    node._getAdminSocket = async () => {
+      throw new Error('admin ws unavailable');
+    };
+    node.queryWithTimeout = async (sql) => {
+      if (sql === 'SELECT node_id FROM nodes LIMIT 1') {
+        sqlProbeCount += 1;
+      }
+      return {rows: [{ok: 1}]};
+    };
+
+    try {
+      const diagnostics = await node.getReachabilityDiagnostics();
+      assert.strictEqual(
+        diagnostics.bootstrapHealth.ok,
+        true,
+        'bootstrap health probe should report reachable',
+      );
+      assert.strictEqual(
+        diagnostics.adminHealth.ok,
+        false,
+        'admin health probe should still execute after bootstrap health success',
+      );
+      assert.strictEqual(
+        diagnostics.sqlProbe.ok,
+        true,
+        'sql readiness probe should execute as admin fallback',
+      );
+      assert.strictEqual(
+        diagnostics.adminReady,
+        true,
+        'admin readiness should be true when sql fallback succeeds',
+      );
+      assert.strictEqual(
+        diagnostics.reachableBy,
+        'sql_probe',
+        'reachability source should reflect admin-readiness probe path',
+      );
+      assert.strictEqual(
+        sqlProbeCount,
+        1,
+        'sql readiness fallback should run exactly once',
+      );
+      assert.strictEqual(
+        calledUrls.length,
+        2,
+        'diagnostics should execute both bootstrap and admin HTTP probes',
+      );
+    } finally {
+      http.get = originalGet;
+      node.queryWithTimeout = originalQueryWithTimeout;
+      node._getAdminSocket = originalGetAdminSocket;
+    }
+  },
+);
+
 test('Unit: NodeHandle.getReachabilityDiagnostics reports all probe stages on failure',
   async () => {
     const node = new NodeHandle(

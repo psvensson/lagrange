@@ -8,7 +8,7 @@ TAP version 14
         ok 5 - should avoid standalone add moves when degraded topology is already at target
         ok 6 - should schedule REPLACE moves for spread correction under degraded topology
         1..6
-    ok 1 - full flow: seed node, second node joins, replica placed via message group # time=49.388ms
+    ok 1 - full flow: seed node, second node joins, replica placed via message group # time=50.761ms
     
     # Subtest: message group routes CREATE_REPLICA via real WebSocket
         ok 1 - should have message ID
@@ -17,7 +17,7 @@ TAP version 14
         ok 4 - should receive CREATE_REPLICA message
         ok 5 - should have correct request ID
         1..5
-    ok 2 - message group routes CREATE_REPLICA via real WebSocket # time=2.385ms
+    ok 2 - message group routes CREATE_REPLICA via real WebSocket # time=2.452ms
     
     # Subtest: rebalancer schedules REPLACE moves in degraded two-node topology
         ok 1 - rebalance should succeed
@@ -27,7 +27,7 @@ TAP version 14
         ok 5 - should schedule one paired replacement move with two ready nodes
         ok 6 - scheduled degraded move should use REPLACE workflow
         1..6
-    ok 3 - rebalancer schedules REPLACE moves in degraded two-node topology # time=1.167ms
+    ok 3 - rebalancer schedules REPLACE moves in degraded two-node topology # time=1.246ms
     
     # Subtest: replica lifecycle manager handles CREATE_REPLICA idempotently
         ok 1 - first call should return initiated
@@ -35,9 +35,9 @@ TAP version 14
         ok 3 - second call should return already_exists
         ok 4 - should only create replica once
         1..4
-    ok 4 - replica lifecycle manager handles CREATE_REPLICA idempotently # time=26.965ms
+    ok 4 - replica lifecycle manager handles CREATE_REPLICA idempotently # time=27.587ms
     
     1..4
-ok 1 - Cross-node replica placement integration tests # time=174.741ms
+ok 1 - Cross-node replica placement integration tests # time=181.919ms
 
 1..1

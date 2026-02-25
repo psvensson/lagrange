@@ -3,6 +3,7 @@ import {test} from '../../../../src/test-helpers/tap.js';
 import {NodeClient} from '../node-client.js';
 import {
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+  NODE_CLIENT_CONTEXT_KEYS,
   NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
   NODE_CLIENT_SERVICE_DISCOVERY_SQL,
   NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
@@ -773,6 +774,63 @@ test('NodeClient isolates control channel breaker state from load failures',
     assert.equal(controlResult.rows[0].ok, true);
     assert.equal(loadCallCount, ONE, 'breaker-open load call should be short-circuited');
     assert.equal(controlCallCount, ONE, 'control channel must remain healthy');
+  });
+
+test('NodeClient suppresses breaker opens for transient control errors',
+  async () => {
+    let controlCallCount = ZERO;
+    const node = {
+      id: 'node-transient-control',
+      async queryWithTimeout(sql) {
+        if (sql !== 'SELECT control') {
+          return {rows: []};
+        }
+        controlCallCount += ONE;
+        if (controlCallCount === ONE) {
+          throw new Error('Table not found: benchmark_events');
+        }
+        return {rows: [{ok: true}]};
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+
+    const client = new NodeClient({
+      channelPolicies: {
+        control: {
+          circuitBreakerThreshold: 1,
+          cooldownMs: 1000,
+          retryBudget: 0,
+        },
+      },
+    });
+
+    await assert.rejects(
+      client.queryControl(
+        node,
+        'SELECT control',
+        [],
+        {
+          [NODE_CLIENT_CONTEXT_KEYS.TOLERATE_TRANSIENT_ERRORS]: true,
+        },
+      ),
+      /Table not found/i,
+    );
+    const result = await client.queryControl(
+      node,
+      'SELECT control',
+      [],
+      {
+        [NODE_CLIENT_CONTEXT_KEYS.TOLERATE_TRANSIENT_ERRORS]: true,
+      },
+    );
+    assert.equal(result.rows[0].ok, true);
+    assert.equal(
+      controlCallCount,
+      2,
+      'transient control failures should not trigger breaker short-circuit',
+    );
   });
 
 test('NodeClient tracks timeout budget mismatches for probe responses', async () => {

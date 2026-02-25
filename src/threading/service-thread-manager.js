@@ -60,9 +60,18 @@ class ServiceThreadManager extends EventEmitter {
    * Reset the singleton instance (for testing).
    */
   static resetInstance() {
-    if (ServiceThreadManager.instance) {
-      ServiceThreadManager.instance.shutdown().catch(() => {});
+    const instance = ServiceThreadManager.instance;
+    if (!instance) {
+      return;
     }
+
+    if (instance.pool && typeof instance.pool.destroy === 'function') {
+      instance.pool.destroy().catch(() => {});
+    }
+    instance.pool = null;
+    instance.services.clear();
+    instance.initialized = false;
+    instance.removeAllListeners();
     ServiceThreadManager.instance = null;
   }
 
@@ -354,6 +363,7 @@ class ServiceThreadManager extends EventEmitter {
     }
 
     this.logger.info(THREADING_LOG_MSG.SHUTDOWN_START);
+    let shutdownError = null;
 
     // Unregister all services
     const serviceIds = Array.from(this.services.keys());
@@ -365,18 +375,31 @@ class ServiceThreadManager extends EventEmitter {
           serviceId,
           error: error.message,
         });
-        throw error;
+        if (!shutdownError) {
+          shutdownError = error;
+        }
+        this.services.delete(serviceId);
       }
     }
 
     // Destroy the pool
     if (this.pool) {
-      await this.pool.destroy();
+      try {
+        await this.pool.destroy();
+      } catch (error) {
+        if (!shutdownError) {
+          shutdownError = error;
+        }
+      }
       this.pool = null;
     }
 
+    this.services.clear();
     this.initialized = false;
     this.logger.info(THREADING_LOG_MSG.SHUTDOWN_COMPLETE);
+    if (shutdownError) {
+      throw shutdownError;
+    }
   }
 }
 

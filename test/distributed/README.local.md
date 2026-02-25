@@ -57,8 +57,11 @@ Common configs:
 4. `test/distributed/config/local-benchmark.json`
 5. `test/distributed/config/local-benchmark-3node.json`
 6. `test/distributed/config/local-benchmark-5node.json`
-7. `test/distributed/config/gcp-small.json`
-8. `test/distributed/config/gcp-large.json`
+7. `test/distributed/config/local-benchmark-7node.json`
+8. `test/distributed/config/local-benchmark-3node-timeout180.json`
+9. `test/distributed/config/local-benchmark-3node-timeout600.json`
+10. `test/distributed/config/gcp-small.json`
+11. `test/distributed/config/gcp-large.json`
 
 ## Scenario Names
 
@@ -102,6 +105,53 @@ Benchmark tuning notes (in `benchmark` config block):
 1. `loadOpsPerSec`: target request rate for system-under-test load.
 2. `loadMaxInFlight`: in-flight cap for harness load generation. Keep this
    high enough to avoid client-side throttling when latency increases.
+
+## Postgres Baseline Workflow
+
+Run baseline-comparison scenario on local benchmark profiles:
+
+```bash
+TS="$(date -u +%Y%m%dT%H%M%SZ)"
+node test/distributed/run.js \
+  --config test/distributed/config/local-benchmark-3node.json \
+  --scenario postgres-baseline-comparison \
+  --output "test-output/reports/postgres-baseline-3node-${TS}.report.json" \
+  --verbose
+
+TS="$(date -u +%Y%m%dT%H%M%SZ)"
+node test/distributed/run.js \
+  --config test/distributed/config/local-benchmark-7node.json \
+  --scenario postgres-baseline-comparison \
+  --output "test-output/reports/postgres-baseline-7node-${TS}.report.json" \
+  --verbose
+```
+
+Compare latest run against prior run for both `3node` and `7node` profiles:
+
+```bash
+scripts/compare-latest-baseline-runs.sh --report-dir test-output/reports
+```
+
+The comparison output includes:
+
+1. Run-to-run deltas (pass/fail, duration, throughput, total ops, latency, queue delay).
+2. Load execution details (`attempt_errors`, `dispatched_ops`,
+   `undispatched_ops`, channel error counts).
+3. Per-run SUT-vs-Postgres baseline comparison from the same report when
+   available (`sut_vs_pg[...]`, throughput ratio, latency ratios).
+4. Load parity and discovery summaries (`load_parity[...]`,
+   `sut_discovery[...]`) and truncated error strings for fast triage.
+
+The compare script requires report names matching:
+
+1. `postgres-baseline-3node-*.report.json`
+2. `postgres-baseline-7node-*.report.json`
+
+Optional deep-dive analysis for one report:
+
+```bash
+npm run analyze:pg-baseline -- --report test-output/reports/<report>.report.json
+```
 
 ## Artifacts
 

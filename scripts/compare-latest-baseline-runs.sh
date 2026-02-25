@@ -92,6 +92,11 @@ compare_profile() {
     def num($v): ($v // 0);
     def f2: ((.*100 | round) / 100);
     def f3: ((.*1000 | round) / 1000);
+    def arr($v): if ($v | type) == "array" then $v else [] end;
+    def obj($v): if ($v | type) == "object" then $v else {} end;
+    def short($text; $max):
+      ($text // "" | tostring) as $s
+      | if ($s | length) <= $max then $s else ($s[0:$max] + "...") end;
     def sgn:
       if . > 0 then "+" + (.|tostring)
       else (.|tostring)
@@ -100,10 +105,76 @@ compare_profile() {
       if $old == 0 then "n/a"
       else ((((($new - $old) / $old) * 100) | f2) | tostring) + "%"
       end;
+    def details_root($scenario):
+      obj($scenario.details.details // $scenario.details // {});
+    def comparison($scenario):
+      obj(details_root($scenario).comparison);
+    def parity($scenario):
+      obj(details_root($scenario).parity);
+    def benchmark($scenario):
+      obj(details_root($scenario).benchmark);
+    def channel_metrics($scenario):
+      obj(details_root($scenario).channelMetrics);
     def phase_map($scenario):
-      (($scenario.details.details.phaseTimeline // $scenario.details.phaseTimeline // [])
+      (arr(details_root($scenario).phaseTimeline)
        | map({key: .phase, value: (.durationMs // 0)})
        | from_entries);
+    def parity_reason_codes($parity_obj):
+      (arr($parity_obj.reasons)
+       | map(.code // "unknown")
+       | unique
+       | sort
+       | join("|"));
+    def sut_vs_pg_line($tag; $scenario):
+      comparison($scenario) as $c
+      | if ($c | length) == 0 then
+          "sut_vs_pg[" + $tag + "]: unavailable"
+        else
+          "sut_vs_pg[" + $tag + "]: sut_ops_per_sec=" +
+            ((num($c.sutOpsPerSec) | f3) | tostring) +
+            ", pg_tps=" + ((num($c.baselineTps) | f3) | tostring) +
+            ", throughput_ratio=" +
+            ((num($c.throughputRatioSutToBaseline) | f3) | tostring) +
+            ", sut_p99_ms=" + (num($c.sutP99LatencyMs) | tostring) +
+            ", pg_avg_latency_ms=" +
+            ((num($c.baselineLatencyAvgMs) | f3) | tostring) +
+            ", p99_vs_pg_avg_ratio=" +
+            ((num($c.p99LatencyRatioSutToBaselineAvg) | f3) | tostring)
+        end;
+    def parity_line($tag; $scenario):
+      parity($scenario) as $p
+      | if ($p | length) == 0 then
+          "load_parity[" + $tag + "]: unavailable"
+        else
+          "load_parity[" + $tag + "]: status=" +
+            (($p.status // "unknown") | tostring) +
+            ", reason_codes=" + parity_reason_codes($p) +
+            ", sut_load_nodes=" + (num($p.effective.sutLoadNodeCount) | tostring) +
+            ", pg_load_nodes=" +
+            (num($p.effective.baselineLoadNodeCount) | tostring) +
+            ", sut_node_budget=" + (num($p.effective.sutPerNodeBudget) | tostring) +
+            ", pg_node_budget=" +
+            (num($p.effective.baselinePerNodeBudget) | tostring)
+        end;
+    def discovery_line($tag; $scenario):
+      benchmark($scenario).sutLoadDiscovery as $d
+      | if ($d | type) != "object" then
+          "sut_discovery[" + $tag + "]: unavailable"
+        else
+          "sut_discovery[" + $tag + "]: attempts=" +
+            (num($d.attempts) | tostring) +
+            ", timedOut=" + (($d.timedOut // false) | tostring) +
+            ", discovered_nodes=" + ((arr($d.discoveredNodeIds) | length) | tostring) +
+            ", reachable_nodes=" + ((arr($d.reachableNodeIds) | length) | tostring) +
+            ", source_discovered=" +
+            ((arr($d.sourceResults) |
+              map(select(.status == "discovered")) |
+              length) | tostring) +
+            ", source_errors=" +
+            ((arr($d.sourceResults) |
+              map(select(.status == "error")) |
+              length) | tostring)
+        end;
 
     .[0] as $latest_report
     | .[1] as $previous_report
@@ -114,19 +185,42 @@ compare_profile() {
     | ((($latest_phases | keys_unsorted) + ($previous_phases | keys_unsorted))
         | unique
         | sort) as $all_phases
-    | "latest: \($latest_file)",
-      "previous: \($previous_file)",
-      "passed: \(($latest.passed|tostring)) vs \(($previous.passed|tostring))",
-      "errors: failed=\(num($latest.loadMetrics.failed)) vs \(num($previous.loadMetrics.failed)), errors=\(num($latest.loadMetrics.errors)) vs \(num($previous.loadMetrics.errors))",
-      "duration_ms: \(num($latest_report.summary.duration)) vs \(num($previous_report.summary.duration)) (Δ \(((num($latest_report.summary.duration) - num($previous_report.summary.duration)) | sgn)))",
-      "ops_per_sec: \((num($latest.loadMetrics.opsPerSec) | f3)) vs \((num($previous.loadMetrics.opsPerSec) | f3)) (Δ \(((num($latest.loadMetrics.opsPerSec) - num($previous.loadMetrics.opsPerSec)) | f3 | sgn)), \((pct(num($latest.loadMetrics.opsPerSec); num($previous.loadMetrics.opsPerSec)))))",
-      "total_ops: \(num($latest.loadMetrics.total)) vs \(num($previous.loadMetrics.total)) (Δ \(((num($latest.loadMetrics.total) - num($previous.loadMetrics.total)) | sgn)))",
-      "latency_ms(avg/p50/p95/p99): \((num($latest.loadMetrics.latency.avg) | f2))/\(num($latest.loadMetrics.latency.p50))/\(num($latest.loadMetrics.latency.p95))/\(num($latest.loadMetrics.latency.p99)) vs \((num($previous.loadMetrics.latency.avg) | f2))/\(num($previous.loadMetrics.latency.p50))/\(num($previous.loadMetrics.latency.p95))/\(num($previous.loadMetrics.latency.p99))",
-      "queue_delay_ms(avg/p50/p95/p99/max): \((num($latest.loadMetrics.queueDelay.avg) | f2))/\((num($latest.loadMetrics.queueDelay.p50) | f2))/\((num($latest.loadMetrics.queueDelay.p95) | f2))/\((num($latest.loadMetrics.queueDelay.p99) | f2))/\((num($latest.loadMetrics.queueDelay.max) | f2)) vs \((num($previous.loadMetrics.queueDelay.avg) | f2))/\((num($previous.loadMetrics.queueDelay.p50) | f2))/\((num($previous.loadMetrics.queueDelay.p95) | f2))/\((num($previous.loadMetrics.queueDelay.p99) | f2))/\((num($previous.loadMetrics.queueDelay.max) | f2))",
-      "benchmark_gate: enabled=\((($latest_report.benchmarkRegressionGate.enabled // false) | tostring)), status=\(($latest_report.benchmarkRegressionGate.status // "n/a")) vs enabled=\((($previous_report.benchmarkRegressionGate.enabled // false) | tostring)), status=\(($previous_report.benchmarkRegressionGate.status // "n/a"))",
-      "phase_durations_ms:",
+    | "files:",
+      "  previous: \($previous_file)",
+      "  latest:   \($latest_file)",
+      "status:",
+      "  passed: \((($previous.passed // false) | tostring)) -> \((($latest.passed // false) | tostring))",
+      "  duration_ms: \(num($previous_report.summary.duration)) -> \(num($latest_report.summary.duration)) (Δ \(((num($latest_report.summary.duration) - num($previous_report.summary.duration)) | sgn)))",
+      "  benchmark_gate: previous(enabled=\((($previous_report.benchmarkRegressionGate.enabled // false) | tostring)), status=\(($previous_report.benchmarkRegressionGate.status // "n/a"))); latest(enabled=\((($latest_report.benchmarkRegressionGate.enabled // false) | tostring)), status=\(($latest_report.benchmarkRegressionGate.status // "n/a")))",
+      "load (previous -> latest):",
+      "  failed/errors: \(num($previous.loadMetrics.failed))/\(num($previous.loadMetrics.errors)) -> \(num($latest.loadMetrics.failed))/\(num($latest.loadMetrics.errors))",
+      "  ops_per_sec: \((num($previous.loadMetrics.opsPerSec) | f3)) -> \((num($latest.loadMetrics.opsPerSec) | f3)) (Δ \(((num($latest.loadMetrics.opsPerSec) - num($previous.loadMetrics.opsPerSec)) | f3 | sgn)), \((pct(num($latest.loadMetrics.opsPerSec); num($previous.loadMetrics.opsPerSec)))))",
+      "  total_ops: \(num($previous.loadMetrics.total)) -> \(num($latest.loadMetrics.total)) (Δ \(((num($latest.loadMetrics.total) - num($previous.loadMetrics.total)) | sgn)))",
+      "  attempt_errors: \(num($previous.loadMetrics.attemptErrors)) -> \(num($latest.loadMetrics.attemptErrors))",
+      "  dispatched_ops: \(num($previous.loadMetrics.dispatchedOperations)) -> \(num($latest.loadMetrics.dispatchedOperations))",
+      "  undispatched_ops: \(num($previous.loadMetrics.undispatchedOperations)) -> \(num($latest.loadMetrics.undispatchedOperations))",
+      "latency (previous -> latest):",
+      "  latency_ms(avg/p50/p95/p99): \((num($previous.loadMetrics.latency.avg) | f2))/\(num($previous.loadMetrics.latency.p50))/\(num($previous.loadMetrics.latency.p95))/\(num($previous.loadMetrics.latency.p99)) -> \((num($latest.loadMetrics.latency.avg) | f2))/\(num($latest.loadMetrics.latency.p50))/\(num($latest.loadMetrics.latency.p95))/\(num($latest.loadMetrics.latency.p99))",
+      "  queue_delay_ms(avg/p50/p95/p99/max): \((num($previous.loadMetrics.queueDelay.avg) | f2))/\((num($previous.loadMetrics.queueDelay.p50) | f2))/\((num($previous.loadMetrics.queueDelay.p95) | f2))/\((num($previous.loadMetrics.queueDelay.p99) | f2))/\((num($previous.loadMetrics.queueDelay.max) | f2)) -> \((num($latest.loadMetrics.queueDelay.avg) | f2))/\((num($latest.loadMetrics.queueDelay.p50) | f2))/\((num($latest.loadMetrics.queueDelay.p95) | f2))/\((num($latest.loadMetrics.queueDelay.p99) | f2))/\((num($latest.loadMetrics.queueDelay.max) | f2))",
+      "sut_vs_pg (same-run):",
+      "  " + sut_vs_pg_line("previous"; $previous),
+      "  " + sut_vs_pg_line("latest"; $latest),
+      "  ratio_delta: throughput_ratio=\(((num(comparison($latest).throughputRatioSutToBaseline) - num(comparison($previous).throughputRatioSutToBaseline)) | f3 | sgn)), p99_vs_pg_avg_ratio=\(((num(comparison($latest).p99LatencyRatioSutToBaselineAvg) - num(comparison($previous).p99LatencyRatioSutToBaselineAvg)) | f3 | sgn))",
+      "load_parity:",
+      "  " + parity_line("previous"; $previous),
+      "  " + parity_line("latest"; $latest),
+      "discovery:",
+      "  " + discovery_line("previous"; $previous),
+      "  " + discovery_line("latest"; $latest),
+      "channels:",
+      "  errors previous(load/control/probe/snapshot): \(num(channel_metrics($previous).load.errors))/\(num(channel_metrics($previous).control.errors))/\(num(channel_metrics($previous).probe.errors))/\(num(channel_metrics($previous).snapshot.errors))",
+      "  errors latest(load/control/probe/snapshot): \(num(channel_metrics($latest).load.errors))/\(num(channel_metrics($latest).control.errors))/\(num(channel_metrics($latest).probe.errors))/\(num(channel_metrics($latest).snapshot.errors))",
+      "errors:",
+      "  previous: \(short($previous.error; 220))",
+      "  latest:   \(short($latest.error; 220))",
+      "phases duration_ms (previous -> latest):",
       ($all_phases[]
-        | "  - \(.) : \((($latest_phases[.] // 0))) vs \((($previous_phases[.] // 0))) (Δ \((((($latest_phases[.] // 0) - ($previous_phases[.] // 0))) | sgn)))")
+        | "  - \(.) : \((($previous_phases[.] // 0))) -> \((($latest_phases[.] // 0))) (Δ \((((($latest_phases[.] // 0) - ($previous_phases[.] // 0))) | sgn)))")
     ' "$latest_report" "$previous_report"
   printf '\n'
 }

@@ -1,5 +1,6 @@
 import {
   NODE_CLIENT_CHANNEL,
+  NODE_CLIENT_CONTEXT_KEYS,
   NODE_CLIENT_CONTROL_SNAPSHOT_SCHEMA_VERSION,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
   NODE_CLIENT_ERROR_CODES,
@@ -18,6 +19,13 @@ const UNKNOWN_NODE_ID = 'unknown-node';
 const ERROR_MESSAGE_UNKNOWN = 'unknown error';
 const TIMEOUT_ERROR_CODE = 'ETIMEDOUT';
 const TIMEOUT_ERROR_PATTERN = /timeout|timed out|deadline exceeded|etimedout/i;
+const TRANSIENT_ERROR_PATTERN_TABLE_NOT_FOUND = /table not found/i;
+const TRANSIENT_ERROR_PATTERN_CONNECTION_REFUSED =
+  /econnrefused|connection refused/i;
+const TRANSIENT_OPERATION_ERROR_PATTERNS = Object.freeze([
+  TRANSIENT_ERROR_PATTERN_TABLE_NOT_FOUND,
+  TRANSIENT_ERROR_PATTERN_CONNECTION_REFUSED,
+]);
 
 const OPERATION_QUERY_LOAD = 'queryLoad';
 const OPERATION_QUERY_CONTROL = 'queryControl';
@@ -140,6 +148,32 @@ function classifyTimeoutClass(error) {
     return NODE_CLIENT_TIMEOUT_CLASS.TIMEOUT;
   }
   return NODE_CLIENT_TIMEOUT_CLASS.NON_TIMEOUT;
+}
+
+function isControlOrSnapshotChannel(channel) {
+  return channel === NODE_CLIENT_CHANNEL.CONTROL ||
+    channel === NODE_CLIENT_CHANNEL.SNAPSHOT;
+}
+
+function isTransientAdminOperationError(channel, error) {
+  if (!isControlOrSnapshotChannel(channel)) {
+    return false;
+  }
+  if (error?.timeoutClass === NODE_CLIENT_TIMEOUT_CLASS.TIMEOUT) {
+    return false;
+  }
+  const message = normalizeErrorMessage(error);
+  for (const pattern of TRANSIENT_OPERATION_ERROR_PATTERNS) {
+    if (pattern.test(message)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function shouldSuppressNodeFailure(context, channel, error) {
+  return context?.[NODE_CLIENT_CONTEXT_KEYS.TOLERATE_TRANSIENT_ERRORS] === true &&
+    isTransientAdminOperationError(channel, error);
 }
 
 function withTimeout(promise, timeoutMs, timeoutMessage) {
@@ -418,7 +452,16 @@ class NodeClient {
             }
           }
           this._incrementMetric(channel, NODE_CLIENT_METRIC_KEY_ERRORS);
-          this._recordNodeFailure(state, policy, channel);
+          const suppressNodeFailure = shouldSuppressNodeFailure(
+            options.context,
+            channel,
+            normalizedError,
+          );
+          if (suppressNodeFailure) {
+            this._recordNodeSuccess(state);
+          } else {
+            this._recordNodeFailure(state, policy, channel);
+          }
 
           const canRetry = attempt < maxAttempts;
           if (canRetry) {

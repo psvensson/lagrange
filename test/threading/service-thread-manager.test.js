@@ -213,6 +213,38 @@ test('ServiceThreadManager', async (t) => {
     t.equal(manager.getServiceCount(), 0, 'should have 0 services');
   });
 
+  t.test('shutdown still destroys pool when unregister fails', async (t) => {
+    const manager = ServiceThreadManager.getInstance();
+    manager.initialize({minThreads: 1, maxThreads: 2});
+
+    manager.services.set('broken-service', {
+      id: 'broken-service',
+      status: ServiceStatus.RUNNING,
+      registeredAt: Date.now(),
+      lastHealthCheck: null,
+      healthStatus: null,
+    });
+
+    let destroyCalls = 0;
+    manager.pool = {
+      destroy: async () => {
+        destroyCalls += 1;
+      },
+    };
+    manager.unregisterService = async () => {
+      throw new Error('forced unregister failure');
+    };
+
+    await t.rejects(
+      manager.shutdown(),
+      /forced unregister failure/,
+      'shutdown should surface first unregister error',
+    );
+    t.equal(destroyCalls, 1, 'shutdown should still destroy pool');
+    t.equal(manager.isInitialized(), false, 'manager should be marked uninitialized');
+    t.equal(manager.getServiceCount(), 0, 'service map should be cleared on shutdown');
+  });
+
   t.test('emits events on service lifecycle', async (t) => {
     const manager = ServiceThreadManager.getInstance();
     manager.initialize({minThreads: 1, maxThreads: 2});

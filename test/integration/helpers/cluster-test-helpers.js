@@ -14,6 +14,7 @@
 
 import {ConfigurationManager} from '../../../src/config/configuration-manager.js';
 import {LoggingService} from '../../../src/logging/logging-service.js';
+import {LogsTableService} from '../../../src/logging/logs-table-service.js';
 import {NodeService} from '../../../src/node/node-service.js';
 import {AddressManager} from '../../../src/address/address-manager.js';
 import {ServiceThreadManager} from '../../../src/threading/service-thread-manager.js';
@@ -73,7 +74,6 @@ export function initializeTestEnvironment(options = {}) {
   LoggingService.resetInstance();
   NodeService.resetInstance();
   AddressManager.resetInstance();
-  ServiceThreadManager.resetInstance();
 
   // Initialize configuration with fast Raft elections
   const config = ConfigurationManager.getInstance();
@@ -91,6 +91,8 @@ export function initializeTestEnvironment(options = {}) {
       periodicCheckIntervalMs: 1000,
       periodicCheckJitterMs: 100,
       stabilizationPeriodMs: 1000,
+      systemPartitionStartDelayMs: 0,
+      userPartitionStartDelayMs: 0,
       ...rebalancer,
     },
     replicaHandler: {
@@ -122,6 +124,11 @@ export async function cleanupTestEnvironment() {
   }
   try {
     await ServiceThreadManager.getInstance().shutdown().catch(() => {});
+  } catch {
+    // Ignore shutdown errors
+  }
+  try {
+    LogsTableService.resetInstance();
   } catch {
     // Ignore shutdown errors
   }
@@ -480,17 +487,22 @@ export async function gracefulJoiningShutdown(joiningService) {
     return;
   }
 
-  try {
-    stopAllRebalancers(joiningService.partitionServices);
-    if (typeof joiningService.cleanup === 'function') {
+  stopAllRebalancers(joiningService.partitionServices);
+
+  if (typeof joiningService.cleanup === 'function') {
+    try {
       await joiningService.cleanup();
-      return;
+    } catch {
+      // Best-effort cleanup only.
     }
-    if (typeof joiningService.shutdown === 'function') {
+  }
+
+  if (typeof joiningService.shutdown === 'function') {
+    try {
       await joiningService.shutdown();
+    } catch {
+      // Best-effort cleanup only.
     }
-  } catch {
-    // Best-effort cleanup only.
   }
 }
 

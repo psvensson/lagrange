@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 3,
+  "key": "v3-828a323447039df4eee07de9a279d5861add28151f8da75758181af5e564a817",
+  "signature": {
+    "schemaVersion": 3,
+    "engine": "postgres",
+    "machine": {
+      "platform": "linux",
+      "arch": "x64",
+      "hostname": "peter-System-Product-Name",
+      "cpuCount": 20,
+      "cpuModel": "13th Gen Intel(R) Core(TM) i5-13600KF"
+    },
+    "benchmark": {
+      "baselineImage": "postgres:16",
+      "user": "benchmark",
+      "database": "benchmark",
+      "port": 5432,
+      "loadOpsPerSec": 120,
+      "loadDurationMs": 30000,
+      "loadMaxInFlight": 128,
+      "loadNodeCount": 8,
+      "tableName": "benchmark_events",
+      "workloadProfile": "benchmark_events_mixed",
+      "operations": [
+        "INSERT",
+        "SELECT"
+      ],
+      "replicationFactor": 3,
+      "syncReplicaAcks": 1
+    }
+  },
+  "cachedAt": "2026-02-25T17:56:06.140Z",
+  "metrics": {
+    "total": 3600,
+    "success": 3600,
+    "failed": 0,
+    "errors": 0,
+    "latency": {
+      "avg": 0.7447222222222222,
+      "p50": 1,
+      "p95": 2,
+      "p99": 2
+    },
+    "opsPerSec": 120,
+    "queueDelay": {
+      "avg": 0.7858881293402777,
+      "p50": 0.70947265625,
+      "p95": 1.82275390625,
+      "p99": 1.935302734375,
+      "max": 5.449462890625
+    },
+    "targetOperations": 3600,
+    "dispatchedOperations": 3600,
+    "undispatchedOperations": 0,
+    "undispatchedByReason": {
+      "capacity": 0,
+      "durationTimeout": 0,
+      "cancelled": 0
+    },
+    "perNode": {
+      "postgres-baseline-load-node-1": {
+        "dispatched": 450,
+        "success": 450,
+        "attemptErrors": 0,
+        "admissionSignals": 0
+      },
+      "postgres-baseline-load-node-2": {
+        "dispatched": 450,
+        "success": 450,
+        "attemptErrors": 0,
+        "admissionSignals": 0
+      },
+      "postgres-baseline-load-node-3": {
+        "dispatched": 450,
+        "success": 450,
+        "attemptErrors": 0,
+        "admissionSignals": 0
+      },
+      "postgres-baseline-load-node-4": {
+        "dispatched": 450,
+        "success": 450,
+        "attemptErrors": 0,
+        "admissionSignals": 0
+      },
+      "postgres-baseline-load-node-5": {
+        "dispatched": 450,
+        "success": 450,
+        "attemptErrors": 0,
+        "admissionSignals": 0
+      },
+      "postgres-baseline-load-node-6": {
+        "dispatched": 450,
+        "success": 450,
+        "attemptErrors": 0,
+        "admissionSignals": 0
+      },
+      "postgres-baseline-load-node-7": {
+        "dispatched": 450,
+        "success": 450,
+        "attemptErrors": 0,
+        "admissionSignals": 0
+      },
+      "postgres-baseline-load-node-8": {
+        "dispatched": 450,
+        "success": 450,
+        "attemptErrors": 0,
+        "admissionSignals": 0
+      }
+    }
+  }
+}

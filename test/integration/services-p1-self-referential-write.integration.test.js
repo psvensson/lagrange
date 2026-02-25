@@ -173,6 +173,69 @@ async function waitForServiceUpdate(
   return null;
 }
 
+/**
+ * Check whether an error-like value indicates an in-use port collision.
+ *
+ * @param {*} errorLike - Error object or message-like value.
+ * @return {boolean} True when the error indicates EADDRINUSE.
+ */
+function isAddressInUseError(errorLike) {
+  const message = typeof errorLike === 'string' ?
+    errorLike :
+    (errorLike?.message || '');
+  return message.includes('EADDRINUSE');
+}
+
+/**
+ * Bootstrap a seed node with bounded retries for transient EADDRINUSE races.
+ *
+ * @param {string} seedNodeId - Seed node ID.
+ * @param {number} maxAttempts - Maximum attempts.
+ * @return {Promise<{seedWsPort:number, bootstrapService:Object, bootstrapResult:Object}>}
+ */
+async function bootstrapSeedNodeWithRetry(seedNodeId, maxAttempts = 3) {
+  let lastAddressInUseError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const seedWsPort = getUniquePort();
+    const bootstrapService = new BootstrapService({
+      nodeId: seedNodeId,
+      nodeAddress: `ws://localhost:${seedWsPort}`,
+      wsPort: seedWsPort,
+      config: TEST_CONFIG.bootstrap,
+    });
+
+    let bootstrapResult = null;
+    try {
+      bootstrapResult = await bootstrapService.bootstrap();
+      if (bootstrapResult?.success) {
+        return {seedWsPort, bootstrapService, bootstrapResult};
+      }
+
+      if (!isAddressInUseError(bootstrapResult?.error)) {
+        return {seedWsPort, bootstrapService, bootstrapResult};
+      }
+
+      lastAddressInUseError = new Error(
+        bootstrapResult?.error || 'Bootstrap failed with EADDRINUSE',
+      );
+    } catch (error) {
+      if (!isAddressInUseError(error)) {
+        throw error;
+      }
+      lastAddressInUseError = error;
+    }
+
+    if (bootstrapResult?.messageRouter?.shutdown) {
+      await bootstrapResult.messageRouter.shutdown().catch(() => {});
+    }
+    await bootstrapService.shutdown().catch(() => {});
+  }
+
+  throw lastAddressInUseError ||
+    new Error(`Bootstrap failed with EADDRINUSE after ${maxAttempts} attempts`);
+}
+
 test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TEST_TIMEOUT_MS},
   async (t) => {
     t.beforeEach(() => {
@@ -198,19 +261,13 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
       // PHASE 1: Bootstrap seed node with system tables
       // =========================================================================
       const seedNodeId = '550e8400-e29b-41d4-a716-446655440201';
-      const seedWsPort = getUniquePort();
-
-      const bootstrapService = new BootstrapService({
-        nodeId: seedNodeId,
-        nodeAddress: `ws://localhost:${seedWsPort}`,
-        wsPort: seedWsPort,
-        config: TEST_CONFIG.bootstrap,
-      });
-
+      let seedWsPort;
+      let bootstrapService;
       let bootstrapResult;
 
       try {
-        bootstrapResult = await bootstrapService.bootstrap();
+        ({seedWsPort, bootstrapService, bootstrapResult} =
+          await bootstrapSeedNodeWithRetry(seedNodeId));
         t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
 
         // =========================================================================
@@ -345,19 +402,13 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
       // PHASE 1: Bootstrap seed node
       // =========================================================================
       const seedNodeId = '550e8400-e29b-41d4-a716-446655440202';
-      const seedWsPort = getUniquePort();
-
-      const bootstrapService = new BootstrapService({
-        nodeId: seedNodeId,
-        nodeAddress: `ws://localhost:${seedWsPort}`,
-        wsPort: seedWsPort,
-        config: TEST_CONFIG.bootstrap,
-      });
-
+      let seedWsPort;
+      let bootstrapService;
       let bootstrapResult;
 
       try {
-        bootstrapResult = await bootstrapService.bootstrap();
+        ({seedWsPort, bootstrapService, bootstrapResult} =
+          await bootstrapSeedNodeWithRetry(seedNodeId));
         t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
 
         // Wait for services-p1 leader
@@ -467,19 +518,13 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
       // PHASE 1: Bootstrap seed node
       // =========================================================================
       const seedNodeId = '550e8400-e29b-41d4-a716-446655440203';
-      const seedWsPort = getUniquePort();
-
-      const bootstrapService = new BootstrapService({
-        nodeId: seedNodeId,
-        nodeAddress: `ws://localhost:${seedWsPort}`,
-        wsPort: seedWsPort,
-        config: TEST_CONFIG.bootstrap,
-      });
-
+      let seedWsPort;
+      let bootstrapService;
       let bootstrapResult;
 
       try {
-        bootstrapResult = await bootstrapService.bootstrap();
+        ({seedWsPort, bootstrapService, bootstrapResult} =
+          await bootstrapSeedNodeWithRetry(seedNodeId));
         t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
 
         // Wait for services-p1 leader
